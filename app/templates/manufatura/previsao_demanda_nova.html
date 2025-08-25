@@ -1,0 +1,962 @@
+{% extends "base.html" %}
+
+{% block title %}Previsão de Demanda - Manufatura/PCP{% endblock %}
+
+{% block head %}
+<style>
+    .comparison-selector {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    .comparison-selector button {
+        padding: 5px 12px;
+        font-size: 0.85rem;
+        border-radius: 20px;
+    }
+    .comparison-selector button.active {
+        background-color: #007bff;
+        color: white;
+    }
+    .editable-cell {
+        cursor: pointer;
+        position: relative;
+    }
+    .editable-cell:hover {
+        background-color: #f8f9fa;
+    }
+    .editable-cell input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        text-align: right;
+        padding: 5px;
+    }
+    .editable-cell input:focus {
+        outline: 2px solid #007bff;
+        background: white;
+    }
+    .editable-select {
+        border: none;
+        background: transparent;
+        cursor: pointer;
+    }
+    .editable-select:focus {
+        outline: 2px solid #007bff;
+        background: white;
+    }
+    .comparison-header {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+    .grupo-restante {
+        font-style: italic;
+        color: #6c757d;
+    }
+    .save-indicator {
+        position: absolute;
+        right: -20px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #28a745;
+        display: none;
+    }
+    .save-indicator.show {
+        display: block;
+    }
+    .comparison-value {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    .previsto-value {
+        font-weight: 600;
+        color: #212529;
+    }
+    .table-sticky {
+        position: sticky;
+        left: 0;
+        background: white;
+        z-index: 10;
+    }
+    .sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+    .sortable:hover {
+        background-color: #e9ecef;
+    }
+    .produto-info {
+        min-width: 200px;
+    }
+    .table-sortable thead th i {
+        font-size: 0.8rem;
+        opacity: 0.6;
+    }
+    .table-sortable thead th:hover i {
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Token CSRF para requisições AJAX -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<div class="container-fluid px-4 py-3">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('manufatura.dashboard') }}">Manufatura</a></li>
+                    <li class="breadcrumb-item active">Previsão de Demanda</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-3">
+                <i class="fas fa-chart-line me-2"></i>
+                Previsão de Demanda
+            </h1>
+        </div>
+    </div>
+
+    <!-- Configuração de Análise -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-cog me-2"></i>Configuração de Análise
+            </h6>
+        </div>
+        <div class="card-body">
+            <!-- Período e Grupo -->
+            <div class="row mb-4">
+                <div class="col-md-2">
+                    <label>Mês/Ano a Prever</label>
+                    <div class="input-group">
+                        <select class="form-control" id="mes-previsao">
+                            <option value="1">Jan</option>
+                            <option value="2">Fev</option>
+                            <option value="3">Mar</option>
+                            <option value="4">Abr</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Jun</option>
+                            <option value="7">Jul</option>
+                            <option value="8">Ago</option>
+                            <option value="9">Set</option>
+                            <option value="10">Out</option>
+                            <option value="11">Nov</option>
+                            <option value="12">Dez</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label>&nbsp;</label>
+                    <input type="number" class="form-control" id="ano-previsao" min="2024" max="2030">
+                </div>
+                <div class="col-md-4">
+                    <label>Grupo Empresarial
+                        <button type="button" class="btn btn-link btn-sm p-0 ms-2" id="btn-gerenciar-grupos" title="Gerenciar Grupos">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </label>
+                    <select class="form-control" id="grupo-empresarial">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label>&nbsp;</label>
+                    <div>
+                        <button class="btn btn-primary" onclick="carregarDados()">
+                            <i class="fas fa-search"></i> Buscar Produtos
+                        </button>
+                        <button class="btn btn-success" onclick="salvarTodasPrevisoes()">
+                            <i class="fas fa-save"></i> Salvar Todas
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seleção de Comparações -->
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="mb-3">Selecione as Comparações para Análise</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th width="30%">Tipo de Análise</th>
+                                <th width="70%">Incluir na Coluna</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-chart-bar text-info me-2"></i>
+                                    Média Últimos 3 Meses
+                                </td>
+                                <td>
+                                    <div class="comparison-selector" data-comparison="media_3_meses">
+                                        <button class="btn btn-sm btn-outline-primary" data-column="1">Coluna 1</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="2">Coluna 2</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="3">Coluna 3</button>
+                                        <button class="btn btn-sm btn-outline-secondary active" data-column="0">Não incluir</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-chart-line text-warning me-2"></i>
+                                    Média Últimos 6 Meses
+                                </td>
+                                <td>
+                                    <div class="comparison-selector" data-comparison="media_6_meses">
+                                        <button class="btn btn-sm btn-outline-primary" data-column="1">Coluna 1</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="2">Coluna 2</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="3">Coluna 3</button>
+                                        <button class="btn btn-sm btn-outline-secondary active" data-column="0">Não incluir</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-calendar-alt text-success me-2"></i>
+                                    Mesmo Mês Ano Anterior
+                                </td>
+                                <td>
+                                    <div class="comparison-selector" data-comparison="ano_anterior">
+                                        <button class="btn btn-sm btn-outline-primary" data-column="1">Coluna 1</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="2">Coluna 2</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="3">Coluna 3</button>
+                                        <button class="btn btn-sm btn-outline-secondary active" data-column="0">Não incluir</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-shopping-cart text-danger me-2"></i>
+                                    Demanda Ativa (Carteira)
+                                </td>
+                                <td>
+                                    <div class="comparison-selector" data-comparison="demanda_ativa">
+                                        <button class="btn btn-sm btn-outline-primary" data-column="1">Coluna 1</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="2">Coluna 2</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="3">Coluna 3</button>
+                                        <button class="btn btn-sm btn-outline-secondary active" data-column="0">Não incluir</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Resultados -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table me-2"></i>Análise de Previsão
+            </h6>
+        </div>
+        <div class="card-body">
+            <!-- Filtros da Tabela -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" id="filtro-codigo" placeholder="Filtrar por código...">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" id="filtro-nome" placeholder="Filtrar por nome (ILIKE)...">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-sm btn-secondary" onclick="limparFiltros()">
+                        <i class="fas fa-eraser"></i> Limpar Filtros
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover table-sortable" id="tabela-previsao">
+                    <thead>
+                        <tr>
+                            <th rowspan="2" class="align-middle table-sticky sortable" data-sort="produto">
+                                Código / Produto
+                                <i class="fas fa-sort ms-1"></i>
+                            </th>
+                            <th colspan="3" class="text-center comparison-header">Comparações</th>
+                            <th rowspan="2" class="align-middle text-center" style="background-color: #e7f3ff;">
+                                Demanda<br>Prevista
+                            </th>
+                            <th rowspan="2" class="align-middle text-center">Disparo</th>
+                            <th rowspan="2" class="align-middle text-center">Ações</th>
+                        </tr>
+                        <tr>
+                            <th class="text-center comparison-header sortable" id="header-col-1" data-sort="col1">
+                                <span class="header-text">-</span>
+                                <i class="fas fa-sort ms-1"></i>
+                            </th>
+                            <th class="text-center comparison-header sortable" id="header-col-2" data-sort="col2">
+                                <span class="header-text">-</span>
+                                <i class="fas fa-sort ms-1"></i>
+                            </th>
+                            <th class="text-center comparison-header sortable" id="header-col-3" data-sort="col3">
+                                <span class="header-text">-</span>
+                                <i class="fas fa-sort ms-1"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-previsao">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Configure os parâmetros acima e clique em "Buscar Produtos"
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Gerenciamento de Grupos -->
+<div class="modal fade" id="modalGrupos" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-users me-2"></i>Gerenciar Grupos Empresariais
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Formulário de Cadastro -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Novo Grupo / Editar Grupo</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="formGrupo">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label>Nome do Grupo <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="grupo-nome" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label>Descrição</label>
+                                    <input type="text" class="form-control" id="grupo-descricao">
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <label>Prefixos CNPJ (8 dígitos) <span class="text-danger">*</span></label>
+                                    <div class="input-group mb-2">
+                                        <input type="text" class="form-control" id="grupo-prefixo-input" 
+                                               placeholder="Ex: 12345678" maxlength="8" pattern="[0-9]{8}">
+                                        <button type="button" class="btn btn-primary" onclick="adicionarPrefixo()">
+                                            <i class="fas fa-plus"></i> Adicionar
+                                        </button>
+                                    </div>
+                                    <div id="lista-prefixos" class="d-flex flex-wrap gap-2">
+                                        <!-- Prefixos adicionados aparecem aqui -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12 text-end">
+                                    <button type="button" class="btn btn-secondary" onclick="limparFormGrupo()">
+                                        <i class="fas fa-eraser"></i> Limpar
+                                    </button>
+                                    <button type="button" class="btn btn-success" onclick="salvarGrupo()">
+                                        <i class="fas fa-save"></i> Salvar Grupo
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Lista de Grupos Existentes -->
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Grupos Cadastrados</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Prefixos</th>
+                                        <th>Descrição</th>
+                                        <th width="100">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-grupos">
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">
+                                            <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Configuração global
+var comparacoesConfig = {
+    media_3_meses: { coluna: 0, label: 'Média 3M' },
+    media_6_meses: { coluna: 0, label: 'Média 6M' },
+    ano_anterior: { coluna: 0, label: 'Ano Anterior' },
+    demanda_ativa: { coluna: 0, label: 'Carteira' }
+};
+
+var produtosCarregados = [];
+var comparacoesCarregadas = {};
+
+// Inicialização
+$(document).ready(function() {
+    // Define data atual
+    var hoje = new Date();
+    $('#mes-previsao').val(hoje.getMonth() + 1);
+    $('#ano-previsao').val(hoje.getFullYear());
+    
+    // Carrega grupos
+    carregarGrupos();
+    
+    // Configura filtros
+    $('#filtro-codigo, #filtro-nome').on('keyup', aplicarFiltros);
+    
+    // Configura ordenação
+    $('.sortable').click(function() {
+        var coluna = $(this).data('sort');
+        ordenarTabela(coluna);
+    });
+    
+    // Configura botão de gerenciar grupos
+    $('#btn-gerenciar-grupos').click(function() {
+        $('#modalGrupos').modal('show');
+        carregarGruposCadastrados();
+    });
+    
+    // Configura seletores de comparação
+    $('.comparison-selector button').click(function() {
+        var $btn = $(this);
+        var $selector = $btn.parent();
+        var comparison = $selector.data('comparison');
+        var column = parseInt($btn.data('column'));
+        
+        // Remove active de todos os botões do grupo
+        $selector.find('button').removeClass('active');
+        $btn.addClass('active');
+        
+        // Atualiza configuração
+        comparacoesConfig[comparison].coluna = column;
+        
+        // Atualiza headers
+        atualizarHeaders();
+    });
+});
+
+// Carrega grupos empresariais
+function carregarGrupos() {
+    $.get('{{ url_for("manufatura.listar_grupos_empresariais") }}')
+    .done(function(grupos) {
+        var $select = $('#grupo-empresarial');
+        $select.empty();
+        
+        grupos.forEach(function(grupo) {
+            var $option = $('<option>').val(grupo.value).text(grupo.label);
+            if (grupo.value === 'RESTANTE') {
+                $option.addClass('grupo-restante');
+            }
+            $select.append($option);
+        });
+    })
+    .fail(function() {
+        alert('Erro ao carregar grupos empresariais');
+    });
+}
+
+// Atualiza headers das colunas
+function atualizarHeaders() {
+    // Limpa headers
+    $('#header-col-1 .header-text, #header-col-2 .header-text, #header-col-3 .header-text').text('-');
+    
+    // Atualiza com as comparações selecionadas
+    for (var comp in comparacoesConfig) {
+        var config = comparacoesConfig[comp];
+        if (config.coluna > 0) {
+            $('#header-col-' + config.coluna + ' .header-text').text(config.label);
+        }
+    }
+}
+
+// Função de filtro
+function aplicarFiltros() {
+    var filtroCodigo = $('#filtro-codigo').val().toLowerCase();
+    var filtroNome = $('#filtro-nome').val().toLowerCase();
+    
+    $('#tbody-previsao tr').each(function() {
+        var $tr = $(this);
+        var codigo = ($tr.find('[data-codigo]').attr('data-codigo') || '').toLowerCase();
+        var nome = ($tr.find('[data-nome]').attr('data-nome') || '').toLowerCase();
+        
+        var mostrar = true;
+        
+        if (filtroCodigo && !codigo.includes(filtroCodigo)) {
+            mostrar = false;
+        }
+        
+        if (filtroNome && !nome.includes(filtroNome)) {
+            mostrar = false;
+        }
+        
+        $tr.toggle(mostrar);
+    });
+}
+
+// Limpar filtros
+function limparFiltros() {
+    $('#filtro-codigo, #filtro-nome').val('');
+    $('#tbody-previsao tr').show();
+}
+
+// Ordenação da tabela
+var ordemAtual = {};
+function ordenarTabela(coluna) {
+    var ordem = ordemAtual[coluna] === 'asc' ? 'desc' : 'asc';
+    ordemAtual[coluna] = ordem;
+    
+    var $tbody = $('#tbody-previsao');
+    var $rows = $tbody.find('tr').toArray();
+    
+    $rows.sort(function(a, b) {
+        var valorA, valorB;
+        
+        if (coluna === 'produto') {
+            valorA = $(a).find('[data-codigo]').attr('data-codigo');
+            valorB = $(b).find('[data-codigo]').attr('data-codigo');
+        } else if (coluna.startsWith('col')) {
+            var idx = parseInt(coluna.replace('col', ''));
+            valorA = parseFloat($(a).find('td').eq(idx).text().replace(/\./g, '').replace(',', '.')) || 0;
+            valorB = parseFloat($(b).find('td').eq(idx).text().replace(/\./g, '').replace(',', '.')) || 0;
+        }
+        
+        if (ordem === 'asc') {
+            return valorA > valorB ? 1 : -1;
+        } else {
+            return valorA < valorB ? 1 : -1;
+        }
+    });
+    
+    $tbody.empty().append($rows);
+    
+    // Atualizar ícones
+    $('.sortable i').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+    $('[data-sort="' + coluna + '"] i')
+        .removeClass('fa-sort')
+        .addClass(ordem === 'asc' ? 'fa-sort-up' : 'fa-sort-down');
+}
+
+// Carrega dados
+function carregarDados() {
+    var mes = $('#mes-previsao').val();
+    var ano = $('#ano-previsao').val();
+    var grupo = $('#grupo-empresarial').val();
+    
+    if (!mes || !ano) {
+        alert('Selecione mês e ano');
+        return;
+    }
+    
+    // Limpa tabela
+    $('#tbody-previsao').html(
+        '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Carregando...</td></tr>'
+    );
+    
+    // Busca produtos reais do histórico filtrados por grupo
+    $.get('{{ url_for("manufatura.listar_produtos_historico") }}', { grupo: grupo })
+        .done(function(produtos) {
+            if (!produtos || produtos.length === 0) {
+                produtosCarregados = [];
+                renderizarTabela();
+                return;
+            }
+            
+            // Transforma para o formato esperado
+            produtosCarregados = produtos.map(function(p) {
+                return {
+                    cod: p.cod_produto,
+                    nome: p.nome_produto,
+                    qtd_total: p.qtd_total,
+                    num_pedidos: p.num_pedidos,
+                    primeira_venda: p.primeira_venda,
+                    ultima_venda: p.ultima_venda
+                };
+            });
+            
+            // Para cada produto, busca comparações
+            var promises = [];
+            produtosCarregados.forEach(function(produto) {
+        var promise = $.get('{{ url_for("manufatura.calcular_comparacoes") }}', {
+            mes: mes,
+            ano: ano,
+            cod_produto: produto.cod,
+            grupo: grupo
+        }).done(function(comparacoes) {
+            comparacoesCarregadas[produto.cod] = comparacoes;
+        });
+        promises.push(promise);
+    });
+    
+            // Quando todas as comparações forem carregadas
+            $.when.apply($, promises).done(function() {
+                renderizarTabela();
+            }).fail(function() {
+                alert('Erro ao carregar comparações');
+                renderizarTabela();
+            });
+        })
+        .fail(function(xhr) {
+            var erro = xhr.responseJSON ? xhr.responseJSON.erro : 'Erro ao carregar produtos';
+            alert(erro);
+            produtosCarregados = [];
+            renderizarTabela();
+        });
+}
+
+// Renderiza tabela
+function renderizarTabela() {
+    var $tbody = $('#tbody-previsao');
+    $tbody.empty();
+    
+    if (produtosCarregados.length === 0) {
+        $tbody.html(
+            '<tr><td colspan="7" class="text-center text-muted">Nenhum produto encontrado</td></tr>'
+        );
+        return;
+    }
+    
+    produtosCarregados.forEach(function(produto, index) {
+        var comparacoes = comparacoesCarregadas[produto.cod] || {};
+        
+        var $tr = $('<tr>').attr('data-produto', produto.cod);
+        
+        // Coluna Produto - Mostrando código e nome corretamente
+        $tr.append(
+            $('<td>').addClass('table-sticky')
+                .attr('data-codigo', produto.cod)
+                .attr('data-nome', produto.nome)
+                .html(
+                    '<div class="produto-info">' +
+                    '<strong class="text-primary">' + produto.cod + '</strong><br>' +
+                    '<small class="text-muted">' + produto.nome + '</small>' +
+                    '</div>'
+                )
+        );
+        
+        // Colunas de Comparação (1, 2, 3)
+        for (var i = 1; i <= 3; i++) {
+            var valor = '-';
+            
+            // Encontra qual comparação está nesta coluna
+            for (var comp in comparacoesConfig) {
+                if (comparacoesConfig[comp].coluna === i) {
+                    valor = formatarNumero(comparacoes[comp] || 0);
+                    break;
+                }
+            }
+            
+            $tr.append(
+                $('<td>').addClass('text-right comparison-value').text(valor)
+            );
+        }
+        
+        // Coluna Demanda Prevista (editável)
+        var $tdPrevista = $('<td>').addClass('text-right editable-cell previsto-value');
+        var $inputPrevista = $('<input>')
+            .attr('type', 'number')
+            .attr('step', '0.001')
+            .addClass('form-control form-control-sm')
+            .val(0)
+            .on('change', function() {
+                salvarPrevisaoIndividual(produto.cod, $(this).val());
+            });
+        $tdPrevista.append($inputPrevista);
+        $tdPrevista.append('<span class="save-indicator"><i class="fas fa-check"></i></span>');
+        $tr.append($tdPrevista);
+        
+        // Coluna Disparo (editável)
+        var $tdDisparo = $('<td>').addClass('text-center');
+        var $selectDisparo = $('<select>')
+            .addClass('form-control form-control-sm editable-select')
+            .html(
+                '<option value="MTS">MTS</option>' +
+                '<option value="MTO">MTO</option>'
+            )
+            .on('change', function() {
+                salvarPrevisaoIndividual(produto.cod, null, $(this).val());
+            });
+        $tdDisparo.append($selectDisparo);
+        $tr.append($tdDisparo);
+        
+        // Coluna Ações
+        $tr.append(
+            $('<td>').addClass('text-center').html(
+                '<button class="btn btn-sm btn-success" onclick="salvarLinha(\'' + produto.cod + '\')">' +
+                '<i class="fas fa-save"></i>' +
+                '</button>'
+            )
+        );
+        
+        $tbody.append($tr);
+    });
+}
+
+// Formata número - sem decimais e "-" para zero
+function formatarNumero(valor) {
+    var num = parseFloat(valor);
+    if (num === 0) {
+        return '-';
+    }
+    return Math.round(num).toLocaleString('pt-BR');
+}
+
+// Salva previsão individual
+function salvarPrevisaoIndividual(codProduto, qtdPrevista, disparoProducao) {
+    var $tr = $('tr[data-produto="' + codProduto + '"]');
+    
+    if (!qtdPrevista) {
+        qtdPrevista = $tr.find('input[type="number"]').val();
+    }
+    if (!disparoProducao) {
+        disparoProducao = $tr.find('select').val();
+    }
+    
+    var dados = {
+        mes: $('#mes-previsao').val(),
+        ano: $('#ano-previsao').val(),
+        grupo: $('#grupo-empresarial').val(),
+        cod_produto: codProduto,
+        nome_produto: produtosCarregados.find(p => p.cod === codProduto)?.nome,
+        qtd_prevista: parseFloat(qtdPrevista),
+        disparo_producao: disparoProducao
+    };
+    
+    $.ajax({
+        url: '{{ url_for("manufatura.salvar_previsao_editada") }}',
+        method: 'POST',
+        data: JSON.stringify(dados),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+        }
+    })
+    .done(function() {
+        // Mostra indicador de salvo
+        $tr.find('.save-indicator').addClass('show');
+        setTimeout(function() {
+            $tr.find('.save-indicator').removeClass('show');
+        }, 2000);
+    })
+    .fail(function() {
+        alert('Erro ao salvar previsão');
+    });
+}
+
+// Salva linha individual
+function salvarLinha(codProduto) {
+    salvarPrevisaoIndividual(codProduto);
+}
+
+// Salva todas as previsões
+function salvarTodasPrevisoes() {
+    if (!confirm('Salvar todas as previsões?')) return;
+    
+    var promises = [];
+    
+    $('tr[data-produto]').each(function() {
+        var codProduto = $(this).data('produto');
+        promises.push(salvarPrevisaoIndividual(codProduto));
+    });
+    
+    $.when.apply($, promises).done(function() {
+        alert('Todas as previsões foram salvas!');
+    });
+}
+
+// Array temporário de prefixos
+var prefixosTemp = [];
+
+// Adiciona prefixo à lista temporária
+function adicionarPrefixo() {
+    var prefixo = $('#grupo-prefixo-input').val().replace(/\D/g, '');
+    
+    if (prefixo.length !== 8) {
+        alert('Prefixo deve ter exatamente 8 dígitos');
+        return;
+    }
+    
+    if (prefixosTemp.includes(prefixo)) {
+        alert('Prefixo já adicionado');
+        return;
+    }
+    
+    prefixosTemp.push(prefixo);
+    renderizarPrefixos();
+    $('#grupo-prefixo-input').val('').focus();
+}
+
+// Renderiza lista de prefixos
+function renderizarPrefixos() {
+    var $lista = $('#lista-prefixos');
+    $lista.empty();
+    
+    prefixosTemp.forEach(function(prefixo, index) {
+        var $badge = $('<span class="badge bg-primary">')
+            .html(prefixo + ' <i class="fas fa-times ms-1" style="cursor:pointer" onclick="removerPrefixo(' + index + ')"></i>');
+        $lista.append($badge);
+    });
+}
+
+// Remove prefixo da lista
+function removerPrefixo(index) {
+    prefixosTemp.splice(index, 1);
+    renderizarPrefixos();
+}
+
+// Limpa formulário
+function limparFormGrupo() {
+    $('#formGrupo')[0].reset();
+    prefixosTemp = [];
+    renderizarPrefixos();
+}
+
+// Salva grupo
+function salvarGrupo() {
+    var nome = $('#grupo-nome').val().trim();
+    var descricao = $('#grupo-descricao').val().trim();
+    
+    if (!nome) {
+        alert('Nome do grupo é obrigatório');
+        return;
+    }
+    
+    if (prefixosTemp.length === 0) {
+        alert('Adicione pelo menos um prefixo');
+        return;
+    }
+    
+    var dados = {
+        nome_grupo: nome,
+        descricao: descricao,
+        prefixos: prefixosTemp
+    };
+    
+    $.ajax({
+        url: '{{ url_for("manufatura.criar_grupo_empresarial") }}',
+        method: 'POST',
+        data: JSON.stringify(dados),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+        },
+        success: function(response) {
+            alert(response.mensagem);
+            limparFormGrupo();
+            carregarGruposCadastrados();
+            carregarGrupos(); // Atualiza select principal
+        },
+        error: function(xhr) {
+            var erro = xhr.responseJSON ? xhr.responseJSON.erro : 'Erro ao salvar grupo';
+            alert(erro);
+        }
+    });
+}
+
+// Carrega grupos cadastrados para a tabela
+function carregarGruposCadastrados() {
+    $.get('{{ url_for("manufatura.listar_grupos_crud") }}')
+    .done(function(grupos) {
+        var $tbody = $('#tbody-grupos');
+        $tbody.empty();
+        
+        if (grupos.length === 0) {
+            $tbody.html('<tr><td colspan="4" class="text-center text-muted">Nenhum grupo cadastrado</td></tr>');
+            return;
+        }
+        
+        grupos.forEach(function(grupo) {
+            var $tr = $('<tr>');
+            $tr.append('<td>' + grupo.nome_grupo + '</td>');
+            $tr.append('<td>' + grupo.prefixos.join(', ') + '</td>');
+            $tr.append('<td>' + (grupo.descricao || '-') + '</td>');
+            $tr.append(
+                '<td>' +
+                '<button class="btn btn-sm btn-info me-1" onclick="editarGrupo(\'' + grupo.nome_grupo + '\')">' +
+                '<i class="fas fa-edit"></i>' +
+                '</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="deletarGrupo(\'' + grupo.nome_grupo + '\')">' +
+                '<i class="fas fa-trash"></i>' +
+                '</button>' +
+                '</td>'
+            );
+            $tbody.append($tr);
+        });
+    })
+    .fail(function() {
+        alert('Erro ao carregar grupos');
+    });
+}
+
+// Edita grupo (carrega dados no formulário)
+function editarGrupo(nomeGrupo) {
+    $.get('{{ url_for("manufatura.listar_grupos_crud") }}')
+    .done(function(grupos) {
+        var grupo = grupos.find(g => g.nome_grupo === nomeGrupo);
+        if (grupo) {
+            $('#grupo-nome').val(grupo.nome_grupo);
+            $('#grupo-descricao').val(grupo.descricao || '');
+            prefixosTemp = grupo.prefixos;
+            renderizarPrefixos();
+        }
+    });
+}
+
+// Deleta grupo
+function deletarGrupo(nomeGrupo) {
+    if (!confirm('Deseja realmente desativar o grupo "' + nomeGrupo + '"?')) return;
+    
+    $.ajax({
+        url: '{{ url_for("manufatura.deletar_grupo_empresarial", nome_grupo="_NOME_") }}'.replace('_NOME_', nomeGrupo),
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+        },
+        success: function(response) {
+            alert(response.mensagem);
+            carregarGruposCadastrados();
+            carregarGrupos(); // Atualiza select principal
+        },
+        error: function(xhr) {
+            var erro = xhr.responseJSON ? xhr.responseJSON.erro : 'Erro ao deletar grupo';
+            alert(erro);
+        }
+    });
+}
+</script>
+{% endblock %}

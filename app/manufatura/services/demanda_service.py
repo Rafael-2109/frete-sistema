@@ -7,14 +7,65 @@ from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.carteira.models import PreSeparacaoItem, CarteiraPrincipal
 from datetime import datetime
-from sqlalchemy import func, and_, extract, not_, exists
+from sqlalchemy import func, extract, or_
 from decimal import Decimal
 
 
 class DemandaService:
     
-    def calcular_demanda_ativa(self, mes=None, ano=None, cod_produto=None):
-        """Calcula demanda ativa excluindo pedidos faturados"""
+    def calcular_demanda_ativa(self, cod_produto, grupo=None):
+        """Calcula demanda ativa da carteira para um produto específico"""
+        
+        from app.carteira.models import CarteiraPrincipal
+        
+        # Busca na CarteiraPrincipal (pedidos não faturados)
+        query = db.session.query(
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
+        ).filter(
+            CarteiraPrincipal.cod_produto == cod_produto,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        )
+        
+        # Filtro por grupo se especificado
+        if grupo and grupo != '':
+            if grupo == 'RESTANTE':
+                # Busca todos os prefixos cadastrados
+                from app.manufatura.models import GrupoEmpresarial
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+                
+                # Exclui CNPJs que pertencem a algum grupo
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query = query.filter(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                        )
+            else:
+                # Busca prefixos do grupo específico
+                from app.manufatura.models import GrupoEmpresarial
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+                
+                if prefixos_grupo:
+                    from sqlalchemy import or_
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query = query.filter(or_(*cnpj_filters))
+        
+        resultado = query.scalar()
+        return float(resultado or 0)
+    
+    def calcular_demanda_ativa_OLD(self, mes=None, ano=None, cod_produto=None):
+        """Método antigo mantido para compatibilidade"""
         
         query_filters = []
         if mes:
@@ -263,3 +314,147 @@ class DemandaService:
             db.session.commit()
         
         return len(previsoes_criadas)
+    
+    def identificar_grupo_por_cnpj(self, cnpj):
+        """
+        Identifica grupo empresarial pelo prefixo do CNPJ (8 primeiros dígitos)
+        Retorna 'RESTANTE' se não pertencer a nenhum grupo
+        """
+        # Remove caracteres não numéricos do CNPJ
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+        
+        # Pega os 8 primeiros dígitos (prefixo)
+        if len(cnpj_limpo) < 8:
+            return 'RESTANTE'
+        
+        prefixo_cnpj = cnpj_limpo[:8]
+        
+        # Busca diretamente pelo prefixo (muito mais eficiente com a nova estrutura)
+        grupo = GrupoEmpresarial.query.filter_by(
+            prefixo_cnpj=prefixo_cnpj,
+            ativo=True
+        ).first()
+        
+        if grupo:
+            return grupo.nome_grupo
+        
+        return 'RESTANTE'
+    
+    def calcular_media_historica(self, cod_produto, meses, mes_base, ano_base, grupo=None):
+        """
+        Calcula média dos últimos N meses para um produto
+        Se grupo for especificado, filtra por grupo (incluindo 'RESTANTE')
+        """
+        from dateutil.relativedelta import relativedelta
+        from datetime import date
+        
+        # Data base para cálculo
+        data_base = date(ano_base, mes_base, 1)
+        
+        # Calcula período de análise
+        data_inicial = data_base - relativedelta(months=meses)
+        data_final = data_base - relativedelta(days=1)  # Último dia do mês anterior
+        
+        # Query base
+        query = db.session.query(
+            func.sum(HistoricoPedidos.qtd_produto_pedido).label('qtd_total')
+        ).filter(
+            HistoricoPedidos.cod_produto == cod_produto,
+            HistoricoPedidos.data_pedido >= data_inicial,
+            HistoricoPedidos.data_pedido <= data_final
+        )
+        
+        # Filtro por grupo
+        if grupo and grupo != 'RESTANTE':
+            # Busca todos os prefixos do grupo
+            prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                GrupoEmpresarial.nome_grupo == grupo,
+                GrupoEmpresarial.ativo == True
+            ).all()
+            
+            if prefixos_grupo:
+                # Lista de prefixos do grupo
+                prefixos = [p[0] for p in prefixos_grupo]
+                
+                # Filtra CNPJs que começam com os prefixos
+                cnpj_filters = []
+                for prefixo in prefixos:
+                    cnpj_filters.append(
+                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                    )
+                if cnpj_filters:
+                    query = query.filter(or_(*cnpj_filters))
+            else:
+                # Grupo não encontrado, retorna 0
+                return 0
+                
+        elif grupo == 'RESTANTE':
+            # Busca todos os prefixos cadastrados
+            todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                GrupoEmpresarial.ativo == True
+            ).all()
+            
+            # Exclui CNPJs que pertencem a algum grupo
+            if todos_prefixos:
+                for prefixo_tuple in todos_prefixos:
+                    prefixo = prefixo_tuple[0]
+                    query = query.filter(
+                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                    )
+        
+        # Executa query
+        resultado = query.scalar() or 0
+        
+        # Calcula média
+        media = float(resultado) / meses if meses > 0 else 0
+        
+        return round(media, 3)
+    
+    def calcular_mesmo_mes_ano_anterior(self, cod_produto, mes, ano, grupo=None):
+        """
+        Busca quantidade do mesmo mês no ano anterior
+        """
+        ano_anterior = ano - 1
+        
+        # Query base
+        query = db.session.query(
+            func.sum(HistoricoPedidos.qtd_produto_pedido).label('qtd_total')
+        ).filter(
+            HistoricoPedidos.cod_produto == cod_produto,
+            extract('month', HistoricoPedidos.data_pedido) == mes,
+            extract('year', HistoricoPedidos.data_pedido) == ano_anterior
+        )
+        
+        # Aplica mesma lógica de grupo da função anterior
+        if grupo and grupo != 'RESTANTE':
+            # Busca todos os prefixos do grupo
+            prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                GrupoEmpresarial.nome_grupo == grupo,
+                GrupoEmpresarial.ativo == True
+            ).all()
+            
+            if prefixos_grupo:
+                prefixos = [p[0] for p in prefixos_grupo]
+                cnpj_filters = []
+                for prefixo in prefixos:
+                    cnpj_filters.append(
+                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                    )
+                if cnpj_filters:
+                    query = query.filter(or_(*cnpj_filters))
+                    
+        elif grupo == 'RESTANTE':
+            # Busca todos os prefixos cadastrados
+            todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                GrupoEmpresarial.ativo == True
+            ).all()
+            
+            if todos_prefixos:
+                for prefixo_tuple in todos_prefixos:
+                    prefixo = prefixo_tuple[0]
+                    query = query.filter(
+                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                    )
+        
+        resultado = query.scalar() or 0
+        return float(resultado)

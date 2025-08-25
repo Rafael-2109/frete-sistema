@@ -522,6 +522,13 @@ class ManufaturaOdooService:
                                     self.logger.error(f"Erro ao processar data de pedido: {e}")
                                     pass
                             
+                            # Processar nome do produto - remover código [XXX] do início
+                            nome_produto_completo = linha['product_id'][1] if linha.get('product_id') else None
+                            nome_produto_limpo = nome_produto_completo
+                            if nome_produto_completo and ']' in nome_produto_completo:
+                                # Remove [codigo] do início do nome
+                                nome_produto_limpo = nome_produto_completo.split(']', 1)[-1].strip()
+                            
                             # Criar histórico
                             historico = HistoricoPedidos(
                                 num_pedido=ped_odoo.get('name'),
@@ -531,7 +538,7 @@ class ManufaturaOdooService:
                                 vendedor=ped_odoo['user_id'][1] if ped_odoo.get('user_id') else None,
                                 equipe_vendas=ped_odoo['team_id'][1] if ped_odoo.get('team_id') else None,
                                 cod_produto=str(linha['product_id'][0]) if linha.get('product_id') else None,
-                                nome_produto=linha['product_id'][1] if linha.get('product_id') else None,
+                                nome_produto=nome_produto_limpo,
                                 qtd_produto_pedido=Decimal(str(linha.get('product_uom_qty', 0))),
                                 preco_produto_pedido=Decimal(str(linha.get('price_unit', 0))),
                                 valor_produto_pedido=Decimal(str(linha.get('price_total', 0)))

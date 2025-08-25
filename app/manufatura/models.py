@@ -3,19 +3,24 @@ Modelos do módulo de Manufatura/PCP
 """
 from app import db
 from datetime import datetime
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 class GrupoEmpresarial(db.Model):
     __tablename__ = 'grupo_empresarial'
     
     id = db.Column(db.Integer, primary_key=True)
-    nome_grupo = db.Column(db.String(100), nullable=False, unique=True, index=True)
-    tipo_grupo = db.Column(db.String(20), nullable=False)
-    info_grupo = db.Column(ARRAY(db.Text), nullable=False)
+    nome_grupo = db.Column(db.String(100), nullable=False, index=True)
+    prefixo_cnpj = db.Column(db.String(8), nullable=False, index=True)  # 1 prefixo por linha
+    descricao = db.Column(db.String(255), nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100))
     ativo = db.Column(db.Boolean, default=True)
+    
+    __table_args__ = (
+        db.UniqueConstraint('prefixo_cnpj'),  # Cada prefixo deve ser único
+        db.Index('idx_grupo_prefixo', 'nome_grupo', 'prefixo_cnpj'),  # Índice composto
+    )
 
 
 class HistoricoPedidos(db.Model):
