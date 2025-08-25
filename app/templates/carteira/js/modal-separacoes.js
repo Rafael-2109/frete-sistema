@@ -468,7 +468,7 @@ class ModalSeparacoes {
 
         try {
             // Verificar De-Para
-            const verificacaoResponse = await fetch(`/portal/portal/atacadao/agendamento/verificar_depara/${loteId}`);
+            const verificacaoResponse = await fetch(`/portal/atacadao/agendamento/verificar_depara/${loteId}`);
             const verificacao = await verificacaoResponse.json();
 
             if (!verificacao.success) {
@@ -516,7 +516,7 @@ class ModalSeparacoes {
             }
 
             // Preparar dados de agendamento
-            const preparacaoResponse = await fetch(`/portal/portal/atacadao/agendamento/preparar/${loteId}`);
+            const preparacaoResponse = await fetch(`/portal/atacadao/agendamento/preparar/${loteId}`);
             const preparacao = await preparacaoResponse.json();
 
             if (!preparacao.success) {
@@ -624,7 +624,7 @@ class ModalSeparacoes {
             if (data.success) {
                 // Se tem protocolo, gravar na Separacao
                 if (data.protocolo) {
-                    await fetch('/portal/portal/atacadao/agendamento/gravar_protocolo', {
+                    await fetch('/portal/atacadao/agendamento/gravar_protocolo', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -685,8 +685,8 @@ class ModalSeparacoes {
         try {
             // Verificar De-Para e status
             const [verificacaoResponse, preparacaoResponse] = await Promise.all([
-                fetch(`/portal/portal/atacadao/agendamento/verificar_depara/${loteId}`),
-                fetch(`/portal/portal/atacadao/agendamento/preparar/${loteId}`)
+                fetch(`/portal/atacadao/agendamento/verificar_depara/${loteId}`),
+                fetch(`/portal/atacadao/agendamento/preparar/${loteId}`)
             ]);
 
             const verificacao = await verificacaoResponse.json();
@@ -881,7 +881,7 @@ class ModalSeparacoes {
     // Função para salvar De-Para
     async salvarDePara(dados) {
         try {
-            const response = await fetch('/portal/portal/atacadao/depara/api/criar', {
+            const response = await fetch('/portal/atacadao/depara/api/criar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

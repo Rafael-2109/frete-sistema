@@ -175,7 +175,7 @@ $(document).ready(function() {
         
         if (codigo) {
             $.ajax({
-                url: `/portal/portal/atacadao/depara/buscar_produto_nosso/${codigo}`,
+                url: `/portal/atacadao/depara/buscar_produto_nosso/${codigo}`,
                 method: 'GET',
                 success: function(response) {
                     if (response.success) {

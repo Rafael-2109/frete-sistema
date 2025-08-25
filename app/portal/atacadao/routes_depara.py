@@ -167,11 +167,71 @@ def importar():
             temp_path = os.path.join('/tmp', filename)
             arquivo.save(temp_path)
             
-            # Ler planilha
+            # Ler planilha com detecção automática de encoding
             if filename.endswith('.csv'):
-                df = pd.read_csv(temp_path)
+                # Tentar diferentes encodings para CSV
+                encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+                df = None
+                
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(temp_path, encoding=encoding)
+                        logger.info(f"CSV lido com sucesso usando encoding: {encoding}")
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Erro ao tentar encoding {encoding}: {e}")
+                        continue
+                
+                if df is None:
+                    # Se nenhum encoding funcionou, tentar com errors='ignore'
+                    try:
+                        df = pd.read_csv(temp_path, encoding='latin-1', errors='ignore')
+                        logger.warning("CSV lido com encoding latin-1 e errors='ignore'")
+                        flash('⚠️ Arquivo com caracteres especiais. Alguns podem ter sido ignorados.', 'warning')
+                    except Exception as e:
+                        flash(f'Erro ao ler arquivo CSV: {str(e)}', 'danger')
+                        os.remove(temp_path)
+                        return redirect(request.url)
             else:
-                df = pd.read_excel(temp_path)
+                # Ler Excel com tratamento de erros
+                try:
+                    # Primeiro tentar com engine padrão
+                    df = pd.read_excel(temp_path)
+                    logger.info("Excel lido com sucesso usando engine padrão")
+                except Exception as e:
+                    logger.warning(f"Erro ao ler Excel com engine padrão: {e}")
+                    try:
+                        # Tentar com openpyxl explicitamente
+                        df = pd.read_excel(temp_path, engine='openpyxl')
+                        logger.info("Excel lido com sucesso usando openpyxl")
+                    except Exception as e2:
+                        logger.warning(f"Erro ao ler Excel com openpyxl: {e2}")
+                        try:
+                            # Última tentativa: pode ser um CSV com extensão errada
+                            logger.warning("Tentando ler como CSV (pode ser extensão errada)")
+                            # Aplicar mesma lógica de encoding do CSV
+                            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+                            df = None
+                            
+                            for encoding in encodings:
+                                try:
+                                    df = pd.read_csv(temp_path, encoding=encoding)
+                                    logger.warning(f"Arquivo com extensão Excel mas é CSV! Lido com {encoding}")
+                                    flash('⚠️ Arquivo parece ser CSV com extensão Excel. Processado com sucesso.', 'warning')
+                                    break
+                                except:
+                                    continue
+                            
+                            if df is None:
+                                df = pd.read_csv(temp_path, encoding='latin-1', errors='ignore')
+                                logger.warning("CSV (com extensão Excel) lido com latin-1 + ignore")
+                                
+                        except Exception as e3:
+                            flash(f'Erro ao ler arquivo: {str(e3)}', 'danger')
+                            os.remove(temp_path)
+                            return redirect(request.url)
             
             # Validar colunas obrigatórias
             colunas_obrigatorias = ['cod atacadao', 'descricao atacadao', 'nosso cod']
