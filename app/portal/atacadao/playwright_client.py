@@ -424,13 +424,32 @@ class AtacadaoPlaywrightClient:
                 'total_registros': 0
             }
             
-            # Verificar se existe elemento de paginação
-            paginacao = self.page.locator('.VuePagination__pagination, .pagination, nav.text-center')
+            # Verificar se existe elemento de paginação VuePagination
+            paginacao = self.page.locator('ul.pagination.VuePagination__pagination')
             if paginacao.count() == 0:
-                logger.info("Não há paginação na página")
-                return info
+                # Tentar seletor alternativo
+                paginacao = self.page.locator('.pagination, nav.text-center')
+                if paginacao.count() == 0:
+                    logger.info("Não há paginação na página")
+                    return info
             
-            # Verificar texto de contagem de registros
+            # Método 1: Detectar total de páginas pelos botões numéricos
+            botoes_pagina = self.page.locator('.VuePagination__pagination-item.page-item:not(.VuePagination__pagination-item-prev-chunk):not(.VuePagination__pagination-item-prev-page):not(.VuePagination__pagination-item-next-page):not(.VuePagination__pagination-item-next-chunk) a')
+            if botoes_pagina.count() > 0:
+                # Pegar o número da última página visível
+                for i in range(botoes_pagina.count()):
+                    texto = botoes_pagina.nth(i).text_content().strip()
+                    try:
+                        num_pagina = int(texto)
+                        if num_pagina > info['total_paginas']:
+                            info['total_paginas'] = num_pagina
+                    except ValueError:
+                        continue
+                
+                logger.info(f"Detectadas {info['total_paginas']} páginas pelos botões de navegação")
+                info['tem_paginacao'] = info['total_paginas'] > 1
+            
+            # Método 2: Verificar texto de contagem de registros (se disponível)
             count_text = self.page.locator('.VuePagination__count, p:has-text("Registros")')
             if count_text.count() > 0:
                 texto = count_text.first.text_content()
@@ -444,21 +463,35 @@ class AtacadaoPlaywrightClient:
                     info['registro_fim'] = int(numeros[1])
                     info['total_registros'] = int(numeros[2])
                     
-                    # Calcular total de páginas
+                    # Calcular total de páginas baseado nos registros
                     registros_por_pagina = info['registro_fim'] - info['registro_inicio'] + 1
                     if registros_por_pagina > 0:
-                        info['total_paginas'] = (info['total_registros'] + registros_por_pagina - 1) // registros_por_pagina
+                        total_paginas_calculado = (info['total_registros'] + registros_por_pagina - 1) // registros_por_pagina
+                        
+                        # Usar o maior valor entre o calculado e o detectado pelos botões
+                        if total_paginas_calculado > info['total_paginas']:
+                            info['total_paginas'] = total_paginas_calculado
                     
                     info['tem_paginacao'] = info['total_paginas'] > 1
             
-            # Detectar página atual
-            pagina_ativa = self.page.locator('.pagination .active, .VuePagination__pagination-item.active')
+            # Detectar página atual pelo botão com classe 'active'
+            pagina_ativa = self.page.locator('.VuePagination__pagination-item.active a')
             if pagina_ativa.count() > 0:
-                texto_pagina = pagina_ativa.first.text_content()
+                texto_pagina = pagina_ativa.first.text_content().strip()
                 try:
                     info['pagina_atual'] = int(texto_pagina)
+                    logger.info(f"Página atual detectada: {info['pagina_atual']}")
                 except ValueError:
                     pass
+            
+            # Verificação adicional: se não detectou páginas mas tem botão next habilitado
+            if info['total_paginas'] == 1:
+                next_button = self.page.locator('.VuePagination__pagination-item-next-page:not(.disabled)')
+                if next_button.count() > 0:
+                    # Há próxima página, então tem pelo menos 2 páginas
+                    info['tem_paginacao'] = True
+                    info['total_paginas'] = 2  # Estimativa mínima
+                    logger.info("Detectada paginação pelo botão 'próxima página' habilitado")
             
             logger.info(f"📊 Paginação detectada: Página {info['pagina_atual']}/{info['total_paginas']}, "
                        f"Registros {info['registro_inicio']}-{info['registro_fim']} de {info['total_registros']}")
@@ -484,49 +517,72 @@ class AtacadaoPlaywrightClient:
             bool: True se navegou com sucesso, False caso contrário
         """
         try:
-            # Procurar botão de próxima página
-            botao_proxima = self.page.locator('.VuePagination__pagination-item-next-page:not(.disabled) a')
+            # Capturar página atual antes de navegar
+            pagina_antes = 1
+            try:
+                pagina_ativa = self.page.locator('.VuePagination__pagination-item.active a')
+                if pagina_ativa.count() > 0:
+                    pagina_antes = int(pagina_ativa.first.text_content().strip())
+            except Exception:
+                pass
             
-            # Se não encontrar, tentar seletor alternativo
-            if botao_proxima.count() == 0:
-                botao_proxima = self.page.locator('li.page-item:has-text(">"):not(.disabled) a')
+            # Procurar botão de próxima página específico do VuePagination
+            botao_proxima = self.page.locator('li.VuePagination__pagination-item-next-page:not(.disabled) a.page-link')
             
             if botao_proxima.count() == 0:
-                logger.info("Não há próxima página disponível")
+                # Tentar seletor mais genérico
+                botao_proxima = self.page.locator('.VuePagination__pagination-item-next-page a')
+                
+                # Verificar se o pai (li) está desabilitado
+                if botao_proxima.count() > 0:
+                    parent_li = self.page.locator('li.VuePagination__pagination-item-next-page')
+                    if parent_li.count() > 0:
+                        classes = parent_li.get_attribute('class') or ''
+                        if 'disabled' in classes:
+                            logger.info("Botão de próxima página está desabilitado - última página alcançada")
+                            return False
+            
+            if botao_proxima.count() == 0:
+                logger.info("Não há botão de próxima página disponível")
                 return False
             
-            # Verificar se o botão não está desabilitado
-            parent_li = botao_proxima.locator('..')
-            if parent_li.count() > 0:
-                classes = parent_li.get_attribute('class') or ''
-                if 'disabled' in classes:
-                    logger.info("Botão de próxima página está desabilitado")
-                    return False
-            
             # Clicar no botão
-            logger.info("📄 Navegando para a próxima página...")
+            logger.info(f"📄 Navegando da página {pagina_antes} para a próxima...")
             botao_proxima.first.click()
             
-            # Aguardar a página carregar (usar wait adaptativo)
-            def nova_pagina_carregada():
+            # Aguardar a mudança de página com verificação mais robusta
+            def pagina_mudou():
                 try:
-                    # Verificar se a tabela foi atualizada verificando se há produtos
+                    # Verificar se a página ativa mudou
+                    pagina_ativa_nova = self.page.locator('.VuePagination__pagination-item.active a')
+                    if pagina_ativa_nova.count() > 0:
+                        pagina_atual = int(pagina_ativa_nova.first.text_content().strip())
+                        return pagina_atual > pagina_antes
+                    
+                    # Fallback: verificar se há produtos na tabela
                     return self.page.locator('table tbody tr').count() > 0
                 except Exception:
                     return False
             
-            carregou = self.aguardar_com_retry(
-                nova_pagina_carregada,
+            mudou = self.aguardar_com_retry(
+                pagina_mudou,
                 timeout_ms=3000,
                 intervalo_ms=200,
-                descricao="Nova página carregar"
+                descricao="Mudança de página"
             )
             
-            if carregou:
-                logger.info("✅ Navegou para a próxima página com sucesso")
+            if mudou:
+                # Confirmar nova página
+                try:
+                    pagina_nova = self.page.locator('.VuePagination__pagination-item.active a')
+                    if pagina_nova.count() > 0:
+                        num_pagina = pagina_nova.first.text_content().strip()
+                        logger.info(f"✅ Navegou com sucesso para a página {num_pagina}")
+                except Exception:
+                    logger.info("✅ Navegou para a próxima página")
                 return True
             else:
-                logger.warning("⚠️ Timeout aguardando nova página carregar")
+                logger.warning("⚠️ Timeout aguardando mudança de página")
                 return False
             
         except Exception as e:
