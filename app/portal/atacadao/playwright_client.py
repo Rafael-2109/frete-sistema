@@ -240,7 +240,7 @@ class AtacadaoPlaywrightClient:
         try:
             # Navegar para a pagina de pedidos
             url_pedidos = self.config['urls']['pedidos']  # https://atacadao.hodiebooking.com.br/pedidos
-            self.page.goto(url_pedidos, wait_until='networkidle')
+            self.page.goto(url_pedidos, wait_until='domcontentloaded')
             
             # Verificar indicadores de login do CONFIG
             usuario_logado = self.config['seletores']['usuario_logado']
@@ -388,7 +388,8 @@ class AtacadaoPlaywrightClient:
         def elemento_visivel():
             try:
                 return self.page.locator(seletor).is_visible()
-            except:
+            except Exception as e:
+                logger.warning(f"Erro ao verificar elemento visível: {e}")
                 return False
         
         return self.aguardar_com_retry_progressivo(
@@ -482,40 +483,62 @@ class AtacadaoPlaywrightClient:
             # FORÇAR CLIQUE DE VÁRIAS FORMAS
             logger.info("🎯 Tentando clicar no botão Salvar...")
             
-            # Método 1: Click normal
+            # Método 1: Click normal com tratamento de navegação
             try:
-                botao_salvar.click()
-                logger.info("   ✅ Click normal executado")
-                self.page.wait_for_timeout(500)  # Aguardar meio segundo
+                # Capturar URL antes do clique
+                url_before = self.page.url
+                logger.info(f"   URL antes: {url_before}")
                 
-                # Verificar se mudou de página
-                current_url = self.page.url
-                logger.info(f"   URL após click: {current_url}")
+                # Clicar e aguardar navegação ou timeout
+                try:
+                    with self.page.expect_navigation(wait_until="domcontentloaded", timeout=5000):
+                        botao_salvar.click()
+                        logger.info("   ✅ Click executado, aguardando navegação...")
+                except Exception as e:
+                    logger.warning(f"Erro ao clicar no botão salvar: {e}")
+                    # Se não houve navegação, tentar outros métodos
+                    logger.info("   ⚠️ Sem navegação detectada, verificando estado...")
                 
+                # Verificar URL após clique
+                url_after = self.page.url
+                logger.info(f"   URL depois: {url_after}")
+                
+                # Se mudou de página, sucesso
+                if url_after != url_before:
+                    logger.info("   ✅ Navegação detectada!")
+                    return True
+                    
+                # Se ainda na mesma página, verificar se há modal de erro
+                if self.page.locator('.modal.show, .alert-danger').count() > 0:
+                    logger.warning("   ⚠️ Modal ou erro detectado")
+                    return False
+                    
                 return True
+                
             except Exception as e:
                 logger.warning(f"   ⚠️ Click normal falhou: {e}")
                 
-                # Método 2: Click com JavaScript
+                # Se o contexto foi destruído, significa que navegou (sucesso)
+                if "context was destroyed" in str(e).lower() or "execution context" in str(e).lower():
+                    logger.info("   ✅ Contexto destruído = navegação ocorreu (sucesso)")
+                    return True
+                
+                # Método 2: Forçar com JavaScript se necessário
                 try:
                     logger.info("   Tentando click via JavaScript...")
                     self.page.evaluate('document.querySelector("#salvar").click()')
-                    logger.info("   ✅ Click JavaScript executado")
-                    self.page.wait_for_timeout(500)
-                    return True
+                    # Aguardar pequeno tempo para processar
+                    try:
+                        self.page.wait_for_url("**/cargas/**", timeout=2000)
+                        logger.info("   ✅ Click JavaScript funcionou")
+                        return True
+                    except Exception as e:
+                        logger.warning(f"Erro ao aguardar URL: {e}")
+                        pass
                 except Exception as e2:
                     logger.warning(f"   ⚠️ Click JavaScript falhou: {e2}")
-                    
-                    # Método 3: Força jQuery click
-                    try:
-                        logger.info("   Tentando click via jQuery...")
-                        self.page.evaluate('$("#salvar").click()')
-                        logger.info("   ✅ Click jQuery executado")
-                        self.page.wait_for_timeout(500)
-                        return True
-                    except Exception as e3:
-                        logger.error(f"   ❌ Todos os métodos falharam: {e3}")
-                        return False
+                
+                return False
         
         # Se não encontrou #salvar, procurar alternativas
         logger.warning("❌ Botão #salvar não encontrado, procurando alternativas...")
@@ -547,7 +570,12 @@ class AtacadaoPlaywrightClient:
         try:
             # Navegar para pagina de pedidos
             self.page.goto(self.config['urls']['pedidos'], timeout=30000)
-            self.page.wait_for_load_state('networkidle', timeout=10000)
+            # Aguardar DOM em vez de networkidle (pode travar em produção)
+            try:
+                self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+            except Exception as e:
+                logger.warning(f"Erro ao aguardar DOM: {e}")
+                pass  # Continuar mesmo se timeout
             
             # ABRIR FILTROS PRIMEIRO - IMPORTANTE!
             logger.info("Abrindo secao de filtros...")
@@ -675,9 +703,13 @@ class AtacadaoPlaywrightClient:
                             if link_exibir.count() > 0:
                                 link_exibir.click()
                                 logger.info(f"Pedido {numero_pedido} aberto com sucesso")
-                                self.page.wait_for_load_state('networkidle', timeout=10000)
-                                return True
-                            break
+                                # Aguardar DOM em vez de networkidle (pode travar em produção)
+                                try:
+                                    self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                                except Exception as e:
+                                    pass  # Continuar mesmo se timeout
+                                    return True
+                            break  # Sair do loop após encontrar o pedido
             else:
                 # Não encontrou o pedido
                 logger.warning(f"Pedido {numero_pedido} não encontrado na busca")
@@ -751,7 +783,13 @@ class AtacadaoPlaywrightClient:
                 )
             
             logger.info("Formulario de agendamento aberto")
-            self.page.wait_for_load_state('networkidle')
+            # REMOVIDO wait_for_load_state('networkidle') - pode travar em produção
+            # Aguardar apenas o DOM estar pronto
+            try:
+                self.page.wait_for_load_state('domcontentloaded', timeout=3000)
+            except Exception as e:
+                logger.warning(f"Erro ao aguardar DOM: {e}")
+                logger.warning("Timeout aguardando DOM, continuando...")
             
             # DIAGNÓSTICO: Verificar URL depois
             url_depois = self.page.url
@@ -826,7 +864,8 @@ class AtacadaoPlaywrightClient:
                             try:
                                 valor_atual = campo_data_visivel.input_value()
                                 return valor_atual == data_agendamento
-                            except:
+                            except Exception as e:
+                                logger.warning(f"Erro ao verificar data: {e}")
                                 return False
                         
                         # Aguardar confirmação que digitou
@@ -899,7 +938,8 @@ class AtacadaoPlaywrightClient:
                             try:
                                 valor_atual = campo_leadtime.input_value()
                                 return valor_atual == data_agendamento
-                            except:
+                            except Exception as e:
+                                logger.warning(f"Erro ao verificar leadtime: {e}")
                                 return False
                         
                         # Aguardar confirmação que digitou
@@ -952,7 +992,8 @@ class AtacadaoPlaywrightClient:
             try:
                 valor_transportadora = campo_transportadora.input_value() if campo_transportadora.count() > 0 else ""
                 transportadora_preenchida = valor_transportadora != "" and valor_transportadora != "0"
-            except:
+            except Exception as e:
+                logger.warning(f"Erro ao verificar transportadora: {e}")
                 pass
             
             if not transportadora_preenchida and self.page.locator(self.config['seletores']['botao_buscar_transportadora']).is_visible():
@@ -971,7 +1012,8 @@ class AtacadaoPlaywrightClient:
                         botao_existe = self.page.locator('.modal-footer button.selecionar').count() > 0
                         
                         return modal_visivel and radio_visivel and botao_existe
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Erro ao verificar modal: {e}")
                         return False
                 
                 modal_aberto = self.aguardar_com_retry_progressivo(
@@ -995,7 +1037,8 @@ class AtacadaoPlaywrightClient:
                         def radio_marcado():
                             try:
                                 return radio_agregado.is_checked()
-                            except:
+                            except Exception as e:
+                                logger.warning(f"Erro ao verificar radio: {e}")
                                 return False
                         
                         self.aguardar_com_retry(
@@ -1028,7 +1071,8 @@ class AtacadaoPlaywrightClient:
                                 valor = self.page.locator('#id_transportadora, #transportadora').input_value()
                                 # Verificar se tem valor e não é "0" ou vazio
                                 return valor != "" and valor != "0"
-                            except:
+                            except Exception as e:
+                                logger.warning(f"Erro ao verificar transportadora: {e}")
                                 return False
                         
                         preencheu = self.aguardar_com_retry_progressivo(
@@ -1146,7 +1190,8 @@ class AtacadaoPlaywrightClient:
                     botao_habilitado = self.page.locator('#salvar').is_enabled()
                     
                     return data_ok and transp_ok and not tem_erro and botao_habilitado
-                except:
+                except Exception as e:
+                    logger.warning(f"Erro ao verificar formulário: {e}")
                     return False
             
             # Primeiro wait curto para casos rápidos
@@ -1436,7 +1481,12 @@ class AtacadaoPlaywrightClient:
         try:
             # Navegar para pagina de pedidos
             self.page.goto(self.config['urls']['pedidos'], timeout=30000)
-            self.page.wait_for_load_state('networkidle', timeout=10000)
+            # Aguardar DOM em vez de networkidle (pode travar em produção)
+            try:
+                self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+            except Exception as e:
+                logger.warning(f"Erro ao aguardar DOM: {e}")
+                pass  # Continuar mesmo se timeout
             
             # Abrir filtros
             logger.info("Abrindo filtros...")
@@ -1489,7 +1539,7 @@ class AtacadaoPlaywrightClient:
                                 link_exibir = linha.locator('a[title="Exibir"]')
                                 if link_exibir.count() > 0:
                                     link_exibir.click()
-                                    self.page.wait_for_load_state('networkidle')
+                                    self.page.wait_for_load_state('domcontentloaded')
                                     return True
                 
                 # Se nao encontrou, limpar e tentar novamente
@@ -1521,7 +1571,12 @@ class AtacadaoPlaywrightClient:
             # URL do agendamento
             url_agendamento = self.config['urls']['agendamento_status'].format(protocolo=protocolo)
             self.page.goto(url_agendamento)
-            self.page.wait_for_load_state('networkidle')
+            # Aguardar DOM em vez de networkidle (pode travar em produção)
+            try:
+                self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+            except Exception as e:
+                logger.warning(f"Erro ao aguardar DOM: {e}")
+                pass  # Continuar mesmo se timeout
             
             # Extrair status
             status_selector = self.config['seletores']['status_agendamento']
