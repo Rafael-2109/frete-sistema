@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Filtros de Carteira</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {
+            margin-top: 50px;
+        }
+        
+        .bg-filtro {
+            cursor: pointer !important;
+            transition: all 0.2s ease;
+            user-select: none;
+            margin: 2px;
+        }
+        
+        .bg-filtro:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .bg-filtro:active {
+            transform: scale(0.98);
+        }
+        
+        .bg-filtro.ativo {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .test-result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .test-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .test-error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teste de Filtros de Carteira</h1>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Badges de Agendamento</h5>
+            </div>
+            <div class="card-body">
+                <span class="badge bg-filtro badge-agendamento"
+                    style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                    data-tipo="agendamento" data-valor="sem">
+                    Sem Agendamento
+                </span>
+                <span class="badge bg-filtro badge-agendamento"
+                    style="background-color: transparent; color: #198754; border: 2px solid #198754;"
+                    data-tipo="agendamento" data-valor="com">
+                    Com Agendamento
+                </span>
+                <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-agendamento"
+                    style="display:none;">
+                    Limpar
+                </button>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Badges de Rotas/Incoterms</h5>
+            </div>
+            <div class="card-body">
+                <span class="badge bg-filtro badge-rota"
+                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                    data-tipo="rota" data-valor="SP">SP</span>
+                <span class="badge bg-filtro badge-rota"
+                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                    data-tipo="rota" data-valor="RJ">RJ</span>
+                <span class="badge bg-filtro badge-rota"
+                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                    data-tipo="rota" data-valor="MG">MG</span>
+                <span class="badge bg-filtro badge-incoterm"
+                    style="background-color: transparent; color: #ffc107; border: 2px solid #ffc107;"
+                    data-tipo="incoterm" data-valor="FOB">FOB</span>
+                <span class="badge bg-filtro badge-incoterm"
+                    style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                    data-tipo="incoterm" data-valor="RED">RED</span>
+                <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-rotas"
+                    style="display:none;">
+                    Limpar
+                </button>
+            </div>
+        </div>
+        
+        <div class="test-result" id="test-result">
+            <h5>Resultado do Teste:</h5>
+            <div id="test-messages"></div>
+        </div>
+        
+        <div class="mt-4">
+            <button class="btn btn-primary" onclick="testarFiltros()">Executar Teste</button>
+            <button class="btn btn-secondary" onclick="location.reload()">Recarregar</button>
+        </div>
+    </div>
+
+    <script>
+        // Teste simples dos filtros
+        function testarFiltros() {
+            const resultDiv = document.getElementById('test-messages');
+            resultDiv.innerHTML = '';
+            let hasError = false;
+            
+            // Teste 1: Verificar se badges existem
+            const badges = document.querySelectorAll('.bg-filtro');
+            if (badges.length > 0) {
+                addMessage('✅ Badges encontrados: ' + badges.length, 'success');
+            } else {
+                addMessage('❌ Nenhum badge encontrado!', 'error');
+                hasError = true;
+            }
+            
+            // Teste 2: Adicionar event listeners
+            let clickCount = 0;
+            badges.forEach(badge => {
+                badge.style.cursor = 'pointer';
+                badge.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    clickCount++;
+                    
+                    // Toggle visual
+                    if (this.classList.contains('ativo')) {
+                        this.classList.remove('ativo');
+                        this.style.backgroundColor = 'transparent';
+                        
+                        // Restaurar cor original
+                        if (this.dataset.tipo === 'rota') {
+                            this.style.color = '#0d6efd';
+                        } else if (this.dataset.valor === 'FOB') {
+                            this.style.color = '#ffc107';
+                        } else if (this.dataset.valor === 'RED' || this.dataset.valor === 'sem') {
+                            this.style.color = '#dc3545';
+                        } else if (this.dataset.valor === 'com') {
+                            this.style.color = '#198754';
+                        }
+                    } else {
+                        this.classList.add('ativo');
+                        
+                        // Aplicar cor de fundo
+                        if (this.dataset.tipo === 'rota') {
+                            this.style.backgroundColor = '#0d6efd';
+                            this.style.color = 'white';
+                        } else if (this.dataset.valor === 'FOB') {
+                            this.style.backgroundColor = '#ffc107';
+                            this.style.color = '#000';
+                        } else if (this.dataset.valor === 'RED' || this.dataset.valor === 'sem') {
+                            this.style.backgroundColor = '#dc3545';
+                            this.style.color = 'white';
+                        } else if (this.dataset.valor === 'com') {
+                            this.style.backgroundColor = '#198754';
+                            this.style.color = 'white';
+                        }
+                    }
+                    
+                    addMessage(`Badge clicado: ${this.dataset.tipo} - ${this.dataset.valor} (Total clicks: ${clickCount})`, 'success');
+                });
+            });
+            
+            addMessage('✅ Event listeners adicionados aos badges', 'success');
+            
+            // Teste 3: Simular clique
+            if (badges.length > 0) {
+                const firstBadge = badges[0];
+                firstBadge.click();
+                addMessage('✅ Teste de clique simulado executado', 'success');
+            }
+            
+            // Resultado final
+            const resultClass = hasError ? 'test-error' : 'test-success';
+            document.getElementById('test-result').className = 'test-result ' + resultClass;
+        }
+        
+        function addMessage(msg, type) {
+            const resultDiv = document.getElementById('test-messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.innerHTML = msg;
+            msgDiv.style.color = type === 'error' ? '#721c24' : '#155724';
+            resultDiv.appendChild(msgDiv);
+        }
+        
+        // Auto-executar teste ao carregar
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM carregado - pronto para testes');
+            
+            // Adicionar mensagem inicial
+            addMessage('Página carregada. Clique em "Executar Teste" ou clique diretamente nos badges.', 'info');
+        });
+    </script>
+</body>
+</html>

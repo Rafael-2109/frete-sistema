@@ -739,6 +739,26 @@
 
 <!-- CSS de animações fluidas -->
 <style>
+    /* Estilos para badges de filtros clicáveis */
+    .bg-filtro {
+        cursor: pointer !important;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+    
+    .bg-filtro:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .bg-filtro:active {
+        transform: scale(0.98);
+    }
+    
+    .bg-filtro.ativo {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
     /* Animações fluidas para atualizações parciais */
     .update-animation {
         animation: highlightUpdate 1s ease-in-out;

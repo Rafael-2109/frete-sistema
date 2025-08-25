@@ -400,6 +400,274 @@ class AtacadaoPlaywrightClient:
             descricao=f"Elemento '{seletor}' ficar visível"
         )
     
+    def _detectar_paginacao(self):
+        """
+        Detecta informações de paginação na página
+        
+        Returns:
+            dict: {
+                'tem_paginacao': bool,
+                'pagina_atual': int,
+                'total_paginas': int,
+                'registro_inicio': int,
+                'registro_fim': int,
+                'total_registros': int
+            }
+        """
+        try:
+            info = {
+                'tem_paginacao': False,
+                'pagina_atual': 1,
+                'total_paginas': 1,
+                'registro_inicio': 0,
+                'registro_fim': 0,
+                'total_registros': 0
+            }
+            
+            # Verificar se existe elemento de paginação
+            paginacao = self.page.locator('.VuePagination__pagination, .pagination, nav.text-center')
+            if paginacao.count() == 0:
+                logger.info("Não há paginação na página")
+                return info
+            
+            # Verificar texto de contagem de registros
+            count_text = self.page.locator('.VuePagination__count, p:has-text("Registros")')
+            if count_text.count() > 0:
+                texto = count_text.first.text_content()
+                logger.info(f"Texto de paginação encontrado: {texto}")
+                
+                # Extrair números do texto tipo "Registros 1 ao 20 de 35"
+                import re
+                numeros = re.findall(r'\d+', texto)
+                if len(numeros) >= 3:
+                    info['registro_inicio'] = int(numeros[0])
+                    info['registro_fim'] = int(numeros[1])
+                    info['total_registros'] = int(numeros[2])
+                    
+                    # Calcular total de páginas
+                    registros_por_pagina = info['registro_fim'] - info['registro_inicio'] + 1
+                    if registros_por_pagina > 0:
+                        info['total_paginas'] = (info['total_registros'] + registros_por_pagina - 1) // registros_por_pagina
+                    
+                    info['tem_paginacao'] = info['total_paginas'] > 1
+            
+            # Detectar página atual
+            pagina_ativa = self.page.locator('.pagination .active, .VuePagination__pagination-item.active')
+            if pagina_ativa.count() > 0:
+                texto_pagina = pagina_ativa.first.text_content()
+                try:
+                    info['pagina_atual'] = int(texto_pagina)
+                except ValueError:
+                    pass
+            
+            logger.info(f"📊 Paginação detectada: Página {info['pagina_atual']}/{info['total_paginas']}, "
+                       f"Registros {info['registro_inicio']}-{info['registro_fim']} de {info['total_registros']}")
+            
+            return info
+            
+        except Exception as e:
+            logger.error(f"Erro ao detectar paginação: {e}")
+            return {
+                'tem_paginacao': False,
+                'pagina_atual': 1,
+                'total_paginas': 1,
+                'registro_inicio': 0,
+                'registro_fim': 0,
+                'total_registros': 0
+            }
+    
+    def _navegar_proxima_pagina(self):
+        """
+        Navega para a próxima página se disponível
+        
+        Returns:
+            bool: True se navegou com sucesso, False caso contrário
+        """
+        try:
+            # Procurar botão de próxima página
+            botao_proxima = self.page.locator('.VuePagination__pagination-item-next-page:not(.disabled) a')
+            
+            # Se não encontrar, tentar seletor alternativo
+            if botao_proxima.count() == 0:
+                botao_proxima = self.page.locator('li.page-item:has-text(">"):not(.disabled) a')
+            
+            if botao_proxima.count() == 0:
+                logger.info("Não há próxima página disponível")
+                return False
+            
+            # Verificar se o botão não está desabilitado
+            parent_li = botao_proxima.locator('..')
+            if parent_li.count() > 0:
+                classes = parent_li.get_attribute('class') or ''
+                if 'disabled' in classes:
+                    logger.info("Botão de próxima página está desabilitado")
+                    return False
+            
+            # Clicar no botão
+            logger.info("📄 Navegando para a próxima página...")
+            botao_proxima.first.click()
+            
+            # Aguardar a página carregar (usar wait adaptativo)
+            def nova_pagina_carregada():
+                try:
+                    # Verificar se a tabela foi atualizada verificando se há produtos
+                    return self.page.locator('table tbody tr').count() > 0
+                except Exception:
+                    return False
+            
+            carregou = self.aguardar_com_retry(
+                nova_pagina_carregada,
+                timeout_ms=3000,
+                intervalo_ms=200,
+                descricao="Nova página carregar"
+            )
+            
+            if carregou:
+                logger.info("✅ Navegou para a próxima página com sucesso")
+                return True
+            else:
+                logger.warning("⚠️ Timeout aguardando nova página carregar")
+                return False
+            
+        except Exception as e:
+            logger.error(f"Erro ao navegar para próxima página: {e}")
+            return False
+    
+    def _processar_produtos_pagina_atual(self, produtos_separacao):
+        """
+        Processa os produtos da página atual
+        
+        Args:
+            produtos_separacao: dict com código do produto como chave e quantidade como valor
+            
+        Returns:
+            dict: {'preenchidos': int, 'zerados': int, 'processados': list}
+        """
+        resultado = {
+            'preenchidos': 0,
+            'zerados': 0,
+            'processados': []
+        }
+        
+        try:
+            # Preencher cada linha da tabela
+            linhas_produtos = self.page.locator('table tbody tr').all()
+            logger.info(f"📋 Processando {len(linhas_produtos)} produtos nesta página")
+            
+            for linha in linhas_produtos:
+                try:
+                    # Pegar código do produto (primeira coluna)
+                    codigo = linha.locator('td').first.text_content().strip()
+                    
+                    # Campo de quantidade
+                    campo_qtd = linha.locator('input[name*="qtd_alocada"]')
+                    
+                    if campo_qtd.count() > 0:
+                        if codigo in produtos_separacao:
+                            # Produto está na separação
+                            qtd = produtos_separacao[codigo]
+                            campo_qtd.fill(str(qtd))
+                            logger.info(f"  ✅ Produto {codigo}: {qtd} unidades")
+                            resultado['preenchidos'] += 1
+                            resultado['processados'].append(codigo)
+                        else:
+                            # Produto NÃO está na separação - zerar
+                            campo_qtd.fill('0')
+                            logger.debug(f"  ❌ Produto {codigo}: 0 (não na separação)")
+                            resultado['zerados'] += 1
+                
+                except Exception as e:
+                    logger.warning(f"Erro ao processar linha do produto: {e}")
+                    continue
+            
+            logger.info(f"📊 Página processada: {resultado['preenchidos']} preenchidos, {resultado['zerados']} zerados")
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar produtos da página: {e}")
+        
+        return resultado
+    
+    def _processar_produtos_todas_paginas(self, produtos_separacao):
+        """
+        Processa produtos em todas as páginas disponíveis
+        
+        Args:
+            produtos_separacao: dict com código do produto como chave e quantidade como valor
+            
+        Returns:
+            dict: Resumo do processamento
+        """
+        resumo = {
+            'total_preenchidos': 0,
+            'total_zerados': 0,
+            'total_paginas': 0,
+            'produtos_processados': []
+        }
+        
+        try:
+            # Detectar informações de paginação
+            info_paginacao = self._detectar_paginacao()
+            
+            if not info_paginacao['tem_paginacao']:
+                # Não tem paginação, processar apenas página atual
+                logger.info("📄 Processando página única (sem paginação)")
+                resultado = self._processar_produtos_pagina_atual(produtos_separacao)
+                resumo['total_preenchidos'] = resultado['preenchidos']
+                resumo['total_zerados'] = resultado['zerados']
+                resumo['total_paginas'] = 1
+                resumo['produtos_processados'] = resultado['processados']
+            else:
+                # Tem múltiplas páginas
+                logger.info(f"📚 Detectadas {info_paginacao['total_paginas']} páginas de produtos")
+                
+                # Processar cada página
+                pagina_atual = 1
+                max_paginas = min(info_paginacao['total_paginas'], 10)  # Limitar a 10 páginas por segurança
+                
+                while pagina_atual <= max_paginas:
+                    logger.info(f"\n🔄 PROCESSANDO PÁGINA {pagina_atual}/{info_paginacao['total_paginas']}")
+                    
+                    # Processar página atual
+                    resultado = self._processar_produtos_pagina_atual(produtos_separacao)
+                    resumo['total_preenchidos'] += resultado['preenchidos']
+                    resumo['total_zerados'] += resultado['zerados']
+                    resumo['produtos_processados'].extend(resultado['processados'])
+                    
+                    # Verificar se há próxima página
+                    if pagina_atual < info_paginacao['total_paginas']:
+                        # Navegar para próxima página
+                        if self._navegar_proxima_pagina():
+                            pagina_atual += 1
+                            # Pequena pausa para garantir estabilidade
+                            self.page.wait_for_timeout(500)
+                        else:
+                            logger.warning("Não foi possível navegar para a próxima página")
+                            break
+                    else:
+                        break
+                
+                resumo['total_paginas'] = pagina_atual
+                
+                # Verificar se todos os produtos foram processados
+                produtos_nao_encontrados = []
+                for codigo in produtos_separacao.keys():
+                    if codigo not in resumo['produtos_processados']:
+                        produtos_nao_encontrados.append(codigo)
+                
+                if produtos_nao_encontrados:
+                    logger.warning(f"⚠️ {len(produtos_nao_encontrados)} produtos da separação não foram encontrados nas páginas: {produtos_nao_encontrados[:5]}...")
+                
+        except Exception as e:
+            logger.error(f"Erro ao processar produtos em múltiplas páginas: {e}")
+            # Em caso de erro, tentar processar ao menos a página atual
+            resultado = self._processar_produtos_pagina_atual(produtos_separacao)
+            resumo['total_preenchidos'] = resultado['preenchidos']
+            resumo['total_zerados'] = resultado['zerados']
+            resumo['total_paginas'] = 1
+            resumo['produtos_processados'] = resultado['processados']
+        
+        return resumo
+    
     def _capturar_protocolo_apos_salvar(self, timeout_ms=5000):
         """Captura protocolo com retry rápido"""
         inicio = time.time()
@@ -1121,7 +1389,7 @@ class AtacadaoPlaywrightClient:
                 except Exception as e:
                     logger.warning(f"Erro ao selecionar veiculo: {e}")
             
-            # 4.6 Preencher quantidades dos produtos (SIMPLES como no script funcional)
+            # 4.6 Preencher quantidades dos produtos em TODAS AS PÁGINAS
             logger.info("Preenchendo quantidades dos produtos...")
             
             # Criar mapa de produtos da separação
@@ -1131,26 +1399,14 @@ class AtacadaoPlaywrightClient:
                     codigo = str(produto.get('codigo'))
                     quantidade = produto.get('quantidade', 0)
                     produtos_separacao[codigo] = int(quantidade)
+                logger.info(f"📦 Total de produtos na separação: {len(produtos_separacao)}")
             
-            # Preencher cada linha da tabela
-            linhas_produtos = self.page.locator('table tbody tr').all()
-            for linha in linhas_produtos:
-                # Pegar código do produto (primeira coluna)
-                codigo = linha.locator('td').first.text_content().strip()
-                
-                # Campo de quantidade
-                campo_qtd = linha.locator('input[name*="qtd_alocada"]')
-                
-                if campo_qtd.count() > 0:
-                    if codigo in produtos_separacao:
-                        # Produto está na separação
-                        qtd = produtos_separacao[codigo]
-                        campo_qtd.fill(str(qtd))
-                        logger.info(f"✅ Produto {codigo}: {qtd} unidades")
-                    else:
-                        # Produto NÃO está na separação - zerar
-                        campo_qtd.fill('0')
-                        logger.info(f"❌ Produto {codigo}: 0 (não na separação)")
+            # NOVO: Processar produtos em todas as páginas
+            produtos_processados = self._processar_produtos_todas_paginas(produtos_separacao)
+            
+            # Log final
+            logger.info(f"✅ RESUMO: {produtos_processados['total_preenchidos']} produtos preenchidos, "
+                       f"{produtos_processados['total_zerados']} zerados em {produtos_processados['total_paginas']} página(s)")
             
             # 5. NÃO MEXER NO MODO DE EDIÇÃO (como o script que funciona)
             # REMOVIDO: window.f_editando = true (estava quebrando o formulário)

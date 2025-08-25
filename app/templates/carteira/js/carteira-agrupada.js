@@ -9,18 +9,28 @@ class CarteiraAgrupada {
         this.filtrosAtivos = {
             rotas: new Set(),
             incoterms: new Set(),
-            subrotas: new Set()
+            subrotas: new Set(),
+            agendamento: null  // null, 'com' ou 'sem'
         };
         this.maxFiltrosAtivos = 3; // Máximo de badges selecionados simultaneamente
         this.init();
     }
 
     init() {
+        console.log('🚀 Inicializando CarteiraAgrupada...');
         this.setupEventListeners();
         this.initDropdownSeparacoes();
         this.initWorkspace();
         this.initBadgesFiltros();
         console.log('✅ Carteira Agrupada inicializada');
+        
+        // Debug: verificar se os badges foram encontrados
+        const totalBadges = document.querySelectorAll('.bg-filtro').length;
+        if (totalBadges === 0) {
+            console.error('❌ ERRO: Nenhum badge .bg-filtro encontrado no DOM!');
+        } else {
+            console.log(`✅ ${totalBadges} badges de filtro encontrados e configurados`);
+        }
     }
 
     initWorkspace() {
@@ -64,8 +74,11 @@ class CarteiraAgrupada {
     }
 
     initBadgesFiltros() {
-        // Event listeners para badges
-        document.querySelectorAll('.badge-filtro').forEach(badge => {
+        // Event listeners para badges - CORREÇÃO: usar .bg-filtro em vez de .badge-filtro
+        document.querySelectorAll('.bg-filtro').forEach(badge => {
+            // Adicionar cursor pointer para indicar que é clicável
+            badge.style.cursor = 'pointer';
+            
             badge.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -91,7 +104,7 @@ class CarteiraAgrupada {
             limparAgendamento.addEventListener('click', () => this.limparFiltrosAgendamento());
         }
         
-        console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.badge-filtro').length);
+        console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.bg-filtro').length);
     }
 
     toggleBadgeFiltro(badge) {
