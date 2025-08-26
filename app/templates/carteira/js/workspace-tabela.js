@@ -135,11 +135,6 @@ class WorkspaceTabela {
                                     title="Ver projeção de estoque D+0 a D+28">
                                 <i class="fas fa-chart-line me-1"></i>Cardex
                             </button>
-                            <button class="btn btn-outline-secondary btn-xs" 
-                                    onclick="workspace.resetarQuantidadeProduto('${produto.cod_produto}')"
-                                    title="Restaurar quantidade original do pedido">
-                                <i class="fas fa-undo me-1"></i>Reset
-                            </button>
                         </div>
                     </td>
                 </tr>
