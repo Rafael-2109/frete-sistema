@@ -27,7 +27,9 @@ requests==2.32.3
 # ==========================================
 # CLOUD & DEPLOYMENT
 # ==========================================
-gunicorn==21.2.0
+gunicorn==23.0.0  # Atualizado para melhor compatibilidade
+greenlet==3.1.1  # CRÍTICO: Versão 3.1+ para Python 3.12+
+gevent==24.11.1  # Atualizado para compatibilidade com greenlet
 boto3==1.35.0
 python-dotenv==1.1.0
 psutil==5.9.6
@@ -36,7 +38,7 @@ psutil==5.9.6
 # CACHE & PERFORMANCE
 # ==========================================
 redis==5.0.8
-rq==1.16.1  # Redis Queue para processamento em background
+rq==1.16.2  # Redis Queue para processamento em background (atualizado)
 rq-dashboard==0.6.1  # Dashboard para monitorar jobs (opcional)
 APScheduler==3.11.0
 
@@ -64,7 +66,8 @@ anyio==4.9.0               # Async support
 # - Detecção de sinônimos
 
 fuzzywuzzy==0.18.0         # Matching fuzzy de strings
-python-Levenshtein==0.25.0 # Algoritmo de distância (opcional mas recomendado)
+rapidfuzz==3.10.1          # Substitui python-Levenshtein - mais rápido e compatível com Python 3.12+
+# python-Levenshtein-wheels==0.13.2  # Alternativa se precisar manter Levenshtein
 unidecode==1.4.0           # Remove acentos para comparação
 
 # NLTK Simplificado (apenas o essencial)
@@ -91,9 +94,9 @@ jellyfish==1.1.0           # String matching algorithms
 # ==========================================
 # plotly==5.20.0          # Gráficos interativos
 # matplotlib==3.8.3       # Gráficos básicos
-structlog>=23.1.0
+structlog==24.4.0  # Versão específica para estabilidade
 # Logging colorido
-colorlog>=6.7.0
+colorlog==6.8.2  # Versão específica para estabilidade
 PyJWT==2.8.0
 
 fastapi==0.115.5
@@ -116,15 +119,15 @@ extract-msg==0.45.0  # Para ler arquivos .msg do Outlook
 # Escolha uma das opções abaixo conforme necessidade:
 
 # Opção 1: Selenium (para Chrome Debug Mode - RECOMENDADO)
-selenium==4.15.0           # Automação browser
-webdriver-manager==4.0.1   # Gerenciamento de drivers
+selenium==4.27.1           # Automação browser (atualizado)
+webdriver-manager==4.0.2   # Gerenciamento de drivers (atualizado)
 
 # Opção 2: Playwright (alternativa moderna)
-playwright==1.40.0       # Automação multi-browser (descomentado se preferir)
-nest-asyncio==1.6.0      # Fix para Playwright Sync em loop asyncio
+playwright==1.49.0         # Automação multi-browser (atualizado)
+nest-asyncio==1.6.0        # Fix para Playwright Sync em loop asyncio
 
 # Dependências adicionais para portal
-cryptography==41.0.7       # Criptografia de cookies/sessões (já incluído acima)
-PyPDF2==3.0.1
+cryptography==43.0.3       # Criptografia de cookies/sessões (atualizado para segurança)
+# PyPDF2==3.0.1            # Removido - pypdf é o sucessor
 pdfplumber==0.11.7
 pypdf==5.1.0

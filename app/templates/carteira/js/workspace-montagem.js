@@ -1121,9 +1121,31 @@ class WorkspaceMontagem {
     }
 
     async reverterSeparacao(loteId) {
-        if (!confirm('Deseja reverter esta separação para pré-separação?')) {
+        // Usar SweetAlert2 para confirmação elegante
+        const result = await Swal.fire({
+            title: 'Confirmar Reversão',
+            text: 'Deseja reverter esta separação para pré-separação?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#f39c12',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="fas fa-undo me-1"></i> Sim, Reverter',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) {
             return;
         }
+
+        // Mostrar loading
+        Swal.fire({
+            title: 'Processando...',
+            text: 'Revertendo separação para pré-separação',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
         try {
             const response = await fetch(`/carteira/api/separacao/${loteId}/reverter`, {
@@ -1150,6 +1172,18 @@ class WorkspaceMontagem {
             const data = await response.json();
 
             if (data.success || data.ok) {
+                // Mostrar sucesso
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Reversão Concluída!',
+                    text: 'A separação foi revertida para pré-separação com sucesso.',
+                    confirmButtonColor: '#28a745',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    // Atualizar a página sem reload completo
+                    this.atualizarWorkspace(loteId);
+                });
+                
                 // Tentar aplicar parciais HTML se disponíveis
                 try {
                     if (data.targets && window.separacaoManager && window.separacaoManager.applyTargets) {
@@ -1165,79 +1199,38 @@ class WorkspaceMontagem {
                     // Continua mesmo se falhar aplicar parciais
                 }
                 
-                // Mostrar mensagem de sucesso
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Separação revertida!',
-                        text: data.message || 'Separação revertida com sucesso',
-                        toast: true,
-                        position: 'top-end',
-                        timer: 3000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    alert('✅ ' + (data.message || 'Separação revertida com sucesso!'));
-                }
-                
-                // Atualizar workspace localmente
+                // Atualizar workspace localmente sem reload
                 try {
-                    this.atualizarListaSeparacoes();
+                    await this.carregarDadosPedido(); // Recarregar dados
+                    this.renderizarSeparacoes(); // Re-renderizar separações
+                    this.renderizarPreSeparacoes(); // Re-renderizar pré-separações
                 } catch (updateError) {
-                    console.warn('Aviso: Não foi possível atualizar lista local:', updateError);
-                }
-                
-                // Se não conseguiu aplicar parciais, fazer reload
-                if (!data.targets || !window.separacaoManager) {
+                    console.warn('Aviso: Atualizando via reload:', updateError);
+                    // Se falhar atualização local, fazer reload suave após 1s
                     setTimeout(() => {
                         location.reload();
-                    }, 1500);
+                    }, 1000);
                 }
             } else {
-                alert(`❌ Erro ao reverter separação: ${data.error || 'Erro desconhecido'}`);
+                // Mostrar erro
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro ao Reverter',
+                    text: data.error || 'Não foi possível reverter a separação',
+                    confirmButtonColor: '#dc3545'
+                });
             }
 
         } catch (error) {
             console.error('Erro ao reverter separação:', error);
             
-            // Verificar se o erro é de parsing JSON ou se a mensagem contém indicação de sucesso
-            const errorMessage = error.message ? error.message.toLowerCase() : '';
-            
-            if (error instanceof SyntaxError || errorMessage.includes('json')) {
-                // Provavelmente a operação funcionou mas retornou HTML ao invés de JSON
-                console.log('Possível sucesso com resposta não-JSON, recarregando...');
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Processando...',
-                        text: 'Separação sendo revertida, aguarde...',
-                        toast: true,
-                        position: 'top-end',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                }
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
-            } else {
-                // Erro real - mostrar mensagem apropriada
-                const userMessage = error.message || 'Erro desconhecido ao reverter separação';
-                
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Erro ao reverter',
-                        text: userMessage,
-                        toast: true,
-                        position: 'top-end',
-                        timer: 5000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    alert(`❌ ${userMessage}`);
-                }
-            }
+            // Mostrar erro com Swal
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro ao Reverter',
+                text: error.message || 'Ocorreu um erro ao reverter a separação',
+                confirmButtonColor: '#dc3545'
+            });
         }
     }
     
@@ -1359,9 +1352,24 @@ class WorkspaceMontagem {
         const agendamentoConfirmado = document.getElementById('agendamentoConfirmado').checked;
 
         if (!expedicao) {
-            alert('Data de expedição é obrigatória!');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Campo Obrigatório',
+                text: 'Data de expedição é obrigatória!',
+                confirmButtonColor: '#0066cc'
+            });
             return;
         }
+
+        // Mostrar loading
+        Swal.fire({
+            title: 'Atualizando...',
+            text: 'Salvando alterações das datas',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
         try {
             const endpoint = tipo === 'pre-separacao'
@@ -1388,15 +1396,95 @@ class WorkspaceMontagem {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('modalEdicaoDatas'));
                 modal.hide();
 
-                alert('✅ Datas atualizadas com sucesso!');
-                location.reload();
+                // Atualizar dados localmente sem recarregar a página
+                if (tipo === 'pre-separacao') {
+                    const loteData = this.preSeparacoes.get(loteId);
+                    if (loteData) {
+                        loteData.dataExpedicao = expedicao;
+                        loteData.data_expedicao = expedicao;
+                        loteData.data_agendamento = agendamento;
+                        loteData.protocolo = protocolo;
+                        loteData.agendamento_confirmado = agendamentoConfirmado;
+                        
+                        // Atualizar card
+                        const card = document.querySelector(`.card[data-lote-id="${loteId}"]`);
+                        if (card) {
+                            // Atualizar campos de data no card
+                            const expedicaoElem = card.querySelector('.text-info');
+                            if (expedicaoElem) {
+                                expedicaoElem.innerHTML = `<i class="fas fa-calendar-day"></i> Expedição: ${this.formatarData(expedicao)}`;
+                            }
+                            
+                            const agendamentoElem = card.querySelector('.text-warning');
+                            if (agendamentoElem && agendamento) {
+                                agendamentoElem.innerHTML = `<i class="fas fa-clock"></i> Agendamento: ${this.formatarData(agendamento)}`;
+                            }
+                            
+                            const protocoloElem = card.querySelector('.text-success');
+                            if (protocoloElem && protocolo) {
+                                protocoloElem.innerHTML = `<i class="fas fa-hashtag"></i> Protocolo: ${protocolo}`;
+                            }
+                        }
+                    }
+                } else {
+                    // Atualizar dados de separação
+                    const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
+                    if (separacao) {
+                        separacao.expedicao = expedicao;
+                        separacao.agendamento = agendamento;
+                        separacao.protocolo = protocolo;
+                        separacao.agendamento_confirmado = agendamentoConfirmado;
+                        
+                        // Atualizar card
+                        const card = document.querySelector(`.card[data-lote-id="${loteId}"]`);
+                        if (card) {
+                            // Atualizar campos de data no card
+                            const expedicaoElem = card.querySelector('.text-info');
+                            if (expedicaoElem) {
+                                expedicaoElem.innerHTML = `<i class="fas fa-calendar-day"></i> Expedição: ${this.formatarData(expedicao)}`;
+                            }
+                            
+                            const agendamentoElem = card.querySelector('.text-warning');
+                            if (agendamentoElem && agendamento) {
+                                agendamentoElem.innerHTML = `<i class="fas fa-clock"></i> Agendamento: ${this.formatarData(agendamento)}`;
+                            }
+                            
+                            const protocoloElem = card.querySelector('.text-success');
+                            if (protocoloElem && protocolo) {
+                                protocoloElem.innerHTML = `<i class="fas fa-hashtag"></i> Protocolo: ${protocolo}`;
+                            }
+                        }
+                    }
+                }
+
+                // Mostrar sucesso
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Datas Atualizadas!',
+                    text: `As datas foram atualizadas com sucesso`,
+                    toast: true,
+                    position: 'top-end',
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+
             } else {
-                alert(`❌ Erro ao atualizar datas: ${data.error}`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro ao Atualizar',
+                    text: data.error || 'Erro ao atualizar as datas',
+                    confirmButtonColor: '#dc3545'
+                });
             }
 
         } catch (error) {
             console.error('Erro ao atualizar datas:', error);
-            alert('❌ Erro interno ao atualizar datas');
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro Interno',
+                text: 'Ocorreu um erro ao atualizar as datas. Tente novamente.',
+                confirmButtonColor: '#dc3545'
+            });
         }
     }
 

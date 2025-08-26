@@ -107,7 +107,8 @@ def aplicar_migracao_render():
                 'ID do job no Redis Queue para processamento assíncrono'
             """)
             conn.commit()
-        except:
+        except Exception as e:
+            print(f"⚠️  Aviso ao adicionar comentário: {e}")
             pass  # Comentário é opcional
         
         # Atualizar registros com status NULL
