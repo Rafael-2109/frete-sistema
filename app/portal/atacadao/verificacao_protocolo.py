@@ -141,42 +141,83 @@ class VerificadorProtocoloAtacadao:
             except Exception as e:
                 logger.warning(f"Erro ao buscar status: {e}")
             
-            # 2. Capturar produtos do portal
+            # 2. Capturar produtos do portal (COM SUPORTE A PAGINAÇÃO)
             try:
                 # Aguardar tabela de cargas
                 self.client.page.wait_for_selector('.VueTables__table', timeout=5000)
                 
-                # Buscar linhas da tabela de cargas
-                rows = self.client.page.locator('.VueTables__table tbody tr:not(.VueTables__no-results)').all()
+                # Função auxiliar para processar produtos da página atual
+                def capturar_produtos_pagina():
+                    produtos_pagina = []
+                    rows = self.client.page.locator('.VueTables__table tbody tr:not(.VueTables__no-results)').all()
+                    
+                    for row in rows:
+                        try:
+                            cells = row.locator('td').all()
+                            if len(cells) >= 6:
+                                # Colunas: Carga | Fornecedor | Pedido | Código | Mercadoria | Quantidade
+                                codigo = cells[3].text_content().strip()
+                                mercadoria = cells[4].text_content().strip()
+                                quantidade = cells[5].text_content().strip()
+                                
+                                # Converter quantidade
+                                quantidade = quantidade.replace(',', '.')
+                                try:
+                                    quantidade = float(quantidade)
+                                except Exception:
+                                    quantidade = 0
+                                
+                                produtos_pagina.append({
+                                    'codigo': codigo,
+                                    'mercadoria': mercadoria,
+                                    'quantidade': quantidade
+                                })
+                                
+                                logger.info(f"Produto capturado: {codigo} - {mercadoria} - Qtd: {quantidade}")
+                        except Exception as e:
+                            logger.warning(f"Erro ao processar linha da tabela: {e}")
+                            continue
+                    
+                    return produtos_pagina
                 
-                for row in rows:
-                    try:
-                        cells = row.locator('td').all()
-                        if len(cells) >= 6:
-                            # Colunas: Carga | Fornecedor | Pedido | Código | Mercadoria | Quantidade
-                            codigo = cells[3].text_content().strip()
-                            mercadoria = cells[4].text_content().strip()
-                            quantidade = cells[5].text_content().strip()
-                            
-                            # Converter quantidade
-                            quantidade = quantidade.replace(',', '.')
-                            try:
-                                quantidade = float(quantidade)
-                            except Exception as e:
-                                logger.error(f"Erro ao converter quantidade: {e}")
-                                quantidade = 0
-                            
-                            resultado['produtos_portal'].append({
-                                'codigo': codigo,
-                                'mercadoria': mercadoria,
-                                'quantidade': quantidade
-                            })
-                            
-                            logger.info(f"Produto capturado: {codigo} - {mercadoria} - Qtd: {quantidade}")
-                    except Exception as e:
-                        logger.warning(f"Erro ao processar linha da tabela: {e}")
-                        continue
+                # Verificar se há paginação
+                info_paginacao = self.client._detectar_paginacao()
+                
+                if not info_paginacao['tem_paginacao']:
+                    # Sem paginação, capturar apenas página atual
+                    logger.info("📄 Processando página única de produtos")
+                    resultado['produtos_portal'] = capturar_produtos_pagina()
+                else:
+                    # Com paginação, processar todas as páginas
+                    logger.info(f"📚 Detectadas {info_paginacao['total_paginas']} páginas de produtos")
+                    todos_produtos = []
+                    pagina_atual = 1
+                    max_paginas = min(info_paginacao['total_paginas'], 10)  # Limitar a 10 páginas
+                    
+                    while pagina_atual <= max_paginas:
+                        logger.info(f"🔄 Processando página {pagina_atual}/{info_paginacao['total_paginas']}")
                         
+                        # Capturar produtos da página atual
+                        produtos_pagina = capturar_produtos_pagina()
+                        todos_produtos.extend(produtos_pagina)
+                        logger.info(f"   Capturados {len(produtos_pagina)} produtos nesta página")
+                        
+                        # Verificar se há próxima página
+                        if pagina_atual < info_paginacao['total_paginas']:
+                            # Navegar para próxima página
+                            if self.client._navegar_proxima_pagina():
+                                pagina_atual += 1
+                                # Pequena pausa para garantir carregamento
+                                self.client.page.wait_for_timeout(500)
+                            else:
+                                logger.warning("Não foi possível navegar para a próxima página")
+                                break
+                        else:
+                            break
+                    
+                    resultado['produtos_portal'] = todos_produtos
+                    logger.info(f"✅ Total de {len(todos_produtos)} produtos capturados em {pagina_atual} página(s)")
+                    
             except Exception as e:
                 logger.warning(f"Erro ao buscar produtos: {e}")
             

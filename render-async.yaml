@@ -1,0 +1,87 @@
+# =====================================================
+# CONFIGURAÇÃO DO RENDER COM WORKER ASSÍNCRONO
+# Adicione estas configurações ao seu projeto no Render
+# =====================================================
+
+services:
+  # Aplicação Web Principal (já existe)
+  - type: web
+    name: sistema-fretes
+    env: python
+    plan: starter
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: ./start_render.sh
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: WEB_CONCURRENCY
+        value: 1
+      # ADICIONAR: Configuração do Redis
+      - key: REDIS_URL
+        value: redis://red-d1c4jheuk2gs73absk10:6379  # Seu Redis interno
+      - key: ATACADAO_USUARIO
+        sync: false  # Definir no Dashboard
+      - key: ATACADAO_SENHA
+        sync: false  # Definir no Dashboard
+    autoDeploy: true
+    
+  # NOVO: Worker Assíncrono do Atacadão
+  - type: worker
+    name: sistema-fretes-worker-atacadao
+    env: python
+    plan: starter  # Mesmo plano da web
+    buildCommand: |
+      pip install -r requirements.txt && \
+      playwright install chromium && \
+      playwright install-deps
+    startCommand: python worker_atacadao.py --workers 2
+    envVars:
+      - key: REDIS_URL
+        value: redis://red-d1c4jheuk2gs73absk10:6379  # Mesmo Redis
+      - key: ATACADAO_USUARIO
+        sync: false  # Mesmas credenciais da web
+      - key: ATACADAO_SENHA
+        sync: false  # Mesmas credenciais da web
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: WORKER_CONCURRENCY
+        value: 2  # 2 workers paralelos
+      - key: RQ_WORKER_TTL
+        value: 300
+      - key: RQ_DEFAULT_TIMEOUT
+        value: 1800  # 30 minutos para jobs longos
+    autoDeploy: true
+
+databases:
+  - name: sistema-fretes-db
+
+# =====================================================
+# INSTRUÇÕES DE CONFIGURAÇÃO NO RENDER:
+# =====================================================
+#
+# 1. NO DASHBOARD DO RENDER:
+#    a. Vá em "New +" → "Background Worker"
+#    b. Conecte seu repositório GitHub
+#    c. Nome: sistema-fretes-worker-atacadao
+#    d. Build Command: pip install -r requirements.txt && playwright install chromium && playwright install-deps
+#    e. Start Command: python worker_atacadao.py
+#
+# 2. VARIÁVEIS DE AMBIENTE (Environment):
+#    Adicione no Dashboard do Render:
+#    - REDIS_URL = redis://red-d1c4jheuk2gs73absk10:6379
+#    - ATACADAO_USUARIO = [seu usuário]
+#    - ATACADAO_SENHA = [sua senha]
+#
+# 3. APLICAR MIGRAÇÃO SQL:
+#    a. Vá no seu Database PostgreSQL
+#    b. Clique em "PSQL Command"
+#    c. Cole o conteúdo de RENDER_MIGRATION_ASYNC.sql
+#
+# 4. VERIFICAR FUNCIONAMENTO:
+#    a. Vá em Logs do Worker
+#    b. Deve aparecer: "WORKER ATACADÃO - INICIANDO"
+#    c. Teste fazendo um agendamento pela aplicação

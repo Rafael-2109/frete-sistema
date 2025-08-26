@@ -135,6 +135,23 @@ class Config:
     UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "pdf", "xlsx", "docx", "txt"]
 
 
+    # ==========================================
+    # REDIS QUEUE - CONFIGURAÇÃO PARA WORKERS
+    # ==========================================
+    REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+    
+    # Configurações do RQ (Redis Queue)
+    RQ_REDIS_URL = REDIS_URL
+    RQ_DEFAULT_TIMEOUT = '30m'  # 30 minutos para jobs longos (Playwright)
+    RQ_RESULT_TTL = 86400  # Mantém resultados por 24 horas
+    RQ_FAILURE_TTL = 86400  # Mantém falhas por 24 horas
+    RQ_QUEUES = ['high', 'default', 'low', 'atacadao']  # Fila dedicada para Atacadão
+    
+    # Dashboard do RQ (opcional)
+    RQ_DASHBOARD_REDIS_URL = REDIS_URL
+    RQ_DASHBOARD_WEB_BACKGROUND = True  # Executa em background
+
+
 class TestConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"

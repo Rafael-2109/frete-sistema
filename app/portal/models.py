@@ -20,6 +20,7 @@ class PortalIntegracao(db.Model):
     # Protocolo pode ser NULL inicialmente, UNIQUE permite múltiplos NULL
     protocolo = db.Column(db.String(100), unique=True, index=True)
     status = db.Column(db.String(50), default='aguardando', index=True)
+    job_id = db.Column(db.String(100), index=True)  # ID do job no Redis Queue
     data_solicitacao = db.Column(db.DateTime)
     data_confirmacao = db.Column(db.DateTime)
     data_agendamento = db.Column(db.Date)

@@ -603,8 +603,8 @@ class ModalSeparacoes {
                 }
             });
 
-            // Fazer o agendamento
-            const response = await fetch('/portal/api/solicitar-agendamento', {
+            // Fazer o agendamento ASSÍNCRONO com Redis Queue
+            const response = await fetch('/portal/api/solicitar-agendamento-async', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

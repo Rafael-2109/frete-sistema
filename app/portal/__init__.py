@@ -11,6 +11,7 @@ portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 # Importar rotas para registrá-las no blueprint
 from app.portal import routes
 from app.portal import routes_sessao  # Rotas de configuração de sessão
+from app.portal import routes_async  # Rotas assíncronas com Redis Queue
 
 # Registrar rotas De-Para do Atacadão
 from app.portal.atacadao.routes_depara import bp as depara_bp

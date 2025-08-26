@@ -1488,7 +1488,7 @@ class WorkspaceMontagem {
         
         // Fazer requisição direta
         try {
-            const response = await fetch('/portal/api/solicitar-agendamento', {
+            const response = await fetch('/portal/api/solicitar-agendamento-async', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

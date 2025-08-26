@@ -2181,9 +2181,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     
-    // Chamar nova API
+    // Chamar API ASSÍNCRONA com Redis Queue
     $.ajax({
-      url: '/portal/api/solicitar-agendamento-nf',
+      url: '/portal/api/solicitar-agendamento-nf-async',
       type: 'POST',
       contentType: 'application/json',
       data: JSON.stringify(dados),
@@ -2211,7 +2211,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 </script>
-
+<script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
 <!-- Modal de Agendamento no Portal -->
 <div class="modal fade" id="modalAgendamentoPortal" tabindex="-1" aria-labelledby="modalAgendamentoPortalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">

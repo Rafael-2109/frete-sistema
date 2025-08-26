@@ -195,7 +195,7 @@ $('#formAgendamento').on('submit', function(e) {
     });
     
     $.ajax({
-        url: '/portal/api/solicitar-agendamento',
+        url: '/portal/api/solicitar-agendamento-async',
         type: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(dados),

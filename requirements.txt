@@ -36,6 +36,8 @@ psutil==5.9.6
 # CACHE & PERFORMANCE
 # ==========================================
 redis==5.0.8
+rq==1.16.1  # Redis Queue para processamento em background
+rq-dashboard==0.6.1  # Dashboard para monitorar jobs (opcional)
 APScheduler==3.11.0
 
 # ==========================================
@@ -72,7 +74,7 @@ nltk==3.8.1                # Natural Language Toolkit
 jellyfish==1.1.0           # String matching algorithms
 
 # SpaCy - Processamento Avançado de Linguagem Natural
-spacy==3.7.4               # Engine principal de NLP
+# spacy==3.7.4               # Engine principal de NLP
 # IMPORTANTE: Após instalar, execute:
 # python -m spacy download pt_core_news_sm
 # ou adicione no seu script de deploy:

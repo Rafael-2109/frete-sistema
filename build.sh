@@ -45,3 +45,5 @@ echo "Inicializando banco..."
 python init_db.py
 
 echo "Build concluído com sucesso!"
+
+python aplicar_migracao_render.py || echo "Migration already applied"

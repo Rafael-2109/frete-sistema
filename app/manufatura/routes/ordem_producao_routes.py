@@ -125,7 +125,7 @@ def register_ordem_producao_routes(bp):
             from app.manufatura.services.ordem_producao_service import OrdemProducaoService
             
             dados = request.json
-            dados['criado_por'] = current_user.username if current_user.is_authenticated else 'Sistema'
+            dados['criado_por'] = current_user.nome if current_user.is_authenticated else 'Sistema'
             
             service = OrdemProducaoService()
             ordem = service.criar_ordem(dados)
