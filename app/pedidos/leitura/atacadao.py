@@ -24,7 +24,7 @@ class AtacadaoExtractor(PDFExtractor):
         text = self.extract_text_with_pdfplumber(pdf_path)
         
         if not text:
-            # Fallback para PyPDF2
+            # Fallback para pypdf
             text = self.extract_text_with_pypdf2(pdf_path)
         
         if not text:

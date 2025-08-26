@@ -6,7 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import PyPDF2
+import pypdf  # Mudado de PyPDF2 para pypdf
 import pdfplumber
 from decimal import Decimal
 
@@ -116,15 +116,15 @@ class PDFExtractor(ABC):
         return text
     
     def extract_text_with_pypdf2(self, pdf_path: str) -> str:
-        """Extrai texto usando PyPDF2 (backup)"""
+        """Extrai texto usando pypdf (backup)"""
         text = ""
         try:
             with open(pdf_path, 'rb') as file:
-                reader = PyPDF2.PdfReader(file)
+                reader = pypdf.PdfReader(file)
                 for page in reader.pages:
                     page_text = page.extract_text()
                     if page_text:
                         text += page_text + "\n"
         except Exception as e:
-            self.errors.append(f"Erro ao extrair com PyPDF2: {e}")
+            self.errors.append(f"Erro ao extrair com pypdf: {e}")
         return text
