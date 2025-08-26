@@ -94,25 +94,45 @@ except Exception as e:
 
 echo ""
 
-# Verificar se Playwright está instalado
-echo "🎭 Verificando Playwright..."
+# Verificar e instalar Playwright + Chromium
+echo "🎭 Verificando Playwright e navegadores..."
 if playwright --version > /dev/null 2>&1; then
     echo "   ✅ Playwright instalado"
-else
-    echo "   📦 Tentando instalar Playwright..."
-    if playwright install chromium; then
-        echo "   ✅ Chromium instalado com sucesso"
+    
+    # Verificar se o Chromium está instalado
+    if [ -d "/opt/render/.cache/ms-playwright/chromium-"* ] || [ -d "$HOME/.cache/ms-playwright/chromium-"* ]; then
+        echo "   🔍 Diretório do Chromium encontrado, verificando binários..."
     else
-        echo "   ⚠️  Falha ao instalar Chromium - continuando sem browser automation"
+        echo "   ⚠️  Chromium não encontrado no cache"
     fi
     
-    # Tentar instalar deps, mas não falhar se não conseguir
-    if playwright install-deps 2>/dev/null; then
+    # Sempre tentar instalar/atualizar o Chromium
+    echo "   📦 Instalando/Atualizando Chromium..."
+    if playwright install chromium; then
+        echo "   ✅ Chromium instalado/atualizado com sucesso"
+    else
+        echo "   ⚠️  Falha ao instalar Chromium"
+    fi
+    
+    # Instalar chromium headless shell também (usado pelo Playwright em modo headless)
+    echo "   📦 Instalando Chromium Headless Shell..."
+    if playwright install chromium-headless-shell 2>/dev/null; then
+        echo "   ✅ Chromium Headless Shell instalado"
+    else
+        echo "   ℹ️  Chromium Headless Shell pode não estar disponível"
+    fi
+    
+    # Tentar instalar deps do sistema (provavelmente falhará no Render)
+    echo "   📦 Tentando instalar dependências do sistema..."
+    if playwright install-deps chromium 2>/dev/null; then
         echo "   ✅ Dependências do sistema instaladas"
     else
-        echo "   ⚠️  Não foi possível instalar deps do sistema (normal no Render)"
-        echo "   ℹ️  O worker funcionará, mas Portal Atacadão pode não estar disponível"
+        echo "   ⚠️  Não foi possível instalar deps do sistema (esperado no Render)"
+        echo "   ℹ️  Algumas funcionalidades podem estar limitadas"
     fi
+else
+    echo "   ❌ Playwright não está instalado"
+    echo "   ℹ️  O worker funcionará, mas Portal Atacadão não estará disponível"
 fi
 
 echo ""

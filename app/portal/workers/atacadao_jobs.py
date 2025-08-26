@@ -63,10 +63,19 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
             db.session.add(log_inicio)
             db.session.commit()
             
-            # Inicializar cliente Playwright
+            # Inicializar cliente Playwright com tratamento de erro
             logger.info("[Worker] Inicializando Playwright...")
-            client = AtacadaoPlaywrightClient(headless=True)
-            client.iniciar_sessao()
+            try:
+                client = AtacadaoPlaywrightClient(headless=True)
+                client.iniciar_sessao()
+            except Exception as playwright_error:
+                error_msg = str(playwright_error)
+                if "Executable doesn't exist" in error_msg or "playwright install" in error_msg:
+                    logger.error("[Worker] Playwright/Chromium não está instalado corretamente")
+                    logger.error("[Worker] Execute: playwright install chromium")
+                    raise Exception("Playwright não disponível. O navegador Chromium precisa ser instalado.")
+                else:
+                    raise
             
             # Verificar login
             if not client.verificar_login():
