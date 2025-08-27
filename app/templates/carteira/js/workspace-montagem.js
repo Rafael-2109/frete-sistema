@@ -9,6 +9,7 @@ class WorkspaceMontagem {
         this.separacoesConfirmadas = []; // array de separações confirmadas
         this.produtosSelecionados = new Set();
         this.dadosProdutos = new Map(); // codProduto -> dados completos
+        this.pedidoAtual = null; // Armazenar pedido atual
         
         // 🆕 Controle de requisições assíncronas de estoque
         this.abortControllerEstoque = null;
@@ -37,8 +38,45 @@ class WorkspaceMontagem {
         });
     }
 
+    /**
+     * 🧹 LIMPAR DADOS DO PEDIDO ANTERIOR
+     * Limpa todos os dados antes de carregar um novo pedido
+     */
+    limparDadosAnteriores() {
+        console.log('🧹 Limpando dados do pedido anterior...');
+        
+        // Limpar dados dos produtos
+        this.dadosProdutos.clear();
+        
+        // Limpar produtos selecionados
+        this.produtosSelecionados.clear();
+        
+        // Limpar pré-separações
+        this.preSeparacoes.clear();
+        
+        // Limpar separações confirmadas
+        this.separacoesConfirmadas = [];
+        
+        // Cancelar requisições assíncronas pendentes
+        if (this.abortControllerEstoque) {
+            this.abortControllerEstoque.abort();
+            this.abortControllerEstoque = null;
+        }
+        
+        // Limpar pedido atual
+        this.pedidoAtual = null;
+        
+        console.log('✅ Dados anteriores limpos');
+    }
+
     async abrirWorkspace(numPedido) {
         console.log(`🔄 Carregando workspace para pedido ${numPedido}`);
+        
+        // 🧹 LIMPAR DADOS DO PEDIDO ANTERIOR
+        this.limparDadosAnteriores();
+        
+        // Armazenar novo pedido
+        this.pedidoAtual = numPedido;
 
         try {
             // Carregar dados do workspace
