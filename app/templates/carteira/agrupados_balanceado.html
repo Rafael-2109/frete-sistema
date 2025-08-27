@@ -100,6 +100,22 @@
                                 <i class="fas fa-check-circle me-1"></i>
                                 Com Agendamento
                             </span>
+                            
+                            <!-- NOVOS FILTROS DE SEPARAÇÃO COMPLETA -->
+                            <span class="badge bg-filtro badge-agendamento ms-3"
+                                style="background-color: transparent; color: #fd7e14; border: 2px solid #fd7e14;"
+                                data-tipo="agendamento" data-valor="completa-sem-confirmacao"
+                                title="Pedidos com separação completa que precisam de agendamento (não confirmado)">
+                                <i class="fas fa-box-open me-1"></i>
+                                Sep. Completa (Aguardando)
+                            </span>
+                            <span class="badge bg-filtro badge-agendamento"
+                                style="background-color: transparent; color: #0dcaf0; border: 2px solid #0dcaf0;"
+                                data-tipo="agendamento" data-valor="completa-confirmado"
+                                title="Pedidos com separação completa e agendamento confirmado">
+                                <i class="fas fa-check-double me-1"></i>
+                                Sep. Completa (Confirmado)
+                            </span>
                         </div>
                         <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-agendamento"
                             style="display:none;">
@@ -261,6 +277,8 @@
                                 data-subrota="{{ pedido.sub_rota or '' }}"
                                 data-incoterm="{{ pedido.incoterm or 'CIF' }}" data-uf="{{ pedido.cod_uf or '' }}"
                                 data-agendamento="{{ 'sem' if (not pedido.forma_agendamento or pedido.forma_agendamento == 'SEM AGENDAMENTO') else 'com' }}"
+                                data-separacao-completa="{{ 'true' if pedido.tem_separacao_completa else 'false' }}"
+                                data-agendamento-confirmado="{{ 'true' if pedido.agendamento_confirmado else 'false' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
 
                                 <!-- Botão Expandir -->
