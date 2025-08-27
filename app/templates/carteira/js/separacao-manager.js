@@ -135,20 +135,21 @@ class SeparacaoManager {
         // Adicionar à lista de processamento
         this.processingRequests.add(numPedido);
         
-        const botao = document.querySelector(`[data-pedido="${numPedido}"] .btn-gerar-separacao`);
+        // DESABILITAR TODOS os botões deste pedido para evitar múltiplos cliques
+        const todosBotoes = document.querySelectorAll(`[data-pedido="${numPedido}"] .btn-gerar-separacao, [onclick*="criarSeparacao('${numPedido}')"]`);
         
         try {
-            // Loading local no botão
-            if (botao) {
-                botao.disabled = true;
-                botao.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processando...';
-            }
+            // Loading em TODOS os botões
+            todosBotoes.forEach(btn => {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processando...';
+            })
             
             const response = await fetch(`/carteira/api/pedido/${numPedido}/gerar-separacao-completa`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'text/html',  // IMPORTANTE: Solicitar HTML para receber targets
+                    'Accept': 'application/json',  // 🆕 MUDANÇA: Solicitar JSON para receber lote_id
                     'X-CSRFToken': this.getCSRFToken()  // Adicionar CSRF token
                 },
                 body: JSON.stringify({
@@ -162,8 +163,27 @@ class SeparacaoManager {
             const data = await response.json();
             
             if (data.ok || data.success) {
-                // Aplicar parciais HTML retornados
-                await this.applyTargets(data);
+                // Como não temos mais targets HTML, atualizar a UI manualmente
+                if (data.targets) {
+                    // Se ainda retornar targets (modo antigo), aplicar
+                    await this.applyTargets(data);
+                } else {
+                    // 🆕 Modo JSON: Recarregar separações compactas e atualizar contadores
+                    if (window.carteiraAgrupada) {
+                        // Recarregar separações compactas para este pedido
+                        await window.carteiraAgrupada.carregarSeparacoesCompactasPedido(numPedido);
+                        
+                        // Atualizar contador de separações no botão
+                        const btnSeparacoes = document.querySelector(`[data-pedido="${numPedido}"].btn-separacoes`);
+                        if (btnSeparacoes) {
+                            const contador = btnSeparacoes.querySelector('.contador-separacoes');
+                            if (contador) {
+                                const qtdAtual = parseInt(contador.textContent) || 0;
+                                contador.textContent = qtdAtual + 1;
+                            }
+                        }
+                    }
+                }
                 
                 // Atualizar contadores globais
                 if (data.contadores) {
@@ -172,24 +192,52 @@ class SeparacaoManager {
                 
                 // Feedback de sucesso
                 this.mostrarSucesso(data.message || 'Separação criada com sucesso!');
+                
+                // Restaurar TODOS os botões após sucesso
+                todosBotoes.forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
+                })
+                
+                // 🆕 AGENDAMENTO AUTOMÁTICO: Verificar se há data de agendamento e pedir confirmação
+                if (dataExpedicao.agendamento && !dataExpedicao.protocolo && data.lote_id) {
+                    // Aguardar um pouco para garantir que as atualizações foram aplicadas
+                    setTimeout(async () => {
+                        const confirmarAgendamento = await this.confirmarAgendamentoAutomatico();
+                        
+                        if (confirmarAgendamento) {
+                            console.log('✅ Usuário confirmou agendamento automático');
+                            // Chamar função de agendamento do carteiraAgrupada se disponível
+                            if (window.carteiraAgrupada && window.carteiraAgrupada.agendarPortal) {
+                                window.carteiraAgrupada.agendarPortal(data.lote_id, dataExpedicao.agendamento);
+                            } else {
+                                // Fallback: redirecionar para portal de agendamento
+                                console.log('📆 Redirecionando para portal de agendamento...');
+                                this.redirecionarParaPortalAgendamento(data.lote_id, dataExpedicao.agendamento);
+                            }
+                        } else {
+                            console.log('❌ Usuário recusou agendamento automático');
+                        }
+                    }, 1500);
+                }
             } else {
                 this.mostrarErro(data.error || 'Erro ao criar separação');
                 
-                // Restaurar botão em caso de erro
-                if (botao) {
-                    botao.disabled = false;
-                    botao.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
-                }
+                // Restaurar TODOS os botões em caso de erro
+                todosBotoes.forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
+                })
             }
         } catch (error) {
             console.error('Erro ao criar separação:', error);
             this.mostrarErro('Erro de comunicação com o servidor');
             
-            // Restaurar botão
-            if (botao) {
-                botao.disabled = false;
-                botao.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
-            }
+            // Restaurar TODOS os botões
+            todosBotoes.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
+            })
         } finally {
             // Remover da lista de processamento
             this.processingRequests.delete(numPedido);
@@ -544,6 +592,56 @@ class SeparacaoManager {
         } else {
             alert('❌ ' + mensagem);
         }
+    }
+
+    /**
+     * 🆕 CONFIRMAR AGENDAMENTO AUTOMÁTICO
+     * Solicita confirmação do usuário para agendar automaticamente no portal
+     */
+    async confirmarAgendamentoAutomatico() {
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: 'Agendamento Automático',
+                text: 'Deseja realizar o agendamento no portal automaticamente?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, agendar',
+                cancelButtonText: 'Não',
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#6c757d'
+            });
+            return result.isConfirmed;
+        } else {
+            return confirm('Deseja realizar o agendamento no portal automaticamente?\n\n"OK" = Sim, agendar no portal\n"Cancelar" = Não agendar');
+        }
+    }
+
+    /**
+     * 🆕 REDIRECIONAR PARA PORTAL DE AGENDAMENTO
+     * Função de fallback caso carteiraAgrupada não esteja disponível
+     */
+    redirecionarParaPortalAgendamento(loteId, dataAgendamento) {
+        console.log(`📆 Preparando redirecionamento para portal de agendamento`);
+        console.log(`   Lote: ${loteId}`);
+        console.log(`   Data: ${dataAgendamento}`);
+        
+        // Tentar chamar a função do workspace se disponível
+        if (window.workspace && window.workspace.agendarNoPortal) {
+            window.workspace.agendarNoPortal(loteId, dataAgendamento);
+        } else {
+            // Se não houver função disponível, apenas logar
+            console.warn('⚠️ Função de agendamento não disponível. Implemente manualmente o redirecionamento para o portal.');
+            this.mostrarSucesso(`Separação criada! Agora você pode agendar o lote ${loteId} para ${this.formatarDataBR(dataAgendamento)} no portal.`);
+        }
+    }
+
+    /**
+     * 🆕 FORMATAR DATA PARA EXIBIÇÃO BR
+     */
+    formatarDataBR(data) {
+        if (!data) return '';
+        const [ano, mes, dia] = data.split('-');
+        return `${dia}/${mes}/${ano}`;
     }
 }
 

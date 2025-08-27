@@ -1,3 +1,40 @@
+# 🔴 [PRECISION MODE] - MODO PRECISION ENGINEER ATIVO
+
+## REGRAS ABSOLUTAS - NUNCA IGNORAR:
+
+### ✅ SEMPRE FAZER:
+1. **INICIAR TODA RESPOSTA COM**: "CONFIRMAÇÃO DO ENTENDIMENTO: Entendi que você precisa..."
+2. **MOSTRAR EVIDÊNCIAS**: Citar arquivo:linha ANTES de qualquer modificação
+3. **VERIFICAR TUDO**: Ler arquivos completos, verificar imports, testar mentalmente
+4. **QUESTIONAR**: Se algo não estiver 100% claro, PARAR e PERGUNTAR
+
+### ❌ NUNCA FAZER:
+1. **NUNCA assumir** comportamento pelo nome da função
+2. **NUNCA inventar** imports ou caminhos
+3. **NUNCA modificar** sem mostrar o código atual primeiro
+4. **NUNCA pular** direto para a solução
+
+### 📋 FORMATO OBRIGATÓRIO DE RESPOSTA:
+```
+1. CONFIRMAÇÃO DO ENTENDIMENTO:
+   "Entendi que você precisa [EXATAMENTE o que foi pedido]..."
+
+2. ANÁLISE DETALHADA:
+   "Analisando arquivo X, linhas Y-Z, vejo que..."
+   [MOSTRAR CÓDIGO ATUAL]
+
+3. QUESTÕES (se houver):
+   "Antes de prosseguir, preciso confirmar:..."
+
+4. IMPLEMENTAÇÃO:
+   "Com base na análise completa..."
+```
+
+### 🎯 PALAVRA DE ATIVAÇÃO:
+Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nível de rigor e detalhe.
+
+---
+
 # CLAUDE.md - Referência de Modelos e Campos
 
 ## ⚠️ ATENÇÃO: Use SEMPRE os nomes EXATOS dos campos listados aqui

@@ -181,13 +181,23 @@ class WorkspaceMontagem {
                     </div>
                 </div>
 
-                <!-- Tabela de Produtos (Origem) -->
+                <!-- 🆕 RENDERIZAÇÃO COMPACTA DE SEPARAÇÕES/PRÉ-SEPARAÇÕES -->
+                <div class="separacoes-compactas-container bg-white p-3 border-bottom">
+                    ${this.renderizarSeparacoesCompactas(numPedido)}
+                </div>
+
+                <!-- Tabela de Produtos (Origem) - Com carregamento assíncrono -->
                 <div class="workspace-produtos bg-light p-3">
                     <h6 class="mb-3">
                         <i class="fas fa-list me-2"></i>
                         Produtos do Pedido
+                        <span id="loading-produtos-${numPedido}" class="spinner-border spinner-border-sm ms-2" style="display: none;">
+                            <span class="visually-hidden">Carregando...</span>
+                        </span>
                     </h6>
-                    ${this.renderizarTabelaProdutos(data.produtos)}
+                    <div id="tabela-produtos-container-${numPedido}">
+                        ${this.renderizarTabelaProdutosBasica(data.produtos)}
+                    </div>
                 </div>
 
                 <!-- Área de Separações Confirmadas -->
@@ -1691,6 +1701,294 @@ class WorkspaceMontagem {
         } else {
             const icone = tipo === 'success' ? '✅' : tipo === 'error' ? '❌' : 'ℹ️';
             alert(`${icone} ${mensagem}`);
+        }
+    }
+
+    /**
+     * 🆕 RENDERIZAÇÃO COMPACTA DE SEPARAÇÕES E PRÉ-SEPARAÇÕES
+     * Mostra todas as separações e pré-separações em uma tabela compacta
+     */
+    renderizarSeparacoesCompactas(numPedido) {
+        // Combinar separações confirmadas e pré-separações
+        const todasSeparacoes = [];
+        
+        // Adicionar separações confirmadas
+        if (this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0) {
+            this.separacoesConfirmadas.forEach(sep => {
+                todasSeparacoes.push({
+                    tipo: 'Separação',
+                    status: sep.status || '',
+                    loteId: sep.separacao_lote_id,
+                    valor: sep.valor_total || 0,
+                    peso: sep.peso_total || 0,
+                    pallet: sep.pallet_total || 0,
+                    expedicao: sep.expedicao,
+                    agendamento: sep.agendamento,
+                    protocolo: sep.protocolo,
+                    agendamento_confirmado: sep.agendamento_confirmado,
+                    embarque: sep.embarque,
+                    isSeparacao: true
+                });
+            });
+        }
+        
+        // Adicionar pré-separações
+        if (this.preSeparacoes && this.preSeparacoes.size > 0) {
+            this.preSeparacoes.forEach((preSepa, loteId) => {
+                // Calcular totais se não existirem
+                let valorTotal = 0;
+                let pesoTotal = 0;
+                let palletTotal = 0;
+                
+                if (preSepa.produtos && preSepa.produtos.length > 0) {
+                    preSepa.produtos.forEach(prod => {
+                        valorTotal += prod.valor || 0;
+                        pesoTotal += prod.peso || 0;
+                        palletTotal += prod.pallet || 0;
+                    });
+                }
+                
+                todasSeparacoes.push({
+                    tipo: 'Pré-separação',
+                    status: '', // Pré-separação não tem status
+                    loteId: loteId,
+                    valor: valorTotal || preSepa.totais?.valor || 0,
+                    peso: pesoTotal || preSepa.totais?.peso || 0,
+                    pallet: palletTotal || preSepa.totais?.pallet || 0,
+                    expedicao: preSepa.dataExpedicao || preSepa.data_expedicao,
+                    agendamento: preSepa.data_agendamento,
+                    protocolo: preSepa.protocolo,
+                    agendamento_confirmado: preSepa.agendamento_confirmado || false,
+                    embarque: null, // Pré-separações não têm embarque
+                    isSeparacao: false
+                });
+            });
+        }
+        
+        // Se não houver nenhuma separação ou pré-separação
+        if (todasSeparacoes.length === 0) {
+            return `
+                <div class="text-center text-muted py-2">
+                    <small><i class="fas fa-info-circle me-1"></i>Nenhuma separação ou pré-separação encontrada</small>
+                </div>
+            `;
+        }
+        
+        // Renderizar tabela compacta
+        return `
+            <h6 class="mb-3">
+                <i class="fas fa-truck me-2"></i>
+                Separações e Pré-Separações
+                <span class="badge bg-secondary ms-2">${todasSeparacoes.length}</span>
+            </h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="100">Tipo</th>
+                            <th width="80">Status</th>
+                            <th class="text-end">Valor</th>
+                            <th class="text-end">Peso</th>
+                            <th class="text-end">Pallet</th>
+                            <th class="text-center">Expedição</th>
+                            <th class="text-center">Agendamento</th>
+                            <th>Protocolo</th>
+                            <th class="text-center">Confirmação</th>
+                            <th>Embarque</th>
+                            <th width="200" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${todasSeparacoes.map(item => this.renderizarLinhaSeparacaoCompacta(item, numPedido)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    /**
+     * 🆕 RENDERIZAR LINHA INDIVIDUAL DA SEPARAÇÃO COMPACTA
+     */
+    renderizarLinhaSeparacaoCompacta(item, numPedido) {
+        const tipoClass = item.isSeparacao ? 'text-primary' : 'text-warning';
+        const statusBadge = item.status ? 
+            (item.status === 'COTADO' ? '<span class="badge bg-warning text-dark">COTADO</span>' : 
+             item.status === 'ABERTO' ? '<span class="badge bg-secondary">ABERTO</span>' : '') : '';
+        
+        const confirmacaoBadge = item.agendamento ? 
+            (item.agendamento_confirmado ? 
+                '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Confirmado</span>' :
+                '<span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Aguardando</span>') : '-';
+        
+        const embarqueInfo = item.embarque ? 
+            `<span title="${item.embarque.transportadora || 'Sem transportadora'}" style="cursor: help;">
+                #${item.embarque.numero || '-'} | ${item.embarque.data_prevista_embarque ? this.formatarData(item.embarque.data_prevista_embarque) : '-'}
+             </span>` : '-';
+        
+        return `
+            <tr>
+                <td><strong class="${tipoClass}">${item.tipo}</strong></td>
+                <td>${statusBadge}</td>
+                <td class="text-end text-success">${this.formatarMoeda(item.valor)}</td>
+                <td class="text-end">${this.formatarPeso(item.peso)}</td>
+                <td class="text-end">${this.formatarPallet(item.pallet)}</td>
+                <td class="text-center">${item.expedicao ? this.formatarData(item.expedicao) : '-'}</td>
+                <td class="text-center">${item.agendamento ? this.formatarData(item.agendamento) : '-'}</td>
+                <td><small>${item.protocolo || '-'}</small></td>
+                <td class="text-center">${confirmacaoBadge}</td>
+                <td><small>${embarqueInfo}</small></td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        ${item.isSeparacao ? `
+                            <button class="btn btn-outline-primary btn-sm" 
+                                    onclick="workspace.editarDatasSeparacao('${item.loteId}')"
+                                    title="Editar datas">
+                                <i class="fas fa-calendar-alt"></i> Datas
+                            </button>
+                        ` : `
+                            <button class="btn btn-outline-primary btn-sm" 
+                                    onclick="workspace.editarDatasPreSeparacao('${item.loteId}')"
+                                    title="Editar datas">
+                                <i class="fas fa-calendar-alt"></i> Datas
+                            </button>
+                            <button class="btn btn-outline-success btn-sm" 
+                                    onclick="workspace.confirmarSeparacao('${item.loteId}')"
+                                    title="Confirmar separação">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        `}
+                        ${item.agendamento && !item.protocolo ? `
+                            <button class="btn btn-outline-success btn-sm" 
+                                    onclick="workspace.agendarNoPortal('${item.loteId}', '${item.agendamento}')"
+                                    title="Agendar no portal">
+                                <i class="fas fa-calendar-plus"></i> Agendar
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+    
+    /**
+     * 🆕 RENDERIZAR TABELA DE PRODUTOS BÁSICA (sem estoque)
+     * Carrega apenas dados da CarteiraPrincipal inicialmente
+     */
+    renderizarTabelaProdutosBasica(produtos) {
+        // Usar WorkspaceTabela se disponível, mas sem dados de estoque
+        if (window.workspaceTabela) {
+            // Temporariamente zerar dados de estoque para carregamento inicial
+            const produtosBasicos = produtos.map(p => ({
+                ...p,
+                estoque_hoje: null,
+                menor_estoque_7d: null,
+                producao_hoje: null,
+                estoque_data_expedicao: null
+            }));
+            return window.workspaceTabela.renderizarTabelaProdutos(produtosBasicos);
+        }
+        
+        // Fallback simples se WorkspaceTabela não estiver disponível
+        return `
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Quantidade</th>
+                            <th>Valor</th>
+                            <th>Estoque</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${produtos.map(p => `
+                            <tr>
+                                <td>${p.cod_produto} - ${p.nome_produto || ''}</td>
+                                <td>${p.qtd_saldo_produto_pedido || 0}</td>
+                                <td>${this.formatarMoeda((p.qtd_saldo_produto_pedido || 0) * (p.preco_produto_pedido || 0))}</td>
+                                <td><span class="spinner-border spinner-border-sm"></span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    /**
+     * 🆕 CARREGAR DADOS DE ESTOQUE DE FORMA ASSÍNCRONA
+     * Carrega estoque, projeções e menor_estoque após renderização inicial
+     */
+    async carregarDadosEstoqueAssincrono(numPedido) {
+        try {
+            console.log(`📊 Carregando dados de estoque assincronamente para pedido ${numPedido}`);
+            
+            // Mostrar loading
+            const loadingSpinner = document.getElementById(`loading-produtos-${numPedido}`);
+            if (loadingSpinner) {
+                loadingSpinner.style.display = 'inline-block';
+            }
+            
+            // Fazer requisição para obter dados completos com estoque
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/workspace-estoque`);
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Erro ao carregar estoque');
+            }
+            
+            // Atualizar dados locais com informações de estoque
+            data.produtos.forEach(produto => {
+                const dadosExistentes = this.dadosProdutos.get(produto.cod_produto);
+                if (dadosExistentes) {
+                    // Mesclar dados de estoque com dados existentes
+                    Object.assign(dadosExistentes, {
+                        estoque_hoje: produto.estoque || produto.estoque_d0,
+                        menor_estoque_7d: produto.menor_estoque_produto_d7,
+                        producao_hoje: produto.producao_hoje || 0,
+                        estoque_data_expedicao: produto.saldo_estoque_pedido,
+                        // Adicionar projeções D0-D28 se disponíveis
+                        ...Object.fromEntries(
+                            Object.entries(produto).filter(([key]) => key.startsWith('estoque_d'))
+                        )
+                    });
+                }
+            });
+            
+            // Re-renderizar tabela com dados completos
+            const container = document.getElementById(`tabela-produtos-container-${numPedido}`);
+            if (container && window.workspaceTabela) {
+                container.innerHTML = window.workspaceTabela.renderizarTabelaProdutos(Array.from(this.dadosProdutos.values()));
+            }
+            
+            // Esconder loading
+            if (loadingSpinner) {
+                loadingSpinner.style.display = 'none';
+            }
+            
+            console.log(`✅ Dados de estoque carregados para ${data.produtos.length} produtos`);
+            
+        } catch (error) {
+            console.error(`❌ Erro ao carregar dados de estoque:`, error);
+            
+            // Esconder loading em caso de erro
+            const loadingSpinner = document.getElementById(`loading-produtos-${numPedido}`);
+            if (loadingSpinner) {
+                loadingSpinner.style.display = 'none';
+            }
+            
+            // Mostrar mensagem de erro inline (não bloquear a interface)
+            const container = document.getElementById(`tabela-produtos-container-${numPedido}`);
+            if (container) {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-warning alert-dismissible fade show mt-2';
+                alertDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Não foi possível carregar dados de estoque. Trabalhando com dados básicos.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                container.insertBefore(alertDiv, container.firstChild);
+            }
         }
     }
 }

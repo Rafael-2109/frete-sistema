@@ -156,3 +156,32 @@ exec python worker_atacadao.py \
     --workers $WORKER_COUNT \
     --queues atacadao,high,default \
     --verbose
+
+
+│   Vamos ver como vai ser ao finalizar o deploy.
+│   Preciso fazer algumas alterações cirurgicas e preciso garantir precisão nas alterações.
+│   O botão que carrega a analise de estoque na coluna-entrega-obs tem um desempenho ótimo no que     │
+│   tange a deixar o sistema rodar e calcular algo mais pesado em paralelo enquanto pausa sempre que uma ação é executada.
+│   Porem muitas vezes eu preciso expandir o pedido para conseguir ver os produtos do pedido e nessa expansão normalmente gera mta lentidão pelo calculo dos estoque X pedido, alem de ser um pouco "ruim" qdo o pedido é mto longo e as vezes o unico objetivo de abrir o pedido é alterar uma data de uma separação ou solicitar um agendamento ou verificar no portal.
+│   Diante disso, pensei em algumas coisas a principio:
+│   1- renderizar todas as separações com status COTADO ou ABERTO e pré separações com status CRIADO ou RECOMPOSTO embaixo da linha do pedido de uma maneira compacta onde:
+│   A- Deverá haver apenas 1 cabeçalho, servira pra separações e pré separações.
+│   B- As colunas serão:
+│   -Tipo (Separação ou Pré separacao)
+│   -Status(apenas de Separação sendo Aberto ou Cotado, Pré separação deixar em branco)
+│   -Valor
+│   -Peso
+│   -Pallet
+│   -Expedição
+│   -Agendamento
+│   -Protocolo
+│   -agendamento_confirmado (Aguardando ou Confirmado em badges amarelo ou verde)
+│   -Embarque (formato #numero do embarque | Data prevista) em que ao passar o mouse mostraria um balão de info pequeno com a transportadora.
+│   -3 botões (Datas, Confirmar e Agendar).
+│   2- Tambem ao expandir o pedido, queria que carregasse de maneira assincrona, ou seja, carrega primeiro as linhas do pedido com as informações de CarteiraPrincipal (Considerando Qtd Saldo) e depois conforme for processando carregaria as informações de estoque, menor estoque, etc.
+│   Seja pragmatico, considere que tudo que solicitei já existe, os campos já estão corretos e já funciona, portanto preciso que encontre os cards de separação e pre-separação e avalie cada campo chamado para garatir consistencia.
+No caso dos botões, eles já existem no card de Separação, portanto preciso que apenas garanta que faça a mesma funcionalidade
+No caso das colunas que citei, elas tambem existem no card de separação, portanto preciso que verifique essas informações e garanta consistencia e integridade.
+
+Pense profundamente e me retorne com as evidencias de todos os campos e botões e colunas e garanta que o sistema funcione corretamente.
+Caso tenha duvida em algum ponto, me pergunte.

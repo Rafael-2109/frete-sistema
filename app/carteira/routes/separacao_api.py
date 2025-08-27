@@ -92,14 +92,23 @@ def gerar_separacao_completa_pedido(num_pedido):
     }
     """
     try:
-        # VALIDAÇÃO: Verificar se já existe separação completa para este pedido
+        # PROTEÇÃO CONTRA RACE CONDITION: Dupla verificação com lock
         from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
+        from sqlalchemy import text
+        
+        # LOCK no nível do pedido primeiro (advisory lock do PostgreSQL)
+        # Isso garante que apenas uma transação processe este pedido por vez
+        db.session.execute(text(f"SELECT pg_advisory_xact_lock(hashtext(:pedido))"), {'pedido': num_pedido})
+        
+        # Agora verificar novamente com a garantia do lock
         separacao_existente = Separacao.query.filter_by(
             num_pedido=num_pedido,
             tipo_envio='total'
         ).first()
         
         if separacao_existente:
+            db.session.rollback()  # Liberar o lock
             return jsonify({
                 "success": False, 
                 "error": f"Pedido já possui separação completa (Lote: {separacao_existente.separacao_lote_id})"

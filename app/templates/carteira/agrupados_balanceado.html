@@ -478,6 +478,17 @@
                                 </td>
                             </tr>
 
+                            <!-- 🆕 LINHA DE SEPARAÇÕES COMPACTAS (sempre visível) -->
+                            <tr class="separacoes-compactas-row" id="separacoes-compactas-{{ pedido.num_pedido }}" 
+                                data-pedido="{{ pedido.num_pedido }}"
+                                style="display: none;">
+                                <td colspan="10">
+                                    <div class="separacoes-compactas-container">
+                                        <!-- Conteúdo será carregado via JavaScript -->
+                                    </div>
+                                </td>
+                            </tr>
+
                             <!-- Linha de detalhes expandida (oculta por padrão) -->
                             <tr class="detalhes-row collapse" id="detalhes-{{ pedido.num_pedido }}">
                                 <td colspan="9">
