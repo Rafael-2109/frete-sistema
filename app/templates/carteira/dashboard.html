@@ -124,7 +124,52 @@
         </div>
     </div>
 
-  
+    <!-- Seção de Pedidos Programados -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-2 bg-info text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold">
+                            <i class="fas fa-calendar-check"></i> Pedidos Programados
+                        </h6>
+                        <div id="totais-programados" class="text-end">
+                            <small>
+                                <span class="badge bg-light text-dark">
+                                    <span id="qtd-separacoes">0</span> Separações
+                                </span>
+                                <span class="badge bg-warning text-dark ms-2">
+                                    R$ <span id="valor-total-separacoes">0,00</span>
+                                </span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body py-2">
+                    <!-- Grid Horizontal de Datas -->
+                    <div class="table-responsive" style="max-height: 120px; overflow-x: auto;">
+                        <table class="table table-sm table-bordered mb-0" style="font-size: 0.75rem;">
+                            <thead class="table-light">
+                                <tr id="datas-header">
+                                    <!-- Preenchido via JavaScript -->
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr id="valores-row">
+                                    <!-- Preenchido via JavaScript -->
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-1">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Valores de Separações (status COTADO/ABERTO) por data de expedição
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Expedições Próximas -->
     {% if expedicoes_proximas %}
@@ -503,5 +548,101 @@
 
 <!-- Script de Relatórios -->
 <script src="{{ url_for('static', filename='carteira/js/modal-relatorios.js') }}"></script>
+
+<!-- Script para Pedidos Programados -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para carregar dados de separações programadas
+    async function carregarPedidosProgramados() {
+        try {
+            const response = await fetch('/carteira/api/separacoes-programadas');
+            const data = await response.json();
+            
+            if (data.success) {
+                // Atualizar totais
+                document.getElementById('qtd-separacoes').textContent = data.total_quantidade || 0;
+                document.getElementById('valor-total-separacoes').textContent = 
+                    new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(data.total_valor || 0);
+                
+                // Preencher grid de datas
+                preencherGridDatas(data.por_data || {});
+            }
+        } catch (error) {
+            console.error('Erro ao carregar pedidos programados:', error);
+        }
+    }
+    
+    // Função para preencher o grid horizontal de datas
+    function preencherGridDatas(dadosPorData) {
+        const datasHeader = document.getElementById('datas-header');
+        const valoresRow = document.getElementById('valores-row');
+        
+        // Limpar conteúdo anterior
+        datasHeader.innerHTML = '';
+        valoresRow.innerHTML = '';
+        
+        // Calcular range de datas (D-4 até D+10)
+        const hoje = new Date();
+        const datas = [];
+        
+        for (let i = -4; i <= 10; i++) {
+            const data = new Date(hoje);
+            data.setDate(hoje.getDate() + i);
+            datas.push(data);
+        }
+        
+        // Preencher cabeçalho e valores
+        datas.forEach(data => {
+            const dataStr = data.toISOString().split('T')[0];
+            const diaMes = `${String(data.getDate()).padStart(2, '0')}/${String(data.getMonth() + 1).padStart(2, '0')}`;
+            
+            // Adicionar célula de data
+            const thData = document.createElement('th');
+            thData.className = 'text-center';
+            thData.style.minWidth = '70px';
+            
+            // Destacar hoje
+            if (data.toDateString() === hoje.toDateString()) {
+                thData.innerHTML = `<span class="badge bg-primary">${diaMes}</span>`;
+            } else if (data < hoje) {
+                thData.innerHTML = `<small class="text-muted">${diaMes}</small>`;
+            } else {
+                thData.innerHTML = `<small>${diaMes}</small>`;
+            }
+            datasHeader.appendChild(thData);
+            
+            // Adicionar célula de valor
+            const tdValor = document.createElement('td');
+            tdValor.className = 'text-center';
+            
+            const valor = dadosPorData[dataStr] || 0;
+            if (valor > 0) {
+                const valorFormatado = new Intl.NumberFormat('pt-BR', { 
+                    notation: 'compact',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 1 
+                }).format(valor);
+                
+                // Colorir baseado no valor
+                let bgClass = 'bg-light';
+                if (valor > 100000) bgClass = 'bg-success text-white';
+                else if (valor > 50000) bgClass = 'bg-warning';
+                else if (valor > 20000) bgClass = 'bg-info text-white';
+                
+                tdValor.innerHTML = `<small class="badge ${bgClass}">R$ ${valorFormatado}</small>`;
+            } else {
+                tdValor.innerHTML = '<small class="text-muted">-</small>';
+            }
+            valoresRow.appendChild(tdValor);
+        });
+    }
+    
+    // Carregar dados ao iniciar
+    carregarPedidosProgramados();
+    
+    // Recarregar a cada 5 minutos
+    setInterval(carregarPedidosProgramados, 300000);
+});
+</script>
 
 {% endblock %} 

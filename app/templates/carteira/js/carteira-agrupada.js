@@ -531,6 +531,40 @@ class CarteiraAgrupada {
         if (contador) {
             contador.textContent = totalVisiveis;
         }
+        
+        // Calcular e atualizar valor total dos pedidos visíveis
+        this.atualizarValorTotal();
+    }
+    
+    atualizarValorTotal() {
+        let valorTotal = 0;
+        
+        // Somar valores de todos os pedidos visíveis
+        document.querySelectorAll('.pedido-row:not([style*="display: none"])').forEach(linha => {
+            const valorElement = linha.querySelector('.valor-pedido');
+            if (valorElement) {
+                // Extrair valor do texto (remover R$, pontos e converter vírgula)
+                const valorTexto = valorElement.textContent
+                    .replace('R$', '')
+                    .replace(/\./g, '')
+                    .replace(',', '.')
+                    .trim();
+                
+                const valor = parseFloat(valorTexto) || 0;
+                valorTotal += valor;
+            }
+        });
+        
+        // Formatar e exibir valor total
+        const valorFormatado = new Intl.NumberFormat('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(valorTotal);
+        
+        const elementoValorTotal = document.getElementById('valor-total-filtro');
+        if (elementoValorTotal) {
+            elementoValorTotal.textContent = valorFormatado;
+        }
     }
 
     // 🎯 EXPANDIR/COLAPSAR

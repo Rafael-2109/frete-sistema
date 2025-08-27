@@ -33,6 +33,9 @@ from .standby_api import standby_bp
 # API de Relatórios
 from .relatorios_api import *
 
+# API do Dashboard
+from .dashboard_api import *
+
 # API de Alertas de Separação
 from .alertas_separacao_api import alertas_separacao_api
 from .alertas_visualizacao import alertas_visualizacao_bp

@@ -13,8 +13,13 @@
                     Carteira Agrupada por Pedidos
                 </h1>
                 {% if total_pedidos %}
-                <small class="text-muted"><span id="contador-pedidos">{{ total_pedidos }}</span> pedidos
-                    encontrados</small>
+                <small class="text-muted">
+                    <span id="contador-pedidos">{{ total_pedidos }}</span> pedidos encontrados
+                    <span class="ms-2">|</span>
+                    <span class="ms-2 text-success fw-bold">
+                        R$ <span id="valor-total-filtro">0,00</span>
+                    </span>
+                </small>
                 {% endif %}
             </div>
 
@@ -403,7 +408,7 @@
                                 <!-- ✅ CORREÇÃO 2: Informações (sem texto branco) -->
                                 <td>
                                     <div class="valores-info text-end">
-                                        <strong class="text-success">{{ pedido.valor_total|moeda_carteira }}</strong>
+                                        <strong class="text-success valor-pedido">{{ pedido.valor_total|moeda_carteira }}</strong>
                                         <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }}</small>
                                         <br><small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small>
                                         <br><span class="badge bg-primary text-white">{{ pedido.total_itens }}
@@ -619,6 +624,9 @@
         window.modalEndereco = new ModalEndereco();
         window.modalSeparacoes = new ModalSeparacoes();
         window.separacaoManager = new SeparacaoManager();
+        
+        // Calcular valor total inicial
+        window.carteiraAgrupada.atualizarValorTotal();
 
         console.log('✅ Template balanceado carregado com todos os módulos');
     });
