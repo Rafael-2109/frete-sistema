@@ -50,22 +50,45 @@ def solicitar_agendamento_nf_async():
         entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
         
         if not entrega:
+            logger.error(f"Entrega não encontrada para NF {numero_nf}")
             return jsonify({
                 'success': False,
                 'message': f'Entrega com NF {numero_nf} não encontrada'
             }), 404
         
-        # Buscar produtos da NF
-        produtos_faturamento = FaturamentoProduto.query.filter_by(
-            numero_nf=numero_nf,
-            status_nf='Lançado'
+        logger.info(f"Entrega encontrada para NF {numero_nf}: ID={entrega.id}, Cliente={entrega.cliente}")
+        
+        # Buscar produtos da NF - aceitar qualquer status exceto Cancelado
+        produtos_faturamento = FaturamentoProduto.query.filter(
+            FaturamentoProduto.numero_nf == numero_nf,
+            FaturamentoProduto.status_nf != 'Cancelado'
         ).all()
         
         if not produtos_faturamento:
-            return jsonify({
-                'success': False,
-                'message': f'Produtos não encontrados para a NF {numero_nf}'
-            }), 404
+            # Tentar buscar sem filtro de status como fallback
+            produtos_faturamento = FaturamentoProduto.query.filter_by(
+                numero_nf=numero_nf
+            ).all()
+            
+            if not produtos_faturamento:
+                logger.error(f"Produtos não encontrados para NF {numero_nf} na tabela FaturamentoProduto")
+                
+                # Debug: verificar total de registros na tabela
+                total_registros = FaturamentoProduto.query.count()
+                logger.info(f"Total de registros em FaturamentoProduto: {total_registros}")
+                
+                # Debug: verificar últimas NFs cadastradas
+                ultimas_nfs = db.session.query(FaturamentoProduto.numero_nf).distinct().limit(5).all()
+                logger.info(f"Últimas NFs cadastradas: {[nf[0] for nf in ultimas_nfs]}")
+                
+                return jsonify({
+                    'success': False,
+                    'message': f'Produtos não encontrados para a NF {numero_nf}. Verifique se a NF foi importada corretamente no sistema de faturamento.'
+                }), 404
+            else:
+                logger.warning(f"Produtos encontrados para NF {numero_nf}, mas todos com status Cancelado")
+        
+        logger.info(f"Encontrados {len(produtos_faturamento)} produtos para NF {numero_nf}")
         
         # Identificar portal
         portal = GrupoEmpresarial.identificar_portal(entrega.cnpj_cliente)
@@ -99,7 +122,7 @@ def solicitar_agendamento_nf_async():
             
             produtos.append({
                 'codigo': codigo_portal,
-                'codigo_erp': produto.cod_produto,
+                'codigo_nosso': produto.cod_produto,  # Nosso código interno
                 'nome': produto.nome_produto,
                 'quantidade': int(produto.qtd_produto_faturado or 0),
                 'peso': float(produto.peso_total or 0)
@@ -255,7 +278,7 @@ def solicitar_agendamento_async():
             
             produtos.append({
                 'codigo': codigo_portal,
-                'codigo_erp': item.cod_produto,
+                'codigo_nosso': item.cod_produto,  # Nosso código interno
                 'nome': getattr(item, 'nome_produto', ''),
                 'quantidade': int(item.qtd_saldo or 0),
                 'peso': float(item.peso or 0)
