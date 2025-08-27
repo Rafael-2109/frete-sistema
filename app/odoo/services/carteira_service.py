@@ -350,7 +350,65 @@ class CarteiraService:
             
             # Buscar endereço de entrega
             endereco = {}
-            if pedido.get('partner_shipping_id'):
+            
+            # 🚛 LÓGICA ESPECIAL PARA REDESPACHO
+            # Se o incoterm for REDESPACHO, usar endereço da transportadora
+            if pedido.get('incoterm') and pedido.get('carrier_id'):
+                incoterm_info = pedido['incoterm']
+                incoterm_texto = ''
+                
+                # Extrair texto do incoterm
+                if isinstance(incoterm_info, list) and len(incoterm_info) > 1:
+                    incoterm_texto = incoterm_info[1].upper()
+                elif isinstance(incoterm_info, str):
+                    incoterm_texto = incoterm_info.upper()
+                
+                # Verificar se é REDESPACHO
+                if 'RED' in incoterm_texto or 'REDESPACHO' in incoterm_texto:
+                    carrier_id = pedido['carrier_id'][0] if isinstance(pedido['carrier_id'], list) else pedido['carrier_id']
+                    
+                    # Buscar dados da transportadora
+                    try:
+                        logger.info(f"🚛 Pedido {pedido.get('name')} é REDESPACHO - buscando endereço da transportadora {carrier_id}")
+                        
+                        # Buscar delivery.carrier para obter o l10n_br_partner_id
+                        carrier_data = self.connection.search_read(
+                            'delivery.carrier',
+                            [('id', '=', carrier_id)],
+                            ['id', 'name', 'l10n_br_partner_id']
+                        )
+                        
+                        if carrier_data and carrier_data[0].get('l10n_br_partner_id'):
+                            # Pegar o ID do parceiro da transportadora
+                            transportadora_partner_id = carrier_data[0]['l10n_br_partner_id'][0] if isinstance(carrier_data[0]['l10n_br_partner_id'], list) else carrier_data[0]['l10n_br_partner_id']
+                            
+                            # Buscar no cache ou fazer query
+                            if transportadora_partner_id in cache_partners:
+                                endereco = cache_partners.get(transportadora_partner_id, {})
+                                logger.info(f"✅ Usando endereço da transportadora (cache): {endereco.get('name', 'N/A')}")
+                            else:
+                                # Query adicional se não estiver no cache
+                                transp_partner = self.connection.search_read(
+                                    'res.partner',
+                                    [('id', '=', transportadora_partner_id)],
+                                    campos_partner
+                                )
+                                if transp_partner:
+                                    endereco = transp_partner[0]
+                                    cache_partners[transportadora_partner_id] = endereco
+                                    logger.info(f"✅ Usando endereço da transportadora (query): {endereco.get('name', 'N/A')}")
+                                    
+                                    # Log detalhado do endereço substituído
+                                    municipio = endereco.get('l10n_br_municipio_id', ['', ''])[1] if isinstance(endereco.get('l10n_br_municipio_id'), list) else ''
+                                    logger.info(f"   📍 Endereço REDESPACHO: {municipio} - {endereco.get('street', 'N/A')}")
+                        else:
+                            logger.warning(f"⚠️ Transportadora {carrier_id} não possui l10n_br_partner_id configurado")
+                            
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao buscar endereço da transportadora: {e}")
+            
+            # Se não é REDESPACHO ou não conseguiu o endereço da transportadora, usar o padrão
+            if not endereco and pedido.get('partner_shipping_id'):
                 partner_id = pedido['partner_shipping_id'][0] if isinstance(pedido['partner_shipping_id'], list) else pedido['partner_shipping_id']
                 
                 # Usar o cache de partners já carregado (evita query extra)
