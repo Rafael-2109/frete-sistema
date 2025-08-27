@@ -471,6 +471,12 @@ class CarteiraAgrupada {
             if (linhaDetalhes) {
                 linhaDetalhes.style.display = mostrar ? '' : 'none';
             }
+            
+            // 🆕 Ocultar também linha de separações/pré-separações quando pedido é filtrado
+            const linhaSeparacoes = document.getElementById(`separacoes-compactas-${numPedido}`);
+            if (linhaSeparacoes) {
+                linhaSeparacoes.style.display = mostrar ? '' : 'none';
+            }
 
             if (mostrar) totalVisiveis++;
         });
@@ -715,8 +721,21 @@ class CarteiraAgrupada {
 
     formatarData(data) {
         if (!data) return '-';
-        const d = new Date(data);
-        return d.toLocaleDateString('pt-BR');
+        // Garantir formato dd/mm/yyyy
+        let d;
+        if (data.includes('T')) {
+            // Já está em formato ISO
+            d = new Date(data);
+        } else {
+            // Apenas data, criar no timezone local sem ajuste
+            const [ano, mes, dia] = data.split('-');
+            d = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+        }
+        // Forçar formato dd/mm/yyyy
+        const dia = String(d.getDate()).padStart(2, '0');
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const ano = d.getFullYear();
+        return `${dia}/${mes}/${ano}`;
     }
 
     formatarPeso(peso) {

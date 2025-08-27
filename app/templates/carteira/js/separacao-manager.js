@@ -196,7 +196,7 @@ class SeparacaoManager {
                 // Restaurar TODOS os botões após sucesso
                 todosBotoes.forEach(btn => {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
+                    btn.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Pedido Separado';
                 })
                 
                 // 🆕 AGENDAMENTO AUTOMÁTICO: Verificar se há data de agendamento e pedir confirmação

@@ -181,11 +181,6 @@ class WorkspaceMontagem {
                     </div>
                 </div>
 
-                <!-- 🆕 RENDERIZAÇÃO COMPACTA DE SEPARAÇÕES/PRÉ-SEPARAÇÕES -->
-                <div class="separacoes-compactas-container bg-white p-3 border-bottom">
-                    ${this.renderizarSeparacoesCompactas(numPedido)}
-                </div>
-
                 <!-- Tabela de Produtos (Origem) - Com carregamento assíncrono -->
                 <div class="workspace-produtos bg-light p-3">
                     <h6 class="mb-3">
@@ -427,8 +422,21 @@ class WorkspaceMontagem {
 
     formatarData(data) {
         if (!data) return '-';
-        const d = new Date(data + 'T00:00:00');
-        return d.toLocaleDateString('pt-BR');
+        // Garantir formato dd/mm/yyyy
+        let d;
+        if (data.includes('T')) {
+            // Já está em formato ISO
+            d = new Date(data);
+        } else {
+            // Apenas data, criar no timezone local sem ajuste
+            const [ano, mes, dia] = data.split('-');
+            d = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+        }
+        // Forçar formato dd/mm/yyyy
+        const dia = String(d.getDate()).padStart(2, '0');
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const ano = d.getFullYear();
+        return `${dia}/${mes}/${ano}`;
     }
 
     calcularStatusDisponibilidade(produto) {

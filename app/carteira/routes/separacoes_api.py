@@ -83,8 +83,8 @@ def obter_separacoes_completas(num_pedido):
             sep_data = {
                 'separacao_lote_id': sep.separacao_lote_id,
                 'num_pedido': sep.num_pedido,
-                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
-                'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
+                'expedicao': sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else None,
+                'agendamento': sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else None,
                 'protocolo': sep.protocolo,
                 'agendamento_confirmado': sep.agendamento_confirmado if hasattr(sep, 'agendamento_confirmado') else False,
                 'status': pedido.status if pedido else 'ABERTO',
@@ -120,7 +120,7 @@ def obter_separacoes_completas(num_pedido):
                         sep_data['embarque'] = {
                             'numero': embarque.numero,
                             'transportadora': transportadora,
-                            'data_prevista_embarque': embarque.data_prevista_embarque.isoformat() if embarque.data_prevista_embarque else None
+                            'data_prevista_embarque': embarque.data_prevista_embarque.strftime('%Y-%m-%d') if embarque.data_prevista_embarque else None
                         }
             
             separacoes_data.append(sep_data)

@@ -1190,6 +1190,9 @@ def fechar_frete_grupo():
     Fechar fretes por grupo - versão corrigida com dados da tabela nos locais corretos
     """
     try:
+        # ✅ PROTEÇÃO CONTRA DUPLICAÇÃO: Advisory lock PostgreSQL
+        from sqlalchemy import text
+        
         # ✅ CORREÇÃO: Aceita tanto JSON quanto form data
         if request.is_json:
             data = request.get_json()
@@ -1205,6 +1208,15 @@ def fechar_frete_grupo():
         
         if not data:
             return jsonify({'success': False, 'message': 'Dados inválidos'}), 400
+        
+        # ✅ NOVO: Cria hash único para o conjunto de CNPJs para lock
+        cnpjs = data.get('cnpjs', [])
+        if cnpjs:
+            # Cria uma string única ordenada com os CNPJs
+            lock_key = '_'.join(sorted(cnpjs))
+            # Usa advisory lock para evitar processamento simultâneo do mesmo conjunto
+            db.session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {'key': f'fechar_frete_{lock_key}'})
+            print(f"[DEBUG] 🔒 Advisory lock obtido para CNPJs: {lock_key[:50]}...")
         
         tipo = data.get('tipo', 'FRACIONADA')
         transportadora_id = data.get('transportadora_id')
@@ -1243,6 +1255,34 @@ def fechar_frete_grupo():
         # Calcula totais
         valor_total = sum(p.valor_saldo_total or 0 for p in todos_pedidos)
         peso_total = sum(p.peso_total or 0 for p in todos_pedidos)
+        
+        # ✅ NOVO: Verifica se já existe embarque recente (últimos 10 segundos) com os mesmos pedidos
+        from datetime import timedelta
+        tempo_limite = datetime.now() - timedelta(seconds=10)
+        
+        # Busca os números de pedidos
+        numeros_pedidos = sorted([p.num_pedido for p in todos_pedidos])
+        
+        # Verifica embarques recentes
+        embarques_recentes = Embarque.query.filter(
+            Embarque.transportadora_id == transportadora_id,
+            Embarque.criado_em >= tempo_limite,
+            Embarque.status == 'ativo'
+        ).all()
+        
+        for emb_rec in embarques_recentes:
+            # Busca os pedidos deste embarque
+            itens_emb = EmbarqueItem.query.filter_by(embarque_id=emb_rec.id).all()
+            pedidos_emb = sorted([item.pedido for item in itens_emb])
+            
+            # Se tem os mesmos pedidos, é duplicação
+            if pedidos_emb == numeros_pedidos:
+                print(f"[DEBUG] ⚠️ Embarque duplicado detectado! ID: {emb_rec.id}, Número: {emb_rec.numero}")
+                return jsonify({
+                    'success': True,  # Retorna sucesso para não mostrar erro ao usuário
+                    'message': 'Embarque já foi criado',
+                    'redirect_url': url_for('cotacao.resumo_frete', cotacao_id=emb_rec.cotacao_id)
+                })
 
         # Cria cotação
         cotacao = Cotacao(

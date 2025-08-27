@@ -664,6 +664,20 @@ $(document).ready(function() {
     const tipo = $btn.data('tipo');
     const indiceOriginal = $btn.data('indice');
     
+    // ✅ PROTEÇÃO: Desabilita TODOS os botões de fechar frete
+    const $todosBotoes = $('.fechar-frete, .fechar-frete-grupo');
+    $todosBotoes.prop('disabled', true);
+    
+    // ✅ PROTEÇÃO: Adiciona indicador visual de processamento
+    const textoOriginal = $btn.html();
+    $btn.html('<i class="fas fa-spinner fa-spin me-1"></i>Processando...');
+    
+    // ✅ PROTEÇÃO: Flag para evitar múltiplas chamadas
+    if ($btn.data('processando')) {
+      return false;
+    }
+    $btn.data('processando', true);
+    
     console.log('[DEBUG] Botão clicado:');
     console.log('[DEBUG] - data-indice (indice_original):', indiceOriginal);
     console.log('[DEBUG] - data-opcao-id (indice atual):', $btn.data('opcao-id'));
@@ -687,20 +701,40 @@ $(document).ready(function() {
     console.log('[DEBUG] Payload enviado:', payload);
 
     // Envia a requisição
+    // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
+    const timeoutId = setTimeout(function() {
+      alert('O processamento está demorando mais que o esperado. Por favor, aguarde...');
+    }, 30000);
+    
     $.ajax({
       url: "{{ url_for('cotacao.fechar_frete') }}",
       type: 'POST',
       contentType: 'application/json',
       data: JSON.stringify(payload),
+      timeout: 120000, // ✅ Timeout de 2 minutos
       success: function(response) {
+        clearTimeout(timeoutId);
         if (response.success) {
-          window.location.href = response.redirect_url;
+          // ✅ Mostra mensagem antes de redirecionar
+          $btn.html('<i class="fas fa-check me-1"></i>Concluído!');
+          setTimeout(function() {
+            window.location.href = response.redirect_url;
+          }, 500);
         } else {
           alert('Erro ao fechar frete: ' + response.message);
+          // ✅ Reabilita botões em caso de erro
+          $todosBotoes.prop('disabled', false);
+          $btn.html(textoOriginal);
+          $btn.data('processando', false);
         }
       },
       error: function(xhr) {
-        alert('Erro ao processar requisição: ' + xhr.responseText);
+        clearTimeout(timeoutId);
+        alert('Erro ao processar requisição: ' + (xhr.responseText || 'Timeout'));
+        // ✅ Reabilita botões em caso de erro
+        $todosBotoes.prop('disabled', false);
+        $btn.html(textoOriginal);
+        $btn.data('processando', false);
       }
     });
   });
@@ -711,11 +745,30 @@ $(document).ready(function() {
     const transportadora_id = $btn.data('transportadora-id');
     const cnpjs = $btn.data('cnpjs');
     
+    // ✅ PROTEÇÃO: Desabilita TODOS os botões de fechar frete para evitar múltiplos cliques
+    const $todosBotoes = $('.fechar-frete-grupo, .btn-fechar-frete');
+    $todosBotoes.prop('disabled', true);
+    
+    // ✅ PROTEÇÃO: Adiciona indicador visual de processamento no botão clicado
+    const textoOriginal = $btn.html();
+    $btn.html('<i class="fas fa-spinner fa-spin me-1"></i>Processando...');
+    
+    // ✅ PROTEÇÃO: Flag para evitar múltiplas chamadas
+    if ($btn.data('processando')) {
+      return false;
+    }
+    $btn.data('processando', true);
+    
     // Prepara os dados para envio
     const payload = {
       transportadora_id: transportadora_id,
       cnpjs: cnpjs
     };
+
+    // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
+    const timeoutId = setTimeout(function() {
+      alert('O processamento está demorando mais que o esperado. Por favor, aguarde...');
+    }, 30000);
 
     // Envia a requisição
     $.ajax({
@@ -723,15 +776,30 @@ $(document).ready(function() {
       type: 'POST',
       contentType: 'application/json',
       data: JSON.stringify(payload),
+      timeout: 120000, // ✅ Timeout de 2 minutos
       success: function(response) {
+        clearTimeout(timeoutId);
         if (response.success) {
-          window.location.href = response.redirect_url;
+          // ✅ Mostra mensagem antes de redirecionar
+          $btn.html('<i class="fas fa-check me-1"></i>Concluído!');
+          setTimeout(function() {
+            window.location.href = response.redirect_url;
+          }, 500);
         } else {
           alert('Erro ao fechar frete: ' + response.message);
+          // ✅ Reabilita botões em caso de erro
+          $todosBotoes.prop('disabled', false);
+          $btn.html(textoOriginal);
+          $btn.data('processando', false);
         }
       },
       error: function(xhr) {
-        alert('Erro ao processar requisição: ' + xhr.responseText);
+        clearTimeout(timeoutId);
+        alert('Erro ao processar requisição: ' + (xhr.responseText || 'Timeout'));
+        // ✅ Reabilita botões em caso de erro
+        $todosBotoes.prop('disabled', false);
+        $btn.html(textoOriginal);
+        $btn.data('processando', false);
       }
     });
   });

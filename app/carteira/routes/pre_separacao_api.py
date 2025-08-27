@@ -189,10 +189,10 @@ def listar_pre_separacoes(num_pedido):
                 lotes[lote_key] = {
                     "lote_id": lote_key,
                     "data_expedicao": (
-                        pre_sep.data_expedicao_editada.isoformat() if pre_sep.data_expedicao_editada else None
+                        pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else None
                     ),
                     "data_agendamento": (
-                        pre_sep.data_agendamento_editada.isoformat() if pre_sep.data_agendamento_editada else None
+                        pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else None
                     ),
                     "agendamento_confirmado": pre_sep.agendamento_confirmado if hasattr(pre_sep, 'agendamento_confirmado') else False,
                     "protocolo": pre_sep.protocolo_editado,
