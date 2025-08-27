@@ -1189,7 +1189,7 @@ class ModalSeparacoes {
                                         Status: ${data.agendamento_confirmado ? 'Aguardando check-in' : 'Aguardando aprovação'}
                                     </h6>
                                     ${data.data_aprovada ? `
-                                        <p class="mb-1 small"><strong>Entrega aprovada para:</strong> ${data.data_aprovada}</p>
+                                        <p class="mb-1 small"><strong>Entrega aprovada para:</strong> ${this.formatarData(data.data_aprovada)}</p>
                                     ` : ''}
                                     <p class="mb-0 small"><strong>Protocolo:</strong> ${protocolo}</p>
                                 </div>

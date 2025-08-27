@@ -107,35 +107,56 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 integracao.resposta_portal = resultado
                 integracao.atualizado_em = datetime.utcnow()
                 
-                # Atualizar Separacao se houver protocolo
+                # Atualizar Separacao e Pedido se houver protocolo
                 if resultado.get('protocolo') and dados_agendamento.get('lote_id'):
+                    # Importar modelo Pedido
+                    from app.pedidos.models import Pedido
+                    
                     separacoes = Separacao.query.filter_by(
                         separacao_lote_id=dados_agendamento.get('lote_id')
                     ).all()
                     
+                    # Converter data uma vez para usar em ambos os updates
+                    data_agendamento_convertida = None
+                    if dados_agendamento.get('data_agendamento'):
+                        try:
+                            if isinstance(dados_agendamento['data_agendamento'], str):
+                                if '/' in dados_agendamento['data_agendamento']:
+                                    # Formato DD/MM/AAAA
+                                    partes = dados_agendamento['data_agendamento'].split('/')
+                                    data_agendamento_convertida = datetime(
+                                        int(partes[2]), 
+                                        int(partes[1]), 
+                                        int(partes[0])
+                                    ).date()
+                                else:
+                                    # Formato ISO
+                                    data_agendamento_convertida = datetime.fromisoformat(
+                                        dados_agendamento['data_agendamento']
+                                    ).date()
+                            else:
+                                data_agendamento_convertida = dados_agendamento['data_agendamento']
+                        except Exception as e:
+                            logger.error(f"Erro ao converter data: {e}")
+                    
+                    # Atualizar Separacao
                     for sep in separacoes:
                         sep.protocolo = resultado.get('protocolo')
-                        if dados_agendamento.get('data_agendamento'):
-                            # Converter string para date se necessário
-                            try:
-                                if isinstance(dados_agendamento['data_agendamento'], str):
-                                    if '/' in dados_agendamento['data_agendamento']:
-                                        # Formato DD/MM/AAAA
-                                        partes = dados_agendamento['data_agendamento'].split('/')
-                                        sep.agendamento = datetime(
-                                            int(partes[2]), 
-                                            int(partes[1]), 
-                                            int(partes[0])
-                                        ).date()
-                                    else:
-                                        # Formato ISO
-                                        sep.agendamento = datetime.fromisoformat(
-                                            dados_agendamento['data_agendamento']
-                                        ).date()
-                                else:
-                                    sep.agendamento = dados_agendamento['data_agendamento']
-                            except Exception as e:
-                                logger.error(f"Erro ao converter data: {e}")
+                        if data_agendamento_convertida:
+                            sep.agendamento = data_agendamento_convertida
+                    
+                    # Atualizar Pedido correspondente
+                    pedido = Pedido.query.filter_by(
+                        separacao_lote_id=dados_agendamento.get('lote_id')
+                    ).first()
+                    
+                    if pedido:
+                        pedido.protocolo = resultado.get('protocolo')
+                        if data_agendamento_convertida:
+                            pedido.agendamento = data_agendamento_convertida
+                        logger.info(f"[Worker] ✅ Atualizado Pedido {pedido.num_pedido} com protocolo {resultado.get('protocolo')}")
+                    else:
+                        logger.warning(f"[Worker] ⚠️ Pedido não encontrado para lote {dados_agendamento.get('lote_id')}")
                 
                 # Log de sucesso
                 log_sucesso = PortalLog(

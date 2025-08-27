@@ -42,9 +42,52 @@ class WorkspaceTabela {
         `;
 
         produtos.forEach(produto => {
-            const statusDisponibilidade = this.calcularStatusDisponibilidade(produto);
-            const saldoDisponivel = this.calcularSaldoDisponivel(produto);
+            // Garantir que produto tem estrutura mínima necessária
+            if (!produto || !produto.cod_produto) {
+                console.warn('⚠️ Produto inválido ou sem código:', produto);
+                return; // Pular este produto
+            }
+            
+            // Se não há estoque nem produção, mostrar INDISPONÍVEL em vez de CARREGANDO
+            let statusDisponibilidade = this.calcularStatusDisponibilidade(produto);
+            if (!statusDisponibilidade) {
+                // Se estoque é 0 e não há produção, não está carregando, está indisponível
+                const temEstoque = (produto.estoque_hoje ?? produto.estoque ?? 0) > 0;
+                const temProducao = (produto.producao_hoje ?? 0) > 0;
+                const temDisponibilidade = produto.data_disponibilidade && produto.data_disponibilidade !== 'Sem previsão';
+                
+                if (!temEstoque && !temProducao && !temDisponibilidade) {
+                    statusDisponibilidade = {
+                        class: 'bg-danger text-white',
+                        texto: 'INDISPONÍVEL',
+                        detalhes: 'Sem estoque',
+                        tooltip: 'Produto indisponível no momento'
+                    };
+                } else {
+                    statusDisponibilidade = {
+                        class: 'bg-secondary text-white',
+                        texto: 'CARREGANDO...',
+                        detalhes: 'Aguardando dados',
+                        tooltip: 'Dados de estoque sendo carregados'
+                    };
+                }
+            }
+            
+            const saldoDisponivel = this.calcularSaldoDisponivel(produto) || {
+                qtdEditavel: produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0,
+                qtdSeparacoes: 0,
+                qtdPreSeparacoes: 0,
+                qtdIndisponivel: 0
+            };
+            
             const producaoHoje = produto.producao_hoje || 0;
+            
+            // Garantir que valores numéricos não sejam undefined
+            const estoqueHoje = produto.estoque_hoje ?? 0;
+            const menorEstoque7d = produto.menor_estoque_7d ?? produto.menor_estoque_produto_d7 ?? 0;
+            const precoUnitario = produto.preco_unitario ?? produto.preco_produto_pedido ?? 0;
+            const pesoUnitario = produto.peso_unitario ?? 0;
+            const palletizacao = produto.palletizacao ?? 1000;
 
             html += `
                 <tr class="produto-origem" 
@@ -86,31 +129,31 @@ class WorkspaceTabela {
                     </td>
                     
                     <td class="text-end" id="valor-${produto.cod_produto}">
-                        <strong class="text-success valor-calculada">${this.formatarMoeda(saldoDisponivel.qtdEditavel * (produto.preco_unitario || 0))}</strong>
-                        <br><small class="text-muted">Unit: ${this.formatarMoeda(produto.preco_unitario || 0)}</small>
+                        <strong class="text-success valor-calculada">${this.formatarMoeda(saldoDisponivel.qtdEditavel * precoUnitario)}</strong>
+                        <br><small class="text-muted">Unit: ${this.formatarMoeda(precoUnitario)}</small>
                     </td>
                     
                     <td class="text-end" id="peso-${produto.cod_produto}">
-                        <strong class="text-info peso-calculado">${this.formatarPeso(saldoDisponivel.qtdEditavel * (produto.peso_unitario || 0))}</strong>
-                        <br><small class="text-muted">Unit: ${this.formatarPeso(produto.peso_unitario || 0)}</small>
+                        <strong class="text-info peso-calculado">${this.formatarPeso(saldoDisponivel.qtdEditavel * pesoUnitario)}</strong>
+                        <br><small class="text-muted">Unit: ${this.formatarPeso(pesoUnitario)}</small>
                     </td>
                     
                     <td class="text-end" id="pallet-${produto.cod_produto}">
-                        <strong class="text-warning pallet-calculado">${this.formatarPallet(saldoDisponivel.qtdEditavel / (produto.palletizacao || 1))}</strong>
-                        <br><small class="text-muted">PLT: ${this.formatarPallet(produto.palletizacao || 1)}</small>
+                        <strong class="text-warning pallet-calculado">${this.formatarPallet(saldoDisponivel.qtdEditavel / palletizacao)}</strong>
+                        <br><small class="text-muted">PLT: ${this.formatarPallet(palletizacao)}</small>
                     </td>
                     
                     <td class="text-center">
-                        <span class="badge ${this.getEstoqueHojeBadgeClass(produto.estoque_hoje)}"
+                        <span class="badge ${this.getEstoqueHojeBadgeClass(estoqueHoje)}"
                               title="Estoque disponível hoje">
-                            ${this.formatarQuantidade(produto.estoque_hoje || 0)}
+                            ${this.formatarQuantidade(estoqueHoje)}
                         </span>
                     </td>
                     
                     <td class="text-center">
-                        <span class="badge ${this.getEstoqueMinimoBadgeClass(produto.menor_estoque_7d)}"
+                        <span class="badge ${this.getEstoqueMinimoBadgeClass(menorEstoque7d)}"
                               title="Menor estoque projetado nos próximos 7 dias">
-                            ${this.formatarQuantidade(produto.menor_estoque_7d || 0)}
+                            ${this.formatarQuantidade(menorEstoque7d)}
                         </span>
                     </td>
                     
@@ -198,17 +241,25 @@ class WorkspaceTabela {
      */
     calcularStatusDisponibilidade(produto) {
         try {
-            // Debug dos dados recebidos
-            console.log('Debug disponibilidade:', {
-                cod_produto: produto.cod_produto,
-                qtd_pedido: produto.qtd_pedido,
-                estoque_hoje: produto.estoque_hoje,
-                data_disponibilidade: produto.data_disponibilidade,
-                qtd_disponivel: produto.qtd_disponivel
-            });
+            // Verificar se produto é válido
+            if (!produto) {
+                console.warn('⚠️ calcularStatusDisponibilidade chamado com produto undefined');
+                return null;
+            }
             
-            const qtdPedido = produto.qtd_pedido || 0;
-            const estoqueHoje = produto.estoque_hoje || 0;
+            // Debug dos dados recebidos (apenas em desenvolvimento)
+            if (window.DEBUG_MODE) {
+                console.log('Debug disponibilidade:', {
+                    cod_produto: produto.cod_produto,
+                    qtd_pedido: produto.qtd_pedido,
+                    estoque_hoje: produto.estoque_hoje,
+                    data_disponibilidade: produto.data_disponibilidade,
+                    qtd_disponivel: produto.qtd_disponivel
+                });
+            }
+            
+            const qtdPedido = produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0;
+            const estoqueHoje = produto.estoque_hoje ?? produto.estoque ?? 0;
             const dataDisponivel = produto.data_disponibilidade;
             const qtdDisponivel = produto.qtd_disponivel || 0;
 
@@ -261,7 +312,8 @@ class WorkspaceTabela {
                 };
             }
         } catch (error) {
-            console.error('Erro ao calcular disponibilidade:', error);
+            console.error('Erro ao calcular disponibilidade:', error, produto);
+            // Sempre retornar um objeto válido para evitar erro de 'undefined.class'
             return {
                 class: 'bg-secondary text-white',
                 texto: 'ERRO',
@@ -272,13 +324,25 @@ class WorkspaceTabela {
     }
 
     calcularSaldoDisponivel(produto) {
-        // Delegar para o WorkspaceQuantidades se disponível
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.calcularSaldoDisponivel(produto);
-        }
-
-        // Fallback caso WorkspaceQuantidades não esteja disponível
         try {
+            // Verificar se produto é válido
+            if (!produto) {
+                console.warn('⚠️ calcularSaldoDisponivel chamado com produto undefined');
+                return {
+                    qtdEditavel: 0,
+                    qtdSeparacoes: 0,
+                    qtdPreSeparacoes: 0,
+                    qtdIndisponivel: 0
+                };
+            }
+            
+            // Delegar para o WorkspaceQuantidades se disponível
+            if (window.workspaceQuantidades) {
+                const resultado = window.workspaceQuantidades.calcularSaldoDisponivel(produto);
+                if (resultado) return resultado;
+            }
+
+            // Fallback caso WorkspaceQuantidades não esteja disponível ou retorne null
             const qtdPedido = produto.qtd_pedido || produto.qtd_produto_pedido || 0;
             const qtdSeparacoes = produto.qtd_separacoes || 0;
             const qtdPreSeparacoes = produto.qtd_pre_separacoes || 0;
@@ -315,8 +379,12 @@ class WorkspaceTabela {
     }
 
     formatarQuantidade(qtd) {
-        if (!qtd) return '0';
-        return Math.floor(qtd).toLocaleString('pt-BR');
+        // Verificar se é null, undefined ou NaN
+        if (qtd === null || qtd === undefined || isNaN(qtd)) return '0';
+        // Garantir que é um número válido
+        const numero = parseFloat(qtd);
+        if (isNaN(numero)) return '0';
+        return Math.floor(numero).toLocaleString('pt-BR');
     }
 
     formatarPeso(peso) {

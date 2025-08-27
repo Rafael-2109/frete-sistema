@@ -32,9 +32,13 @@ def obter_estoque_pedido(num_pedido):
         
         for produto in produtos:
             # USAR ServicoEstoqueTempoReal IGUAL ao workspace_api.py
-            projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            try:
+                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            except Exception as e:
+                logger.warning(f"Erro ao buscar projeção para produto {produto.cod_produto}: {e}")
+                projecao_completa = None
             
-            if projecao_completa:
+            if projecao_completa and isinstance(projecao_completa, dict):
                 # Usar dados calculados pelo serviço (VALORES REAIS)
                 produto_estoque = {
                     'cod_produto': produto.cod_produto,
@@ -94,9 +98,13 @@ def obter_workspace_estoque(num_pedido):
         
         for produto in produtos:
             # USAR ServicoEstoqueTempoReal IGUAL ao workspace_api.py
-            projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            try:
+                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            except Exception as e:
+                logger.warning(f"Erro ao buscar projeção para produto {produto.cod_produto}: {e}")
+                projecao_completa = None
             
-            if projecao_completa:
+            if projecao_completa and isinstance(projecao_completa, dict):
                 # Usar dados calculados pelo serviço (VALORES REAIS)
                 produto_data = {
                     'cod_produto': produto.cod_produto,
@@ -122,7 +130,7 @@ def obter_workspace_estoque(num_pedido):
                 # Adicionar todas as projeções D0-D28 calculadas
                 for i, valor in enumerate(projecao_completa.get('projecao', [])):
                     if i < 29:
-                        produto_data[f'estoque_d{i}'] = valor
+                        produto_data[f'estoque_d{i}'] = valor if valor is not None else 0
             else:
                 # Fallback se o serviço falhar
                 produto_data = {

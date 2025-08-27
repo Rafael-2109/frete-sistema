@@ -173,18 +173,31 @@ def verificar_protocolo_portal():
         verificador = VerificadorProtocoloAtacadao()
         resultado = verificador.verificar_protocolo_completo(protocolo, lote_id)
         
-        # Se tem confirmação e data, atualizar separação
+        # Se tem confirmação e data, atualizar separação e pedido
         if resultado.get('success') and lote_id and resultado.get('agendamento_confirmado') and resultado.get('data_aprovada'):
             try:
                 from datetime import datetime
+                from app.pedidos.models import Pedido
+                
                 separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
                 for sep in separacoes:
                     sep.agendamento_confirmado = True
                     sep.agendamento = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
+                
+                # Atualizar também o Pedido correspondente
+                pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+                if pedido:
+                    pedido.agendamento_confirmado = True
+                    pedido.agendamento = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
+                    # Se tem protocolo no resultado, também atualizar
+                    if protocolo:
+                        pedido.protocolo = protocolo
+                    logger.info(f"Pedido {pedido.num_pedido} atualizado com confirmação do agendamento")
+                
                 db.session.commit()
-                logger.info(f"Separação atualizada com confirmação do agendamento")
+                logger.info(f"Separação e Pedido atualizados com confirmação do agendamento")
             except Exception as e:
-                logger.error(f"Erro ao atualizar separação: {e}")
+                logger.error(f"Erro ao atualizar separação/pedido: {e}")
                 db.session.rollback()
         
         return jsonify(resultado)
@@ -226,14 +239,28 @@ def atualizar_status_separacao():
                 'message': 'Separação não encontrada'
             })
         
+        # Converter data de agendamento uma vez
+        data_agendamento = None
+        if agendamento:
+            if isinstance(agendamento, str):
+                data_agendamento = datetime.strptime(agendamento, '%Y-%m-%d').date()
+            else:
+                data_agendamento = agendamento
+        
+        # Atualizar separações
         for sep in separacoes:
-            if agendamento:
-                # Converter string para date se necessário
-                if isinstance(agendamento, str):
-                    sep.agendamento = datetime.strptime(agendamento, '%Y-%m-%d').date()
-                else:
-                    sep.agendamento = agendamento
+            if data_agendamento:
+                sep.agendamento = data_agendamento
             sep.agendamento_confirmado = agendamento_confirmado
+        
+        # Atualizar também o Pedido correspondente
+        from app.pedidos.models import Pedido
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+        if pedido:
+            if data_agendamento:
+                pedido.agendamento = data_agendamento
+            pedido.agendamento_confirmado = agendamento_confirmado
+            logger.info(f"Pedido {pedido.num_pedido} atualizado junto com separação")
         
         db.session.commit()
         

@@ -13,6 +13,11 @@ class CarteiraAgrupada {
             agendamento: null  // null, 'com' ou 'sem'
         };
         this.maxFiltrosAtivos = 3; // Máximo de badges selecionados simultaneamente
+        
+        // 🆕 Controle de requisições assíncronas
+        this.abortControllers = new Map(); // pedidoId -> AbortController
+        this.pedidosVisiveis = new Set(); // Conjunto de pedidos atualmente visíveis
+        
         this.init();
     }
 
@@ -406,6 +411,12 @@ class CarteiraAgrupada {
         const statusSelecionado = document.getElementById('filtro-status')?.value || '';
         const equipeSelecionada = document.getElementById('filtro-equipe')?.value || '';
 
+        // 🆕 Cancelar todas as requisições assíncronas pendentes
+        this.cancelarTodasRequisicoes();
+        
+        // Limpar conjunto de pedidos visíveis
+        this.pedidosVisiveis.clear();
+
         const linhasPedidos = document.querySelectorAll('.pedido-row');
         let totalVisiveis = 0;
 
@@ -478,7 +489,11 @@ class CarteiraAgrupada {
                 linhaSeparacoes.style.display = mostrar ? '' : 'none';
             }
 
-            if (mostrar) totalVisiveis++;
+            if (mostrar) {
+                totalVisiveis++;
+                // 🆕 Adicionar ao conjunto de pedidos visíveis
+                this.pedidosVisiveis.add(numPedido);
+            }
         });
 
         console.log(`🔍 Filtros aplicados: ${totalVisiveis} pedidos visíveis`);
@@ -719,6 +734,36 @@ class CarteiraAgrupada {
         });
     }
 
+    /**
+     * 🆕 VERIFICAR SE PEDIDO ESTÁ VISÍVEL
+     */
+    isPedidoVisivel(numPedido) {
+        // Sempre verificar diretamente no DOM para garantir precisão
+        const pedidoRow = document.querySelector(`.pedido-row[data-pedido="${numPedido}"]`);
+        if (!pedidoRow) return false;
+        
+        // Verificar se está visível no DOM
+        return pedidoRow.style.display !== 'none';
+    }
+    
+    /**
+     * 🆕 CANCELAR TODAS AS REQUISIÇÕES ASSÍNCRONAS
+     */
+    cancelarTodasRequisicoes() {
+        console.log(`🚫 Cancelando ${this.abortControllers.size} requisições assíncronas...`);
+        this.abortControllers.forEach((controller) => {
+            controller.abort();
+        });
+        this.abortControllers.clear();
+        
+        // 🆕 Também cancelar requisições de estoque do workspace
+        if (window.workspace && window.workspace.abortControllerEstoque) {
+            window.workspace.abortControllerEstoque.abort();
+            window.workspace.abortControllerEstoque = null;
+            console.log(`✔️ Carregamento de estoque do workspace cancelado`);
+        }
+    }
+    
     formatarData(data) {
         if (!data) return '-';
         // Garantir formato dd/mm/yyyy
@@ -770,11 +815,25 @@ class CarteiraAgrupada {
      * 🆕 CARREGAR SEPARAÇÕES COMPACTAS PARA UM PEDIDO
      */
     async carregarSeparacoesCompactasPedido(numPedido) {
+        // 🆕 Verificar se o pedido está visível antes de fazer requisição
+        if (!this.isPedidoVisivel(numPedido)) {
+            console.log(`🚫 Pedido ${numPedido} não está visível, cancelando requisição`);
+            return;
+        }
+        
         try {
-            // Fazer requisições em paralelo
+            // Criar AbortController para este pedido
+            const abortController = new AbortController();
+            this.abortControllers.set(numPedido, abortController);
+            
+            // Fazer requisições em paralelo com signal para cancelamento
             const [separacoesResponse, preSeparacoesResponse] = await Promise.all([
-                fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`).catch(() => null),
-                fetch(`/carteira/api/pedido/${numPedido}/pre-separacoes`).catch(() => null)
+                fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`, {
+                    signal: abortController.signal
+                }).catch(() => null),
+                fetch(`/carteira/api/pedido/${numPedido}/pre-separacoes`, {
+                    signal: abortController.signal
+                }).catch(() => null)
             ]);
             
             let separacoesData = null;
@@ -785,6 +844,12 @@ class CarteiraAgrupada {
             }
             if (preSeparacoesResponse && preSeparacoesResponse.ok) {
                 preSeparacoesData = await preSeparacoesResponse.json();
+            }
+            
+            // 🆕 Verificar novamente se pedido ainda está visível antes de renderizar
+            if (!this.isPedidoVisivel(numPedido)) {
+                console.log(`🚫 Pedido ${numPedido} foi filtrado durante carregamento, não renderizando`);
+                return;
             }
             
             // Renderizar separações compactas se houver dados
@@ -801,7 +866,15 @@ class CarteiraAgrupada {
             }
             
         } catch (error) {
-            console.error(`❌ Erro ao carregar separações compactas para ${numPedido}:`, error);
+            // 🆕 Ignorar erro de abort (cancelamento)
+            if (error.name === 'AbortError') {
+                console.log(`✔️ Requisição cancelada para pedido ${numPedido}`);
+            } else {
+                console.error(`❌ Erro ao carregar separações compactas para ${numPedido}:`, error);
+            }
+        } finally {
+            // Limpar AbortController após conclusão
+            this.abortControllers.delete(numPedido);
         }
     }
 
@@ -919,7 +992,7 @@ class CarteiraAgrupada {
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-primary btn-sm" 
-                                onclick="carteiraAgrupada.abrirModalDatas('${item.loteId}', ${item.isSeparacao})"
+                                onclick="carteiraAgrupada.abrirModalDatas('${item.loteId}', ${item.isSeparacao}, '${item.expedicao || ''}', '${item.agendamento || ''}', '${item.protocolo || ''}', ${item.agendamento_confirmado || false})"
                                 title="Editar datas">
                             <i class="fas fa-calendar-alt"></i> Datas
                         </button>
@@ -1092,15 +1165,24 @@ class CarteiraAgrupada {
     /**
      * 🆕 FUNÇÕES AUXILIARES PARA BOTÕES
      */
-    async abrirModalDatas(loteId, isSeparacao) {
+    async abrirModalDatas(loteId, isSeparacao, expedicao, agendamento, protocolo, agendamentoConfirmado) {
         console.log(`📅 Abrindo modal de datas para ${loteId} (Separação: ${isSeparacao})`);
+        console.log(`   Dados: expedição=${expedicao}, agendamento=${agendamento}, protocolo=${protocolo}, confirmado=${agendamentoConfirmado}`);
         
         // Redirecionar para workspace se disponível
         if (window.workspace) {
+            // Passar os dados diretamente para o workspace
+            const dadosModal = {
+                expedicao: expedicao || '',
+                agendamento: agendamento || '',
+                protocolo: protocolo || '',
+                agendamento_confirmado: agendamentoConfirmado || false
+            };
+            
             if (isSeparacao) {
-                window.workspace.editarDatasSeparacao(loteId);
+                window.workspace.editarDatasSeparacaoComDados(loteId, dadosModal);
             } else {
-                window.workspace.editarDatasPreSeparacao(loteId);
+                window.workspace.editarDatasPreSeparacaoComDados(loteId, dadosModal);
             }
         } else {
             alert('Função de edição de datas em desenvolvimento');

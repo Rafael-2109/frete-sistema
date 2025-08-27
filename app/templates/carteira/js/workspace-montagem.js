@@ -9,6 +9,9 @@ class WorkspaceMontagem {
         this.separacoesConfirmadas = []; // array de separações confirmadas
         this.produtosSelecionados = new Set();
         this.dadosProdutos = new Map(); // codProduto -> dados completos
+        
+        // 🆕 Controle de requisições assíncronas de estoque
+        this.abortControllerEstoque = null;
 
         // Inicializar módulos
         this.loteManager = new LoteManager(this);
@@ -45,10 +48,28 @@ class WorkspaceMontagem {
             if (!workspaceResponse.ok || !workspaceData.success) {
                 throw new Error(workspaceData.error || 'Erro ao carregar workspace');
             }
+            
+            // Verificar se há produtos
+            if (!workspaceData.produtos || workspaceData.produtos.length === 0) {
+                throw new Error('Nenhum produto encontrado para este pedido');
+            }
 
             // Armazenar dados dos produtos e status do pedido
             workspaceData.produtos.forEach(produto => {
-                this.dadosProdutos.set(produto.cod_produto, produto);
+                // Garantir estrutura mínima para cada produto
+                const produtoCompleto = {
+                    ...produto,
+                    qtd_pedido: produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0,
+                    estoque_hoje: produto.estoque_hoje || produto.estoque || 0,
+                    menor_estoque_7d: produto.menor_estoque_7d || produto.menor_estoque_produto_d7 || 0,
+                    producao_hoje: produto.producao_hoje || 0,
+                    preco_unitario: produto.preco_unitario || produto.preco_produto_pedido || 0,
+                    peso_unitario: produto.peso_unitario || 0,
+                    palletizacao: produto.palletizacao || 1000,
+                    data_disponibilidade: produto.data_disponibilidade || null,
+                    qtd_disponivel: produto.qtd_disponivel || 0
+                };
+                this.dadosProdutos.set(produto.cod_produto, produtoCompleto);
             });
 
             // Armazenar status do pedido
@@ -99,6 +120,13 @@ class WorkspaceMontagem {
             requestAnimationFrame(() => {
                 console.log('🎯 Inicializando sistema de seleção...');
                 this.configurarCheckboxes(numPedido);
+                
+                // 🆕 CARREGAR DADOS DE ESTOQUE DE FORMA ASSÍNCRONA
+                // Aguardar um pouco para garantir que DOM esteja pronto
+                setTimeout(() => {
+                    console.log('📊 Carregando dados de estoque assíncronos...');
+                    this.carregarDadosEstoqueAssincrono(numPedido);
+                }, 500);
             });
 
         } catch (error) {
@@ -1264,8 +1292,99 @@ class WorkspaceMontagem {
     editarDatasPreSeparacao(loteId) {
         this.abrirModalEdicaoDatas('pre-separacao', loteId);
     }
+    
+    // Novas funções que recebem os dados diretamente
+    editarDatasSeparacaoComDados(loteId, dados) {
+        this.abrirModalEdicaoDatasDireto('separacao', loteId, dados);
+    }
+    
+    editarDatasPreSeparacaoComDados(loteId, dados) {
+        this.abrirModalEdicaoDatasDireto('pre-separacao', loteId, dados);
+    }
+    
+    // Função que abre o modal diretamente com os dados fornecidos
+    abrirModalEdicaoDatasDireto(tipo, loteId, dadosAtuais) {
+        // Formatar datas para exibição no modal (dd/mm/yyyy)
+        const formatarDataParaExibicao = (data) => {
+            if (!data) return '';
+            if (data && data.includes('-')) {
+                const [ano, mes, dia] = data.split('-');
+                return `${dia}/${mes}/${ano}`;
+            }
+            return data;
+        };
+        
+        // Criar modal
+        const modalHtml = `
+            <div class="modal fade" id="modalEdicaoDatas" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Editar Datas - ${tipo === 'pre-separacao' ? 'Pré-Separação' : 'Separação'}
+                                <span class="badge bg-primary ms-2">${loteId}</span>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="formEdicaoDatas">
+                                <div class="mb-3">
+                                    <label class="form-label">Data de Expedição <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="dataExpedicao" 
+                                           value="${dadosAtuais.expedicao}" required>
+                                    ${dadosAtuais.expedicao ? `<small class="text-muted">Data atual: ${formatarDataParaExibicao(dadosAtuais.expedicao)}</small>` : ''}
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Data de Agendamento</label>
+                                    <input type="date" class="form-control" id="dataAgendamento" 
+                                           value="${dadosAtuais.agendamento}">
+                                    ${dadosAtuais.agendamento ? `<small class="text-muted">Data atual: ${formatarDataParaExibicao(dadosAtuais.agendamento)}</small>` : ''}
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Protocolo</label>
+                                    <input type="text" class="form-control" id="protocolo" 
+                                           value="${dadosAtuais.protocolo || ''}" 
+                                           placeholder="Digite o protocolo">
+                                    ${dadosAtuais.protocolo ? `<small class="text-success">Protocolo atual: ${dadosAtuais.protocolo}</small>` : ''}
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="agendamentoConfirmado" 
+                                               ${dadosAtuais.agendamento_confirmado ? 'checked' : ''}>
+                                        <label class="form-check-label" for="agendamentoConfirmado">
+                                            <i class="fas fa-check-circle text-success"></i> Agendamento Confirmado
+                                        </label>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="workspace.salvarEdicaoDatas('${tipo}', '${loteId}')">
+                                <i class="fas fa-save me-1"></i> Salvar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
-    abrirModalEdicaoDatas(tipo, loteId) {
+        // Remover modal anterior se existir
+        const modalExistente = document.getElementById('modalEdicaoDatas');
+        if (modalExistente) {
+            modalExistente.remove();
+        }
+
+        // Adicionar modal ao body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalEdicaoDatas'));
+        modal.show();
+    }
+
+    async abrirModalEdicaoDatas(tipo, loteId) {
         // Buscar dados atuais
         let dadosAtuais = {};
 
@@ -1294,9 +1413,55 @@ class WorkspaceMontagem {
                     protocolo: separacao.protocolo || '',
                     agendamento_confirmado: separacao.agendamento_confirmado || false
                 };
+            } else {
+                // Se não encontrar nos dados locais, buscar da carteira agrupada
+                if (window.carteiraAgrupada && window.carteiraAgrupada.separacoesPorPedido) {
+                    for (const [pedido, separacoes] of window.carteiraAgrupada.separacoesPorPedido) {
+                        const sep = separacoes.find(s => s.separacao_lote_id === loteId);
+                        if (sep) {
+                            dadosAtuais = {
+                                expedicao: sep.expedicao || '',
+                                agendamento: sep.agendamento || '',
+                                protocolo: sep.protocolo || '',
+                                agendamento_confirmado: sep.agendamento_confirmado || false
+                            };
+                            break;
+                        }
+                    }
+                }
+                
+                // Se ainda não encontrou, buscar da API diretamente
+                if (!dadosAtuais.expedicao) {
+                    try {
+                        const response = await fetch(`/carteira/api/separacao/${loteId}/detalhes`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success && data.separacao) {
+                                dadosAtuais = {
+                                    expedicao: data.separacao.expedicao || '',
+                                    agendamento: data.separacao.agendamento || '',
+                                    protocolo: data.separacao.protocolo || '',
+                                    agendamento_confirmado: data.separacao.agendamento_confirmado || false
+                                };
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Erro ao buscar dados da separação ${loteId}:`, error);
+                    }
+                }
             }
         }
 
+        // Formatar datas para exibição no modal (dd/mm/yyyy)
+        const formatarDataParaExibicao = (data) => {
+            if (!data) return '';
+            if (data && data.includes('-')) {
+                const [ano, mes, dia] = data.split('-');
+                return `${dia}/${mes}/${ano}`;
+            }
+            return data;
+        };
+        
         // Criar modal
         const modalHtml = `
             <div class="modal fade" id="modalEdicaoDatas" tabindex="-1">
@@ -1306,33 +1471,37 @@ class WorkspaceMontagem {
                             <h5 class="modal-title">
                                 <i class="fas fa-calendar-alt me-2"></i>
                                 Editar Datas - ${tipo === 'pre-separacao' ? 'Pré-Separação' : 'Separação'}
+                                <span class="badge bg-primary ms-2">${loteId}</span>
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <form id="formEdicaoDatas">
                                 <div class="mb-3">
-                                    <label class="form-label">Data de Expedição</label>
+                                    <label class="form-label">Data de Expedição <span class="text-danger">*</span></label>
                                     <input type="date" class="form-control" id="dataExpedicao" 
                                            value="${dadosAtuais.expedicao}" required>
+                                    ${dadosAtuais.expedicao ? `<small class="text-muted">Data atual: ${formatarDataParaExibicao(dadosAtuais.expedicao)}</small>` : ''}
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Data de Agendamento</label>
                                     <input type="date" class="form-control" id="dataAgendamento" 
                                            value="${dadosAtuais.agendamento}">
+                                    ${dadosAtuais.agendamento ? `<small class="text-muted">Data atual: ${formatarDataParaExibicao(dadosAtuais.agendamento)}</small>` : ''}
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Protocolo</label>
                                     <input type="text" class="form-control" id="protocolo" 
-                                           value="${dadosAtuais.protocolo}" 
+                                           value="${dadosAtuais.protocolo || ''}" 
                                            placeholder="Digite o protocolo">
+                                    ${dadosAtuais.protocolo ? `<small class="text-success">Protocolo atual: ${dadosAtuais.protocolo}</small>` : ''}
                                 </div>
                                 <div class="mb-3">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="agendamentoConfirmado" 
                                                ${dadosAtuais.agendamento_confirmado ? 'checked' : ''}>
                                         <label class="form-check-label" for="agendamentoConfirmado">
-                                            <i class="fas fa-check-circle text-success"></i> Agenda Confirmada
+                                            <i class="fas fa-check-circle text-success"></i> Agendamento Confirmado
                                         </label>
                                     </div>
                                 </div>
@@ -1885,13 +2054,21 @@ class WorkspaceMontagem {
     renderizarTabelaProdutosBasica(produtos) {
         // Usar WorkspaceTabela se disponível, mas sem dados de estoque
         if (window.workspaceTabela) {
-            // Temporariamente zerar dados de estoque para carregamento inicial
+            // Garantir valores numéricos válidos em vez de null
             const produtosBasicos = produtos.map(p => ({
                 ...p,
-                estoque_hoje: null,
-                menor_estoque_7d: null,
-                producao_hoje: null,
-                estoque_data_expedicao: null
+                qtd_pedido: p.qtd_pedido || p.qtd_saldo_produto_pedido || 0,
+                estoque_hoje: 0,  // Usar 0 em vez de null
+                estoque: 0,       // Adicionar campo alternativo
+                menor_estoque_7d: 0,  // Usar 0 em vez de null
+                menor_estoque_produto_d7: 0,  // Campo alternativo
+                producao_hoje: 0,  // Usar 0 em vez de null
+                estoque_data_expedicao: 0,  // Usar 0 em vez de null
+                data_disponibilidade: null,  // Pode ser null
+                qtd_disponivel: 0,
+                preco_unitario: p.preco_unitario || p.preco_produto_pedido || 0,
+                peso_unitario: p.peso_unitario || 0,
+                palletizacao: p.palletizacao || 1000
             }));
             return window.workspaceTabela.renderizarTabelaProdutos(produtosBasicos);
         }
@@ -1928,8 +2105,23 @@ class WorkspaceMontagem {
      * Carrega estoque, projeções e menor_estoque após renderização inicial
      */
     async carregarDadosEstoqueAssincrono(numPedido) {
+        // 🆕 Verificar se o pedido ainda está visível
+        const pedidoRow = document.querySelector(`.pedido-row[data-pedido="${numPedido}"]`);
+        if (pedidoRow && pedidoRow.style.display === 'none') {
+            console.log(`🚫 Pedido ${numPedido} foi filtrado, cancelando carregamento de estoque`);
+            return;
+        }
+        
         try {
             console.log(`📊 Carregando dados de estoque assincronamente para pedido ${numPedido}`);
+            
+            // Cancelar requisição anterior se existir
+            if (this.abortControllerEstoque) {
+                this.abortControllerEstoque.abort();
+            }
+            
+            // Criar novo AbortController
+            this.abortControllerEstoque = new AbortController();
             
             // Mostrar loading
             const loadingSpinner = document.getElementById(`loading-produtos-${numPedido}`);
@@ -1938,7 +2130,9 @@ class WorkspaceMontagem {
             }
             
             // Fazer requisição para obter dados completos com estoque
-            const response = await fetch(`/carteira/api/pedido/${numPedido}/workspace-estoque`);
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/workspace-estoque`, {
+                signal: this.abortControllerEstoque.signal
+            });
             const data = await response.json();
             
             if (!response.ok || !data.success) {
@@ -1949,15 +2143,17 @@ class WorkspaceMontagem {
             data.produtos.forEach(produto => {
                 const dadosExistentes = this.dadosProdutos.get(produto.cod_produto);
                 if (dadosExistentes) {
-                    // Mesclar dados de estoque com dados existentes
+                    // Mesclar dados de estoque com dados existentes (garantir que não sejam undefined)
                     Object.assign(dadosExistentes, {
-                        estoque_hoje: produto.estoque || produto.estoque_d0,
-                        menor_estoque_7d: produto.menor_estoque_produto_d7,
+                        estoque_hoje: produto.estoque || produto.estoque_d0 || 0,
+                        menor_estoque_7d: produto.menor_estoque_produto_d7 || 0,
                         producao_hoje: produto.producao_hoje || 0,
-                        estoque_data_expedicao: produto.saldo_estoque_pedido,
+                        estoque_data_expedicao: produto.saldo_estoque_pedido || 0,
                         // Adicionar projeções D0-D28 se disponíveis
                         ...Object.fromEntries(
-                            Object.entries(produto).filter(([key]) => key.startsWith('estoque_d'))
+                            Object.entries(produto)
+                                .filter(([key]) => key.startsWith('estoque_d'))
+                                .map(([key, value]) => [key, value || 0])
                         )
                     });
                 }
@@ -1967,6 +2163,13 @@ class WorkspaceMontagem {
             const container = document.getElementById(`tabela-produtos-container-${numPedido}`);
             if (container && window.workspaceTabela) {
                 container.innerHTML = window.workspaceTabela.renderizarTabelaProdutos(Array.from(this.dadosProdutos.values()));
+                
+                // 🆕 IMPORTANTE: Re-configurar checkboxes após re-renderizar
+                // Aguardar DOM atualizar e re-aplicar event listeners
+                requestAnimationFrame(() => {
+                    console.log('🔄 Re-configurando checkboxes após carregamento de estoque...');
+                    this.configurarCheckboxes(numPedido);
+                });
             }
             
             // Esconder loading
@@ -1977,6 +2180,17 @@ class WorkspaceMontagem {
             console.log(`✅ Dados de estoque carregados para ${data.produtos.length} produtos`);
             
         } catch (error) {
+            // 🆕 Ignorar erro de abort (cancelamento)
+            if (error.name === 'AbortError') {
+                console.log(`✔️ Carregamento de estoque cancelado para pedido ${numPedido}`);
+                return;
+            }
+            // 🆕 Ignorar erro de abort (cancelamento)
+            if (error.name === 'AbortError') {
+                console.log(`✔️ Carregamento de estoque cancelado para pedido ${numPedido}`);
+                return;
+            }
+            
             console.error(`❌ Erro ao carregar dados de estoque:`, error);
             
             // Esconder loading em caso de erro

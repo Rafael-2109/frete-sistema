@@ -68,10 +68,14 @@ def workspace_pedido_real(num_pedido):
 
         for produto in produtos_carteira:
             # Obter projeção completa do produto usando Sistema de Estoque em Tempo Real
-            projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            try:
+                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            except Exception as e:
+                logger.warning(f"Erro ao buscar projeção para produto {produto.cod_produto}: {e}")
+                projecao_completa = None
             
             # Converter formato para compatibilidade com workspace_utils
-            if projecao_completa:
+            if projecao_completa and isinstance(projecao_completa, dict):
                 resumo_estoque = {
                     'estoque_inicial': projecao_completa['estoque_atual'],
                     'estoque_atual': projecao_completa['estoque_atual'],

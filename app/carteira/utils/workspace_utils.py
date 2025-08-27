@@ -105,8 +105,12 @@ def obter_producao_hoje(cod_produto, resumo_estoque):
             if projecao and len(projecao) > 0:
                 # Primeiro dia da projeção é D0 (hoje)
                 hoje_dados = projecao[0]
-                # O campo pode ser producao_programada ou entrada
-                return float(hoje_dados.get('producao_programada', hoje_dados.get('entrada', 0)))
+                # Garantir que hoje_dados é um dicionário válido
+                if isinstance(hoje_dados, dict):
+                    # O campo pode ser producao_programada ou entrada
+                    return float(hoje_dados.get('producao_programada', hoje_dados.get('entrada', 0)))
+                else:
+                    return 0
             else:
                 return 0
         
