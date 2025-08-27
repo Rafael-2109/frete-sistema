@@ -58,6 +58,10 @@ class Pedido(db.Model):
             'num_pedido', 'expedicao', 'agendamento', 'protocolo',
             name='uix_num_pedido_exped_agend_prot'
         ),
+        UniqueConstraint(
+            'separacao_lote_id',
+            name='uix_separacao_lote_id'
+        ),
     )
 
     # Relacionamentos

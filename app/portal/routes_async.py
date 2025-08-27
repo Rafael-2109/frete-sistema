@@ -11,7 +11,6 @@ from app.portal.workers import enqueue_job
 from app.portal.workers.atacadao_jobs import processar_agendamento_atacadao
 from app import db
 from datetime import datetime
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -99,13 +98,33 @@ def solicitar_agendamento_nf_async():
                 'message': f'Portal {portal} ainda não suporta agendamento assíncrono'
             }), 400
         
-        # Buscar pedido_cliente
-        pedido_cliente = entrega.pedido_cliente
+        # Buscar pedido_cliente através da cadeia de tabelas
+        # FaturamentoProduto → origem → Separacao → pedido_cliente
+        pedido_cliente = None
+        
+        # Primeiro, buscar o número do pedido (origem) no FaturamentoProduto
+        if produtos_faturamento and len(produtos_faturamento) > 0:
+            num_pedido = produtos_faturamento[0].origem  # origem = número do pedido
+            
+            if num_pedido:
+                # Buscar pedido_cliente na Separacao usando o num_pedido
+                from app.separacao.models import Separacao
+                separacao = Separacao.query.filter_by(num_pedido=num_pedido).first()
+                
+                if separacao and separacao.pedido_cliente:
+                    pedido_cliente = separacao.pedido_cliente
+                    logger.info(f"Pedido cliente encontrado via Separacao: {pedido_cliente}")
+                else:
+                    # Tentar buscar em CarteiraPrincipal como fallback
+                    from app.carteira.models import CarteiraPrincipal
+                    carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido).first()
+                    if carteira_item and carteira_item.pedido_cliente:
+                        pedido_cliente = carteira_item.pedido_cliente
+                        logger.info(f"Pedido cliente encontrado via CarteiraPrincipal: {pedido_cliente}")
+        
         if not pedido_cliente:
-            return jsonify({
-                'success': False,
-                'message': 'Pedido do cliente não encontrado para esta NF'
-            }), 400
+            logger.warning(f"Pedido cliente não encontrado para NF {numero_nf}, usando NF como referência")
+            pedido_cliente = f"NF-{numero_nf}"  # Usar NF como fallback
         
         # Preparar produtos com DE-PARA
         produtos = []

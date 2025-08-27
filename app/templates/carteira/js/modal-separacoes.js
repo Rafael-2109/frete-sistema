@@ -431,10 +431,23 @@ class ModalSeparacoes {
 
     formatarData(data) {
         if (!data) return '-';
-        // Aceita formatos: '2025-08-20', '2025-08-20T10:30:00', etc
-        const d = new Date(data);
+        
+        // Se já está no formato dd/mm/yyyy, retornar como está
+        if (data.includes('/')) return data;
+        
+        // Converter de YYYY-MM-DD para dd/mm/yyyy
+        // CORREÇÃO TIMEZONE: Adicionar T12:00:00 para evitar D-1
+        const dataComHora = data.includes('T') ? data : data + 'T12:00:00';
+        const d = new Date(dataComHora);
+        
         if (isNaN(d.getTime())) return '-';
-        return d.toLocaleDateString('pt-BR');
+        
+        // Formatar manualmente para evitar problemas de timezone
+        const dia = String(d.getDate()).padStart(2, '0');
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const ano = d.getFullYear();
+        
+        return `${dia}/${mes}/${ano}`;
     }
 
     toggleProdutosSeparacao(loteId) {
@@ -564,10 +577,13 @@ class ModalSeparacoes {
                 </tr>`
             ).join('');
 
+            // Formatar data para exibição
+            const dataFormatada = this.formatarData(dataAgendamento);
+
             const confirmResult = await Swal.fire({
                 title: 'Confirmar Agendamento',
                 html: `
-                    <p><strong>Data:</strong> ${dataAgendamento}</p>
+                    <p><strong>Data:</strong> ${dataFormatada}</p>
                     <p><strong>Produtos convertidos:</strong> ${preparacao.total_convertidos} de ${preparacao.total_itens}</p>
                     <table class="table table-sm" style="font-size: 0.85em;">
                         <thead>

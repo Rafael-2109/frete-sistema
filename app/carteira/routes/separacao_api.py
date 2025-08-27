@@ -244,29 +244,55 @@ def gerar_separacao_completa_pedido(num_pedido):
         ).first()
         pedido_cliente = item_carteira.pedido_cliente if item_carteira else None
         
-        # Criar novo pedido
-        novo_pedido = Pedido(
-            separacao_lote_id=lote_id,
-            num_pedido=num_pedido,
-            data_pedido=primeiro_item.data_pedido,
-            cnpj_cpf=primeiro_item.cnpj_cpf,
-            raz_social_red=primeiro_item.raz_social_red,
-            nome_cidade=primeiro_item.nome_cidade,
-            cod_uf=primeiro_item.cod_uf,
-            valor_saldo_total=valor_total_separacao,
-            pallet_total=pallet_total_separacao,
-            peso_total=peso_total_separacao,
-            rota=primeiro_item.rota,
-            sub_rota=primeiro_item.sub_rota,
-            observ_ped_1=primeiro_item.observ_ped_1,
-            expedicao=expedicao_obj,
-            agendamento=agendamento_obj,
-            protocolo=protocolo,
-            pedido_cliente=pedido_cliente,  # ✅ NOVO: Incluir pedido_cliente
-            status="ABERTO",  # Sempre começa como ABERTO
-        )
-
-        db.session.add(novo_pedido)
+        # VERIFICAR se já existe um Pedido com este lote_id ANTES de criar um novo
+        pedido_existente = Pedido.query.filter_by(
+            separacao_lote_id=lote_id
+        ).first()
+        
+        if pedido_existente:
+            # ATUALIZAR o pedido existente ao invés de criar um novo
+            logger.warning(f"⚠️ Pedido já existe para lote {lote_id}. Atualizando dados ao invés de criar duplicado.")
+            pedido_existente.num_pedido = num_pedido
+            pedido_existente.data_pedido = primeiro_item.data_pedido
+            pedido_existente.cnpj_cpf = primeiro_item.cnpj_cpf
+            pedido_existente.raz_social_red = primeiro_item.raz_social_red
+            pedido_existente.nome_cidade = primeiro_item.nome_cidade
+            pedido_existente.cod_uf = primeiro_item.cod_uf
+            pedido_existente.valor_saldo_total = valor_total_separacao
+            pedido_existente.pallet_total = pallet_total_separacao
+            pedido_existente.peso_total = peso_total_separacao
+            pedido_existente.rota = primeiro_item.rota
+            pedido_existente.sub_rota = primeiro_item.sub_rota
+            pedido_existente.observ_ped_1 = primeiro_item.observ_ped_1
+            pedido_existente.expedicao = expedicao_obj
+            pedido_existente.agendamento = agendamento_obj
+            pedido_existente.protocolo = protocolo
+            pedido_existente.pedido_cliente = pedido_cliente
+            # Não alterar status se já existir
+            novo_pedido = pedido_existente
+        else:
+            # Criar novo pedido apenas se não existir
+            novo_pedido = Pedido(
+                separacao_lote_id=lote_id,
+                num_pedido=num_pedido,
+                data_pedido=primeiro_item.data_pedido,
+                cnpj_cpf=primeiro_item.cnpj_cpf,
+                raz_social_red=primeiro_item.raz_social_red,
+                nome_cidade=primeiro_item.nome_cidade,
+                cod_uf=primeiro_item.cod_uf,
+                valor_saldo_total=valor_total_separacao,
+                pallet_total=pallet_total_separacao,
+                peso_total=peso_total_separacao,
+                rota=primeiro_item.rota,
+                sub_rota=primeiro_item.sub_rota,
+                observ_ped_1=primeiro_item.observ_ped_1,
+                expedicao=expedicao_obj,
+                agendamento=agendamento_obj,
+                protocolo=protocolo,
+                pedido_cliente=pedido_cliente,  # ✅ NOVO: Incluir pedido_cliente
+                status="ABERTO",  # Sempre começa como ABERTO
+            )
+            db.session.add(novo_pedido)
 
         # Commit das mudanças
         db.session.commit()
@@ -436,16 +462,12 @@ def transformar_lote_em_separacao(lote_id):
         if not separacoes_criadas:
             return jsonify({"success": False, "error": "Nenhuma separação foi criada"}), 400
 
-        # SEMPRE criar um novo pedido para este lote de separação
+        # Atualizar ou criar pedido para este lote de separação
         # Buscar dados do primeiro item para popular o pedido
         primeiro_item = separacoes_criadas[0]
 
-        # Verificar se já existe um pedido com este lote (não deveria)
+        # Verificar se já existe um pedido com este lote
         pedido_existente = Pedido.query.filter_by(separacao_lote_id=separacao_lote_id).first()
-
-        if pedido_existente:
-            # Se por algum motivo já existe, remover
-            db.session.delete(pedido_existente)
 
         # Buscar pedido_cliente da CarteiraPrincipal usando apenas num_pedido
         item_carteira = CarteiraPrincipal.query.filter_by(
@@ -454,29 +476,50 @@ def transformar_lote_em_separacao(lote_id):
         ).first()
         pedido_cliente = item_carteira.pedido_cliente if item_carteira else None
 
-        # Criar novo pedido
-        novo_pedido = Pedido(
-            separacao_lote_id=separacao_lote_id,
-            num_pedido=num_pedido,
-            data_pedido=primeiro_item.data_pedido,
-            cnpj_cpf=primeiro_item.cnpj_cpf,
-            raz_social_red=primeiro_item.raz_social_red,
-            nome_cidade=primeiro_item.nome_cidade,
-            cod_uf=primeiro_item.cod_uf,
-            valor_saldo_total=valor_total,
-            pallet_total=pallet_total,
-            peso_total=peso_total,
-            rota=primeiro_item.rota,
-            sub_rota=primeiro_item.sub_rota,
-            observ_ped_1=primeiro_item.observ_ped_1,
-            expedicao=pre_separacoes[0].data_expedicao_editada,
-            agendamento=pre_separacoes[0].data_agendamento_editada,
-            protocolo=pre_separacoes[0].protocolo_editado,
-            pedido_cliente=pedido_cliente,  # ✅ NOVO: Incluir pedido_cliente
-            status="ABERTO",  # Sempre começa como ABERTO
-        )
-
-        db.session.add(novo_pedido)
+        if pedido_existente:
+            # ATUALIZAR o pedido existente ao invés de deletar e criar novo
+            logger.warning(f"⚠️ Pedido já existe para lote {separacao_lote_id}. Atualizando dados ao invés de criar duplicado.")
+            pedido_existente.num_pedido = num_pedido
+            pedido_existente.data_pedido = primeiro_item.data_pedido
+            pedido_existente.cnpj_cpf = primeiro_item.cnpj_cpf
+            pedido_existente.raz_social_red = primeiro_item.raz_social_red
+            pedido_existente.nome_cidade = primeiro_item.nome_cidade
+            pedido_existente.cod_uf = primeiro_item.cod_uf
+            pedido_existente.valor_saldo_total = valor_total
+            pedido_existente.pallet_total = pallet_total
+            pedido_existente.peso_total = peso_total
+            pedido_existente.rota = primeiro_item.rota
+            pedido_existente.sub_rota = primeiro_item.sub_rota
+            pedido_existente.observ_ped_1 = primeiro_item.observ_ped_1
+            pedido_existente.expedicao = pre_separacoes[0].data_expedicao_editada
+            pedido_existente.agendamento = pre_separacoes[0].data_agendamento_editada
+            pedido_existente.protocolo = pre_separacoes[0].protocolo_editado
+            pedido_existente.pedido_cliente = pedido_cliente
+            # Não alterar status se já existir
+            novo_pedido = pedido_existente
+        else:
+            # Criar novo pedido apenas se não existir
+            novo_pedido = Pedido(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=num_pedido,
+                data_pedido=primeiro_item.data_pedido,
+                cnpj_cpf=primeiro_item.cnpj_cpf,
+                raz_social_red=primeiro_item.raz_social_red,
+                nome_cidade=primeiro_item.nome_cidade,
+                cod_uf=primeiro_item.cod_uf,
+                valor_saldo_total=valor_total,
+                pallet_total=pallet_total,
+                peso_total=peso_total,
+                rota=primeiro_item.rota,
+                sub_rota=primeiro_item.sub_rota,
+                observ_ped_1=primeiro_item.observ_ped_1,
+                expedicao=pre_separacoes[0].data_expedicao_editada,
+                agendamento=pre_separacoes[0].data_agendamento_editada,
+                protocolo=pre_separacoes[0].protocolo_editado,
+                pedido_cliente=pedido_cliente,  # ✅ NOVO: Incluir pedido_cliente
+                status="ABERTO",  # Sempre começa como ABERTO
+            )
+            db.session.add(novo_pedido)
 
         # Commit das mudanças
         db.session.commit()
