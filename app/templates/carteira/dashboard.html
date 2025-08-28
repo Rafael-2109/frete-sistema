@@ -32,11 +32,10 @@
             <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-info me-2">
                 <i class="fas fa-file-pdf"></i> Importar Pedidos PDF
             </a>
-            {% if 'portal' in current_app.blueprints %}
-            <a href="{{ url_for('portal.central_portais') }}" class="btn btn-primary me-2">
-                <i class="fas fa-globe"></i> Portais de Agendamento
-            </a>
-            {% endif %}
+            {# Verifica se o portal está disponível usando has_request_context #}
+                <a href="{{ url_for('portal.central_portais') }}" class="btn btn-primary me-2">
+                    <i class="fas fa-globe"></i> Portais de Agendamento
+                </a>
             <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success">
                 <i class="fas fa-boxes"></i> Carteira de Pedidos
             </a>
