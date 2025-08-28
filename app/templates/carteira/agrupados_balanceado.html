@@ -72,6 +72,22 @@
                     </div>
 
                     <div class="col-md-4 text-end">
+                        <!-- Botão de Verificar TODOS os Protocolos Pendentes -->
+                        <button type="button" class="btn btn-warning btn-sm me-2" id="btn-verificar-todos-pendentes"
+                            onclick="carteiraAgrupada.verificarTodosProtocolosPendentes()"
+                            title="Verificar TODOS os protocolos pendentes de confirmação">
+                            <i class="fas fa-check-double"></i> Verificar Todos Pendentes
+                            <span class="badge bg-dark ms-1" id="contador-pendentes-total">0</span>
+                        </button>
+                        
+                        <!-- Botão de Verificar Agendas -->
+                        <button type="button" class="btn btn-outline-info btn-sm me-2" id="btn-verificar-agendas"
+                            onclick="carteiraAgrupada.verificarAgendasEmLote()"
+                            title="Verificar status de até 50 agendamentos no portal">
+                            <i class="fas fa-sync-alt"></i> Verificar Agendas
+                            <span class="badge bg-danger ms-1" id="contador-protocolos">0</span>
+                        </button>
+                        
                         <div class="btn-group btn-group-sm" role="group">
                             <button type="button" class="btn btn-outline-primary" id="expandir-todos">
                                 <i class="fas fa-expand-arrows-alt me-1"></i> Expandir Todos
@@ -279,6 +295,8 @@
                                 data-agendamento="{{ 'sem' if (not pedido.forma_agendamento or pedido.forma_agendamento == 'SEM AGENDAMENTO') else 'com' }}"
                                 data-separacao-completa="{{ 'true' if pedido.tem_separacao_completa else 'false' }}"
                                 data-agendamento-confirmado="{{ 'true' if pedido.agendamento_confirmado else 'false' }}"
+                                data-protocolo="{{ pedido.protocolo or '' }}"
+                                data-separacao-lote-id="{{ pedido.separacao_lote_id or '' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
 
                                 <!-- Botão Expandir -->

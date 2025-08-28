@@ -217,7 +217,8 @@ class AgrupamentoService:
                 'valor_saldo_restante': valor_saldo_restante,
                 'qtd_separacoes': qtd_separacoes,
                 'totalmente_separado': totalmente_separado,
-                'tem_separacao_completa': dados_separacao_completa and dados_separacao_completa['expedicao'] is not None
+                'tem_separacao_completa': dados_separacao_completa and dados_separacao_completa['expedicao'] is not None,
+                'separacao_lote_id': dados_separacao_completa.get('separacao_lote_id')  # Passar lote_id
             }
             
         except Exception as e:
@@ -263,7 +264,8 @@ class AgrupamentoService:
                 'expedicao': None,
                 'agendamento': None,
                 'protocolo': None,
-                'agendamento_confirmado': False
+                'agendamento_confirmado': False,
+                'separacao_lote_id': None  # Adicionar lote_id
             }
             
             for sep, ped in separacoes_ativas:
@@ -277,6 +279,7 @@ class AgrupamentoService:
                     dados_separacao_completa['agendamento'] = ped.agendamento
                     dados_separacao_completa['protocolo'] = ped.protocolo
                     dados_separacao_completa['agendamento_confirmado'] = sep.agendamento_confirmado if hasattr(sep, 'agendamento_confirmado') else False
+                    dados_separacao_completa['separacao_lote_id'] = sep.separacao_lote_id  # Adicionar lote_id
             
             # Buscar pré-separações completas também
             if not dados_separacao_completa['expedicao']:
@@ -292,6 +295,7 @@ class AgrupamentoService:
                     dados_separacao_completa['protocolo'] = pre_sep_completa.protocolo_editado
                     # IMPORTANTE: Incluir também o agendamento_confirmado da pré-separação
                     dados_separacao_completa['agendamento_confirmado'] = pre_sep_completa.agendamento_confirmado if hasattr(pre_sep_completa, 'agendamento_confirmado') else False
+                    dados_separacao_completa['separacao_lote_id'] = pre_sep_completa.separacao_lote_id  # Adicionar lote_id
             
             return qtd_separacoes, valor_separacoes, dados_separacao_completa
             

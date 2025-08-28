@@ -239,9 +239,15 @@ class SincronizacaoIntegradaService:
             
             # Verificar se existem registros de faturamento
             try:
+                from app import db
                 from app.faturamento.models import FaturamentoProduto
                 
-                total_faturamento = FaturamentoProduto.query.count()
+                # Renovar sessão após commit anterior
+                db.session.rollback()  # Limpar qualquer transação pendente
+                db.session.begin()  # Iniciar nova transação limpa
+                
+                # Agora fazer a query com sessão limpa
+                total_faturamento = db.session.query(FaturamentoProduto).count()
                 
                 if total_faturamento == 0:
                     problemas.append({
@@ -252,7 +258,16 @@ class SincronizacaoIntegradaService:
                 else:
                     logger.info(f"✅ {total_faturamento} registros de faturamento encontrados")
                 
+                # Fazer rollback para limpar a transação de leitura
+                db.session.rollback()
+                
             except Exception as e:
+                # Garantir que a sessão seja limpa em caso de erro
+                try:
+                    db.session.rollback()
+                except:
+                    pass
+                
                 problemas.append({
                     'tipo': 'ERRO_VALIDACAO_FATURAMENTO',
                     'nivel': 'ERRO',

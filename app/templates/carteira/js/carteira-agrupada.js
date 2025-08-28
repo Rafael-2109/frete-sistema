@@ -27,6 +27,10 @@ class CarteiraAgrupada {
         this.initDropdownSeparacoes();
         this.initWorkspace();
         this.initBadgesFiltros();
+        
+        // Atualizar contadores
+        this.atualizarContadorProtocolos();
+        this.atualizarContadorPendentesTotal();
         this.setupInterceptadorBotoes(); // 🆕 Interceptar cliques em botões
         console.log('✅ Carteira Agrupada inicializada');
         
@@ -40,6 +44,9 @@ class CarteiraAgrupada {
         
         // 🆕 Carregar separações compactas para todos os pedidos
         this.carregarTodasSeparacoesCompactas();
+        
+        // Atualizar contador de protocolos
+        this.atualizarContadorProtocolos();
     }
 
     initWorkspace() {
@@ -1335,6 +1342,423 @@ class CarteiraAgrupada {
         } else {
             alert('Função de verificação de protocolo em desenvolvimento');
         }
+    }
+    
+    /**
+     * 🔄 VERIFICAÇÃO EM LOTE DE AGENDAMENTOS
+     * Verifica até 50 protocolos de uma vez no portal do Atacadão
+     */
+    async verificarAgendasEmLote() {
+        try {
+            // Coletar protocolos dos pedidos visíveis que têm protocolo
+            const protocolosParaVerificar = [];
+            const pedidosVisiveis = document.querySelectorAll('.pedido-row:not([style*="display: none"])');
+            
+            pedidosVisiveis.forEach(linha => {
+                const protocolo = linha.dataset.protocolo;
+                const loteId = linha.dataset.separacaoLoteId;
+                
+                // Adicionar apenas se tem protocolo e não está confirmado
+                if (protocolo && protocolo !== 'null' && protocolo !== '') {
+                    const agendamentoConfirmado = linha.dataset.agendamentoConfirmado === 'true';
+                    if (!agendamentoConfirmado) {
+                        protocolosParaVerificar.push({
+                            protocolo: protocolo,
+                            lote_id: loteId,
+                            num_pedido: linha.dataset.pedido
+                        });
+                    }
+                }
+            });
+            
+            // Limitar a 50 protocolos
+            const protocolosLimitados = protocolosParaVerificar.slice(0, 50);
+            
+            if (protocolosLimitados.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Nenhum protocolo para verificar',
+                    text: 'Não há protocolos pendentes de confirmação nos pedidos visíveis.',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+            
+            // Confirmar ação
+            const result = await Swal.fire({
+                icon: 'question',
+                title: 'Verificar Agendamentos',
+                html: `
+                    <p>Serão verificados <strong>${protocolosLimitados.length}</strong> protocolos no portal.</p>
+                    <p class="text-muted small">Esta operação será executada em segundo plano e pode levar alguns minutos.</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Verificar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0dcaf0'
+            });
+            
+            if (!result.isConfirmed) return;
+            
+            // Mostrar loading
+            Swal.fire({
+                title: 'Enviando para verificação...',
+                text: 'Aguarde enquanto os protocolos são enfileirados',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Enviar para API
+            const response = await fetch('/portal/api/verificar-agendas-lote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                },
+                body: JSON.stringify({
+                    protocolos: protocolosLimitados,
+                    portal: 'atacadao'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Verificação iniciada!',
+                    html: `
+                        <p>${data.total_enfileirados} protocolos foram enviados para verificação.</p>
+                        <p class="text-muted small">Os status serão atualizados automaticamente conforme forem processados.</p>
+                        ${data.task_id ? `<p class="text-muted small">Task ID: ${data.task_id}</p>` : ''}
+                    `,
+                    confirmButtonText: 'OK'
+                });
+                
+                // Iniciar polling para atualizar status
+                if (data.task_id) {
+                    this.iniciarPollingVerificacao(data.task_id);
+                }
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: data.message || 'Erro ao enviar protocolos para verificação',
+                    confirmButtonText: 'OK'
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao verificar agendas em lote:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Erro ao comunicar com o servidor',
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+    
+    /**
+     * Polling para atualizar status das verificações
+     */
+    iniciarPollingVerificacao(taskId) {
+        let tentativas = 0;
+        const maxTentativas = 60; // 5 minutos (5 segundos * 60)
+        
+        const interval = setInterval(async () => {
+            tentativas++;
+            
+            try {
+                const response = await fetch(`/portal/api/status-verificacao/${taskId}`);
+                const data = await response.json();
+                
+                if (data.status === 'completed' || tentativas >= maxTentativas) {
+                    clearInterval(interval);
+                    
+                    // Atualizar contador
+                    this.atualizarContadorProtocolos();
+                    
+                    // Se completou, mostrar resultado
+                    if (data.status === 'completed') {
+                        console.log('✅ Verificação concluída:', data.resultados);
+                        
+                        // Recarregar página para mostrar atualizações
+                        if (data.atualizados > 0) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Verificação concluída!',
+                                html: `
+                                    <p><strong>${data.atualizados}</strong> agendamentos foram atualizados.</p>
+                                    <p>A página será recarregada para mostrar as alterações.</p>
+                                `,
+                                timer: 3000,
+                                timerProgressBar: true,
+                                didClose: () => {
+                                    location.reload();
+                                }
+                            });
+                        }
+                    }
+                } else if (data.status === 'processing') {
+                    // Atualizar progresso se disponível
+                    console.log(`🔄 Processando... ${data.processados}/${data.total}`);
+                }
+            } catch (error) {
+                console.error('Erro no polling:', error);
+                clearInterval(interval);
+            }
+        }, 5000); // Verificar a cada 5 segundos
+    }
+    
+    /**
+     * Atualizar contador de protocolos pendentes
+     */
+    atualizarContadorProtocolos() {
+        const protocolosPendentes = document.querySelectorAll(
+            '.pedido-row:not([style*="display: none"])[data-protocolo]:not([data-protocolo=""]):not([data-protocolo="null"])[data-agendamento-confirmado="false"]'
+        ).length;
+        
+        const contador = document.getElementById('contador-protocolos');
+        if (contador) {
+            contador.textContent = protocolosPendentes;
+            contador.className = protocolosPendentes > 0 ? 'badge bg-danger ms-1' : 'badge bg-secondary ms-1';
+        }
+    }
+    
+    /**
+     * Atualizar contador de TODOS protocolos pendentes (busca no servidor)
+     */
+    async atualizarContadorPendentesTotal() {
+        try {
+            const response = await fetch('/portal/api/buscar-protocolos-pendentes');
+            const data = await response.json();
+            
+            if (data.success) {
+                const contador = document.getElementById('contador-pendentes-total');
+                if (contador) {
+                    contador.textContent = data.total;
+                    contador.className = data.total > 0 ? 'badge bg-dark ms-1' : 'badge bg-secondary ms-1';
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao buscar total de pendentes:', error);
+        }
+    }
+    
+    /**
+     * Verificar TODOS os protocolos pendentes automaticamente
+     */
+    async verificarTodosProtocolosPendentes() {
+        try {
+            // Primeiro buscar para mostrar quantos serão verificados
+            const buscaResponse = await fetch('/portal/api/buscar-protocolos-pendentes');
+            const buscaData = await buscaResponse.json();
+            
+            if (!buscaData.success || buscaData.total === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Nenhum protocolo pendente',
+                    text: 'Todos os protocolos já estão confirmados ou não há protocolos válidos.',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+            
+            // Confirmar ação
+            const result = await Swal.fire({
+                icon: 'question',
+                title: 'Verificar Todos os Protocolos Pendentes',
+                html: `
+                    <p>Foram encontrados <strong>${buscaData.total}</strong> protocolos pendentes de confirmação.</p>
+                    <p class="text-muted small">Esta operação verificará TODOS os protocolos no portal Atacadão.</p>
+                    <p class="text-warning small"><i class="fas fa-exclamation-triangle"></i> Isso pode levar vários minutos.</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Verificar Todos',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#ffc107'
+            });
+            
+            if (!result.isConfirmed) return;
+            
+            // Mostrar loading
+            Swal.fire({
+                title: 'Processando...',
+                html: `
+                    <p>Enviando ${buscaData.total} protocolos para verificação...</p>
+                    <div class="progress mt-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Enviar para verificação
+            const response = await fetch('/portal/api/verificar-todos-protocolos-pendentes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                },
+                body: JSON.stringify({
+                    portal: 'atacadao'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Verificação iniciada!',
+                    html: `
+                        <p>${data.total_enfileirados} protocolos foram enviados para verificação.</p>
+                        <p class="text-muted small">Aguarde o processamento...</p>
+                    `,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+                
+                // Iniciar polling detalhado para esta task
+                if (data.task_id) {
+                    this.iniciarPollingVerificacaoDetalhado(data.task_id);
+                }
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: data.message || 'Erro ao enviar protocolos para verificação',
+                    confirmButtonText: 'OK'
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao verificar todos protocolos pendentes:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Erro ao comunicar com o servidor',
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+    
+    /**
+     * Polling detalhado para verificação de todos protocolos
+     */
+    iniciarPollingVerificacaoDetalhado(taskId) {
+        let tentativas = 0;
+        const maxTentativas = 180; // 15 minutos (5 segundos * 180)
+        
+        const interval = setInterval(async () => {
+            tentativas++;
+            
+            try {
+                const response = await fetch(`/portal/api/status-verificacao-detalhado/${taskId}`);
+                const data = await response.json();
+                
+                // Atualizar progresso no Swal se ainda estiver aberto
+                if (Swal.isVisible() && data.status === 'processing') {
+                    const percentual = Math.round((data.processados / data.total) * 100);
+                    Swal.update({
+                        html: `
+                            <p>Processando protocolos...</p>
+                            <p><strong>${data.processados}</strong> de <strong>${data.total}</strong> verificados</p>
+                            <div class="progress mt-3">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     style="width: ${percentual}%">${percentual}%</div>
+                            </div>
+                        `
+                    });
+                }
+                
+                if (data.status === 'completed' || tentativas >= maxTentativas) {
+                    clearInterval(interval);
+                    
+                    // Atualizar contadores
+                    this.atualizarContadorProtocolos();
+                    this.atualizarContadorPendentesTotal();
+                    
+                    // Se completou, mostrar resultado detalhado
+                    if (data.status === 'completed') {
+                        console.log('✅ Verificação de todos protocolos concluída');
+                        
+                        // Preparar HTML com lista de alterações
+                        let alteracoesHtml = '';
+                        if (data.alteracoes && data.alteracoes.length > 0) {
+                            alteracoesHtml = `
+                                <div class="mt-3">
+                                    <h6>Alterações detectadas:</h6>
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Protocolo</th>
+                                                    <th>Cliente</th>
+                                                    <th>Mudança</th>
+                                                    <th>Data Anterior</th>
+                                                    <th>Data Nova</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>`;
+                            
+                            data.alteracoes.forEach(alt => {
+                                const statusIcon = alt.confirmado ? 
+                                    '<span class="badge bg-success">Confirmado</span>' : 
+                                    '<span class="badge bg-warning">Pendente</span>';
+                                
+                                alteracoesHtml += `
+                                    <tr>
+                                        <td>${alt.protocolo}</td>
+                                        <td>${alt.cliente || '-'}</td>
+                                        <td>${alt.tipo_mudanca || 'Atualização'}</td>
+                                        <td>${alt.data_anterior || '-'}</td>
+                                        <td>${alt.data_nova || '-'}</td>
+                                        <td>${statusIcon}</td>
+                                    </tr>`;
+                            });
+                            
+                            alteracoesHtml += `
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>`;
+                        }
+                        
+                        // Mostrar resultado final
+                        Swal.fire({
+                            icon: data.atualizados > 0 ? 'success' : 'info',
+                            title: 'Verificação Concluída!',
+                            html: `
+                                <div class="text-start">
+                                    <p class="text-center">
+                                        <strong>${data.processados}</strong> protocolos verificados<br>
+                                        <strong>${data.atualizados}</strong> protocolos atualizados
+                                    </p>
+                                    ${alteracoesHtml}
+                                    ${data.atualizados > 0 ? '<p class="text-center mt-3">A página será recarregada para mostrar as alterações.</p>' : ''}
+                                </div>
+                            `,
+                            confirmButtonText: data.atualizados > 0 ? 'Recarregar Página' : 'OK',
+                            width: data.alteracoes && data.alteracoes.length > 0 ? '800px' : '500px',
+                            didClose: () => {
+                                if (data.atualizados > 0) {
+                                    location.reload();
+                                }
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Erro no polling detalhado:', error);
+                clearInterval(interval);
+            }
+        }, 5000); // Verificar a cada 5 segundos
     }
     
     /**

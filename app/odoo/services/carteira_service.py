@@ -388,10 +388,16 @@ class CarteiraService:
                                 logger.info(f"✅ Usando endereço da transportadora (cache): {endereco.get('name', 'N/A')}")
                             else:
                                 # Query adicional se não estiver no cache
+                                # Definir campos necessários para buscar dados do partner
+                                campos_partner_transp = [
+                                    'id', 'name', 'l10n_br_cnpj', 'l10n_br_razao_social',
+                                    'l10n_br_municipio_id', 'state_id', 'zip',
+                                    'street', 'street2', 'city', 'country_id', 'phone'
+                                ]
                                 transp_partner = self.connection.search_read(
                                     'res.partner',
                                     [('id', '=', transportadora_partner_id)],
-                                    campos_partner
+                                    campos_partner_transp
                                 )
                                 if transp_partner:
                                     endereco = transp_partner[0]
@@ -1338,7 +1344,34 @@ class CarteiraService:
             for num_pedido, _ in itens_removidos:
                 # Verificar se tem Pedido com este número e qual o status
                 from app.pedidos.models import Pedido
-                pedidos_do_numero = Pedido.query.filter_by(num_pedido=num_pedido).all()
+                from sqlalchemy.exc import OperationalError
+                import time
+                
+                # Tentar consultar com retry em caso de erro SSL
+                pedidos_do_numero = []
+                max_tentativas = 3
+                for tentativa in range(max_tentativas):
+                    try:
+                        pedidos_do_numero = Pedido.query.filter_by(num_pedido=num_pedido).all()
+                        break  # Sucesso, sair do loop
+                    except OperationalError as e:
+                        if 'SSL' in str(e) or 'bad record mac' in str(e):
+                            logger.warning(f"⚠️ Erro SSL na tentativa {tentativa + 1}/{max_tentativas} ao consultar pedido {num_pedido}: {e}")
+                            if tentativa < max_tentativas - 1:
+                                # Aguardar e tentar reconectar
+                                time.sleep(1)
+                                try:
+                                    db.session.rollback()
+                                    db.session.remove()
+                                    db.engine.dispose()
+                                except:
+                                    pass
+                            else:
+                                logger.error(f"❌ Erro SSL persistente após {max_tentativas} tentativas para pedido {num_pedido}")
+                                continue  # Pular este pedido
+                        else:
+                            # Não é erro SSL, propagar
+                            raise
                 
                 pode_processar = False
                 for pedido in pedidos_do_numero:
