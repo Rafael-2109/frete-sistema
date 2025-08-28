@@ -111,6 +111,20 @@ def log_database_query(query_name, duration, row_count=None):
 
 def log_request_info(request):
     """Log de informações da requisição"""
+    # Ignorar logs para endpoints de polling frequente
+    paths_ignorados = [
+        '/portal/api/status-job/',
+        '/monitoramento/historico_agendamentos',
+        '/static/',
+        '/favicon.ico'
+    ]
+    
+    # Verificar se o path deve ser ignorado
+    for path in paths_ignorados:
+        if request.path.startswith(path):
+            return  # Não logar
+    
+    # Logar normalmente outras requisições
     logger.info(f"🌐 {request.method} {request.path} | "
                f"User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}...")
 

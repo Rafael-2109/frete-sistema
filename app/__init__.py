@@ -301,8 +301,23 @@ def create_app(config_name=None):
             if hasattr(g, 'start_time'):
                 duration = time.time() - g.start_time
                 
-                # Log apenas para rotas que não são estáticas
-                if not request.path.startswith('/static') and not request.path.endswith('.ico'):
+                # Ignorar logs para endpoints de polling frequente
+                paths_ignorados = [
+                    '/portal/api/status-job/',
+                    '/monitoramento/historico_agendamentos',
+                    '/static/',
+                    '/favicon.ico'
+                ]
+                
+                # Verificar se o path deve ser ignorado
+                deve_ignorar = False
+                for path in paths_ignorados:
+                    if request.path.startswith(path):
+                        deve_ignorar = True
+                        break
+                
+                # Log apenas para rotas não ignoradas
+                if not deve_ignorar:
                     logger.info(f"⏱️ {request.method} {request.path} | "
                                f"Status: {response.status_code} | "
                                f"Tempo: {duration:.3f}s")

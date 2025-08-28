@@ -19,11 +19,12 @@ window.PortalAsync = {
         reprocessar: '/portal/api/reprocessar-integracao/'
     },
     
-    // Configurações de polling
+    // Configurações de polling otimizadas
     polling: {
-        maxTentativas: 120,  // 2 minutos com intervalo de 1s
-        intervalo: 1000,     // 1 segundo
-        intervaloPrimeiro: 500  // 500ms para primeira verificação
+        maxTentativas: 40,       // ~2 minutos no total (40 * 3s = 120s)
+        intervalo: 3000,         // 3 segundos entre verificações
+        intervaloInicial: 20000, // Aguarda 20 segundos antes de começar
+        mostrarNotificacao: true // Mostrar notificação discreta
     }
 };
 
@@ -42,8 +43,8 @@ window.agendarNoPortalAtacadaoAsync = async function(entregaId, numeroNf) {
     const horaAgendamento = document.getElementById('hora-agendamento-portal')?.value ||
                            document.getElementById('hora-agendamento')?.value;
     
-    // Mostrar loading imediatamente
-    mostrarLoadingPortal('Enviando agendamento para processamento...');
+    // Não mostrar modal intrusivo, apenas log
+    console.log('📤 Enviando agendamento para processamento...');
     
     try {
         // 1. Enviar para fila assíncrona (nova rota)
@@ -73,7 +74,7 @@ window.agendarNoPortalAtacadaoAsync = async function(entregaId, numeroNf) {
         }
         
         console.log('✅ Job enfileirado:', data.job_id);
-        mostrarLoadingPortal('Agendamento em processamento. Aguarde...');
+        // Notificação discreta ao invés de modal intrusivo
         
         // 2. Iniciar monitoramento do status
         const resultado = await monitorarStatusJob(
@@ -106,7 +107,8 @@ window.agendarNoPortalAtacadaoAsync = async function(entregaId, numeroNf) {
         mostrarErroPortal('Erro no Agendamento', error.message);
         throw error;
     } finally {
-        esconderLoadingPortal();
+        // Limpar notificação se ainda estiver visível
+        esconderNotificacaoDiscreta();
     }
 };
 
@@ -120,8 +122,8 @@ window.agendarNoPortalAsync = async function(loteId, dataAgendamento) {
     // Usar data fornecida ou data atual
     dataAgendamento = dataAgendamento || new Date().toISOString().split('T')[0];
     
-    // Mostrar loading
-    mostrarLoadingPortal('Enviando agendamento para processamento...');
+    // Apenas log, sem modal intrusivo
+    console.log('📤 Enviando agendamento para processamento...');
     
     try {
         // 1. Enviar para fila assíncrona
@@ -150,7 +152,7 @@ window.agendarNoPortalAsync = async function(loteId, dataAgendamento) {
         }
         
         console.log('✅ Job enfileirado:', data.job_id);
-        mostrarLoadingPortal('Agendamento em processamento. Aguarde...');
+        // Notificação discreta ao invés de modal intrusivo
         
         // 2. Monitorar status
         const resultado = await monitorarStatusJob(
@@ -188,7 +190,8 @@ window.agendarNoPortalAsync = async function(loteId, dataAgendamento) {
         mostrarErroPortal('Erro no Agendamento', error.message);
         throw error;
     } finally {
-        esconderLoadingPortal();
+        // Limpar notificação se ainda estiver visível
+        esconderNotificacaoDiscreta();
     }
 };
 
@@ -201,8 +204,12 @@ async function monitorarStatusJob(jobId, integracaoId, referencia) {
     const intervalo = PortalAsync.polling.intervalo;
     let tentativa = 0;
     
-    // Primeira verificação rápida
-    await sleep(PortalAsync.polling.intervaloPrimeiro);
+    // Mostrar notificação inicial discreta
+    mostrarNotificacaoDiscreta('Agendamento enviado', 'Aguardando processamento...', 'info');
+    
+    // Aguardar período inicial antes de começar polling
+    console.log(`⏳ Aguardando ${PortalAsync.polling.intervaloInicial/1000}s antes de verificar status...`);
+    await sleep(PortalAsync.polling.intervaloInicial);
     
     while (tentativa < maxTentativas) {
         tentativa++;
@@ -211,37 +218,220 @@ async function monitorarStatusJob(jobId, integracaoId, referencia) {
             const response = await fetch(`${PortalAsync.endpoints.status}${jobId}`);
             const data = await response.json();
             
-            console.log(`[${tentativa}/${maxTentativas}] Status: ${data.status}`);
+            // Log reduzido - apenas mudanças de status
+            if (tentativa === 1 || tentativa % 10 === 0) {
+                console.log(`[Verificação ${tentativa}/${maxTentativas}] Status: ${data.status}`);
+            }
             
-            // Atualizar interface com progresso
-            atualizarProgressoPortal(data.status, tentativa, maxTentativas);
+            // Atualizar notificação discreta
+            atualizarNotificacaoDiscreta(data.status, tentativa, maxTentativas);
             
             // Verificar se finalizou
             if (['finished', 'failed'].includes(data.status)) {
+                esconderNotificacaoDiscreta();
                 return data;
-            }
-            
-            // Mensagens específicas por status
-            if (data.status === 'started') {
-                mostrarLoadingPortal(`Processando agendamento... (${Math.round(tentativa/maxTentativas*100)}%)`);
-            } else if (data.status === 'queued') {
-                mostrarLoadingPortal(`Na fila aguardando processamento... (posição estimada)`);
             }
             
             // Aguardar próxima verificação
             await sleep(intervalo);
             
         } catch (error) {
-            console.error(`Erro ao verificar status (tentativa ${tentativa}):`, error);
+            // Log de erro apenas a cada 5 tentativas
+            if (tentativa % 5 === 0) {
+                console.warn(`Status check ${tentativa}: ${error.message}`);
+            }
         }
     }
     
+    esconderNotificacaoDiscreta();
     // Timeout
     throw new Error('Timeout: Agendamento demorou muito para processar (mais de 2 minutos)');
 }
 
 // ========================================
-// FUNÇÕES DE UI MELHORADAS
+// FUNÇÕES DE NOTIFICAÇÃO DISCRETA (CANTO SUPERIOR DIREITO)
+// ========================================
+
+function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
+    // Remover notificação antiga se existir
+    const notificacaoAntiga = document.getElementById('portal-notificacao-discreta');
+    if (notificacaoAntiga) {
+        notificacaoAntiga.remove();
+    }
+    
+    // Cores por tipo
+    const cores = {
+        info: '#17a2b8',
+        success: '#28a745',
+        warning: '#ffc107',
+        error: '#dc3545',
+        processing: '#007bff'
+    };
+    
+    // Criar nova notificação
+    const notificacao = document.createElement('div');
+    notificacao.id = 'portal-notificacao-discreta';
+    notificacao.className = 'portal-notificacao-discreta';
+    notificacao.innerHTML = `
+        <div class="notificacao-header" style="background: ${cores[tipo]};">
+            <span class="notificacao-titulo">${titulo}</span>
+            <button class="notificacao-fechar" onclick="esconderNotificacaoDiscreta()">×</button>
+        </div>
+        <div class="notificacao-body">
+            <div class="notificacao-mensagem">${mensagem}</div>
+            <div class="notificacao-spinner">
+                <div class="spinner-pequeno"></div>
+            </div>
+        </div>
+        <div class="notificacao-progresso">
+            <div class="notificacao-progresso-bar" style="width: 0%"></div>
+        </div>
+    `;
+    document.body.appendChild(notificacao);
+    
+    // Adicionar CSS se não existir
+    if (!document.getElementById('portal-notificacao-styles')) {
+        const style = document.createElement('style');
+        style.id = 'portal-notificacao-styles';
+        style.textContent = `
+            .portal-notificacao-discreta {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                width: 320px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 9999;
+                animation: slideInRight 0.3s ease-out;
+                font-size: 14px;
+            }
+            .notificacao-header {
+                padding: 10px 15px;
+                border-radius: 8px 8px 0 0;
+                color: white;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .notificacao-titulo {
+                font-weight: 600;
+                font-size: 14px;
+            }
+            .notificacao-fechar {
+                background: none;
+                border: none;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+                line-height: 18px;
+                opacity: 0.8;
+                transition: opacity 0.2s;
+            }
+            .notificacao-fechar:hover {
+                opacity: 1;
+            }
+            .notificacao-body {
+                padding: 12px 15px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .notificacao-mensagem {
+                flex: 1;
+                color: #495057;
+                font-size: 13px;
+            }
+            .notificacao-spinner {
+                flex-shrink: 0;
+            }
+            .spinner-pequeno {
+                width: 16px;
+                height: 16px;
+                border: 2px solid #e9ecef;
+                border-top-color: #007bff;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            .notificacao-progresso {
+                height: 3px;
+                background: #e9ecef;
+                border-radius: 0 0 8px 8px;
+                overflow: hidden;
+            }
+            .notificacao-progresso-bar {
+                height: 100%;
+                background: linear-gradient(90deg, #007bff, #28a745);
+                transition: width 0.3s ease;
+            }
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            @keyframes slideOutRight {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+function atualizarNotificacaoDiscreta(status, tentativa, maxTentativas) {
+    const notificacao = document.getElementById('portal-notificacao-discreta');
+    if (!notificacao) return;
+    
+    const mensagemEl = notificacao.querySelector('.notificacao-mensagem');
+    const progressBar = notificacao.querySelector('.notificacao-progresso-bar');
+    
+    // Atualizar mensagem baseada no status
+    const mensagens = {
+        'queued': 'Na fila de processamento...',
+        'started': 'Processando agendamento...',
+        'processing': 'Enviando para o portal...',
+        'finished': 'Agendamento concluído!',
+        'failed': 'Erro no processamento'
+    };
+    
+    if (mensagemEl) {
+        mensagemEl.textContent = mensagens[status] || `Verificando... (${tentativa}/${maxTentativas})`;
+    }
+    
+    // Atualizar barra de progresso
+    if (progressBar) {
+        const porcentagem = Math.min(Math.round((tentativa / maxTentativas) * 100), 95);
+        progressBar.style.width = porcentagem + '%';
+    }
+}
+
+function esconderNotificacaoDiscreta() {
+    const notificacao = document.getElementById('portal-notificacao-discreta');
+    if (notificacao) {
+        notificacao.style.animation = 'slideOutRight 0.3s ease-in';
+        setTimeout(() => notificacao.remove(), 300);
+    }
+}
+
+// ========================================
+// FUNÇÕES DE UI MELHORADAS (MANTIDAS PARA COMPATIBILIDADE)
 // ========================================
 
 function mostrarLoadingPortal(mensagem) {
