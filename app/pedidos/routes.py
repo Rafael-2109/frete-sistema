@@ -1371,6 +1371,7 @@ def embarque_fob():
             db.session.add(embarque_item)
 
         # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens FOB
+        cotacao_fob = None  # Inicializar variável fora do if
         for pedido in pedidos:
             # FOB não tem cotação, mas precisa de cotacao_id para ficar como COTADO
             # Vamos criar uma cotação fictícia para FOB
@@ -1397,8 +1398,8 @@ def embarque_fob():
                 # Atualiza o embarque com a cotação FOB
                 embarque.cotacao_id = cotacao_fob.id
             
-            # Atualiza o pedido
-            pedido.cotacao_id = embarque.cotacao_id or cotacao_fob.id
+            # Atualiza o pedido - usar cotacao_fob.id apenas se foi criada
+            pedido.cotacao_id = embarque.cotacao_id or (cotacao_fob.id if cotacao_fob else None)
             pedido.transportadora = transportadora_fob.razao_social
             pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar embarque FOB
             # O status será calculado automaticamente como COTADO pelo trigger
