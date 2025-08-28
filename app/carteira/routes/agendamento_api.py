@@ -121,7 +121,6 @@ def salvar_agendamento(num_pedido):
         data = request.get_json()
         data_expedicao = data.get('data_expedicao')
         data_agendamento = data.get('data_agendamento')
-        hora_agendamento = data.get('hora_agendamento')
         protocolo = data.get('protocolo')
         confirmado = data.get('confirmado', False)
 
@@ -150,13 +149,6 @@ def salvar_agendamento(num_pedido):
                     'error': 'Formato de data de agendamento inválido'
                 }), 400
 
-        hora_agend_obj = None
-        if hora_agendamento:
-            try:
-                hora_agend_obj = datetime.strptime(hora_agendamento, '%H:%M').time()
-            except ValueError:
-                pass
-
         # Atualizar todos os itens do pedido na carteira
         itens_atualizados = db.session.query(CarteiraPrincipal).filter(
             CarteiraPrincipal.num_pedido == num_pedido,
@@ -164,7 +156,6 @@ def salvar_agendamento(num_pedido):
         ).update({
             'expedicao': data_exp_obj,
             'agendamento': data_agend_obj,
-            'hora_agendamento': hora_agend_obj,
             'protocolo': protocolo,
             'agendamento_confirmado': confirmado
         })
@@ -177,19 +168,86 @@ def salvar_agendamento(num_pedido):
 
         # Atualizar também na tabela Pedido se existir
         pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
+        separacoes_atualizadas = 0
+        pre_separacoes_atualizadas = 0
+        
         if pedido:
             pedido.expedicao = data_exp_obj
             pedido.agendamento = data_agend_obj
             pedido.protocolo = protocolo
+            
+            # IMPORTANTE: Se o pedido tem separacao_lote_id, atualizar também as Separações deste lote
+            if pedido.separacao_lote_id:
+                from app.separacao.models import Separacao
+                from app.carteira.models import PreSeparacaoItem
+                
+                logger.info(f"Atualizando Separações do lote {pedido.separacao_lote_id} com novas datas")
+                
+                # Atualizar Separações do lote específico
+                separacoes_atualizadas = db.session.query(Separacao).filter(
+                    Separacao.separacao_lote_id == pedido.separacao_lote_id
+                ).update({
+                    'expedicao': data_exp_obj,
+                    'agendamento': data_agend_obj,
+                    'protocolo': protocolo
+                })
+                
+                # Atualizar PreSeparacaoItem que estão vinculadas a este lote
+                # (status ENVIADO_SEPARACAO significa que já foram convertidas em separação)
+                pre_separacoes_atualizadas = db.session.query(PreSeparacaoItem).filter(
+                    PreSeparacaoItem.separacao_lote_id == pedido.separacao_lote_id,
+                    PreSeparacaoItem.status == 'ENVIADO_SEPARACAO'
+                ).update({
+                    'data_expedicao_editada': data_exp_obj,
+                    'data_agendamento_editada': data_agend_obj,
+                    'protocolo_editado': protocolo
+                })
+                
+                if separacoes_atualizadas > 0:
+                    logger.info(f"✅ {separacoes_atualizadas} separações atualizadas com novas datas")
+                if pre_separacoes_atualizadas > 0:
+                    logger.info(f"✅ {pre_separacoes_atualizadas} pré-separações (ENVIADO_SEPARACAO) atualizadas")
+        
+        # Também atualizar PreSeparacaoItem que ainda não foram enviadas para separação
+        # mas que são do mesmo pedido (mantém consistência)
+        from app.carteira.models import PreSeparacaoItem
+        pre_sep_pendentes = db.session.query(PreSeparacaoItem).filter(
+            PreSeparacaoItem.num_pedido == num_pedido,
+            PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+        ).update({
+            'data_expedicao_editada': data_exp_obj,
+            'data_agendamento_editada': data_agend_obj,
+            'protocolo_editado': protocolo
+        })
+        
+        if pre_sep_pendentes > 0:
+            logger.info(f"✅ {pre_sep_pendentes} pré-separações pendentes atualizadas")
 
         db.session.commit()
 
+        # Preparar mensagem de retorno detalhada
+        mensagem_detalhes = [f'{itens_atualizados} itens da carteira']
+        if separacoes_atualizadas > 0:
+            mensagem_detalhes.append(f'{separacoes_atualizadas} separações')
+        if pre_separacoes_atualizadas > 0:
+            mensagem_detalhes.append(f'{pre_separacoes_atualizadas} pré-separações enviadas')
+        if pre_sep_pendentes > 0:
+            mensagem_detalhes.append(f'{pre_sep_pendentes} pré-separações pendentes')
+        
+        mensagem_final = f'Expedição e agendamento salvos com sucesso! Atualizados: {", ".join(mensagem_detalhes)}.'
+
         return jsonify({
             'success': True,
-            'message': f'Expedição e agendamento salvos com sucesso! {itens_atualizados} itens atualizados.',
+            'message': mensagem_final,
             'data_expedicao': data_expedicao,
             'data_agendamento': data_agendamento,
-            'confirmado': confirmado
+            'confirmado': confirmado,
+            'detalhes': {
+                'carteira': itens_atualizados,
+                'separacoes': separacoes_atualizadas,
+                'pre_separacoes_enviadas': pre_separacoes_atualizadas,
+                'pre_separacoes_pendentes': pre_sep_pendentes
+            }
         })
 
     except Exception as e:
@@ -230,11 +288,42 @@ def confirmar_agendamento(num_pedido):
             'agendamento_confirmado': True
         })
 
+        # IMPORTANTE: Também confirmar nas Separações se o pedido tem lote de separação
+        # Buscar o pedido para obter o separacao_lote_id
+        pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
+        separacoes_confirmadas = 0
+        
+        if pedido and pedido.separacao_lote_id:
+            from app.separacao.models import Separacao
+            
+            logger.info(f"Confirmando agendamento nas Separações do lote {pedido.separacao_lote_id}")
+            
+            # Atualizar agendamento_confirmado nas Separações do lote
+            separacoes_confirmadas = db.session.query(Separacao).filter(
+                Separacao.separacao_lote_id == pedido.separacao_lote_id
+            ).update({
+                'agendamento_confirmado': True
+            })
+            
+            if separacoes_confirmadas > 0:
+                logger.info(f"✅ {separacoes_confirmadas} separações do lote {pedido.separacao_lote_id} confirmadas")
+
         db.session.commit()
+
+        # Preparar mensagem detalhada
+        mensagem_detalhes = [f'{itens_atualizados} itens da carteira']
+        if separacoes_confirmadas > 0:
+            mensagem_detalhes.append(f'{separacoes_confirmadas} separações verificadas')
+        
+        mensagem_final = f'Agendamento confirmado com sucesso! Confirmados: {", ".join(mensagem_detalhes)}.'
 
         return jsonify({
             'success': True,
-            'message': f'Agendamento confirmado com sucesso! {itens_atualizados} itens atualizados.'
+            'message': mensagem_final,
+            'detalhes': {
+                'carteira': itens_atualizados,
+                'separacoes_verificadas': separacoes_confirmadas
+            }
         })
 
     except Exception as e:
@@ -272,15 +361,77 @@ def cancelar_agendamento(num_pedido):
 
         # Limpar também na tabela Pedido
         pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
+        separacoes_limpas = 0
+        pre_separacoes_limpas = 0
+        
         if pedido:
             pedido.agendamento = None
             pedido.protocolo = None
+            
+            # IMPORTANTE: Limpar também nas Separações e PreSeparacaoItem se houver lote
+            if pedido.separacao_lote_id:
+                from app.separacao.models import Separacao
+                from app.carteira.models import PreSeparacaoItem
+                
+                logger.info(f"Cancelando agendamento nas Separações do lote {pedido.separacao_lote_id}")
+                
+                # Limpar agendamento nas Separações do lote
+                separacoes_limpas = db.session.query(Separacao).filter(
+                    Separacao.separacao_lote_id == pedido.separacao_lote_id
+                ).update({
+                    'agendamento': None,
+                    'protocolo': None,
+                    'agendamento_confirmado': False
+                })
+                
+                # Limpar agendamento nas PreSeparacaoItem enviadas para separação
+                pre_separacoes_limpas = db.session.query(PreSeparacaoItem).filter(
+                    PreSeparacaoItem.separacao_lote_id == pedido.separacao_lote_id,
+                    PreSeparacaoItem.status == 'ENVIADO_SEPARACAO'
+                ).update({
+                    'data_agendamento_editada': None,
+                    'protocolo_editado': None
+                })
+                
+                if separacoes_limpas > 0:
+                    logger.info(f"✅ {separacoes_limpas} separações tiveram agendamento cancelado")
+                if pre_separacoes_limpas > 0:
+                    logger.info(f"✅ {pre_separacoes_limpas} pré-separações tiveram agendamento cancelado")
+        
+        # Limpar também PreSeparacaoItem pendentes do mesmo pedido
+        pre_sep_pendentes = db.session.query(PreSeparacaoItem).filter(
+            PreSeparacaoItem.num_pedido == num_pedido,
+            PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+        ).update({
+            'data_agendamento_editada': None,
+            'protocolo_editado': None
+        })
+        
+        if pre_sep_pendentes > 0:
+            logger.info(f"✅ {pre_sep_pendentes} pré-separações pendentes tiveram agendamento cancelado")
 
         db.session.commit()
 
+        # Preparar mensagem detalhada
+        mensagem_detalhes = [f'{itens_atualizados} itens da carteira']
+        if separacoes_limpas > 0:
+            mensagem_detalhes.append(f'{separacoes_limpas} separações')
+        if pre_separacoes_limpas > 0:
+            mensagem_detalhes.append(f'{pre_separacoes_limpas} pré-separações enviadas')
+        if pre_sep_pendentes > 0:
+            mensagem_detalhes.append(f'{pre_sep_pendentes} pré-separações pendentes')
+        
+        mensagem_final = f'Agendamento cancelado com sucesso! Limpos: {", ".join(mensagem_detalhes)}.'
+
         return jsonify({
             'success': True,
-            'message': f'Agendamento cancelado com sucesso! {itens_atualizados} itens atualizados.'
+            'message': mensagem_final,
+            'detalhes': {
+                'carteira': itens_atualizados,
+                'separacoes': separacoes_limpas,
+                'pre_separacoes_enviadas': pre_separacoes_limpas,
+                'pre_separacoes_pendentes': pre_sep_pendentes
+            }
         })
 
     except Exception as e:

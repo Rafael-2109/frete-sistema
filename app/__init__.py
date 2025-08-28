@@ -681,7 +681,13 @@ def create_app(config_name=None):
         app.register_blueprint(portal_bp)
         app.logger.info("✅ Portal de integração registrado com sucesso")
     except ImportError as e:
-        app.logger.warning(f"⚠️ Portal de integração não disponível: {e}")
+        app.logger.error(f"❌ Portal de integração - ImportError: {e}")
+        import traceback
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+    except Exception as e:
+        app.logger.error(f"❌ Portal de integração - Erro inesperado: {type(e).__name__}: {e}")
+        import traceback
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
     
     app.register_blueprint(estoque_bp)
     
