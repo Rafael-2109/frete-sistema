@@ -3,12 +3,11 @@ Rotas para leitura e processamento de PDFs de pedidos
 """
 
 from flask import Blueprint, render_template, request, jsonify, send_file, flash, redirect, url_for
-from flask_login import login_required, current_user
+from flask_login import login_required
 from werkzeug.utils import secure_filename
 import os
 import tempfile
 from datetime import datetime
-import pandas as pd
 
 from .processor import PedidoProcessor
 

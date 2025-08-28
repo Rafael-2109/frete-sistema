@@ -40,8 +40,42 @@ class Separacao(db.Model):
     data_sincronizacao = db.Column(db.DateTime, nullable=True)  # Data/hora da sincronização
     zerado_por_sync = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi zerado por sincronização
     data_zeragem = db.Column(db.DateTime, nullable=True)  # Data/hora quando foi zerado
+    
+    # 🆕 NOVOS CAMPOS PARA SUBSTITUIR PEDIDO E PRESEPARACAOITEM
+    status = db.Column(db.String(20), default='ABERTO', nullable=False, index=True)  # PREVISAO, ABERTO, FATURADO
+    nf_cd = db.Column(db.Boolean, default=False, nullable=False)  # NF voltou para o CD
+    data_embarque = db.Column(db.Date, nullable=True)  # Data de embarque
+    
+    # Campos de normalização (para cotação e agrupamento)
+    cidade_normalizada = db.Column(db.String(120), nullable=True)
+    uf_normalizada = db.Column(db.String(2), nullable=True)
+    codigo_ibge = db.Column(db.String(10), nullable=True)
+    
+    # Controle de impressão
+    separacao_impressa = db.Column(db.Boolean, default=False, nullable=False)
+    separacao_impressa_em = db.Column(db.DateTime, nullable=True)
+    separacao_impressa_por = db.Column(db.String(100), nullable=True)
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Índices compostos para performance (ordem correta: mais seletivo primeiro)
+    __table_args__ = (
+        # Índices principais
+        db.Index('idx_sep_lote_sync', 'separacao_lote_id', 'sincronizado_nf'),
+        db.Index('idx_sep_lote_status', 'separacao_lote_id', 'status'),
+        db.Index('idx_sep_num_pedido', 'num_pedido'),
+        db.Index('idx_sep_pedido_sync', 'num_pedido', 'sincronizado_nf'),
+        
+        # Índices para estoque projetado
+        db.Index('idx_sep_estoque_projetado', 'cod_produto', 'expedicao'),
+        db.Index('idx_sep_expedicao_produto', 'expedicao', 'cod_produto'),
+        
+        # Índices simples
+        db.Index('idx_sep_status', 'status'),
+        db.Index('idx_sep_nf', 'numero_nf', 'sincronizado_nf'),
+        db.Index('idx_sep_cnpj', 'cnpj_cpf', 'sincronizado_nf'),
+        db.Index('idx_sep_expedicao', 'expedicao', 'sincronizado_nf'),
+    )
 
     def __repr__(self):
         return f'<Separacao #{self.id} - {self.num_pedido} - Lote: {self.separacao_lote_id} - Tipo: {self.tipo_envio}>'
