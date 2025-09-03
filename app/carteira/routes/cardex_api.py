@@ -5,12 +5,7 @@ APIs específicas para cardex D0-D28
 from flask import jsonify
 from flask_login import login_required
 # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
-from app.carteira.utils.workspace_utils import (
-    converter_projecao_para_cardex,
-    calcular_estatisticas_cardex,
-    gerar_alertas_reais
-)
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 import logging
 
 from . import carteira_bp
@@ -22,12 +17,12 @@ logger = logging.getLogger(__name__)
 @login_required
 def cardex_produto_real(cod_produto):
     """
-    API unificada para cardex D0-D28 usando SaldoEstoque
+    API unificada para cardex D0-D28 usando SaldoEstoqueSimples
     Usado por: modal-cardex.js
     """
     try:
         # Obter projeção completa usando Sistema de Estoque em Tempo Real
-        projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
+        projecao_completa = ServicoEstoqueSimples.get_projecao_completa(cod_produto, dias=28)
 
         if not projecao_completa:
             return jsonify({
@@ -150,7 +145,7 @@ def obter_cardex_detalhado_produto(cod_produto):
         from app import db
         
         # Obter projeção completa de 28 dias
-        projecao = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
+        projecao = ServicoEstoqueSimples.get_projecao_completa(cod_produto, dias=28)
         
         if not projecao or not isinstance(projecao, dict):
             return jsonify({

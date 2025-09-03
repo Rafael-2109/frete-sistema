@@ -164,8 +164,7 @@ class SaldoEstoqueCompativel:
                 MovimentacaoEstoque.nome_produto,
                 db.func.sum(MovimentacaoEstoque.qtd_movimentacao).label('saldo')
             ).filter(
-                MovimentacaoEstoque.ativo == True,
-                db.func.coalesce(MovimentacaoEstoque.status_nf, '') != 'CANCELADO'
+                MovimentacaoEstoque.ativo == True  # Apenas registros ativos
             ).group_by(
                 MovimentacaoEstoque.cod_produto,
                 MovimentacaoEstoque.nome_produto

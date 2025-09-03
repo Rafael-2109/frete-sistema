@@ -8,7 +8,6 @@ from datetime import datetime, date, timedelta
 import pandas as pd
 import io
 from app.estoque.models import UnificacaoCodigos
-# MIGRADO: EstoqueTempoReal e MovimentacaoPrevista -> ServicoEstoqueSimples (02/09/2025)
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.producao.models import CadastroPalletizacao
 import logging

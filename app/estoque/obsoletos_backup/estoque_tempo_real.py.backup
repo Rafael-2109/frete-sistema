@@ -278,7 +278,7 @@ class ServicoEstoqueTempoReal:
             # Somar movimentações de todos os códigos relacionados
             for codigo in codigos:
                 movs = MovimentacaoEstoque.query.filter_by(
-                    cod_produto=codigo,
+                    cod_produto=codigo,                    
                     ativo=True
                 ).all()
                 

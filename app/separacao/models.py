@@ -1,5 +1,7 @@
 from app import db  # ou de onde você estiver importando seu `db`
 from datetime import datetime
+from sqlalchemy import text
+from sqlalchemy.ext.hybrid import hybrid_property
 
 # models.py
 class Separacao(db.Model):
@@ -84,6 +86,108 @@ class Separacao(db.Model):
         db.Index('idx_sep_expedicao', 'expedicao', 'sincronizado_nf'),
         db.Index('idx_sep_cotacao', 'cotacao_id'),
     )
+
+    @property
+    def status_calculado(self):
+        """
+        Calcula o status do item de separação baseado no estado atual:
+        - NF no CD: Flag nf_cd é True (NF voltou para o CD)
+        - FATURADO: Tem NF preenchida (sincronizado_nf=True) e não está no CD
+        - EMBARCADO: Tem data de embarque mas não tem NF
+        - COTADO: Tem cotação_id mas não está embarcado
+        - ABERTO: Não tem cotação
+        - PREVISAO: Status é PREVISAO (pré-separação)
+        """
+        # Primeiro verifica se é uma pré-separação
+        if self.status == 'PREVISAO':
+            return 'PREVISAO'
+        # Depois verifica se a NF está no CD
+        elif getattr(self, 'nf_cd', False):
+            return 'NF no CD'
+        # Verifica se foi sincronizado com NF (faturado)
+        elif self.sincronizado_nf or (self.numero_nf and str(self.numero_nf).strip()):
+            return 'FATURADO'
+        elif self.data_embarque:
+            return 'EMBARCADO'
+        elif self.cotacao_id:
+            return 'COTADO'
+        else:
+            return 'ABERTO'
+    
+    @classmethod
+    def atualizar_status(cls, separacao_lote_id, num_pedido=None, novo_status='ABERTO'):
+        """
+        Método helper para atualizar status de itens de separação
+        Se num_pedido for fornecido, atualiza apenas esse pedido
+        Caso contrário, atualiza todo o lote
+        """
+        if num_pedido:
+            sql = text("""
+                UPDATE separacao 
+                SET status = :status
+                WHERE separacao_lote_id = :lote_id
+                AND num_pedido = :num_pedido
+            """)
+            
+            db.session.execute(sql, {
+                'status': novo_status,
+                'lote_id': separacao_lote_id,
+                'num_pedido': num_pedido
+            })
+        else:
+            sql = text("""
+                UPDATE separacao 
+                SET status = :status
+                WHERE separacao_lote_id = :lote_id
+            """)
+            
+            db.session.execute(sql, {
+                'status': novo_status,
+                'lote_id': separacao_lote_id
+            })
+        
+        db.session.commit()
+    
+    @classmethod
+    def atualizar_nf_cd(cls, separacao_lote_id, num_pedido=None, nf_cd=False):
+        """
+        Método helper para atualizar flag nf_cd de itens de separação
+        Se num_pedido for fornecido, atualiza apenas esse pedido
+        Caso contrário, atualiza todo o lote
+        """
+        if num_pedido:
+            sql = text("""
+                UPDATE separacao 
+                SET nf_cd = :nf_cd
+                WHERE separacao_lote_id = :lote_id
+                AND num_pedido = :num_pedido
+            """)
+            
+            db.session.execute(sql, {
+                'nf_cd': nf_cd,
+                'lote_id': separacao_lote_id,
+                'num_pedido': num_pedido
+            })
+        else:
+            sql = text("""
+                UPDATE separacao 
+                SET nf_cd = :nf_cd
+                WHERE separacao_lote_id = :lote_id
+            """)
+            
+            db.session.execute(sql, {
+                'nf_cd': nf_cd,
+                'lote_id': separacao_lote_id
+            })
+        
+        db.session.commit()
+    
+    def save(self):
+        """
+        Método helper para salvar alterações no item de separação
+        """
+        db.session.add(self)
+        db.session.commit()
 
     def __repr__(self):
         return f'<Separacao #{self.id} - {self.num_pedido} - Lote: {self.separacao_lote_id} - Tipo: {self.tipo_envio}>'

@@ -516,9 +516,6 @@ def processar_importacao_programacao():
         
         # COMPORTAMENTO: SEMPRE SUBSTITUI - Deletar todos os dados existentes
         try:
-            # MIGRADO: MovimentacaoPrevista não é mais usado
-            # O novo sistema calcula entradas previstas diretamente da ProgramacaoProducao
-            # Não precisa mais limpar MovimentacaoPrevista
             
             # Deletar todas as programações existentes
             ProgramacaoProducao.query.delete()

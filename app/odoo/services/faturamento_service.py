@@ -249,9 +249,10 @@ class FaturamentoService:
             # 1. Atualizar MovimentacaoEstoque
             movs_atualizadas = MovimentacaoEstoque.query.filter(
                 MovimentacaoEstoque.numero_nf == numero_nf,
-                MovimentacaoEstoque.status_nf != 'CANCELADO'
+                MovimentacaoEstoque.ativo == True  # Buscar apenas ativos
             ).update({
                 'status_nf': 'CANCELADO',
+                'ativo': False,  # IMPORTANTE: Marcar como inativo para excluir do estoque
                 'atualizado_em': datetime.now(),
                 'atualizado_por': 'Sistema - NF Cancelada no Odoo'
             })

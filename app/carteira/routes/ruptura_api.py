@@ -10,6 +10,7 @@ from app.carteira.main_routes import carteira_bp
 from sqlalchemy import func, case
 import logging
 from datetime import datetime
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,6 @@ def analisar_ruptura_pedido(num_pedido):
                 'message': 'Pedido não encontrado'
             }), 404
             
-        # MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
-        from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
         
         # OTIMIZAÇÃO: Buscar TODAS as produções programadas de uma vez
         produtos_pedido = [item.cod_produto for item in itens]
@@ -86,7 +85,7 @@ def analisar_ruptura_pedido(num_pedido):
             valor_total_pedido += valor_item
             
             # Usar EXATAMENTE o mesmo método que o workspace usa (QUE FUNCIONA!)
-            projecao = ServicoEstoqueTempoReal.get_projecao_completa(item.cod_produto, dias=7)
+            projecao = ServicoEstoqueSimples.get_projecao_completa(item.cod_produto, dias=7)
             
             # DEBUG: Log do tipo retornado
             logger.debug(f"Produto {item.cod_produto}: projecao tipo={type(projecao)}, valor={projecao}")
@@ -525,10 +524,3 @@ def obter_detalhes_pedido_completo(num_pedido):
             'error': str(e)
         }), 500
 
-
-# API obter_cardex_produto movida para cardex_api.py para evitar redundância
-# Rota mantida aqui apenas para compatibilidade, redirecionando para a API unificada
-
-
-# API obter_cardex_detalhado_produto movida para cardex_api.py para evitar redundância
-# Rota mantida aqui apenas para compatibilidade, redirecionando para a API unificada

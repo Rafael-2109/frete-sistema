@@ -6,8 +6,7 @@ from flask import jsonify
 from flask_login import login_required
 from sqlalchemy import and_, func
 from app.carteira.models import CarteiraPrincipal
-# MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
-from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.producao.models import CadastroPalletizacao
 from app.separacao.models import Separacao
 from app.carteira.utils.workspace_utils import processar_dados_workspace_produto
@@ -35,9 +34,8 @@ def obter_estoque_pedido(num_pedido):
         produtos_estoque = []
         
         for produto in produtos:
-            # USAR ServicoEstoqueTempoReal IGUAL ao workspace_api.py
             try:
-                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+                projecao_completa = ServicoEstoqueSimples.get_projecao_completa(produto.cod_produto, dias=28)
             except Exception as e:
                 logger.warning(f"Erro ao buscar projeção para produto {produto.cod_produto}: {e}")
                 projecao_completa = None
@@ -153,7 +151,7 @@ def obter_workspace_estoque(num_pedido):
                 inicio_produto = time.time()
                 logger.debug(f"[{idx}/{len(produtos_carteira)}] Calculando projeção para produto {produto.cod_produto}")
                 
-                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+                projecao_completa = ServicoEstoqueSimples.get_projecao_completa(produto.cod_produto, dias=28)
                 
                 tempo_produto = (time.time() - inicio_produto) * 1000
                 if tempo_produto > 100:  # Log se demorar mais de 100ms

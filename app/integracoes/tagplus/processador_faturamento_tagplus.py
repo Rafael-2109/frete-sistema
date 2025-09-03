@@ -74,26 +74,6 @@ class ProcessadorFaturamentoTagPlus:
                         logger.error(f"Erro ao sincronizar Separacao: {e}")
                         erros_etapa.append(f"Sincronizar Separacao: {str(e)}")
 
-                # Caso 1 ou 3: Abater MovimentacaoPrevista usando data da Separacao (sem fallback)
-                try:
-                    from app.separacao.models import Separacao
-
-                    sep = Separacao.query.filter_by(
-                        separacao_lote_id=embarque_item_match.separacao_lote_id,
-                        cod_produto=faturamento_produto.cod_produto,
-                    ).first()
-                    if sep and sep.expedicao:
-                        ServicoEstoqueTempoReal.atualizar_movimentacao_prevista(
-                            cod_produto=faturamento_produto.cod_produto,
-                            data=sep.expedicao,
-                            qtd_entrada=0,
-                            qtd_saida=-abs(faturamento_produto.qtd_produto_faturado),
-                        )
-                except Exception as e:
-                    logger.debug(
-                        f"Falha ao abater previsão TagPlus NF {faturamento_produto.numero_nf}/{faturamento_produto.cod_produto}: {e}"
-                    )
-
             # 4. Atualizar origem no FaturamentoProduto (SEMPRE TENTAR)
             if num_pedido:
                 try:

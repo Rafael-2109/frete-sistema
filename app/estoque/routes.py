@@ -6,8 +6,7 @@ from app import db
 from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos
 # from app.estoque.models import SaldoEstoque
 from app.estoque.services.compatibility_layer import SaldoEstoque
-# MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
-from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.utils.timezone import agora_brasil
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import logging
@@ -1211,7 +1210,7 @@ def saldo_estoque():
         # Primeiro processar a amostra para estatísticas
         for produto in produtos_amostra[:50]:  # Limitar ainda mais para performance
             # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-            projecao = ServicoEstoqueTempoReal.get_projecao_completa(produto.get('cod_produto'), dias=7)
+            projecao = ServicoEstoqueSimples.get_projecao_completa(produto.get('cod_produto'), dias=7)
             # Converter para formato compatível
             resumo = converter_projecao_para_resumo(projecao) if projecao else None
             if resumo:
@@ -1238,7 +1237,7 @@ def saldo_estoque():
         produtos_resumo = []
         for produto in produtos_pagina:
             # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-            projecao = ServicoEstoqueTempoReal.get_projecao_completa(produto.get('cod_produto'), dias=28)
+            projecao = ServicoEstoqueSimples.get_projecao_completa(produto.get('cod_produto'), dias=28)
             # Converter para formato compatível
             resumo = converter_projecao_para_resumo(projecao) if projecao else None
             if resumo:
@@ -1369,7 +1368,7 @@ def api_saldo_produto(cod_produto):
     try:
         # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
         # Obter projeção completa
-        projecao = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
+        projecao = ServicoEstoqueSimples.get_projecao_completa(cod_produto, dias=28)
         resumo = converter_projecao_para_resumo(projecao) if projecao else None
         
         if not resumo:

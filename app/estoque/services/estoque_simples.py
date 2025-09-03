@@ -1,6 +1,5 @@
 """
 Serviço de Estoque Simplificado - Queries Diretas sem Cache
-Substitui EstoqueTempoReal, MovimentacaoPrevista e todos os triggers
 Performance garantida < 50ms por consulta
 """
 
@@ -41,13 +40,12 @@ class ServicoEstoqueSimples:
             codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
             
             # Query simples: apenas SOMA pois valores já têm sinal correto
-            # Exclui apenas status_nf = 'CANCELADO'
+            # Considera apenas registros ativos (cancelados têm ativo=False)
             resultado = db.session.query(
                 func.sum(MovimentacaoEstoque.qtd_movimentacao).label('estoque_atual')
             ).filter(
                 MovimentacaoEstoque.cod_produto.in_(codigos),
-                MovimentacaoEstoque.ativo == True,
-                MovimentacaoEstoque.status_nf != 'CANCELADO'
+                MovimentacaoEstoque.ativo == True
             ).scalar()
             
             return float(resultado or 0)

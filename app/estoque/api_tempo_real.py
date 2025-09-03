@@ -6,12 +6,10 @@ Data: 02/09/2025
 """
 
 from typing import List, Dict, Any, Optional
-from datetime import date, timedelta
-from decimal import Decimal
 from flask import jsonify, request, Blueprint
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from app import db
-from app.estoque.models import UnificacaoCodigos, MovimentacaoEstoque
+from app.estoque.models import MovimentacaoEstoque
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 
 # Blueprint para rotas da API
@@ -168,11 +166,7 @@ class APIEstoqueTempoReal:
             MovimentacaoEstoque.cod_produto,
             func.sum(MovimentacaoEstoque.qtd_movimentacao).label('saldo')
         ).filter(
-            MovimentacaoEstoque.ativo == True,
-            or_(
-                MovimentacaoEstoque.status_nf != 'CANCELADO',
-                MovimentacaoEstoque.status_nf.is_(None)
-            )
+            MovimentacaoEstoque.ativo == True  # Apenas registros ativos
         ).group_by(
             MovimentacaoEstoque.cod_produto
         ).having(
@@ -186,11 +180,7 @@ class APIEstoqueTempoReal:
             MovimentacaoEstoque.cod_produto,
             func.sum(MovimentacaoEstoque.qtd_movimentacao).label('saldo')
         ).filter(
-            MovimentacaoEstoque.ativo == True,
-            or_(
-                MovimentacaoEstoque.status_nf != 'CANCELADO',
-                MovimentacaoEstoque.status_nf.is_(None)
-            )
+            MovimentacaoEstoque.ativo == True  # Apenas registros ativos
         ).group_by(
             MovimentacaoEstoque.cod_produto
         ).having(

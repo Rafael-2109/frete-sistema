@@ -9,8 +9,6 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
-# MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
-from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
 from app import db
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.estoque.models import MovimentacaoEstoque
@@ -668,32 +666,6 @@ class ProcessadorFaturamento:
                 movimentacoes_criadas += 1
                 logger.debug(f"  ✓ Movimentação criada: {produto.cod_produto} - Qtd: {mov.qtd_movimentacao}")
 
-                # Abater MovimentacaoPrevista SEM fallback de data
-                try:
-                    # Buscar separação no cache ou no banco
-                    sep = None
-                    if cache_separacoes:
-                        # Procurar em todas as chaves do cache que contém o lote_id
-                        for cache_key, separacoes in cache_separacoes.items():
-                            if cache_key.startswith(f"{lote_id}_"):
-                                sep = next((s for s in separacoes if s.cod_produto == produto.cod_produto), None)
-                                if sep:
-                                    break
-                    
-                    # Se não encontrou no cache, buscar no banco
-                    if not sep:
-                        sep = Separacao.query.filter_by(separacao_lote_id=lote_id, cod_produto=produto.cod_produto).first()
-                    
-                    if sep and sep.expedicao:
-                        ServicoEstoqueTempoReal.atualizar_movimentacao_prevista(
-                            cod_produto=produto.cod_produto,
-                            data=sep.expedicao,
-                            qtd_entrada=Decimal("0"),
-                            qtd_saida=Decimal(str(-abs(produto.qtd_produto_faturado))),
-                        )
-                        logger.debug(f"  ✓ Previsão abatida para {produto.cod_produto}")
-                except Exception as e:
-                    logger.debug(f"  ⚠️ Falha ao abater previsão {produto.cod_produto}: {e}")
                     
             except Exception as e:
                 logger.error(f"  ✗ Erro ao criar movimentação para produto {produto.cod_produto}: {e}")
