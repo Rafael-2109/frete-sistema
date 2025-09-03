@@ -16,6 +16,7 @@ from app.utils.auth_decorators import require_portaria
 from app.portaria.models import Motorista, ControlePortaria
 from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
 from app.embarques.models import Embarque
+from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
 from app.utils.file_storage import get_file_storage
@@ -283,6 +284,14 @@ def registrar_movimento():
                             embarque.data_embarque = registro.data_saida
                             print(f"[DEBUG] Data embarque atualizada para {registro.data_saida}")
                             flash(f'Data de embarque do Embarque #{embarque.numero} atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
+                            
+                            # ✅ PROPAGAR data_embarque para tabela Separacao
+                            for item in embarque.itens:
+                                if item.separacao_lote_id:
+                                    Separacao.query.filter_by(
+                                        separacao_lote_id=item.separacao_lote_id
+                                    ).update({'data_embarque': registro.data_saida})
+                                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id} atualizado com data_embarque")
                             
                             # Sincroniza com sistema de entregas para cada item do embarque
                             if embarque.itens:
@@ -634,6 +643,14 @@ def adicionar_embarque():
             embarque.data_embarque = registro.data_saida
             print(f"[DEBUG] Data embarque atualizada para {registro.data_saida} (vinculação após saída)")
             
+            # ✅ PROPAGAR data_embarque para tabela Separacao
+            for item in embarque.itens:
+                if item.separacao_lote_id:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id
+                    ).update({'data_embarque': registro.data_saida})
+                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id} atualizado com data_embarque")
+            
             # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
             if embarque.itens:
                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
@@ -686,6 +703,14 @@ def excluir_embarque():
         if embarque and embarque.data_embarque:
             embarque.data_embarque = None
             print(f"[DEBUG] Data embarque removida do Embarque #{embarque_numero}")
+            
+            # ✅ LIMPAR data_embarque da tabela Separacao
+            for item in embarque.itens:
+                if item.separacao_lote_id:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id
+                    ).update({'data_embarque': None})
+                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id} - data_embarque removida")
             
             # 2. Ajusta sistema de entregas para cada NF do embarque
             if embarque.itens:

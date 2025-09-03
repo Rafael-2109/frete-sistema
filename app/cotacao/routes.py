@@ -1156,6 +1156,20 @@ def fechar_frete():
                 db.session.add(item)
 
         db.session.commit()
+        
+        # ✅ PROPAGAR cotacao_id para Separacao usando separacao_lote_id dos EmbarqueItems
+        # Isso garante que TODOS os itens que foram adicionados ao embarque tenham cotacao_id
+        for item in embarque.itens:
+            if item.separacao_lote_id and item.status == 'ativo':
+                Separacao.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).update({
+                    'cotacao_id': cotacao.id,
+                    'nf_cd': False
+                })
+                print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
+        
+        db.session.commit()
 
         # ✅ LIMPA DADOS DA SESSÃO APÓS SUCESSO
         if alterando_embarque:
@@ -1405,6 +1419,20 @@ def fechar_frete_grupo():
             
             db.session.add(item)
 
+        db.session.commit()
+        
+        # ✅ PROPAGAR cotacao_id para Separacao usando separacao_lote_id dos EmbarqueItems
+        # Isso garante que TODOS os itens que foram adicionados ao embarque tenham cotacao_id
+        for item in embarque.itens:
+            if item.separacao_lote_id and item.status == 'ativo':
+                Separacao.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).update({
+                    'cotacao_id': cotacao.id,
+                    'nf_cd': False
+                })
+                print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
+        
         db.session.commit()
 
         return jsonify({

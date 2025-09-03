@@ -879,8 +879,7 @@ class ProcessadorFaturamento:
             separacoes_com_nf = Separacao.query.filter(
                 Separacao.numero_nf.isnot(None),
                 Separacao.numero_nf != "",
-                Separacao.sincronizado_nf == True,
-                Separacao.status != 'FATURADO'
+                Separacao.sincronizado_nf == False,
             ).all()
             
             logger.info(f"📊 Encontradas {len(separacoes_com_nf)} separações com NF mas sem status FATURADO")
@@ -894,6 +893,7 @@ class ProcessadorFaturamento:
                 if faturamento_existe:
                     status_antigo = sep.status
                     sep.status = 'FATURADO'
+                    sep.sincronizado_nf = True
                     contador += 1
                     logger.debug(f"  • Separação {sep.separacao_lote_id}/{sep.num_pedido}: '{status_antigo}' → 'FATURADO' (NF: {sep.numero_nf})")
             
@@ -915,7 +915,6 @@ class ProcessadorFaturamento:
                 ).update({
                     'status': 'FATURADO',
                     'numero_nf': item.nota_fiscal,
-                    'sincronizado_nf': True,
                     'data_sincronizacao': datetime.now()
                 })
                 

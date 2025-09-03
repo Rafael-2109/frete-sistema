@@ -98,7 +98,7 @@ class SincronizacaoIntegradaService:
                 from app import db
                 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
                 processador = ProcessadorFaturamento()
-                pedidos_atualizados = processador._atualizar_status_pedidos_faturados()
+                pedidos_atualizados = processador._atualizar_status_separacoes_faturadas()
                 
                 if pedidos_atualizados > 0:
                     logger.info(f"✅ {pedidos_atualizados} pedidos atualizados para status FATURADO")
