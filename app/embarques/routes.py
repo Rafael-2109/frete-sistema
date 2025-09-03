@@ -1485,37 +1485,43 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
 
 def atualizar_status_pedido_nf_cd(numero_pedido, separacao_lote_id=None):
     """
-    ✅ FUNÇÃO CORRIGIDA: Atualiza status do pedido para "NF no CD"
+    ✅ FUNÇÃO CORRIGIDA: Atualiza status dos itens de separação para "NF no CD"
     
     Implementa o item 2-d do processo_completo.md:
-    - Quando uma NF volta para o CD, altera o status do pedido
-    - Remove data de embarque para permitir nova cotação
-    - Usa separacao_lote_id quando disponível para maior precisão
+    - Quando uma NF volta para o CD, altera o status dos itens de separação
+    - Remove data de embarque e marca nf_cd=True para permitir nova cotação
+    - Atualiza diretamente na tabela Separacao (não na VIEW Pedido)
     """
     try:
-        pedido = None
+        # Atualiza diretamente na tabela Separacao
+        update_data = {
+            'nf_cd': True,
+            'data_embarque': None,
+            'status': 'NF no CD'
+        }
         
-        # ✅ CORREÇÃO: Priorizar busca por separacao_lote_id quando disponível
+        # Constrói a query baseada nos parâmetros disponíveis
         if separacao_lote_id:
-            pedido = Pedido.query.filter_by(separacao_lote_id=separacao_lote_id).first()
-            print(f"[DEBUG] 🔍 Busca por lote {separacao_lote_id}: {'Encontrado' if pedido else 'Não encontrado'}")
-        
-        # Fallback: Se não encontrou por lote, busca por número do pedido
-        if not pedido and numero_pedido:
-            pedido = Pedido.query.filter_by(num_pedido=numero_pedido).first()
-            print(f"[DEBUG] 🔍 Busca por num_pedido {numero_pedido}: {'Encontrado' if pedido else 'Não encontrado'}")
-        
-        if pedido:
-            # Remove dados de embarque para permitir nova cotação
-            pedido.data_embarque = None
-            pedido.nf = None  # Remove NF para voltar ao status anterior
-            # Status será recalculado automaticamente pelo trigger
+            # Atualização por lote completo
+            result = Separacao.query.filter_by(
+                separacao_lote_id=separacao_lote_id
+            ).update(update_data)
             
-            db.session.commit()
-            print(f"[DEBUG] 📦 Pedido {pedido.num_pedido} (Lote: {pedido.separacao_lote_id}): Status atualizado para 'NF no CD'")
-            return True, f"Pedido {pedido.num_pedido} atualizado para 'NF no CD'"
+            identificador = f"Lote: {separacao_lote_id}"
+                        
         else:
-            return False, f"Pedido não encontrado (num_pedido: {numero_pedido}, lote: {separacao_lote_id})"
+            return False, "Nenhum parâmetro de busca fornecido"
+        
+        # Confirma as alterações
+        db.session.commit()
+        
+        # Verifica quantas linhas foram afetadas
+        if result > 0:
+            msg = f"Status atualizado para 'NF no CD': {result} item(ns) de separação ({identificador})"
+            print(f"[DEBUG] 📦 {msg}")
+            return True, msg
+        else:
+            return False, f"Nenhum item de separação encontrado ({identificador})"
             
     except Exception as e:
         db.session.rollback()
