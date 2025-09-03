@@ -1,5 +1,5 @@
 <!-- Formulário de edição para uso em modal AJAX -->
-<form method="POST" action="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}?ajax=1">
+<form method="POST" action="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.separacao_lote_id) }}?ajax=1">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     {{ form.hidden_tag() }}
     
@@ -129,7 +129,7 @@
     <!-- Botões de ação -->
     <div class="d-flex justify-content-between mt-3">
         <!-- Botão Reset Status (lado esquerdo) -->
-        <button type="button" class="btn btn-warning" onclick="resetStatusPedido({{ pedido.id }})" 
+        <button type="button" class="btn btn-warning" onclick="resetStatusPedido({{ pedido.separacao_id }})" 
                 title="Limpa NF e recalcula status baseado em EmbarqueItem e FaturamentoProduto">
             <i class="fas fa-sync-alt"></i> Reset Status
         </button>

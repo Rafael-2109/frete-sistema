@@ -1629,6 +1629,9 @@ def alterar_cotacao(embarque_id):
                 func.coalesce(func.sum(Separacao.pallet), 0).label('pallet_total'),
                 func.coalesce(func.sum(Separacao.peso), 0).label('peso_total'),
                 func.min(Separacao.rota).label('rota'),
+                func.min(Separacao.cidade_normalizada).label('cidade_normalizada'),
+                func.min(Separacao.uf_normalizada).label('uf_normalizada'),
+                func.min(Separacao.codigo_ibge).label('codigo_ibge'),
                 func.min(Separacao.sub_rota).label('sub_rota'),
                 func.min(Separacao.expedicao).label('expedicao'),
                 func.min(Separacao.agendamento).label('agendamento'),
@@ -1650,6 +1653,9 @@ def alterar_cotacao(embarque_id):
                     'raz_social_red': agregacao.raz_social_red,
                     'nome_cidade': agregacao.nome_cidade,
                     'cod_uf': agregacao.cod_uf,
+                    'cidade_normalizada': agregacao.cidade_normalizada,
+                    'uf_normalizada': agregacao.uf_normalizada,
+                    'codigo_ibge': agregacao.codigo_ibge,
                     'valor_saldo_total': float(agregacao.valor_saldo_total or 0),
                     'pallet_total': float(agregacao.pallet_total or 0),
                     'peso_total': float(agregacao.peso_total or 0),
@@ -1672,7 +1678,7 @@ def alterar_cotacao(embarque_id):
         pedidos_serializados = []
         for p in pedidos_data:
             pedidos_serializados.append({
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'separacao_lote_id': p.separacao_lote_id,
                 'num_pedido': p.num_pedido,
                 'data_pedido': p.data_pedido.isoformat() if p.data_pedido else None,
@@ -1680,6 +1686,9 @@ def alterar_cotacao(embarque_id):
                 'raz_social_red': p.raz_social_red,
                 'nome_cidade': p.nome_cidade,
                 'cod_uf': p.cod_uf,
+                'cidade_normalizada': p.cidade_normalizada,
+                'uf_normalizada': p.uf_normalizada,
+                'codigo_ibge': p.codigo_ibge,
                 'valor_saldo_total': p.valor_saldo_total,
                 'pallet_total': p.pallet_total,
                 'peso_total': p.peso_total,

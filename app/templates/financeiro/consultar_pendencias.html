@@ -24,7 +24,7 @@
             <tbody>
                 {% for p in pendencias %}
                 <tr>
-                    <td><input type="checkbox" name="selecionadas" value="{{ p.id }}"></td>
+                    <td><input type="checkbox" name="selecionadas" value="{{ p.separacao_lote_id }}"></td>
                     <td>{{ p.numero_nf }}</td>
                     <td>{{ p.entrega.cnpj_cliente if p.entrega else '-' }}</td>
                     <td>{{ p.entrega.cliente if p.entrega else '-' }}</td>

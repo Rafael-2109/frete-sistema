@@ -197,7 +197,7 @@ def lista_pedidos():
                 )
             else:
                 # Se não há CNPJs válidos, retorna query vazia
-                query = query.filter(Pedido.id == -1)
+                query = query.filter(Pedido.separacao_lote_id == 'IMPOSSIVEL')
         elif filtro_status == 'sem_data':
             # ✅ NOVO: Filtro para pedidos sem data de expedição
             query = query.filter(
@@ -797,10 +797,12 @@ def excluir_pedido(pedido_id):
         # 🔧 NOVA FUNCIONALIDADE: Excluir itens de cotação relacionados
         from app.cotacao.models import CotacaoItem
         itens_cotacao_excluidos = 0
-        itens_cotacao = CotacaoItem.query.filter_by(pedido_id=pedido.id).all()
-        for item_cotacao in itens_cotacao:
-            db.session.delete(item_cotacao)
-            itens_cotacao_excluidos += 1
+        # Usar separacao_lote_id ao invés de pedido_id
+        if pedido.separacao_lote_id:
+            itens_cotacao = CotacaoItem.query.filter_by(separacao_lote_id=pedido.separacao_lote_id).all()
+            for item_cotacao in itens_cotacao:
+                db.session.delete(item_cotacao)
+                itens_cotacao_excluidos += 1
         
         if itens_cotacao_excluidos > 0:
             print(f"[DEBUG] 🗑️ Removendo {itens_cotacao_excluidos} item(ns) de cotação relacionados")
@@ -1063,7 +1065,14 @@ def cotacao_manual():
         session["cotacao_manual_pedidos"] = lista_ids
 
         # Carrega os pedidos do banco
-        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        # Converter IDs para lotes se necessário
+        from app.separacao.models import Separacao
+        # Se lista_ids contém strings de lote, usar diretamente
+        if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
+            pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
+        else:
+            # Se são IDs numéricos, precisa converter para num_pedido ou buscar lotes
+            pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
         
         if not pedidos:
             flash("Nenhum pedido encontrado!", "warning")
@@ -1119,7 +1128,14 @@ def processar_cotacao_manual():
             return redirect(url_for("pedidos.cotacao_manual"))
 
         # Carrega pedidos e transportadora
-        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        # Converter IDs para lotes se necessário
+        from app.separacao.models import Separacao
+        # Se lista_ids contém strings de lote, usar diretamente
+        if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
+            pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
+        else:
+            # Se são IDs numéricos, precisa converter para num_pedido ou buscar lotes
+            pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
         transportadora = Transportadora.query.get(transportadora_id)
 
         if not pedidos or not transportadora:
@@ -1164,7 +1180,7 @@ def processar_cotacao_manual():
         for pedido in pedidos:
             cotacao_item = CotacaoItem(
                 cotacao_id=cotacao.id,
-                pedido_id=pedido.id,
+                separacao_lote_id=pedido.separacao_lote_id,  
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 peso=pedido.peso_total or 0,
@@ -1271,7 +1287,14 @@ def embarque_fob():
         lista_ids = [int(x) for x in lista_ids_str]
 
         # Carrega os pedidos do banco
-        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        # Converter IDs para lotes se necessário
+        from app.separacao.models import Separacao
+        # Se lista_ids contém strings de lote, usar diretamente
+        if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
+            pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
+        else:
+            # Se são IDs numéricos, precisa converter para num_pedido ou buscar lotes
+            pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
         
         if not pedidos:
             flash("Nenhum pedido encontrado!", "warning")
@@ -1435,13 +1458,13 @@ def embarque_fob():
         flash(f"Erro ao criar embarque FOB: {str(e)}", "error")
         return redirect(url_for("pedidos.lista_pedidos"))
 
-@pedidos_bp.route('/detalhes/<int:id>')
+@pedidos_bp.route('/detalhes/<string:lote_id>')
 @login_required
-def detalhes_pedido(id):
+def detalhes_pedido(lote_id):
     """
-    Visualiza detalhes completos de um pedido
+    Visualiza detalhes completos de um pedido usando separacao_lote_id
     """
-    pedido = Pedido.query.get_or_404(id)
+    pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
     
     # Buscar embarque relacionado se existir
     embarque = None

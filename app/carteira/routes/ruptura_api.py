@@ -11,8 +11,34 @@ from sqlalchemy import func, case
 import logging
 from datetime import datetime
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+import time
+import json
 
 logger = logging.getLogger(__name__)
+
+# Tentar importar Redis e Celery (opcional)
+try:
+    import redis
+    import os
+    
+    # Usar variáveis de ambiente do Render
+    REDIS_CLIENT = redis.StrictRedis(
+        host=os.environ.get('REDIS_HOST', 'localhost'),
+        port=int(os.environ.get('REDIS_PORT', 6379)),
+        db=int(os.environ.get('REDIS_DB', 0)),
+        password=os.environ.get('REDIS_PASSWORD', None),  # Se houver senha
+        decode_responses=True,
+        socket_connect_timeout=1,
+        socket_timeout=1
+    )
+    # Testar conexão
+    REDIS_CLIENT.ping()
+    REDIS_DISPONIVEL = True
+    REDIS_TTL = int(os.environ.get('REDIS_TTL', 30))  # 30 segundos de cache por padrão
+except:
+    REDIS_CLIENT = None
+    REDIS_DISPONIVEL = False
+    logger.warning("Redis não disponível - usando processamento direto")
 
 
 @carteira_bp.route('/api/ruptura/analisar-pedido/<num_pedido>', methods=['GET'])
@@ -20,8 +46,27 @@ def analisar_ruptura_pedido(num_pedido):
     """
     Analisa ruptura de estoque para um pedido específico
     Retorna análise detalhada ou indica que pedido está OK
+    
+    Otimizações aplicadas:
+    1. Usa Redis para cache de curta duração (30s)
+    2. Processa múltiplos produtos em paralelo
+    3. Batch queries para reduzir I/O
     """
     try:
+        inicio_total = time.time()
+        
+        # ===== VERIFICAR CACHE REDIS SE DISPONÍVEL =====
+        if REDIS_DISPONIVEL:
+            redis_key = f"ruptura:pedido:{num_pedido}"
+            cache_resultado = REDIS_CLIENT.get(redis_key)
+            
+            if cache_resultado:
+                logger.info(f"✅ Cache HIT para pedido {num_pedido}")
+                resultado = json.loads(cache_resultado)
+                resultado['from_cache'] = True
+                return jsonify(resultado)
+        
+        # ===== PROCESSAR SEM CACHE =====
         # Buscar todos os itens do pedido - SEM campos de estoque que não são usados
         itens = db.session.query(
             CarteiraPrincipal.cod_produto,
@@ -40,17 +85,18 @@ def analisar_ruptura_pedido(num_pedido):
             }), 404
             
         
-        # OTIMIZAÇÃO: Buscar TODAS as produções programadas de uma vez
-        produtos_pedido = [item.cod_produto for item in itens]
+        # OTIMIZAÇÃO 1: Buscar produtos únicos para reduzir processamento
+        produtos_unicos = list(set([item.cod_produto for item in itens]))
+        logger.info(f"📦 Processando {len(produtos_unicos)} produtos únicos de {len(itens)} itens")
         producoes_por_produto = {}
         
-        if produtos_pedido:
+        if produtos_unicos:
             producoes_todas = db.session.query(
                 ProgramacaoProducao.cod_produto,
                 ProgramacaoProducao.data_programacao,
                 func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
             ).filter(
-                ProgramacaoProducao.cod_produto.in_(produtos_pedido),
+                ProgramacaoProducao.cod_produto.in_(produtos_unicos),
                 ProgramacaoProducao.data_programacao >= datetime.now().date()
             ).group_by(
                 ProgramacaoProducao.cod_produto,
@@ -69,6 +115,28 @@ def analisar_ruptura_pedido(num_pedido):
                     'qtd': float(prod.qtd_producao)
                 })
         
+        # OTIMIZAÇÃO 2: Processar projeções em paralelo para produtos únicos
+        inicio_projecoes = time.time()
+        
+        # Usar processamento paralelo para múltiplos produtos
+        if len(produtos_unicos) > 5:  # Vale a pena paralelizar com 5+ produtos
+            logger.info(f"🚀 Usando processamento paralelo para {len(produtos_unicos)} produtos")
+            projecoes_produtos = ServicoEstoqueSimples.calcular_multiplos_produtos(
+                produtos_unicos, 
+                dias=7
+            )
+        else:
+            # Poucos produtos, processar sequencialmente
+            projecoes_produtos = {}
+            for cod_produto in produtos_unicos:
+                projecoes_produtos[cod_produto] = ServicoEstoqueSimples.get_projecao_completa(
+                    cod_produto, 
+                    dias=7
+                )
+        
+        tempo_projecoes = (time.time() - inicio_projecoes) * 1000
+        logger.info(f"⏱️ Projeções calculadas em {tempo_projecoes:.2f}ms")
+        
         # Análise dos itens
         itens_com_ruptura = []
         itens_disponiveis_lista = []  # Lista dos itens SEM ruptura
@@ -84,11 +152,8 @@ def analisar_ruptura_pedido(num_pedido):
             valor_item = float(item.qtd_saldo_produto_pedido * (item.preco_produto_pedido or 0))
             valor_total_pedido += valor_item
             
-            # Usar EXATAMENTE o mesmo método que o workspace usa (QUE FUNCIONA!)
-            projecao = ServicoEstoqueSimples.get_projecao_completa(item.cod_produto, dias=7)
-            
-            # DEBUG: Log do tipo retornado
-            logger.debug(f"Produto {item.cod_produto}: projecao tipo={type(projecao)}, valor={projecao}")
+            # OTIMIZAÇÃO: Usar projeção já calculada (lookup O(1))
+            projecao = projecoes_produtos.get(item.cod_produto, {})
             
             # Se não tem projeção ou não é um dicionário, usar 0
             if not projecao or not isinstance(projecao, dict):
@@ -156,15 +221,30 @@ def analisar_ruptura_pedido(num_pedido):
                     'valor_total': valor_item
                 })
         
+        # Preparar resultado final
+        tempo_total = (time.time() - inicio_total) * 1000
+        
         # Se não há ruptura, pedido está OK
         if not itens_com_ruptura:
-            return jsonify({
+            resultado = {
                 'success': True,
                 'pedido_ok': True,
                 'percentual_disponibilidade': 100,
                 'data_disponibilidade_total': 'agora',
-                'message': 'Pedido OK - Todos os itens disponíveis'
-            })
+                'message': 'Pedido OK - Todos os itens disponíveis',
+                'performance_ms': tempo_total,
+                'produtos_unicos': len(produtos_unicos),
+                'total_itens': len(itens)
+            }
+            
+            # Salvar no cache Redis se disponível
+            if REDIS_DISPONIVEL:
+                redis_key = f"ruptura:pedido:{num_pedido}"
+                REDIS_CLIENT.setex(redis_key, REDIS_TTL, json.dumps(resultado))
+                logger.info(f"💾 Resultado salvo no cache Redis por {REDIS_TTL}s")
+            
+            logger.info(f"✅ Pedido {num_pedido} OK - Tempo: {tempo_total:.2f}ms")
+            return jsonify(resultado)
             
         # Calcular percentual de ruptura por VALOR
         percentual_ruptura = (valor_com_ruptura / valor_total_pedido * 100) if valor_total_pedido > 0 else 0
@@ -195,8 +275,8 @@ def analisar_ruptura_pedido(num_pedido):
             criticidade = 'MEDIA'
         else:
             criticidade = 'BAIXA'
-            
-        return jsonify({
+        
+        resultado = {
             'success': True,
             'pedido_ok': False,
             'percentual_disponibilidade': round(percentual_disponibilidade, 0),  # Percentual por VALOR disponível
@@ -216,8 +296,20 @@ def analisar_ruptura_pedido(num_pedido):
                 'data_disponibilidade_total': data_disponibilidade_total
             },
             'itens': itens_com_ruptura,
-            'itens_disponiveis': itens_disponiveis_lista  # Nova lista com itens disponíveis
-        })
+            'itens_disponiveis': itens_disponiveis_lista,  # Nova lista com itens disponíveis
+            'performance_ms': tempo_total,
+            'produtos_unicos': len(produtos_unicos),
+            'total_itens': len(itens)
+        }
+        
+        # Salvar no cache Redis se disponível
+        if REDIS_DISPONIVEL:
+            redis_key = f"ruptura:pedido:{num_pedido}"
+            REDIS_CLIENT.setex(redis_key, REDIS_TTL, json.dumps(resultado))
+            logger.info(f"💾 Resultado salvo no cache Redis por {REDIS_TTL}s")
+        
+        logger.info(f"⚠️ Pedido {num_pedido} com ruptura - Tempo: {tempo_total:.2f}ms")
+        return jsonify(resultado)
         
     except Exception as e:
         logger.error(f"Erro ao analisar ruptura do pedido {num_pedido}: {e}")
@@ -285,6 +377,68 @@ def atualizar_visual_pos_separacao():
         
     except Exception as e:
         logger.error(f"Erro ao atualizar visual pós-separação: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_bp.route('/api/ruptura/cache/status', methods=['GET'])
+def status_cache_ruptura():
+    """
+    Retorna status do cache Redis se disponível
+    """
+    try:
+        if not REDIS_DISPONIVEL:
+            return jsonify({
+                'success': True,
+                'redis_disponivel': False,
+                'message': 'Redis não está disponível'
+            })
+        
+        # Contar chaves de ruptura
+        keys = REDIS_CLIENT.keys("ruptura:pedido:*")
+        
+        return jsonify({
+            'success': True,
+            'redis_disponivel': True,
+            'pedidos_em_cache': len(keys),
+            'ttl_segundos': REDIS_TTL,
+            'redis_ping': REDIS_CLIENT.ping()
+        })
+    except Exception as e:
+        logger.error(f"Erro ao obter status do cache: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_bp.route('/api/ruptura/cache/limpar', methods=['POST'])
+def limpar_cache_ruptura():
+    """
+    Limpa cache Redis de análises de ruptura
+    """
+    try:
+        if not REDIS_DISPONIVEL:
+            return jsonify({
+                'success': False,
+                'message': 'Redis não está disponível'
+            })
+        
+        # Buscar e deletar todas as chaves de ruptura
+        keys = REDIS_CLIENT.keys("ruptura:pedido:*")
+        if keys:
+            REDIS_CLIENT.delete(*keys)
+            logger.info(f"Cache limpo: {len(keys)} pedidos removidos")
+        
+        return jsonify({
+            'success': True,
+            'pedidos_removidos': len(keys),
+            'message': f'Cache limpo com sucesso - {len(keys)} pedidos removidos'
+        })
+    except Exception as e:
+        logger.error(f"Erro ao limpar cache: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

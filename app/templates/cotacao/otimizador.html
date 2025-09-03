@@ -96,8 +96,8 @@
                             <td class="text-end">R$ {{ "%.0f"|format(pedido.valor_saldo_total) }}</td>
                             <td class="text-end">{{ "%.0f"|format(pedido.peso_total) }} kg</td>
                             <td>
-                                {% if pedido.id in otimizacoes.remover %}
-                                    {% set otimizacao = otimizacoes.remover[pedido.id] %}
+                                {% if pedido.separacao_lote_id in otimizacoes.remover %}
+                                    {% set otimizacao = otimizacoes.remover[pedido.separacao_lote_id] %}
                                     <div class="alert alert-info mb-0 py-2 px-3 shadow-sm">
                                         <div class="d-flex align-items-center">
                                             <i class="fas fa-chart-line me-2"></i>
@@ -145,7 +145,7 @@
                             <td>
                                 <form action="{{ url_for('cotacao.excluir_pedido') }}" method="POST" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                                    <input type="hidden" name="pedido_id" value="{{ pedido.separacao_lote_id }}">
                                     <button type="submit" class="btn btn-danger btn-sm">
                                         <i class="fas fa-minus-circle"></i> Excluir
                                     </button>
@@ -204,8 +204,8 @@
                             <td class="text-end">R$ {{ "%.0f"|format(pedido.valor_saldo_total) }}</td>
                             <td class="text-end">{{ "%.0f"|format(pedido.peso_total) }} kg</td>
                             <td>
-                                {% if pedido.id in otimizacoes.adicionar %}
-                                    {% set otimizacao = otimizacoes.adicionar[pedido.id] %}
+                                {% if pedido.separacao_lote_id in otimizacoes.adicionar %}
+                                    {% set otimizacao = otimizacoes.adicionar[pedido.separacao_lote_id] %}
                                     <div class="alert alert-success mb-0 py-2 px-3 shadow-sm">
                                         <div class="d-flex align-items-center">
                                             <i class="fas fa-chart-line me-2"></i>
@@ -255,7 +255,7 @@
                             <td>
                                 <form action="{{ url_for('cotacao.incluir_pedido') }}" method="POST" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                                    <input type="hidden" name="pedido_id" value="{{ pedido.separacao_lote_id }}">
                                     <button type="submit" class="btn btn-success btn-sm">
                                         <i class="fas fa-plus-circle"></i> Adicionar
                                     </button>

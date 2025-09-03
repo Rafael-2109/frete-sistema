@@ -151,7 +151,7 @@ class DashboardService:
             ).order_by(PlanoMestreProducao.qtd_reposicao_sugerida.desc()).limit(20).all()
             
             return [{
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'cod_produto': p.cod_produto,
                 'nome_produto': p.nome_produto,
                 'qtd_demanda_prevista': float(p.qtd_demanda_prevista or 0),

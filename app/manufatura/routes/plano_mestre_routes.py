@@ -72,7 +72,7 @@ def register_plano_mestre_routes(bp):
             planos = query.order_by(PlanoMestreProducao.cod_produto).all()
             
             return jsonify([{
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'mes': p.data_mes,
                 'ano': p.data_ano,
                 'cod_produto': p.cod_produto,

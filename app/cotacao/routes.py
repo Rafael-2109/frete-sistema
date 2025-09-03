@@ -191,7 +191,7 @@ def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, fr
     otimizacoes = {}
     
     # 1. Calcula frete SEM este pedido
-    pedidos_sem = [p for p in pedidos_atuais if p.id != pedido.id]
+    pedidos_sem = [p for p in pedidos_atuais if p.separacao_lote_id != pedido.separacao_lote_id]
     peso_sem = sum(p.peso_total or 0 for p in pedidos_sem)
     peso_total = sum(p.peso_total or 0 for p in pedidos_atuais)
     
@@ -248,19 +248,28 @@ def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, fr
 @login_required
 def iniciar_cotacao():
     """
-    Recebe via POST a lista de pedidos selecionados (pedido_ids).
-    Redireciona para a tela de cotação, guardando no 'session' 
-    ou em outro local a lista de IDs.
+    Recebe via POST a lista de pedidos selecionados.
+    IMPORTANTE: Agora recebe separacao_lote_id ao invés de pedido_id
     """
-    lista_ids_str = request.form.getlist("pedido_ids")
-    if not lista_ids_str:
+    # Tenta primeiro por separacao_lote_ids (novo padrão)
+    lista_lotes = request.form.getlist("separacao_lote_ids")
+    
+    # Fallback para pedido_ids (retrocompatibilidade)
+    if not lista_lotes:
+        lista_ids_str = request.form.getlist("pedido_ids")
+        if lista_ids_str:
+            # Se são IDs numéricos, buscar os lotes correspondentes
+            from app.pedidos.models import Pedido
+            pedidos = Pedido.query.filter(Pedido.num_pedido.in_(lista_ids_str)).all()
+            lista_lotes = [p.separacao_lote_id for p in pedidos if p.separacao_lote_id]
+    
+    if not lista_lotes:
         flash("Nenhum pedido selecionado!", "warning")
         return redirect(url_for("pedidos.lista_pedidos"))
 
-    lista_ids = [int(x) for x in lista_ids_str]
-
-    # Armazena no session para usar nas rotas subsequentes:
-    session["cotacao_pedidos"] = lista_ids
+    # Armazena no session como lotes
+    session["cotacao_lotes"] = lista_lotes
+    session["cotacao_pedidos"] = lista_lotes  # Manter para retrocompatibilidade
     
     # CORREÇÃO: Limpa informações de alteração de embarque se houver
     # Isso evita que uma alteração anterior não finalizada interfira em nova cotação
@@ -319,6 +328,12 @@ def tela_cotacao():
     # Verifica primeiro se há dados completos de alteração de embarque
     pedidos_data_sessao = session.get("cotacao_pedidos_data", None)
     
+    # Verifica se está alterando embarque (vindo da query string ou sessão)
+    alterando_embarque = alterando_embarque_id is not None or 'alterando_embarque' in session
+    
+    # Inicializar lista_lotes para evitar UnboundLocalError
+    lista_lotes = []
+    
     if pedidos_data_sessao and alterando_embarque:
         # Está alterando embarque - usar dados da sessão diretamente
         from datetime import datetime
@@ -327,14 +342,17 @@ def tela_cotacao():
         for p_data in pedidos_data_sessao:
             # Criar objeto compatível com Pedido
             pedido_obj = type('PedidoTemp', (), {
-                'id': p_data['id'],
-                'separacao_lote_id': p_data.get('separacao_lote_id'),
-                'num_pedido': p_data['num_pedido'],
+                'id': p_data.get('id', p_data.get('separacao_lote_id')),
+                'separacao_lote_id': p_data.get('separacao_lote_id', p_data.get('id')),
+                'num_pedido': p_data.get('num_pedido', ''),
                 'data_pedido': datetime.fromisoformat(p_data['data_pedido']) if p_data.get('data_pedido') else None,
-                'cnpj_cpf': p_data['cnpj_cpf'],
-                'raz_social_red': p_data['raz_social_red'],
-                'nome_cidade': p_data['nome_cidade'],
-                'cod_uf': p_data['cod_uf'],
+                'cnpj_cpf': p_data.get('cnpj_cpf', ''),
+                'raz_social_red': p_data.get('raz_social_red', ''),
+                'nome_cidade': p_data.get('nome_cidade', ''),
+                'cidade_normalizada': p_data.get('cidade_normalizada', p_data.get('nome_cidade', '')),
+                'uf_normalizada': p_data.get('uf_normalizada', p_data.get('cod_uf', '')),
+                'codigo_ibge': p_data.get('codigo_ibge', ''),
+                'cod_uf': p_data.get('cod_uf', ''),
                 'valor_saldo_total': p_data.get('valor_saldo_total', 0),
                 'pallet_total': p_data.get('pallet_total', 0),
                 'peso_total': p_data.get('peso_total', 0),
@@ -347,17 +365,27 @@ def tela_cotacao():
                 'cotacao_id': None
             })()
             pedidos.append(pedido_obj)
+            # Adicionar lote_id à lista para evitar erro
+            if p_data.get('separacao_lote_id'):
+                lista_lotes.append(p_data['separacao_lote_id'])
         print(f"[DEBUG] Pedidos carregados da sessão (alteração embarque): {len(pedidos)}")
     else:
         # Fluxo normal - buscar pedidos do banco
-        lista_ids = session.get("cotacao_pedidos", [])
-        if not lista_ids:
+        # Tentar primeiro por lotes (novo padrão)
+        lista_lotes = session.get("cotacao_lotes", [])
+        
+        # Fallback para IDs antigos
+        if not lista_lotes:
+            lista_lotes = session.get("cotacao_pedidos", [])
+        
+        if not lista_lotes:
             flash("Nenhum pedido na cotação!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
         
-        # Carrega os pedidos do banco
-        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
-        print(f"[DEBUG] Pedidos carregados do banco: {len(pedidos)}")
+        # Carrega os pedidos do banco usando separacao_lote_id
+        # Pedido é uma VIEW agregada, então busca por lote
+        pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_lotes)).all()
+        print(f"[DEBUG] Pedidos carregados do banco por lote: {len(pedidos)}")
     
     if not pedidos:
         flash("Nenhum pedido encontrado!", "warning")
@@ -386,8 +414,10 @@ def tela_cotacao():
     # Organiza pedidos por CNPJ e cria versões JSON
     for pedido in pedidos:
         # Cria dicionário com dados do pedido
+        # IMPORTANTE: Usar separacao_lote_id como identificador principal
         pedido_dict = {
-            'id': pedido.id,
+            'id': pedido.separacao_lote_id,  # Usar lote como ID principal
+            'separacao_lote_id': pedido.separacao_lote_id,
             'num_pedido': pedido.num_pedido,
             'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
             'cnpj_cpf': pedido.cnpj_cpf,
@@ -418,10 +448,11 @@ def tela_cotacao():
         uf_busca = list(ufs_normalizados)[0]
                 
         print(f"[DEBUG] Buscando pedidos com UF={uf_busca}")
+        # Usar lista_lotes ao invés de lista_ids
         pedidos_mesmo_estado = (Pedido.query
                                .filter(
                                    (Pedido.cod_uf == uf_busca))                                        
-                               .filter(~Pedido.id.in_(lista_ids))
+                               .filter(~Pedido.separacao_lote_id.in_(lista_lotes))
                                .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
                                .all())
         print(f"[DEBUG] Pedidos do mesmo estado encontrados: {len(pedidos_mesmo_estado)}")
@@ -429,7 +460,7 @@ def tela_cotacao():
         # Serializa pedidos_mesmo_estado
         for p in pedidos_mesmo_estado:
             pedidos_mesmo_estado_json.append({
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'num_pedido': p.num_pedido,
                 'data_pedido': p.data_pedido.strftime('%Y-%m-%d') if p.data_pedido else None,
                 'cnpj_cpf': p.cnpj_cpf,
@@ -891,7 +922,9 @@ def fechar_frete():
             # Para cotação normal, usa UF original dos pedidos
             uf_destino = None
             for pedido_data in pedidos_data:
-                pedido = Pedido.query.get(pedido_data.get('id'))
+                # Usa separacao_lote_id em vez de id
+                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido:
                     uf_destino = pedido.cod_uf
                     break
@@ -929,7 +962,9 @@ def fechar_frete():
         else:
             # Para cotação normal, busca ICMS da cidade original do primeiro pedido
             for pedido_data in pedidos_data:
-                pedido = Pedido.query.get(pedido_data.get('id'))
+                # Usa separacao_lote_id em vez de id
+                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido:
                     # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível para buscar ICMS
                     cidade_destino = None
@@ -1049,7 +1084,9 @@ def fechar_frete():
             
             # Atualiza Separacao COM ID DA COTAÇÃO VÁLIDO
             for pedido_data in pedidos_data:
-                pedido = Pedido.query.get(pedido_data.get('id'))
+                # Usa separacao_lote_id em vez de id
+                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido and pedido.separacao_lote_id:
                     # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
                     Separacao.query.filter_by(
@@ -1086,7 +1123,9 @@ def fechar_frete():
 
             # Atualiza Separacao COM ID DA COTAÇÃO VÁLIDO
             for pedido_data in pedidos_data:
-                pedido = Pedido.query.get(pedido_data.get('id'))
+                # Usa separacao_lote_id em vez de id
+                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido and pedido.separacao_lote_id:
                     # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
                     Separacao.query.filter_by(
@@ -1131,7 +1170,9 @@ def fechar_frete():
 
             # Cria EmbarqueItems apenas para criação nova
             for pedido_data in pedidos_data:
-                pedido = Pedido.query.get(pedido_data.get('id'))
+                # Usa separacao_lote_id em vez de id
+                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if not pedido:
                     continue
 
@@ -1273,7 +1314,8 @@ def fechar_frete_grupo():
         if not cnpjs:
             lista_ids = session.get("cotacao_pedidos", [])
             if lista_ids:
-                pedidos_sessao = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+                # Usar separacao_lote_id em vez de id (Pedido agora é VIEW)
+                pedidos_sessao = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
                 cnpjs = list(set(p.cnpj_cpf for p in pedidos_sessao))
 
         if not transportadora_id or not cnpjs:
@@ -1289,7 +1331,7 @@ def fechar_frete_grupo():
             lista_ids = session.get("cotacao_pedidos", [])
             pedidos_cnpj = Pedido.query.filter(
                 Pedido.cnpj_cpf == cnpj,
-                Pedido.id.in_(lista_ids)
+                Pedido.separacao_lote_id.in_(lista_ids)
             ).all()
             todos_pedidos.extend(pedidos_cnpj)
 
@@ -1503,7 +1545,7 @@ def otimizar():
             return redirect(url_for("cotacao.tela_cotacao"))
 
         # Carrega os pedidos do banco
-        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         if not pedidos:
             flash("Nenhum pedido encontrado!", "warning")
             return redirect(url_for("cotacao.tela_cotacao"))
@@ -1559,7 +1601,7 @@ def otimizar():
             
             query_redespacho = Pedido.query.filter(
                 (Pedido.cod_uf == 'SP') 
-            ).filter(~Pedido.id.in_(lista_ids)).filter(
+            ).filter(~Pedido.separacao_lote_id.in_(lista_ids)).filter(
                 Pedido.status == 'ABERTO'
             ).filter(
                 Pedido.rota != 'FOB'  # ✅ NOVO: Exclui FOB
@@ -1596,7 +1638,7 @@ def otimizar():
             if uf_principal:
                 query_normal = Pedido.query.filter(
                     (Pedido.cod_uf == uf_principal)
-                ).filter(~Pedido.id.in_(lista_ids)).filter(
+                ).filter(~Pedido.separacao_lote_id.in_(lista_ids)).filter(
                     Pedido.status == 'ABERTO'
                 ).filter(
                     Pedido.rota != 'FOB'  # ✅ NOVO: Exclui FOB
@@ -1667,12 +1709,12 @@ def otimizar():
                 pedido_calculo = pedidos_para_calculo[i]  # Usa pedido convertido se redespacho
                 resultado = calcular_otimizacoes_pedido(pedido_calculo, pedidos_para_calculo, modalidade, veiculos, frete_atual_kg)
                 if resultado:
-                    otimizacoes['remover'][pedido.id] = resultado
+                    otimizacoes['remover'][pedido.separacao_lote_id] = resultado
                     pass  # Otimização encontrada
                 else:
                     pass  # Nenhuma otimização encontrada
                     # Cria uma otimização básica para mostrar dados atuais
-                    otimizacoes['remover'][pedido.id] = {
+                    otimizacoes['remover'][pedido.separacao_lote_id] = {
                         'frete_kg_atual': frete_atual_kg,
                         'peso_pedido': pedido.peso_total or 0,
                         'sem_otimizacao': True,
@@ -1683,7 +1725,7 @@ def otimizar():
             except Exception as e:
                 print(f"[DEBUG] ❌ Erro ao calcular otimização para pedido {pedido.num_pedido}: {str(e)}")
                 # Cria uma otimização básica mesmo com erro
-                otimizacoes['remover'][pedido.id] = {
+                otimizacoes['remover'][pedido.separacao_lote_id] = {
                     'frete_kg_atual': frete_atual_kg,
                     'peso_pedido': pedido.peso_total or 0,
                     'erro': str(e),
@@ -1701,12 +1743,12 @@ def otimizar():
             try:
                 resultado = calcular_otimizacoes_pedido_adicional(pedido, pedidos_para_calculo, transportadora, modalidade, peso_total, veiculos, frete_atual_kg)
                 if resultado:
-                    otimizacoes['adicionar'][pedido.id] = resultado
+                    otimizacoes['adicionar'][pedido.separacao_lote_id] = resultado
                     pass  # Otimização encontrada  
                 else:
                     pass  # Nenhuma otimização encontrada
                     # Cria uma otimização básica para mostrar dados atuais
-                    otimizacoes['adicionar'][pedido.id] = {
+                    otimizacoes['adicionar'][pedido.separacao_lote_id] = {
                         'frete_kg_atual': frete_atual_kg,
                         'peso_pedido': pedido.peso_total or 0,
                         'sem_otimizacao': True,
@@ -1717,7 +1759,7 @@ def otimizar():
             except Exception as e:
                 print(f"[DEBUG] ❌ Erro ao calcular otimização para adicionar pedido {pedido.num_pedido}: {str(e)}")
                 # Cria uma otimização básica mesmo com erro
-                otimizacoes['adicionar'][pedido.id] = {
+                otimizacoes['adicionar'][pedido.separacao_lote_id] = {
                     'frete_kg_atual': frete_atual_kg,
                     'peso_pedido': pedido.peso_total or 0,
                     'erro': str(e),
@@ -2311,7 +2353,7 @@ def redespachar():
             return redirect(url_for("pedidos.lista_pedidos"))
 
         # Carrega os pedidos originais do banco
-        pedidos_originais = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        pedidos_originais = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         if not pedidos_originais:
             flash("Nenhum pedido encontrado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
@@ -2364,7 +2406,8 @@ def redespachar():
         # Organiza pedidos por CNPJ
         for i, pedido in enumerate(pedidos_redespacho):
             pedido_dict = {
-                'id': pedidos_originais[i].id,  # Mantém ID original para referências
+                'id': pedidos_originais[i].separacao_lote_id,  # Usar lote_id
+                'separacao_lote_id': pedidos_originais[i].separacao_lote_id,
                 'num_pedido': pedido.num_pedido,
                 'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
                 'cnpj_cpf': pedido.cnpj_cpf,
@@ -2492,7 +2535,7 @@ def redespachar():
         # ✅ BUSCA PEDIDOS DO MESMO UF (SP) PARA OTIMIZADOR
         pedidos_mesmo_uf = (Pedido.query
                            .filter(Pedido.cod_uf == 'SP')
-                           .filter(~Pedido.id.in_(lista_ids))
+                           .filter(~Pedido.separacao_lote_id.in_(lista_ids))
                            .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
                            .limit(200)  # ✅ Aumenta limite para mais otimizações
                            .all())
@@ -2501,7 +2544,7 @@ def redespachar():
         pedidos_mesmo_estado_json = []
         for p in pedidos_mesmo_uf:
             pedidos_mesmo_estado_json.append({
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'num_pedido': p.num_pedido,
                 'data_pedido': p.data_pedido.strftime('%Y-%m-%d') if p.data_pedido else None,
                 'cnpj_cpf': p.cnpj_cpf,
@@ -2559,7 +2602,7 @@ def redespachar_sao_paulo():
             return redirect(url_for("pedidos.lista_pedidos"))
 
         # Carrega os pedidos originais do banco
-        pedidos_originais = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        pedidos_originais = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         if not pedidos_originais:
             flash("Nenhum pedido encontrado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
@@ -2612,7 +2655,8 @@ def redespachar_sao_paulo():
         # Organiza pedidos por CNPJ
         for i, pedido in enumerate(pedidos_redespacho):
             pedido_dict = {
-                'id': pedidos_originais[i].id,  # Mantém ID original para referências
+                'id': pedidos_originais[i].separacao_lote_id,  # Usar lote_id
+                'separacao_lote_id': pedidos_originais[i].separacao_lote_id,
                 'num_pedido': pedido.num_pedido,
                 'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
                 'cnpj_cpf': pedido.cnpj_cpf,
@@ -2740,7 +2784,7 @@ def redespachar_sao_paulo():
         # ✅ BUSCA PEDIDOS DO MESMO UF (SP) PARA OTIMIZADOR
         pedidos_mesmo_uf = (Pedido.query
                            .filter(Pedido.cod_uf == 'SP')
-                           .filter(~Pedido.id.in_(lista_ids))
+                           .filter(~Pedido.separacao_lote_id.in_(lista_ids))
                            .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
                            .limit(200)  # ✅ Aumenta limite para mais otimizações
                            .all())
@@ -2749,7 +2793,7 @@ def redespachar_sao_paulo():
         pedidos_mesmo_estado_json = []
         for p in pedidos_mesmo_uf:
             pedidos_mesmo_estado_json.append({
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'num_pedido': p.num_pedido,
                 'data_pedido': p.data_pedido.strftime('%Y-%m-%d') if p.data_pedido else None,
                 'cnpj_cpf': p.cnpj_cpf,
@@ -2817,7 +2861,7 @@ def incluir_em_embarque():
     
     try:
         embarque = Embarque.query.get_or_404(embarque_id)
-        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         
         if not pedidos:
             flash("❌ Nenhum pedido encontrado!", "warning")

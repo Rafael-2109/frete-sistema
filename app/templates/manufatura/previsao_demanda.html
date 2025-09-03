@@ -251,9 +251,9 @@ function renderizarTabela() {
         tr.append('<td class="text-center">' + percentual + '%</td>');
         tr.append('<td class="text-center"><span class="badge ' + badgeDisparo + '">' + p.disparo_producao + '</span></td>');
         tr.append('<td class="text-center">' +
-            '<button class="btn btn-sm btn-info" onclick="editarPrevisao(' + p.id + ')">' +
+            '<button class="btn btn-sm btn-info" onclick="editarPrevisao(' + p.separacao_lote_id + ')">' +
             '<i class="fas fa-edit"></i></button> ' +
-            '<button class="btn btn-sm btn-danger" onclick="excluirPrevisao(' + p.id + ')">' +
+            '<button class="btn btn-sm btn-danger" onclick="excluirPrevisao(' + p.separacao_lote_id + ')">' +
             '<i class="fas fa-trash"></i></button>' +
             '</td>');
         tbody.append(tr);

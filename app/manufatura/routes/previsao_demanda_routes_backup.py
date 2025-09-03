@@ -32,7 +32,7 @@ def register_previsao_demanda_routes(bp):
             previsoes = query.order_by(PrevisaoDemanda.data_mes, PrevisaoDemanda.cod_produto).all()
             
             return jsonify([{
-                'id': p.id,
+                'id': p.separacao_lote_id,
                 'mes': p.data_mes,
                 'ano': p.data_ano,
                 'nome_grupo': p.nome_grupo,

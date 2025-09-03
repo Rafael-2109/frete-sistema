@@ -307,7 +307,7 @@
       <tbody>
         {% for p in pedidos %}
         <tr>
-          <td>{{ p.id }}</td>
+          <td>{{ p.separacao_lote_id }}</td>
           <td>{{ p.num_pedido }}</td>
           <td>
             {% if p.data_pedido %}
@@ -412,7 +412,7 @@
                   </button>
                 {% endif %}
                 <button type="button" class="btn btn-danger btn-sm" 
-                        onclick="excluirSeparacao({{ p.id }})"
+                        onclick="excluirSeparacao({{ p.separacao_lote_id }})"
                         title="Excluir esta separação">
                   <i class="fas fa-trash"></i>
                 </button>

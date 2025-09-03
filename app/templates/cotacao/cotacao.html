@@ -565,12 +565,12 @@ $(document).ready(function() {
     
     // Adiciona os pedidos à lista
     pedidosDesteCnpj.forEach(pedido => {
-      if (!pedidosSelecionados.find(p => p.id === pedido.id)) {
+      if (!pedidosSelecionados.find(p => p.separacao_lote_id === pedido.separacao_lote_id)) {
         pedidosSelecionados.push(pedido);
         
         // Adiciona a linha na tabela
         $('#listaPedidosSelecionados').append(`
-          <tr data-pedido-id="${pedido.id}" data-cnpj="${cnpj}">
+          <tr data-pedido-id="${pedido.separacao_lote_id}" data-cnpj="${cnpj}">
             <td>${cnpj}</td>
             <td>${pedido.raz_social_red}</td>
             <td>${pedido.nome_cidade}/${pedido.cod_uf}</td>
@@ -601,7 +601,7 @@ $(document).ready(function() {
     console.log('[DEBUG] Removendo pedido ID:', pedidoId, 'CNPJ:', cnpj);
     
     // Remove o pedido da lista
-    pedidosSelecionados = pedidosSelecionados.filter(p => p.id !== pedidoId);
+    pedidosSelecionados = pedidosSelecionados.filter(p => p.separacao_lote_id !== pedidoId);
     
     // Remove a linha da tabela
     $row.remove();
@@ -627,7 +627,7 @@ $(document).ready(function() {
       transportadora_id: transportadoraSelecionada,
       pedidos: pedidosSelecionados.map(function(pedido) {
         return {
-          id: pedido.id,
+          id: pedido.separacao_lote_id,
           cnpj: pedido.cnpj_cpf,
           valor: pedido.valor_saldo_total,
           peso: pedido.peso_total
@@ -690,7 +690,7 @@ $(document).ready(function() {
       indice_original: indiceOriginal,
       pedidos: {{ pedidos_selecionados|tojson|safe }}.map(function(pedido) {
         return {
-          id: pedido.id,
+          id: pedido.separacao_lote_id,
           cnpj: pedido.cnpj_cpf,
           valor: pedido.valor_saldo_total,
           peso: pedido.peso_total

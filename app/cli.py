@@ -85,7 +85,7 @@ def validar_localizacao():
     cidades_sem_ibge = db.session.query(
         Pedido.cidade_normalizada,
         Pedido.uf_normalizada,
-        func.count(Pedido.id).label('count')
+        func.count(Pedido.separacao_lote_id).label('count')
     ).filter(
         (Pedido.codigo_ibge.is_(None)) | (Pedido.codigo_ibge == ''),
         Pedido.cidade_normalizada.isnot(None)
@@ -93,7 +93,7 @@ def validar_localizacao():
         Pedido.cidade_normalizada,
         Pedido.uf_normalizada
     ).order_by(
-        func.count(Pedido.id).desc()
+        func.count(Pedido.separacao_lote_id).desc()
     ).limit(5).all()
     
     if cidades_sem_ibge:
