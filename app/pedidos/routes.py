@@ -634,7 +634,8 @@ def reset_status_pedido(pedido_id):
                 separacao_lote_id=pedido.separacao_lote_id
             ).update({
                 'numero_nf': None,
-                'nf_cd': False
+                'nf_cd': False,
+                'sincronizado_nf': False
             })
         
         # PASSO 2: Buscar em EmbarqueItem
@@ -672,7 +673,8 @@ def reset_status_pedido(pedido_id):
                 if pedido.separacao_lote_id:
                     Separacao.query.filter_by(
                         separacao_lote_id=pedido.separacao_lote_id
-                    ).update({'status': 'FATURADO'})
+                    ).update({'status': 'FATURADO',
+                    'sincronizado_nf': True})
             else:
                 # CASO 2-B: NF não existe no faturamento (mas existe no embarque)
                 if pedido.separacao_lote_id:
