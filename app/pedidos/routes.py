@@ -522,37 +522,38 @@ def editar_pedido(pedido_id):
                 'agendamento_confirmado': pedido.agendamento_confirmado
             }
             
-            # ✅ ATUALIZA OS CAMPOS DO PEDIDO (incluindo agendamento_confirmado)
-            pedido.expedicao = form.expedicao.data
-            pedido.agendamento = form.agendamento.data
-            pedido.protocolo = form.protocolo.data
-            pedido.agendamento_confirmado = form.agendamento_confirmado.data
+            # ✅ CORRIGIDO: Atualiza APENAS Separacao (Pedido é VIEW, não pode receber UPDATE)
+            # NOTA: NÃO atualizar diretamente o pedido, ele é uma VIEW!
+            # pedido.expedicao = form.expedicao.data  ❌ ERRO - Pedido é VIEW
             
-            # ✅ SINCRONIZA COM SEPARAÇÃO
-            # Busca todas as separações relacionadas ao pedido através do lote
-            separacoes_relacionadas = []
+            # ✅ ATUALIZA DIRETAMENTE NA TABELA SEPARACAO
+            separacoes_atualizadas = 0
             if pedido.separacao_lote_id:
-                separacoes_relacionadas = Separacao.query.filter_by(
+                # Atualiza todas as separações com este lote
+                result = Separacao.query.filter_by(
                     separacao_lote_id=pedido.separacao_lote_id
-                ).all()
+                ).update({
+                    'expedicao': form.expedicao.data,
+                    'agendamento': form.agendamento.data,
+                    'protocolo': form.protocolo.data,
+                    'agendamento_confirmado': form.agendamento_confirmado.data
+                })
+                separacoes_atualizadas = result
             
             # Se não encontrou por lote, busca por chave composta
-            if not separacoes_relacionadas:
-                separacoes_relacionadas = Separacao.query.filter_by(
+            if separacoes_atualizadas == 0:
+                result = Separacao.query.filter_by(
                     num_pedido=pedido.num_pedido,
                     expedicao=valores_originais['expedicao'],
                     agendamento=valores_originais['agendamento'],
                     protocolo=valores_originais['protocolo']
-                ).all()
-            
-            # Atualiza as separações encontradas (incluindo agendamento_confirmado)
-            separacoes_atualizadas = 0
-            for separacao in separacoes_relacionadas:
-                separacao.expedicao = form.expedicao.data
-                separacao.agendamento = form.agendamento.data
-                separacao.protocolo = form.protocolo.data
-                separacao.agendamento_confirmado = form.agendamento_confirmado.data
-                separacoes_atualizadas += 1
+                ).update({
+                    'expedicao': form.expedicao.data,
+                    'agendamento': form.agendamento.data,
+                    'protocolo': form.protocolo.data,
+                    'agendamento_confirmado': form.agendamento_confirmado.data
+                })
+                separacoes_atualizadas = result
             
             # ✅ COMMIT das alterações
             db.session.commit()
@@ -1066,12 +1067,10 @@ def cotacao_manual():
             flash("Nenhum pedido encontrado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
 
-        # ✅ NOVO: Normaliza dados dos pedidos para mostrar nomes corretos das cidades
-        for pedido in pedidos:
-            LocalizacaoService.normalizar_dados_pedido(pedido)
-        
-        # Commit para salvar normalizações
-        db.session.commit()
+        # ✅ CORRIGIDO: Não usa LocalizacaoService.normalizar_dados_pedido pois Pedido é VIEW
+        # A normalização já deve estar presente na VIEW ou será feita em memória se necessário
+        # NOTA: Pedido é uma VIEW, dados de normalização já devem vir da Separacao
+        # Se precisar normalizar, fazer diretamente na Separacao usando separacao_lote_id
 
         # Carrega transportadoras e veículos para os formulários
         transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
@@ -1125,12 +1124,8 @@ def processar_cotacao_manual():
             flash("Dados não encontrados!", "error")
             return redirect(url_for("pedidos.cotacao_manual"))
 
-        # ✅ NOVO: Normaliza dados dos pedidos usando LocalizacaoService (igual ao "Cotar Frete")
-        for pedido in pedidos:
-            LocalizacaoService.normalizar_dados_pedido(pedido)
-        
-        # Commit para salvar normalizações
-        db.session.commit()
+        # ✅ CORRIGIDO: Não usa LocalizacaoService.normalizar_dados_pedido pois Pedido é VIEW
+        # A normalização já deve estar presente na VIEW ou será feita em memória se necessário
 
         # Importa as classes necessárias
         from app.embarques.models import Embarque, EmbarqueItem
@@ -1292,12 +1287,8 @@ def embarque_fob():
 
         # ✅ TODOS SÃO FOB: Procede com criação do embarque
 
-        # Normaliza dados dos pedidos para usar nomes corretos das cidades
-        for pedido in pedidos:
-            LocalizacaoService.normalizar_dados_pedido(pedido)
-        
-        # Commit para salvar normalizações
-        db.session.commit()
+        # ✅ CORRIGIDO: Não usa LocalizacaoService.normalizar_dados_pedido pois Pedido é VIEW
+        # A normalização já deve estar presente na VIEW ou será feita em memória se necessário
 
         # Busca ou cria a transportadora "FOB - COLETA"
         from app.transportadoras.models import Transportadora

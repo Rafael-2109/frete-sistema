@@ -944,3 +944,40 @@
                 </div>
             </div>
         </div>
+
+from app import create_app, db
+from sqlalchemy import text
+
+app = create_app()
+
+with app.app_context():
+    # Verificar RULES existentes
+    result = db.session.execute(text("""
+        SELECT r.rulename 
+        FROM pg_rewrite r
+        JOIN pg_class c ON r.ev_class = c.oid
+        WHERE c.relname = 'pedidos'
+        ORDER BY r.rulename
+    """)).fetchall()
+
+print(f"\nRULES encontradas: {len(result)}")
+for rule in result:
+    print(f"  - {rule[0]}")
+
+# Verificar se a RULE de normalização existe
+tem_normalizacao = any('normalizacao' in r[0] for r in result)
+
+if not tem_normalizacao:
+    print("\n❌ FALTA A RULE pedidos_update_normalizacao")
+    print("Execute o script sql_criar_view_pedidos_final.sql")
+else:
+    print("\n✅ RULE de normalização existe")
+
+# Verificar se a RULE de normalização existe
+tem_normalizacao = any('normalizacao' in r[0] for r in result)
+
+if not tem_normalizacao:
+    print("\n❌ FALTA A RULE pedidos_update_normalizacao")
+    print("Execute o script sql_criar_view_pedidos_final.sql")
+else:
+    print("\n✅ RULE de normalização existe")

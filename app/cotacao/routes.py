@@ -37,9 +37,6 @@ except ImportError:
 
 cotacao_bp = Blueprint("cotacao", __name__, url_prefix="/cotacao")
 
-# LocalizacaoService usa métodos estáticos, não precisa ser instanciado
-
-
 def formatar_protocolo(protocolo):
     """
     Formata protocolo removendo .0 se for número
@@ -143,9 +140,6 @@ def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora
     
     # Recalcula frete com este pedido usando simulador
     try:
-        # Normaliza dados dos pedidos
-        for p in pedidos_com:
-            LocalizacaoService.normalizar_dados_pedido(p)
         
         # ✅ LÓGICA TABELA MAIS CARA: Calcula com pior cenário
         resultados = calcular_frete_otimizacao_conservadora(pedidos_com)
@@ -207,9 +201,6 @@ def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, fr
     
     # Recalcula frete sem este pedido usando simulador
     try:
-        # Normaliza dados dos pedidos
-        for p in pedidos_sem:
-            LocalizacaoService.normalizar_dados_pedido(p)
         
         # ✅ LÓGICA TABELA MAIS CARA: Calcula com pior cenário
         resultados = calcular_frete_otimizacao_conservadora(pedidos_sem)
@@ -422,10 +413,6 @@ def tela_cotacao():
     if pedidos:
         try:
             print("[DEBUG] Iniciando cálculo de fretes...")
-            
-            # Normaliza dados dos pedidos usando LocalizacaoService
-            for pedido in pedidos:
-                LocalizacaoService.normalizar_dados_pedido(pedido)
             
             # Usa a função existente do simulador
             resultados = calcular_frete_por_cnpj(pedidos)
@@ -1601,9 +1588,6 @@ def otimizar():
                 pedido_copia.nome_cidade = 'Guarulhos'
                 pedido_copia.rota = 'CIF'  # Força para não ser RED
                 
-                # Normaliza dados do pedido convertido
-                LocalizacaoService.normalizar_dados_pedido(pedido_copia)
-                
                 pedidos_para_calculo.append(pedido_copia)
                 print(f"[DEBUG] 📍 Convertido: {pedido_original.num_pedido} → Guarulhos/SP")
         
@@ -2029,9 +2013,6 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         # REGRA 1 e 2: Normalização e validação de UF
         print("[DEBUG] 🎯 OTIMIZAÇÃO CONSERVADORA: Iniciando...")
         
-        for pedido in pedidos:
-            LocalizacaoService.normalizar_dados_pedido(pedido)
-        
         # Verifica se todos são do mesmo UF
         ufs_encontrados = set(pedido.cod_uf for pedido in pedidos)
         
@@ -2300,10 +2281,6 @@ def redespachar():
             
             pedidos_redespacho.append(pedido_copia)
 
-        # ✅ NORMALIZA OS DADOS DOS PEDIDOS ALTERADOS
-        for pedido in pedidos_redespacho:
-            LocalizacaoService.normalizar_dados_pedido(pedido)
-
         # ✅ CALCULA FRETES COM OS DADOS ALTERADOS
         print("[DEBUG] 🚛 Calculando fretes para redespacho (SP/Guarulhos)...")
         resultados = calcular_frete_por_cnpj(pedidos_redespacho)
@@ -2551,10 +2528,6 @@ def redespachar_sao_paulo():
             print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → SÃO PAULO/SP")
             
             pedidos_redespacho.append(pedido_copia)
-
-        # ✅ NORMALIZA OS DADOS DOS PEDIDOS ALTERADOS
-        for pedido in pedidos_redespacho:
-            LocalizacaoService.normalizar_dados_pedido(pedido)
 
         # ✅ CALCULA FRETES COM OS DADOS ALTERADOS
         print("[DEBUG] 🚛 Calculando fretes para redespacho (SP/São Paulo)...")

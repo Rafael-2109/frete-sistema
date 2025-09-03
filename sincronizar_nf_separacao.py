@@ -49,10 +49,8 @@ def sincronizar_nf_separacao(verbose=True, dry_run=False):
             total_separacoes = 0
             separacoes_com_nf = 0
             nfs_encontradas = 0
-            cnpjs_correspondentes = 0
             sincronizadas = 0
             ja_sincronizadas = 0
-            erros_cnpj = 0
             
             # 1. Busca todas as separações com numero_nf preenchido e não sincronizadas
             print("\n1. Buscando separações com NF não sincronizadas...")
@@ -81,39 +79,25 @@ def sincronizar_nf_separacao(verbose=True, dry_run=False):
                     print(f"   Processando {i}/{separacoes_com_nf}...")
                 
                 # Busca no RelatorioFaturamentoImportado
+                # NOVA LÓGICA: Busca por numero_nf E origem (num_pedido)
                 relatorio = RelatorioFaturamentoImportado.query.filter_by(
                     numero_nf=separacao.numero_nf,
-                    ativo=True  # Apenas registros ativos
+                    origem=separacao.num_pedido  # Compara origem com num_pedido
                 ).first()
                 
                 if relatorio:
                     nfs_encontradas += 1
                     
-                    # Verifica se o CNPJ corresponde
-                    # Remove formatação do CNPJ para comparação
-                    cnpj_separacao = (separacao.cnpj_cpf or '').replace('.', '').replace('-', '').replace('/', '').strip()
-                    cnpj_relatorio = (relatorio.cnpj_cliente or '').replace('.', '').replace('-', '').replace('/', '').strip()
+                    # Marca como sincronizado (sem validar CNPJ ou ativo)
+                    if not dry_run:
+                        separacao.sincronizado_nf = True
+                        separacao.data_sincronizacao = datetime.now()
                     
-                    if cnpj_separacao == cnpj_relatorio:
-                        cnpjs_correspondentes += 1
-                        
-                        # Marca como sincronizado
-                        if not dry_run:
-                            separacao.sincronizado_nf = True
-                            separacao.data_sincronizacao = datetime.now()
-                        
-                        sincronizadas += 1
-                        
-                        if verbose and sincronizadas <= 10:  # Mostra apenas os primeiros 10
-                            print(f"   ✅ Sincronizado: Pedido {separacao.num_pedido} | "
-                                  f"NF {separacao.numero_nf} | "
-                                  f"CNPJ {cnpj_separacao[:8]}...")
-                    else:
-                        erros_cnpj += 1
-                        if verbose and erros_cnpj <= 5:  # Mostra apenas os primeiros 5 erros
-                            print(f"   ⚠️ CNPJ divergente: NF {separacao.numero_nf}")
-                            print(f"      Separação: {cnpj_separacao}")
-                            print(f"      Relatório: {cnpj_relatorio}")
+                    sincronizadas += 1
+                    
+                    if verbose and sincronizadas <= 10:  # Mostra apenas os primeiros 10
+                        print(f"   ✅ Sincronizado: Pedido {separacao.num_pedido} | "
+                              f"NF {separacao.numero_nf}")
             
             # 3. Verifica separações já sincronizadas para estatística
             print("\n3. Verificando separações já sincronizadas...")
@@ -137,11 +121,9 @@ def sincronizar_nf_separacao(verbose=True, dry_run=False):
             print("RELATÓRIO FINAL")
             print("=" * 70)
             print(f"Separações processadas:        {total_separacoes:,}")
-            print(f"NFs encontradas no relatório:  {nfs_encontradas:,}")
-            print(f"CNPJs correspondentes:         {cnpjs_correspondentes:,}")
+            print(f"NFs encontradas (NF+Pedido):   {nfs_encontradas:,}")
             print(f"Separações sincronizadas:      {sincronizadas:,}")
             print(f"Já sincronizadas previamente:  {ja_sincronizadas:,}")
-            print(f"CNPJs divergentes:             {erros_cnpj:,}")
             print(f"NFs não encontradas:           {total_separacoes - nfs_encontradas:,}")
             
             # Taxa de sucesso

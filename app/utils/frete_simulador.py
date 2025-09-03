@@ -317,27 +317,51 @@ def normalizar_dados_pedido(pedido):
     2. Se cidade SP -> SAO PAULO/SP
     3. Se cidade RJ -> RIO DE JANEIRO/RJ
     4. Outros casos -> Remove acentos e converte para maiúsculo
+    ✅ CORRIGIDO: Atualiza Separacao em vez de Pedido (que é VIEW)
     """
     
     if not pedido:
         return
     
+    # Determina valores normalizados
+    uf_normalizada = None
+    cidade_normalizada = None
+    
     # Normaliza UF
     if pedido.cod_uf:
-        pedido.uf_normalizada = pedido.cod_uf.strip().upper()
+        uf_normalizada = pedido.cod_uf.strip().upper()
     
     # Se for FOB, mantém os dados originais
     if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'FOB':
-        pedido.cidade_normalizada = pedido.nome_cidade
-        return
+        cidade_normalizada = pedido.nome_cidade
+    else:
+        # Normaliza cidade usando a função unificada
+        if pedido.nome_cidade:
+            cidade_normalizada = normalizar_nome_cidade(
+                pedido.nome_cidade,
+                getattr(pedido, 'rota', None)
+            )
     
+    # ✅ CORRIGIDO: Atualiza diretamente na tabela Separacao se tiver separacao_lote_id
+    if hasattr(pedido, 'separacao_lote_id') and pedido.separacao_lote_id:
+        from app.separacao.models import Separacao
+        from app import db
+        
+        update_data = {}
+        if uf_normalizada is not None:
+            update_data['uf_normalizada'] = uf_normalizada
+        if cidade_normalizada is not None:
+            update_data['cidade_normalizada'] = cidade_normalizada
+        
+        if update_data:
+            Separacao.query.filter_by(
+                separacao_lote_id=pedido.separacao_lote_id
+            ).update(update_data)
+            db.session.commit()
     
-    # Normaliza cidade usando a função unificada
-    if pedido.nome_cidade:
-        pedido.cidade_normalizada = normalizar_nome_cidade(
-            pedido.nome_cidade,
-            getattr(pedido, 'rota', None)
-        )
+    # ✅ IMPORTANTE: NÃO atribuir diretamente ao pedido para evitar UPDATE na VIEW
+    # Os valores já foram salvos na tabela Separacao acima
+    # Se precisar usar os valores normalizados, leia direto dos atributos ou use getattr
 
 
 def calcular_frete_por_cnpj(pedidos, veiculo_forcado=None):
@@ -517,12 +541,32 @@ def buscar_cidade_unificada(pedido=None, cidade=None, uf=None, rota=None):
     
     # Se recebeu pedido, extrai os dados dele
     if pedido:
+        # ✅ CORRIGIDO: Busca valores normalizados da Separacao se necessário
         if not hasattr(pedido, 'cidade_normalizada') or not pedido.cidade_normalizada:
+            # Normaliza dados salvando na Separacao (sem commit extra)
             normalizar_dados_pedido(pedido)
-            db.session.commit()
+            
+            # Busca os valores recém-salvos da Separacao
+            if hasattr(pedido, 'separacao_lote_id') and pedido.separacao_lote_id:
+                from app.separacao.models import Separacao
+                sep = Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).first()
+                if sep:
+                    cidade = sep.cidade_normalizada
+                    uf = sep.uf_normalizada
+                else:
+                    # Fallback para valores originais
+                    cidade = pedido.nome_cidade
+                    uf = pedido.cod_uf
+            else:
+                # Fallback para valores originais
+                cidade = pedido.nome_cidade
+                uf = pedido.cod_uf
+        else:
+            cidade = pedido.cidade_normalizada
+            uf = pedido.uf_normalizada
         
-        cidade = pedido.cidade_normalizada
-        uf = pedido.uf_normalizada
         rota = pedido.rota if hasattr(pedido, 'rota') else None
     
     # Valida parâmetros

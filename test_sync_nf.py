@@ -31,12 +31,12 @@ with app.app_context():
         Separacao.sincronizado_nf == True
     ).count()
     
-    total_rel = RelatorioFaturamentoImportado.query.filter_by(ativo=True).count()
+    total_rel = RelatorioFaturamentoImportado.query.count()
     
     print(f"Separações com NF: {total_sep}")
     print(f"  - Sincronizadas: {sync}")
     print(f"  - Não sincronizadas: {nao_sync}")
-    print(f"Relatórios de faturamento ativos: {total_rel}")
+    print(f"Relatórios de faturamento total: {total_rel}")
     
     # Testa com 1 registro
     if nao_sync > 0:
@@ -51,21 +51,15 @@ with app.app_context():
         print(f"  NF: {sep.numero_nf}")
         print(f"  CNPJ: {sep.cnpj_cpf}")
         
+        # NOVA LÓGICA: Busca por numero_nf E origem (num_pedido)
         rel = RelatorioFaturamentoImportado.query.filter_by(
             numero_nf=sep.numero_nf,
-            ativo=True
+            origem=sep.num_pedido  # Compara origem com num_pedido
         ).first()
         
         if rel:
-            print(f"  ✓ NF encontrada no relatório")
-            print(f"    CNPJ relatório: {rel.cnpj_cliente}")
-            
-            cnpj_sep = (sep.cnpj_cpf or '').replace('.','').replace('-','').replace('/','').strip()
-            cnpj_rel = (rel.cnpj_cliente or '').replace('.','').replace('-','').replace('/','').strip()
-            
-            if cnpj_sep == cnpj_rel:
-                print(f"  ✓ CNPJ corresponde! Seria marcado como sincronizado.")
-            else:
-                print(f"  ✗ CNPJ divergente")
+            print(f"  ✓ NF encontrada no relatório com origem correspondente")
+            print(f"    Origem no relatório: {rel.origem}")
+            print(f"    Será marcado como sincronizado!")
         else:
             print(f"  ✗ NF não encontrada no relatório")

@@ -265,6 +265,7 @@ class LocalizacaoService:
         """
         Normaliza os dados de localização de um pedido.
         Aplica todas as regras de negócio e tenta encontrar o código IBGE.
+        ✅ CORRIGIDO: Atualiza Separacao em vez de Pedido (que é VIEW)
         """
         if not pedido:
             return False
@@ -274,50 +275,88 @@ class LocalizacaoService:
             nome_original = getattr(pedido, 'nome_cidade', None)
             uf_original = getattr(pedido, 'cod_uf', None)
             rota = getattr(pedido, 'rota', None)
+            separacao_lote_id = getattr(pedido, 'separacao_lote_id', None)
             
             logger.debug(f"Normalizando pedido {getattr(pedido, 'num_pedido', 'N/A')}: {nome_original}/{uf_original} (rota: {rota})")
+            
+            # Determina os valores normalizados
+            cidade_normalizada = None
+            uf_normalizada = None
+            codigo_ibge = None
             
             # Aplica regras de normalização
             if rota and rota.upper() == 'FOB':
                 # Para FOB, mantém dados originais
-                pedido.cidade_normalizada = nome_original
-                pedido.uf_normalizada = uf_original
+                cidade_normalizada = nome_original
+                uf_normalizada = uf_original
             elif rota and rota.upper() == 'RED':
                 # Para RED, força GUARULHOS/SP
-                pedido.cidade_normalizada = 'Guarulhos'
-                pedido.uf_normalizada = 'SP'
+                cidade_normalizada = 'Guarulhos'
+                uf_normalizada = 'SP'
             else:
                 # Para outros casos, aplica normalização
-                pedido.cidade_normalizada = LocalizacaoService.normalizar_nome_cidade_com_regras(nome_original, rota)
-                pedido.uf_normalizada = LocalizacaoService.normalizar_uf_com_regras(uf_original, nome_original, rota)
+                cidade_normalizada = LocalizacaoService.normalizar_nome_cidade_com_regras(nome_original, rota)
+                uf_normalizada = LocalizacaoService.normalizar_uf_com_regras(uf_original, nome_original, rota)
             
-            # Tenta encontrar e salvar o código IBGE se ainda não tem
+            # Tenta encontrar o código IBGE se ainda não tem
             if not getattr(pedido, 'codigo_ibge', None):
                 cidade = LocalizacaoService.buscar_cidade_unificada(
-                    nome=pedido.cidade_normalizada,
-                    uf=pedido.uf_normalizada,
+                    nome=cidade_normalizada,
+                    uf=uf_normalizada,
                     rota=rota
                 )
                 
                 if cidade:
                     try:
                         # ✅ CARREGA DADOS DA CIDADE IMEDIATAMENTE PARA EVITAR PROBLEMAS DE SESSÃO
-                        codigo_ibge = cidade.codigo_ibge
-                        if codigo_ibge:
-                            pedido.codigo_ibge = codigo_ibge
-                            logger.debug(f"✅ Código IBGE {codigo_ibge} salvo no pedido")
+                        codigo_ibge_temp = cidade.codigo_ibge
+                        if codigo_ibge_temp:
+                            codigo_ibge = codigo_ibge_temp
+                            logger.debug(f"✅ Código IBGE {codigo_ibge} encontrado")
                     except Exception as e:
                         logger.warning(f"Erro ao acessar código IBGE da cidade: {e}")
                         # Tenta recarregar a cidade na sessão atual
                         try:
                             cidade_recarregada = db.session.merge(cidade)
                             if cidade_recarregada and cidade_recarregada.codigo_ibge:
-                                pedido.codigo_ibge = cidade_recarregada.codigo_ibge
-                                logger.debug(f"✅ Código IBGE {cidade_recarregada.codigo_ibge} salvo após recarregar")
+                                codigo_ibge = cidade_recarregada.codigo_ibge
+                                logger.debug(f"✅ Código IBGE {codigo_ibge} obtido após recarregar")
                         except Exception as e2:
                             logger.warning(f"Erro ao recarregar cidade: {e2}")
             
-            logger.debug(f"Dados normalizados: {pedido.cidade_normalizada}/{pedido.uf_normalizada} (IBGE: {getattr(pedido, 'codigo_ibge', 'N/A')})")
+            # ✅ CORRIGIDO: Atualiza diretamente na tabela Separacao
+            if separacao_lote_id:
+                from app.separacao.models import Separacao
+                
+                # Prepara dados para atualização
+                update_data = {}
+                if cidade_normalizada is not None:
+                    update_data['cidade_normalizada'] = cidade_normalizada
+                if uf_normalizada is not None:
+                    update_data['uf_normalizada'] = uf_normalizada
+                if codigo_ibge is not None:
+                    update_data['codigo_ibge'] = codigo_ibge
+                
+                # Atualiza Separacao se houver dados
+                if update_data:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=separacao_lote_id
+                    ).update(update_data)
+                    
+                    # Commit das alterações
+                    db.session.commit()
+                    logger.debug(f"✅ Dados normalizados salvos em Separacao: {cidade_normalizada}/{uf_normalizada} (IBGE: {codigo_ibge})")
+            else:
+                logger.warning(f"Pedido sem separacao_lote_id, não foi possível atualizar Separacao")
+            
+            # Atualiza os atributos do objeto pedido em memória (sem persistir)
+            # para que o resto do código possa usar os valores normalizados
+            pedido.cidade_normalizada = cidade_normalizada
+            pedido.uf_normalizada = uf_normalizada
+            if codigo_ibge:
+                pedido.codigo_ibge = codigo_ibge
+            
+            logger.debug(f"Dados em memória: {pedido.cidade_normalizada}/{pedido.uf_normalizada} (IBGE: {getattr(pedido, 'codigo_ibge', 'N/A')})")
             return True
             
         except Exception as e:

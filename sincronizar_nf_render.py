@@ -27,33 +27,29 @@ with app.app_context():
     print(f"Separações para verificar: {len(separacoes)}")
     
     sincronizadas = 0
-    erros = 0
+    nao_encontradas = 0
     
     for sep in separacoes:
-        # Busca no RelatorioFaturamentoImportado
+        # NOVA LÓGICA: Busca por numero_nf E origem (num_pedido)
         rel = RelatorioFaturamentoImportado.query.filter_by(
             numero_nf=sep.numero_nf,
-            ativo=True
+            origem=sep.num_pedido  # Compara origem com num_pedido
         ).first()
         
         if rel:
-            # Limpa CNPJs para comparação
-            cnpj_sep = (sep.cnpj_cpf or '').replace('.','').replace('-','').replace('/','').strip()
-            cnpj_rel = (rel.cnpj_cliente or '').replace('.','').replace('-','').replace('/','').strip()
-            
-            if cnpj_sep == cnpj_rel:
-                sep.sincronizado_nf = True
-                sep.data_sincronizacao = datetime.now()
-                sincronizadas += 1
-                print(f"✅ {sep.num_pedido} | NF {sep.numero_nf}")
-            else:
-                erros += 1
+            # Marca como sincronizado (sem validar CNPJ ou ativo)
+            sep.sincronizado_nf = True
+            sep.data_sincronizacao = datetime.now()
+            sincronizadas += 1
+            print(f"✅ Pedido {sep.num_pedido} | NF {sep.numero_nf}")
+        else:
+            nao_encontradas += 1
     
     if sincronizadas > 0:
         db.session.commit()
         print(f"\n✅ {sincronizadas} sincronizadas com sucesso!")
     
-    if erros > 0:
-        print(f"⚠️ {erros} com CNPJ divergente")
+    if nao_encontradas > 0:
+        print(f"⚠️ {nao_encontradas} não encontradas (NF+Pedido não batem)")
     
     print("=" * 60)
