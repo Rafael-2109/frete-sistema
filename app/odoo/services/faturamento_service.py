@@ -1138,7 +1138,6 @@ class FaturamentoService:
                 if campo in item_sanitizado and item_sanitizado[campo]:
                     valor = str(item_sanitizado[campo])
                     if len(valor) > 20:
-                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 20 caracteres: {valor}")
                         item_sanitizado[campo] = valor[:20]
             
             # Tratar município com formato "Cidade (UF)"

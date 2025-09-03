@@ -523,4 +523,3 @@ def obter_detalhes_pedido_completo(num_pedido):
             'success': False,
             'error': str(e)
         }), 500
-

@@ -390,7 +390,6 @@ class CarteiraService:
                     
                     # Buscar dados da transportadora
                     try:
-                        logger.info(f"🚛 Pedido {pedido.get('name')} é REDESPACHO - buscando endereço da transportadora {carrier_id}")
                         
                         # Buscar delivery.carrier para obter o l10n_br_partner_id
                         carrier_data = self.connection.search_read(
@@ -406,7 +405,6 @@ class CarteiraService:
                             # Buscar no cache ou fazer query
                             if transportadora_partner_id in cache_partners:
                                 endereco = cache_partners.get(transportadora_partner_id, {})
-                                logger.info(f"✅ Usando endereço da transportadora (cache): {endereco.get('name', 'N/A')}")
                             else:
                                 # Query adicional se não estiver no cache
                                 # Definir campos necessários para buscar dados do partner
@@ -423,7 +421,6 @@ class CarteiraService:
                                 if transp_partner:
                                     endereco = transp_partner[0]
                                     cache_partners[transportadora_partner_id] = endereco
-                                    logger.info(f"✅ Usando endereço da transportadora (query): {endereco.get('name', 'N/A')}")
                                     
                                     # Log detalhado do endereço substituído
                                     municipio = endereco.get('l10n_br_municipio_id', ['', ''])[1] if isinstance(endereco.get('l10n_br_municipio_id'), list) else ''
@@ -617,7 +614,6 @@ class CarteiraService:
                 if campo in item_sanitizado and item_sanitizado[campo]:
                     valor = str(item_sanitizado[campo])
                     if len(valor) > 50:
-                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 50 caracteres: {valor}")
                         item_sanitizado[campo] = valor[:50]
             
             # ⚠️ CAMPOS COM LIMITE DE 20 CARACTERES (críticos)
@@ -630,7 +626,6 @@ class CarteiraService:
                 if campo in item_sanitizado and item_sanitizado[campo]:
                     valor = str(item_sanitizado[campo])
                     if len(valor) > 20:
-                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 20 caracteres: {valor}")
                         item_sanitizado[campo] = valor[:20]
             
             # Campos que DEVEM ser texto (não podem ser boolean)
@@ -718,7 +713,6 @@ class CarteiraService:
                 if campo in item_sanitizado and item_sanitizado[campo]:
                     valor_uf = str(item_sanitizado[campo])
                     if len(valor_uf) > 2:
-                        logger.warning(f"Campo {campo} truncado de {len(valor_uf)} para 2 caracteres: {valor_uf}")
                         item_sanitizado[campo] = valor_uf[:2]
             
             # ⚠️ CAMPOS COM LIMITE DE 10 CARACTERES
@@ -728,7 +722,6 @@ class CarteiraService:
                 if campo in item_sanitizado and item_sanitizado[campo]:
                     valor = str(item_sanitizado[campo])
                     if len(valor) > 10:
-                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 10 caracteres: {valor}")
                         item_sanitizado[campo] = valor[:10]
             
             # ⚠️ CAMPOS COM LIMITE DE 100 CARACTERES
@@ -743,7 +736,6 @@ class CarteiraService:
                 if campo in item_sanitizado and item_sanitizado[campo]:
                     valor = str(item_sanitizado[campo])
                     if len(valor) > 100:
-                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 100 caracteres: {valor}")
                         item_sanitizado[campo] = valor[:100]
             
             dados_sanitizados.append(item_sanitizado)
@@ -1083,6 +1075,54 @@ class CarteiraService:
             from app.faturamento.models import FaturamentoProduto
             from app.separacao.models import Separacao
             from sqlalchemy import func
+            from app.utils.database_helpers import retry_on_ssl_error
+            
+            # 🚀 OTIMIZAÇÃO: Buscar TODOS os dados em apenas 3 queries!
+            
+            # Query 1: Carregar toda a carteira em memória
+            logger.info("   📦 Carregando carteira atual...")
+            todos_itens = CarteiraPrincipal.query.all()
+            logger.info(f"   ✅ {len(todos_itens)} itens carregados")
+            
+            # Query 2: Buscar TODOS os faturamentos de uma vez
+            logger.info("   📦 Carregando todos os faturamentos...")
+            
+            @retry_on_ssl_error(max_retries=3)
+            def buscar_todos_faturamentos():
+                return db.session.query(
+                    FaturamentoProduto.origem,
+                    FaturamentoProduto.cod_produto,
+                    func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_faturada')
+                ).filter(
+                    FaturamentoProduto.status_nf != 'Cancelado'
+                ).group_by(
+                    FaturamentoProduto.origem,
+                    FaturamentoProduto.cod_produto
+                ).all()
+            
+            faturamentos = buscar_todos_faturamentos()
+            faturamentos_dict = {(f.origem, f.cod_produto): float(f.qtd_faturada or 0) for f in faturamentos}
+            logger.info(f"   ✅ {len(faturamentos_dict)} faturamentos carregados")
+            
+            # Query 3: Buscar TODAS as separações não sincronizadas de uma vez
+            logger.info("   📦 Carregando todas as separações não sincronizadas...")
+            
+            @retry_on_ssl_error(max_retries=3)
+            def buscar_todas_separacoes():
+                return db.session.query(
+                    Separacao.num_pedido,
+                    Separacao.cod_produto,
+                    func.sum(Separacao.qtd_saldo).label('qtd_em_separacao')
+                ).filter(
+                    Separacao.sincronizado_nf == False
+                ).group_by(
+                    Separacao.num_pedido,
+                    Separacao.cod_produto
+                ).all()
+            
+            separacoes = buscar_todas_separacoes()
+            separacoes_dict = {(s.num_pedido, s.cod_produto): float(s.qtd_em_separacao or 0) for s in separacoes}
+            logger.info(f"   ✅ {len(separacoes_dict)} separações carregadas")
             
             # Criar índice do estado atual usando campos CORRETOS
             carteira_atual = {}
@@ -1091,33 +1131,19 @@ class CarteiraService:
             registros_atuais = 0
             registros_nao_odoo = 0
             
-            for item in CarteiraPrincipal.query.all():
+            # Processar todos os itens usando dados em memória (ZERO queries!)
+            logger.info("   🔄 Processando cálculos em memória...")
+            for item in todos_itens:
                 chave = (item.num_pedido, item.cod_produto)
                 
-                # NOVO: Calcular qtd_saldo_produto_pedido baseado na fórmula
-                # qtd_saldo = qtd_produto - qtd_cancelada - qtd_faturada
-                qtd_faturada = db.session.query(
-                    func.coalesce(func.sum(FaturamentoProduto.qtd_produto_faturado), 0)
-                ).filter(
-                    FaturamentoProduto.origem == item.num_pedido,
-                    FaturamentoProduto.cod_produto == item.cod_produto,
-                    FaturamentoProduto.status_nf != 'Cancelado'
-                ).scalar() or 0
+                # Buscar valores dos dicionários em memória
+                qtd_faturada = faturamentos_dict.get(chave, 0)
+                qtd_em_separacao = separacoes_dict.get(chave, 0)
                 
                 qtd_produto = float(item.qtd_produto_pedido or 0)
                 qtd_cancelada = float(item.qtd_cancelada_produto_pedido or 0)
-                qtd_saldo_calculado = qtd_produto - qtd_cancelada - float(qtd_faturada)
-                
-                # Calcular saldo livre (CarteiraPrincipal - Separações não sincronizadas)
-                qtd_em_separacao = db.session.query(
-                    func.coalesce(func.sum(Separacao.qtd_saldo), 0)
-                ).filter(
-                    Separacao.num_pedido == item.num_pedido,
-                    Separacao.cod_produto == item.cod_produto,
-                    Separacao.sincronizado_nf == False
-                ).scalar() or 0
-                
-                saldo_livre = qtd_saldo_calculado - float(qtd_em_separacao)
+                qtd_saldo_calculado = qtd_produto - qtd_cancelada - qtd_faturada
+                saldo_livre = qtd_saldo_calculado - qtd_em_separacao
                 
                 dados_item = {
                     'qtd_saldo_anterior': float(item.qtd_saldo_produto_pedido or 0),  # Valor antigo do banco
@@ -1183,6 +1209,62 @@ class CarteiraService:
             alertas_saldo_negativo = []
             
             logger.info("📊 Calculando saldos para itens importados do Odoo...")
+            
+            # 🚀 SUPER OTIMIZAÇÃO: Uma ÚNICA query para TODOS os faturamentos!
+            from app.utils.database_helpers import retry_on_ssl_error, ensure_connection
+            
+            # Garantir conexão antes de começar
+            ensure_connection()
+            
+            # Coletar APENAS os pedidos únicos (não precisa produto, vamos trazer tudo)
+            pedidos_unicos = set()
+            for item_novo in dados_novos:
+                pedidos_unicos.add(item_novo['num_pedido'])
+            
+            logger.info(f"🔍 Buscando faturamentos para {len(pedidos_unicos)} pedidos únicos...")
+            
+            # Uma ÚNICA query super otimizada com retry
+            @retry_on_ssl_error(max_retries=3, backoff_factor=1.0)
+            def buscar_faturamentos_agrupados():
+                """Uma única query para TODOS os faturamentos agrupados"""
+                try:
+                    # Query única agrupada
+                    resultados = db.session.query(
+                        FaturamentoProduto.origem,
+                        FaturamentoProduto.cod_produto,
+                        func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_faturada')
+                    ).filter(
+                        FaturamentoProduto.origem.in_(list(pedidos_unicos)),
+                        FaturamentoProduto.status_nf != 'Cancelado'
+                    ).group_by(
+                        FaturamentoProduto.origem,
+                        FaturamentoProduto.cod_produto
+                    ).all()
+                    
+                    # Converter para dicionário
+                    faturamentos_dict = {}
+                    for row in resultados:
+                        chave = (row.origem, row.cod_produto)
+                        faturamentos_dict[chave] = float(row.qtd_faturada or 0)
+                    
+                    return faturamentos_dict
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao buscar faturamentos: {e}")
+                    # Tentar reconectar e tentar novamente
+                    ensure_connection()
+                    raise
+            
+            # Executar a query única
+            try:
+                todas_qtds_faturadas = buscar_faturamentos_agrupados()
+                logger.info(f"✅ {len(todas_qtds_faturadas)} faturamentos carregados em UMA query!")
+                
+            except Exception as e:
+                logger.error(f"❌ Falha ao buscar faturamentos: {e}")
+                todas_qtds_faturadas = {}
+            
+            # Agora calcular saldos usando as quantidades obtidas (muito rápido, tudo em memória)
             for item_novo in dados_novos:
                 chave = (item_novo['num_pedido'], item_novo['cod_produto'])
                 
@@ -1190,15 +1272,8 @@ class CarteiraService:
                 qtd_produto_nova = float(item_novo.get('qtd_produto_pedido', 0))
                 qtd_cancelada_nova = float(item_novo.get('qtd_cancelada_produto_pedido', 0))
                 
-                # Buscar qtd_faturada (sempre do nosso banco, não do Odoo)
-                qtd_faturada = db.session.query(
-                    func.coalesce(func.sum(FaturamentoProduto.qtd_produto_faturado), 0)
-                ).filter(
-                    FaturamentoProduto.origem == item_novo['num_pedido'],
-                    FaturamentoProduto.cod_produto == item_novo['cod_produto'],
-                    FaturamentoProduto.status_nf != 'Cancelado'
-                ).scalar() or 0
-                qtd_faturada = float(qtd_faturada)
+                # Pegar do cache ou assumir 0 se não faturado
+                qtd_faturada = todas_qtds_faturadas.get(chave, 0)
                 
                 # CALCULAR SALDO: qtd_produto - qtd_cancelada - qtd_faturada
                 qtd_saldo_calculado = qtd_produto_nova - qtd_cancelada_nova - qtd_faturada
@@ -1486,75 +1561,52 @@ class CarteiraService:
             # Importar helper para commits com retry
             from app.utils.database_retry import commit_with_retry
             
-            # Configuração para commits incrementais - evitar erro SSL
-            TAMANHO_LOTE = 10  # Processar 10 registros por vez para evitar timeout SSL
+            # 🚀 SUPER OTIMIZAÇÃO: Processar TUDO de uma vez, UM ÚNICO COMMIT!
+            logger.info(f"🔄 Processando {len(dados_novos)} registros em operação única otimizada...")
+            
+            # Inicializar contador (removido da otimização mas pode ser referenciado em outro lugar)
             contador_lote = 0
+            registros_para_inserir = []
             
-            logger.info(f"🔄 Processando {len(dados_novos)} registros em lotes de {TAMANHO_LOTE}...")
+            # Processar todos os dados de uma vez
+            for item in dados_novos:
+                # Validar dados essenciais
+                if not item.get('num_pedido') or not item.get('cod_produto'):
+                    erros_insercao.append(f"Item sem pedido/produto: {item}")
+                    continue
+                
+                chave = (item['num_pedido'], item['cod_produto'])
+                
+                if chave in registros_odoo_existentes:
+                    # ATUALIZAR - Fazer inline, sem loops
+                    registro_existente = registros_odoo_existentes[chave]
+                    for key, value in item.items():
+                        if hasattr(registro_existente, key) and key != 'id':
+                            setattr(registro_existente, key, value)
+                    contador_atualizados += 1
+                else:
+                    # INSERIR - Acumular para bulk insert
+                    novo_registro = CarteiraPrincipal(**item)
+                    db.session.add(novo_registro)
+                    contador_inseridos += 1
             
-            for idx, item in enumerate(dados_novos):
+            # UM ÚNICO COMMIT para TUDO!
+            logger.info(f"   💾 Salvando {contador_inseridos} inserções e {contador_atualizados} atualizações...")
+            
+            try:
+                if commit_with_retry(db.session, max_retries=3):
+                    logger.info(f"   ✅ SUCESSO! Todos os registros salvos em UM commit!")
+                else:
+                    logger.error(f"   ❌ Falha ao salvar registros")
+                    db.session.rollback()
+            except Exception as e:
+                logger.error(f"   ❌ Erro no commit único: {e}")
                 try:
-                    # Validar dados essenciais usando campos CORRETOS
-                    if not item.get('num_pedido') or not item.get('cod_produto'):
-                        erros_insercao.append(f"Item sem pedido/produto: {item}")
-                        continue
-                    
-                    chave = (item['num_pedido'], item['cod_produto'])
-                    
-                    # CadastroPalletizacao já foi garantido na Fase 3.2
-                    # Não precisa mais verificar aqui
-                    
-                    if chave in registros_odoo_existentes:
-                        # ATUALIZAR registro existente
-                        registro_existente = registros_odoo_existentes[chave]
-                        for key, value in item.items():
-                            if hasattr(registro_existente, key) and key != 'id':
-                                setattr(registro_existente, key, value)
-                        contador_atualizados += 1
-                    else:
-                        # INSERIR novo registro na carteira
-                        novo_registro = CarteiraPrincipal(**item)
-                        db.session.add(novo_registro)
-                        contador_inseridos += 1
-                    
-                    contador_lote += 1
-                    
-                    # Commit incremental a cada TAMANHO_LOTE registros para evitar erro SSL
-                    if contador_lote >= TAMANHO_LOTE:
-                        try:
-                            if commit_with_retry(db.session, max_retries=3):
-                                logger.debug(f"✅ Lote {idx//TAMANHO_LOTE + 1} salvo ({contador_lote} registros)")
-                            else:
-                                logger.warning(f"⚠️ Falha ao salvar lote {idx//TAMANHO_LOTE + 1}")
-                        except Exception as commit_error:
-                            logger.error(f"❌ Erro no commit do lote: {commit_error}")
-                            # Tentar rollback e continuar
-                            try:
-                                db.session.rollback()
-                            except Exception as e:
-                                logger.error(f"❌ Erro no rollback: {e}")
-                                pass
-                        finally:
-                            contador_lote = 0
-                    
+                    db.session.rollback()
                 except Exception as e:
-                    erro_msg = f"Erro ao processar {item.get('num_pedido', 'N/A')}/{item.get('cod_produto', 'N/A')}: {e}"
-                    logger.error(erro_msg)
-                    erros_insercao.append(erro_msg)
+                    logger.error(f"   ❌ Erro no rollback: {e}")
+                    pass
             
-            # Commit final para registros restantes
-            if contador_lote > 0:
-                try:
-                    if commit_with_retry(db.session, max_retries=3):
-                        logger.debug(f"✅ Último lote salvo ({contador_lote} registros)")
-                    else:
-                        logger.warning(f"⚠️ Falha ao salvar último lote")
-                except Exception as commit_error:
-                    logger.error(f"❌ Erro no commit final: {commit_error}")
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
             
             logger.info(f"✅ {contador_inseridos} novos registros inseridos")
             logger.info(f"🔄 {contador_atualizados} registros atualizados")

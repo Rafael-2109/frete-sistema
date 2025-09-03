@@ -169,27 +169,35 @@ class ProcessadorFaturamento:
         GARANTE: Não duplicação - _tem_movimentacao_com_lote() verifica antes de criar
         """
         # Subquery para NFs que já têm movimentação COMPLETA (com lote)
-        nfs_processadas_completas = db.session.query(MovimentacaoEstoque.numero_nf).filter(
+        nfs_processadas_completas = db.session.query(
+            MovimentacaoEstoque.numero_nf.label('numero_nf')
+        ).filter(
             MovimentacaoEstoque.numero_nf.isnot(None),
             MovimentacaoEstoque.separacao_lote_id.isnot(None),  # Tem lote = processamento completo
             MovimentacaoEstoque.status_nf == 'FATURADO'
         ).distinct().subquery()
         
         # Subquery para NFs que precisam reprocessamento (sem lote ou com erro)
-        nfs_reprocessar = db.session.query(MovimentacaoEstoque.numero_nf).filter(
+        nfs_reprocessar = db.session.query(
+            MovimentacaoEstoque.numero_nf.label('numero_nf')
+        ).filter(
             MovimentacaoEstoque.numero_nf.isnot(None),
             MovimentacaoEstoque.separacao_lote_id.is_(None),  # Sem lote = precisa reprocessar
             MovimentacaoEstoque.status_nf == 'FATURADO'
         ).distinct().subquery()
         
         # Subquery para NFs em EmbarqueItem com erro
-        nfs_com_erro_embarque = db.session.query(EmbarqueItem.nota_fiscal).filter(
+        nfs_com_erro_embarque = db.session.query(
+            EmbarqueItem.nota_fiscal.label('nota_fiscal')
+        ).filter(
             EmbarqueItem.nota_fiscal.isnot(None),
             EmbarqueItem.erro_validacao.isnot(None)  # Com erro = precisa reprocessar
         ).distinct().subquery()
         
         # Subquery para NFs que têm produtos ativos
-        nfs_com_produtos = db.session.query(FaturamentoProduto.numero_nf).filter(
+        nfs_com_produtos = db.session.query(
+            FaturamentoProduto.numero_nf.label('numero_nf')
+        ).filter(
             FaturamentoProduto.status_nf != 'Cancelado'  # Ignorar canceladas
         ).distinct().subquery()
         
@@ -200,14 +208,22 @@ class ProcessadorFaturamento:
         return (
             RelatorioFaturamentoImportado.query.filter(
                 RelatorioFaturamentoImportado.ativo == True,
-                RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_com_produtos.c.numero_nf)),
+                RelatorioFaturamentoImportado.numero_nf.in_(
+                    db.session.query(nfs_com_produtos.c.numero_nf)
+                ),
                 db.or_(
                     # NFs não processadas completamente
-                    ~RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_processadas_completas.c.numero_nf)),
+                    ~RelatorioFaturamentoImportado.numero_nf.in_(
+                        db.session.query(nfs_processadas_completas.c.numero_nf)
+                    ),
                     # NFs que precisam reprocessamento (sem lote)
-                    RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_reprocessar.c.numero_nf)),
+                    RelatorioFaturamentoImportado.numero_nf.in_(
+                        db.session.query(nfs_reprocessar.c.numero_nf)
+                    ),
                     # NFs com erro em EmbarqueItem
-                    RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_com_erro_embarque.c.numero_nf))
+                    RelatorioFaturamentoImportado.numero_nf.in_(
+                        db.session.query(nfs_com_erro_embarque.c.nota_fiscal)
+                    )
                 )
             )
             .order_by(RelatorioFaturamentoImportado.numero_nf.desc())

@@ -316,14 +316,48 @@ def tela_cotacao():
     todos_mesmo_uf = False  # Flag para controle no template
     
     # Recupera pedidos da sessão
-    lista_ids = session.get("cotacao_pedidos", [])
-    if not lista_ids:
-        flash("Nenhum pedido na cotação!", "warning")
-        return redirect(url_for("pedidos.lista_pedidos"))
-
-    # Carrega os pedidos do banco
-    pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
-    print(f"[DEBUG] Pedidos carregados: {len(pedidos)}")
+    # Verifica primeiro se há dados completos de alteração de embarque
+    pedidos_data_sessao = session.get("cotacao_pedidos_data", None)
+    
+    if pedidos_data_sessao and alterando_embarque:
+        # Está alterando embarque - usar dados da sessão diretamente
+        from datetime import datetime
+        
+        pedidos = []
+        for p_data in pedidos_data_sessao:
+            # Criar objeto compatível com Pedido
+            pedido_obj = type('PedidoTemp', (), {
+                'id': p_data['id'],
+                'separacao_lote_id': p_data.get('separacao_lote_id'),
+                'num_pedido': p_data['num_pedido'],
+                'data_pedido': datetime.fromisoformat(p_data['data_pedido']) if p_data.get('data_pedido') else None,
+                'cnpj_cpf': p_data['cnpj_cpf'],
+                'raz_social_red': p_data['raz_social_red'],
+                'nome_cidade': p_data['nome_cidade'],
+                'cod_uf': p_data['cod_uf'],
+                'valor_saldo_total': p_data.get('valor_saldo_total', 0),
+                'pallet_total': p_data.get('pallet_total', 0),
+                'peso_total': p_data.get('peso_total', 0),
+                'rota': p_data.get('rota', ''),
+                'sub_rota': p_data.get('sub_rota', ''),
+                'expedicao': datetime.fromisoformat(p_data['expedicao']) if p_data.get('expedicao') else None,
+                'agendamento': datetime.fromisoformat(p_data['agendamento']) if p_data.get('agendamento') else None,
+                'protocolo': p_data.get('protocolo'),
+                'transportadora': None,
+                'cotacao_id': None
+            })()
+            pedidos.append(pedido_obj)
+        print(f"[DEBUG] Pedidos carregados da sessão (alteração embarque): {len(pedidos)}")
+    else:
+        # Fluxo normal - buscar pedidos do banco
+        lista_ids = session.get("cotacao_pedidos", [])
+        if not lista_ids:
+            flash("Nenhum pedido na cotação!", "warning")
+            return redirect(url_for("pedidos.lista_pedidos"))
+        
+        # Carrega os pedidos do banco
+        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        print(f"[DEBUG] Pedidos carregados do banco: {len(pedidos)}")
     
     if not pedidos:
         flash("Nenhum pedido encontrado!", "warning")

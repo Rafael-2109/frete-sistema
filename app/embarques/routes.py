@@ -871,9 +871,8 @@ def obter_dados_portaria_embarque(embarque_id):
 def acessar_separacao(embarque_id, separacao_lote_id):
     """
     Exibe os dados detalhados da separação vinculada ao embarque
-    """
+    """    
     from app.separacao.models import Separacao
-    
     embarque = Embarque.query.get_or_404(embarque_id)
     
     # Busca todos os itens da separação com este lote_id
@@ -1598,30 +1597,102 @@ def alterar_cotacao(embarque_id):
             flash('❌ Este embarque não possui itens ativos para cotar.', 'warning')
             return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
         
-        # Extrair os pedidos dos itens do embarque
-        pedidos_ids = []
+        # Extrair os lotes únicos dos itens do embarque agregando por separacao_lote_id
+        from app.separacao.models import Separacao
+        from sqlalchemy import func
         
+        # Coletar lotes únicos dos itens ativos
+        lotes_unicos = set()
         for item in itens_ativos:
-            # Buscar o pedido correspondente
             if item.separacao_lote_id:
-                # Busca por lote de separação (mais preciso)
-                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-            else:
-                # Fallback: busca por número do pedido
-                pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
-            
-            if pedido:
-                if pedido.id not in pedidos_ids:
-                    pedidos_ids.append(pedido.id)
-            else:
-                flash(f'⚠️ Pedido {item.pedido} não encontrado na base de dados.', 'warning')
+                lotes_unicos.add(item.separacao_lote_id)
         
-        if not pedidos_ids:
-            flash('❌ Nenhum pedido válido encontrado para alterar a cotação.', 'danger')
+        if not lotes_unicos:
+            flash('❌ Nenhum lote de separação encontrado nos itens do embarque.', 'danger')
             return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
         
-        # Armazenar informações da alteração na sessão
-        session['cotacao_pedidos'] = pedidos_ids
+        # Buscar dados agregados de Separacao por lote
+        # Criar estrutura similar à VIEW pedidos mas buscando direto de Separacao
+        pedidos_data = []
+        
+        for lote_id in lotes_unicos:
+            # Buscar dados agregados do lote na tabela Separacao
+            agregacao = db.session.query(
+                Separacao.separacao_lote_id,
+                func.min(Separacao.num_pedido).label('num_pedido'),
+                func.min(Separacao.data_pedido).label('data_pedido'),
+                func.min(Separacao.cnpj_cpf).label('cnpj_cpf'),
+                func.min(Separacao.raz_social_red).label('raz_social_red'),
+                func.min(Separacao.nome_cidade).label('nome_cidade'),
+                func.min(Separacao.cod_uf).label('cod_uf'),
+                func.coalesce(func.sum(Separacao.valor_saldo), 0).label('valor_saldo_total'),
+                func.coalesce(func.sum(Separacao.pallet), 0).label('pallet_total'),
+                func.coalesce(func.sum(Separacao.peso), 0).label('peso_total'),
+                func.min(Separacao.rota).label('rota'),
+                func.min(Separacao.sub_rota).label('sub_rota'),
+                func.min(Separacao.expedicao).label('expedicao'),
+                func.min(Separacao.agendamento).label('agendamento'),
+                func.min(Separacao.protocolo).label('protocolo')
+            ).filter(
+                Separacao.separacao_lote_id == lote_id
+            ).group_by(
+                Separacao.separacao_lote_id
+            ).first()
+            
+            if agregacao:
+                # Criar um objeto similar ao Pedido para compatibilidade
+                pedido_obj = type('PedidoTemp', (), {
+                    'id': hash(lote_id) % 1000000,  # ID temporário único baseado no lote
+                    'separacao_lote_id': agregacao.separacao_lote_id,
+                    'num_pedido': agregacao.num_pedido,
+                    'data_pedido': agregacao.data_pedido,
+                    'cnpj_cpf': agregacao.cnpj_cpf,
+                    'raz_social_red': agregacao.raz_social_red,
+                    'nome_cidade': agregacao.nome_cidade,
+                    'cod_uf': agregacao.cod_uf,
+                    'valor_saldo_total': float(agregacao.valor_saldo_total or 0),
+                    'pallet_total': float(agregacao.pallet_total or 0),
+                    'peso_total': float(agregacao.peso_total or 0),
+                    'rota': agregacao.rota,
+                    'sub_rota': agregacao.sub_rota,
+                    'expedicao': agregacao.expedicao,
+                    'agendamento': agregacao.agendamento,
+                    'protocolo': agregacao.protocolo
+                })()
+                pedidos_data.append(pedido_obj)
+            else:
+                flash(f'⚠️ Lote {lote_id} não encontrado na base de dados.', 'warning')
+        
+        if not pedidos_data:
+            flash('❌ Nenhum dado válido encontrado para alterar a cotação.', 'danger')
+            return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+        
+        # Armazenar os dados completos dos pedidos na sessão para uso na cotação
+        # Em vez de apenas IDs, vamos armazenar os dados completos serializados
+        pedidos_serializados = []
+        for p in pedidos_data:
+            pedidos_serializados.append({
+                'id': p.id,
+                'separacao_lote_id': p.separacao_lote_id,
+                'num_pedido': p.num_pedido,
+                'data_pedido': p.data_pedido.isoformat() if p.data_pedido else None,
+                'cnpj_cpf': p.cnpj_cpf,
+                'raz_social_red': p.raz_social_red,
+                'nome_cidade': p.nome_cidade,
+                'cod_uf': p.cod_uf,
+                'valor_saldo_total': p.valor_saldo_total,
+                'pallet_total': p.pallet_total,
+                'peso_total': p.peso_total,
+                'rota': p.rota,
+                'sub_rota': p.sub_rota,
+                'expedicao': p.expedicao.isoformat() if p.expedicao else None,
+                'agendamento': p.agendamento.isoformat() if p.agendamento else None,
+                'protocolo': p.protocolo
+            })
+        
+        # Armazenar informações na sessão
+        session['cotacao_pedidos_data'] = pedidos_serializados  # Dados completos
+        session['cotacao_pedidos'] = [p['id'] for p in pedidos_serializados]  # IDs para compatibilidade
         session['alterando_embarque'] = {
             'embarque_id': embarque_id,
             'numero_embarque': embarque.numero,
@@ -1629,7 +1700,7 @@ def alterar_cotacao(embarque_id):
             'tipo_carga_anterior': embarque.tipo_carga
         }
         
-        flash(f'🔄 Iniciando alteração da cotação do embarque #{embarque.numero}. {len(pedidos_ids)} pedido(s) selecionado(s).', 'info')
+        flash(f'🔄 Iniciando alteração da cotação do embarque #{embarque.numero}. {len(pedidos_serializados)} pedido(s) selecionado(s).', 'info')
         
         # Redirecionar para a tela de cotação com parâmetro indicando alteração
         return redirect(url_for('cotacao.tela_cotacao', alterando_embarque=embarque_id))
