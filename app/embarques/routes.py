@@ -11,6 +11,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app.localidades.models import Cidade
 from datetime import datetime
 from app.pedidos.models import Pedido
+from app.separacao.models import Separacao
 from app.cotacao.models import Cotacao
 from app.utils.embarque_numero import obter_proximo_numero_embarque
 
@@ -917,12 +918,16 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
     
     embarque = Embarque.query.get_or_404(embarque_id)
     
-    # Marcar pedido como impresso
+    # Marcar separação como impressa diretamente em Separacao
     pedido = Pedido.query.filter_by(separacao_lote_id=separacao_lote_id).first()
     if pedido and not pedido.separacao_impressa:
-        pedido.separacao_impressa = True
-        pedido.separacao_impressa_em = datetime.now()
-        pedido.separacao_impressa_por = current_user.nome if hasattr(current_user, 'nome') else current_user.email
+        Separacao.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).update({
+            'separacao_impressa': True,
+            'separacao_impressa_em': datetime.now(),
+            'separacao_impressa_por': current_user.nome if hasattr(current_user, 'nome') else current_user.email
+        })
         db.session.commit()
     
     # Busca todos os itens da separação com este lote_id
@@ -1006,9 +1011,13 @@ def imprimir_embarque_completo(embarque_id):
         if item.status == 'ativo' and item.separacao_lote_id:
             pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
             if pedido and not pedido.separacao_impressa:
-                pedido.separacao_impressa = True
-                pedido.separacao_impressa_em = datetime.now()
-                pedido.separacao_impressa_por = current_user.nome if hasattr(current_user, 'nome') else current_user.email
+                Separacao.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).update({
+                    'separacao_impressa': True,
+                    'separacao_impressa_em': datetime.now(),
+                    'separacao_impressa_por': current_user.nome if hasattr(current_user, 'nome') else current_user.email
+                })
     db.session.commit()
     
     # Busca todos os lotes únicos de separação vinculados a este embarque
@@ -1306,13 +1315,16 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
         
         # Processar cada item do embarque
         for item in embarque.itens:
-            # Buscar pedido (otimizado)
+            # Buscar pedido (otimizado) - usando VIEW para leitura
             pedido = None
             
             if item.separacao_lote_id:
                 pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                # Atualiza flag nf_cd diretamente em Separacao
                 if pedido and pedido.nf_cd == True:
-                    pedido.nf_cd = False                   
+                    Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id
+                    ).update({'nf_cd': False})                   
             
             if not pedido and item.pedido:
                 pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
@@ -1362,17 +1374,23 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                     
                     if entregas_vinculadas:
                         # ✅ HÁ ENTREGAS VINCULADAS → NF voltou para CD
-                        pedido.nf_cd = True
-                        # MANTÉM pedido.nf (não apaga)
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({'nf_cd': True})
+                        # MANTÉM numero_nf (não apaga)
                         print(f"[SYNC] 📦 NF {pedido.nf} voltou para o CD (nf_cd=True)")
                         
                     else:
                         # ✅ NÃO HÁ ENTREGAS VINCULADAS → Reset completo
-                        pedido.nf = None
-                        pedido.data_embarque = None
-                        pedido.cotacao_id = None
-                        pedido.transportadora = None
-                        pedido.nf_cd = False
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({
+                            'numero_nf': None,
+                            'data_embarque': None,
+                            'cotacao_id': None,
+                            'nf_cd': False
+                        })
+                        # transportadora ignorado conforme orientação
                         print(f"[SYNC] 🔄 Pedido {pedido.num_pedido} resetado para 'Aberto'")
                         
                 else:
@@ -1380,7 +1398,9 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                     
                     if entregas_vinculadas:
                         # ✅ SINCRONIZAR ESTADO COM ENTREGAS MONITORADAS
-                        pedido.nf_cd = tem_entrega_no_cd
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({'nf_cd': tem_entrega_no_cd})
                         print(f"[SYNC] 🔗 Estado sincronizado: nf_cd={tem_entrega_no_cd}")
                         
                     else:
@@ -1390,21 +1410,27 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                 itens_cancelados += 1
                 
             elif item.nota_fiscal and item.nota_fiscal.strip():
-                # ✅ ITEM COM NF: Sincronizar NF no pedido
-                pedido.nf = item.nota_fiscal
+                # ✅ ITEM COM NF: Sincronizar NF em Separacao
+                Separacao.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).update({'numero_nf': item.nota_fiscal})
                 
                 # Configuração especial FOB
                 if is_embarque_fob and transportadora_fob and cotacao_fob:
-                    pedido.transportadora = transportadora_fob.razao_social
+                    # Transportadora ignorado conforme orientação
                     if not pedido.cotacao_id:
-                        pedido.cotacao_id = cotacao_fob.id
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({'cotacao_id': cotacao_fob.id})
                 
                 itens_sincronizados += 1
                 
             else:
-                # ✅ ITEM SEM NF: Remover NF do pedido se existir
+                # ✅ ITEM SEM NF: Remover NF de Separacao se existir
                 if pedido.nf:
-                    pedido.nf = None
+                    Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id
+                    ).update({'numero_nf': None})
                     itens_removidos += 1
         
         # Salvar todas as alterações

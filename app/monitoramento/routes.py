@@ -16,6 +16,7 @@ from app import db
 # 🔒 Importar decoradores de permissão
 from app.utils.auth_decorators import require_monitoramento_geral, allow_vendedor_own_data, check_vendedor_permission, get_vendedor_filter_query
 
+from app.separacao.models import Separacao
 from app.monitoramento.models import (
     EntregaMonitorada,
     EventoEntrega,
@@ -98,15 +99,20 @@ def processar_nf_cd_pedido(entrega_id):
         print(f"[DEBUG] 📦 Marcando pedido {pedido.num_pedido} como 'NF no CD'...")
         
         # ✅ NOVO: Marca como NF no CD sem apagar a NF (preserva histórico)
-        pedido.nf_cd = True
-        pedido.data_embarque = None
-
-        if entrega.data_agenda:
-            pedido.agendamento = entrega.data_agenda
-            pedido.protocolo = entrega.protocolo_agendamento
-        
-        # ✅ LIMPAR expedição - NF voltou para o CD
-        pedido.expedicao = None
+        if pedido.separacao_lote_id:
+            update_data = {
+                'nf_cd': True,
+                'data_embarque': None,
+                'expedicao': None  # ✅ LIMPAR expedição - NF voltou para o CD
+            }
+            
+            if entrega.data_agenda:
+                update_data['agendamento'] = entrega.data_agenda
+                update_data['protocolo'] = entrega.protocolo_agendamento
+            
+            Separacao.query.filter_by(
+                separacao_lote_id=pedido.separacao_lote_id
+            ).update(update_data)
 
         # NF é preservada para manter histórico
         # Status será recalculado automaticamente pelo trigger como "NF no CD"

@@ -10,6 +10,7 @@ from app.vinculos.models import CidadeAtendida
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.transportadoras.models import Transportadora
 from app.pedidos.models import Pedido
+from app.separacao.models import Separacao
 
 def adicionar_dias_uteis(data_inicio, dias_uteis):
     """
@@ -246,7 +247,11 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
     entrega.status_finalizacao         = None
     entrega.entregue                   = False
     entrega.data_hora_entrega_realizada= None
-    pedido.nf_cd                       = False
+    # Atualiza nf_cd em Separacao se houver lote
+    if pedido and pedido.separacao_lote_id:
+        Separacao.query.filter_by(
+            separacao_lote_id=pedido.separacao_lote_id
+        ).update({'nf_cd': False})
 
     entrega.data_embarque = embarque.data_embarque or None
 

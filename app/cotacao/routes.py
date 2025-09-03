@@ -11,6 +11,7 @@ from app import db
 from app.cotacao.forms import CotarFreteForm
 from app.cotacao.models import Cotacao
 from app.pedidos.models import Pedido
+from app.separacao.models import Separacao
 from app.transportadoras.models import Transportadora
 from app.embarques.models import Embarque, EmbarqueItem
 from app.tabelas.models import TabelaFrete
@@ -1025,13 +1026,17 @@ def fechar_frete():
                         
                         print(f"[DEBUG] 🔄 CARGA FRACIONADA: Dados da tabela atualizados no ITEM {item.pedido}")
             
-            # Atualiza pedidos COM ID DA COTAÇÃO VÁLIDO
+            # Atualiza Separacao COM ID DA COTAÇÃO VÁLIDO
             for pedido_data in pedidos_data:
                 pedido = Pedido.query.get(pedido_data.get('id'))
-                if pedido:
-                    pedido.cotacao_id = cotacao.id
-                    pedido.transportadora = transportadora.razao_social
-                    pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                if pedido and pedido.separacao_lote_id:
+                    # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
+                    Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id
+                    ).update({
+                        'cotacao_id': cotacao.id,
+                        'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                    })
                     # O status será calculado automaticamente como COTADO pelo trigger
             
             # Remove cotação antiga se existir
@@ -1058,13 +1063,17 @@ def fechar_frete():
             db.session.add(cotacao)
             db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
 
-            # Atualiza pedidos COM ID DA COTAÇÃO VÁLIDO
+            # Atualiza Separacao COM ID DA COTAÇÃO VÁLIDO
             for pedido_data in pedidos_data:
                 pedido = Pedido.query.get(pedido_data.get('id'))
-                if pedido:
-                    pedido.cotacao_id = cotacao.id
-                    pedido.transportadora = transportadora.razao_social
-                    pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                if pedido and pedido.separacao_lote_id:
+                    # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
+                    Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id
+                    ).update({
+                        'cotacao_id': cotacao.id,
+                        'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                    })
                     # O status será calculado automaticamente como COTADO pelo trigger
 
             # ✅ CRIA EMBARQUE
@@ -1299,10 +1308,15 @@ def fechar_frete_grupo():
 
         # Atualiza todos os pedidos com a cotação
         for pedido in todos_pedidos:
-            pedido.cotacao_id = cotacao.id
-            pedido.transportadora = transportadora.razao_social
-            pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete grupo
-            # O status será calculado automaticamente como COTADO pelo trigger
+            if pedido.separacao_lote_id:
+                # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update({
+                    'cotacao_id': cotacao.id,
+                    'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete grupo
+                })
+                # O status será calculado automaticamente como COTADO pelo trigger
 
         # ✅ BUSCA DADOS DA TABELA PARA GRUPO
         resultados = session.get('resultados', {})
@@ -2889,19 +2903,19 @@ def incluir_em_embarque():
             
             db.session.add(novo_item)
             
-            # ✅ CORRIGIDO: Atualizar status do pedido para "COTADO"
-            # Define cotacao_id se o embarque tiver uma cotação
-            if embarque.cotacao_id:
-                pedido.cotacao_id = embarque.cotacao_id
-            
-            # Define transportadora
-            if embarque.transportadora:
-                pedido.transportadora = embarque.transportadora.razao_social
-            
-            # Reseta flag NF no CD
-            pedido.nf_cd = False
-            
-            # O status será calculado automaticamente como COTADO pelo trigger
+            # ✅ CORRIGIDO: Atualizar Separacao com cotação do embarque
+            if pedido.separacao_lote_id:
+                update_data = {'nf_cd': False}  # Reseta flag NF no CD
+                
+                if embarque.cotacao_id:
+                    update_data['cotacao_id'] = embarque.cotacao_id
+                
+                # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update(update_data)
+                
+                # O status será calculado automaticamente como COTADO pelo trigger
             
             pedidos_adicionados += 1
         

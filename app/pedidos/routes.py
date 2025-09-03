@@ -733,11 +733,16 @@ def excluir_pedido(pedido_id):
             # Se o embarque estiver cancelado, limpa os vínculos órfãos
             if embarque_relacionado and embarque_relacionado.status == 'cancelado':
                 print(f"[DEBUG] 🧹 Limpando vínculos órfãos com embarque cancelado #{embarque_relacionado.numero}")
-                pedido.nf = None
-                pedido.data_embarque = None
-                pedido.cotacao_id = None
-                pedido.transportadora = None
-                pedido.nf_cd = False
+                if pedido.separacao_lote_id:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id
+                    ).update({
+                        'numero_nf': None,
+                        'data_embarque': None,
+                        'cotacao_id': None,
+                        'nf_cd': False
+                    })
+                    # transportadora ignorado conforme orientação
                 vinculos_limpos = True
         
         # ✅ BUSCA E EXCLUI SEPARAÇÕES RELACIONADAS
