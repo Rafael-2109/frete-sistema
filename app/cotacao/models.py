@@ -57,7 +57,11 @@ class CotacaoItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=False)
-    pedido_id = db.Column(db.Integer, db.ForeignKey('pedidos.id'), nullable=False)
+    
+    # Migrado para usar separacao_lote_id ao invés de pedido_id
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # Novo campo principal
+    pedido_id_old = db.Column(db.Integer, nullable=True)  # Antigo pedido_id mantido como backup
+    
     cnpj_cliente = db.Column(db.String(20), nullable=False)
     cliente = db.Column(db.String(100), nullable=False)
     peso = db.Column(db.Float, nullable=False)
@@ -87,7 +91,24 @@ class CotacaoItem(db.Model):
     icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
 
     # Relacionamentos
-    pedido = db.relationship('Pedido', backref=db.backref('cotacao_item', lazy=True))
+    # Removido: relacionamento com Pedido (agora é VIEW, não tem FK)
+    # pedido = db.relationship('Pedido', backref=db.backref('cotacao_item', lazy=True))
+    
+    @property
+    def separacoes(self):
+        """Retorna todas as separações deste lote"""
+        from app.separacao.models import Separacao
+        if self.separacao_lote_id:
+            return Separacao.query.filter_by(separacao_lote_id=self.separacao_lote_id).all()
+        return []
+    
+    @property
+    def pedido(self):
+        """Compatibilidade: retorna dados agregados do pedido (VIEW)"""
+        from app.pedidos.models import Pedido
+        if self.separacao_lote_id:
+            return Pedido.query.filter_by(separacao_lote_id=self.separacao_lote_id).first()
+        return None
 
     def __repr__(self):
-        return f'<CotacaoItem {self.id} - Pedido {self.pedido_id}>'
+        return f'<CotacaoItem {self.id} - Lote {self.separacao_lote_id}>'

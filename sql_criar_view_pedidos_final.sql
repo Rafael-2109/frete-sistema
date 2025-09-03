@@ -283,3 +283,203 @@ FROM pedidos;
 -- Testar busca por ID
 EXPLAIN ANALYZE
 SELECT * FROM pedidos WHERE id = 123456;
+
+
+
+python3 -c "
+from app import create_app, db
+app = create_app()
+with app.app_context():
+    # 1. Fazer backup da tabela atual
+    try:
+        db.session.execute(db.text('ALTER TABLE pedidos RENAME TO pedidos_backup_old'))
+        db.session.commit()
+        print('1. Backup criado: pedidos_backup_old')
+    except Exception as e:
+        print(f'1. Erro no backup (talvez já exista): {e}')
+        db.session.rollback()    
+    # 2. Criar a VIEW
+    sql = '''
+    CREATE VIEW pedidos AS
+    SELECT 
+        ROW_NUMBER() OVER (ORDER BY s.separacao_lote_id)::integer as id,
+        s.separacao_lote_id,
+        MIN(s.num_pedido) as num_pedido,
+        MIN(s.data_pedido) as data_pedido,
+        MIN(s.cnpj_cpf) as cnpj_cpf,
+        MIN(s.raz_social_red) as raz_social_red,
+        MIN(s.nome_cidade) as nome_cidade,
+        MIN(s.cod_uf) as cod_uf,
+        MIN(s.cidade_normalizada) as cidade_normalizada,
+        MIN(s.uf_normalizada) as uf_normalizada,
+        MIN(s.codigo_ibge) as codigo_ibge,
+        COALESCE(SUM(s.valor_saldo), 0) as valor_saldo_total,
+        COALESCE(SUM(s.pallet), 0) as pallet_total,
+        COALESCE(SUM(s.peso), 0) as peso_total,
+        MIN(s.rota) as rota,
+        MIN(s.sub_rota) as sub_rota,
+        MIN(s.observ_ped_1) as observ_ped_1,
+        MIN(s.roteirizacao) as roteirizacao,
+        MIN(s.expedicao) as expedicao,
+        MIN(s.agendamento) as agendamento,
+        MIN(s.protocolo) as protocolo,
+        BOOL_OR(s.agendamento_confirmado) as agendamento_confirmado,
+        NULL::varchar(100) as transportadora,
+        NULL::float as valor_frete,
+        NULL::float as valor_por_kg,
+        NULL::varchar(100) as nome_tabela,
+        NULL::varchar(50) as modalidade,
+        NULL::varchar(100) as melhor_opcao,
+        NULL::float as valor_melhor_opcao,
+        NULL::integer as lead_time,
+        MIN(s.data_embarque) as data_embarque,
+        MIN(s.numero_nf) as nf,
+        MIN(s.status) as status,
+        BOOL_OR(s.nf_cd) as nf_cd,
+        MIN(s.pedido_cliente) as pedido_cliente,
+        BOOL_OR(s.separacao_impressa) as separacao_impressa,
+        MIN(s.separacao_impressa_em) as separacao_impressa_em,
+        MIN(s.separacao_impressa_por) as separacao_impressa_por,
+        MIN(s.cotacao_id) as cotacao_id,
+        NULL::integer as usuario_id,
+        MIN(s.criado_em) as criado_em
+    FROM separacao s
+    WHERE s.separacao_lote_id IS NOT NULL
+    AND s.status != 'PREVISAO'
+    GROUP BY s.separacao_lote_id
+    '''
+    try:
+        db.session.execute(db.text(sql))
+        db.session.commit()
+        print('2. VIEW criada com sucesso!')
+    except Exception as e:
+        print(f'2. Erro ao criar VIEW: {e}')
+        db.session.rollback()
+    
+    # 3. Verificar resultado
+    count = db.session.execute(db.text('SELECT COUNT(*) FROM pedidos')).fetchone()[0]
+    print(f'3. Total na nova VIEW: {count} (esperado: ~2416)')
+"
+
+
+
+python3 -c "
+from app import create_app, db
+app = create_app()
+with app.app_context():
+    # 1. Verificar se há triggers/constraints na tabela
+    r = db.session.execute(db.text(\"\"\"
+        SELECT COUNT(*) FROM information_schema.table_constraints 
+        WHERE table_name = 'pedidos' AND constraint_type != 'CHECK'
+    \"\"\")).fetchone()
+    print(f'1. Constraints em pedidos: {r[0]}')     
+    # 2. Verificar índices
+    r = db.session.execute(db.text(\"\"\"
+        SELECT COUNT(*) FROM pg_indexes 
+        WHERE tablename = 'pedidos'
+    \"\"\")).fetchone()
+    print(f'2. Índices em pedidos: {r[0]}')     
+    # 3. Ver os 62 registros de diferença
+    r = db.session.execute(db.text(\"\"\"
+        SELECT COUNT(*) FROM pedidos p
+        WHERE NOT EXISTS (
+            SELECT 1 FROM separacao s
+            WHERE s.separacao_lote_id = p.separacao_lote_id
+            AND s.status != 'PREVISAO'
+        )
+    \"\"\")).fetchone()
+    print(f'3. Pedidos que não existem mais em separacao: {r[0]}')    
+    # 4. Verificar dependências
+    r = db.session.execute(db.text(\"\"\"
+        SELECT COUNT(*) FROM information_schema.view_table_usage
+        WHERE table_name = 'pedidos'
+    \"\"\")).fetchone()
+    print(f'4. Views que dependem de pedidos: {r[0]}')
+"
+
+
+python3 -c "
+from app import create_app, db
+app = create_app()
+with app.app_context():
+    # 1. Quais são as constraints?
+    r = db.session.execute(db.text(\"\"\"
+        SELECT constraint_name, constraint_type 
+        FROM information_schema.table_constraints 
+        WHERE table_name = 'pedidos'
+    \"\"\")).fetchall()
+    print('1. CONSTRAINTS:')
+    for c in r:
+        print(f'   - {c[0]}: {c[1]}')
+    
+    # 2. Quais são os índices?
+    r = db.session.execute(db.text(\"\"\"
+        SELECT indexname 
+        FROM pg_indexes 
+        WHERE tablename = 'pedidos'
+    \"\"\")).fetchall()
+    print('2. ÍNDICES:')
+    for i in r:
+        print(f'   - {i[0]}')
+    
+    # 3. Qual VIEW depende de pedidos?
+    r = db.session.execute(db.text(\"\"\"
+        SELECT view_schema, view_name 
+        FROM information_schema.view_table_usage
+        WHERE table_name = 'pedidos'
+    \"\"\")).fetchall()
+    print('3. VIEWS DEPENDENTES:')
+    for v in r:
+        print(f'   - {v[0]}.{v[1]}')
+    
+    # 4. Há foreign keys apontando para pedidos?
+    r = db.session.execute(db.text(\"\"\"
+        SELECT tc.table_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.referential_constraints rc
+        ON tc.constraint_name = rc.constraint_name
+        WHERE rc.unique_constraint_name IN (
+            SELECT constraint_name 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'pedidos'
+        )
+    \"\"\")).fetchall()
+    print('4. TABELAS QUE REFERENCIAM PEDIDOS:')
+    for t in r:
+        print(f'   - {t[0]} ({t[1]})')
+"
+
+
+python3 -c "
+from app import create_app, db
+app = create_app()
+with app.app_context():
+    print('VERIFICANDO IMPACTOS DA CONVERSÃO:')
+    print('='*50)
+    # 1. Verificar se cotacao_itens tem registros
+    r = db.session.execute(db.text('SELECT COUNT(*) FROM cotacao_itens WHERE pedido_id IS NOT NULL')).fetchone()
+    if r and r[0] > 0:
+        print(f'❌ PROBLEMA: {r[0]} registros em cotacao_itens referenciam pedidos')
+        print('   Esses registros perderão a referência!')
+    else:
+        print('✅ cotacao_itens: Sem registros usando pedido_id')
+    # 2. Verificar código que usa pedidos.id
+    r = db.session.execute(db.text(\"\"\"
+        SELECT DISTINCT separacao_lote_id, num_pedido
+        FROM pedidos
+        WHERE id IN (
+            SELECT pedido_id FROM cotacao_itens WHERE pedido_id IS NOT NULL ) LIMIT 5
+    \"\"\")).fetchall()
+    if r:
+        print('   Pedidos afetados:')
+        for p in r:
+            print(f'     - Lote: {p[0]}, Pedido: {p[1]}')
+    # 3. Verificar se alguma VIEW usa pedidos.id
+    print('')
+    print('RECOMENDAÇÃO:')
+    if r and r[0] > 0:
+        print('⚠️  Fazer backup de cotacao_itens antes!')
+        print('⚠️  Considerar migrar pedido_id para separacao_lote_id')
+    else:
+        print('✅ Parece seguro prosseguir com a conversão')
+"

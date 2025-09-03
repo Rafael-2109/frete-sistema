@@ -197,9 +197,33 @@ def listar():
     # Simplificado: usa apenas dados da Separação
     separacoes_com_status = []
     for separacao in separacoes:
-        # Status vem direto da property status_calculado da Separação
-        separacao.status_pedido = separacao.status_calculado
-        separacao.pode_excluir = separacao.status_calculado == 'ABERTO'
+        # Proteção: verifica se a property existe e funciona
+        try:
+            # Status vem direto da property status_calculado da Separação
+            status = separacao.status_calculado if hasattr(separacao, 'status_calculado') else None
+            
+            # Fallback caso a property não funcione
+            if not status:
+                if separacao.status == 'PREVISAO':
+                    status = 'PREVISAO'
+                elif getattr(separacao, 'nf_cd', False):
+                    status = 'NF no CD'
+                elif separacao.sincronizado_nf or (separacao.numero_nf and str(separacao.numero_nf).strip()):
+                    status = 'FATURADO'
+                elif separacao.data_embarque:
+                    status = 'EMBARCADO'
+                elif separacao.cotacao_id:
+                    status = 'COTADO'
+                else:
+                    status = 'ABERTO'
+            
+            separacao.status_pedido = status
+            separacao.pode_excluir = status == 'ABERTO'
+            
+        except Exception as e:
+            # Fallback final em caso de erro
+            separacao.status_pedido = separacao.status or 'ABERTO'
+            separacao.pode_excluir = True
         
         separacoes_com_status.append(separacao)
     
