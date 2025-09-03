@@ -192,22 +192,14 @@ def importar():
 
 @separacao_bp.route('/listar')
 def listar():
-    from app.pedidos.models import Pedido
-    
     separacoes = Separacao.query.order_by(Separacao.id.desc()).all()
     
-    # Enriquece as separações com informações do pedido relacionado
+    # Simplificado: usa apenas dados da Separação
     separacoes_com_status = []
     for separacao in separacoes:
-        # Busca o pedido correspondente
-        pedido = Pedido.query.filter_by(
-            separacao_lote_id=separacao.separacao_lote_id
-        ).first()
-        
-        # Adiciona informações do status
-        separacao.pedido_relacionado = pedido
-        separacao.status_pedido = pedido.status_calculado if pedido else 'SEM PEDIDO'
-        separacao.pode_excluir = pedido.status_calculado == 'ABERTO' if pedido else False
+        # Status vem direto da property status_calculado da Separação
+        separacao.status_pedido = separacao.status_calculado
+        separacao.pode_excluir = separacao.status_calculado == 'ABERTO'
         
         separacoes_com_status.append(separacao)
     

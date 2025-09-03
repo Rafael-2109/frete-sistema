@@ -146,6 +146,7 @@ def salvar_pre_separacao_v2():
                 
                 # Status e controle
                 status='PREVISAO',  # ✅ Status PREVISAO para pré-separação
+                sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
                 tipo_envio=(
                     "parcial" if float(qtd_selecionada) < float(item_carteira.qtd_saldo_produto_pedido) else "total"
                 ),

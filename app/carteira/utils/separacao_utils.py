@@ -233,6 +233,7 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
                 agendamento=agendamento_obj,
                 protocolo=protocolo,
                 tipo_envio=tipo_envio,
+                sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
                 criado_em=agora_brasil()
             )
             

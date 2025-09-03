@@ -32,6 +32,7 @@ class PreSeparacaoItemAdapter:
         else:
             self._separacao = Separacao()
             self._separacao.status = self.STATUS_PREVISAO
+            self._separacao.sincronizado_nf = False  # IMPORTANTE: Sempre criar com False
     
     # Mapeamento de campos PreSeparacaoItem → Separacao
     @property

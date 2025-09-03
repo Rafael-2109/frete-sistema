@@ -128,6 +128,7 @@ def salvar_pre_separacao():
                 observ_ped_1=data.get("observacoes_usuario"),  # MIGRADO: observacoes_usuario → observ_ped_1
                 separacao_lote_id=separacao_lote_id,
                 status='PREVISAO',  # MIGRADO: Status fixo para pré-separação
+                sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
                 tipo_envio=(
                     "parcial" if float(qtd_selecionada) < float(item_carteira.qtd_saldo_produto_pedido) else "total"
                 ),

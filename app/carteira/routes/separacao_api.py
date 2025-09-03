@@ -142,6 +142,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 pedido_cliente=item.pedido_cliente,
                 tipo_envio="total",  # SEMPRE total quando vem de gerar_separacao_completa
                 status='PREVISAO',  # CORRIGIDO: Cria como PREVISAO primeiro
+                sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
                 # vendedor=item.vendedor,  # REMOVIDO: campo não existe em Separacao
                 criado_em=agora_brasil(),
             )
@@ -508,7 +509,7 @@ def atualizar_datas_separacao_generic(lote_id):
         # Buscar todas as separações do lote que NÃO estão sincronizadas
         separacoes = Separacao.query.filter(
             Separacao.separacao_lote_id == lote_id,
-            Separacao.sincronizado_nf != True  # Explicitamente != True para incluir NULL
+            Separacao.sincronizado_nf == False  # Explicitamente != True para incluir NULL
         ).all()
         
         if not separacoes:
@@ -578,7 +579,7 @@ def alterar_status_separacao(lote_id):
         # Buscar todas as separações do lote que NÃO estão sincronizadas
         separacoes = Separacao.query.filter(
             Separacao.separacao_lote_id == lote_id,
-            Separacao.sincronizado_nf != True
+            Separacao.sincronizado_nf == False
         ).all()
         
         if not separacoes:
