@@ -9,7 +9,6 @@ from flask import Blueprint, jsonify, request, url_for
 from flask_login import login_required, current_user
 from app.carteira.models_alertas import AlertaSeparacaoCotada
 import logging
-from app import db
 
 logger = logging.getLogger(__name__)
 

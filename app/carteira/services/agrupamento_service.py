@@ -6,7 +6,6 @@ from sqlalchemy import func, and_, exists
 from app import db
 from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
 from app.producao.models import CadastroPalletizacao
 import logging
 
@@ -153,32 +152,12 @@ class AgrupamentoService:
             # Determinar se está totalmente em separação
             totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
             
-            # Para separações tipo_envio 'total', usar dados da separação completa
-            if dados_separacao_completa and dados_separacao_completa['expedicao']:
-                expedicao_final = dados_separacao_completa['expedicao']
-                agendamento_final = dados_separacao_completa['agendamento'] if dados_separacao_completa['agendamento'] else pedido.agendamento
-                protocolo_final = dados_separacao_completa['protocolo'] if dados_separacao_completa['protocolo'] else pedido.protocolo
-                # Usar agendamento_confirmado da separação se existir
-                agendamento_confirmado_final = dados_separacao_completa.get('agendamento_confirmado', pedido.agendamento_confirmado)
-            else:
-                # Verificar se existe pré-separação total
-                from app.carteira.models import PreSeparacaoItem
-                pre_sep_total = db.session.query(PreSeparacaoItem).filter(
-                    PreSeparacaoItem.num_pedido == pedido.num_pedido,
-                    PreSeparacaoItem.tipo_envio == 'total',
-                    PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-                ).first()
-                
-                if pre_sep_total:
-                    expedicao_final = pre_sep_total.data_expedicao_editada if pre_sep_total.data_expedicao_editada else pedido.expedicao
-                    agendamento_final = pre_sep_total.data_agendamento_editada if pre_sep_total.data_agendamento_editada else pedido.agendamento
-                    protocolo_final = pre_sep_total.protocolo_editado if pre_sep_total.protocolo_editado else pedido.protocolo
-                    agendamento_confirmado_final = pre_sep_total.agendamento_confirmado if hasattr(pre_sep_total, 'agendamento_confirmado') else pedido.agendamento_confirmado
-                else:
-                    expedicao_final = pedido.expedicao
-                    agendamento_final = pedido.agendamento
-                    protocolo_final = pedido.protocolo
-                    agendamento_confirmado_final = pedido.agendamento_confirmado
+            # SIMPLIFICADO: Não precisamos mais modificar datas baseado em separações
+            # Sempre usar os valores originais da CarteiraPrincipal
+            expedicao_final = pedido.expedicao
+            agendamento_final = pedido.agendamento
+            protocolo_final = pedido.protocolo
+            agendamento_confirmado_final = pedido.agendamento_confirmado
             
             # Buscar rota e sub-rota das localidades
             rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
@@ -193,8 +172,7 @@ class AgrupamentoService:
                 'raz_social_red': pedido.raz_social_red,
                 'rota': rota_calculada,
                 'sub_rota': sub_rota_calculada,
-                'expedicao': expedicao_final,  # Usa expedição da separação completa se existir
-                'expedicao_original': pedido.expedicao,  # Mantém a original para referência
+                'expedicao': expedicao_final,  # SIMPLIFICADO: Sempre usa valor original
                 'data_entrega_pedido': pedido.data_entrega_pedido,
                 'observ_ped_1': pedido.observ_ped_1,  
                 'status_pedido': pedido.status_pedido,
@@ -202,11 +180,9 @@ class AgrupamentoService:
                 'cod_uf': pedido.cod_uf,
                 'nome_cidade': pedido.nome_cidade,
                 'incoterm': pedido.incoterm,  # Mantém apenas a sigla (CIF, FOB, etc)
-                'protocolo': protocolo_final,  # Usa protocolo da separação completa se existir
-                'protocolo_original': pedido.protocolo,  # Mantém o original para referência
-                'agendamento': agendamento_final,  # Usa agendamento da separação completa se existir
-                'agendamento_original': pedido.agendamento,  # Mantém o original para referência
-                'agendamento_confirmado': agendamento_confirmado_final,  # Usa o valor da separação/pré-separação se existir
+                'protocolo': protocolo_final,  # SIMPLIFICADO: Sempre usa valor original
+                'agendamento': agendamento_final,  # SIMPLIFICADO: Sempre usa valor original
+                'agendamento_confirmado': agendamento_confirmado_final,  # SIMPLIFICADO: Sempre usa valor original
                 'forma_agendamento': pedido.forma_agendamento,
                 'valor_total': valor_pedido,
                 'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
@@ -217,7 +193,7 @@ class AgrupamentoService:
                 'valor_saldo_restante': valor_saldo_restante,
                 'qtd_separacoes': qtd_separacoes,
                 'totalmente_separado': totalmente_separado,
-                'tem_separacao_completa': dados_separacao_completa and dados_separacao_completa['expedicao'] is not None,
+                'tem_separacao_completa': dados_separacao_completa.get('tem_separacao_completa', False),
                 'separacao_lote_id': dados_separacao_completa.get('separacao_lote_id')  # Passar lote_id
             }
             
@@ -228,80 +204,49 @@ class AgrupamentoService:
     def _calcular_separacoes(self, num_pedido):
         """Calcula quantidade e valor das separações ativas e retorna dados de separação completa"""
         try:
-            from app.carteira.models import PreSeparacaoItem
+            # MIGRADO: Removido import de PreSeparacaoItem
             
             # Contar separacao_lote_id únicos (quantidade de envios para separação)
-            # Considera apenas pedidos com status DIFERENTE de 'FATURADO'
+            # MIGRADO: Usa sincronizado_nf=False em vez de JOIN com Pedido
             qtd_separacoes = db.session.query(
                 func.count(func.distinct(Separacao.separacao_lote_id))
-            ).join(
-                Pedido, and_(
-                    Separacao.separacao_lote_id == Pedido.separacao_lote_id,
-                    Separacao.num_pedido == Pedido.num_pedido
-                )
             ).filter(
                 Separacao.num_pedido == num_pedido,
-                # Considera apenas pedidos não faturados
-                Pedido.status != 'FATURADO'
+                Separacao.sincronizado_nf == False  # MIGRADO: Critério correto
             ).scalar() or 0
             
             # Buscar separações para calcular valor total e verificar tipo_envio
-            # Considera apenas pedidos não faturados
-            separacoes_ativas = db.session.query(Separacao, Pedido).join(
-                Pedido, and_(
-                    Separacao.separacao_lote_id == Pedido.separacao_lote_id,
-                    Separacao.num_pedido == Pedido.num_pedido
-                )
-            ).filter(
+            # MIGRADO: Query simplificada sem JOIN com Pedido
+            separacoes_ativas = db.session.query(Separacao).filter(
                 Separacao.num_pedido == num_pedido,
-                # Considera apenas pedidos não faturados
-                Pedido.status != 'FATURADO'
+                Separacao.sincronizado_nf == False  # MIGRADO: Critério correto
             ).all()
             
             # Calcular valor total das separações e buscar dados de separação completa
             valor_separacoes = 0
             dados_separacao_completa = {
-                'expedicao': None,
-                'agendamento': None,
-                'protocolo': None,
-                'agendamento_confirmado': False,
-                'separacao_lote_id': None  # Adicionar lote_id
+                'tem_separacao_completa': False,  # SIMPLIFICADO: Apenas flag
+                'separacao_lote_id': None  # Manter lote_id se houver separação completa
             }
             
-            for sep, ped in separacoes_ativas:
+            for sep in separacoes_ativas:
                 if sep.qtd_saldo and sep.valor_saldo:
                     valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
                     valor_separacoes += sep.qtd_saldo * valor_unit
                 
-                # Se encontrar uma separação com tipo_envio 'total', pegar dados do Pedido
+                # Se encontrar uma separação com tipo_envio 'total', marcar flag
                 if sep.tipo_envio == 'total':
-                    dados_separacao_completa['expedicao'] = ped.expedicao
-                    dados_separacao_completa['agendamento'] = ped.agendamento
-                    dados_separacao_completa['protocolo'] = ped.protocolo
-                    dados_separacao_completa['agendamento_confirmado'] = sep.agendamento_confirmado if hasattr(sep, 'agendamento_confirmado') else False
-                    dados_separacao_completa['separacao_lote_id'] = sep.separacao_lote_id  # Adicionar lote_id
+                    dados_separacao_completa['tem_separacao_completa'] = True
+                    dados_separacao_completa['separacao_lote_id'] = sep.separacao_lote_id
             
-            # Buscar pré-separações completas também
-            if not dados_separacao_completa['expedicao']:
-                pre_sep_completa = PreSeparacaoItem.query.filter(
-                    PreSeparacaoItem.num_pedido == num_pedido,
-                    PreSeparacaoItem.tipo_envio == 'total',
-                    PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-                ).first()
-                
-                if pre_sep_completa:
-                    dados_separacao_completa['expedicao'] = pre_sep_completa.data_expedicao_editada
-                    dados_separacao_completa['agendamento'] = pre_sep_completa.data_agendamento_editada
-                    dados_separacao_completa['protocolo'] = pre_sep_completa.protocolo_editado
-                    # IMPORTANTE: Incluir também o agendamento_confirmado da pré-separação
-                    dados_separacao_completa['agendamento_confirmado'] = pre_sep_completa.agendamento_confirmado if hasattr(pre_sep_completa, 'agendamento_confirmado') else False
-                    dados_separacao_completa['separacao_lote_id'] = pre_sep_completa.separacao_lote_id  # Adicionar lote_id
+            # MIGRADO: Não precisa buscar separadamente pois sincronizado_nf=False já inclui PREVISAO
+            # A query anterior já pegou todas as separações incluindo status='PREVISAO'
             
             return qtd_separacoes, valor_separacoes, dados_separacao_completa
             
         except Exception as e:
             logger.warning(f"Erro ao calcular separações para {num_pedido}: {e}")
-            return 0, 0, {'expedicao': None, 'agendamento': None, 'protocolo': None}
+            return 0, 0, {'tem_separacao_completa': False, 'separacao_lote_id': None}
     
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""

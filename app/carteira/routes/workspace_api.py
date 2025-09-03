@@ -9,11 +9,9 @@ from flask_login import login_required
 from sqlalchemy import and_, func
 
 from app import db
-from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
+from app.carteira.models import CarteiraPrincipal
 from app.carteira.utils.workspace_utils import processar_dados_workspace_produto
-# USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
-from app.pedidos.models import Pedido
+# Estoque agora é carregado assincronamente via /workspace-estoque
 from app.producao.models import CadastroPalletizacao
 from app.separacao.models import Separacao
 
@@ -58,67 +56,46 @@ def workspace_pedido_real(num_pedido):
         if not produtos_carteira:
             return jsonify({"success": False, "error": f"Pedido {num_pedido} não encontrado ou sem itens ativos"}), 404
 
-        # Buscar status do pedido
-        pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
-        status_pedido = pedido.status if pedido else 'ABERTO'
+        # MIGRADO: Status do pedido não é mais necessário aqui
+        # O status agora está em cada Separacao individual
+        
+        # OTIMIZAÇÃO: Buscar TODAS as separações do pedido DE UMA VEZ (fora do loop!)
+        separacoes_agrupadas = db.session.query(
+            Separacao.cod_produto,
+            func.sum(Separacao.qtd_saldo).label('qtd_total')
+        ).filter(
+            Separacao.num_pedido == num_pedido,
+            Separacao.sincronizado_nf == False  # Apenas não sincronizados
+        ).group_by(
+            Separacao.cod_produto
+        ).all()
+        
+        # Criar dicionário para lookup rápido O(1)
+        qtd_por_produto = {sep.cod_produto: float(sep.qtd_total or 0) for sep in separacoes_agrupadas}
         
         # Processar produtos e calcular dados complementares
         produtos_processados = []
         valor_total = 0
 
         for produto in produtos_carteira:
-            # Obter projeção completa do produto usando Sistema de Estoque em Tempo Real
-            try:
-                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
-            except Exception as e:
-                logger.warning(f"Erro ao buscar projeção para produto {produto.cod_produto}: {e}")
-                projecao_completa = None
+            # OTIMIZAÇÃO: NÃO buscar estoque aqui - será feito assincronamente via /workspace-estoque
+            # Isso evita duplicação e melhora performance inicial
+            resumo_estoque = None  # Será preenchido pela chamada assíncrona
             
-            # Converter formato para compatibilidade com workspace_utils
-            if projecao_completa and isinstance(projecao_completa, dict):
-                resumo_estoque = {
-                    'estoque_inicial': projecao_completa['estoque_atual'],
-                    'estoque_atual': projecao_completa['estoque_atual'],
-                    'menor_estoque_d7': projecao_completa.get('menor_estoque_d7'),
-                    'dia_ruptura': projecao_completa.get('dia_ruptura'),
-                    'projecao_29_dias': projecao_completa.get('projecao', []),
-                    'status_ruptura': 'CRÍTICO' if projecao_completa.get('dia_ruptura') else 'OK'
-                }
-            else:
-                resumo_estoque = None
-
-            # Processar dados do produto usando função utilitária
+            # Processar dados BÁSICOS do produto (sem estoque detalhado)
             produto_data = processar_dados_workspace_produto(produto, resumo_estoque)
 
             if produto_data:
-                # Calcular quantidade em pré-separações ativas
-                qtd_pre_separacoes = db.session.query(
-                    func.coalesce(func.sum(PreSeparacaoItem.qtd_selecionada_usuario), 0)
-                ).filter(
-                    PreSeparacaoItem.num_pedido == num_pedido,
-                    PreSeparacaoItem.cod_produto == produto.cod_produto,
-                    PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-                ).scalar()
-                
-                # Calcular quantidade em separações confirmadas
-                qtd_separacoes = db.session.query(
-                    func.coalesce(func.sum(Separacao.qtd_saldo), 0)
-                ).join(
-                    Pedido,
-                    Separacao.separacao_lote_id == Pedido.separacao_lote_id
-                ).filter(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.cod_produto == produto.cod_produto,
-                    Pedido.status.in_(['ABERTO', 'COTADO'])
-                ).scalar()
+                # OTIMIZADO: Usar lookup O(1) ao invés de query no banco
+                qtd_separacoes = qtd_por_produto.get(produto.cod_produto, 0)
                 
                 # Adicionar as quantidades aos dados do produto
-                produto_data['qtd_pre_separacoes'] = float(qtd_pre_separacoes or 0)
-                produto_data['qtd_separacoes'] = float(qtd_separacoes or 0)
+                produto_data['qtd_pre_separacoes'] = 0  # MIGRADO: Não existe mais distinção
+                produto_data['qtd_separacoes'] = qtd_separacoes
                 
-                # Calcular qtd_saldo disponível (quantidade do pedido - separações - pré-separações)
+                # Calcular qtd_saldo disponível (quantidade do pedido - separações)
                 qtd_pedido = produto_data.get('qtd_pedido', 0)
-                produto_data['qtd_saldo'] = qtd_pedido - produto_data['qtd_separacoes'] - produto_data['qtd_pre_separacoes']
+                produto_data['qtd_saldo'] = qtd_pedido - produto_data['qtd_separacoes']
                 
                 produtos_processados.append(produto_data)
                 valor_total += produto_data["qtd_pedido"] * produto_data["preco_unitario"]
@@ -127,7 +104,6 @@ def workspace_pedido_real(num_pedido):
             {
                 "success": True,
                 "num_pedido": num_pedido,
-                "status_pedido": status_pedido,
                 "valor_total": valor_total,
                 "produtos": produtos_processados,
                 "total_produtos": len(produtos_processados),

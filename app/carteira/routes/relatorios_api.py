@@ -10,117 +10,32 @@ import io
 from sqlalchemy import func
 from app import db
 from app.carteira.main_routes import carteira_bp
-from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
+from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
+from app.producao.models import CadastroPalletizacao
 import logging
 
 logger = logging.getLogger(__name__)
 
-@carteira_bp.route('/api/relatorios/pre_separacoes', methods=['POST'])
-def exportar_pre_separacoes():
-    """Exportar pré-separações com status CRIADO e RECOMPOSTO"""
-    try:
-        data = request.json or {}
-        data_inicio = data.get('data_inicio') if data else None
-        data_fim = data.get('data_fim') if data else None
-        
-        # Query base
-        query = PreSeparacaoItem.query.filter(
-            PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-        )
-        
-        # Aplicar filtro de datas se fornecido
-        if data_inicio and data_fim:
-            data_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
-            data_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
-            query = query.filter(
-                PreSeparacaoItem.data_expedicao_editada.between(data_inicio, data_fim)
-            )
-        
-        # Buscar dados
-        items = query.all()
-        
-        # Converter para DataFrame
-        dados = []
-        for item in items:
-            dados.append({
-                'Lote Pré-Separação': item.separacao_lote_id,
-                'Nº Pedido': item.num_pedido,
-                'Cód. Produto': item.cod_produto,
-                'Nome Produto': item.nome_produto,
-                'CNPJ Cliente': item.cnpj_cliente,
-                'Qtd Original': float(item.qtd_original_carteira) if item.qtd_original_carteira else 0,
-                'Qtd Selecionada': float(item.qtd_selecionada_usuario) if item.qtd_selecionada_usuario else 0,
-                'Qtd Restante': float(item.qtd_restante_calculada) if item.qtd_restante_calculada else 0,
-                'Valor': float(item.valor_original_item) if item.valor_original_item else 0,
-                'Peso': float(item.peso_original_item) if item.peso_original_item else 0,
-                'Data Expedição': item.data_expedicao_editada.strftime('%d/%m/%Y') if item.data_expedicao_editada else '',
-                'Data Agendamento': item.data_agendamento_editada.strftime('%d/%m/%Y') if item.data_agendamento_editada else '',
-                'Protocolo': item.protocolo_editado or '',
-                'Status': item.status,
-                'Recomposto': 'Sim' if item.recomposto else 'Não',
-                'Tipo Envio': item.tipo_envio,
-                'Observações': item.observacoes_usuario or '',
-                'Criado Em': item.data_criacao.strftime('%d/%m/%Y %H:%M') if item.data_criacao else '',
-                'Criado Por': item.criado_por or ''
-            })
-        
-        df = pd.DataFrame(dados)
-        
-        # Gerar Excel
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name='Pré-Separações', index=False)
-            
-            # Ajustar largura das colunas
-            worksheet = writer.sheets['Pré-Separações']
-            for i, col in enumerate(df.columns):
-                column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
-                worksheet.set_column(i, i, min(column_width, 50))
-        
-        output.seek(0)
-        
-        filename = f'pre_separacoes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro ao exportar pré-separações: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
+# Função exportar_pre_separacoes REMOVIDA - Obsoleta após migração para Separacao
 
 @carteira_bp.route('/api/relatorios/separacoes', methods=['POST'])
 def exportar_separacoes():
-    """Exportar separações com status do pedido"""
+    """Exportar separações não sincronizadas"""
     try:
         data = request.json or {}
         data_inicio = data.get('data_inicio') if data else None
         data_fim = data.get('data_fim') if data else None
         
-        # Query com join para pegar status do pedido
-        query = db.session.query(
-            Separacao,
-            Pedido.status.label('status_pedido'),
-            Pedido.nf
-        ).outerjoin(
-            Pedido,
-            Separacao.separacao_lote_id == Pedido.separacao_lote_id
-        )
+        # MIGRADO: Removido JOIN com Pedido VIEW, usa sincronizado_nf=False
+        query = Separacao.query
         
-        # Filtrar apenas separações ATIVAS (excluir FATURADO)
+        # Filtrar apenas separações não sincronizadas (inclui PREVISAO, ABERTO, COTADO)
         # Permitir incluir FATURADO apenas se explicitamente solicitado
         incluir_faturado = data.get('incluir_faturado', False) if data else False
         if not incluir_faturado:
             query = query.filter(
-                db.or_(
-                    Pedido.status.in_(['ABERTO', 'COTADO']),
-                    Pedido.status.is_(None)  # Incluir separações sem pedido associado
-                )
+                Separacao.sincronizado_nf == False
             )
         
         # Aplicar filtro de datas se fornecido
@@ -132,11 +47,11 @@ def exportar_separacoes():
             )
         
         # Buscar dados
-        resultados = query.all()
+        separacoes = query.all()
         
         # Converter para DataFrame
         dados = []
-        for sep, status_pedido, nf in resultados:
+        for sep in separacoes:
             dados.append({
                 'Lote Separação': sep.separacao_lote_id,
                 'Nº Pedido': sep.num_pedido,
@@ -154,8 +69,8 @@ def exportar_separacoes():
                 'Data Expedição': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
                 'Data Agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
                 'Protocolo': sep.protocolo or '',
-                'Status Pedido': status_pedido or 'SEM PEDIDO',
-                'Nota Fiscal': nf or '',
+                'Status': sep.status or '',  # Status da própria Separacao
+                'Nota Fiscal': sep.numero_nf or '',  # Campo correto: numero_nf
                 'Tipo Envio': sep.tipo_envio,
                 'Transportadora': sep.roteirizacao or '',
                 'Rota': sep.rota or '',
@@ -297,51 +212,105 @@ def exportar_carteira_detalhada():
             CarteiraPrincipal.cod_produto
         ).all()
         
+        # OTIMIZAÇÃO: Buscar TODAS as somas de separações em UMA query
+        # Agrupando por num_pedido + cod_produto
+        somas_separacoes = db.session.query(
+            Separacao.num_pedido,
+            Separacao.cod_produto,
+            func.sum(Separacao.qtd_saldo).label('qtd_total')
+        ).filter(
+            Separacao.sincronizado_nf == False  # Inclui PREVISAO, ABERTO, COTADO
+        ).group_by(
+            Separacao.num_pedido,
+            Separacao.cod_produto
+        ).all()
+        
+        # Criar índice para acesso rápido O(1)
+        soma_por_pedido_produto = {}
+        for soma in somas_separacoes:
+            chave = (soma.num_pedido, soma.cod_produto)
+            soma_por_pedido_produto[chave] = float(soma.qtd_total or 0)
+        
+        # OTIMIZAÇÃO: Buscar fatores de conversão (palletizacao e peso_bruto) uma vez
+        # Pegar todos os produtos únicos dos pedidos
+        produtos_unicos = list(set(p.cod_produto for p in pedidos))
+        fatores_conversao = db.session.query(
+            CadastroPalletizacao.cod_produto,
+            CadastroPalletizacao.palletizacao,
+            CadastroPalletizacao.peso_bruto
+        ).filter(
+            CadastroPalletizacao.cod_produto.in_(produtos_unicos),
+            CadastroPalletizacao.ativo == True
+        ).all()
+        
+        # Criar índice de fatores de conversão
+        fatores_por_produto = {}
+        for fator in fatores_conversao:
+            fatores_por_produto[fator.cod_produto] = {
+                'palletizacao': float(fator.palletizacao or 1),  # Evita divisão por zero
+                'peso_bruto': float(fator.peso_bruto or 0)
+            }
+        
+        # OTIMIZAÇÃO: Buscar TODAS as separações detalhadas em UMA query
+        todas_separacoes = db.session.query(
+            Separacao,
+            CarteiraPrincipal.pedido_cliente,
+            CarteiraPrincipal.cond_pgto_pedido,
+            CarteiraPrincipal.forma_pgto_pedido,
+            CarteiraPrincipal.incoterm
+        ).outerjoin(
+            CarteiraPrincipal,
+            db.and_(
+                CarteiraPrincipal.num_pedido == Separacao.num_pedido,
+                CarteiraPrincipal.cod_produto == Separacao.cod_produto,
+                CarteiraPrincipal.ativo == True
+            )
+        ).filter(
+            Separacao.sincronizado_nf == False  # Não sincronizadas
+        ).all()
+        
+        # Criar índice para acesso rápido por pedido+produto
+        separacoes_por_pedido_produto = {}
+        for sep_data in todas_separacoes:
+            sep = sep_data[0]
+            chave = (sep.num_pedido, sep.cod_produto)
+            if chave not in separacoes_por_pedido_produto:
+                separacoes_por_pedido_produto[chave] = []
+            separacoes_por_pedido_produto[chave].append(sep_data)
+        
         # Preparar DataFrame
         dados = []
         
         for pedido in pedidos:
-            # Calcular quantidades líquidas (abatendo pré-separações e separações)
-            qtd_pre_sep = db.session.query(
-                func.sum(PreSeparacaoItem.qtd_selecionada_usuario)
-            ).filter(
-                PreSeparacaoItem.num_pedido == pedido.num_pedido,
-                PreSeparacaoItem.cod_produto == pedido.cod_produto,
-                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-            ).scalar() or 0
-            
-            # Somar apenas separações ATIVAS (excluir FATURADO)
-            qtd_sep = db.session.query(
-                func.sum(Separacao.qtd_saldo)
-            ).join(
-                Pedido,
-                Separacao.separacao_lote_id == Pedido.separacao_lote_id
-            ).filter(
-                Separacao.num_pedido == pedido.num_pedido,
-                Separacao.cod_produto == pedido.cod_produto,
-                Pedido.status.in_(['ABERTO', 'COTADO'])  # Excluir FATURADO
-            ).scalar() or 0
-            
-            qtd_liquida = float(pedido.qtd_saldo_produto_pedido or 0) - float(qtd_pre_sep) - float(qtd_sep)
-            
+            # Buscar soma do índice em O(1) em vez de fazer query
+            chave = (pedido.num_pedido, pedido.cod_produto)
+            qtd_sep = soma_por_pedido_produto.get(chave, 0)
+                        
             # Calcular valores para o pedido
             preco_unit = float(pedido.preco_produto_pedido or 0)
             qtd_original = float(pedido.qtd_produto_pedido or 0)
             qtd_saldo_atual = float(pedido.qtd_saldo_produto_pedido or 0)
             
-            # Valores originais
-            valor_original = qtd_original * preco_unit
-            # Assumindo peso e pallet proporcionais (você pode ajustar se tiver campos específicos)
-            peso_unit = float(pedido.peso or 0) / qtd_original if qtd_original > 0 and pedido.peso else 0
-            pallet_unit = float(pedido.pallet or 0) / qtd_original if qtd_original > 0 and pedido.pallet else 0
-            peso_original = qtd_original * peso_unit
-            pallet_original = qtd_original * pallet_unit
+            # CORREÇÃO: Usar fatores de conversão do CadastroPalletizacao
+            # Conforme CLAUDE.md linhas 446-479
+            fatores = fatores_por_produto.get(pedido.cod_produto, {
+                'palletizacao': 1,  # Default se não encontrar
+                'peso_bruto': 0
+            })
             
-            # Valores de saldo (após descontar pré-sep e sep)
-            qtd_saldo_liquido = qtd_saldo_atual - float(qtd_pre_sep) - float(qtd_sep)
+            # Valores de saldo (após descontar separações)
+            qtd_saldo_liquido = qtd_saldo_atual - float(qtd_sep)
             valor_saldo = qtd_saldo_liquido * preco_unit
-            peso_saldo = qtd_saldo_liquido * peso_unit
-            pallet_saldo = qtd_saldo_liquido * pallet_unit
+            
+            # CÁLCULOS CORRETOS conforme CLAUDE.md:
+            # Peso = quantidade * peso_bruto (multiplicação)
+            peso_saldo = qtd_saldo_liquido * fatores['peso_bruto']
+            
+            # Pallet = quantidade / palletizacao (divisão)
+            if fatores['palletizacao'] > 0:
+                pallet_saldo = qtd_saldo_liquido / fatores['palletizacao']
+            else:
+                pallet_saldo = 0
             
             # Linha do pedido
             # Determinar valor da coluna "Data Agendada"
@@ -357,19 +326,18 @@ def exportar_carteira_detalhada():
                 'Cód. Produto': pedido.cod_produto,
                 'Nome Produto': pedido.nome_produto,
                 'CNPJ/CPF': pedido.cnpj_cpf,
-                'Razão Social': pedido.raz_social,
+                'Razão Social': pedido.raz_social_red,
                 'Município': pedido.municipio,
                 'UF': pedido.estado,
                 'Vendedor': pedido.vendedor,
                 'Equipe': pedido.equipe_vendas,
-                'Qtd Original': qtd_original,
-                'Valor Original': valor_original,
-                'Pallet Original': pallet_original,
-                'Peso Original': peso_original,
-                'Qtd Saldo': qtd_saldo_liquido,
-                'Valor Saldo': valor_saldo,
-                'Pallet Saldo': pallet_saldo,
-                'Peso Saldo': peso_saldo,
+                'Qtd': qtd_saldo_liquido,  # Removido sufixo "Saldo"
+                'Valor': valor_saldo,  # Removido sufixo "Saldo"
+                'Pallet': pallet_saldo,  # Removido sufixo "Saldo"
+                'Peso': peso_saldo,  # Removido sufixo "Saldo"
+                'Cond. Pagamento': pedido.cond_pgto_pedido or '',
+                'Forma Pagamento': pedido.forma_pgto_pedido or '',
+                'Incoterm': pedido.incoterm or '',
                 'Data Expedição': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else '',
                 'Entrega Prevista': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 'Data Agendada': data_agendada,
@@ -382,69 +350,14 @@ def exportar_carteira_detalhada():
             }
             dados.append(linha_pedido)
             
-            # Buscar pré-separações deste pedido/produto
-            pre_seps = PreSeparacaoItem.query.filter(
-                PreSeparacaoItem.num_pedido == pedido.num_pedido,
-                PreSeparacaoItem.cod_produto == pedido.cod_produto,
-                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-            ).all()
+            # REMOVIDO: Pré-separações migradas para Separacao com status='PREVISAO'
             
-            for pre_sep in pre_seps:
-                # Calcular pallet e peso proporcional para pré-separação
-                qtd_pre_sep = float(pre_sep.qtd_selecionada_usuario or 0)
-                valor_pre_sep = float(pre_sep.valor_original_item or 0)
-                peso_pre_sep = float(pre_sep.peso_original_item or 0) if hasattr(pre_sep, 'peso_original_item') else qtd_pre_sep * peso_unit
-                pallet_pre_sep = qtd_pre_sep * pallet_unit  # Calcular proporcional
-                
-                # Determinar valor da coluna "Data Agendada" para pré-separação
-                if pre_sep.agendamento_confirmado:
-                    data_agendada_pre = pre_sep.data_agendamento_editada.strftime('%d/%m/%Y') if pre_sep.data_agendamento_editada else ''
-                else:
-                    data_agendada_pre = 'Aguardando Aprovação' if pre_sep.data_agendamento_editada else ''
-                
-                linha_pre_sep = {
-                    'Tipo': 'PRÉ-SEPARAÇÃO',
-                    'Lote': pre_sep.separacao_lote_id or '',
-                    'Nº Pedido': pre_sep.num_pedido,
-                    'Cód. Produto': pre_sep.cod_produto,
-                    'Nome Produto': pre_sep.nome_produto,
-                    'CNPJ/CPF': pedido.cnpj_cpf,
-                    'Razão Social': pedido.raz_social,
-                    'Município': pedido.municipio,
-                    'UF': pedido.estado,
-                    'Vendedor': pedido.vendedor,
-                    'Equipe': pedido.equipe_vendas,
-                    'Qtd Original': '',
-                    'Valor Original': '',
-                    'Pallet Original': '',
-                    'Peso Original': '',
-                    'Qtd Saldo': qtd_pre_sep,
-                    'Valor Saldo': valor_pre_sep,
-                    'Pallet Saldo': pallet_pre_sep,
-                    'Peso Saldo': peso_pre_sep,
-                    'Data Expedição': pre_sep.data_expedicao_editada.strftime('%d/%m/%Y') if pre_sep.data_expedicao_editada else '',
-                    'Entrega Prevista': pre_sep.data_agendamento_editada.strftime('%d/%m/%Y') if pre_sep.data_agendamento_editada else '',
-                    'Data Agendada': data_agendada_pre,
-                    'Protocolo': pre_sep.protocolo_editado or '',
-                    'Observações': pre_sep.observacoes_usuario or '',
-                    'Pedido Cliente': '',
-                    'Status': pre_sep.status,
-                    'Criado Em': pre_sep.data_criacao.strftime('%d/%m/%Y %H:%M') if pre_sep.data_criacao else '',
-                    'Criado Por': pre_sep.criado_por or ''
-                }
-                dados.append(linha_pre_sep)
+            # OTIMIZAÇÃO: Buscar separações do índice em O(1) em vez de fazer query
+            # Cada linha é por separacao_lote_id + cod_produto
+            seps = separacoes_por_pedido_produto.get(chave, [])
             
-            # Buscar separações deste pedido/produto
-            seps = Separacao.query.filter(
-                Separacao.num_pedido == pedido.num_pedido,
-                Separacao.cod_produto == pedido.cod_produto
-            ).all()
-            
-            for sep in seps:
-                # Buscar status do pedido da separação
-                pedido_sep = Pedido.query.filter_by(
-                    separacao_lote_id=sep.separacao_lote_id
-                ).first()
+            for sep_data in seps:
+                sep, pedido_cliente_sep, cond_pgto_sep, forma_pgto_sep, incoterm_sep = sep_data
                 
                 # Valores da separação
                 qtd_sep = float(sep.qtd_saldo or 0)
@@ -458,8 +371,9 @@ def exportar_carteira_detalhada():
                 else:
                     data_agendada_sep = 'Aguardando Aprovação' if sep.agendamento else ''
                 
+                tipo_label = 'PRÉ-SEPARAÇÃO' if sep.status == 'PREVISAO' else 'SEPARAÇÃO'
                 linha_sep = {
-                    'Tipo': 'SEPARAÇÃO',
+                    'Tipo': tipo_label,
                     'Lote': sep.separacao_lote_id or '',
                     'Nº Pedido': sep.num_pedido,
                     'Cód. Produto': sep.cod_produto,
@@ -470,21 +384,20 @@ def exportar_carteira_detalhada():
                     'UF': sep.cod_uf,
                     'Vendedor': pedido.vendedor,
                     'Equipe': pedido.equipe_vendas,
-                    'Qtd Original': '',
-                    'Valor Original': '',
-                    'Pallet Original': '',
-                    'Peso Original': '',
-                    'Qtd Saldo': qtd_sep,
-                    'Valor Saldo': valor_sep,
-                    'Pallet Saldo': pallet_sep,
-                    'Peso Saldo': peso_sep,
+                    'Qtd': qtd_sep,  # Removido sufixo "Saldo"
+                    'Valor': valor_sep,  # Removido sufixo "Saldo"
+                    'Pallet': pallet_sep,  # Removido sufixo "Saldo"
+                    'Peso': peso_sep,  # Removido sufixo "Saldo"
+                    'Cond. Pagamento': cond_pgto_sep or pedido.cond_pgto_pedido or '',
+                    'Forma Pagamento': forma_pgto_sep or pedido.forma_pgto_pedido or '',
+                    'Incoterm': incoterm_sep or pedido.incoterm or '',
                     'Data Expedição': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
                     'Entrega Prevista': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
                     'Data Agendada': data_agendada_sep,
                     'Protocolo': sep.protocolo or '',
                     'Observações': sep.observ_ped_1 or '',
-                    'Pedido Cliente': '',
-                    'Status': pedido_sep.status if pedido_sep else 'SEM PEDIDO',
+                    'Pedido Cliente': pedido_cliente_sep or pedido.pedido_cliente or '',
+                    'Status': sep.status or '',  # Status da própria Separação
                     'Criado Em': sep.criado_em.strftime('%d/%m/%Y %H:%M') if sep.criado_em else '',
                     'Criado Por': ''
                 }

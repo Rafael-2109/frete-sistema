@@ -38,8 +38,37 @@ def analisar_ruptura_pedido(num_pedido):
                 'message': 'Pedido não encontrado'
             }), 404
             
-        # Importar o serviço que JÁ FUNCIONA no cardex
-        from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
+        # MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
+        from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
+        
+        # OTIMIZAÇÃO: Buscar TODAS as produções programadas de uma vez
+        produtos_pedido = [item.cod_produto for item in itens]
+        producoes_por_produto = {}
+        
+        if produtos_pedido:
+            producoes_todas = db.session.query(
+                ProgramacaoProducao.cod_produto,
+                ProgramacaoProducao.data_programacao,
+                func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
+            ).filter(
+                ProgramacaoProducao.cod_produto.in_(produtos_pedido),
+                ProgramacaoProducao.data_programacao >= datetime.now().date()
+            ).group_by(
+                ProgramacaoProducao.cod_produto,
+                ProgramacaoProducao.data_programacao
+            ).order_by(
+                ProgramacaoProducao.cod_produto,
+                ProgramacaoProducao.data_programacao
+            ).all()
+            
+            # Agrupar por produto para lookup O(1)
+            for prod in producoes_todas:
+                if prod.cod_produto not in producoes_por_produto:
+                    producoes_por_produto[prod.cod_produto] = []
+                producoes_por_produto[prod.cod_produto].append({
+                    'data': prod.data_programacao,
+                    'qtd': float(prod.qtd_producao)
+                })
         
         # Análise dos itens
         itens_com_ruptura = []
@@ -59,8 +88,12 @@ def analisar_ruptura_pedido(num_pedido):
             # Usar EXATAMENTE o mesmo método que o workspace usa (QUE FUNCIONA!)
             projecao = ServicoEstoqueTempoReal.get_projecao_completa(item.cod_produto, dias=7)
             
-            # Se não tem projeção, usar 0
-            if not projecao:
+            # DEBUG: Log do tipo retornado
+            logger.debug(f"Produto {item.cod_produto}: projecao tipo={type(projecao)}, valor={projecao}")
+            
+            # Se não tem projeção ou não é um dicionário, usar 0
+            if not projecao or not isinstance(projecao, dict):
+                logger.warning(f"Produto {item.cod_produto} sem projeção válida. Usando estoque=0")
                 estoque_d7 = 0
             else:
                 # Usar o MESMO campo que o workspace usa: menor_estoque_d7
@@ -76,19 +109,8 @@ def analisar_ruptura_pedido(num_pedido):
                 ruptura = qtd_saldo - estoque_d7
                 valor_com_ruptura += valor_item
                 
-                # Buscar produção programada para QUALQUER data futura (não apenas 7 dias)
-                # Buscar TODAS as produções futuras para calcular quando terá estoque suficiente
-                producoes_futuras = db.session.query(
-                    ProgramacaoProducao.data_programacao,
-                    func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
-                ).filter(
-                    ProgramacaoProducao.cod_produto == item.cod_produto,
-                    ProgramacaoProducao.data_programacao >= datetime.now().date()
-                ).group_by(
-                    ProgramacaoProducao.data_programacao
-                ).order_by(
-                    ProgramacaoProducao.data_programacao
-                ).all()
+                # OTIMIZADO: Usar lookup O(1) ao invés de query
+                producoes_futuras = producoes_por_produto.get(item.cod_produto, [])
                 
                 # Calcular quando terá estoque suficiente
                 data_disponivel = None
@@ -98,12 +120,12 @@ def analisar_ruptura_pedido(num_pedido):
                 
                 if producoes_futuras:
                     primeira_producao = producoes_futuras[0]
-                    qtd_primeira_producao = float(primeira_producao.qtd_producao)
+                    qtd_primeira_producao = primeira_producao['qtd']
                     
                     for prod in producoes_futuras:
-                        qtd_acumulada += float(prod.qtd_producao)
+                        qtd_acumulada += prod['qtd']
                         if qtd_acumulada >= qtd_saldo:
-                            data_disponivel = prod.data_programacao
+                            data_disponivel = prod['data']
                             break
                     
                     # Adicionar data de disponibilidade à lista para calcular máximo
@@ -119,7 +141,7 @@ def analisar_ruptura_pedido(num_pedido):
                     'qtd_saldo': int(qtd_saldo),
                     'estoque_min_d7': int(estoque_d7) if estoque_d7 > 0 else int(estoque_d7),
                     'ruptura_qtd': int(ruptura),
-                    'data_producao': primeira_producao.data_programacao.isoformat() if primeira_producao else None,
+                    'data_producao': primeira_producao['data'].isoformat() if primeira_producao else None,
                     'qtd_producao': int(qtd_primeira_producao),
                     'data_disponivel': data_disponivel.isoformat() if data_disponivel else None
                 })
@@ -353,29 +375,34 @@ def obter_detalhes_pedido_completo(num_pedido):
             CarteiraPrincipal.ativo == True
         ).all()
         
-        # Buscar separações relacionadas
+        # MIGRADO: Buscar separações sem JOIN com Pedido
         from app.separacao.models import Separacao
-        from app.pedidos.models import Pedido
         
+        # OTIMIZADO: Buscar separações agrupadas com dados de agendamento
         separacoes = db.session.query(
             Separacao.separacao_lote_id,
             Separacao.criado_em,
             Separacao.tipo_envio,
+            Separacao.status,  # MIGRADO: Usar status direto de Separacao
             func.sum(Separacao.valor_saldo).label('valor_saldo'),
             func.sum(Separacao.peso).label('peso'),
             func.sum(Separacao.pallet).label('pallet'),
-            Pedido.status
-        ).join(
-            Pedido, 
-            Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            func.min(Separacao.expedicao).label('expedicao'),  # Dados de agendamento vêm de Separacao
+            func.min(Separacao.agendamento).label('agendamento'),
+            func.min(Separacao.protocolo).label('protocolo'),
+            func.bool_or(Separacao.agendamento_confirmado).label('agendamento_confirmado')
         ).filter(
-            Separacao.num_pedido == num_pedido
+            Separacao.num_pedido == num_pedido,
+            Separacao.sincronizado_nf == False  # IMPORTANTE: Apenas não sincronizados
         ).group_by(
             Separacao.separacao_lote_id,
             Separacao.criado_em,
             Separacao.tipo_envio,
-            Pedido.status
+            Separacao.status
         ).all()
+        
+        # CORRIGIDO: Pegar dados de agendamento da primeira separação, não de CarteiraPrincipal
+        primeira_sep = separacoes[0] if separacoes else None
         
         # Formatar dados do pedido
         pedido_dict = {
@@ -389,11 +416,12 @@ def obter_detalhes_pedido_completo(num_pedido):
             'vendedor': pedido_info.vendedor,
             'equipe_vendas': pedido_info.equipe_vendas,
             'data_pedido': pedido_info.data_pedido.isoformat() if pedido_info.data_pedido else None,
-            'expedicao': pedido_info.expedicao.isoformat() if pedido_info.expedicao else None,
-            'agendamento': pedido_info.agendamento.isoformat() if pedido_info.agendamento else None,
+            # MIGRADO: Dados de agendamento vêm de Separacao, não CarteiraPrincipal
+            'expedicao': primeira_sep.expedicao.isoformat() if primeira_sep and primeira_sep.expedicao else None,
+            'agendamento': primeira_sep.agendamento.isoformat() if primeira_sep and primeira_sep.agendamento else None,
             'hora_agendamento': pedido_info.hora_agendamento.isoformat() if pedido_info.hora_agendamento else None,
-            'protocolo': pedido_info.protocolo,
-            'agendamento_confirmado': pedido_info.agendamento_confirmado,
+            'protocolo': primeira_sep.protocolo if primeira_sep else None,
+            'agendamento_confirmado': primeira_sep.agendamento_confirmado if primeira_sep else False,
             'observ_ped_1': pedido_info.observ_ped_1,
             'pedido_cliente': pedido_info.pedido_cliente,
             'incoterm': pedido_info.incoterm,
@@ -422,26 +450,35 @@ def obter_detalhes_pedido_completo(num_pedido):
                 'estoque': float(item.estoque or 0) if item.estoque else 0
             })
         
-        # Formatar separações com detalhes dos itens
-        separacoes_list = []
-        for sep in separacoes:
-            # Buscar itens desta separação
-            itens_sep = db.session.query(
+        # OTIMIZADO: Buscar TODOS os itens de separação de uma vez
+        lotes_ids = [sep.separacao_lote_id for sep in separacoes]
+        todos_itens_sep = {}
+        
+        if lotes_ids:
+            itens_todas_sep = db.session.query(
+                Separacao.separacao_lote_id,
                 Separacao.cod_produto,
                 Separacao.nome_produto,
                 Separacao.qtd_saldo,
                 Separacao.peso,
-                Separacao.pallet,
-                Separacao.expedicao,
-                Separacao.agendamento,
-                Separacao.protocolo
+                Separacao.pallet
             ).filter(
-                Separacao.separacao_lote_id == sep.separacao_lote_id,
-                Separacao.num_pedido == num_pedido
+                Separacao.separacao_lote_id.in_(lotes_ids),
+                Separacao.num_pedido == num_pedido,
+                Separacao.sincronizado_nf == False  # Consistente com filtro anterior
             ).all()
             
-            # Pegar dados de expedição/agendamento do primeiro item
-            primeiro_item_sep = itens_sep[0] if itens_sep else None
+            # Agrupar por lote para lookup O(1)
+            for item in itens_todas_sep:
+                if item.separacao_lote_id not in todos_itens_sep:
+                    todos_itens_sep[item.separacao_lote_id] = []
+                todos_itens_sep[item.separacao_lote_id].append(item)
+        
+        # Formatar separações com detalhes dos itens
+        separacoes_list = []
+        for sep in separacoes:
+            # OTIMIZADO: Usar lookup O(1) ao invés de query
+            itens_sep = todos_itens_sep.get(sep.separacao_lote_id, [])
             
             separacoes_list.append({
                 'separacao_lote_id': sep.separacao_lote_id,
@@ -451,9 +488,11 @@ def obter_detalhes_pedido_completo(num_pedido):
                 'peso': float(sep.peso or 0),
                 'pallet': float(sep.pallet or 0),
                 'status': sep.status,
-                'expedicao': primeiro_item_sep.expedicao.isoformat() if primeiro_item_sep and primeiro_item_sep.expedicao else None,
-                'agendamento': primeiro_item_sep.agendamento.isoformat() if primeiro_item_sep and primeiro_item_sep.agendamento else None,
-                'protocolo': primeiro_item_sep.protocolo if primeiro_item_sep else None,
+                # OTIMIZADO: Dados de agendamento já vieram na query principal
+                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
+                'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
+                'protocolo': sep.protocolo,
+                'agendamento_confirmado': sep.agendamento_confirmado,
                 'itens': [
                     {
                         'cod_produto': item.cod_produto,
@@ -487,226 +526,9 @@ def obter_detalhes_pedido_completo(num_pedido):
         }), 500
 
 
-@carteira_bp.route('/api/produto/<cod_produto>/cardex', methods=['GET'])
-def obter_cardex_produto(cod_produto):
-    """
-    Obtém cardex completo do produto (D0-D28)
-    """
-    try:
-        from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
-        
-        # Obter projeção completa de 28 dias
-        projecao = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
-        
-        if not projecao:
-            return jsonify({
-                'success': False,
-                'message': 'Produto não encontrado ou sem dados de estoque'
-            }), 404
-        
-        # Preparar dados do cardex
-        cardex_list = []
-        estoque_atual = float(projecao.get('estoque_atual', 0))
-        maior_estoque = {'dia': 0, 'valor': estoque_atual}
-        menor_estoque = {'dia': 0, 'valor': estoque_atual}
-        total_producao = 0
-        total_saidas = 0
-        alertas = []
-        
-        # Processar cada dia da projeção
-        for i, dia_proj in enumerate(projecao.get('projecao', [])):
-            estoque_inicial = float(dia_proj.get('estoque_inicial', 0))
-            saidas = float(dia_proj.get('saidas', 0))
-            producao = float(dia_proj.get('producao', 0))
-            estoque_final = float(dia_proj.get('estoque_final', 0))
-            data = dia_proj.get('data')
-            
-            # Atualizar estatísticas
-            if estoque_final > maior_estoque['valor']:
-                maior_estoque = {'dia': i, 'valor': estoque_final}
-            if estoque_final < menor_estoque['valor']:
-                menor_estoque = {'dia': i, 'valor': estoque_final}
-            
-            total_producao += producao
-            total_saidas += saidas
-            
-            # Adicionar alertas se necessário
-            if estoque_final <= 0:
-                alertas.append({
-                    'tipo': 'danger',
-                    'dia': i,
-                    'titulo': 'Ruptura de Estoque',
-                    'descricao': f'Estoque zerado em D+{i}',
-                    'sugestao': 'Programar produção urgente'
-                })
-            elif estoque_final < 10:
-                alertas.append({
-                    'tipo': 'warning',
-                    'dia': i,
-                    'titulo': 'Estoque Crítico',
-                    'descricao': f'Estoque muito baixo em D+{i}: {estoque_final} unidades',
-                    'sugestao': 'Considerar produção adicional'
-                })
-            
-            cardex_list.append({
-                'dia': i,
-                'data': data,
-                'estoque_inicial': estoque_inicial,
-                'saidas': saidas,
-                'saldo': estoque_inicial - saidas,
-                'producao': producao,
-                'estoque_final': estoque_final
-            })
-        
-        return jsonify({
-            'success': True,
-            'cod_produto': cod_produto,
-            'estoque_atual': estoque_atual,
-            'maior_estoque': maior_estoque,
-            'menor_estoque': menor_estoque,
-            'total_producao': total_producao,
-            'total_saidas': total_saidas,
-            'alertas': alertas[:5],  # Limitar a 5 alertas mais importantes
-            'cardex': cardex_list
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao obter cardex do produto {cod_produto}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# API obter_cardex_produto movida para cardex_api.py para evitar redundância
+# Rota mantida aqui apenas para compatibilidade, redirecionando para a API unificada
 
 
-@carteira_bp.route('/api/produto/<cod_produto>/cardex-detalhado', methods=['GET'])
-def obter_cardex_detalhado_produto(cod_produto):
-    """
-    Obtém cardex detalhado com detalhes de todas as saídas
-    Usado pelo modal-cardex-expandido.js
-    """
-    try:
-        from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
-        from datetime import date, timedelta
-        
-        # Obter projeção completa de 28 dias
-        projecao = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
-        
-        if not projecao:
-            return jsonify({
-                'success': False,
-                'message': 'Produto não encontrado ou sem dados de estoque'
-            }), 404
-        
-        # Buscar todos os pedidos dos próximos 28 dias
-        data_hoje = date.today()
-        data_limite = data_hoje + timedelta(days=28)
-        
-        # Importar modelos necessários
-        from app.separacao.models import Separacao
-        from app.pedidos.models import Pedido
-        from app.carteira.models import PreSeparacaoItem
-        from sqlalchemy import and_
-        
-        # Buscar pedidos de Separacao (ABERTO ou COTADO)
-        pedidos_separacao = db.session.query(
-            Separacao.num_pedido,
-            Separacao.expedicao,
-            Separacao.qtd_saldo,
-            Separacao.raz_social_red,
-            Separacao.nome_cidade,
-            Separacao.cod_uf,
-            Separacao.separacao_lote_id
-        ).join(
-            Pedido,
-            Separacao.separacao_lote_id == Pedido.separacao_lote_id
-        ).filter(
-            Separacao.cod_produto == cod_produto,
-            Separacao.qtd_saldo > 0,
-            Pedido.status.in_(['ABERTO', 'COTADO'])
-        ).all()
-        
-        # Buscar pedidos de PreSeparacao (CRIADO ou RECOMPOSTO)
-        pedidos_pre_separacao = db.session.query(
-            PreSeparacaoItem.num_pedido,
-            PreSeparacaoItem.data_expedicao_editada.label('expedicao'),
-            PreSeparacaoItem.qtd_selecionada_usuario.label('qtd_saldo'),
-            CarteiraPrincipal.raz_social_red,
-            CarteiraPrincipal.nome_cidade,
-            CarteiraPrincipal.cod_uf,
-            PreSeparacaoItem.separacao_lote_id
-        ).join(
-            CarteiraPrincipal,
-            and_(
-                PreSeparacaoItem.num_pedido == CarteiraPrincipal.num_pedido,
-                PreSeparacaoItem.cod_produto == CarteiraPrincipal.cod_produto
-            )
-        ).filter(
-            PreSeparacaoItem.cod_produto == cod_produto,
-            PreSeparacaoItem.qtd_selecionada_usuario > 0,
-            PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-        ).all()
-        
-        # Combinar os resultados
-        pedidos = list(pedidos_separacao) + list(pedidos_pre_separacao)
-        
-        
-        # Agrupar pedidos por data
-        pedidos_por_data = {}
-        pedidos_sem_data = []
-        
-        # Log temporário para debug
-        logger.info(f"DEBUG Cardex: Total pedidos encontrados: {len(pedidos)}")
-        logger.info(f"DEBUG Cardex: Separacao: {len(pedidos_separacao)}, PreSeparacao: {len(pedidos_pre_separacao)}")
-        
-        for pedido in pedidos:
-            if pedido.expedicao:
-                data_key = pedido.expedicao.isoformat()
-                if data_key not in pedidos_por_data:
-                    pedidos_por_data[data_key] = []
-                
-                # Usar qtd_saldo que é o nome comum em ambas queries
-                qtd = float(pedido.qtd_saldo) if hasattr(pedido, 'qtd_saldo') else 0
-                
-                pedidos_por_data[data_key].append({
-                    'num_pedido': pedido.num_pedido,
-                    'qtd': qtd,
-                    'cliente': pedido.raz_social_red or 'Cliente não informado',
-                    'cidade': pedido.nome_cidade or 'Cidade não informada',
-                    'uf': pedido.cod_uf or 'UF',
-                    'tem_separacao': bool(pedido.separacao_lote_id)
-                })
-            else:
-                # Pedidos sem data de expedição
-                qtd = float(pedido.qtd_saldo) if hasattr(pedido, 'qtd_saldo') else 0
-                
-                pedidos_sem_data.append({
-                    'num_pedido': pedido.num_pedido,
-                    'qtd': qtd,
-                    'cliente': pedido.raz_social_red or 'Cliente não informado',
-                    'cidade': pedido.nome_cidade or 'Cidade não informada',
-                    'uf': pedido.cod_uf or 'UF',
-                    'tem_separacao': bool(pedido.separacao_lote_id)
-                })
-        
-        # Adicionar pedidos sem data em uma categoria especial
-        if pedidos_sem_data:
-            pedidos_por_data['sem_data'] = pedidos_sem_data
-        
-        # Log final para debug
-        logger.info(f"DEBUG Cardex Final: Total datas agrupadas: {len(pedidos_por_data)}")
-        logger.info(f"DEBUG Cardex Final: Datas: {list(pedidos_por_data.keys())[:5]}")  # Primeiras 5 datas
-        
-        return jsonify({
-            'success': True,
-            'cod_produto': cod_produto,
-            'estoque_atual': float(projecao.get('estoque_atual', 0)),
-            'projecao_resumo': projecao.get('projecao', []),
-            'pedidos_por_data': pedidos_por_data
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao obter cardex detalhado do produto {cod_produto}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# API obter_cardex_detalhado_produto movida para cardex_api.py para evitar redundância
+# Rota mantida aqui apenas para compatibilidade, redirecionando para a API unificada

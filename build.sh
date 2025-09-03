@@ -46,4 +46,13 @@ python init_db.py
 
 echo "Build concluído com sucesso!"
 
+# 6. Executar migração de Pedido → VIEW (idempotente)
+echo "Verificando migração Pedido → VIEW..."
+if [ -f "executar_migracao.py" ]; then
+    python executar_migracao.py || echo "Migração VIEW pedidos falhou ou já foi aplicada"
+else
+    echo "Script executar_migracao.py não encontrado, pulando..."
+fi
+
+# Linha antiga mantida por compatibilidade (pode ser removida depois)
 python aplicar_migracao_render.py || echo "Migration already applied"

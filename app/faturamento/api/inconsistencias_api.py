@@ -114,16 +114,31 @@ def dashboard_inconsistencias():
 def api_resolver_inconsistencia(id):
     """API para marcar inconsistência como resolvida"""
     try:
+        from flask_login import current_user
         inconsistencia = InconsistenciaFaturamento.query.get_or_404(id)
         
         # Marcar como resolvida
         inconsistencia.resolvida = True
+        inconsistencia.resolvida_em = datetime.now()
+        inconsistencia.resolvida_por = current_user.nome if hasattr(current_user, 'nome') else 'sistema'
+        
+        # Adicionar ação tomada se fornecida
+        if request.json and request.json.get('acao_tomada'):
+            inconsistencia.acao_tomada = request.json['acao_tomada']
         
         # Adicionar observação de resolução
         if request.json and request.json.get('observacao'):
-            inconsistencia.observacao_resolucao += f"\n\nRESOLVIDO: {request.json['observacao']}"
+            obs_adicional = f"\n\nRESOLVIDO: {request.json['observacao']}"
+            if inconsistencia.observacao_resolucao:
+                inconsistencia.observacao_resolucao += obs_adicional
+            else:
+                inconsistencia.observacao_resolucao = obs_adicional.strip()
         else:
-            inconsistencia.observacao_resolucao += f"\n\nRESOLVIDO em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            obs_adicional = f"\n\nRESOLVIDO em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            if inconsistencia.observacao_resolucao:
+                inconsistencia.observacao_resolucao += obs_adicional
+            else:
+                inconsistencia.observacao_resolucao = obs_adicional.strip()
         
         db.session.commit()
         

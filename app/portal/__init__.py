@@ -12,6 +12,7 @@ portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 from app.portal import routes
 from app.portal import routes_sessao  # Rotas de configuração de sessão
 from app.portal import routes_async  # Rotas assíncronas com Redis Queue
+from app.portal import verificacao_automatica  # Rotas de verificação de protocolos pendentes
 # Removido: verificacao_lote era duplicado - usando verificacao_automatica e verificacao_protocolo
 
 # Registrar rotas De-Para do Atacadão

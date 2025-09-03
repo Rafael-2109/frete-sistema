@@ -28,9 +28,26 @@ class CarteiraAgrupada {
         this.initWorkspace();
         this.initBadgesFiltros();
         
-        // Atualizar contadores
-        this.atualizarContadorProtocolos();
-        this.atualizarContadorPendentesTotal();
+        // 🆕 CARREGAR SEPARAÇÕES COMPACTAS INICIALMENTE
+        // Identificar pedidos visíveis inicialmente
+        document.querySelectorAll('.pedido-row:not([style*="display: none"])').forEach(pedidoRow => {
+            const numPedido = pedidoRow.dataset.pedido || pedidoRow.dataset.numPedido;
+            if (numPedido) {
+                this.pedidosVisiveis.add(numPedido);
+            }
+        });
+        
+        // Carregar separações para todos os pedidos visíveis
+        console.log(`📦 Carregando separações para ${this.pedidosVisiveis.size} pedidos iniciais...`);
+        this.carregarSeparacoesCompactasVisiveis();
+        
+        // Aguardar um pouco para as separações carregarem antes de atualizar contadores
+        setTimeout(() => {
+            // Atualizar contadores
+            this.atualizarContadorProtocolos();
+            this.atualizarContadorPendentesTotal();
+        }, 2000); // 2 segundos para dar tempo de carregar
+        
         this.setupInterceptadorBotoes(); // 🆕 Interceptar cliques em botões
         console.log('✅ Carteira Agrupada inicializada');
         
@@ -387,6 +404,12 @@ class CarteiraAgrupada {
     }
 
     mostrarAlerta(mensagem) {
+        // Usar módulo centralizado se disponível
+        if (window.Notifications && window.Notifications.warning) {
+            return window.Notifications.warning(mensagem);
+        }
+        
+        // Fallback completo
         // Criar alerta temporário
         const alerta = document.createElement('div');
         alerta.className = 'alert alert-warning alert-dismissible fade show position-fixed';
@@ -535,6 +558,9 @@ class CarteiraAgrupada {
                 totalVisiveis++;
                 // 🆕 Adicionar ao conjunto de pedidos visíveis
                 this.pedidosVisiveis.add(numPedido);
+                
+                // NÃO carregar individual aqui!
+                // Será carregado em lote após aplicar filtros
             }
         });
 
@@ -545,6 +571,9 @@ class CarteiraAgrupada {
 
         // Verificar e mostrar/ocultar subrotas SP
         this.verificarSubrotasSP();
+        
+        // 🆕 CARREGAR SEPARAÇÕES COMPACTAS PARA TODOS OS PEDIDOS VISÍVEIS
+        this.carregarSeparacoesCompactasVisiveis();
     }
 
     popularFiltroEquipes() {
@@ -576,6 +605,12 @@ class CarteiraAgrupada {
         
         // Calcular e atualizar valor total dos pedidos visíveis
         this.atualizarValorTotal();
+        
+        // 🆕 ATUALIZAR CONTADOR DE PROTOCOLOS APÓS APLICAR FILTROS
+        // Aguardar um pouco para garantir que as separações assíncronas carreguem
+        setTimeout(() => {
+            this.atualizarContadorProtocolos();
+        }, 1500); // 1.5 segundos para dar tempo das separações carregarem
     }
     
     atualizarValorTotal() {
@@ -656,14 +691,26 @@ class CarteiraAgrupada {
             icon.classList.add('fa-chevron-down');
         }
 
-        // Carregar detalhes se ainda não carregou
+        // SOLUÇÃO: Chamar diretamente o workspace em vez de carregarDetalhes
         const contentDiv = document.getElementById(`content-${numPedido}`);
-        const loadingDiv = document.getElementById(`loading-${numPedido}`);
-
+        
         // Verificar se o conteúdo já foi carregado
-        // Se não tem conteúdo HTML ou está oculto, carregar
+        // Se não tem conteúdo HTML ou está oculto, carregar workspace
         if (contentDiv && (!contentDiv.innerHTML.trim() || contentDiv.style.display === 'none')) {
-            this.carregarDetalhes(numPedido, contentDiv, loadingDiv);
+            // Chamar workspace diretamente
+            if (window.workspace && window.workspace.abrirWorkspace) {
+                console.log(`🚀 Abrindo workspace para pedido ${numPedido}`);
+                window.workspace.abrirWorkspace(numPedido);
+            } else {
+                console.error('❌ WorkspaceMontagem não está disponível');
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Erro: Sistema de workspace não está carregado
+                    </div>
+                `;
+                contentDiv.style.display = 'block';
+            }
         }
     }
 
@@ -675,126 +722,17 @@ class CarteiraAgrupada {
         }
     }
 
-    async carregarDetalhes(numPedido, contentDiv, loadingDiv) {
-        try {
-            if (loadingDiv) loadingDiv.style.display = 'block';
-            if (contentDiv) contentDiv.style.display = 'none';
 
-            // Carregar apenas detalhes do pedido (separações já estão carregadas fora)
-            const detalhesResponse = await fetch(`/carteira/api/pedido/${numPedido}/detalhes`);
-            const detalhesData = await detalhesResponse.json();
-
-            if (!detalhesResponse.ok || !detalhesData.success) {
-                throw new Error(detalhesData.error || 'Erro ao carregar detalhes');
-            }
-
-            if (contentDiv) {
-                // Renderizar apenas detalhes do pedido
-                let html = `
-                    <div class="detalhes-pedido">
-                        <h6 class="mb-3">
-                            <i class="fas fa-list me-2"></i>
-                            Produtos do Pedido
-                            <span id="loading-estoque-${numPedido}" class="spinner-border spinner-border-sm ms-2" style="display: none;">
-                                <span class="visually-hidden">Carregando estoque...</span>
-                            </span>
-                        </h6>
-                        <div id="tabela-produtos-${numPedido}">
-                            ${this.renderizarDetalhesBasicos(detalhesData)}
-                        </div>
-                    </div>
-                `;
-                
-                contentDiv.innerHTML = html;
-                contentDiv.style.display = 'block';
-            }
-            if (loadingDiv) loadingDiv.style.display = 'none';
-            
-            // 🆕 CARREGAR ESTOQUE DE FORMA ASSÍNCRONA com prioridade alta
-            this.carregarEstoqueComPrioridade(numPedido, detalhesData.itens, 'alta');
-
-        } catch (error) {
-            console.error(`❌ Erro ao carregar detalhes do pedido ${numPedido}:`, error);
-            if (contentDiv) {
-                contentDiv.innerHTML = `
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Erro ao carregar detalhes: ${error.message}
-                    </div>
-                `;
-                contentDiv.style.display = 'block';
-            }
-            if (loadingDiv) loadingDiv.style.display = 'none';
-        }
-    }
-
-    renderizarDetalhes(data) {
-        if (!data.itens || data.itens.length === 0) {
-            return `
-                <div class="text-center text-muted py-3">
-                    <i class="fas fa-inbox fa-2x mb-2"></i>
-                    <p>Nenhum item encontrado para este pedido.</p>
-                </div>
-            `;
-        }
-
-        let html = `
-            <div class="detalhes-pedido">
-                <div class="table-responsive">
-                    <table class="table table-sm table-striped">
-                        <thead class="table-primary">
-                            <tr>
-                                <th>Produto</th>
-                                <th>Quantidade</th>
-                                <th>Preço Unit.</th>
-                                <th>Valor Total</th>
-                                <th>Estoque</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-        `;
-
-        data.itens.forEach(item => {
-            html += `
-                <tr>
-                    <td>
-                        <strong>${item.cod_produto}</strong>
-                        <br><small class="text-muted">${item.nome_produto || ''}</small>
-                    </td>
-                    <td class="text-end">
-                        ${this.formatarQuantidade(item.qtd_saldo_produto_pedido)}
-                    </td>
-                    <td class="text-end">
-                        ${this.formatarMoeda(item.preco_produto_pedido)}
-                    </td>
-                    <td class="text-end">
-                        <strong>${this.formatarMoeda((item.qtd_saldo_produto_pedido || 0) * (item.preco_produto_pedido || 0))}</strong>
-                    </td>
-                    <td class="text-end">
-                        <span class="badge ${item.estoque > 0 ? 'bg-success' : 'bg-danger'}">
-                            ${this.formatarQuantidade(item.estoque)}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary">${item.status_item || 'Pendente'}</span>
-                    </td>
-                </tr>
-            `;
-        });
-
-        html += `
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-
-        return html;
-    }
+    // REMOVED: renderizarDetalhes - Método não utilizado (sem chamadas encontradas)
 
     // 🎯 UTILITÁRIOS
     formatarMoeda(valor) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.moeda) {
+            return window.Formatters.moeda(valor);
+        }
+        
+        // Fallback completo
         if (!valor) return 'R$ 0,00';
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
@@ -803,6 +741,12 @@ class CarteiraAgrupada {
     }
 
     formatarQuantidade(qtd) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.quantidade) {
+            return window.Formatters.quantidade(qtd);
+        }
+        
+        // Fallback completo
         if (!qtd) return '0';
         return parseFloat(qtd).toLocaleString('pt-BR', {
             minimumFractionDigits: 0,
@@ -841,123 +785,314 @@ class CarteiraAgrupada {
     }
     
     formatarData(data) {
-        if (!data) return '-';
-        // Garantir formato dd/mm/yyyy
-        let d;
-        if (data.includes('T')) {
-            // Já está em formato ISO
-            d = new Date(data);
-        } else {
-            // Apenas data, criar no timezone local sem ajuste
-            const [ano, mes, dia] = data.split('-');
-            d = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.data) {
+            return window.Formatters.data(data);
         }
-        // Forçar formato dd/mm/yyyy
-        const dia = String(d.getDate()).padStart(2, '0');
-        const mes = String(d.getMonth() + 1).padStart(2, '0');
-        const ano = d.getFullYear();
-        return `${dia}/${mes}/${ano}`;
+        
+        // Fallback completo
+        if (!data) return '-';
+        
+        // Se já está no formato dd/mm/yyyy, retornar como está
+        if (typeof data === 'string' && data.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+            return data;
+        }
+        
+        try {
+            let d;
+            
+            // Se está no formato yyyy-mm-dd
+            if (typeof data === 'string' && data.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const [ano, mes, dia] = data.split('-');
+                d = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+            }
+            // Se inclui tempo (formato ISO)
+            else if (typeof data === 'string' && data.includes('T')) {
+                d = new Date(data);
+            }
+            // Se é um objeto Date
+            else if (data instanceof Date) {
+                d = data;
+            }
+            // Tentar parsear como string de data
+            else {
+                d = new Date(data);
+            }
+            
+            // Verificar se a data é válida
+            if (isNaN(d.getTime())) {
+                console.warn(`⚠️ Data inválida: ${data}`);
+                return '-';
+            }
+            
+            // Forçar formato dd/mm/yyyy
+            const dia = String(d.getDate()).padStart(2, '0');
+            const mes = String(d.getMonth() + 1).padStart(2, '0');
+            const ano = d.getFullYear();
+            return `${dia}/${mes}/${ano}`;
+        } catch (error) {
+            console.error('❌ Erro ao formatar data:', data, error);
+            return '-';
+        }
     }
 
     formatarPeso(peso) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.peso) {
+            return window.Formatters.peso(peso);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPeso(peso);
+        }
+        // Fallback final
         if (!peso) return '0 kg';
-        return `${parseFloat(peso).toFixed(2)} kg`;
+        return `${parseFloat(peso).toFixed(1)} kg`;
     }
 
     formatarPallet(pallet) {
-        if (!pallet) return '0';
-        return parseFloat(pallet).toFixed(2);
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.pallet) {
+            return window.Formatters.pallet(pallet);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPallet(pallet);
+        }
+        // Fallback final
+        if (!pallet) return '0 plt';
+        return `${parseFloat(pallet).toFixed(2)} plt`;
     }
 
+    /**
+     * 🆕 CARREGAR SEPARAÇÕES EM LOTE PARA UM ÚNICO PEDIDO
+     */
+    async carregarSeparacoesEmLoteUnico(pedidos) {
+        if (!pedidos || pedidos.length === 0) return;
+        
+        // Inicializar cache se não existir
+        if (!window.separacoesCompactasCache) {
+            window.separacoesCompactasCache = {};
+        }
+        
+        try {
+            const response = await fetch('/carteira/api/separacoes-compactas-lote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    pedidos: pedidos,
+                    limite: pedidos.length
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // LOG DE DEBUG: Verificar resposta completa da API
+                console.log('🔍 DEBUG API Response (carregarSeparacoesEmLoteUnico):', data);
+                
+                if (data.success && data.pedidos) {
+                    // Salvar no cache
+                    Object.keys(data.pedidos).forEach(numPedido => {
+                        const separacoes = data.pedidos[numPedido];
+                        
+                        // LOG DE DEBUG: Verificar estrutura de cada separação
+                        console.log(`📦 DEBUG - Pedido ${numPedido} - Separações da API:`, separacoes);
+                        if (separacoes && separacoes.length > 0) {
+                            console.log(`📅 DEBUG - Primeira separação tem expedição? ${separacoes[0].expedicao}, agendamento? ${separacoes[0].agendamento}`);
+                        }
+                        
+                        window.separacoesCompactasCache[numPedido] = separacoes;
+                        
+                        // SEMPRE renderizar e tornar visível se houver separações
+                        if (separacoes && separacoes.length > 0) {
+                            const separacoesRow = document.getElementById(`separacoes-compactas-${numPedido}`);
+                            if (separacoesRow) {
+                                // Tornar a linha visível
+                                separacoesRow.style.display = 'table-row';
+                                // Renderizar o conteúdo
+                                this.renderizarSeparacaoDoCache(numPedido);
+                            }
+                        }
+                    });
+                    
+                    console.log(`✅ Carregado: ${Object.keys(data.pedidos).length} pedidos`);
+                    
+                    // Atualizar contador
+                    this.atualizarContadorProtocolos();
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar separações:', error);
+        }
+    }
+    
+    /**
+     * 🆕 RENDERIZAR SEPARAÇÃO DO CACHE
+     */
+    renderizarSeparacaoDoCache(numPedido) {
+        const separacoes = window.separacoesCompactasCache?.[numPedido];
+        if (!separacoes || separacoes.length === 0) return;
+        
+        const container = document.querySelector(`#separacoes-compactas-${numPedido} .separacoes-compactas-container`);
+        if (!container) return;
+        
+        // Log de debug para verificar estrutura do cache
+        console.log(`📊 Dados do cache para pedido ${numPedido}:`, separacoes);
+        
+        // Converter formato do cache para o formato esperado por renderizarSeparacoesCompactas
+        const separacoesData = {
+            success: true,
+            separacoes: separacoes.map(sep => {
+                // Log de debug para cada separação
+                console.log(`📅 Mapeando separação - expedição: ${sep.expedicao}, agendamento: ${sep.agendamento}`);
+                
+                return {
+                    separacao_lote_id: sep.lote_id,
+                    status: sep.status,
+                    valor_total: sep.valor,
+                    peso_total: sep.peso,
+                    pallet_total: sep.pallet,
+                    expedicao: sep.expedicao,
+                    agendamento: sep.agendamento,
+                    protocolo: sep.protocolo,
+                    agendamento_confirmado: sep.agendamento_confirmado,
+                    embarque: sep.embarque
+                };
+            })
+        };
+        
+        // Usar o método existente de renderização
+        const html = this.renderizarSeparacoesCompactas(separacoesData);
+        container.innerHTML = html;
+    }
+    
     /**
      * 🆕 CARREGAR TODAS AS SEPARAÇÕES COMPACTAS
      */
     async carregarTodasSeparacoesCompactas() {
-        console.log('📦 Carregando separações compactas para todos os pedidos...');
+        console.log('📦 Carregando separações compactas para TODOS os pedidos...');
         
         // Buscar todos os pedidos na página
-        const pedidoRows = document.querySelectorAll('.pedido-row');
-        
-        for (const row of pedidoRows) {
-            const numPedido = row.dataset.pedido;
+        const todosPedidos = [];
+        document.querySelectorAll('.pedido-row').forEach(row => {
+            const numPedido = row.dataset.pedido || row.dataset.numPedido;
             if (numPedido) {
-                // Carregar separações compactas para este pedido
-                this.carregarSeparacoesCompactasPedido(numPedido);
+                todosPedidos.push(numPedido);
+            }
+        });
+        
+        // Carregar em lote
+        if (todosPedidos.length > 0) {
+            // Dividir em lotes de 50 se necessário
+            for (let i = 0; i < todosPedidos.length; i += 50) {
+                const lote = todosPedidos.slice(i, i + 50);
+                await this.carregarSeparacoesEmLoteUnico(lote);
             }
         }
     }
     
     /**
-     * 🆕 CARREGAR SEPARAÇÕES COMPACTAS PARA UM PEDIDO
+     * 🆕 CARREGAR SEPARAÇÕES COMPACTAS PARA TODOS OS PEDIDOS VISÍVEIS - OTIMIZADO EM LOTE
      */
-    async carregarSeparacoesCompactasPedido(numPedido) {
-        // 🆕 Verificar se o pedido está visível antes de fazer requisição
-        if (!this.isPedidoVisivel(numPedido)) {
-            console.log(`🚫 Pedido ${numPedido} não está visível, cancelando requisição`);
+    async carregarSeparacoesCompactasVisiveis() {
+        // Coletar pedidos que precisam carregar separações
+        const pedidosParaCarregar = [];
+        
+        this.pedidosVisiveis.forEach(numPedido => {
+            // Verificar se as separações já foram carregadas
+            if (!window.separacoesCompactasCache || !window.separacoesCompactasCache[numPedido]) {
+                pedidosParaCarregar.push(numPedido);
+            }
+        });
+        
+        if (pedidosParaCarregar.length === 0) {
+            console.log('✅ Todas as separações já estão em cache');
             return;
         }
         
+        console.log(`📦 Carregando separações em LOTE para ${pedidosParaCarregar.length} pedidos...`);
+        
+        // Inicializar cache se não existir
+        if (!window.separacoesCompactasCache) {
+            window.separacoesCompactasCache = {};
+        }
+        
         try {
-            // Criar AbortController para este pedido
-            const abortController = new AbortController();
-            this.abortControllers.set(numPedido, abortController);
-            
-            // Fazer requisições em paralelo com signal para cancelamento
-            const [separacoesResponse, preSeparacoesResponse] = await Promise.all([
-                fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`, {
-                    signal: abortController.signal
-                }).catch(() => null),
-                fetch(`/carteira/api/pedido/${numPedido}/pre-separacoes`, {
-                    signal: abortController.signal
-                }).catch(() => null)
-            ]);
-            
-            let separacoesData = null;
-            let preSeparacoesData = null;
-            
-            if (separacoesResponse && separacoesResponse.ok) {
-                separacoesData = await separacoesResponse.json();
-            }
-            if (preSeparacoesResponse && preSeparacoesResponse.ok) {
-                preSeparacoesData = await preSeparacoesResponse.json();
-            }
-            
-            // 🆕 Verificar novamente se pedido ainda está visível antes de renderizar
-            if (!this.isPedidoVisivel(numPedido)) {
-                console.log(`🚫 Pedido ${numPedido} foi filtrado durante carregamento, não renderizando`);
-                return;
-            }
-            
-            // Renderizar separações compactas se houver dados
-            const html = this.renderizarSeparacoesCompactas(separacoesData, preSeparacoesData);
-            
-            if (html) {
-                const container = document.querySelector(`#separacoes-compactas-${numPedido} .separacoes-compactas-container`);
-                const row = document.getElementById(`separacoes-compactas-${numPedido}`);
+            // Dividir em lotes de 50 pedidos para não sobrecarregar
+            const tamanhoLote = 50;
+            for (let i = 0; i < pedidosParaCarregar.length; i += tamanhoLote) {
+                const lote = pedidosParaCarregar.slice(i, i + tamanhoLote);
                 
-                if (container && row) {
-                    container.innerHTML = html;
-                    row.style.display = 'table-row';
+                // Fazer requisição em lote
+                const response = await fetch('/carteira/api/separacoes-compactas-lote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        pedidos: lote,
+                        limite: tamanhoLote
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // LOG DE DEBUG: Verificar resposta completa da API
+                    console.log('🔍 DEBUG API Response (carregarSeparacoesEmLote):', data);
+                    
+                    if (data.success && data.pedidos) {
+                        // Salvar no cache E renderizar
+                        Object.keys(data.pedidos).forEach(numPedido => {
+                            const separacoes = data.pedidos[numPedido];
+                            
+                            // LOG DE DEBUG: Verificar estrutura de cada separação
+                            console.log(`📦 DEBUG - Pedido ${numPedido} - Separações da API:`, separacoes);
+                            if (separacoes && separacoes.length > 0) {
+                                console.log(`📅 DEBUG - Primeira separação tem expedição? ${separacoes[0].expedicao}, agendamento? ${separacoes[0].agendamento}`);
+                            }
+                            
+                            window.separacoesCompactasCache[numPedido] = separacoes;
+                            
+                            // RENDERIZAR se houver separações
+                            if (separacoes && separacoes.length > 0) {
+                                const separacoesRow = document.getElementById(`separacoes-compactas-${numPedido}`);
+                                if (separacoesRow) {
+                                    // Tornar visível
+                                    separacoesRow.style.display = 'table-row';
+                                    // Renderizar conteúdo
+                                    this.renderizarSeparacaoDoCache(numPedido);
+                                }
+                            }
+                        });
+                        
+                        console.log(`✅ Lote ${Math.floor(i/tamanhoLote) + 1}: ${Object.keys(data.pedidos).length} pedidos carregados`);
+                        console.log(`   📊 Total separações: ${data.totais.total_separacoes}`);
+                        console.log(`   🔖 Protocolos pendentes: ${data.totais.protocolos_unicos_pendentes}`);
+                    }
+                } else {
+                    console.error(`❌ Erro ao carregar lote ${Math.floor(i/tamanhoLote) + 1}`);
                 }
             }
             
+            // Atualizar contador após carregar tudo
+            this.atualizarContadorProtocolos();
+            
         } catch (error) {
-            // 🆕 Ignorar erro de abort (cancelamento)
-            if (error.name === 'AbortError') {
-                console.log(`✔️ Requisição cancelada para pedido ${numPedido}`);
-            } else {
-                console.error(`❌ Erro ao carregar separações compactas para ${numPedido}:`, error);
-            }
-        } finally {
-            // Limpar AbortController após conclusão
-            this.abortControllers.delete(numPedido);
+            console.error('❌ Erro ao carregar separações em lote:', error);
+            // Não fazer fallback - carregamento individual é muito lento
         }
     }
+    
+    // REMOVIDO: carregarSeparacoesCompactasPedido - método obsoleto de carregamento individual
 
     /**
      * 🆕 RENDERIZAÇÃO COMPACTA DE SEPARAÇÕES E PRÉ-SEPARAÇÕES
      */
-    renderizarSeparacoesCompactas(separacoesData, preSeparacoesData) {
+    renderizarSeparacoesCompactas(separacoesData) {
         const todasSeparacoes = [];
         
         // Adicionar separações confirmadas
@@ -980,7 +1115,7 @@ class CarteiraAgrupada {
             });
         }
         
-        // Adicionar pré-separações
+        /** Adicionar pré-separações
         if (preSeparacoesData && preSeparacoesData.success && preSeparacoesData.lotes) {
             preSeparacoesData.lotes.forEach(lote => {
                 todasSeparacoes.push({
@@ -998,7 +1133,7 @@ class CarteiraAgrupada {
                     isSeparacao: false
                 });
             });
-        }
+        }**/
         
         // Se não houver nenhuma separação
         if (todasSeparacoes.length === 0) {
@@ -1072,11 +1207,17 @@ class CarteiraAgrupada {
                                 title="Editar datas">
                             <i class="fas fa-calendar-alt"></i> Datas
                         </button>
-                        ${!item.isSeparacao ? `
+                        ${item.status === 'PREVISAO' ? `
                             <button class="btn btn-outline-success btn-sm" 
-                                    onclick="carteiraAgrupada.confirmarPreSeparacao('${item.loteId}')"
+                                    onclick="carteiraAgrupada.alterarStatusSeparacao('${item.loteId}', 'ABERTO')"
                                     title="Confirmar separação">
                                 <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        ` : item.status === 'ABERTO' ? `
+                            <button class="btn btn-outline-warning btn-sm" 
+                                    onclick="carteiraAgrupada.alterarStatusSeparacao('${item.loteId}', 'PREVISAO')"
+                                    title="Voltar para previsão">
+                                <i class="fas fa-undo"></i> Previsão
                             </button>
                         ` : ''}
                         <button class="btn btn-outline-info btn-sm" 
@@ -1100,63 +1241,6 @@ class CarteiraAgrupada {
     /**
      * 🆕 RENDERIZAR DETALHES BÁSICOS (sem estoque)
      */
-    renderizarDetalhesBasicos(data) {
-        if (!data.itens || data.itens.length === 0) {
-            return `
-                <div class="text-center text-muted py-3">
-                    <i class="fas fa-inbox fa-2x mb-2"></i>
-                    <p>Nenhum item encontrado para este pedido.</p>
-                </div>
-            `;
-        }
-
-        return `
-            <div class="table-responsive">
-                <table class="table table-sm table-striped">
-                    <thead class="table-primary">
-                        <tr>
-                            <th>Produto</th>
-                            <th class="text-end">Qtd Saldo</th>
-                            <th class="text-end">Preço Unit.</th>
-                            <th class="text-end">Valor Total</th>
-                            <th class="text-end">Estoque</th>
-                            <th class="text-end">Menor Est. D+7</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.itens.map(item => `
-                            <tr>
-                                <td>
-                                    <strong>${item.cod_produto}</strong>
-                                    <br><small class="text-muted">${item.nome_produto || ''}</small>
-                                </td>
-                                <td class="text-end">
-                                    <strong>${this.formatarQuantidade(item.qtd_saldo_produto_pedido)}</strong>
-                                </td>
-                                <td class="text-end">
-                                    ${this.formatarMoeda(item.preco_produto_pedido)}
-                                </td>
-                                <td class="text-end">
-                                    <strong class="text-success">${this.formatarMoeda((item.qtd_saldo_produto_pedido || 0) * (item.preco_produto_pedido || 0))}</strong>
-                                </td>
-                                <td class="text-end" id="estoque-${item.cod_produto}">
-                                    <span class="spinner-border spinner-border-sm text-primary"></span>
-                                </td>
-                                <td class="text-end" id="menor-estoque-${item.cod_produto}">
-                                    <span class="spinner-border spinner-border-sm text-warning"></span>
-                                </td>
-                                <td>
-                                    <span class="badge bg-secondary">${item.status_item || 'Pendente'}</span>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-    
     /**
      * 🆕 CARREGAR ESTOQUE DE FORMA ASSÍNCRONA
      */
@@ -1255,56 +1339,54 @@ class CarteiraAgrupada {
                 agendamento_confirmado: agendamentoConfirmado || false
             };
             
-            if (isSeparacao) {
-                window.workspace.editarDatasSeparacaoComDados(loteId, dadosModal);
-            } else {
-                window.workspace.editarDatasPreSeparacaoComDados(loteId, dadosModal);
-            }
+            // Usar método unificado para editar datas
+            window.workspace.abrirModalEdicaoDatasDireto('separacao', loteId, dadosModal);
         } else {
             alert('Função de edição de datas em desenvolvimento');
         }
     }
     
-    async confirmarPreSeparacao(loteId) {
-        console.log(`✅ Confirmando pré-separação ${loteId}`);
+    async alterarStatusSeparacao(loteId, novoStatus) {
+        console.log(`🔄 Alterando status da separação ${loteId} para ${novoStatus}`);
         
         try {
-            // Buscar dados da pré-separação para verificar se tem agendamento
-            const response = await fetch(`/carteira/api/pre-separacao/${loteId}/detalhes`);
-            let dadosPreSeparacao = null;
+            // Buscar dados da separação para verificar se tem agendamento
+            const response = await fetch(`/carteira/api/separacao/${loteId}/detalhes`);
+            let dadosSeparacao = null;
             
             if (response.ok) {
-                dadosPreSeparacao = await response.json();
+                dadosSeparacao = await response.json();
             }
             
-            // Confirmar a pré-separação
-            if (window.workspace && window.workspace.confirmarSeparacao) {
-                await window.workspace.confirmarSeparacao(loteId);
+            // Alterar status usando API unificada
+            if (window.separacaoManager && window.separacaoManager.alterarStatus) {
+                await window.separacaoManager.alterarStatus(loteId, novoStatus);
                 
-                // 🆕 Se houver data de agendamento, agendar automaticamente no portal
-                if (dadosPreSeparacao && dadosPreSeparacao.data_agendamento && !dadosPreSeparacao.protocolo) {
+                // 🆕 Se houver data de agendamento e mudando para ABERTO, agendar automaticamente no portal
+                if (novoStatus === 'ABERTO' && dadosSeparacao && dadosSeparacao.agendamento && !dadosSeparacao.protocolo) {
                     console.log('🤖 Agendando automaticamente no portal após confirmação...');
                     setTimeout(() => {
-                        this.agendarPortal(loteId, dadosPreSeparacao.data_agendamento);
+                        this.agendarPortal(loteId, dadosSeparacao.agendamento);
                     }, 2000); // Aguardar 2 segundos após confirmação
                 }
             } else {
-                if (confirm(`Confirmar pré-separação ${loteId}?`)) {
+                if (confirm(`Alterar status da separação ${loteId} para ${novoStatus}?`)) {
                     // Fazer confirmação via API se workspace não estiver disponível
-                    const confirmResponse = await fetch(`/carteira/api/pre-separacao/${loteId}/confirmar`, {
+                    const confirmResponse = await fetch(`/carteira/api/separacao/${loteId}/alterar-status`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
-                        }
+                        },
+                        body: JSON.stringify({ novo_status: novoStatus })
                     });
                     
                     if (confirmResponse.ok) {
                         // 🆕 Agendar automaticamente se tiver data de agendamento
-                        if (dadosPreSeparacao && dadosPreSeparacao.data_agendamento && !dadosPreSeparacao.protocolo) {
+                        if (dadosSeparacao && dadosSeparacao.agendamento && !dadosSeparacao.protocolo) {
                             console.log('🤖 Agendando automaticamente no portal após confirmação...');
                             setTimeout(() => {
-                                this.agendarPortal(loteId, dadosPreSeparacao.data_agendamento);
+                                this.agendarPortal(loteId, dadosSeparacao.agendamento);
                             }, 2000);
                         } else {
                             location.reload();
@@ -1350,31 +1432,45 @@ class CarteiraAgrupada {
      */
     async verificarAgendasEmLote() {
         try {
-            // Coletar protocolos dos pedidos visíveis que têm protocolo
-            const protocolosParaVerificar = [];
+            // CORRIGIDO: Coletar protocolos das SEPARAÇÕES (não dos pedidos)
+            const protocolosUnicos = new Map(); // Usar Map para manter dados do primeiro encontrado
             const pedidosVisiveis = document.querySelectorAll('.pedido-row:not([style*="display: none"])');
             
-            pedidosVisiveis.forEach(linha => {
-                const protocolo = linha.dataset.protocolo;
-                const loteId = linha.dataset.separacaoLoteId;
+            pedidosVisiveis.forEach(pedidoRow => {
+                const numPedido = pedidoRow.dataset.pedido || pedidoRow.dataset.numPedido;
                 
-                // Adicionar apenas se tem protocolo e não está confirmado
-                if (protocolo && protocolo !== 'null' && protocolo !== '') {
-                    const agendamentoConfirmado = linha.dataset.agendamentoConfirmado === 'true';
-                    if (!agendamentoConfirmado) {
-                        protocolosParaVerificar.push({
-                            protocolo: protocolo,
-                            lote_id: loteId,
-                            num_pedido: linha.dataset.pedido
-                        });
-                    }
+                // Buscar nas separações compactas em cache
+                const separacoesCompactas = window.separacoesCompactasCache?.[numPedido];
+                
+                if (separacoesCompactas && separacoesCompactas.length > 0) {
+                    separacoesCompactas.forEach(sep => {
+                        // Verificar se separação tem protocolo válido e não confirmado
+                        if (sep.protocolo && 
+                            sep.protocolo !== '' && 
+                            sep.protocolo !== 'null' && 
+                            sep.protocolo !== 'Vazio' &&
+                            sep.protocolo !== 'vazio' &&
+                            !sep.agendamento_confirmado) {
+                            
+                            // Adicionar ao Map apenas se ainda não existe (evita duplicatas)
+                            if (!protocolosUnicos.has(sep.protocolo)) {
+                                protocolosUnicos.set(sep.protocolo, {
+                                    protocolo: sep.protocolo,
+                                    lote_id: sep.lote_id || sep.separacao_lote_id,
+                                    num_pedido: numPedido
+                                });
+                            }
+                        }
+                    });
                 }
             });
             
-            // Limitar a 50 protocolos
-            const protocolosLimitados = protocolosParaVerificar.slice(0, 50);
+            // Converter Map para Array
+            const protocolosParaVerificar = Array.from(protocolosUnicos.values());
             
-            if (protocolosLimitados.length === 0) {
+            console.log(`📊 Protocolos únicos encontrados para verificar: ${protocolosParaVerificar.length}`);
+            
+            if (protocolosParaVerificar.length === 0) {
                 Swal.fire({
                     icon: 'info',
                     title: 'Nenhum protocolo para verificar',
@@ -1389,7 +1485,7 @@ class CarteiraAgrupada {
                 icon: 'question',
                 title: 'Verificar Agendamentos',
                 html: `
-                    <p>Serão verificados <strong>${protocolosLimitados.length}</strong> protocolos no portal.</p>
+                    <p>Serão verificados <strong>${protocolosParaVerificar.length}</strong> protocolos únicos no portal.</p>
                     <p class="text-muted small">Esta operação será executada em segundo plano e pode levar alguns minutos.</p>
                 `,
                 showCancelButton: true,
@@ -1418,7 +1514,7 @@ class CarteiraAgrupada {
                     'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
                 },
                 body: JSON.stringify({
-                    protocolos: protocolosLimitados,
+                    protocolos: protocolosParaVerificar,
                     portal: 'atacadao'
                 })
             });
@@ -1513,17 +1609,80 @@ class CarteiraAgrupada {
     }
     
     /**
-     * Atualizar contador de protocolos pendentes
+     * Atualizar contador de protocolos pendentes ÚNICOS (visíveis na tela)
+     * CORRIGIDO: Busca protocolos nas SEPARAÇÕES (não nos pedidos)
      */
     atualizarContadorProtocolos() {
-        const protocolosPendentes = document.querySelectorAll(
-            '.pedido-row:not([style*="display: none"])[data-protocolo]:not([data-protocolo=""]):not([data-protocolo="null"])[data-agendamento-confirmado="false"]'
-        ).length;
+        // Coletar protocolos únicos das SEPARAÇÕES dos pedidos visíveis
+        const protocolosUnicos = new Set();
+        
+        const pedidosVisiveis = document.querySelectorAll(
+            '.pedido-row:not([style*="display: none"])'
+        );
+        
+        console.log(`🔍 DEBUG: Total de pedidos visíveis: ${pedidosVisiveis.length}`);
+        
+        let debugPedidosComProtocolo = 0;
+        let debugPedidosSemProtocolo = 0;
+        let debugProtocolosConfirmados = 0;
+        let debugTotalSeparacoes = 0;
+        
+        pedidosVisiveis.forEach(pedidoRow => {
+            const numPedido = pedidoRow.dataset.numPedido;
+            
+            // NOVO: Buscar nas separações compactas em cache
+            const separacoesCompactas = window.separacoesCompactasCache?.[numPedido];
+            
+            if (separacoesCompactas && separacoesCompactas.length > 0) {
+                let pedidoTemProtocolo = false;
+                
+                separacoesCompactas.forEach(sep => {
+                    debugTotalSeparacoes++;
+                    
+                    // Verificar se separação tem protocolo válido e não confirmado
+                    if (sep.protocolo && 
+                        sep.protocolo !== '' && 
+                        sep.protocolo !== 'null' && 
+                        sep.protocolo !== 'Vazio' &&
+                        sep.protocolo !== 'vazio') {
+                        
+                        pedidoTemProtocolo = true;
+                        
+                        if (sep.agendamento_confirmado) {
+                            debugProtocolosConfirmados++;
+                        } else {
+                            // Adicionar protocolo único pendente
+                            protocolosUnicos.add(sep.protocolo);
+                        }
+                    }
+                });
+                
+                if (pedidoTemProtocolo) {
+                    debugPedidosComProtocolo++;
+                } else {
+                    debugPedidosSemProtocolo++;
+                }
+            } else {
+                // Pedido sem separações carregadas
+                debugPedidosSemProtocolo++;
+            }
+        });
+        
+        const totalProtocolosUnicos = protocolosUnicos.size;
+        
+        console.log(`📊 DEBUG Contadores (SEPARAÇÕES):
+            - Pedidos visíveis: ${pedidosVisiveis.length}
+            - Pedidos com protocolo: ${debugPedidosComProtocolo}
+            - Pedidos sem protocolo: ${debugPedidosSemProtocolo}
+            - Total separações verificadas: ${debugTotalSeparacoes}
+            - Protocolos confirmados: ${debugProtocolosConfirmados}
+            - Protocolos únicos pendentes: ${totalProtocolosUnicos}
+            - Exemplos: ${Array.from(protocolosUnicos).slice(0, 5).join(', ')}${protocolosUnicos.size > 5 ? '...' : ''}`);
         
         const contador = document.getElementById('contador-protocolos');
         if (contador) {
-            contador.textContent = protocolosPendentes;
-            contador.className = protocolosPendentes > 0 ? 'badge bg-danger ms-1' : 'badge bg-secondary ms-1';
+            contador.textContent = totalProtocolosUnicos;
+            contador.className = totalProtocolosUnicos > 0 ? 'badge bg-danger ms-1' : 'badge bg-secondary ms-1';
         }
     }
     
@@ -1895,6 +2054,56 @@ class CarteiraAgrupada {
             }
         }, true); // Capture phase para interceptar antes
     }
+    
+    // Método para atualizar dados de uma separação compacta sem re-renderizar
+    atualizarSeparacaoCompacta(loteId, dadosAtualizados) {
+        console.log(`🔄 Atualizando separação compacta ${loteId}`);
+        
+        // Atualizar dados na memória
+        if (this.separacoesPorPedido) {
+            for (const [pedido, separacoes] of this.separacoesPorPedido) {
+                const sep = separacoes.find(s => s.separacao_lote_id === loteId);
+                if (sep) {
+                    // Atualizar campos
+                    if (dadosAtualizados.expedicao !== undefined) sep.expedicao = dadosAtualizados.expedicao;
+                    if (dadosAtualizados.agendamento !== undefined) sep.agendamento = dadosAtualizados.agendamento;
+                    if (dadosAtualizados.protocolo !== undefined) sep.protocolo = dadosAtualizados.protocolo;
+                    if (dadosAtualizados.agendamento_confirmado !== undefined) sep.agendamento_confirmado = dadosAtualizados.agendamento_confirmado;
+                    console.log(`✅ Dados atualizados na memória para ${loteId}`);
+                    break;
+                }
+            }
+        }
+        
+        // Atualizar também em dadosAgrupados se existir
+        if (this.dadosAgrupados && this.dadosAgrupados.grupos) {
+            for (const grupo of this.dadosAgrupados.grupos) {
+                if (grupo.separacoes_compactas) {
+                    const sepCompacta = grupo.separacoes_compactas.find(s => s.lote_id === loteId);
+                    if (sepCompacta) {
+                        // Atualizar campos
+                        if (dadosAtualizados.expedicao !== undefined) sepCompacta.expedicao = dadosAtualizados.expedicao;
+                        if (dadosAtualizados.agendamento !== undefined) sepCompacta.agendamento = dadosAtualizados.agendamento;
+                        if (dadosAtualizados.protocolo !== undefined) sepCompacta.protocolo = dadosAtualizados.protocolo;
+                        if (dadosAtualizados.agendamento_confirmado !== undefined) sepCompacta.agendamento_confirmado = dadosAtualizados.agendamento_confirmado;
+                        console.log(`✅ Dados atualizados em dadosAgrupados para ${loteId}`);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Chamar método do workspace para atualizar a view
+        if (window.workspace && window.workspace.atualizarViewCompactaDireto) {
+            window.workspace.atualizarViewCompactaDireto(
+                loteId,
+                dadosAtualizados.expedicao,
+                dadosAtualizados.agendamento,
+                dadosAtualizados.protocolo,
+                dadosAtualizados.agendamento_confirmado
+            );
+        }
+    }
 }
 
 // 🎯 FUNÇÕES GLOBAIS PARA ONCLICK (BOTÕES DOS CARDS)
@@ -1960,14 +2169,7 @@ function avaliarEstoques(numPedido) {
     }
 }
 
-function solicitarAgendamento(numPedido) {
-    console.log(`🗓️ Solicitar agendamento do pedido ${numPedido}`);
-    if (window.modalAgendamento) {
-        window.modalAgendamento.abrirModalAgendamento(numPedido);
-    } else {
-        console.error('❌ Modal de agendamento não inicializado');
-    }
-}
+// Função removida - modal de agendamento não é mais necessário
 
 function abrirModalEndereco(numPedido) {
     console.log(`📍 Abrir modal de endereço do pedido ${numPedido}`);

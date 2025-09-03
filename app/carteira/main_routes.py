@@ -5,7 +5,9 @@ from app.carteira.models import (
     CarteiraPrincipal, ControleCruzadoSeparacao,
     InconsistenciaFaturamento, SaldoStandby
 )
-from app.estoque.models import SaldoEstoque
+# MIGRADO: SaldoEstoque -> SaldoEstoqueCompativel (02/09/2025)
+# from app.estoque.models import SaldoEstoque
+from app.estoque.services.compatibility_layer import SaldoEstoque
 from sqlalchemy import func, inspect
 from datetime import datetime, date, timedelta
 import logging
@@ -262,7 +264,9 @@ def api_item_detalhes(id):
         
         # 📦 INFORMAÇÕES DE ESTOQUE
         try:
-            from app.estoque.models import SaldoEstoque
+            # MIGRADO: SaldoEstoque -> SaldoEstoqueCompativel (02/09/2025)
+            # from app.estoque.models import SaldoEstoque
+            from app.estoque.services.compatibility_layer import SaldoEstoque
             estoque_info = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
             if estoque_info:
                 dados['estoque'] = {

@@ -4,11 +4,7 @@ API para dados do dashboard da carteira
 
 from flask import jsonify
 from flask_login import login_required
-from app import db
 from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
-from datetime import datetime, timedelta
-from sqlalchemy import func
 from . import carteira_bp
 import logging
 
@@ -19,29 +15,22 @@ logger = logging.getLogger(__name__)
 @login_required
 def api_separacoes_programadas():
     """
-    API para buscar dados de separações programadas (COTADO/ABERTO)
+    API para buscar dados de separações programadas (não sincronizadas)
     Retorna totais e valores por data de expedição
     """
     try:
-        # Buscar separações com status COTADO ou ABERTO
-        query = db.session.query(
-            Separacao,
-            Pedido.status
-        ).join(
-            Pedido, 
-            Separacao.separacao_lote_id == Pedido.separacao_lote_id
-        ).filter(
-            Pedido.status.in_(['COTADO', 'ABERTO'])
-        )
-        
-        separacoes = query.all()
+        # Buscar separações não sincronizadas (inclui PREVISAO, ABERTO, COTADO)
+        # MIGRADO: Removido JOIN com Pedido VIEW, usa sincronizado_nf=False
+        separacoes = Separacao.query.filter(
+            Separacao.sincronizado_nf == False
+        ).all()
         
         # Calcular totais
         total_quantidade = 0
         total_valor = 0
         valores_por_data = {}
         
-        for separacao, status in separacoes:
+        for separacao in separacoes:
             # Contabilizar totais
             total_quantidade += 1
             valor = float(separacao.valor_saldo or 0)

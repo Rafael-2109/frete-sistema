@@ -1,12 +1,10 @@
 """
 Rotas simplificadas para TagPlus v2
 """
-from flask import Blueprint, render_template, jsonify, request, redirect, url_for
+from flask import Blueprint, render_template, jsonify, request, redirect
 from flask_login import login_required
 from datetime import datetime, timedelta, date
-from app import db
 from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
-from app.integracoes.tagplus.oauth2_v2 import TagPlusOAuth2V2
 import logging
 
 logger = logging.getLogger(__name__)

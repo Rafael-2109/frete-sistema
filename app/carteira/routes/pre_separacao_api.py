@@ -1,15 +1,17 @@
 """
 APIs para gerenciamento de pré-separações
 Sistema de persistência para drag & drop do workspace
+MIGRADO: PreSeparacaoItem → Separacao (status='PREVISAO')
 """
 
 from flask import jsonify, request, current_app
 from flask_login import login_required
 from datetime import datetime
 from app import db
-from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
-from app.utils.timezone import agora_brasil
-from app.carteira.utils.separacao_utils import calcular_peso_pallet_produto, gerar_novo_lote_id
+from app.carteira.models import CarteiraPrincipal
+from app.separacao.models import Separacao  # MIGRADO: Usando Separacao ao invés de PreSeparacaoItem
+from app.carteira.utils.separacao_utils import calcular_peso_pallet_produto
+from app.utils.lote_utils import gerar_lote_id as gerar_novo_lote_id  # Função padronizada
 import logging
 
 from . import carteira_bp
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 def salvar_pre_separacao():
     """
     API para salvar pré-separação no drag & drop
-    Cada drag & drop cria/atualiza um PreSeparacaoItem
+    Cada drag & drop cria/atualiza uma Separacao com status='PREVISAO'
     """
     try:
         data = request.get_json()
@@ -68,16 +70,17 @@ def salvar_pre_separacao():
             return jsonify({"success": False, "error": "Formato de data inválido"}), 400
 
         # Verificar se já existe pré-separação para este produto no mesmo lote
-        pre_separacao_existente = PreSeparacaoItem.query.filter(
-            PreSeparacaoItem.num_pedido == num_pedido,
-            PreSeparacaoItem.cod_produto == cod_produto,
-            PreSeparacaoItem.separacao_lote_id == separacao_lote_id,  # Verificar pelo lote específico
-            PreSeparacaoItem.status.in_(["CRIADO", "RECOMPOSTO"]),
+        # MIGRADO: Buscar por status='PREVISAO' ao invés de status.in_(['CRIADO', 'RECOMPOSTO'])
+        pre_separacao_existente = Separacao.query.filter(
+            Separacao.num_pedido == num_pedido,
+            Separacao.cod_produto == cod_produto,
+            Separacao.separacao_lote_id == separacao_lote_id,
+            Separacao.status == 'PREVISAO'  # MIGRADO: Status único para pré-separação
         ).first()
 
         if pre_separacao_existente:
             # Somar quantidade à existente
-            nova_quantidade = float(pre_separacao_existente.qtd_selecionada_usuario) + float(qtd_selecionada)
+            nova_quantidade = float(pre_separacao_existente.qtd_saldo) + float(qtd_selecionada)
 
             # Verificar se não excede o saldo disponível
             if nova_quantidade > float(item_carteira.qtd_saldo_produto_pedido):
@@ -92,38 +95,52 @@ def salvar_pre_separacao():
                 )
 
             # Atualizar quantidade existente (somar)
-            pre_separacao_existente.qtd_selecionada_usuario = nova_quantidade
-            pre_separacao_existente.qtd_restante_calculada = (
-                float(item_carteira.qtd_saldo_produto_pedido) - nova_quantidade
-            )
+            pre_separacao_existente.qtd_saldo = nova_quantidade  # MIGRADO: qtd_selecionada_usuario → qtd_saldo
+            # MIGRADO: qtd_restante_calculada REMOVIDO - não é necessário
+            
             # Recalcular valor total
-            pre_separacao_existente.valor_original_item = (
+            pre_separacao_existente.valor_saldo = (  # MIGRADO: valor_original_item → valor_saldo
                 float(item_carteira.preco_produto_pedido or 0) * nova_quantidade
             )
+            # IMPORTANTE: Recalcular peso e pallet
+            peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, nova_quantidade)
+            pre_separacao_existente.peso = peso_calculado
+            pre_separacao_existente.pallet = pallet_calculado
+            
             pre_separacao = pre_separacao_existente
             acao = "atualizada (quantidade somada)"
         else:
+            # Calcular peso e pallet ANTES de criar
+            peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, float(qtd_selecionada))
+            
             # Criar nova pré-separação
-            pre_separacao = PreSeparacaoItem(
+            # MIGRADO: Campos removidos: qtd_original_carteira, qtd_restante_calculada, criado_por, data_criacao
+            pre_separacao = Separacao(
                 num_pedido=num_pedido,
                 cod_produto=cod_produto,
-                cnpj_cliente=item_carteira.cnpj_cpf,
+                cnpj_cpf=item_carteira.cnpj_cpf,  # MIGRADO: cnpj_cliente → cnpj_cpf
                 nome_produto=item_carteira.nome_produto,
-                qtd_original_carteira=float(item_carteira.qtd_saldo_produto_pedido),
-                qtd_selecionada_usuario=float(qtd_selecionada),
-                qtd_restante_calculada=float(item_carteira.qtd_saldo_produto_pedido) - float(qtd_selecionada),
-                valor_original_item=float(item_carteira.preco_produto_pedido or 0) * float(qtd_selecionada),
-                data_expedicao_editada=data_expedicao_obj,
-                data_agendamento_editada=None,
-                protocolo_editado=data.get("protocolo_editado"),
-                observacoes_usuario=data.get("observacoes_usuario"),
-                separacao_lote_id=separacao_lote_id,  # Adicionar o lote_id
-                status="CRIADO",
+                qtd_saldo=float(qtd_selecionada),  # MIGRADO: qtd_selecionada_usuario → qtd_saldo
+                valor_saldo=float(item_carteira.preco_produto_pedido or 0) * float(qtd_selecionada),  # MIGRADO: valor_original_item → valor_saldo
+                expedicao=data_expedicao_obj,  # MIGRADO: data_expedicao_editada → expedicao
+                agendamento=None,  # MIGRADO: data_agendamento_editada → agendamento
+                protocolo=data.get("protocolo_editado"),  # MIGRADO: protocolo_editado → protocolo
+                observ_ped_1=data.get("observacoes_usuario"),  # MIGRADO: observacoes_usuario → observ_ped_1
+                separacao_lote_id=separacao_lote_id,
+                status='PREVISAO',  # MIGRADO: Status fixo para pré-separação
                 tipo_envio=(
                     "parcial" if float(qtd_selecionada) < float(item_carteira.qtd_saldo_produto_pedido) else "total"
                 ),
-                data_criacao=agora_brasil(),
-                criado_por="workspace_drag_drop",
+                # Campos adicionais de Separacao que precisamos preencher
+                raz_social_red=item_carteira.raz_social_red,
+                nome_cidade=item_carteira.municipio,
+                cod_uf=item_carteira.estado,
+                data_pedido=item_carteira.data_pedido,
+                # IMPORTANTE: Adicionar peso e pallet calculados
+                peso=peso_calculado,
+                pallet=pallet_calculado,
+                # vendedor=item_carteira.vendedor,  # REMOVIDO: campo não existe em Separacao
+                # criado_em é automático no modelo
             )
             db.session.add(pre_separacao)
             acao = "criada"
@@ -131,7 +148,7 @@ def salvar_pre_separacao():
         db.session.commit()
 
         # Calcular peso e pallet para resposta usando a quantidade total final
-        quantidade_final = float(pre_separacao.qtd_selecionada_usuario)
+        quantidade_final = float(pre_separacao.qtd_saldo)  # MIGRADO: qtd_selecionada_usuario → qtd_saldo
         peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, quantidade_final)
 
         return jsonify(
@@ -143,10 +160,10 @@ def salvar_pre_separacao():
                 "dados": {
                     "cod_produto": cod_produto,
                     "quantidade": quantidade_final,
-                    "valor": float(pre_separacao.valor_original_item or 0),
+                    "valor": float(pre_separacao.valor_saldo or 0),  # MIGRADO: valor_original_item → valor_saldo
                     "peso": peso_calculado,
                     "pallet": pallet_calculado,
-                    "status": "CRIADO",
+                    "status": "PREVISAO",  # MIGRADO: Retorna status real
                     "tipo": "pre_separacao",
                 },
             }
@@ -174,11 +191,11 @@ def listar_pre_separacoes(num_pedido):
     Usado para carregar o workspace com dados já salvos
     """
     try:
-        pre_separacoes = (
-            db.session.query(PreSeparacaoItem)
-            .filter(PreSeparacaoItem.num_pedido == num_pedido, PreSeparacaoItem.status.in_(["CRIADO", "RECOMPOSTO"]))
-            .all()
-        )
+        # MIGRADO: Buscar Separacao com status='PREVISAO'
+        pre_separacoes = Separacao.query.filter(
+            Separacao.num_pedido == num_pedido, 
+            Separacao.status == 'PREVISAO'  # MIGRADO: Status único para pré-separação
+        ).all()
 
         # Agrupar por separacao_lote_id
         lotes = {}
@@ -189,30 +206,30 @@ def listar_pre_separacoes(num_pedido):
                 lotes[lote_key] = {
                     "lote_id": lote_key,
                     "data_expedicao": (
-                        pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else None
+                        pre_sep.expedicao.strftime('%Y-%m-%d') if pre_sep.expedicao else None  # MIGRADO: data_expedicao_editada → expedicao
                     ),
                     "data_agendamento": (
-                        pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else None
+                        pre_sep.agendamento.strftime('%Y-%m-%d') if pre_sep.agendamento else None  # MIGRADO: data_agendamento_editada → agendamento
                     ),
-                    "agendamento_confirmado": pre_sep.agendamento_confirmado if hasattr(pre_sep, 'agendamento_confirmado') else False,
-                    "protocolo": pre_sep.protocolo_editado,
+                    "agendamento_confirmado": pre_sep.agendamento_confirmado,  # Este campo existe em Separacao
+                    "protocolo": pre_sep.protocolo,  # MIGRADO: protocolo_editado → protocolo
                     "status": "pre_separacao",
                     "produtos": [],
                     "totais": {"valor": 0, "peso": 0, "pallet": 0},
-                    "pre_separacao_id": pre_sep.id,  # Add reference to the first pre_separacao_id for the lote
+                    "pre_separacao_id": pre_sep.id,
                 }
 
             # Calcular peso e pallet
             peso_calculado, pallet_calculado = calcular_peso_pallet_produto(
-                pre_sep.cod_produto, float(pre_sep.qtd_selecionada_usuario)
+                pre_sep.cod_produto, float(pre_sep.qtd_saldo)  # MIGRADO: qtd_selecionada_usuario → qtd_saldo
             )
 
             produto_data = {
                 "pre_separacao_id": pre_sep.id,
                 "cod_produto": pre_sep.cod_produto,
                 "nome_produto": pre_sep.nome_produto,
-                "quantidade": float(pre_sep.qtd_selecionada_usuario),
-                "valor": float(pre_sep.valor_original_item or 0),
+                "quantidade": float(pre_sep.qtd_saldo),  # MIGRADO: qtd_selecionada_usuario → qtd_saldo
+                "valor": float(pre_sep.valor_saldo or 0),  # MIGRADO: valor_original_item → valor_saldo
                 "peso": peso_calculado,
                 "pallet": pallet_calculado,
             }
@@ -238,7 +255,8 @@ def remover_pre_separacao(pre_separacao_id):
     API para remover pré-separação (quando remove produto do lote)
     """
     try:
-        pre_separacao = PreSeparacaoItem.query.get(pre_separacao_id)
+        # MIGRADO: Buscar Separacao ao invés de PreSeparacaoItem
+        pre_separacao = Separacao.query.get(pre_separacao_id)
 
         if not pre_separacao:
             return jsonify({"success": False, "error": "Pré-separação não encontrada"}), 404
@@ -246,8 +264,8 @@ def remover_pre_separacao(pre_separacao_id):
         # Dados para resposta antes de deletar
         dados_removidos = {
             "cod_produto": pre_separacao.cod_produto,
-            "quantidade": float(pre_separacao.qtd_selecionada_usuario),
-            "valor": float(pre_separacao.valor_original_item or 0),
+            "quantidade": float(pre_separacao.qtd_saldo),  # MIGRADO: qtd_selecionada_usuario → qtd_saldo
+            "valor": float(pre_separacao.valor_saldo or 0),  # MIGRADO: valor_original_item → valor_saldo
         }
 
         db.session.delete(pre_separacao)
@@ -280,8 +298,10 @@ def atualizar_datas_pre_separacao(lote_id):
             return jsonify({"success": False, "error": "Data de expedição é obrigatória"}), 400
 
         # Buscar todas as pré-separações do lote
-        pre_separacoes = PreSeparacaoItem.query.filter(
-            PreSeparacaoItem.separacao_lote_id == lote_id, PreSeparacaoItem.status.in_(["CRIADO", "RECOMPOSTO"])
+        # MIGRADO: Buscar por status='PREVISAO'
+        pre_separacoes = Separacao.query.filter(
+            Separacao.separacao_lote_id == lote_id, 
+            Separacao.status == 'PREVISAO'  # MIGRADO: Status único para pré-separação
         ).all()
 
         if not pre_separacoes:
@@ -297,11 +317,10 @@ def atualizar_datas_pre_separacao(lote_id):
 
         # Atualizar todas as pré-separações do lote
         for pre_sep in pre_separacoes:
-            pre_sep.data_expedicao_editada = data_expedicao_obj
-            pre_sep.data_agendamento_editada = data_agendamento_obj
-            pre_sep.protocolo_editado = protocolo
-            if hasattr(pre_sep, 'agendamento_confirmado'):
-                pre_sep.agendamento_confirmado = agendamento_confirmado
+            pre_sep.expedicao = data_expedicao_obj  # MIGRADO: data_expedicao_editada → expedicao
+            pre_sep.agendamento = data_agendamento_obj  # MIGRADO: data_agendamento_editada → agendamento
+            pre_sep.protocolo = protocolo  # MIGRADO: protocolo_editado → protocolo
+            pre_sep.agendamento_confirmado = agendamento_confirmado  # Campo existe em Separacao
 
         db.session.commit()
 

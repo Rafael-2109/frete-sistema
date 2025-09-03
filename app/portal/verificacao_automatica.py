@@ -33,17 +33,21 @@ except Exception as e:
 @login_required
 def buscar_protocolos_pendentes():
     """
-    Busca todos os protocolos pendentes de confirmação
-    (protocolo != 'Vazio' e agendamento_confirmado = False)
+    Busca todos os protocolos pendentes de confirmação na CARTEIRA
+    Critérios:
+    - protocolo != 'Vazio' e agendamento_confirmado = False
+    - sincronizado_nf = False (apenas itens não faturados)
     """
     try:
         # Buscar separações com protocolo válido e não confirmado
+        # IMPORTANTE: Filtrar apenas não faturadas (sincronizado_nf=False) para carteira
         query = db.session.query(Separacao).filter(
             Separacao.protocolo.isnot(None),
             Separacao.protocolo != '',
             Separacao.protocolo != 'Vazio',
             Separacao.protocolo != 'vazio',
-            Separacao.agendamento_confirmado == False
+            Separacao.agendamento_confirmado == False,
+            Separacao.sincronizado_nf == False  # Apenas itens não faturados na carteira
         )
         
         # Adicionar filtro de portal se necessário (por enquanto só Atacadão)
@@ -96,12 +100,14 @@ def verificar_todos_protocolos_pendentes():
             }), 503
         
         # Buscar todos os protocolos pendentes
+        # IMPORTANTE: Filtrar apenas não faturadas (sincronizado_nf=False) para carteira
         query = db.session.query(Separacao).filter(
             Separacao.protocolo.isnot(None),
             Separacao.protocolo != '',
             Separacao.protocolo != 'Vazio',
             Separacao.protocolo != 'vazio',
-            Separacao.agendamento_confirmado == False
+            Separacao.agendamento_confirmado == False,
+            Separacao.sincronizado_nf == False  # Apenas itens não faturados na carteira
         ).distinct(Separacao.protocolo)
         
         separacoes = query.all()

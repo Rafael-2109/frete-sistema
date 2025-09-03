@@ -1107,7 +1107,7 @@ def api_processar_pendencias():
         from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
         
         processador = ProcessadorFaturamento()
-        resultado = processador.processar_todas_pendencias()
+        resultado = processador.processar_nfs_importadas()
         
         return jsonify({
             'success': True,

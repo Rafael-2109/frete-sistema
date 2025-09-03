@@ -11,7 +11,7 @@ from app.utils.localizacao import LocalizacaoService
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.embarques.models import Embarque, EmbarqueItem
 from flask import jsonify
-import uuid  # ✅ ADICIONADO: Para gerar lotes únicos
+from app.utils.lote_utils import gerar_lote_id  # Função padronizada para gerar lotes
 from app.utils.embarque_numero import obter_proximo_numero_embarque
 from datetime import datetime
 from app.utils.tabela_frete_manager import TabelaFreteManager
@@ -803,9 +803,7 @@ def excluir_pedido(pedido_id):
     
     return redirect(url_for('pedidos.lista_pedidos'))
 
-def gerar_lote_id():
-    """Gera um ID único para o lote de separação"""
-    return f"LOTE_{uuid.uuid4().hex[:8].upper()}"
+# Função gerar_lote_id movida para app.utils.lote_utils para padronização
 
 @pedidos_bp.route('/api/pedido/<string:num_pedido>/endereco-carteira', methods=['GET'])
 @login_required
@@ -943,45 +941,33 @@ def gerar_resumo():
         
         lote_id = separacao_exemplo.separacao_lote_id if separacao_exemplo else None
         
-        if pedido_existente:
-            pedido_existente.data_pedido = row.data_pedido
-            pedido_existente.cnpj_cpf = row.cnpj_cpf
-            pedido_existente.raz_social_red = row.raz_social_red
-            pedido_existente.nome_cidade = row.nome_cidade
-            pedido_existente.cod_uf = row.cod_uf
-            pedido_existente.valor_saldo_total = row.valor_saldo_total
-            pedido_existente.pallet_total = row.pallet_total
-            pedido_existente.peso_total = row.peso_total
-            pedido_existente.rota = row.rota
-            pedido_existente.sub_rota = row.sub_rota
-            pedido_existente.observ_ped_1 = row.observ_ped_1
-            pedido_existente.roteirizacao = row.roteirizacao
-            pedido_existente.separacao_lote_id = lote_id  # ✅ NOVO: Conecta com separação
-            # ✨ Usa o novo serviço de normalização
-            LocalizacaoService.normalizar_dados_pedido(pedido_existente)
-        else:
-            novo = Pedido(
+        # IMPORTANTE: Após migração, Pedido é uma VIEW
+        # Não podemos criar/atualizar registros em Pedido
+        # A VIEW agrega automaticamente as Separacoes
+        
+        # O que podemos fazer é atualizar campos nas Separacoes se necessário
+        if lote_id and not pedido_existente:
+            # Se não existe pedido na VIEW, significa que as Separacoes precisam de ajustes
+            separacoes_do_grupo = Separacao.query.filter_by(
                 num_pedido=row.num_pedido,
-                data_pedido=row.data_pedido,
-                cnpj_cpf=row.cnpj_cpf,
-                raz_social_red=row.raz_social_red,
-                nome_cidade=row.nome_cidade,
-                cod_uf=row.cod_uf,
-                valor_saldo_total=row.valor_saldo_total,
-                pallet_total=row.pallet_total,
-                peso_total=row.peso_total,
-                rota=row.rota,
-                sub_rota=row.sub_rota,
-                observ_ped_1=row.observ_ped_1,
-                roteirizacao=row.roteirizacao,
                 expedicao=row.expedicao,
                 agendamento=row.agendamento,
-                protocolo=row.protocolo,
-                separacao_lote_id=lote_id  # ✅ NOVO: Conecta com separação
-            )
-            # ✨ Usa o novo serviço de normalização
-            LocalizacaoService.normalizar_dados_pedido(novo)
-            db.session.add(novo)
+                protocolo=row.protocolo
+            ).all()
+            
+            # Normalizar dados nas Separacoes
+            for sep in separacoes_do_grupo:
+                # Aplicar normalização diretamente nas Separacoes
+                if hasattr(sep, 'cidade_normalizada') and not sep.cidade_normalizada:
+                    # Normalizar cidade/UF se disponível
+                    try:
+                        from app.utils.localizacao import LocalizacaoService
+                        sep.cidade_normalizada = LocalizacaoService.normalizar_cidade(sep.nome_cidade)
+                        sep.uf_normalizada = LocalizacaoService.normalizar_uf(sep.cod_uf)
+                        sep.codigo_ibge = LocalizacaoService.obter_codigo_ibge(sep.nome_cidade, sep.cod_uf)
+                    except ImportError:
+                        # Se o serviço não existir, apenas pular a normalização
+                        pass
 
     db.session.commit()
     

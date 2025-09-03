@@ -381,18 +381,83 @@ class WorkspaceQuantidades {
      * 🎯 CALCULAR STATUS DE DISPONIBILIDADE
      */
     calcularStatusDisponibilidade(produto) {
-        if (produto.estoque_hoje >= produto.qtd_pedido) {
-            return { classe: 'bg-success', texto: 'Hoje' };
+        // Debug: verificar dados recebidos
+        console.log('🔍 calcularStatusDisponibilidade - Dados do produto:', {
+            cod_produto: produto.cod_produto,
+            qtd_pedido: produto.qtd_pedido,
+            qtd_saldo_produto_pedido: produto.qtd_saldo_produto_pedido,
+            estoque_hoje: produto.estoque_hoje,
+            estoque: produto.estoque,
+            qtd_disponivel: produto.qtd_disponivel,
+            data_disponibilidade: produto.data_disponibilidade
+        });
+        
+        const qtdPedido = produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0;
+        const estoqueHoje = produto.estoque_hoje ?? produto.estoque ?? 0;
+        const qtdDisponivel = produto.qtd_disponivel || 0;
+        
+        // Se tem estoque suficiente hoje
+        if (estoqueHoje >= qtdPedido) {
+            console.log('✅ Estoque suficiente hoje:', estoqueHoje, '>=', qtdPedido);
+            
+            // Formatar data de hoje
+            const hoje = new Date();
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dataHoje = `${dia}/${mes}`;
+            
+            return {
+                class: 'bg-success text-white',
+                texto: 'HOJE',
+                detalhes: `${dataHoje} (${this.formatarQuantidade(estoqueHoje)} un)`,
+                tooltip: `Disponível hoje (${dataHoje}): ${this.formatarQuantidade(estoqueHoje)} unidades`
+            };
         }
 
-        if (produto.data_disponibilidade) {
+        // Se tem data de disponibilidade futura
+        if (produto.data_disponibilidade && produto.data_disponibilidade !== 'Sem previsão') {
+            console.log('📅 Data disponibilidade encontrada:', produto.data_disponibilidade);
             const diasAte = this.calcularDiasAte(produto.data_disponibilidade);
-            if (diasAte <= 7) {
-                return { classe: 'bg-warning', texto: `${diasAte}d` };
+            
+            // Calcular a data somando dias a hoje
+            const hoje = new Date();
+            const dataFutura = new Date(hoje);
+            dataFutura.setDate(hoje.getDate() + diasAte);
+            
+            // Formatar a data para exibição (dd/mm)
+            const dia = String(dataFutura.getDate()).padStart(2, '0');
+            const mes = String(dataFutura.getMonth() + 1).padStart(2, '0');
+            const dataFormatada = `${dia}/${mes}`;
+            
+            console.log(`📅 Data calculada: Hoje + ${diasAte} dias = ${dataFormatada}`);
+            
+            // Determinar a classe baseada nos dias
+            let colorClass = 'bg-warning';
+            if (diasAte <= 3) {
+                colorClass = 'bg-success';
+            } else if (diasAte > 7) {
+                colorClass = 'bg-danger';
             }
+            
+            const resultado = {
+                class: `${colorClass} text-white`,
+                texto: `D+${diasAte}`,
+                detalhes: `${dataFormatada} (${this.formatarQuantidade(qtdDisponivel)} un)`,
+                tooltip: `Disponível em ${diasAte} dias (${dataFormatada}) - Quantidade: ${this.formatarQuantidade(qtdDisponivel)} unidades`
+            };
+            
+            console.log('📊 Resultado calculado:', resultado);
+            return resultado;
         }
 
-        return { classe: 'bg-danger', texto: 'Sem est.' };
+        // Sem disponibilidade
+        console.log('❌ Sem disponibilidade - data:', produto.data_disponibilidade, 'qtd:', qtdDisponivel);
+        return {
+            class: 'bg-danger text-white',
+            texto: 'INDISPONÍVEL',
+            detalhes: 'Sem previsão',
+            tooltip: 'Produto sem previsão de disponibilidade'
+        };
     }
 
     /**
@@ -400,9 +465,16 @@ class WorkspaceQuantidades {
      */
     calcularDiasAte(dataStr) {
         const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0); // Zerar horas para comparação de dias
+        
         const dataTarget = new Date(dataStr);
+        dataTarget.setHours(0, 0, 0, 0); // Zerar horas para comparação de dias
+        
         const diffTime = dataTarget - hoje;
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const dias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Não retornar dias negativos - mínimo é 0 (hoje)
+        return Math.max(0, dias);
     }
 
     /**
@@ -416,14 +488,32 @@ class WorkspaceQuantidades {
         }).format(valor);
     }
 
-    formatarPeso(peso) {
-        if (!peso) return '0 kg';
-        return `${parseFloat(peso).toFixed(1)} kg`;
+    formatarQuantidade(qtd) {
+        // Verificar se é null, undefined ou NaN
+        if (qtd === null || qtd === undefined || isNaN(qtd)) return '0';
+        // Garantir que é um número válido
+        const numero = parseFloat(qtd);
+        if (isNaN(numero)) return '0';
+        // Retornar com 3 decimais para quantidades precisas
+        return numero.toFixed(3).replace('.', ',');
     }
 
-    formatarPallet(pallet) {
-        if (!pallet) return '0 plt';
-        return `${parseFloat(pallet).toFixed(2)} plt`;
+    formatarPeso(valor) {
+        if (!valor || isNaN(valor)) return '0';
+        // Formatar com separador de milhar "." sem casa decimal
+        return Math.round(valor).toLocaleString('pt-BR', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }) +' kg';
+    }
+
+    formatarPallet(valor) {
+        if (!valor || isNaN(valor)) return '0,0';
+        // Formatar com separador de milhar "." e 1 casa decimal ","
+        return valor.toLocaleString('pt-BR', {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1
+        }) +' plt';
     }
 }
 

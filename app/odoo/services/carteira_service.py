@@ -20,6 +20,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 
+from app import db
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
 from sqlalchemy import or_
@@ -63,9 +64,9 @@ class CarteiraService:
     
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None):
         """
-        Obter carteira pendente do Odoo com campos corretos
+        Obter carteira pendente do Odoo com filtro combinado inteligente
         """
-        logger.info("Buscando carteira pendente do Odoo...")
+        logger.info("Buscando carteira pendente do Odoo com filtro inteligente...")
         
         try:
             # Conectar ao Odoo
@@ -76,30 +77,50 @@ class CarteiraService:
                     'dados': []
                 }
             
-            # Usar filtros para carteira pendente
-            filtros_carteira = {
-                'modelo': 'carteira',
-                'carteira_pendente': True
-            }
+            # NOVO: Coletar pedidos existentes na CarteiraPrincipal para filtro
+            from app.carteira.models import CarteiraPrincipal
+            from app import db
             
-            # Adicionar filtros opcionais
+            pedidos_na_carteira = set()
+            logger.info("📋 Coletando pedidos existentes na carteira para filtro...")
+            
+            for pedido in db.session.query(CarteiraPrincipal.num_pedido).distinct().all():
+                if pedido[0] and self.is_pedido_odoo(pedido[0]):
+                    pedidos_na_carteira.add(pedido[0])
+            
+            logger.info(f"✅ {len(pedidos_na_carteira)} pedidos Odoo existentes serão incluídos no filtro")
+            
+            # Montar domain com lógica OR inteligente
+            if pedidos_na_carteira:
+                # Se tem pedidos na carteira, usar filtro OR
+                domain = [
+                    '&',  # AND entre status válido e condição OR
+                    ('order_id.state', 'in', ['draft', 'sent', 'sale']),  # Status válido sempre
+                    '|',  # OR entre as duas condições abaixo
+                    ('qty_saldo', '>', 0),  # Novos pedidos com saldo
+                    ('order_id.name', 'in', list(pedidos_na_carteira))  # OU pedidos já existentes
+                ]
+                logger.info("🔍 Usando filtro combinado: (qty_saldo > 0) OU (pedidos existentes)")
+            else:
+                # Se carteira vazia, apenas qty_saldo > 0
+                domain = [
+                    ('qty_saldo', '>', 0),  # Carteira pendente
+                    ('order_id.state', 'in', ['draft', 'sent', 'sale'])  # Status válido
+                ]
+                logger.info("🔍 Carteira vazia - usando apenas filtro qty_saldo > 0")
+            
+            # Adicionar filtros opcionais de data se fornecidos
             if data_inicio:
-                filtros_carteira['data_inicio'] = data_inicio
+                domain.append(('order_id.date_order', '>=', data_inicio))
             if data_fim:
-                filtros_carteira['data_fim'] = data_fim
+                domain.append(('order_id.date_order', '<=', data_fim))
             if pedidos_especificos:
-                filtros_carteira['pedidos_especificos'] = pedidos_especificos
+                domain.append(('order_id.name', 'in', pedidos_especificos))
             
-            # Usar novo método do CarteiraMapper com múltiplas queries
-            logger.info("Usando sistema de múltiplas queries para carteira...")
-            
-            # Primeiro buscar dados brutos do Odoo
-            domain = [
-                ('qty_saldo', '>', 0),  # Carteira pendente
-                ('order_id.state', 'in', ['draft', 'sent', 'sale'])  # ✅ FILTRO DE STATUS: Apenas pedidos válidos
-            ]  
+            # Campos básicos necessários
             campos_basicos = ['id', 'order_id', 'product_id', 'product_uom', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
             
+            logger.info("📡 Executando query no Odoo com filtro inteligente...")
             dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos)
             
             if dados_odoo_brutos:
@@ -781,186 +802,177 @@ class CarteiraService:
 
     # 🔧 MÉTODOS AUXILIARES CRÍTICOS PARA OPERAÇÃO COMPLETA
     
-    def _verificar_riscos_pre_sincronizacao(self):
-        """
-        🚨 VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO: Detecta riscos operacionais críticos
-        
-        Verifica separações cotadas, faturamento pendente e outros riscos ANTES da sincronização destrutiva
-        """
-        try:
-            logger.info("🔍 Verificando riscos operacionais antes da sincronização...")
-            
-            # Importar sistema de alertas
-            from app.carteira.alert_system import AlertaSistemaCarteira
-            
-            alertas_criticos = []
-            
-            # ✅ VERIFICAÇÃO 1: Separações cotadas
-            resultado_cotadas = AlertaSistemaCarteira.verificar_separacoes_cotadas_antes_sincronizacao()
-            
-            if resultado_cotadas.get('alertas'):
-                logger.warning(f"🚨 {resultado_cotadas['quantidade']} separações COTADAS detectadas")
-                
-                alertas_criticos.append({
-                    'tipo': 'SEPARACOES_COTADAS',
-                    'nivel': 'CRITICO',
-                    'quantidade': resultado_cotadas['quantidade'],
-                    'separacoes_afetadas': resultado_cotadas['separacoes_afetadas'],
-                    'mensagem': resultado_cotadas['mensagem'],
-                    'recomendacao': resultado_cotadas['recomendacao']
-                })
-            
-            # ✅ VERIFICAÇÃO 2: CRÍTICA - Pedidos cotados sem faturamento atualizado
-            risco_faturamento = self._verificar_risco_faturamento_pendente()
-            
-            if risco_faturamento.get('risco_alto'):
-                logger.critical(f"🚨 RISCO CRÍTICO: {risco_faturamento['pedidos_em_risco']} pedidos cotados podem perder NFs")
-                
-                alertas_criticos.append({
-                    'tipo': 'FATURAMENTO_PENDENTE_CRITICO',
-                    'nivel': 'CRITICO',
-                    'quantidade': risco_faturamento['pedidos_em_risco'],
-                    'pedidos_afetados': risco_faturamento['lista_pedidos'],
-                    'mensagem': f"🚨 CRÍTICO: {risco_faturamento['pedidos_em_risco']} pedidos cotados podem perder referência às NFs",
-                    'recomendacao': '⚠️ IMPORTANTE: Execute sincronização de FATURAMENTO ANTES da carteira'
-                })
-            
-            # ✅ VERIFICAÇÃO 3: Última sincronização de faturamento
-            tempo_ultima_sync_fat = self._verificar_ultima_sincronizacao_faturamento()
-            
-            if tempo_ultima_sync_fat.get('desatualizado'):
-                logger.warning(f"⚠️ Faturamento desatualizado: {tempo_ultima_sync_fat['horas_atraso']} horas desde última sync")
-                
-                alertas_criticos.append({
-                    'tipo': 'FATURAMENTO_DESATUALIZADO',
-                    'nivel': 'AVISO',
-                    'horas_atraso': tempo_ultima_sync_fat['horas_atraso'],
-                    'mensagem': f"⚠️ Faturamento não sincronizado há {tempo_ultima_sync_fat['horas_atraso']} horas",
-                    'recomendacao': 'Considere sincronizar faturamento primeiro para maior segurança'
-                })
-            
-            # ✅ AVALIAÇÃO FINAL DE SEGURANÇA
-            riscos_criticos = [a for a in alertas_criticos if a['nivel'] == 'CRITICO']
-            safe_to_proceed = len(riscos_criticos) == 0
-            
-            if not safe_to_proceed:
-                logger.critical(f"🚨 SINCRONIZAÇÃO COM RISCOS CRÍTICOS: {len(riscos_criticos)} alertas impedem operação segura")
-            
-            return {
-                'alertas_criticos': alertas_criticos,
-                'total_alertas': len(alertas_criticos),
-                'riscos_criticos': len(riscos_criticos),
-                'safe_to_proceed': safe_to_proceed,
-                'recomendacao_sequencia': 'Sincronize FATURAMENTO → CARTEIRA para máxima segurança',
-                'timestamp': datetime.now()
-            }
-            
-        except ImportError:
-            logger.warning("Sistema de alertas não disponível - prosseguindo sem verificação")
-            return {
-                'alertas_criticos': [],
-                'total_alertas': 0,
-                'safe_to_proceed': True,
-                'warning': 'Sistema de alertas indisponível'
-            }
-        except Exception as e:
-            logger.error(f"❌ Erro na verificação pré-sincronização: {e}")
-            return {
-                'alertas_criticos': [],
-                'total_alertas': 0,
-                'safe_to_proceed': True,
-                'erro': str(e)
-            }
+    # FUNÇÕES REMOVIDAS: 
+    # - _verificar_riscos_pre_sincronizacao
+    # - _criar_backup_pre_separacoes  
+    # Motivo: PreSeparacaoItem foi substituído por Separacao com status='PREVISAO'
+    # e não há mais necessidade de verificar riscos de separações cotadas
     
-    def _criar_backup_pre_separacoes(self):
+    def _garantir_cadastro_palletizacao_completo(self, dados_carteira: List[Dict]) -> Dict[str, Any]:
         """
-        💾 BACKUP AUTOMÁTICO: Marca pré-separações como "aguardando recomposição"
+        📦 GARANTIR CADASTRO DE PALLETIZAÇÃO PARA TODOS OS PRODUTOS
         
-        As pré-separações já existem na tabela, apenas marcamos como pendentes
-        de recomposição após a sincronização
+        Esta função garante que TODOS os produtos da carteira tenham um CadastroPalletizacao
+        ANTES de processar a importação. Isso evita problemas de produtos não aparecerem
+        na carteira agrupada por falta de cadastro.
+        
+        ESTRATÉGIA:
+        1. Coletar todos os produtos únicos dos dados
+        2. Verificar quais produtos já têm cadastro
+        3. Criar cadastros faltantes com valores padrão
+        4. Atualizar nomes de produtos desatualizados
+        5. Garantir que todos estejam ativos
+        
+        Args:
+            dados_carteira: Lista de dicionários com dados da carteira
+            
+        Returns:
+            Dict com estatísticas: criados, atualizados, ja_existentes, erros
         """
+        from app.producao.models import CadastroPalletizacao
+        
+        resultado = {
+            'criados': 0,
+            'atualizados': 0,
+            'ja_existentes': 0,
+            'erros': 0,
+            'produtos_processados': set(),
+            'produtos_com_erro': []
+        }
+        
         try:
-            from app.carteira.models import PreSeparacaoItem
-            from app import db
+            logger.info(f"📦 Iniciando garantia de CadastroPalletizacao para {len(dados_carteira)} registros")
             
-            logger.info("💾 Marcando pré-separações para recomposição...")
+            # 1. COLETAR PRODUTOS ÚNICOS
+            produtos_unicos = {}
+            for item in dados_carteira:
+                cod_produto = item.get('cod_produto')
+                nome_produto = item.get('nome_produto', '')
+                
+                if not cod_produto:
+                    continue
+                    
+                # Guardar o nome mais recente/completo
+                if cod_produto not in produtos_unicos or len(nome_produto) > len(produtos_unicos[cod_produto]):
+                    produtos_unicos[cod_produto] = nome_produto
             
-            # Buscar todas as pré-separações ativas
-            pre_separacoes_ativas = PreSeparacaoItem.query.filter(
-                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+            logger.info(f"📊 {len(produtos_unicos)} produtos únicos identificados")
+            
+            # 2. VERIFICAR CADASTROS EXISTENTES EM LOTE
+            produtos_existentes = set()
+            cadastros_existentes = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.cod_produto.in_(list(produtos_unicos.keys()))
             ).all()
             
-            contador_backup = 0
+            # Processar cadastros existentes
+            for cadastro in cadastros_existentes:
+                produtos_existentes.add(cadastro.cod_produto)
+                resultado['produtos_processados'].add(cadastro.cod_produto)
+                
+                mudancas = False
+                
+                # Verificar se precisa atualizar o nome
+                nome_novo = produtos_unicos[cadastro.cod_produto]
+                if nome_novo and (not cadastro.nome_produto or len(nome_novo) > len(cadastro.nome_produto)):
+                    logger.debug(f"   📝 Atualizando nome: {cadastro.cod_produto} - '{cadastro.nome_produto}' -> '{nome_novo}'")
+                    cadastro.nome_produto = nome_novo
+                    mudancas = True
+                
+                # Garantir que está ativo
+                if not cadastro.ativo:
+                    logger.info(f"   ✅ Ativando cadastro: {cadastro.cod_produto}")
+                    cadastro.ativo = True
+                    mudancas = True
+                
+                # Garantir valores mínimos
+                if not cadastro.palletizacao or cadastro.palletizacao <= 0:
+                    cadastro.palletizacao = 1.0
+                    mudancas = True
+                    
+                if not cadastro.peso_bruto or cadastro.peso_bruto <= 0:
+                    cadastro.peso_bruto = 1.0
+                    mudancas = True
+                
+                if mudancas:
+                    resultado['atualizados'] += 1
+                else:
+                    resultado['ja_existentes'] += 1
             
-            for pre_sep in pre_separacoes_ativas:
-                # Marcar como pendente de recomposição
-                pre_sep.recomposto = False
-                pre_sep.observacoes = f"Aguardando recomposição pós-sync {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                contador_backup += 1
+            # 3. CRIAR CADASTROS FALTANTES
+            produtos_faltantes = set(produtos_unicos.keys()) - produtos_existentes
             
-            # Salvar alterações
-            db.session.commit()
+            if produtos_faltantes:
+                logger.info(f"📝 Criando {len(produtos_faltantes)} cadastros de palletização faltantes...")
+                
+                for cod_produto in produtos_faltantes:
+                    try:
+                        nome_produto = produtos_unicos[cod_produto] or f"Produto {cod_produto}"
+                        
+                        novo_cadastro = CadastroPalletizacao(
+                            cod_produto=cod_produto,
+                            nome_produto=nome_produto,
+                            palletizacao=1.0,  # Valor padrão seguro
+                            peso_bruto=1.0,    # Valor padrão seguro
+                            ativo=True,
+                            # Campos opcionais com valores padrão
+                            altura_cm=0,
+                            largura_cm=0,
+                            comprimento_cm=0
+                        )
+                        
+                        # Adicionar campos created_by/updated_by se existirem no modelo
+                        if hasattr(CadastroPalletizacao, 'created_by'):
+                            novo_cadastro.created_by = 'ImportacaoOdoo'
+                        if hasattr(CadastroPalletizacao, 'updated_by'):
+                            novo_cadastro.updated_by = 'ImportacaoOdoo'
+                        
+                        db.session.add(novo_cadastro)
+                        resultado['criados'] += 1
+                        resultado['produtos_processados'].add(cod_produto)
+                        
+                        if resultado['criados'] <= 10:  # Log primeiros 10
+                            logger.info(f"   ✅ Criado: {cod_produto} - {nome_produto[:50]}")
+                        
+                    except Exception as e:
+                        logger.error(f"   ❌ Erro ao criar cadastro para {cod_produto}: {e}")
+                        resultado['erros'] += 1
+                        resultado['produtos_com_erro'].append({
+                            'cod_produto': cod_produto,
+                            'erro': str(e)
+                        })
             
-            logger.info(f"✅ {contador_backup} pré-separações marcadas para recomposição")
+            # 4. COMMIT DAS ALTERAÇÕES
+            if resultado['criados'] > 0 or resultado['atualizados'] > 0:
+                try:
+                    db.session.commit()
+                    logger.info(f"✅ Cadastros de palletização salvos com sucesso")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao salvar cadastros de palletização: {e}")
+                    db.session.rollback()
+                    resultado['erros'] += resultado['criados'] + resultado['atualizados']
+                    resultado['criados'] = 0
+                    resultado['atualizados'] = 0
+                    raise
             
-            return {
-                'sucesso': True,
-                'total_backups': contador_backup,
-                'timestamp': datetime.now(),
-                'metodo': 'marcacao_recomposicao'
-            }
+            # 5. VERIFICAÇÃO FINAL
+            total_esperado = len(produtos_unicos)
+            total_processado = len(resultado['produtos_processados'])
+            
+            if total_processado < total_esperado:
+                produtos_nao_processados = set(produtos_unicos.keys()) - resultado['produtos_processados']
+                logger.warning(f"⚠️ {len(produtos_nao_processados)} produtos não foram processados: {list(produtos_nao_processados)[:10]}")
+            
+            # Log de produtos com erro
+            if resultado['produtos_com_erro']:
+                logger.error(f"❌ Produtos com erro de criação:")
+                for erro in resultado['produtos_com_erro'][:5]:
+                    logger.error(f"   - {erro['cod_produto']}: {erro['erro']}")
+            
+            return resultado
             
         except Exception as e:
-            logger.error(f"❌ Erro no backup de pré-separações: {e}")
-            return {
-                'sucesso': False,
-                'total_backups': 0,
-                'erro': str(e)
-            }
-    
-    def _recompor_pre_separacoes_automaticamente(self):
-        """
-        🔄 RECOMPOSIÇÃO AUTOMÁTICA: Reconstrói pré-separações após sincronização
-        
-        Usa o sistema existente de recomposição para manter as decisões operacionais
-        """
-        try:
-            from app.carteira.models import PreSeparacaoItem
-            from app.estoque.triggers_recalculo_otimizado import RecalculoMovimentacaoPrevista
-            from app import db
-            
-            logger.info("🔄 Iniciando recomposição automática de pré-separações...")
-            
-            # Usar método existente de recomposição
-            resultado = PreSeparacaoItem.recompor_todas_pendentes("SYNC_ODOO_AUTO")
-            
-            logger.info(f"✅ Recomposição concluída: {resultado['sucesso']} sucessos, {resultado['erro']} erros")
-            
-            # IMPORTANTE: Recalcular MovimentacaoPrevista após recomposição
-            logger.info("📊 Recalculando MovimentacaoPrevista após recomposição...")
-            try:
-                with db.engine.connect() as connection:
-                    RecalculoMovimentacaoPrevista.recalcular_apos_sincronizacao(connection)
-                    connection.commit()
-                logger.info("✅ MovimentacaoPrevista recalculada com sucesso")
-            except Exception as e:
-                logger.error(f"❌ Erro ao recalcular MovimentacaoPrevista: {e}")
-            
-            return {
-                'sucessos': resultado['sucesso'],
-                'erros': resultado['erro'],
-                'timestamp': datetime.now(),
-                'metodo': 'recomposicao_automatica',
-                'movimentacao_recalculada': True
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Erro na recomposição automática: {e}")
-            return {
-                'sucessos': 0,
-                'erros': 0,
-                'erro': str(e)
-            }
+            logger.error(f"❌ Erro crítico em _garantir_cadastro_palletizacao_completo: {e}")
+            return resultado
     
     def _verificar_alertas_pos_sincronizacao(self, dados_sincronizados, alertas_pre_sync):
         """
@@ -1024,152 +1036,10 @@ class CarteiraService:
                 'erro': str(e)
             }
     
-    def _verificar_risco_faturamento_pendente(self):
-        """
-        🚨 VERIFICAÇÃO CRÍTICA: Detecta pedidos cotados sem faturamento atualizado
-        
-        Identifica o risco de pedidos faturados no Odoo que não foram sincronizados
-        e podem ser perdidos na sincronização destrutiva da carteira
-        """
-        try:
-            from app.separacao.models import Separacao
-            from app.faturamento.models import FaturamentoProduto
-            
-            logger.info("🔍 Verificando risco de faturamento pendente...")
-            
-            # Buscar pedidos cotados (potencialmente faturados)
-            from app.pedidos.models import Pedido
-            
-            pedidos_cotados = Pedido.query.filter(
-                Pedido.status == 'COTADO',
-                Pedido.separacao_lote_id is not None
-            ).all()
-            
-            if not pedidos_cotados:
-                return {
-                    'risco_faturamento': False,
-                    'impactos': [],
-                    'contagem': 0
-                }
-            
-            # Buscar separações desses pedidos
-            lotes_cotados = [p.separacao_lote_id for p in pedidos_cotados]
-            
-            separacoes_cotadas = Separacao.query.filter(
-                Separacao.separacao_lote_id.in_(lotes_cotados)
-            ).all()
-            
-            if not separacoes_cotadas:
-                return {
-                    'risco_alto': False,
-                    'pedidos_em_risco': 0,
-                    'lista_pedidos': [],
-                    'mensagem': 'Nenhuma separação cotada encontrada'
-                }
-            
-            pedidos_em_risco = []
-            
-            for separacao in separacoes_cotadas:
-                # Verificar se o pedido tem faturamento registrado
-                faturamento_existe = FaturamentoProduto.query.filter(
-                    FaturamentoProduto.origem == separacao.num_pedido,
-                    FaturamentoProduto.cod_produto == separacao.cod_produto
-                ).first()
-                
-                if not faturamento_existe:
-                    # Pedido cotado sem faturamento = RISCO ALTO
-                    pedidos_em_risco.append({
-                        'num_pedido': separacao.num_pedido,
-                        'cod_produto': separacao.cod_produto,
-                        'separacao_lote_id': separacao.separacao_lote_id,
-                        'qtd_saldo': separacao.qtd_saldo,
-                        'expedicao': separacao.expedicao.strftime('%Y-%m-%d') if separacao.expedicao else None
-                    })
-            
-            risco_alto = len(pedidos_em_risco) > 0
-            
-            if risco_alto:
-                logger.critical(f"🚨 RISCO CRÍTICO DETECTADO: {len(pedidos_em_risco)} pedidos cotados sem faturamento")
-            
-            return {
-                'risco_alto': risco_alto,
-                'pedidos_em_risco': len(pedidos_em_risco),
-                'lista_pedidos': pedidos_em_risco,
-                'total_separacoes_cotadas': len(separacoes_cotadas),
-                'percentual_risco': round((len(pedidos_em_risco) / len(separacoes_cotadas)) * 100, 1) if separacoes_cotadas else 0,
-                'mensagem': f"{len(pedidos_em_risco)} de {len(separacoes_cotadas)} separações cotadas sem faturamento registrado"
-            }
-            
-        except ImportError as e:
-            logger.warning(f"Módulos de separação/faturamento não disponíveis: {e}")
-            return {
-                'risco_alto': False,
-                'pedidos_em_risco': 0,
-                'lista_pedidos': [],
-                'erro': 'Módulos indisponíveis'
-            }
-        except Exception as e:
-            logger.error(f"❌ Erro ao verificar risco de faturamento: {e}")
-            return {
-                'risco_alto': False,
-                'pedidos_em_risco': 0,
-                'lista_pedidos': [],
-                'erro': str(e)
-            }
-    
-    def _verificar_ultima_sincronizacao_faturamento(self):
-        """
-        📅 VERIFICAÇÃO TEMPORAL: Verifica quando foi a última sincronização de faturamento
-        
-        Identifica se o faturamento está desatualizado e pode causar inconsistências
-        """
-        try:
-            from app.faturamento.models import FaturamentoProduto
-            from datetime import datetime
-            
-            logger.info("📅 Verificando última sincronização de faturamento...")
-            
-            # Buscar o registro mais recente de faturamento
-            ultimo_faturamento = FaturamentoProduto.query.order_by(
-                FaturamentoProduto.created_at.desc()
-            ).first()
-            
-            if not ultimo_faturamento:
-                return {
-                    'desatualizado': True,
-                    'horas_atraso': 999,
-                    'ultima_sync': None,
-                    'mensagem': 'Nenhum faturamento encontrado no sistema'
-                }
-            
-            # Calcular tempo desde última sincronização
-            agora = datetime.now()
-            ultima_sync = ultimo_faturamento.created_at
-            tempo_decorrido = agora - ultima_sync
-            horas_atraso = tempo_decorrido.total_seconds() / 3600
-            
-            # Considerar desatualizado se > 6 horas
-            desatualizado = horas_atraso > 6
-            
-            if desatualizado:
-                logger.warning(f"⚠️ Faturamento desatualizado: {horas_atraso:.1f} horas desde última sync")
-            
-            return {
-                'desatualizado': desatualizado,
-                'horas_atraso': round(horas_atraso, 1),
-                'ultima_sync': ultima_sync.strftime('%Y-%m-%d %H:%M:%S'),
-                'limite_horas': 6,
-                'mensagem': f"Última sincronização: {horas_atraso:.1f} horas atrás"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao verificar última sincronização: {e}")
-            return {
-                'desatualizado': True,
-                'horas_atraso': 0,
-                'ultima_sync': None,
-                'erro': str(e)
-            }
+    # FUNÇÕES AUXILIARES REMOVIDAS:
+    # - _verificar_risco_faturamento_pendente  
+    # - _verificar_ultima_sincronizacao_faturamento
+    # Motivo: Eram usadas apenas pela função removida _verificar_riscos_pre_sincronizacao
     
     def sincronizar_carteira_odoo_com_gestao_quantidades(self, usar_filtro_pendente=True):
         """
@@ -1179,15 +1049,12 @@ class CarteiraService:
         funcionalidades originais MAIS gestão inteligente de quantidades.
         
         FLUXO COMPLETO:
-        1. Verificação de riscos pré-sincronização
-        2. Backup de pré-separações
-        3. Carrega estado atual em memória
-        4. Busca dados novos do Odoo
-        5. Calcula diferenças (reduções/aumentos/novos/removidos)
-        6. Aplica mudanças respeitando hierarquia
-        7. Substitui carteira com dados atualizados
-        8. Recompõe pré-separações
-        9. Verificação pós-sincronização com alertas
+        1. Carrega estado atual em memória
+        2. Busca dados novos do Odoo
+        3. Calcula diferenças (reduções/aumentos/novos/removidos)
+        4. Aplica mudanças respeitando hierarquia
+        5. Substitui carteira com dados atualizados
+        6. Verificação pós-sincronização com alertas
         
         Args:
             usar_filtro_pendente (bool): Se True, filtra apenas itens com saldo > 0
@@ -1205,36 +1072,67 @@ class CarteiraService:
             from app import db
             logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA COM GESTÃO INTELIGENTE")
             
-            # ETAPA 1: VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO (ALERTAS CRÍTICOS)
-            logger.info("🔍 ETAPA 1: Verificação pré-sincronização...")
-            alertas_pre_sync = self._verificar_riscos_pre_sincronizacao()
+            # Inicializar variáveis que eram preenchidas pelas etapas removidas
+            alertas_pre_sync = {'alertas_criticos': []}  # Não verificamos mais riscos pré-sync
+            # backup_result removido - não fazemos mais backup de pré-separações
             
-            if alertas_pre_sync.get('alertas_criticos'):
-                logger.warning(f"🚨 ALERTAS CRÍTICOS DETECTADOS: {len(alertas_pre_sync['alertas_criticos'])} separações cotadas")
+            # FASE 1: ANÁLISE - Carregar estado atual em memória e calcular saldos
+            logger.info("📊 Fase 1: Analisando estado atual da carteira e calculando saldos...")
             
-            # ETAPA 2: BACKUP AUTOMÁTICO DE PRÉ-SEPARAÇÕES
-            logger.info("💾 ETAPA 2: Backup automático de pré-separações...")
-            backup_result = self._criar_backup_pre_separacoes()
-            
-            logger.info(f"✅ Backup criado: {backup_result['total_backups']} pré-separações preservadas")
-            
-            # FASE 3: ANÁLISE - Carregar estado atual em memória
-            logger.info("📊 Fase 3: Analisando estado atual da carteira...")
+            # Importar modelos necessários para cálculo
+            from app.faturamento.models import FaturamentoProduto
+            from app.separacao.models import Separacao
+            from sqlalchemy import func
             
             # Criar índice do estado atual usando campos CORRETOS
             carteira_atual = {}
             carteira_nao_odoo = {}  # Guardar pedidos não-Odoo separadamente
+            saldos_calculados_antes = {}  # Guardar saldos calculados ANTES da importação
             registros_atuais = 0
             registros_nao_odoo = 0
             
             for item in CarteiraPrincipal.query.all():
                 chave = (item.num_pedido, item.cod_produto)
+                
+                # NOVO: Calcular qtd_saldo_produto_pedido baseado na fórmula
+                # qtd_saldo = qtd_produto - qtd_cancelada - qtd_faturada
+                qtd_faturada = db.session.query(
+                    func.coalesce(func.sum(FaturamentoProduto.qtd_produto_faturado), 0)
+                ).filter(
+                    FaturamentoProduto.origem == item.num_pedido,
+                    FaturamentoProduto.cod_produto == item.cod_produto,
+                    FaturamentoProduto.status_nf != 'Cancelado'
+                ).scalar() or 0
+                
+                qtd_produto = float(item.qtd_produto_pedido or 0)
+                qtd_cancelada = float(item.qtd_cancelada_produto_pedido or 0)
+                qtd_saldo_calculado = qtd_produto - qtd_cancelada - float(qtd_faturada)
+                
+                # Calcular saldo livre (CarteiraPrincipal - Separações não sincronizadas)
+                qtd_em_separacao = db.session.query(
+                    func.coalesce(func.sum(Separacao.qtd_saldo), 0)
+                ).filter(
+                    Separacao.num_pedido == item.num_pedido,
+                    Separacao.cod_produto == item.cod_produto,
+                    Separacao.sincronizado_nf == False
+                ).scalar() or 0
+                
+                saldo_livre = qtd_saldo_calculado - float(qtd_em_separacao)
+                
                 dados_item = {
-                    'qtd_saldo': float(item.qtd_saldo_produto_pedido or 0),
-                    'qtd_total': float(item.qtd_produto_pedido or 0),
+                    'qtd_saldo_anterior': float(item.qtd_saldo_produto_pedido or 0),  # Valor antigo do banco
+                    'qtd_saldo_calculado': qtd_saldo_calculado,  # Novo valor calculado
+                    'qtd_total': qtd_produto,
+                    'qtd_cancelada': qtd_cancelada,
+                    'qtd_faturada': float(qtd_faturada),
+                    'qtd_em_separacao': float(qtd_em_separacao),
+                    'saldo_livre': saldo_livre,
                     'separacao_lote_id': item.separacao_lote_id,
                     'id': item.id
                 }
+                
+                # Guardar saldo calculado para comparação posterior
+                saldos_calculados_antes[chave] = qtd_saldo_calculado
                 
                 # Separar pedidos por origem
                 if self.is_pedido_odoo(item.num_pedido):
@@ -1244,7 +1142,7 @@ class CarteiraService:
                     carteira_nao_odoo[chave] = dados_item
                     registros_nao_odoo += 1
             
-            logger.info(f"✅ {registros_atuais} registros Odoo indexados na memória")
+            logger.info(f"✅ {registros_atuais} registros Odoo indexados com saldos calculados")
             logger.info(f"🛡️ {registros_nao_odoo} registros não-Odoo protegidos")
             
             # FASE 2: BUSCAR DADOS NOVOS DO ODOO
@@ -1277,45 +1175,95 @@ class CarteiraService:
             
             logger.info(f"✅ {len(dados_novos)} registros obtidos do Odoo")
             
-            # FASE 3: CALCULAR DIFERENÇAS
-            logger.info("🔍 Fase 3: Calculando diferenças de quantidade...")
+            # FASE 3: CALCULAR DIFERENÇAS COM SALDOS CALCULADOS
+            logger.info("🔍 Fase 3: Calculando saldos e identificando diferenças...")
             
+            # Primeiro, calcular os novos saldos para cada item do Odoo
+            saldos_calculados_depois = {}
+            alertas_saldo_negativo = []
+            
+            logger.info("📊 Calculando saldos para itens importados do Odoo...")
+            for item_novo in dados_novos:
+                chave = (item_novo['num_pedido'], item_novo['cod_produto'])
+                
+                # Obter quantidades do Odoo
+                qtd_produto_nova = float(item_novo.get('qtd_produto_pedido', 0))
+                qtd_cancelada_nova = float(item_novo.get('qtd_cancelada_produto_pedido', 0))
+                
+                # Buscar qtd_faturada (sempre do nosso banco, não do Odoo)
+                qtd_faturada = db.session.query(
+                    func.coalesce(func.sum(FaturamentoProduto.qtd_produto_faturado), 0)
+                ).filter(
+                    FaturamentoProduto.origem == item_novo['num_pedido'],
+                    FaturamentoProduto.cod_produto == item_novo['cod_produto'],
+                    FaturamentoProduto.status_nf != 'Cancelado'
+                ).scalar() or 0
+                qtd_faturada = float(qtd_faturada)
+                
+                # CALCULAR SALDO: qtd_produto - qtd_cancelada - qtd_faturada
+                qtd_saldo_calculado = qtd_produto_nova - qtd_cancelada_nova - qtd_faturada
+                saldos_calculados_depois[chave] = qtd_saldo_calculado
+                
+                # IMPORTANTE: Adicionar o saldo calculado ao item (substitui qty_saldo do Odoo)
+                item_novo['qtd_saldo_produto_pedido'] = qtd_saldo_calculado
+                
+                # Verificar saldo negativo
+                if qtd_saldo_calculado < 0:
+                    alertas_saldo_negativo.append({
+                        'tipo': 'SALDO_NEGATIVO',
+                        'num_pedido': item_novo['num_pedido'],
+                        'cod_produto': item_novo['cod_produto'],
+                        'qtd_saldo': qtd_saldo_calculado,
+                        'qtd_faturada': qtd_faturada,
+                        'qtd_produto': qtd_produto_nova,
+                        'qtd_cancelada': qtd_cancelada_nova,
+                        'mensagem': f'Saldo negativo ({qtd_saldo_calculado:.2f}) - possível NF devolvida ou erro'
+                    })
+                    logger.warning(f"⚠️ Saldo negativo detectado: {item_novo['num_pedido']}/{item_novo['cod_produto']} = {qtd_saldo_calculado:.2f}")
+            
+            # Agora comparar saldos CALCULADOS (antes x depois)
             reducoes = []
             aumentos = []
             novos_itens = []
             itens_removidos = set(carteira_atual.keys())
             
             for item_novo in dados_novos:
-                # Usar campos CORRETOS
                 chave = (item_novo['num_pedido'], item_novo['cod_produto'])
-                qtd_nova = float(item_novo.get('qtd_saldo_produto_pedido', 0))
+                qtd_saldo_nova = saldos_calculados_depois[chave]
                 
                 if chave in carteira_atual:
                     # Item existe - remover da lista de removidos
                     itens_removidos.discard(chave)
                     
-                    # Comparar quantidades
-                    qtd_atual = carteira_atual[chave]['qtd_saldo']
+                    # Comparar saldos CALCULADOS
+                    qtd_saldo_anterior = carteira_atual[chave]['qtd_saldo_calculado']
+                    saldo_livre_anterior = carteira_atual[chave]['saldo_livre']
+                    qtd_em_separacao = carteira_atual[chave]['qtd_em_separacao']
                     
-                    if qtd_nova < qtd_atual:
-                        # REDUÇÃO detectada
-                        reducoes.append({
-                            'num_pedido': item_novo['num_pedido'],
-                            'cod_produto': item_novo['cod_produto'],
-                            'qtd_reduzida': qtd_atual - qtd_nova,
-                            'qtd_atual': qtd_atual,
-                            'qtd_nova': qtd_nova
-                        })
-                        
-                    elif qtd_nova > qtd_atual:
-                        # AUMENTO detectado
-                        aumentos.append({
-                            'num_pedido': item_novo['num_pedido'],
-                            'cod_produto': item_novo['cod_produto'],
-                            'qtd_aumentada': qtd_nova - qtd_atual,
-                            'qtd_atual': qtd_atual,
-                            'qtd_nova': qtd_nova
-                        })
+                    if abs(qtd_saldo_nova - qtd_saldo_anterior) > 0.01:  # Diferença significativa
+                        if qtd_saldo_nova < qtd_saldo_anterior:
+                            # REDUÇÃO detectada
+                            reducoes.append({
+                                'num_pedido': item_novo['num_pedido'],
+                                'cod_produto': item_novo['cod_produto'],
+                                'qtd_reduzida': qtd_saldo_anterior - qtd_saldo_nova,
+                                'qtd_saldo_anterior': qtd_saldo_anterior,
+                                'qtd_saldo_nova': qtd_saldo_nova,
+                                'saldo_livre_anterior': saldo_livre_anterior,
+                                'qtd_em_separacao': qtd_em_separacao
+                            })
+                            
+                        elif qtd_saldo_nova > qtd_saldo_anterior:
+                            # AUMENTO detectado
+                            aumentos.append({
+                                'num_pedido': item_novo['num_pedido'],
+                                'cod_produto': item_novo['cod_produto'],
+                                'qtd_aumentada': qtd_saldo_nova - qtd_saldo_anterior,
+                                'qtd_saldo_anterior': qtd_saldo_anterior,
+                                'qtd_saldo_nova': qtd_saldo_nova,
+                                'saldo_livre_anterior': saldo_livre_anterior,
+                                'qtd_em_separacao': qtd_em_separacao
+                            })
                 else:
                     # NOVO item
                     novos_itens.append(item_novo)
@@ -1325,6 +1273,18 @@ class CarteiraService:
             logger.info(f"   📈 {len(aumentos)} aumentos")
             logger.info(f"   ➕ {len(novos_itens)} novos itens")
             logger.info(f"   ➖ {len(itens_removidos)} itens removidos")
+            if alertas_saldo_negativo:
+                logger.warning(f"   ⚠️ {len(alertas_saldo_negativo)} itens com saldo negativo (NF devolvida?)")
+            
+            # FASE 3.2: GARANTIR CADASTRO DE PALLETIZAÇÃO PARA TODOS OS PRODUTOS
+            logger.info("📦 Fase 3.2: Garantindo CadastroPalletizacao para todos os produtos...")
+            resultado_palletizacao = self._garantir_cadastro_palletizacao_completo(dados_novos)
+            logger.info(f"✅ CadastroPalletizacao garantido:")
+            logger.info(f"   - {resultado_palletizacao['criados']} produtos criados")
+            logger.info(f"   - {resultado_palletizacao['atualizados']} produtos atualizados") 
+            logger.info(f"   - {resultado_palletizacao['ja_existentes']} já existentes")
+            if resultado_palletizacao['erros'] > 0:
+                logger.error(f"   - ❌ {resultado_palletizacao['erros']} erros ao criar cadastros")
             
             # FASE 3.5: PROCESSAR PEDIDOS ALTERADOS COM NOVO SERVIÇO UNIFICADO
             
@@ -1342,52 +1302,45 @@ class CarteiraService:
             
             # PROTEÇÃO CRÍTICA: Processar pedidos removidos apenas se não estiverem faturados
             for num_pedido, _ in itens_removidos:
-                # Verificar se tem Pedido com este número e qual o status
-                from app.pedidos.models import Pedido
-                from sqlalchemy.exc import OperationalError
-                import time
+                # CORREÇÃO: Verificar diretamente na tabela Separacao com sincronizado_nf=False
+                # em vez de usar a VIEW Pedido que ignora status='PREVISAO'
                 
-                # Tentar consultar com retry em caso de erro SSL
-                pedidos_do_numero = []
-                max_tentativas = 3
-                for tentativa in range(max_tentativas):
-                    try:
-                        pedidos_do_numero = Pedido.query.filter_by(num_pedido=num_pedido).all()
-                        break  # Sucesso, sair do loop
-                    except OperationalError as e:
-                        if 'SSL' in str(e) or 'bad record mac' in str(e):
-                            logger.warning(f"⚠️ Erro SSL na tentativa {tentativa + 1}/{max_tentativas} ao consultar pedido {num_pedido}: {e}")
-                            if tentativa < max_tentativas - 1:
-                                # Aguardar e tentar reconectar
-                                time.sleep(1)
-                                try:
-                                    db.session.rollback()
-                                    db.session.remove()
-                                    db.engine.dispose()
-                                except:
-                                    pass
-                            else:
-                                logger.error(f"❌ Erro SSL persistente após {max_tentativas} tentativas para pedido {num_pedido}")
-                                continue  # Pular este pedido
-                        else:
-                            # Não é erro SSL, propagar
-                            raise
-                
-                pode_processar = False
-                for pedido in pedidos_do_numero:
-                    if pedido.status in ['ABERTO', 'COTADO']:
-                        pode_processar = True
-                        break
-                
-                if pode_processar:
-                    pedidos_com_alteracoes.add(num_pedido)
-                    logger.info(f"✅ Pedido {num_pedido} removido da carteira - será processado (tem separações em ABERTO/COTADO)")
-                else:
-                    if pedidos_do_numero:
-                        status_encontrados = ', '.join([p.status for p in pedidos_do_numero])
-                        logger.warning(f"🛡️ PROTEÇÃO: Pedido {num_pedido} removido mas NÃO será processado (status: {status_encontrados})")
+                # Buscar separações não sincronizadas (não faturadas)
+                try:
+                    separacoes_nao_sincronizadas = Separacao.query.filter_by(
+                        num_pedido=num_pedido,
+                        sincronizado_nf=False  # CRÍTICO: apenas não sincronizadas
+                    ).all()
+                    
+                    if separacoes_nao_sincronizadas:
+                        # Tem separações não faturadas, pode processar
+                        pedidos_com_alteracoes.add(num_pedido)
+                        
+                        # Log detalhado dos status encontrados
+                        status_encontrados = set()
+                        for sep in separacoes_nao_sincronizadas:
+                            status_encontrados.add(sep.status)
+                        
+                        status_str = ', '.join(sorted(status_encontrados))
+                        logger.info(f"✅ Pedido {num_pedido} removido da carteira - será processado "
+                                  f"({len(separacoes_nao_sincronizadas)} separações não sincronizadas com status: {status_str})")
                     else:
-                        logger.info(f"ℹ️ Pedido {num_pedido} removido - sem separações para processar")
+                        # Verificar se existem separações sincronizadas (já faturadas)
+                        separacoes_sincronizadas = Separacao.query.filter_by(
+                            num_pedido=num_pedido,
+                            sincronizado_nf=True
+                        ).first()
+                        
+                        if separacoes_sincronizadas:
+                            logger.warning(f"🛡️ PROTEÇÃO: Pedido {num_pedido} removido mas NÃO será processado "
+                                         f"(todas as separações já sincronizadas/faturadas)")
+                        else:
+                            logger.info(f"ℹ️ Pedido {num_pedido} removido - sem separações para processar")
+                            
+                except Exception as e:
+                    logger.error(f"❌ Erro ao verificar separações do pedido {num_pedido}: {e}")
+                    # Em caso de erro, não adicionar para processamento por segurança
+                    continue
             
             for item in novos_itens:
                 pedidos_com_alteracoes.add(item['num_pedido'])
@@ -1548,6 +1501,9 @@ class CarteiraService:
                     
                     chave = (item['num_pedido'], item['cod_produto'])
                     
+                    # CadastroPalletizacao já foi garantido na Fase 3.2
+                    # Não precisa mais verificar aqui
+                    
                     if chave in registros_odoo_existentes:
                         # ATUALIZAR registro existente
                         registro_existente = registros_odoo_existentes[chave]
@@ -1556,27 +1512,7 @@ class CarteiraService:
                                 setattr(registro_existente, key, value)
                         contador_atualizados += 1
                     else:
-                        # INSERIR novo registro - criar produto se não existir
-                        # Verificar se produto existe no cadastro
-                        from app.producao.models import CadastroPalletizacao
-                        
-                        cod_produto = item.get('cod_produto')
-                        if cod_produto:
-                            produto_existe = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
-                            if not produto_existe:
-                                # Criar produto com dados básicos
-                                novo_produto = CadastroPalletizacao(
-                                    cod_produto=cod_produto,
-                                    nome_produto=item.get('nome_produto', cod_produto),
-                                    palletizacao=1.0,  # Valor padrão
-                                    peso_bruto=1.0,    # Valor padrão
-                                    created_by='ImportacaoOdoo',
-                                    updated_by='ImportacaoOdoo'
-                                )
-                                db.session.add(novo_produto)
-                                logger.info(f"✅ Produto {cod_produto} criado automaticamente no cadastro")
-                        
-                        # Agora criar o registro na carteira
+                        # INSERIR novo registro na carteira
                         novo_registro = CarteiraPrincipal(**item)
                         db.session.add(novo_registro)
                         contador_inseridos += 1
@@ -1595,7 +1531,8 @@ class CarteiraService:
                             # Tentar rollback e continuar
                             try:
                                 db.session.rollback()
-                            except Exception:
+                            except Exception as e:
+                                logger.error(f"❌ Erro no rollback: {e}")
                                 pass
                         finally:
                             contador_lote = 0
@@ -1625,20 +1562,18 @@ class CarteiraService:
             # FASE 8: COMMIT FINAL (já feito incrementalmente)
             logger.info("💾 Fase 8: Todas as alterações já salvas incrementalmente")
             
-            logger.info("🔄 Fase 9: Recompondo pré-separações...")
-            recomposicao_result = self._recompor_pre_separacoes_automaticamente()
+            # recomposicao_result removido - não recompomos mais pré-separações
             
-            # FASE 9.5: ATUALIZAR DADOS DE SEPARAÇÃO/PEDIDO/PRÉ-SEPARAÇÃO
-            logger.info("🔄 Fase 9.5: Atualizando dados de Separação/Pedido/Pré-Separação...")
+            # FASE 9: ATUALIZAR DADOS DE SEPARAÇÃO/PEDIDO
+            logger.info("🔄 Fase 9: Atualizando dados de Separação/Pedido...")
             try:
                 from app.carteira.services.atualizar_dados_service import AtualizarDadosService
                 atualizador = AtualizarDadosService()
                 resultado_atualizacao = atualizador.atualizar_dados_pos_sincronizacao()
                 
                 if resultado_atualizacao.get('sucesso'):
-                    logger.info(f"✅ Dados atualizados: {resultado_atualizacao['total_pedidos_atualizados']} pedidos, "
-                               f"{resultado_atualizacao['total_separacoes_atualizadas']} separações, "
-                               f"{resultado_atualizacao['total_pre_separacoes_atualizadas']} pré-separações")
+                    logger.info(f"✅ Dados atualizados: {resultado_atualizacao.get('total_pedidos_atualizados', 0)} pedidos, "
+                               f"{resultado_atualizacao.get('total_separacoes_atualizadas', 0)} separações")
                 else:
                     logger.warning(f"⚠️ Atualização de dados com problemas: {resultado_atualizacao.get('erro')}")
             except Exception as e:
@@ -1796,9 +1731,7 @@ class CarteiraService:
                 
                 # Dados operacionais específicos
                 'tempo_execucao_segundos': round(tempo_total, 2),
-                'backup_pre_separacoes': backup_result['total_backups'],
-                'recomposicao_sucesso': recomposicao_result['sucessos'],
-                'recomposicao_erros': recomposicao_result['erros'],
+                # Campos removidos - não fazemos mais backup/recomposição de pré-separações
                 'alertas_pre_sync': len(alertas_pre_sync.get('alertas_criticos', [])),
                 'alertas_pos_sync': len(alertas_pos_sync.get('alertas_criticos', [])),
                 'separacoes_cotadas_afetadas': alertas_pos_sync.get('separacoes_cotadas_afetadas', 0),
@@ -1817,12 +1750,12 @@ class CarteiraService:
             logger.info(f"   🔄 {contador_atualizados} registros atualizados")
             logger.info(f"   🗑️ {pedidos_odoo_deletados} registros Odoo removidos")
             logger.info(f"   🛡️ {registros_nao_odoo} registros não-Odoo preservados")
-            logger.info(f"   💾 {backup_result['total_backups']} pré-separações em backup")
+            # Linha removida - não fazemos mais backup de pré-separações
             logger.info(f"   📉 {estatisticas_completas['reducoes_aplicadas']} reduções aplicadas")
             logger.info(f"   📈 {estatisticas_completas['aumentos_aplicados']} aumentos aplicados")
             logger.info(f"   ➖ {estatisticas_completas['remocoes_aplicadas']} remoções processadas")
             logger.info(f"   ➕ {len(novos_itens)} novos itens")
-            logger.info(f"   🔄 {recomposicao_result['sucessos']} pré-separações recompostas")
+            # Linha removida - não recompomos mais pré-separações
             logger.info(f"   🚨 {len(alertas_pos_sync.get('alertas_criticos', []))} alertas pós-sincronização")
             logger.info(f"   ⏱️ {tempo_total:.2f} segundos de execução")
             
@@ -1842,15 +1775,14 @@ class CarteiraService:
                 # Dados operacionais para interface
                 'alertas_pre_sync': alertas_pre_sync,
                 'alertas_pos_sync': alertas_pos_sync,
-                'backup_info': backup_result,
-                'recomposicao_info': recomposicao_result,
+                # Campos removidos - não fazemos mais backup/recomposição
                 'tempo_execucao': tempo_total,
                 
                 # Dados específicos da gestão de quantidades
                 'alteracoes_aplicadas': alteracoes_aplicadas,
                 'gestao_quantidades_ativa': True,
                 
-                'mensagem': f'✅ Sincronização operacional completa: {contador_inseridos} registros importados, {recomposicao_result["sucessos"]} pré-separações recompostas, {len(alteracoes_sucesso)} mudanças de quantidade processadas'
+                'mensagem': f'✅ Sincronização operacional completa: {contador_inseridos} registros importados, {len(alteracoes_sucesso)} mudanças de quantidade processadas'
             }
             
         except Exception as e:

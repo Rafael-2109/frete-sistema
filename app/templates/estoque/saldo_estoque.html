@@ -574,7 +574,6 @@ function recarregarDados() {
 }
 
 // Eventos
-{% if current_user.nivel == 'admin' %}
 $(document).ready(function() {
     $('#formAjuste').on('submit', function(e) {
     e.preventDefault();
@@ -627,7 +626,6 @@ $(document).ready(function() {
     });
     });
 });
-{% endif %}
 
 $(document).ready(function() {
     $('#formFiltros').on('submit', function(e) {

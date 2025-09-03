@@ -1329,3 +1329,26 @@ class CadastroCliente(db.Model):
         self.nome_cidade = self.municipio
         self.cod_uf = self.estado
         self.endereco_mesmo_cliente = True
+
+
+# ============================================================================
+# ATIVAÇÃO DO ADAPTER PreSeparacaoItem → Separacao
+# Data: 2025-01-29
+# 
+# IMPORTANTE: Este adapter faz PreSeparacaoItem funcionar usando Separacao
+# com status='PREVISAO'. Isso permite migração gradual sem quebrar o código.
+#
+# Para DESATIVAR: Remova este bloco de código
+# ============================================================================
+
+try:
+    from app.carteira.models_adapter_presep import PreSeparacaoItemAdapter
+    
+    # Substituir a classe PreSeparacaoItem pelo adapter
+    PreSeparacaoItem = PreSeparacaoItemAdapter
+    PreSeparacaoItem.query = PreSeparacaoItemAdapter.query_adapter()
+    
+    print("⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'")
+except ImportError as e:
+    print(f"⚠️ Adapter não pôde ser carregado: {e}")
+    # Mantém a classe original se o adapter não estiver disponível

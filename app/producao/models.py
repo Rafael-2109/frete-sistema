@@ -1,5 +1,4 @@
 from app import db
-from datetime import datetime
 from app.utils.timezone import agora_brasil
 
 class ProgramacaoProducao(db.Model):

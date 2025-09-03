@@ -554,7 +554,7 @@ def create_app(config_name=None):
     try:
         from app.cli import (normalizar_dados, atualizar_ibge, limpar_cache_localizacao, 
                             validar_localizacao, diagnosticar_vinculos, corrigir_vinculos_grupo, 
-                            importar_cidades_cli, inicializar_cache_estoque, atualizar_cache_estoque)
+                            importar_cidades_cli)
         app.cli.add_command(normalizar_dados)
         app.cli.add_command(atualizar_ibge)
         app.cli.add_command(limpar_cache_localizacao)
@@ -562,8 +562,6 @@ def create_app(config_name=None):
         app.cli.add_command(diagnosticar_vinculos)
         app.cli.add_command(corrigir_vinculos_grupo)
         app.cli.add_command(importar_cidades_cli)
-        app.cli.add_command(inicializar_cache_estoque)
-        app.cli.add_command(atualizar_cache_estoque)
         
         # REMOVIDO: criar_vinculos_faltantes (função perigosa que criava vínculos automaticamente)
     except ImportError as e:
@@ -628,6 +626,11 @@ def create_app(config_name=None):
     app.register_blueprint(faturamento_bp)
     app.register_blueprint(atualizar_nf_bp)
     app.register_blueprint(inconsistencias_bp)
+    
+    # Importar e registrar blueprint de faturamentos parciais
+    from app.carteira.api.faturamentos_parciais_api import faturamentos_parciais_bp
+    app.register_blueprint(faturamentos_parciais_bp)
+    
     app.register_blueprint(localidades_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(monitoramento_bp)
@@ -863,50 +866,6 @@ def create_app(config_name=None):
         app.logger.warning(f"⚠️ Erro ao inicializar sistemas de autonomia: {e}")
         # Sistema continua funcionando sem autonomia
 
-    if os.getenv('MCP_ENABLED', 'false').lower() == 'true':
-
-        try:
-            from app.mcp_flask_integration import setup_mcp_routes
-            setup_mcp_routes(app)
-            app.logger.info("✅ MCP integration configured")
-        except Exception as e:
-            app.logger.warning(f"⚠️ MCP integration not available: {e}")
-
-    # Sistema híbrido REMOVIDO - usando novo sistema de estoque em tempo real
     
-    # 🚀 SISTEMA DE ESTOQUE EM TEMPO REAL
-    try:
-        # Registrar triggers SQL corrigidos (versão definitiva sem erros de sintaxe)
-        from app.estoque.triggers_sql_corrigido import ativar_triggers_corrigidos
-        ativar_triggers_corrigidos()
-        app.logger.info("✅ Triggers SQL corrigidos do EstoqueTempoReal registrados com sucesso")
-        
-        # Registrar API de estoque tempo real
-        from app.estoque.api_tempo_real import estoque_tempo_real_bp
-        app.register_blueprint(estoque_tempo_real_bp)
-        app.logger.info("✅ API de Estoque Tempo Real registrada")
-        
-        # Configurar job de fallback (recalcula 10 produtos mais antigos a cada 60 segundos)
-        from apscheduler.schedulers.background import BackgroundScheduler
-        from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
-        
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(
-            func=lambda: ServicoEstoqueTempoReal.processar_fallback(app),
-            trigger="interval",
-            seconds=60,
-            id='fallback_estoque_tempo_real',
-            replace_existing=True,
-            max_instances=1  # Evita execuções paralelas
-        )
-        scheduler.start()
-        app.logger.info("✅ Job de Fallback de Estoque configurado (60 segundos)")
-        
-        # Registrar shutdown do scheduler
-        import atexit
-        atexit.register(lambda: scheduler.shutdown())
-        
-    except Exception as e:
-        app.logger.warning(f"⚠️ Sistema de Estoque Tempo Real não configurado: {e}")
 
     return app

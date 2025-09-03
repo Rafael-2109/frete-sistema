@@ -237,7 +237,8 @@ class WorkspaceTabela {
     }
 
     /**
-     * 🎯 CÁLCULOS DE STATUS E DISPONIBILIDADE
+     * 🎯 DELEGAR CÁLCULO DE STATUS DE DISPONIBILIDADE
+     * Usa workspace-quantidades para cálculo completo
      */
     calcularStatusDisponibilidade(produto) {
         try {
@@ -247,23 +248,27 @@ class WorkspaceTabela {
                 return null;
             }
             
-            // Debug dos dados recebidos (apenas em desenvolvimento)
-            if (window.DEBUG_MODE) {
-                console.log('Debug disponibilidade:', {
-                    cod_produto: produto.cod_produto,
-                    qtd_pedido: produto.qtd_pedido,
-                    estoque_hoje: produto.estoque_hoje,
-                    data_disponibilidade: produto.data_disponibilidade,
-                    qtd_disponivel: produto.qtd_disponivel
-                });
+            // Debug: verificar dados do produto
+            console.log('📊 DEBUG calcularStatusDisponibilidade:', {
+                cod_produto: produto.cod_produto,
+                qtd_pedido: produto.qtd_pedido,
+                estoque_hoje: produto.estoque_hoje,
+                data_disponibilidade: produto.data_disponibilidade,
+                qtd_disponivel: produto.qtd_disponivel,
+                workspaceQuantidades_existe: !!window.workspaceQuantidades
+            });
+            
+            // Delegar para workspace-quantidades se disponível
+            if (window.workspaceQuantidades) {
+                const resultado = window.workspaceQuantidades.calcularStatusDisponibilidade(produto);
+                console.log('📊 Resultado de workspaceQuantidades:', resultado);
+                return resultado;
             }
             
+            // Fallback simplificado se workspace-quantidades não estiver disponível
             const qtdPedido = produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0;
             const estoqueHoje = produto.estoque_hoje ?? produto.estoque ?? 0;
-            const dataDisponivel = produto.data_disponibilidade;
-            const qtdDisponivel = produto.qtd_disponivel || 0;
 
-            // Se tem estoque hoje suficiente
             if (estoqueHoje >= qtdPedido) {
                 return {
                     class: 'bg-success text-white',
@@ -271,39 +276,7 @@ class WorkspaceTabela {
                     detalhes: `${this.formatarQuantidade(estoqueHoje)} unidades`,
                     tooltip: `Estoque: ${this.formatarQuantidade(estoqueHoje)}, Pedido: ${this.formatarQuantidade(qtdPedido)}`
                 };
-            } 
-            // Se tem data de disponibilidade futura
-            else if (dataDisponivel && dataDisponivel !== 'Sem previsão') {
-                const hoje = new Date().toISOString().split('T')[0];
-                if (dataDisponivel > hoje) {
-                    const diasFuturo = this.calcularDiasAteData(dataDisponivel);
-                    return {
-                        class: 'bg-info text-white',
-                        texto: `${this.formatarQuantidade(qtdDisponivel)}`,
-                        detalhes: `D+${diasFuturo} - ${this.formatarData(dataDisponivel)}`,
-                        tooltip: `Disponível: ${this.formatarQuantidade(qtdDisponivel)} unidades em ${this.formatarData(dataDisponivel)}`
-                    };
-                } else if (qtdDisponivel > 0) {
-                    // Data passada ou hoje com quantidade disponível
-                    return {
-                        class: 'bg-warning text-dark',
-                        texto: 'PARCIAL',
-                        detalhes: `${this.formatarQuantidade(qtdDisponivel)} disponível`,
-                        tooltip: `Disponível: ${this.formatarQuantidade(qtdDisponivel)} unidades`
-                    };
-                }
-            }
-            // Se tem estoque parcial
-            else if (estoqueHoje > 0) {
-                return {
-                    class: 'bg-warning text-dark',
-                    texto: 'PARCIAL',
-                    detalhes: `${this.formatarQuantidade(estoqueHoje)} de ${this.formatarQuantidade(qtdPedido)}`,
-                    tooltip: `Disponível parcialmente. Estoque: ${this.formatarQuantidade(estoqueHoje)}`
-                };
-            } 
-            // Sem estoque e sem previsão
-            else {
+            } else {
                 return {
                     class: 'bg-danger text-white',
                     texto: 'INDISPONÍVEL',
@@ -313,7 +286,6 @@ class WorkspaceTabela {
             }
         } catch (error) {
             console.error('Erro ao calcular disponibilidade:', error, produto);
-            // Sempre retornar um objeto válido para evitar erro de 'undefined.class'
             return {
                 class: 'bg-secondary text-white',
                 texto: 'ERRO',
@@ -323,6 +295,10 @@ class WorkspaceTabela {
         }
     }
 
+    /**
+     * 🎯 DELEGAR CÁLCULO DE SALDO DISPONÍVEL
+     * Já está delegando corretamente para WorkspaceQuantidades
+     */
     calcularSaldoDisponivel(produto) {
         try {
             // Verificar se produto é válido
@@ -336,22 +312,20 @@ class WorkspaceTabela {
                 };
             }
             
-            // Delegar para o WorkspaceQuantidades se disponível
+            // Já delega para o WorkspaceQuantidades se disponível
             if (window.workspaceQuantidades) {
                 const resultado = window.workspaceQuantidades.calcularSaldoDisponivel(produto);
                 if (resultado) return resultado;
             }
 
-            // Fallback caso WorkspaceQuantidades não esteja disponível ou retorne null
+            // Fallback caso WorkspaceQuantidades não esteja disponível
             const qtdPedido = produto.qtd_pedido || produto.qtd_produto_pedido || 0;
             const qtdSeparacoes = produto.qtd_separacoes || 0;
             const qtdPreSeparacoes = produto.qtd_pre_separacoes || 0;
-
-            // Saldo disponível = Qtd Pedido - (Separações + Pré-Separações)
             const qtdEditavel = qtdPedido - qtdSeparacoes - qtdPreSeparacoes;
 
             return {
-                qtdEditavel: Math.max(0, qtdEditavel), // Nunca negativo
+                qtdEditavel: Math.max(0, qtdEditavel),
                 qtdSeparacoes: qtdSeparacoes,
                 qtdPreSeparacoes: qtdPreSeparacoes,
                 qtdIndisponivel: Math.max(0, -qtdEditavel)
@@ -368,9 +342,14 @@ class WorkspaceTabela {
     }
 
     /**
-     * 🎯 MÉTODOS DE FORMATAÇÃO (compatíveis com workspace-core.js)
+     * 🎯 DELEGAÇÃO DE FORMATAÇÃO
+     * Todas as formatações são delegadas para workspace-quantidades
      */
     formatarMoeda(valor) {
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarMoeda(valor);
+        }
+        // Fallback se workspace-quantidades não estiver disponível
         if (!valor) return 'R$ 0,00';
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
@@ -379,20 +358,32 @@ class WorkspaceTabela {
     }
 
     formatarQuantidade(qtd) {
-        // Verificar se é null, undefined ou NaN
+        if (window.workspaceQuantidades) {
+            // Usar formatação do workspace-quantidades mas sem decimais
+            const formatted = window.workspaceQuantidades.formatarQuantidade(qtd);
+            return formatted ? formatted.split(',')[0] : '0';
+        }
+        // Fallback
         if (qtd === null || qtd === undefined || isNaN(qtd)) return '0';
-        // Garantir que é um número válido
         const numero = parseFloat(qtd);
         if (isNaN(numero)) return '0';
         return Math.floor(numero).toLocaleString('pt-BR');
     }
 
     formatarPeso(peso) {
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPeso(peso);
+        }
+        // Fallback
         if (!peso) return '0 kg';
         return `${parseFloat(peso).toFixed(1)} kg`;
     }
 
     formatarPallet(pallet) {
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPallet(pallet);
+        }
+        // Fallback
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
     }

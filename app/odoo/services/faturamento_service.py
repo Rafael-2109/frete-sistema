@@ -15,6 +15,7 @@ from typing import Dict, List, Any, Optional
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.faturamento_mapper import FaturamentoMapper
+from app.embarques.models import EmbarqueItem
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -227,6 +228,75 @@ class FaturamentoService:
         except Exception as e:
             logger.error(f"❌ Erro no processamento faturamento otimizado: {e}")
             return []
+    
+    def _processar_cancelamento_nf(self, numero_nf: str) -> bool:
+        """
+        Processa o cancelamento de uma NF de forma atômica
+        
+        Args:
+            numero_nf: Número da NF a ser cancelada
+            
+        Returns:
+            bool: True se processamento foi bem sucedido
+        """
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info(f"🔄 Processando cancelamento da NF {numero_nf}")
+            
+            from app.estoque.models import MovimentacaoEstoque
+            from app.separacao.models import Separacao
+            
+            # 1. Atualizar MovimentacaoEstoque
+            movs_atualizadas = MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.numero_nf == numero_nf,
+                MovimentacaoEstoque.status_nf != 'CANCELADO'
+            ).update({
+                'status_nf': 'CANCELADO',
+                'atualizado_em': datetime.now(),
+                'atualizado_por': 'Sistema - NF Cancelada no Odoo'
+            })
+            
+            if movs_atualizadas > 0:
+                logger.info(f"   ✅ {movs_atualizadas} movimentações de estoque marcadas como CANCELADO")
+            
+            # 2. Limpar EmbarqueItem (remover número da NF)
+            embarques_limpos = db.session.query(EmbarqueItem).filter(
+                EmbarqueItem.nota_fiscal == numero_nf
+            ).update({
+                'nota_fiscal': None,
+                'erro_validacao': 'NF cancelada no Odoo'
+            })
+            
+            if embarques_limpos > 0:
+                logger.info(f"   ✅ {embarques_limpos} itens de embarque atualizados")
+            
+            # 3. Atualizar Separacao (reverter sincronização)
+            separacoes_atualizadas = db.session.query(Separacao).filter(
+                Separacao.numero_nf == numero_nf
+            ).update({
+                'numero_nf': None,
+                'sincronizado_nf': False
+            })
+            
+            if separacoes_atualizadas > 0:
+                logger.info(f"   ✅ {separacoes_atualizadas} separações revertidas para não sincronizado")
+            
+            # 4. Log de auditoria detalhado
+            logger.info(f"✅ CANCELAMENTO COMPLETO: NF {numero_nf}")
+            logger.info(f"   - Movimentações canceladas: {movs_atualizadas}")
+            logger.info(f"   - Embarques limpos: {embarques_limpos}") 
+            logger.info(f"   - Separações revertidas: {separacoes_atualizadas}")
+            
+            # Commit apenas se houve alterações
+            if movs_atualizadas > 0 or embarques_limpos > 0 or separacoes_atualizadas > 0:
+                db.session.commit()
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar cancelamento da NF {numero_nf}: {e}")
+            db.session.rollback()
+            return False
     
     def _mapear_status(self, status_odoo: Optional[str]) -> str:
         """
@@ -446,6 +516,7 @@ class FaturamentoService:
             # 📋 LISTAS PARA SINCRONIZAÇÃO POSTERIOR
             nfs_novas = []  # NFs que foram inseridas
             nfs_atualizadas = []  # NFs que foram atualizadas
+            nfs_reprocessar = []  # NFs que precisam ser reprocessadas (novas ou status mudou para não-cancelado)
             cnpjs_processados = set()  # CNPJs únicos para lançamento de fretes
             
             # 🔍 CRIAR ÍNDICE DE REGISTROS EXISTENTES
@@ -500,13 +571,14 @@ class FaturamentoService:
                             nfs_atualizadas.append(numero_nf)
                             logger.debug(f"✏️ UPDATE: NF {numero_nf} produto {cod_produto} - status: {registro_info['status_atual']} → {status_odoo}")
                             
-                            # 🚨 IMPORTANTE: Se mudou para CANCELADO, marcar para processar cancelamento
-                            # Verificar o status BRUTO do Odoo (antes do mapeamento)
+                            # 🚨 Se mudou para CANCELADO, processar imediatamente
                             if status_odoo_raw == 'cancel' and registro_info['status_atual'] != 'CANCELADO':
-                                if 'nfs_para_cancelar' not in locals():
-                                    nfs_para_cancelar = set()
-                                nfs_para_cancelar.add(numero_nf)
-                                logger.info(f"🚨 NF {numero_nf} marcada para processar CANCELAMENTO (Odoo state='cancel')")
+                                logger.info(f"🚨 Processando CANCELAMENTO da NF {numero_nf} (Odoo state='cancel')")
+                                self._processar_cancelamento_nf(numero_nf)
+                            # 🔄 Se mudou DE cancelado PARA ativo, precisa reprocessar
+                            elif registro_info['status_atual'] == 'CANCELADO' and status_odoo != 'CANCELADO':
+                                nfs_reprocessar.append(numero_nf)
+                                logger.info(f"🔄 NF {numero_nf} voltou de CANCELADO para {status_odoo}, marcada para reprocessamento")
                         # Se status igual, não faz nada (otimização)
                         
                     else:
@@ -516,6 +588,24 @@ class FaturamentoService:
                         if 'status_odoo_raw' in item_para_inserir:
                             del item_para_inserir['status_odoo_raw']
                         
+                        # Verificar e criar CadastroPalletizacao se não existir
+                        from app.producao.models import CadastroPalletizacao
+                        cod_produto = item_para_inserir.get('cod_produto')
+                        if cod_produto:
+                            produto_cadastro = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+                            if not produto_cadastro:
+                                # Criar produto com dados básicos
+                                produto_cadastro = CadastroPalletizacao(
+                                    cod_produto=cod_produto,
+                                    nome_produto=item_para_inserir.get('nome_produto', cod_produto),
+                                    palletizacao=1.0,  # Valor padrão
+                                    peso_bruto=1.0,    # Valor padrão
+                                    created_by='ImportacaoFaturamentoOdoo',
+                                    updated_by='ImportacaoFaturamentoOdoo'
+                                )
+                                db.session.add(produto_cadastro)
+                                logger.info(f"✅ Produto {cod_produto} criado automaticamente no CadastroPalletizacao (via Faturamento)")
+                        
                         novo_registro = FaturamentoProduto(**item_para_inserir)
                         novo_registro.created_by = 'Sistema Odoo'
                         novo_registro.status_nf = status_odoo
@@ -523,6 +613,7 @@ class FaturamentoService:
                         db.session.add(novo_registro)
                         contador_novos += 1
                         nfs_novas.append(numero_nf)
+                        nfs_reprocessar.append(numero_nf)  # NFs novas sempre precisam ser processadas
                         logger.debug(f"➕ INSERT: NF {numero_nf} produto {cod_produto}")
                     
                 except Exception as e:
@@ -537,46 +628,15 @@ class FaturamentoService:
             logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
             
             # ============================================
-            # 🚨 LIMPEZA DE MOVIMENTAÇÕES DE NFs CANCELADAS
+            # 🚨 PROCESSAMENTO DE NFs CANCELADAS
             # ============================================
-            # LÓGICA SIMPLES:
-            # - NF está CANCELADA? → Apagar movimentações se existirem
-            # - Independente de quando foi importada
+            # NFs recém-canceladas já foram processadas durante a sincronização incremental
+            # Este bloco agora é apenas para garantir consistência em casos especiais
             
-            logger.info("🔍 Verificando NFs CANCELADAS para limpar movimentações...")
+            logger.info("🔍 Verificando consistência de NFs CANCELADAS...")
             
-            from app.estoque.models import MovimentacaoEstoque
-            
-            # Buscar TODAS as NFs com status CANCELADO no banco
-            nfs_canceladas = db.session.query(
-                FaturamentoProduto.numero_nf
-            ).filter(
-                FaturamentoProduto.status_nf == 'CANCELADO'
-            ).distinct().all()
-            
-            logger.info(f"📊 Total de NFs CANCELADAS no sistema: {len(nfs_canceladas)}")
-            
-            movimentacoes_removidas_total = 0
-            nfs_limpas = 0
-            
-            for (numero_nf,) in nfs_canceladas:
-                # Para cada NF cancelada, buscar e remover movimentações
-                movs = MovimentacaoEstoque.query.filter(
-                    MovimentacaoEstoque.observacao.like(f"%NF {numero_nf}%")
-                ).all()
-                
-                if movs:
-                    logger.info(f"🗑️ NF {numero_nf} CANCELADA - Removendo {len(movs)} movimentações")
-                    for mov in movs:
-                        db.session.delete(mov)
-                        movimentacoes_removidas_total += 1
-                    nfs_limpas += 1
-            
-            if movimentacoes_removidas_total > 0:
-                db.session.commit()
-                logger.info(f"✅ LIMPEZA CONCLUÍDA: {movimentacoes_removidas_total} movimentações removidas de {nfs_limpas} NFs")
-            else:
-                logger.info("✅ Nenhuma movimentação de NF cancelada para remover")
+            # Nota: O processamento principal de cancelamentos agora ocorre em tempo real
+            # durante a sincronização incremental através de _processar_cancelamento_nf()
             
             # ============================================
             # 🔄 CONSOLIDAÇÃO PARA RELATORIOFATURAMENTOIMPORTADO
@@ -609,7 +669,26 @@ class FaturamentoService:
                 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
                 
                 processador = ProcessadorFaturamento()
-                resultado_processamento = processador.processar_nfs_importadas(usuario='Sincronização Odoo')
+                
+                # 🚀 FLUXO INTELIGENTE: 
+                # Se tem NFs novas/reativadas específicas → processa só elas
+                # Senão → processa TUDO que precisa (novas + incompletas antigas)
+                nfs_para_processar = list(set(nfs_reprocessar))  # NFs novas + reativadas, sem duplicatas
+                
+                if nfs_para_processar:
+                    # Caso 1: Temos NFs específicas da sincronização atual
+                    logger.info(f"📊 Processando {len(nfs_para_processar)} NFs específicas da sincronização")
+                    logger.debug(f"   - {len(set(nfs_novas))} NFs novas")
+                    logger.debug(f"   - {len(set(nfs_reprocessar) - set(nfs_novas))} NFs reativadas")
+                    
+                    resultado_processamento = processador.processar_nfs_importadas(
+                        usuario='Sincronização Odoo',
+                        nfs_especificas=nfs_para_processar  # Passa lista específica
+                    )
+                else:
+                    # Caso 2: Não tem NFs novas, mas pode ter incompletas antigas
+                    logger.info("🔄 Executando fluxo completo (busca automática de pendentes)")
+                    resultado_processamento = processador.processar_fluxo_completo()
                 
                 if resultado_processamento:
                     stats_estoque['processadas'] = resultado_processamento.get('processadas', 0)
@@ -748,8 +827,8 @@ class FaturamentoService:
                 'economia_tempo': 'MUITO SIGNIFICATIVA vs método DELETE+INSERT',
                 # 🆕 ESTATÍSTICAS DE CANCELAMENTOS
                 'cancelamentos': {
-                    'nfs_canceladas': nfs_limpas if 'nfs_limpas' in locals() else 0,
-                    'movimentacoes_removidas': movimentacoes_removidas_total if 'movimentacoes_removidas_total' in locals() else 0
+                    'nfs_canceladas': 0,  # Agora processadas em tempo real via _processar_cancelamento_nf
+                    'movimentacoes_removidas': 0  # Contabilizadas durante processamento incremental
                 },
                 # 🆕 ESTATÍSTICAS DAS SINCRONIZAÇÕES
                 'sincronizacoes': stats_sincronizacao
@@ -758,12 +837,6 @@ class FaturamentoService:
             logger.info(f"   ✅ SINCRONIZAÇÃO INCREMENTAL COMPLETA CONCLUÍDA:")
             logger.info(f"   ➕ {contador_novos} novos registros inseridos")
             logger.info(f"   ✏️ {contador_atualizados} registros atualizados")
-            
-            # Log de cancelamentos se houver
-            if 'nfs_limpas' in locals() and nfs_limpas > 0:
-                logger.info(f"   🚨 {nfs_limpas} NFs CANCELADAS processadas")
-                logger.info(f"   🗑️ {movimentacoes_removidas_total} movimentações de estoque removidas")
-            
             logger.info(f"   📋 {stats_sincronizacao['relatorios_consolidados']} relatórios consolidados")
             logger.info(f"   🔄 {stats_sincronizacao['entregas_sincronizadas']} entregas sincronizadas")
             logger.info(f"   📦 {stats_sincronizacao['embarques_revalidados']} embarques re-validados")
@@ -888,24 +961,6 @@ class FaturamentoService:
                 'sucesso': False,
                 'erro': str(e)
             }
-
-    # ============================================
-    # 🔄 MÉTODOS DE COMPATIBILIDADE
-    # ============================================
-    
-    def obter_faturamento_produtos(self, data_inicio=None, data_fim=None, nfs_especificas=None):
-        """
-        🔄 MÉTODO DE COMPATIBILIDADE - Usa novo método otimizado
-        
-        Este método mantém a interface antiga mas usa internamente o método otimizado
-        """
-        logger.warning("⚠️ Método obsoleto 'obter_faturamento_produtos' usado - migre para 'obter_faturamento_otimizado'")
-        
-        # Redirecionar para método otimizado
-        return self.obter_faturamento_otimizado(
-            usar_filtro_postado=True,
-            limite=0  # Sem limite para compatibilidade
-        )
     
     # ============================================
     # 🛠️ MÉTODOS AUXILIARES E DE PROCESSAMENTO

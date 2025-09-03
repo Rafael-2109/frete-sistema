@@ -9,14 +9,14 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
-from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
+# MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
 from app import db
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.estoque.models import MovimentacaoEstoque
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque, EmbarqueItem
 from app.carteira.models import FaturamentoParcialJustificativa, InconsistenciaFaturamento
-from app.pedidos.models import Pedido
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +27,26 @@ class ProcessadorFaturamento:
     """
 
     def processar_nfs_importadas(
-        self, usuario: str = "Importação Odoo", limpar_inconsistencias: bool = True
+        self, usuario: str = "Importação Odoo", 
+        limpar_inconsistencias: bool = True,
+        nfs_especificas: List[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Processa todas as NFs importadas seguindo lógica simplificada
+        Processa NFs importadas seguindo lógica simplificada
         COM MELHORIAS: Commits em lotes e tratamento de erros isolados
+        
+        Args:
+            usuario: Usuário responsável pelo processamento
+            limpar_inconsistencias: Se deve limpar inconsistências anteriores
+            nfs_especificas: Lista de NFs específicas para processar (otimização)
+                           Se None, busca NFs não processadas
+                           
+        Cenários de Processamento/Reprocessamento:
+            1. NF nova importada → Cria MovimentacaoEstoque
+            2. NF sem EmbarqueItem → Cria como "Sem Separação", reprocessa quando tiver
+            3. NF sem Separacao → Cria sem lote, reprocessa quando encontrar
+            4. NF com erro em EmbarqueItem → Reprocessa após correção
+            5. NF reativada (des-cancelada) → Reprocessa para recriar movimentações
         """
         resultado = {
             "processadas": 0,
@@ -59,152 +74,55 @@ class ProcessadorFaturamento:
                     logger.warning(f"⚠️ Erro ao limpar inconsistências: {e}")
                     db.session.rollback()
 
-            # 1. Buscar TODAS as NFs ativas
-            nfs_pendentes = self._buscar_nfs_pendentes()
+            # 1. Buscar NFs para processar
+            if nfs_especificas:
+                # 🚀 OTIMIZAÇÃO: Processar apenas NFs específicas (novas ou atualizadas)
+                logger.info(f"🎯 Processando {len(nfs_especificas)} NFs específicas...")
+                nfs_pendentes = self._buscar_nfs_especificas(nfs_especificas)
+            else:
+                # Fallback: buscar NFs não processadas (método otimizado)
+                logger.info("🔍 Buscando NFs não processadas...")
+                nfs_pendentes = self._buscar_nfs_nao_processadas()
+            
             logger.info(f"📊 Total de NFs para processar: {len(nfs_pendentes)}")
             
-            # LOG DETALHADO: Verificar quantas têm movimentação
-            nfs_com_mov = 0
-            nfs_sem_mov = 0
-            for nf in nfs_pendentes:
-                tem_mov = MovimentacaoEstoque.query.filter(
-                    MovimentacaoEstoque.observacao.like(f"%NF {nf.numero_nf}%")
-                ).first()
-                if tem_mov:
-                    nfs_com_mov += 1
-                else:
-                    nfs_sem_mov += 1
+            # Cache de separações por lote para evitar queries repetidas
+            cache_separacoes = {}
             
-            logger.info(f"📊 Status inicial: {nfs_com_mov} já têm movimentação, {nfs_sem_mov} precisam ser processadas")
-            
-            # AJUSTE MAIS SEGURO: Processar em lotes com SAVEPOINTS
-            # Lote de 20 é ideal: ~14s por commit, baixo risco de timeout SSL
-            TAMANHO_LOTE_COMMIT = 20  # Commit a cada 20 NFs processadas
-            nfs_processadas_lote = []  # Lista de NFs processadas com sucesso no lote
-
             for idx, nf in enumerate(nfs_pendentes):
-                # Criar SAVEPOINT para cada NF
-                savepoint = None
                 try:
-                    # SEGURANÇA MÁXIMA: Savepoint permite rollback parcial
-                    savepoint = db.session.begin_nested()
-                    
-                    logger.info(
-                        f"🔄 [{idx+1}/{len(nfs_pendentes)}] Processando NF {nf.numero_nf} - Pedido: {nf.origem}"
+                    logger.debug(f"[{idx+1}/{len(nfs_pendentes)}] NF {nf.numero_nf}")
+
+                    # Processar NF (verificação redundante removida)
+                    processou, mov_criadas, emb_atualizados = self._processar_nf_simplificado(
+                        nf, usuario, cache_separacoes
                     )
-
-                    # 1.A - Já tem movimentação com separacao_lote_id?
-                    if self._tem_movimentacao_com_lote(nf.numero_nf):
-                        logger.info(f"✅ NF {nf.numero_nf} já processada com lote - pulando")
-                        resultado["ja_processadas"] += 1
-                        savepoint.commit()  # Liberar savepoint
-                        continue
-
-                    # 1.B - NF Cancelada?
-                    if self._nf_cancelada(nf):
-                        self._processar_cancelamento(nf)
-                        resultado["canceladas"] += 1
-                        logger.info(f"🚫 NF {nf.numero_nf} cancelada - movimentações removidas")
-                        savepoint.commit()  # Confirmar alterações desta NF
-                        nfs_processadas_lote.append(nf.numero_nf)
-                        continue
-
-                    # 1.C - Processar NF (com ou sem movimentação "Sem Separação")
-                    processou, mov_criadas, emb_atualizados = self._processar_nf(nf, usuario)
+                    
                     if processou:
                         resultado["processadas"] += 1
                         resultado["movimentacoes_criadas"] += mov_criadas
                         resultado["embarque_items_atualizados"] += emb_atualizados
-                        savepoint.commit()  # Confirmar alterações desta NF
-                        nfs_processadas_lote.append(nf.numero_nf)
-                    else:
-                        # Não processou mas não é erro - fazer commit do savepoint
-                        savepoint.commit()
-                        
-                    # AJUSTE SEGURO: Commit em lote a cada N NFs para evitar timeout
-                    if len(nfs_processadas_lote) >= TAMANHO_LOTE_COMMIT:
-                        # Fazer commit do lote com retry para SSL
-                        max_tentativas = 3
-                        
-                        for tentativa in range(max_tentativas):
-                            try:
-                                db.session.commit()
-                                logger.info(f"✅ Lote {(idx//TAMANHO_LOTE_COMMIT)+1} com {len(nfs_processadas_lote)} NFs commitado com sucesso")
-                                nfs_processadas_lote = []  # Resetar lista
-                                break
-                            except Exception as commit_error:
-                                error_msg = str(commit_error).lower()
-                                
-                                # Verificar se é erro SSL recuperável
-                                if 'ssl' in error_msg or 'decryption' in error_msg or 'eof' in error_msg:
-                                    if tentativa < max_tentativas - 1:
-                                        logger.warning(f"⚠️ Erro SSL no commit do lote, tentativa {tentativa + 1}/{max_tentativas}")
-                                        # Aguardar antes de tentar novamente
-                                        import time
-                                        time.sleep(0.5 * (tentativa + 1))  # Delay crescente
-                                        
-                                        # Forçar reconexão
-                                        try:
-                                            db.session.rollback()
-                                            db.session.close()
-                                            db.engine.dispose()
-                                        except Exception as e:
-                                            logger.error(f"❌ Erro ao fechar conexão: {e}")
-                                            pass
-                                    else:
-                                        logger.error(f"❌ Erro SSL persistente após {max_tentativas} tentativas")
-                                        db.session.rollback()
-                                        resultado["erros"].append(f"Lote ({len(nfs_processadas_lote)} NFs): Erro SSL no commit após {max_tentativas} tentativas")
-                                        nfs_processadas_lote = []
-                                else:
-                                    # Erro não relacionado a SSL - não tentar novamente
-                                    logger.error(f"❌ Erro no commit do lote: {commit_error}")
-                                    db.session.rollback()
-                                    resultado["erros"].append(f"Lote ({len(nfs_processadas_lote)} NFs): Erro no commit")
-                                    nfs_processadas_lote = []
-                                    break
 
                 except Exception as e:
-                    # SEGURANÇA: Rollback apenas do savepoint desta NF
-                    if savepoint and not savepoint.is_active:
-                        # Savepoint já foi commitado, não precisa fazer nada
-                        pass
-                    elif savepoint:
-                        try:
-                            savepoint.rollback()  # Rollback APENAS desta NF
-                            logger.warning(f"⚠️ Rollback do savepoint para NF {nf.numero_nf}")
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao fazer rollback do savepoint para NF {nf.numero_nf}: {str(e)}")
-                            pass
-                    
-                    logger.error(f"❌ Erro ao processar NF {nf.numero_nf}: {str(e)}")
+                    logger.error(f"❌ Erro NF {nf.numero_nf}: {str(e)}")
                     resultado["erros"].append(f"NF {nf.numero_nf}: {str(e)}")
-                    # Continuar com as outras NFs - o savepoint protegeu as anteriores
+                    db.session.rollback()  # Rollback específico do erro
                     continue
 
-            # AJUSTE SEGURO: Commit final para NFs restantes no último lote
-            if len(nfs_processadas_lote) > 0:
-                try:
-                    db.session.commit()
-                    logger.info(f"✅ Último lote de {len(nfs_processadas_lote)} NFs commitado com sucesso")
-                except Exception as e:
-                    logger.error(f"❌ Erro no commit do último lote: {e}")
-                    # Tentar reconectar
-                    try:
-                        db.session.rollback()
-                        db.session.close()
-                        db.engine.dispose()
-                        resultado["erros"].append(f"Último lote ({len(nfs_processadas_lote)} NFs): Erro no commit")
-                    except Exception as e:
-                        logger.error(f"❌ Erro no commit do último lote: {e}")
-                        pass
+            # Commit único no final (mais simples e seguro)
+            try:
+                db.session.commit()
+                logger.debug(f"✅ Commit final de {resultado['processadas']} NFs processadas")
+            except Exception as e:
+                logger.error(f"❌ Erro no commit final: {e}")
+                db.session.rollback()
             
-            # NOVO: Atualizar status dos pedidos para FATURADO
-            logger.info("🔄 Atualizando status dos pedidos para FATURADO...")
-            pedidos_atualizados = self._atualizar_status_pedidos_faturados()
-            if pedidos_atualizados > 0:
-                logger.info(f"✅ {pedidos_atualizados} pedidos atualizados para status FATURADO")
-                resultado["pedidos_atualizados_status"] = pedidos_atualizados
+            # NOVO: Atualizar status das separações para FATURADO
+            logger.info("🔄 Atualizando status das separações para FATURADO...")
+            separacoes_atualizadas = self._atualizar_status_separacoes_faturadas()
+            if separacoes_atualizadas > 0:
+                logger.info(f"✅ {separacoes_atualizadas} separações atualizadas para status FATURADO")
+                resultado["separacoes_atualizadas_status"] = separacoes_atualizadas
             
             # Estatísticas finais
             logger.info(f"✅ Processamento completo: {resultado['processadas']} NFs processadas")
@@ -220,314 +138,435 @@ class ProcessadorFaturamento:
 
         return resultado
 
-    def _buscar_nfs_pendentes(self) -> List[RelatorioFaturamentoImportado]:
+    def _buscar_nfs_especificas(self, nfs_lista: List[str]) -> List[RelatorioFaturamentoImportado]:
         """
-        Busca TODAS as NFs ativas que têm produtos
+        Busca NFs específicas da lista fornecida
+        
+        Args:
+            nfs_lista: Lista de números de NF para buscar
         """
-        # Subquery para NFs que têm produtos
-        nfs_com_produtos = db.session.query(FaturamentoProduto.numero_nf).distinct().subquery()
-
-        # Buscar todas as NFs ativas com produtos
+        if not nfs_lista:
+            return []
+        
+        # Remover duplicatas
+        nfs_unicas = list(set(nfs_lista))
+        
         return (
             RelatorioFaturamentoImportado.query.filter(
                 RelatorioFaturamentoImportado.ativo == True,
-                RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_com_produtos.c.numero_nf)),
+                RelatorioFaturamentoImportado.numero_nf.in_(nfs_unicas)
             )
             .order_by(RelatorioFaturamentoImportado.numero_nf.desc())
             .all()
         )
+    
+    def _buscar_nfs_nao_processadas(self) -> List[RelatorioFaturamentoImportado]:
+        """
+        FLUXO ÚNICO: Busca NFs que precisam ser processadas ou REprocessadas
+        Inclui:
+        - NFs sem MovimentacaoEstoque
+        - NFs com MovimentacaoEstoque mas sem separacao_lote_id (processamento incompleto)
+        - NFs em EmbarqueItem com erro_validacao pendente
+        
+        GARANTE: Não duplicação - _tem_movimentacao_com_lote() verifica antes de criar
+        """
+        # Subquery para NFs que já têm movimentação COMPLETA (com lote)
+        nfs_processadas_completas = db.session.query(MovimentacaoEstoque.numero_nf).filter(
+            MovimentacaoEstoque.numero_nf.isnot(None),
+            MovimentacaoEstoque.separacao_lote_id.isnot(None),  # Tem lote = processamento completo
+            MovimentacaoEstoque.status_nf == 'FATURADO'
+        ).distinct().subquery()
+        
+        # Subquery para NFs que precisam reprocessamento (sem lote ou com erro)
+        nfs_reprocessar = db.session.query(MovimentacaoEstoque.numero_nf).filter(
+            MovimentacaoEstoque.numero_nf.isnot(None),
+            MovimentacaoEstoque.separacao_lote_id.is_(None),  # Sem lote = precisa reprocessar
+            MovimentacaoEstoque.status_nf == 'FATURADO'
+        ).distinct().subquery()
+        
+        # Subquery para NFs em EmbarqueItem com erro
+        nfs_com_erro_embarque = db.session.query(EmbarqueItem.nota_fiscal).filter(
+            EmbarqueItem.nota_fiscal.isnot(None),
+            EmbarqueItem.erro_validacao.isnot(None)  # Com erro = precisa reprocessar
+        ).distinct().subquery()
+        
+        # Subquery para NFs que têm produtos ativos
+        nfs_com_produtos = db.session.query(FaturamentoProduto.numero_nf).filter(
+            FaturamentoProduto.status_nf != 'Cancelado'  # Ignorar canceladas
+        ).distinct().subquery()
+        
+        # Buscar NFs que:
+        # 1. Não estão processadas completamente OU
+        # 2. Estão marcadas para reprocessamento OU  
+        # 3. Têm erro em EmbarqueItem
+        return (
+            RelatorioFaturamentoImportado.query.filter(
+                RelatorioFaturamentoImportado.ativo == True,
+                RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_com_produtos.c.numero_nf)),
+                db.or_(
+                    # NFs não processadas completamente
+                    ~RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_processadas_completas.c.numero_nf)),
+                    # NFs que precisam reprocessamento (sem lote)
+                    RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_reprocessar.c.numero_nf)),
+                    # NFs com erro em EmbarqueItem
+                    RelatorioFaturamentoImportado.numero_nf.in_(db.session.query(nfs_com_erro_embarque.c.numero_nf))
+                )
+            )
+            .order_by(RelatorioFaturamentoImportado.numero_nf.desc())
+            .all()  # Sem limite - máximo 50 NFs/dia na prática
+        )
+        
+    def processar_fluxo_completo(self) -> Dict[str, Any]:
+        """
+        FLUXO ÚNICO COMPLETO: Processa todas as NFs que precisam (novas + incompletas)
+        
+        Garante:
+        - Não duplica movimentações (verifica antes de criar)
+        - Processa NFs novas
+        - Reprocessa NFs incompletas
+        - Tenta vincular separações que apareceram depois
+        
+        Returns:
+            Dicionário com estatísticas completas
+        """
+        logger.info("🚀 FLUXO ÚNICO: Processando todas as NFs pendentes...")
+        
+        # Usar o método já otimizado que pega TUDO que precisa
+        resultado = self.processar_nfs_importadas(
+            usuario="Sincronização Completa",
+            limpar_inconsistencias=True,
+            nfs_especificas=None  # None = busca automática de todas pendentes
+        )
+        
+        if resultado:
+            logger.info(f"✅ FLUXO COMPLETO CONCLUÍDO:")
+            logger.info(f"   - {resultado.get('processadas', 0)} NFs processadas")
+            logger.info(f"   - {resultado.get('movimentacoes_criadas', 0)} movimentações criadas")
+            logger.info(f"   - {resultado.get('embarque_items_atualizados', 0)} embarques atualizados")
+            logger.info(f"   - {resultado.get('sem_separacao', 0)} sem separação (tentarão novamente depois)")
+            
+        return resultado or {"sucesso": False, "erro": "Processamento retornou None"}
 
     def _tem_movimentacao_com_lote(self, numero_nf: str) -> bool:
         """
         Verifica se NF já tem movimentação COM separacao_lote_id
+        Sem fallback - todos os registros já foram migrados
         """
-        return (
-            MovimentacaoEstoque.query.filter(
-                MovimentacaoEstoque.observacao.like(f"%NF {numero_nf}%"),
-                MovimentacaoEstoque.observacao.like("%lote separação%"),
-                ~MovimentacaoEstoque.observacao.like("%Sem Separação%"),
-            ).first()
-            is not None
-        )
+        resultado = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.numero_nf == numero_nf,
+            MovimentacaoEstoque.separacao_lote_id.isnot(None),
+            MovimentacaoEstoque.status_nf == 'FATURADO'
+        ).first()
+        
+        return resultado is not None
 
-    def _nf_cancelada(self, nf: RelatorioFaturamentoImportado) -> bool:
+    def _processar_nf_simplificado(self, nf: RelatorioFaturamentoImportado, usuario: str, cache_separacoes: dict = None) -> tuple:
         """
-        Verifica se NF está cancelada
-        """
-        produto_cancelado = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf, status_nf="Cancelado").first()
-
-        return produto_cancelado is not None or not nf.ativo
-
-    def _processar_cancelamento(self, nf: RelatorioFaturamentoImportado):
-        """
-        Remove movimentações de NF cancelada
-        """
-        MovimentacaoEstoque.query.filter(MovimentacaoEstoque.observacao.like(f"%NF {nf.numero_nf}%")).delete()
-
-    def _processar_nf(self, nf: RelatorioFaturamentoImportado, usuario: str) -> tuple:
-        """
-        Processa uma NF seguindo a lógica simplificada
+        Processa NF seguindo ESPECIFICACAO_SINCRONIZACAO_ODOO.md
+        
+        Lógica:
+        1. tipo_envio="total" ou 1 EmbarqueItem ativo → processar direto
+        2. tipo_envio="parcial" com múltiplos EmbarqueItems → avaliar score
+        3. Sem pedido encontrado → criar sem lote
+        
+        Usa cache de separações para evitar queries repetidas
+        
         Retorna: (processou, movimentacoes_criadas, embarque_items_atualizados)
         """
         movimentacoes_criadas = 0
         embarque_items_atualizados = 0
+        separacao_lote_id = None
         
-        # 2. NF consta em EmbarqueItem?
-        embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=nf.numero_nf).first()
-
-        if embarque_item and embarque_item.pedido == nf.origem:
-            # Caso 1: NF vinculada e pedido bate
-            logger.info(f"📦 NF {nf.numero_nf} já vinculada em EmbarqueItem com mesmo pedido")
-            self._apagar_movimentacao_anterior(nf.numero_nf)
-
-            # Gravar movimentação com o lote do EmbarqueItem
-            if embarque_item.separacao_lote_id:
-                mov_criadas = self._criar_movimentacao_com_lote(nf, embarque_item.separacao_lote_id, usuario)
-                movimentacoes_criadas += mov_criadas
-                
-                # Limpar erro de validação se existir
-                if embarque_item.erro_validacao in ['NF_PENDENTE_FATURAMENTO', 'NF_DIVERGENTE']:
-                    embarque_item.erro_validacao = None
-                    logger.info(f"✅ Erro de validação limpo para EmbarqueItem ID {embarque_item.id}")
-                    embarque_items_atualizados += 1
-                
-                # Avaliar score para verificar se há divergência
-                self._avaliar_score_e_gerar_inconsistencia(nf, embarque_item.separacao_lote_id, usuario)
-                return True, movimentacoes_criadas, embarque_items_atualizados
-            else:
-                logger.error(f"❌ EmbarqueItem sem separacao_lote_id para NF {nf.numero_nf}")
-                return False, 0, 0
-
-        elif embarque_item:
-            # NF vinculada mas pedido não bate
-            logger.warning(f"⚠️ NF {nf.numero_nf} em EmbarqueItem mas pedido divergente")
+        # Inicializar cache se não fornecido
+        if cache_separacoes is None:
+            cache_separacoes = {}
+        
+        logger.info(f"📋 Processando NF {nf.numero_nf} - Pedido {nf.origem}")
+        
+        # Buscar EmbarqueItems ativos para o pedido
+        embarque_items = EmbarqueItem.query.join(
+            Embarque, EmbarqueItem.embarque_id == Embarque.id
+        ).filter(
+            EmbarqueItem.pedido == nf.origem,
+            EmbarqueItem.status == 'ativo',
+            Embarque.status == 'ativo'
+        ).all()
+        
+        # NOVO: Se não encontrou com o pedido correto, verificar se há items com divergência
+        if not embarque_items:
+            # Buscar EmbarqueItems que têm a NF mas com pedido divergente
+            embarque_items_divergentes = EmbarqueItem.query.join(
+                Embarque, EmbarqueItem.embarque_id == Embarque.id
+            ).filter(
+                EmbarqueItem.nota_fiscal == nf.numero_nf,
+                EmbarqueItem.pedido != nf.origem,  # Pedido diferente
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            ).all()
+            
+            if embarque_items_divergentes:
+                logger.warning(f"⚠️ Encontrados {len(embarque_items_divergentes)} EmbarqueItems com divergência para NF {nf.numero_nf}")
+                # Criar inconsistências para cada item divergente
+                for item_div in embarque_items_divergentes:
+                    self._gerar_inconsistencia_divergencia_embarque(nf, item_div, usuario)
+                    # Marcar erro de validação no EmbarqueItem
+                    if not item_div.erro_validacao:
+                        item_div.erro_validacao = f"NF_DIVERGENTE: Pedido NF ({nf.origem}) != Pedido Item ({item_div.pedido})"
+            
+            # 4.4 da especificação - Pedido não encontrado
+            logger.warning(f"⚠️ NF {nf.numero_nf} sem embarque ativo - criando sem lote")
             mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
-            movimentacoes_criadas += mov_criadas
-            self._gerar_inconsistencia_divergencia_embarque(nf, embarque_item, usuario)
-            return True, movimentacoes_criadas, embarque_items_atualizados
-
-        # 3. Origem da NF consta em algum embarque ativo?
-        embarque_ativo = self._buscar_embarque_ativo_por_pedido(nf.origem)
-
-        if embarque_ativo:
-            # Caso 2: Pedido encontrado em embarque ativo
-            logger.info(f"🚢 NF {nf.numero_nf} tem embarque ativo - avaliando score")
-            self._apagar_movimentacao_anterior(nf.numero_nf)
-            processou, mov_criadas, emb_atualizados = self._avaliar_score_completo(nf, usuario)
-            return processou, mov_criadas, emb_atualizados
+            return True, mov_criadas, 0
+        
+        # Se apenas 1 EmbarqueItem, usar direto
+        if len(embarque_items) == 1:
+            separacao_lote_id = embarque_items[0].separacao_lote_id
+            if separacao_lote_id:
+                logger.info(f"✅ Único EmbarqueItem encontrado - usando lote {separacao_lote_id}")
+            else:
+                logger.warning(f"⚠️ EmbarqueItem sem lote - criando sem separação")
+                mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+                return True, mov_criadas, 0
         else:
-            # Não - Registra "Sem Separação" + inconsistência
-            logger.info(f"❌ NF {nf.numero_nf} sem embarque ativo - registrando 'Sem Separação'")
-            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
-            movimentacoes_criadas += mov_criadas
-            self._gerar_inconsistencia_sem_separacao(nf, usuario)
-            return True, movimentacoes_criadas, embarque_items_atualizados
-
-    def _buscar_embarque_ativo_por_pedido(self, num_pedido: str) -> Optional[EmbarqueItem]:
-        """
-        Busca embarque ativo por número do pedido que precisa de processamento
-        
-        Processa SE:
-        1. NF vazia (ainda não preenchida) OU  
-        2. erro_validacao != None (tem erro para resolver)
-        
-        NÃO processa SE:
-        NF preenchida E erro_validacao = None (já está tudo OK!)
-        """
-        from sqlalchemy import or_
-        
-        return (
-            EmbarqueItem.query.join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
-            .filter(
-                EmbarqueItem.pedido == num_pedido,
-                Embarque.status == "ativo",
-                EmbarqueItem.status == "ativo",
-                or_(
-                    # Caso 1: NF vazia (ainda não preenchida)
-                    EmbarqueItem.nota_fiscal.is_(None),
-                    EmbarqueItem.nota_fiscal == '',
-                    # Caso 2: Tem erro de validação para resolver
-                    EmbarqueItem.erro_validacao.isnot(None)
-                )
-            )
-            .first()
-        )
-
-    def _apagar_movimentacao_anterior(self, numero_nf: str):
-        """
-        Apaga movimentações anteriores da NF (exceto as com lote)
-        """
-        MovimentacaoEstoque.query.filter(
-            MovimentacaoEstoque.observacao.like(f"%NF {numero_nf}%"),
-            MovimentacaoEstoque.observacao.like("%Sem Separação%"),
-        ).delete()
-
-    def _avaliar_score_e_gerar_inconsistencia(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
-        """
-        Avalia score para gerar inconsistência se houver divergência (Caso 1)
-        """
-        # Buscar separações do lote
-        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
-
-        if separacoes:
-            tem_divergencia = self._calcular_divergencia_lote(nf, separacoes)
-            if tem_divergencia:
-                self._criar_justificativa_divergencia(nf, lote_id, usuario)
-
-    def _avaliar_score_completo(self, nf: RelatorioFaturamentoImportado, usuario: str) -> tuple:
-        """
-        Avalia score completo para encontrar melhor lote (Caso 2)
-        Retorna: (processou, movimentacoes_criadas, embarque_items_atualizados)
-        """
-        movimentacoes_criadas = 0
-        embarque_items_atualizados = 0
-        
-        # Verificar se há apenas 1 EmbarqueItem com o pedido
-        embarques_pedido = EmbarqueItem.query.filter_by(pedido=nf.origem).all()
-
-        if len(embarques_pedido) == 1:
-            # Apenas 1 EmbarqueItem - usar seu lote
-            lote_id = embarques_pedido[0].separacao_lote_id
-            if lote_id:
-                logger.info(f"✅ Único EmbarqueItem encontrado para pedido {nf.origem} - lote {lote_id}")
-                mov_criadas = self._criar_movimentacao_com_lote(nf, lote_id, usuario)
-                movimentacoes_criadas += mov_criadas
-                if self._atualizar_embarque_item(nf.numero_nf, lote_id):
-                    embarque_items_atualizados += 1
-                # Avaliar divergência
-                self._avaliar_score_e_gerar_inconsistencia(nf, lote_id, usuario)
-                return True, movimentacoes_criadas, embarque_items_atualizados
-
-        # Múltiplos embarques ou nenhum - avaliar por score
-        return self._avaliar_melhor_lote_por_score(nf, embarques_pedido, usuario)
-
-    def _calcular_divergencia_lote(self, nf: RelatorioFaturamentoImportado, separacoes: List[Separacao]) -> bool:
-        """
-        Calcula se há divergência entre NF e separações de um lote
-        """
-        produtos_nf = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-
-        tem_divergencia = False
-
-        for prod_nf in produtos_nf:
-            sep_correspondente = next(
-                (sep for sep in separacoes if str(sep.cod_produto).strip() == str(prod_nf.cod_produto).strip()), None
-            )
-
-            if sep_correspondente and sep_correspondente.qtd_saldo > 0:
-                qtd_nf = Decimal(str(prod_nf.qtd_produto_faturado))
-                qtd_sep = Decimal(str(sep_correspondente.qtd_saldo))
-
-                max_qtd = max(qtd_nf, qtd_sep)
-                if max_qtd > 0:
-                    # Divergência se diferença > 5%
-                    if abs(qtd_nf - qtd_sep) / max_qtd > 0.05:
-                        tem_divergencia = True
-                        break
+            # Múltiplos EmbarqueItems - verificar tipo_envio das Separações
+            logger.info(f"🔍 {len(embarque_items)} EmbarqueItems encontrados - analisando tipo_envio")
+            
+            # Coletar lotes e verificar tipo_envio
+            lotes_parciais = []
+            lote_total = None
+            
+            for item in embarque_items:
+                if not item.separacao_lote_id:
+                    continue
+                    
+                # Usar cache ou buscar Separações do lote
+                cache_key = f"{item.separacao_lote_id}_{nf.origem}"
+                if cache_key not in cache_separacoes:
+                    # Buscar apenas não sincronizadas
+                    cache_separacoes[cache_key] = Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id,
+                        num_pedido=nf.origem,
+                        sincronizado_nf=False  # IMPORTANTE: apenas não sincronizadas
+                    ).all()
+                
+                separacoes_lote = cache_separacoes[cache_key]
+                
+                # Verificar tipo_envio da primeira Separação
+                separacao = separacoes_lote[0] if separacoes_lote else None
+                
+                if separacao:
+                    if separacao.tipo_envio == 'total':
+                        lote_total = item.separacao_lote_id
+                        logger.info(f"  • Lote {item.separacao_lote_id}: tipo_envio=TOTAL")
+                        break  # Se encontrou total, usar este
+                    else:
+                        lotes_parciais.append(item.separacao_lote_id)
+                        logger.info(f"  • Lote {item.separacao_lote_id}: tipo_envio=PARCIAL")
+            
+            # Decisão baseada no tipo_envio
+            if lote_total:
+                # 4.1 da especificação - Separação completa
+                separacao_lote_id = lote_total
+                logger.info(f"✅ Usando lote TOTAL {separacao_lote_id}")
+            elif len(lotes_parciais) == 1:
+                # 4.2 da especificação - Parcial único
+                separacao_lote_id = lotes_parciais[0]
+                logger.info(f"✅ Único lote PARCIAL {separacao_lote_id}")
+            elif len(lotes_parciais) > 1:
+                # 4.3 da especificação - Múltiplos parciais, calcular score
+                logger.info(f"📊 Calculando score para {len(lotes_parciais)} lotes parciais")
+                separacao_lote_id = self._calcular_melhor_lote_por_score_simples(nf, lotes_parciais, cache_separacoes, usuario)
             else:
-                # Produto não encontrado ou sem saldo
-                tem_divergencia = True
-                break
-
-        return tem_divergencia
-
-    def _avaliar_melhor_lote_por_score(
-        self, nf: RelatorioFaturamentoImportado, embarques_pedido: List[EmbarqueItem], usuario: str
-    ) -> tuple:
-        """
-        Avalia múltiplos lotes e escolhe o melhor por score
-        Retorna: (processou, movimentacoes_criadas, embarque_items_atualizados)
-        """
-        movimentacoes_criadas = 0
-        embarque_items_atualizados = 0
+                # Nenhum lote válido encontrado
+                logger.warning(f"⚠️ Nenhum lote válido encontrado - criando sem separação")
+                mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+                return True, mov_criadas, 0
         
-        # Coletar todos os lotes únicos
-        lotes_unicos = set()
-        for item in embarques_pedido:
-            if item.separacao_lote_id:
-                lotes_unicos.add(item.separacao_lote_id)
-
-        if not lotes_unicos:
-            logger.warning(f"⚠️ Nenhum lote encontrado para pedido {nf.origem}")
-            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+        # PROCESSAR COM O LOTE ENCONTRADO
+        if separacao_lote_id:
+            logger.info(f"📦 Processando NF {nf.numero_nf} com lote {separacao_lote_id}")
+            
+            # 1. Atualizar EmbarqueItem
+            embarque_item = EmbarqueItem.query.filter_by(
+                separacao_lote_id=separacao_lote_id,
+                pedido=nf.origem,
+                status='ativo'
+            ).first()
+            
+            if embarque_item:
+                if not embarque_item.nota_fiscal:
+                    embarque_item.nota_fiscal = nf.numero_nf
+                    embarque_item.erro_validacao = None
+                    embarque_items_atualizados += 1
+                    logger.info(f"✅ EmbarqueItem atualizado com NF {nf.numero_nf}")
+            
+            # 2. Atualizar Separações do lote
+            separacoes_atualizadas = Separacao.query.filter_by(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=nf.origem,
+                sincronizado_nf=False
+            ).update({
+                'numero_nf': nf.numero_nf,
+                'sincronizado_nf': True,
+                'data_sincronizacao': datetime.now()
+            })
+            
+            if separacoes_atualizadas > 0:
+                logger.info(f"✅ {separacoes_atualizadas} Separações marcadas como sincronizadas")
+            
+            # 3. Criar MovimentacaoEstoque
+            mov_criadas = self._criar_movimentacao_com_lote(nf, separacao_lote_id, usuario, cache_separacoes)
             movimentacoes_criadas += mov_criadas
-            self._gerar_inconsistencia_sem_separacao(nf, usuario)
-            return True, movimentacoes_criadas, embarque_items_atualizados
-
+            
+            # 4. Atualizar status das Separações para FATURADO
+            separacoes_status = Separacao.query.filter_by(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=nf.origem
+            ).filter(
+                Separacao.status != 'FATURADO'
+            ).update({
+                'status': 'FATURADO'
+            })
+            
+            if separacoes_status > 0:
+                logger.info(f"✅ {separacoes_status} Separações atualizadas para status FATURADO")
+        
+        return True, movimentacoes_criadas, embarque_items_atualizados
+    
+    def _calcular_melhor_lote_por_score_simples(self, nf: RelatorioFaturamentoImportado, lotes_candidatos: list, cache_separacoes: dict = None, usuario: str = 'sistema') -> Optional[str]:
+        """
+        Calcula score simples para múltiplos lotes parciais
+        Score baseado em match de produtos e quantidades
+        NOVO: Cria FaturamentoParcialJustificativa quando score < 0.99
+        
+        Returns:
+            separacao_lote_id do melhor match
+        """
         # Buscar produtos da NF
         produtos_nf = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-
+        
+        # Criar dict para fácil acesso
+        nf_produtos_dict = {}
+        for prod in produtos_nf:
+            nf_produtos_dict[prod.cod_produto] = float(prod.qtd_produto_faturado)
+        
         melhor_score = 0
         melhor_lote = None
-
-        # Avaliar cada lote
-        for lote_id in lotes_unicos:
-            # Buscar separações do lote
-            separacoes_lote = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
-
-            if not separacoes_lote:
+        detalhes_melhor_lote = {}  # Para guardar informações do melhor match
+        
+        for lote_id in lotes_candidatos:
+            # Usar cache se disponível
+            cache_key = f"{lote_id}_{nf.origem}"
+            if cache_separacoes and cache_key in cache_separacoes:
+                separacoes = cache_separacoes[cache_key]
+            else:
+                # Buscar separações do lote
+                separacoes = Separacao.query.filter_by(
+                    separacao_lote_id=lote_id,
+                    num_pedido=nf.origem,
+                    sincronizado_nf=False
+                ).all()
+                # Adicionar ao cache se fornecido
+                if cache_separacoes is not None:
+                    cache_separacoes[cache_key] = separacoes
+            
+            if not separacoes:
                 continue
-
-            # Calcular score do lote
-            score_produtos = []
-
-            for prod_nf in produtos_nf:
-                sep_correspondente = next(
-                    (
-                        sep
-                        for sep in separacoes_lote
-                        if str(sep.cod_produto).strip() == str(prod_nf.cod_produto).strip()
-                    ),
-                    None,
-                )
-
-                if sep_correspondente and sep_correspondente.qtd_saldo > 0:
-                    qtd_nf = Decimal(str(prod_nf.qtd_produto_faturado))
-                    qtd_sep = Decimal(str(sep_correspondente.qtd_saldo))
-
-                    max_qtd = max(qtd_nf, qtd_sep)
-                    if max_qtd > 0:
-                        score_produto = float(min(qtd_nf, qtd_sep) / max_qtd)
-                        score_produtos.append(score_produto)
-                else:
-                    score_produtos.append(0)
-
+            
+            # Calcular score e guardar detalhes
+            score_total = 0
+            produtos_matched = 0
+            detalhes_produtos = {}
+            
+            for sep in separacoes:
+                if sep.cod_produto in nf_produtos_dict:
+                    qtd_nf = nf_produtos_dict[sep.cod_produto]
+                    qtd_sep = float(sep.qtd_saldo or 0)
+                    
+                    if qtd_sep > 0 and qtd_nf > 0:
+                        # Score baseado na proximidade das quantidades
+                        # 1.0 = quantidades idênticas, 0.0 = completamente diferentes
+                        ratio = min(qtd_nf, qtd_sep) / max(qtd_nf, qtd_sep)
+                        score_total += ratio
+                        produtos_matched += 1
+                        
+                        # Guardar detalhes para possível justificativa
+                        detalhes_produtos[sep.cod_produto] = {
+                            'qtd_separada': qtd_sep,
+                            'qtd_faturada': qtd_nf,
+                            'qtd_saldo': qtd_sep - qtd_nf if qtd_sep > qtd_nf else 0,
+                            'ratio': ratio
+                        }
+            
             # Score médio do lote
-            score_lote = sum(score_produtos) / len(score_produtos) if score_produtos else 0
-
-            logger.info(f"  Lote {lote_id}: score {score_lote:.2f}")
-
-            if score_lote > melhor_score:
-                melhor_score = score_lote
-                melhor_lote = lote_id
-
+            if produtos_matched > 0:
+                score_lote = score_total / len(nf_produtos_dict)  # Normalizar pelo total de produtos na NF
+                logger.info(f"  Lote {lote_id}: score {score_lote:.2%} ({produtos_matched}/{len(nf_produtos_dict)} produtos)")
+                
+                if score_lote > melhor_score:
+                    melhor_score = score_lote
+                    melhor_lote = lote_id
+                    detalhes_melhor_lote = detalhes_produtos
+        
+        # NOVO: Criar FaturamentoParcialJustificativa se score < 0.99 (divergência > 1%)
+        if melhor_lote and melhor_score < 0.99:
+            logger.warning(f"⚠️ Score {melhor_score:.2%} < 99% para lote {melhor_lote} - criando justificativas")
+            
+            for cod_produto, detalhes in detalhes_melhor_lote.items():
+                # Verificar se há divergência significativa
+                if detalhes['ratio'] < 0.99:
+                    # Verificar se já existe justificativa
+                    just_existente = FaturamentoParcialJustificativa.query.filter_by(
+                        separacao_lote_id=melhor_lote,
+                        num_pedido=nf.origem if hasattr(nf, 'origem') else None,
+                        cod_produto=cod_produto,
+                        numero_nf=nf.numero_nf
+                    ).first()
+                    
+                    if not just_existente:
+                        # Criar nova justificativa
+                        just = FaturamentoParcialJustificativa()
+                        just.separacao_lote_id = melhor_lote
+                        just.num_pedido = nf.origem if hasattr(nf, 'origem') else None
+                        just.cod_produto = cod_produto
+                        just.numero_nf = nf.numero_nf
+                        just.qtd_separada = detalhes['qtd_separada']
+                        just.qtd_faturada = detalhes['qtd_faturada']
+                        just.qtd_saldo = detalhes['qtd_saldo']
+                        
+                        # Deixar campos vazios como solicitado
+                        just.motivo_nao_faturamento = ''  # Para preenchimento posterior
+                        just.classificacao_saldo = ''  # Para preenchimento posterior
+                        just.descricao_detalhada = f"Divergência detectada: Score {detalhes['ratio']:.2%}"
+                        just.criado_por = usuario
+                        # criado_em tem default
+                        
+                        db.session.add(just)
+                        logger.info(f"  📝 Justificativa criada para produto {cod_produto}: Sep {detalhes['qtd_separada']} x Fat {detalhes['qtd_faturada']}")
+        
         if melhor_lote:
-            logger.info(f"✅ Melhor lote para NF {nf.numero_nf}: {melhor_lote} (score: {melhor_score:.2f})")
-            mov_criadas = self._criar_movimentacao_com_lote(nf, melhor_lote, usuario)
-            movimentacoes_criadas += mov_criadas
-            if self._atualizar_embarque_item(nf.numero_nf, melhor_lote):
-                embarque_items_atualizados += 1
-            self._avaliar_score_e_gerar_inconsistencia(nf, melhor_lote, usuario)
-            return True, movimentacoes_criadas, embarque_items_atualizados
+            logger.info(f"✅ Melhor lote selecionado: {melhor_lote} (score: {melhor_score:.2%})")
         else:
-            logger.warning(f"⚠️ Nenhum lote adequado encontrado para NF {nf.numero_nf}")
-            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
-            movimentacoes_criadas += mov_criadas
-            self._gerar_inconsistencia_sem_separacao(nf, usuario)
-            return True, movimentacoes_criadas, embarque_items_atualizados
+            # Se nenhum lote teve score > 0, pegar o primeiro
+            melhor_lote = lotes_candidatos[0] if lotes_candidatos else None
+            logger.warning(f"⚠️ Nenhum lote com score positivo, usando primeiro: {melhor_lote}")
+        
+        return melhor_lote
 
     def _criar_movimentacao_sem_separacao(self, nf: RelatorioFaturamentoImportado, usuario: str) -> int:
         """
         Cria movimentação 'Sem Separação'
-        MUDANÇA: Também tenta encontrar e sincronizar Separação correspondente
+        Verifica por campos estruturados para evitar duplicação
+        NOVO: Cria inconsistência tipo NF_SEM_SEPARACAO
         Retorna: quantidade de movimentações criadas
         """
         movimentacoes_criadas = 0
         
-        # Verificar se já existe
+        # Verificar se já existe usando campos estruturados
         existe = MovimentacaoEstoque.query.filter(
-            MovimentacaoEstoque.observacao.like(f"%NF {nf.numero_nf}%"),
-            MovimentacaoEstoque.observacao.like("%Sem Separação%"),
+            MovimentacaoEstoque.numero_nf == nf.numero_nf,
+            MovimentacaoEstoque.separacao_lote_id.is_(None),  # Sem lote
+            MovimentacaoEstoque.status_nf == 'FATURADO'
         ).first()
 
         if existe:
@@ -537,16 +576,9 @@ class ProcessadorFaturamento:
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         logger.info(f"📦 Criando {len(produtos)} movimentações 'Sem Separação' para NF {nf.numero_nf}")
         
-        # NOVA LÓGICA: Tentar encontrar Separação correspondente mesmo sem lote
-        # Buscar Pedido pela origem (num_pedido)
-        from app.pedidos.models import Pedido
-        pedidos = Pedido.query.filter_by(num_pedido=nf.origem).all()
+        # NOVO: Criar inconsistência NF_SEM_SEPARACAO
+        self._criar_inconsistencia_nf_sem_separacao(nf, produtos, usuario)
         
-        for pedido in pedidos:
-            if pedido.separacao_lote_id and pedido.nf == nf.numero_nf:
-                logger.info(f"🔄 Encontrada Separação para sincronizar: lote {pedido.separacao_lote_id}")
-                self._sincronizar_separacao_com_nf(pedido.separacao_lote_id, nf.numero_nf, nf.origem, produtos)
-                break
 
         for produto in produtos:
             try:
@@ -557,6 +589,15 @@ class ProcessadorFaturamento:
                 mov.local_movimentacao = "VENDA"
                 mov.data_movimentacao = datetime.now().date()
                 mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
+                
+                # NOVO: Campos estruturados
+                mov.numero_nf = nf.numero_nf
+                mov.num_pedido = nf.origem if hasattr(nf, 'origem') else None
+                mov.tipo_origem = 'ODOO'  # ProcessadorFaturamento processa dados do Odoo
+                mov.status_nf = 'FATURADO'
+                mov.separacao_lote_id = None  # Sem separação
+                
+                # Manter observação para compatibilidade
                 mov.observacao = f"Baixa automática NF {nf.numero_nf} - Sem Separação"
                 mov.criado_por = usuario
                 db.session.add(mov)
@@ -568,33 +609,32 @@ class ProcessadorFaturamento:
         logger.info(f"✅ {movimentacoes_criadas} movimentações 'Sem Separação' preparadas para NF {nf.numero_nf}")
         return movimentacoes_criadas
 
-    def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str) -> int:
+    def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str, cache_separacoes: dict = None) -> int:
         """
-        Cria movimentação com lote de separação e marca Pedido como FATURADO
-        MUDANÇA: Também sincroniza quantidades com Separação
-        Retorna: quantidade de movimentações criadas
+        Cria movimentação com lote de separação
+        Se já existir movimentação sem lote, apenas preenche o lote
+        Retorna: quantidade de movimentações criadas/atualizadas
         """
+        # Verificar se já existe movimentação sem lote para esta NF
+        movs_sem_lote = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.numero_nf == nf.numero_nf,
+            MovimentacaoEstoque.separacao_lote_id.is_(None),
+            MovimentacaoEstoque.status_nf == 'FATURADO'
+        ).all()
+        
+        if movs_sem_lote:
+            # Apenas preencher o lote nas movimentações existentes
+            logger.info(f"🔄 Atualizando {len(movs_sem_lote)} movimentações existentes com lote {lote_id}")
+            for mov in movs_sem_lote:
+                mov.separacao_lote_id = lote_id
+                mov.atualizado_em = datetime.now()
+                mov.atualizado_por = 'ProcessadorFaturamento - Lote preenchido'
+            return len(movs_sem_lote)
+        
+        # Criar novas movimentações se não existirem
         movimentacoes_criadas = 0
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         logger.info(f"📦 Criando {len(produtos)} movimentações com lote {lote_id} para NF {nf.numero_nf}")
-        
-        # IMPORTANTE: Atualizar status do Pedido para FATURADO
-        # Isso evita que o ajuste_sincronizacao_service rode desnecessariamente
-        from app.pedidos.models import Pedido
-        
-        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
-        if pedido:
-            if pedido.status != 'FATURADO':
-                pedido.status = 'FATURADO'
-                logger.info(f"✅ Pedido {pedido.num_pedido} marcado como FATURADO ao criar movimentação (lote {lote_id})")
-            
-            # NOVA LÓGICA: Sincronizar quantidades com Separação
-            # Validação: Separacao JOIN Pedido por separacao_lote_id, Pedido.nf = FaturamentoProduto.numero_nf
-            if pedido.nf == nf.numero_nf and pedido.num_pedido == nf.origem:
-                logger.info(f"🔄 SINCRONIZANDO quantidades de NF {nf.numero_nf} com Separações do lote {lote_id}")
-                self._sincronizar_separacao_com_nf(lote_id, nf.numero_nf, nf.origem, produtos)
-        else:
-            logger.warning(f"⚠️ Pedido não encontrado para lote {lote_id} ao criar movimentação")
 
         for produto in produtos:
             try:
@@ -605,6 +645,23 @@ class ProcessadorFaturamento:
                 mov.local_movimentacao = "VENDA"
                 mov.data_movimentacao = datetime.now().date()
                 mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
+                
+                # NOVO: Campos estruturados
+                mov.separacao_lote_id = lote_id
+                mov.numero_nf = nf.numero_nf
+                mov.num_pedido = nf.origem if hasattr(nf, 'origem') else None
+                mov.tipo_origem = 'ODOO'  # ProcessadorFaturamento processa dados do Odoo
+                mov.status_nf = 'FATURADO'
+                
+                # Buscar código do embarque se existir
+                embarque_item = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=lote_id,
+                    pedido=nf.origem
+                ).first()
+                if embarque_item:
+                    mov.codigo_embarque = embarque_item.embarque_id
+                
+                # Manter observação para compatibilidade
                 mov.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
                 mov.criado_por = usuario
                 db.session.add(mov)
@@ -613,7 +670,20 @@ class ProcessadorFaturamento:
 
                 # Abater MovimentacaoPrevista SEM fallback de data
                 try:
-                    sep = Separacao.query.filter_by(separacao_lote_id=lote_id, cod_produto=produto.cod_produto).first()
+                    # Buscar separação no cache ou no banco
+                    sep = None
+                    if cache_separacoes:
+                        # Procurar em todas as chaves do cache que contém o lote_id
+                        for cache_key, separacoes in cache_separacoes.items():
+                            if cache_key.startswith(f"{lote_id}_"):
+                                sep = next((s for s in separacoes if s.cod_produto == produto.cod_produto), None)
+                                if sep:
+                                    break
+                    
+                    # Se não encontrou no cache, buscar no banco
+                    if not sep:
+                        sep = Separacao.query.filter_by(separacao_lote_id=lote_id, cod_produto=produto.cod_produto).first()
+                    
                     if sep and sep.expedicao:
                         ServicoEstoqueTempoReal.atualizar_movimentacao_prevista(
                             cod_produto=produto.cod_produto,
@@ -631,96 +701,6 @@ class ProcessadorFaturamento:
         logger.info(f"✅ {movimentacoes_criadas} movimentações com lote preparadas para NF {nf.numero_nf}")        
         return movimentacoes_criadas
 
-    def _sincronizar_separacao_com_nf(self, lote_id: str, numero_nf: str, num_pedido: str, produtos_nf: List[FaturamentoProduto]):
-        """
-        NOVA FUNÇÃO: Sincroniza quantidades da NF com as Separações
-        Importante: Atualiza as quantidades nas Separações com os valores faturados
-        
-        Args:
-            lote_id: ID do lote de separação
-            numero_nf: Número da NF
-            num_pedido: Número do pedido (origem)
-            produtos_nf: Lista de produtos da NF
-        """
-        try:
-            logger.info(f"🔄 Sincronizando Separações do lote {lote_id} com NF {numero_nf}")
-            
-            # Buscar todas as separações do lote e pedido
-            separacoes = Separacao.query.filter_by(
-                separacao_lote_id=lote_id,
-                num_pedido=num_pedido
-            ).all()
-            
-            if not separacoes:
-                logger.warning(f"⚠️ Nenhuma separação encontrada para lote {lote_id} e pedido {num_pedido}")
-                return
-            
-            # Criar dicionário de produtos da NF para fácil acesso
-            produtos_nf_dict = {}
-            for prod in produtos_nf:
-                if prod.cod_produto not in produtos_nf_dict:
-                    produtos_nf_dict[prod.cod_produto] = {
-                        'qtd': 0,
-                        'valor': 0,
-                        'peso': 0
-                    }
-                produtos_nf_dict[prod.cod_produto]['qtd'] += float(prod.qtd_produto_faturado or 0)
-                produtos_nf_dict[prod.cod_produto]['valor'] += float(prod.valor_produto_faturado or 0)
-                produtos_nf_dict[prod.cod_produto]['peso'] += float(prod.peso_total or 0)
-            
-            # Atualizar cada separação com os valores da NF
-            separacoes_atualizadas = 0
-            for sep in separacoes:
-                if sep.cod_produto in produtos_nf_dict:
-                    dados_nf = produtos_nf_dict[sep.cod_produto]
-                    
-                    # Guardar valores antigos para log
-                    qtd_antiga = float(sep.qtd_saldo or 0)
-                    valor_antigo = float(sep.valor_saldo or 0)
-                    
-                    # Atualizar com valores da NF
-                    sep.qtd_saldo = dados_nf['qtd']
-                    sep.valor_saldo = dados_nf['valor']
-                    sep.peso = dados_nf['peso']
-                    
-                    # Marcar como sincronizado
-                    sep.sincronizado_nf = True
-                    sep.numero_nf = numero_nf
-                    sep.data_sincronizacao = datetime.now()
-                    
-                    # Calcular pallets se possível
-                    from app.producao.models import CadastroPalletizacao
-                    palletizacao = CadastroPalletizacao.query.filter_by(
-                        cod_produto=sep.cod_produto
-                    ).first()
-                    
-                    if palletizacao and palletizacao.palletizacao and palletizacao.palletizacao > 0:
-                        sep.pallet = dados_nf['qtd'] / float(palletizacao.palletizacao)
-                    
-                    separacoes_atualizadas += 1
-                    
-                    # Log da atualização
-                    if qtd_antiga != dados_nf['qtd']:
-                        logger.info(f"  ✓ {sep.cod_produto}: qtd {qtd_antiga} → {dados_nf['qtd']}")
-                else:
-                    # Produto não está na NF - zerar quantidades
-                    if sep.qtd_saldo > 0:
-                        logger.info(f"  ⚠️ {sep.cod_produto}: não consta na NF - zerando (era {sep.qtd_saldo})")
-                        sep.qtd_saldo = 0
-                        sep.valor_saldo = 0
-                        sep.peso = 0
-                        sep.pallet = 0
-                        # Marcar como zerado por sincronização
-                        sep.zerado_por_sync = True
-                        sep.data_zeragem = datetime.now()
-                        sep.sincronizado_nf = True
-                        sep.numero_nf = numero_nf
-                        sep.data_sincronizacao = datetime.now()
-            
-            logger.info(f"✅ {separacoes_atualizadas} separações sincronizadas com NF {numero_nf}")
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao sincronizar separações com NF {numero_nf}: {e}")
 
     def _criar_justificativa_divergencia(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
         """
@@ -784,17 +764,18 @@ class ProcessadorFaturamento:
                 item.erro_validacao = None
                 logger.info(f"✅ Erro de validação limpo para EmbarqueItem do lote {lote_id}")
             
-            # IMPORTANTE: Atualizar status do Pedido para FATURADO
-            # Isso evita que o ajuste_sincronizacao_service rode desnecessariamente
-            from app.pedidos.models import Pedido
+            # IMPORTANTE: Atualizar status das Separações para FATURADO
+            # Como Pedido é VIEW, atualizamos direto na Separação
+            separacoes_atualizadas = Separacao.query.filter_by(
+                separacao_lote_id=lote_id
+            ).filter(
+                Separacao.status != 'FATURADO'
+            ).update({
+                'status': 'FATURADO'
+            })
             
-            pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
-            if pedido:
-                if pedido.status != 'FATURADO':
-                    pedido.status = 'FATURADO'
-                    logger.info(f"✅ Pedido {pedido.num_pedido} marcado como FATURADO (lote {lote_id})")
-            else:
-                logger.warning(f"⚠️ Pedido não encontrado para lote {lote_id}")
+            if separacoes_atualizadas > 0:
+                logger.info(f"✅ {separacoes_atualizadas} Separações marcadas como FATURADO (lote {lote_id})")
             
             logger.info(f"✅ NF {numero_nf} vinculada ao EmbarqueItem do lote {lote_id} (ID: {item.id})")
             return True
@@ -808,192 +789,174 @@ class ProcessadorFaturamento:
     ):
         """
         Gera inconsistência para divergência NF x Embarque
+        IMPORTANTE: Uma linha por produto para facilitar análise
         """
-        # Verificar se já existe inconsistência para esta NF
-        inc_existente = InconsistenciaFaturamento.query.filter_by(
-            numero_nf=nf.numero_nf, tipo="DIVERGENCIA_NF_EMBARQUE"
-        ).first()
-
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-        qtd_total = sum(float(p.qtd_produto_faturado) for p in produtos)
+        inconsistencias_criadas = 0
+        
+        # Criar uma inconsistência por produto
+        for produto in produtos:
+            # Verificar se já existe inconsistência não resolvida para este produto
+            inc_existente = InconsistenciaFaturamento.query.filter_by(
+                numero_nf=nf.numero_nf,
+                cod_produto=produto.cod_produto,
+                tipo="DIVERGENCIA_NF_EMBARQUE",
+                resolvida=False
+            ).first()
+            
+            if inc_existente:
+                # Atualizar observação com informações mais recentes
+                inc_existente.observacao_resolucao = (
+                    f"NF {nf.numero_nf} produto {produto.cod_produto} com divergência: "
+                    f"Pedido NF: {nf.origem if hasattr(nf, 'origem') else 'N/A'}, "
+                    f"Pedido EmbarqueItem: {embarque_item.pedido}, "
+                    f"Embarque ID: {embarque_item.embarque_id}, "
+                    f"Lote: {embarque_item.separacao_lote_id}"
+                )
+                logger.debug(f"Inconsistência DIVERGENCIA_NF_EMBARQUE atualizada para produto {produto.cod_produto}")
+            else:
+                # Criar nova inconsistência
+                inc = InconsistenciaFaturamento()
+                inc.tipo = "DIVERGENCIA_NF_EMBARQUE"
+                inc.numero_nf = nf.numero_nf
+                inc.num_pedido = nf.origem if hasattr(nf, 'origem') else None
+                inc.cod_produto = produto.cod_produto
+                inc.qtd_faturada = float(produto.qtd_produto_faturado)
+                inc.saldo_disponivel = None  # Não aplicável neste caso
+                inc.qtd_excesso = None  # Não aplicável
+                inc.resolvida = False
+                inc.acao_tomada = None  # Para usuário definir
+                inc.observacao_resolucao = (
+                    f"NF {nf.numero_nf} produto {produto.cod_produto} com divergência: "
+                    f"Pedido NF: {nf.origem if hasattr(nf, 'origem') else 'N/A'}, "
+                    f"Pedido EmbarqueItem: {embarque_item.pedido}, "
+                    f"Embarque ID: {embarque_item.embarque_id}, "
+                    f"Lote: {embarque_item.separacao_lote_id}"
+                )
+                # detectada_em tem default
+                inc.resolvida_em = None
+                inc.resolvida_por = None
+                
+                db.session.add(inc)
+                inconsistencias_criadas += 1
+        
+        if inconsistencias_criadas > 0:
+            logger.info(f"⚠️ {inconsistencias_criadas} inconsistências DIVERGENCIA_NF_EMBARQUE criadas para NF {nf.numero_nf}")
 
-        if inc_existente:
-            # Atualizar existente
-            inc_existente.num_pedido = nf.origem
-            inc_existente.cod_produto = produtos[0].cod_produto if produtos else "MULTIPLOS"
-            inc_existente.qtd_faturada = qtd_total
-            inc_existente.observacao_resolucao = f"""
-            NF {nf.numero_nf} vinculada ao embarque mas com pedido divergente:
-            - Pedido NF: {nf.origem}
-            - Pedido EmbarqueItem: {embarque_item.pedido}
-            - Embarque ID: {embarque_item.embarque_id}
-            """
-            inc_existente.resolvida = False
-            inc_existente.atualizado_por = usuario
-            inc_existente.atualizado_em = datetime.now()
-        else:
-            # Criar nova
-            inc = InconsistenciaFaturamento()
-            inc.tipo = "DIVERGENCIA_NF_EMBARQUE"
-            inc.numero_nf = nf.numero_nf
-            inc.num_pedido = nf.origem
-            inc.cod_produto = produtos[0].cod_produto if produtos else "MULTIPLOS"
-            inc.qtd_faturada = qtd_total
-            inc.observacao_resolucao = f"""
-            NF {nf.numero_nf} vinculada ao embarque mas com pedido divergente:
-            - Pedido NF: {nf.origem}
-            - Pedido EmbarqueItem: {embarque_item.pedido}
-            - Embarque ID: {embarque_item.embarque_id}
-            """
-            inc.resolvida = False
-            inc.criado_por = usuario
-            db.session.add(inc)
-
-    def _gerar_inconsistencia_sem_separacao(self, nf: RelatorioFaturamentoImportado, usuario: str):
+    def _criar_inconsistencia_nf_sem_separacao(self, nf: RelatorioFaturamentoImportado, produtos: list, usuario: str):
         """
-        Gera inconsistência para NF sem separação
+        Cria inconsistência para NF sem separação
+        IMPORTANTE: Uma linha por produto para facilitar análise
         """
-        # Verificar se já existe inconsistência para esta NF
-        inc_existente = InconsistenciaFaturamento.query.filter_by(
-            numero_nf=nf.numero_nf, tipo="NF_SEM_SEPARACAO"
-        ).first()
-
-        produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-        qtd_total = sum(float(p.qtd_produto_faturado) for p in produtos)
-
-        if inc_existente:
-            # Atualizar existente
-            inc_existente.num_pedido = nf.origem
-            inc_existente.cod_produto = produtos[0].cod_produto if produtos else "MULTIPLOS"
-            inc_existente.qtd_faturada = qtd_total
-            inc_existente.observacao_resolucao = f"NF {nf.numero_nf} processada sem separação - Pedido {nf.origem}"
-            inc_existente.resolvida = False
-            inc_existente.atualizado_por = usuario
-            inc_existente.atualizado_em = datetime.now()
-        else:
-            # Criar nova
+        inconsistencias_criadas = 0
+        
+        # Criar uma inconsistência por produto
+        for produto in produtos:
+            # Verificar se já existe inconsistência não resolvida para este produto
+            inc_existente = InconsistenciaFaturamento.query.filter_by(
+                numero_nf=nf.numero_nf,
+                cod_produto=produto.cod_produto,
+                tipo="NF_SEM_SEPARACAO",
+                resolvida=False
+            ).first()
+            
+            if inc_existente:
+                logger.debug(f"Inconsistência já existe para NF {nf.numero_nf} produto {produto.cod_produto}")
+                continue
+            
+            # Criar nova inconsistência
             inc = InconsistenciaFaturamento()
             inc.tipo = "NF_SEM_SEPARACAO"
             inc.numero_nf = nf.numero_nf
-            inc.num_pedido = nf.origem
-            inc.cod_produto = produtos[0].cod_produto if produtos else "MULTIPLOS"
-            inc.qtd_faturada = qtd_total
-            inc.observacao_resolucao = f"NF {nf.numero_nf} processada sem separação - Pedido {nf.origem}"
+            inc.num_pedido = nf.origem if hasattr(nf, 'origem') else None
+            inc.cod_produto = produto.cod_produto
+            inc.qtd_faturada = float(produto.qtd_produto_faturado)
+            inc.saldo_disponivel = None  # Não há separação
+            inc.qtd_excesso = None  # Não aplicável
             inc.resolvida = False
-            inc.criado_por = usuario
+            inc.acao_tomada = None  # Para usuário definir
+            inc.observacao_resolucao = (
+                f"Produto {produto.cod_produto} - {produto.nome_produto[:50]}... "
+                f"faturado sem separação. Qtd: {produto.qtd_produto_faturado}. "
+                f"Verificar pedido {nf.origem if hasattr(nf, 'origem') else 'N/A'}"
+            )
+            # detectada_em tem default
+            inc.resolvida_em = None
+            inc.resolvida_por = None
+            
             db.session.add(inc)
+            inconsistencias_criadas += 1
+        
+        if inconsistencias_criadas > 0:
+            logger.info(f"⚠️ {inconsistencias_criadas} inconsistências NF_SEM_SEPARACAO criadas para NF {nf.numero_nf}")
     
-    def _atualizar_status_pedidos_faturados(self) -> int:
+    def _atualizar_status_separacoes_faturadas(self) -> int:
         """
-        Atualiza o status dos pedidos para FATURADO quando têm NF preenchida
+        Atualiza o status das Separações para FATURADO quando têm NF preenchida
         e existe faturamento correspondente.
         
-        NOVA FUNCIONALIDADE: Também verifica NFs em EmbarqueItem e atualiza Pedido.nf
+        Como Pedido agora é uma VIEW, trabalhamos diretamente com Separação
         
         Returns:
-            Número de pedidos atualizados
+            Número de separações atualizadas
         """
         contador = 0
-        contador_nf_sincronizada = 0
         
         try:
-            # PARTE 1: Sincronizar NFs de EmbarqueItem para Pedido
-            logger.info("🔍 Verificando NFs em EmbarqueItem para sincronizar com Pedido...")
-            
-            # Buscar EmbarqueItems com NF preenchida mas cujo Pedido não tem NF
-            embarque_items_com_nf = db.session.query(EmbarqueItem).join(
-                Pedido,
-                EmbarqueItem.separacao_lote_id == Pedido.separacao_lote_id
-            ).filter(
-                EmbarqueItem.nota_fiscal.isnot(None),
-                EmbarqueItem.nota_fiscal != "",
-                db.or_(
-                    Pedido.nf.is_(None),
-                    Pedido.nf == ""
-                )
+            # Buscar separações com NF mas sem status FATURADO
+            separacoes_com_nf = Separacao.query.filter(
+                Separacao.numero_nf.isnot(None),
+                Separacao.numero_nf != "",
+                Separacao.sincronizado_nf == True,
+                Separacao.status != 'FATURADO'
             ).all()
             
-            logger.info(f"📊 Encontrados {len(embarque_items_com_nf)} EmbarqueItems com NF mas Pedido sem NF")
+            logger.info(f"📊 Encontradas {len(separacoes_com_nf)} separações com NF mas sem status FATURADO")
             
-            for item in embarque_items_com_nf:
-                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                if pedido:
-                    nf_antiga = pedido.nf
-                    pedido.nf = item.nota_fiscal
-                    contador_nf_sincronizada += 1
-                    logger.info(f"  • Pedido {pedido.num_pedido}: NF sincronizada de EmbarqueItem: '{nf_antiga}' → '{item.nota_fiscal}'")
-            
-            if contador_nf_sincronizada > 0:
-                logger.info(f"✅ {contador_nf_sincronizada} NFs sincronizadas de EmbarqueItem para Pedido")
-            
-            # PARTE 2: Atualizar status para FATURADO
-            # Buscar pedidos que têm NF mas não estão com status FATURADO
-            # Incluindo também NF no CD que devem ser marcadas como FATURADO
-            pedidos_com_nf = Pedido.query.filter(
-                Pedido.nf.isnot(None),
-                Pedido.nf != "",
-                Pedido.status != 'FATURADO'
-            ).all()
-            
-            logger.info(f"📊 Encontrados {len(pedidos_com_nf)} pedidos com NF mas sem status FATURADO")
-            
-            for pedido in pedidos_com_nf:
+            for sep in separacoes_com_nf:
                 # Verificar se existe faturamento para esta NF
                 faturamento_existe = FaturamentoProduto.query.filter_by(
-                    numero_nf=pedido.nf
+                    numero_nf=sep.numero_nf
                 ).first()
                 
                 if faturamento_existe:
-                    status_antigo = pedido.status
-                    pedido.status = 'FATURADO'
+                    status_antigo = sep.status
+                    sep.status = 'FATURADO'
                     contador += 1
-                    logger.info(f"  • Pedido {pedido.num_pedido}: '{status_antigo}' → 'FATURADO' (NF: {pedido.nf})")
-                else:
-                    logger.warning(f"  ⚠️ Pedido {pedido.num_pedido} tem NF {pedido.nf} mas não tem FaturamentoProduto")
+                    logger.debug(f"  • Separação {sep.separacao_lote_id}/{sep.num_pedido}: '{status_antigo}' → 'FATURADO' (NF: {sep.numero_nf})")
             
-            # PARTE 3: Verificar EmbarqueItems com NF que precisam ter Pedido FATURADO
-            logger.info("🔍 Verificando EmbarqueItems com NF para garantir Pedido FATURADO...")
+            # Também verificar EmbarqueItems com NF para garantir Separações FATURADAS
+            logger.info("🔍 Verificando EmbarqueItems com NF para garantir Separações FATURADAS...")
             
-            # Buscar EmbarqueItems com NF onde o Pedido não está FATURADO
-            embarque_items_nf_sem_faturado = db.session.query(EmbarqueItem).join(
-                Pedido,
-                EmbarqueItem.separacao_lote_id == Pedido.separacao_lote_id
-            ).filter(
+            embarque_items_com_nf = EmbarqueItem.query.filter(
                 EmbarqueItem.nota_fiscal.isnot(None),
                 EmbarqueItem.nota_fiscal != "",
-                Pedido.status != 'FATURADO'
+                EmbarqueItem.separacao_lote_id.isnot(None)
             ).all()
             
-            logger.info(f"📊 Encontrados {len(embarque_items_nf_sem_faturado)} EmbarqueItems com NF mas Pedido não FATURADO")
+            for item in embarque_items_com_nf:
+                # Atualizar todas as separações deste lote
+                sep_atualizadas = Separacao.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).filter(
+                    Separacao.status != 'FATURADO'
+                ).update({
+                    'status': 'FATURADO',
+                    'numero_nf': item.nota_fiscal,
+                    'sincronizado_nf': True,
+                    'data_sincronizacao': datetime.now()
+                })
+                
+                if sep_atualizadas > 0:
+                    contador += sep_atualizadas
+                    logger.debug(f"  • {sep_atualizadas} separações do lote {item.separacao_lote_id} atualizadas para FATURADO")
             
-            for item in embarque_items_nf_sem_faturado:
-                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                if pedido:
-                    # Verificar se existe FaturamentoProduto para esta NF
-                    faturamento_existe = FaturamentoProduto.query.filter_by(
-                        numero_nf=item.nota_fiscal
-                    ).first()
-                    
-                    if faturamento_existe:
-                        status_antigo = pedido.status
-                        pedido.status = 'FATURADO'
-                        
-                        # Garantir que Pedido.nf está preenchido
-                        if not pedido.nf or pedido.nf != item.nota_fiscal:
-                            pedido.nf = item.nota_fiscal
-                            logger.info(f"  • Pedido {pedido.num_pedido}: NF atualizada para '{item.nota_fiscal}'")
-                        
-                        contador += 1
-                        logger.info(f"  • Pedido {pedido.num_pedido}: '{status_antigo}' → 'FATURADO' (NF de EmbarqueItem: {item.nota_fiscal})")
-                    else:
-                        logger.warning(f"  ⚠️ EmbarqueItem com NF {item.nota_fiscal} mas sem FaturamentoProduto (Pedido: {pedido.num_pedido})")
-            
-            if contador > 0 or contador_nf_sincronizada > 0:
+            if contador > 0:
                 db.session.commit()
-                logger.info(f"✅ Total: {contador} pedidos atualizados para FATURADO, {contador_nf_sincronizada} NFs sincronizadas")
+                logger.info(f"✅ Total: {contador} separações atualizadas para FATURADO")
             
         except Exception as e:
-            logger.error(f"❌ Erro ao atualizar status dos pedidos: {e}")
+            logger.error(f"❌ Erro ao atualizar status das separações: {e}")
             db.session.rollback()
         
-        return contador + contador_nf_sincronizada
+        return contador

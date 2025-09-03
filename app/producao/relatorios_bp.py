@@ -7,10 +7,9 @@ from flask import Blueprint, jsonify, send_file
 from datetime import datetime, date, timedelta
 import pandas as pd
 import io
-from sqlalchemy import func
-from app import db
 from app.estoque.models import UnificacaoCodigos
-from app.estoque.models_tempo_real import EstoqueTempoReal, MovimentacaoPrevista
+# MIGRADO: EstoqueTempoReal e MovimentacaoPrevista -> ServicoEstoqueSimples (02/09/2025)
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.producao.models import CadastroPalletizacao
 import logging
 
@@ -26,18 +25,19 @@ def exportar_relatorios_producao():
         # Preparar dados de estoque
         dados_estoque = []
         
-        # Query de estoque em tempo real
-        estoques = EstoqueTempoReal.query.order_by(EstoqueTempoReal.cod_produto).all()
+        # Obter estoque completo usando novo serviço
+        estoques_dict = ServicoEstoqueSimples.exportar_estoque_completo()
         
         # Buscar informações de palletização
         palletizacoes = {p.cod_produto: p for p in CadastroPalletizacao.query.all()}
         
-        for estoque in estoques:
+        # Converter dados do serviço para formato do relatório
+        for cod_produto, estoque_info in estoques_dict.items():
             # Verificar unificação de códigos
             codigos_unificados = []
             try:
                 # Converter código do produto para inteiro se possível
-                cod_produto_int = int(estoque.cod_produto) if estoque.cod_produto.isdigit() else None
+                cod_produto_int = int(cod_produto) if cod_produto.isdigit() else None
                 if cod_produto_int:
                     # Buscar códigos unificados onde este produto é o destino
                     unificacoes = UnificacaoCodigos.query.filter_by(
@@ -50,20 +50,35 @@ def exportar_relatorios_producao():
                 pass
             
             # Buscar informações de palletização
-            pallet_info = palletizacoes.get(estoque.cod_produto, None)
+            pallet_info = palletizacoes.get(cod_produto, None)
+            
+            # Calcular menor estoque D+7 se houver projeção
+            menor_estoque_d7 = 0
+            data_ruptura = None
+            if estoque_info.get('projecao'):
+                # Pegar os primeiros 7 dias da projeção
+                projecao_7d = estoque_info['projecao'][:7]
+                if projecao_7d:
+                    estoques_7d = [dia.get('saldo_final', 0) for dia in projecao_7d]
+                    menor_estoque_d7 = min(estoques_7d)
+                    # Encontrar dia de ruptura (primeiro dia com estoque <= 0)
+                    for dia in estoque_info['projecao']:
+                        if dia.get('saldo_final', 0) <= 0:
+                            data_ruptura = dia.get('data')
+                            break
             
             dados_estoque.append({
-                'Código Produto': estoque.cod_produto,
-                'Nome Produto': estoque.nome_produto,
-                'Saldo Atual': float(estoque.saldo_atual or 0),
-                'Menor Estoque D+7': float(estoque.menor_estoque_d7 or 0),
-                'Data Ruptura': estoque.dia_ruptura.strftime('%d/%m/%Y') if estoque.dia_ruptura else '',
+                'Código Produto': cod_produto,
+                'Nome Produto': estoque_info.get('nome_produto', ''),
+                'Saldo Atual': float(estoque_info.get('estoque_atual', 0)),
+                'Menor Estoque D+7': float(menor_estoque_d7),
+                'Data Ruptura': data_ruptura.strftime('%d/%m/%Y') if data_ruptura else '',
                 'Códigos Unificados': ', '.join(codigos_unificados) if codigos_unificados else '',
                 'Peso Bruto (kg)': float(pallet_info.peso_bruto) if pallet_info else 0,
                 'Palletização': float(pallet_info.palletizacao) if pallet_info else 0,
                 'Categoria': pallet_info.categoria_produto if pallet_info else '',
                 'Subcategoria': pallet_info.subcategoria if pallet_info else '',
-                'Última Atualização': estoque.atualizado_em.strftime('%d/%m/%Y %H:%M') if estoque.atualizado_em else ''
+                'Última Atualização': datetime.now().strftime('%d/%m/%Y %H:%M')
             })
         
         df_estoque = pd.DataFrame(dados_estoque)
@@ -71,51 +86,49 @@ def exportar_relatorios_producao():
         # Preparar dados de movimentações previstas
         dados_movimentacoes = []
         
-        # Query de movimentações previstas para os próximos 30 dias
+        # Buscar movimentações previstas usando o novo serviço
         data_limite = date.today() + timedelta(days=30)
         
-        query_mov = MovimentacaoPrevista.query.filter(
-            MovimentacaoPrevista.data_prevista <= data_limite
-        ).order_by(
-            MovimentacaoPrevista.data_prevista,
-            MovimentacaoPrevista.cod_produto
-        )
-        
-        movimentacoes = query_mov.all()
+        # Obter todas as movimentações para os próximos 30 dias
+        # Vamos iterar pelos produtos que temos no estoque
+        for cod_produto, estoque_info in estoques_dict.items():
+            nome_produto = estoque_info.get('nome_produto', cod_produto)
+            
+            # Se houver projeção, usar os dados dela
+            if estoque_info.get('projecao'):
+                for dia in estoque_info['projecao'][:30]:  # Limitar a 30 dias
+                    data_prevista = dia.get('data')
+                    if not data_prevista:
+                        continue
+                        
+                    # Adicionar entrada se houver
+                    entrada_val = float(dia.get('entrada', 0))
+                    if entrada_val > 0:
+                        dados_movimentacoes.append({
+                            'Data Prevista': data_prevista.strftime('%d/%m/%Y') if hasattr(data_prevista, 'strftime') else str(data_prevista),
+                            'Código Produto': cod_produto,
+                            'Nome Produto': nome_produto,
+                            'Tipo Movimento': 'Entrada',
+                            'Quantidade': entrada_val,
+                            'Observações': 'Produção/Entrada prevista'
+                        })
+                    
+                    # Adicionar saída se houver
+                    saida_val = float(dia.get('saida', 0))
+                    if saida_val > 0:
+                        dados_movimentacoes.append({
+                            'Data Prevista': data_prevista.strftime('%d/%m/%Y') if hasattr(data_prevista, 'strftime') else str(data_prevista),
+                            'Código Produto': cod_produto,
+                            'Nome Produto': nome_produto,
+                            'Tipo Movimento': 'Saída',
+                            'Quantidade': saida_val,
+                            'Observações': 'Separação/Expedição prevista'
+                        })
         
         # Debug: verificar se há entradas
-        logger.info(f"Total de movimentações encontradas: {len(movimentacoes)}")
-        for m in movimentacoes[:5]:  # Mostrar primeiras 5 para debug
-            logger.info(f"Produto {m.cod_produto} em {m.data_prevista}: entrada={m.entrada_prevista}, saída={m.saida_prevista}")
-        
-        for mov in movimentacoes:
-            # Buscar nome do produto do EstoqueTempoReal
-            produto = EstoqueTempoReal.query.filter_by(cod_produto=mov.cod_produto).first()
-            nome_produto = produto.nome_produto if produto else mov.cod_produto
-            
-            # Adicionar entrada se houver
-            entrada_val = float(mov.entrada_prevista) if mov.entrada_prevista else 0
-            if entrada_val > 0:
-                dados_movimentacoes.append({
-                    'Data Prevista': mov.data_prevista.strftime('%d/%m/%Y') if mov.data_prevista else '',
-                    'Código Produto': mov.cod_produto,
-                    'Nome Produto': nome_produto,
-                    'Tipo Movimento': 'Entrada',
-                    'Quantidade': entrada_val,
-                    'Observações': 'Produção/Entrada prevista'
-                })
-            
-            # Adicionar saída se houver
-            saida_val = float(mov.saida_prevista) if mov.saida_prevista else 0
-            if saida_val > 0:
-                dados_movimentacoes.append({
-                    'Data Prevista': mov.data_prevista.strftime('%d/%m/%Y') if mov.data_prevista else '',
-                    'Código Produto': mov.cod_produto,
-                    'Nome Produto': nome_produto,
-                    'Tipo Movimento': 'Saída',
-                    'Quantidade': saida_val,
-                    'Observações': 'Separação/Expedição prevista'
-                })
+        logger.info(f"Total de movimentações encontradas: {len(dados_movimentacoes)}")
+        for m in dados_movimentacoes[:5]:  # Mostrar primeiras 5 para debug
+            logger.info(f"Produto {m['Código Produto']} em {m['Data Prevista']}: {m['Tipo Movimento']}={m['Quantidade']}")
         
         df_movimentacoes = pd.DataFrame(dados_movimentacoes)
         

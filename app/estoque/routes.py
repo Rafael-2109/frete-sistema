@@ -2,10 +2,12 @@ import pandas as pd
 from flask import render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos, SaldoEstoque
-# Importar novo sistema de estoque em tempo real
-# APIEstoqueTempoReal não é usada diretamente neste arquivo
-from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
+# MIGRADO: SaldoEstoque -> SaldoEstoqueCompativel (02/09/2025)
+from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos
+# from app.estoque.models import SaldoEstoque
+from app.estoque.services.compatibility_layer import SaldoEstoque
+# MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
 from app.utils.timezone import agora_brasil
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import logging
@@ -1335,6 +1337,9 @@ def saldo_estoque():
                              linhas_producao=linhas_producao)
         
     except Exception as e:
+        import traceback
+        logger.error(f"Erro ao carregar saldo de estoque: {str(e)}")
+        logger.error(f"Traceback completo: {traceback.format_exc()}")
         flash(f'❌ Erro ao carregar saldo de estoque: {str(e)}', 'error')
         return render_template('estoque/saldo_estoque.html',
                              produtos=[],
@@ -1346,7 +1351,16 @@ def saldo_estoque():
                              total_paginas=1,
                              limite=50,
                              codigo_produto='',
-                             status_ruptura='')
+                             status_ruptura='',
+                             # Adicionar campos que faltavam
+                             categoria_filtro='',
+                             embalagem_filtro='',
+                             materia_prima_filtro='',
+                             linha_producao_filtro='',
+                             categorias=[],
+                             embalagens=[],
+                             materias_primas=[],
+                             linhas_producao=[])
 
 @estoque_bp.route('/saldo-estoque/api/produto/<cod_produto>')
 @login_required
@@ -1524,7 +1538,7 @@ def exportar_dados_movimentacoes():
             dados.append({
                 'ID': mov.id,
                 'Data': mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '',
-                'Código Produto': mov.cod_produto,
+                'Código Produto': str(mov.cod_produto),
                 'Descrição': mov.nome_produto,
                 'Tipo': mov.tipo_movimentacao,
                 'Quantidade': formatar_valor_brasileiro(mov.qtd_movimentacao),

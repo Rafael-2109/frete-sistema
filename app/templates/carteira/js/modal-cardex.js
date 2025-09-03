@@ -212,6 +212,12 @@ class ModalCardex {
         console.log('   - Data com correção:', new Date(cardex[0]?.data + 'T12:00:00'));
         console.log('   - Data local:', new Date().toLocaleDateString('pt-BR'));
         console.log('   - Timezone offset:', new Date().getTimezoneOffset());
+        
+        // Debug dos valores de estoque_final
+        console.log('📊 DEBUG - Valores de estoque_final:');
+        cardex.slice(0, 5).forEach((dia, idx) => {
+            console.log(`   Dia ${idx}: estoque_final = ${dia.estoque_final} (tipo: ${typeof dia.estoque_final})`);
+        });
 
         return cardex.map((dia, index) => {
             const statusClass = this.getStatusClasseCardex(dia);
@@ -223,7 +229,7 @@ class ModalCardex {
                     <td>${dataFormatada}</td>
                     <td class="text-end">${this.formatarQuantidade(dia.estoque_inicial)}</td>
                     <td class="text-end text-danger">
-                        ${dia.saidas ? `-${this.formatarQuantidade(dia.saidas)}` : '-'}
+                        ${dia.saidas !== undefined && dia.saidas !== null ? `-${this.formatarQuantidade(dia.saidas)}` : '-'}
                     </td>
                     <td class="text-end">
                         <span class="badge ${dia.saldo <= 0 ? 'bg-danger' : 'bg-secondary'}">
@@ -231,7 +237,7 @@ class ModalCardex {
                         </span>
                     </td>
                     <td class="text-end text-success">
-                        ${dia.producao ? `+${this.formatarQuantidade(dia.producao)}` : '-'}
+                        ${dia.producao !== undefined && dia.producao !== null ? `+${this.formatarQuantidade(dia.producao)}` : '-'}
                     </td>
                     <td class="text-end">
                         <strong class="${dia.estoque_final <= 0 ? 'text-danger' : 'text-success'}">
@@ -374,8 +380,17 @@ class ModalCardex {
 
     // Utilitários
     formatarQuantidade(qtd) {
-        if (!qtd) return '0';
-        return parseFloat(qtd).toLocaleString('pt-BR', {
+        // Tratar valores null, undefined ou string vazia
+        if (qtd === null || qtd === undefined || qtd === '') return '0';
+        
+        // Converter para número e formatar
+        const numero = parseFloat(qtd);
+        
+        // Se não for um número válido, retornar '0'
+        if (isNaN(numero)) return '0';
+        
+        // Formatar o número (incluindo negativos e zero)
+        return numero.toLocaleString('pt-BR', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         });

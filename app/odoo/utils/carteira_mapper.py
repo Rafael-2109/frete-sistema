@@ -49,7 +49,7 @@ class CarteiraMapper:
             
             # 📊 QUANTIDADES E VALORES
             'qtd_produto_pedido': 'product_uom_qty',
-            'qtd_saldo_produto_pedido': 'qty_saldo',
+            # 'qtd_saldo_produto_pedido': 'qty_saldo',  # REMOVIDO - Agora é calculado, não importado
             'qtd_cancelada_produto_pedido': 'qty_cancelado',
             'preco_produto_pedido': 'price_unit',
             

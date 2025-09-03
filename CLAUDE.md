@@ -41,6 +41,12 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nível 
 
 ## SE NÃO TIVER CERTEZA, NÃO ALTERE E PERGUNTE
 
+## 🔴 LEIA TAMBÉM: 
+- **REGRAS_NEGOCIO.md** - Regras de negócio e comportamento do sistema
+- **ESPECIFICACAO_SINCRONIZACAO_ODOO.md** - Processo de sincronização com Odoo (futuro)
+- **FLUXO_SINCRONIZACAO_NF.md** - Fluxogramas do processo de NF (futuro)
+- **CARD_SEPARACAO.md** - Detalhamento da função do Card de Separação e Separação Compacta na Carteira Agrupada
+
 Este arquivo contém os nomes corretos dos campos de todos os modelos para evitar erros como `data_expedicao_pedido` (❌ INCORRETO) em vez de `expedicao` (✅ CORRETO).
 
 
@@ -59,12 +65,12 @@ Este arquivo contém os nomes corretos dos campos de todos os modelos para evita
 # CAMPOS CORRETOS - SEMPRE USAR ESTES NOMES:
 expedicao = db.Column(db.Date, nullable=True)                    # ✅ Data prevista expedição
 agendamento = db.Column(db.Date, nullable=True)                  # ✅ Data agendamento
-hora_agendamento = db.Column(db.Time, nullable=True)             # ✅ Hora agendamento
 protocolo = db.Column(db.String(50), nullable=True)             # ✅ Protocolo agendamento
 agendamento_confirmado = db.Column(db.Boolean, default=False)    # ✅ Status confirmação
 data_entrega_pedido = db.Column(db.Date, nullable=True)          # ✅ Data entrega prevista
 data_entrega = db.Column(db.Date, nullable=True)                 # ✅ Data prevista entrega
 observ_ped_1 = db.Column(db.Text, nullable=True)                # ✅ Observações
+hora_agendamento = db.Column(db.Time, nullable=True)             # ⚠️ NÃO USADO - ignorar
 
 # ❌ CAMPOS QUE NÃO EXISTEM - NUNCA USAR:
 # data_expedicao_pedido ❌
@@ -73,17 +79,17 @@ observ_ped_1 = db.Column(db.Text, nullable=True)                # ✅ Observaç�
 
 ### 📊 Campos de Quantidades e Valores
 ```python
-# CAMPOS CORRETOS:
+# CAMPOS CORRETOS E USADOS:
 qtd_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False)       # ✅ Quantidade original
 qtd_saldo_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False) # ✅ Saldo disponível
 qtd_cancelada_produto_pedido = db.Column(db.Numeric(15, 3), default=0)  # ✅ Quantidade cancelada
 preco_produto_pedido = db.Column(db.Numeric(15, 2), nullable=True)      # ✅ Preço unitário
 
-# Campos calculados de carga/lote:
-qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)         # ✅ Qtd no lote separação
-valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)       # ✅ Valor no lote
-peso = db.Column(db.Numeric(15, 3), nullable=True)              # ✅ Peso no lote
-pallet = db.Column(db.Numeric(15, 3), nullable=True)            # ✅ Pallets no lote
+# ⚠️ CAMPOS NÃO USADOS (podem ser removidos):
+qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)         # ⚠️ NÃO USADO
+valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)       # ⚠️ NÃO USADO
+peso = db.Column(db.Numeric(15, 3), nullable=True)              # ⚠️ NÃO USADO
+pallet = db.Column(db.Numeric(15, 3), nullable=True)            # ⚠️ NÃO USADO
 ```
 
 ### 🆔 Campos de Identificação
@@ -124,20 +130,27 @@ telefone_endereco_ent = db.Column(db.String(20), nullable=True) # ✅ Telefone
 
 ### 📈 Campos de Estoque e Projeção
 ```python
-# CAMPOS CORRETOS:
-estoque = db.Column(db.Numeric(15, 3), nullable=True)           # ✅ Estoque inicial/atual D0
+# CAMPOS USADOS:
 saldo_estoque_pedido = db.Column(db.Numeric(15, 3), nullable=True) # ✅ Estoque na data expedição
 menor_estoque_produto_d7 = db.Column(db.Numeric(15, 3), nullable=True) # ✅ Previsão ruptura 7 dias
 
-# Projeção D0-D28 (28 campos de estoque futuro):
-estoque_d0 = db.Column(db.Numeric(15, 3), nullable=True)        # ✅ Estoque final D0
-estoque_d1 = db.Column(db.Numeric(15, 3), nullable=True)        # ✅ Estoque final D1
-# ... até estoque_d28
+# ⚠️ CAMPOS NÃO USADOS (podem ser removidos):
+estoque = db.Column(db.Numeric(15, 3), nullable=True)           # ⚠️ NÃO USADO
+# Projeção D0-D28 (28 campos):
+estoque_d0 = db.Column(db.Numeric(15, 3), nullable=True)        # ⚠️ NÃO USADO
+estoque_d1 = db.Column(db.Numeric(15, 3), nullable=True)        # ⚠️ NÃO USADO
+# ... até estoque_d28 - TODOS NÃO USADOS
 ```
 
 ---
 
 ## 🚛 Separacao (app/separacao/models.py)
+### Única fonte da verdade para projetar as saidas de estoque através de sincronizado_nf=False
+
+### ⚠️ REGRA CRÍTICA: sincronizado_nf
+- **sincronizado_nf=False**: Item SEMPRE aparece na carteira e SEMPRE é projetado no estoque
+- **sincronizado_nf=True**: Foi faturado (tem NF), NÃO aparece na carteira, NÃO projeta estoque
+
 
 ### 📋 Campos Principais
 ```python
@@ -149,6 +162,7 @@ qtd_saldo = db.Column(db.Float, nullable=True)                  # ✅ Quantidade
 valor_saldo = db.Column(db.Float, nullable=True)                # ✅ Valor separado
 peso = db.Column(db.Float, nullable=True)                       # ✅ Peso
 pallet = db.Column(db.Float, nullable=True)                     # ✅ Pallet
+numero_nf = db.Column(db.String(20), nullable=True)             # ✅ NF associada quando sincronizada
 
 # Campos de cliente:
 cnpj_cpf = db.Column(db.String(20), nullable=True)              # ✅ CNPJ cliente
@@ -170,13 +184,23 @@ roteirizacao = db.Column(db.String(255), nullable=True)         # ✅ Transporta
 rota = db.Column(db.String(50), nullable=True)                  # ✅ Rota
 sub_rota = db.Column(db.String(50), nullable=True)              # ✅ Sub-rota
 
-# ❌ NOTA IMPORTANTE: Separacao NÃO tem campo 'status'
-# O status vem de Pedido.status via JOIN!
-```
+# 🆕 NOVOS CAMPOS PARA SUBSTITUIR PEDIDO E PRESEPARACAOITEM
+status = db.Column(db.String(20), default='ABERTO', nullable=False, index=True)  # Valores comuns de status: 'PREVISAO', 'ABERTO', 'COTADO', 'EMBARCADO', 'FATURADO', 'NF no CD'
+nf_cd = db.Column(db.Boolean, default=False, nullable=False)  # NF voltou para o CD
+sincronizado_nf = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi sincronizado com NF, gatilho principal para projetar saidas de estoque
 
----
 
-## 📦 Pedido (app/pedidos/models.py)
+
+## 📦 Pedido (app/pedidos/models.py) 
+### Modelo Pedido que agora é uma VIEW agregando dados de Separacao
+
+### ⚠️ REGRA DA VIEW:
+- **IGNORA**: Separacao com status='PREVISAO' 
+- **AGREGA**: Por separacao_lote_id e num_pedido
+- **INCLUI**: Apenas status != 'PREVISAO'
+  
+    __tablename__ = 'pedidos'
+    __table_args__ = {'info': {'is_view': True}}  # Marca como VIEW para SQLAlchemy
 
 ### 📋 Campos Principais
 ```python
@@ -225,8 +249,11 @@ usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))     # ✅ ID us
 ```
 
 ---
-
 ## 🏗️ PreSeparacaoItem (app/carteira/models.py)
+
+### ⛔ DEPRECATED - NÃO USAR!
+### SEMPRE substituir por Separacao com status='PREVISAO'
+Agora usamos Separacao com status='PREVISAO' para fazer tudo que PreSeparacaoItem fazia e melhor
 
 ### 📋 Campos Principais
 ```python
@@ -403,6 +430,56 @@ inativado_por = db.Column(db.String(100), nullable=True)        # ✅ Usuário i
 criado_em = db.Column(db.DateTime, default=datetime.utcnow)     # ✅ Data criação
 ```
 
+## CadastroPalletizacao (app/producao/models.py)
+
+### 📋 Campos Principais
+```python
+# CAMPOS CORRETOS:
+id = db.Column(db.Integer, primary_key=True)
+
+# Dados do produto (conforme CSV)
+cod_produto = db.Column(db.String(50), nullable=False, unique=True, index=True)  # Cód.Produto
+nome_produto = db.Column(db.String(255), nullable=False)  # Descrição Produto
+
+# Fatores de conversão (conforme CSV)
+palletizacao = db.Column(db.Float, nullable=False)  # PALLETIZACAO: qtd / palletizacao = pallets
+peso_bruto = db.Column(db.Float, nullable=False)    # PESO BRUTO: qtd * peso_bruto = peso total
+
+# Dados de dimensões (interessante para cálculos)
+altura_cm = db.Column(db.Numeric(10, 2), nullable=True, default=0)
+largura_cm = db.Column(db.Numeric(10, 2), nullable=True, default=0)
+comprimento_cm = db.Column(db.Numeric(10, 2), nullable=True, default=0)
+
+# Subcategorias para filtros avançados
+tipo_embalagem = db.Column(db.String(50), nullable=True, index=True)
+tipo_materia_prima = db.Column(db.String(50), nullable=True, index=True)
+categoria_produto = db.Column(db.String(50), nullable=True, index=True)
+subcategoria = db.Column(db.String(50), nullable=True)
+linha_producao = db.Column(db.String(50), nullable=True, index=True)
+
+# Status
+ativo = db.Column(db.Boolean, nullable=False, default=True)
+
+# Auditoria
+created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+
+def __repr__(self):
+   return f'<CadastroPalletizacao {self.cod_produto} - Pallet: {self.palletizacao}>'
+
+def calcular_pallets(self, quantidade):
+   """Calcula quantos pallets para uma quantidade"""
+   if self.palletizacao > 0:
+      return round(quantidade / self.palletizacao, 2)
+   return 0
+
+def calcular_peso_total(self, quantidade):
+   """Calcula peso total para uma quantidade"""
+   return round(quantidade * self.peso_bruto, 2)
+
+```
+
+
 ---
 
 ## 🚨 REGRAS DE OURO PARA CLAUDE AI
@@ -450,31 +527,22 @@ item.data_expedicao_pedido      # ❌ ERRO
 item.agendamento_status         # ❌ ERRO
 ```
 
-### ✅ Status - USO CORRETO:
+### ✅ Busca de Carteira - USO CORRETO:
 ```python
-# Status de Pedido (via JOIN):
-Pedido.status                   # ✅ CORRETO
+# Para buscar itens na carteira:
+items = Separacao.query.filter_by(
+    sincronizado_nf=False  # ✅ CORRETO - Critério principal
+).all()
 
-# Separacao NÃO tem status próprio:
-query = db.session.query(Separacao).join(
-    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-).filter(Pedido.status == 'ABERTO')  # ✅ CORRETO
+# Separacao TEM status próprio:
+items = Separacao.query.filter_by(
+    status='PREVISAO'  # ✅ CORRETO - Para pré-separações
+).all()
+
+# NÃO fazer JOIN desnecessário com Pedido VIEW
 ```
 
 ---
-
-## 🔄 HISTÓRICO DE ERROS CORRIGIDOS
-
-### 25/07/2025:
-- ❌ **Erro**: PreSeparacaoItem sem campo `separacao_lote_id` → ✅ **Corrigido**: Campo adicionado ao modelo
-
-### 22/07/2025:
-- ❌ **Erro**: Usado `data_expedicao_pedido` → ✅ **Corrigido**: `expedicao`
-- ❌ **Erro**: Usado `data_entrega` → ✅ **Corrigido**: `data_expedicao` → `expedicao`
-
----
-
-**📝 Nota**: Este arquivo deve ser consultado SEMPRE antes de trabalhar com campos dos modelos. Manter atualizado conforme evolução do sistema.
 
 
 ### ❌ ARQUIVOS OBSOLETOS DA CARTEIRA DE PEDIDOS:
@@ -496,113 +564,3 @@ query = db.session.query(Separacao).join(
 
 
 
-# BUSCAR E DELETAR PEDIDOS DE TODAS AS EMPRESAS
-data_corte = "2025-08-14 19:00:52"
-
-# Listar todas as empresas
-empresas = env['res.company'].search([])
-info_empresas = []
-
-total_geral = 0
-pedidos_por_empresa = {}
-
-# Buscar em CADA empresa
-for empresa in empresas:
-    # Buscar com sudo() e forçando a empresa
-    pedidos = env['sale.order'].sudo().with_company(empresa).search([
-        ('create_date', '>=', data_corte),
-        ('state', '=', 'cancel'),
-        ('company_id', '=', empresa.id)
-    ])
-
-    # Também buscar sem filtro de company_id para pegar órfãos
-    pedidos_sem_empresa = env['sale.order'].sudo().search([
-        ('create_date', '>=', data_corte),
-        ('state', '=', 'cancel'),
-        ('company_id', '=', False)  # Pedidos sem empresa
-    ])
-
-    total_empresa = len(pedidos)
-    total_geral += total_empresa
-
-    if pedidos:
-        pedidos_por_empresa[empresa.name] = pedidos
-
-    info_empresas.append("""
-    Empresa: %s (ID: %s)
-    - Pedidos encontrados: %d
-    - Primeiros: %s
-    """ % (
-        empresa.name,
-        empresa.id,
-        total_empresa,
-        ', '.join([p.name for p in pedidos[:5]]) if pedidos else "Nenhum"
-    ))
-
-# Buscar também com sudo() sem filtro de empresa
-todos_pedidos = env['sale.order'].sudo().search([
-    ('create_date', '>=', data_corte),
-    ('state', '=', 'cancel')
-])
-
-# Deletar TODOS encontrados
-deletados = 0
-erros = []
-
-for pedido in todos_pedidos:
-    try:
-        # Forçar exclusão com sudo
-        env.cr.execute("""
-            DELETE FROM sale_order_line WHERE order_id = %s
-        """, (pedido.id,))
-
-        env.cr.execute("""
-            DELETE FROM sale_order WHERE id = %s
-        """, (pedido.id,))
-
-        deletados += 1
-    except Exception as e:
-        erros.append("%s (Empresa: %s): %s" % (
-            pedido.name,
-            pedido.company_id.name if pedido.company_id else "SEM EMPRESA",
-            str(e)
-        ))
-
-# Commit
-env.cr.commit()
-
-# Verificar restantes em TODAS as empresas
-restantes_total = env['sale.order'].sudo().search_count([
-    ('create_date', '>=', data_corte),
-    ('state', '=', 'cancel')
-])
-
-mensagem = """
-🏢 EXCLUSÃO MULTI-EMPRESA:
----------------------------
-EMPRESAS NO SISTEMA: %d
-
-DETALHES POR EMPRESA:
-%s
-
-RESUMO GERAL:
-- Total encontrado (todas empresas): %d
-- Total com sudo() direto: %d
-- Deletados: %d
-- Restantes: %d
-
-ERROS:
-%s
-
-NOTA: Use sudo() para acessar dados de todas as empresas!
-""" % (
-    len(empresas),
-    '\n'.join(info_empresas),
-    total_geral,
-    len(todos_pedidos),
-    deletados,
-    restantes_total,
-    '\n'.join(erros[:10]) if erros else "Nenhum"
-)
-
-raise UserError(mensagem)

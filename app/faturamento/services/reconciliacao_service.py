@@ -6,9 +6,8 @@ Gerencia NFs sem vinculação e separações órfãs
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from sqlalchemy import and_, or_, not_
+from typing import Dict, List, Any
+from sqlalchemy import or_
 from app import db
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.estoque.models import MovimentacaoEstoque

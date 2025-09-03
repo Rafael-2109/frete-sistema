@@ -275,7 +275,6 @@
                                 <th>Pedido</th>
                                 <th>Cliente</th>
                                 <th>Destino</th>
-                                <th>Expedição</th>
                                 <th>Entrega/Obs</th>
                                 <th>Informações</th>
                                 <th>Saldo</th>
@@ -369,37 +368,6 @@
                                             <i class="fas fa-map-marker-alt me-1"></i>
                                             Endereço
                                         </button>
-                                    </div>
-                                </td>
-
-                                <!-- Expedição -->
-                                <td>
-                                    <div class="expedicao-info">
-                                        {% if pedido.expedicao %}
-                                        <strong class="text-success">{{ pedido.expedicao|safe_date }}</strong>
-                                        {% else %}
-                                        <span class="text-warning">Não definida</span>
-                                        {% endif %}
-
-                                        {% if pedido.agendamento %}
-                                        <br><small class="text-info">
-                                            <i class="fas fa-calendar-check me-1"></i>
-                                            {{ pedido.agendamento|safe_date }}
-                                        </small>
-                                        <!-- ✅ CORREÇÃO 1: Flags de Agendamento -->
-                                        {% if pedido.agendamento_confirmado %}
-                                        <br><span class="badge bg-success text-white">Confirmada</span>
-                                        {% else %}
-                                        <br><span class="badge bg-warning text-dark">Ag. Aprovação</span>
-                                        {% endif %}
-                                        {% endif %}
-
-                                        {% if pedido.protocolo %}
-                                        <br><small class="text-success">
-                                            <i class="fas fa-clipboard-check me-1"></i>
-                                            {{ pedido.protocolo }}
-                                        </small>
-                                        {% endif %}
                                     </div>
                                 </td>
 
@@ -499,13 +467,6 @@
                                             <i class="fas fa-chart-line me-1"></i> Estoques
                                         </button>
 
-                                        <button type="button" class="btn btn-success btn-sm"
-                                            data-pedido="{{ pedido.num_pedido }}"
-                                            onclick="solicitarAgendamento('{{ pedido.num_pedido }}')"
-                                            title="Solicitar agendamento">
-                                            <i class="fas fa-calendar-plus me-1"></i> Agendar
-                                        </button>
-
                                         <!-- Botão Standby -->
                                         <button type="button" class="btn btn-sm btn-standby"
                                             id="btn-standby-{{ pedido.num_pedido }}"
@@ -575,6 +536,18 @@
 
 {% block scripts %}
 <!-- Módulos JavaScript incluídos -->
+
+<!-- Módulos Utilitários Centralizados (Carregar PRIMEIRO) -->
+<script>
+    {% include 'carteira/js/utils/formatters.js' %}
+</script>
+<script>
+    {% include 'carteira/js/utils/security.js' %}
+</script>
+<script>
+    {% include 'carteira/js/utils/notifications.js' %}
+</script>
+
 <script>
     {% include 'carteira/js/dropdown-separacoes.js' %}
 </script>
@@ -589,9 +562,7 @@
     {% include 'carteira/js/modal-cardex.js' %}
 </script>
 
-<script>
-    {% include 'carteira/js/modal-agendamento.js' %}
-</script>
+<!-- Modal de agendamento removido - não é mais necessário -->
 
 <script>
     {% include 'carteira/js/modal-endereco.js' %}
@@ -607,6 +578,10 @@
 
 <script>
     {% include 'carteira/js/lote-manager.js' %}
+</script>
+
+<script>
+    {% include 'carteira/js/workspace/workspace-api.js' %}
 </script>
 
 <script>
@@ -656,7 +631,7 @@
         window.carteiraAgrupada = new CarteiraAgrupada();
         window.workspace = new WorkspaceMontagem();
         window.modalCardex = new ModalCardex();
-        window.modalAgendamento = new ModalAgendamento();
+        // Modal de agendamento removido - não é mais necessário
         window.modalEndereco = new ModalEndereco();
         window.modalSeparacoes = new ModalSeparacoes();
         window.separacaoManager = new SeparacaoManager();

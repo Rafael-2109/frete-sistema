@@ -48,50 +48,67 @@ def atualizar_nf_embarque_items_com_erro():
         
         for item in embarque_items_erro:
             try:
-                # Buscar movimentação de estoque com o lote_id na observação
-                # Padrão esperado: "Baixa automática NF {numero_nf} - lote separação {lote_id}"
-                pattern = f"lote separação {item.separacao_lote_id}"
-                
+                # NOVO: Buscar usando campos estruturados
                 movimentacao = MovimentacaoEstoque.query.filter(
                     and_(
-                        MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
-                        MovimentacaoEstoque.observacao.like(f'%{pattern}%')
+                        MovimentacaoEstoque.tipo_movimentacao.in_(['FATURAMENTO', 'FATURAMENTO TAGPLUS']),
+                        MovimentacaoEstoque.separacao_lote_id == item.separacao_lote_id,
+                        MovimentacaoEstoque.status_nf == 'FATURADO'  # Apenas NFs válidas
                     )
                 ).first()
                 
-                if movimentacao:
-                    # Extrair número da NF da observação usando regex
-                    match = re.search(r'NF\s+(\d+)', movimentacao.observacao)
-                    
-                    if match:
-                        numero_nf = match.group(1)
-                        
-                        # Atualizar o EmbarqueItem
-                        item.nota_fiscal = numero_nf
-                        item.erro_validacao = None  # Limpar erro já que encontramos a NF
-                        
-                        relatorio['itens_atualizados'].append({
-                            'embarque_item_id': item.id,
-                            'separacao_lote_id': item.separacao_lote_id,
-                            'nota_fiscal': numero_nf,
-                            'num_pedido': item.pedido,
-                        })
-                        
-                        relatorio['total_atualizados'] += 1
-                        logger.info(f"Atualizado EmbarqueItem {item.id} com NF {numero_nf}")
-                    else:
-                        logger.warning(f"Não foi possível extrair NF da observação: {movimentacao.observacao}")
-                        relatorio['erros'].append({
-                            'embarque_item_id': item.id,
-                            'erro': 'NF não encontrada no padrão da observação',
-                            'observacao': movimentacao.observacao
-                        })
-                        relatorio['total_erros'] += 1
+                if movimentacao and movimentacao.numero_nf:
+                    # Usar campo estruturado direto
+                    numero_nf = movimentacao.numero_nf
                 else:
-                    logger.warning(f"Movimentação não encontrada para lote {item.separacao_lote_id}")
+                    # FALLBACK: Para registros antigos, buscar pelo padrão de texto
+                    pattern = f"lote separação {item.separacao_lote_id}"
+                    
+                    movimentacao_antiga = MovimentacaoEstoque.query.filter(
+                        and_(
+                            MovimentacaoEstoque.tipo_movimentacao.in_(['FATURAMENTO', 'FATURAMENTO TAGPLUS']),
+                            MovimentacaoEstoque.observacao.like(f'%{pattern}%'),
+                            MovimentacaoEstoque.numero_nf.is_(None)  # Apenas registros sem campo estruturado
+                        )
+                    ).first()
+                    
+                    if movimentacao_antiga:
+                        # Extrair número da NF da observação usando regex
+                        match = re.search(r'NF\s+(\d+)', movimentacao_antiga.observacao)
+                        
+                        if match:
+                            numero_nf = match.group(1)
+                            
+                            # Aproveitar para migrar o campo estruturado
+                            movimentacao_antiga.numero_nf = numero_nf
+                            movimentacao_antiga.separacao_lote_id = item.separacao_lote_id
+                            movimentacao_antiga.tipo_origem = 'LEGADO'
+                            movimentacao_antiga.status_nf = 'FATURADO'
+                        else:
+                            numero_nf = None
+                    else:
+                        numero_nf = None
+                
+                if numero_nf:
+                    # Atualizar o EmbarqueItem
+                    item.nota_fiscal = numero_nf
+                    item.erro_validacao = None  # Limpar erro já que encontramos a NF
+                    
+                    relatorio['itens_atualizados'].append({
+                        'embarque_item_id': item.id,
+                        'separacao_lote_id': item.separacao_lote_id,
+                        'nota_fiscal': numero_nf,
+                        'num_pedido': item.pedido,
+                    })
+                    
+                    relatorio['total_atualizados'] += 1
+                    logger.info(f"Atualizado EmbarqueItem {item.id} com NF {numero_nf}")
+                else:
+                    # Não encontrou NF ou não conseguiu extrair
+                    logger.warning(f"Movimentação não encontrada ou NF não extraída para lote {item.separacao_lote_id}")
                     relatorio['erros'].append({
                         'embarque_item_id': item.id,
-                        'erro': f'Movimentação não encontrada para lote {item.separacao_lote_id}'
+                        'erro': f'Movimentação não encontrada ou NF não extraída para lote {item.separacao_lote_id}'
                     })
                     relatorio['total_erros'] += 1
                     

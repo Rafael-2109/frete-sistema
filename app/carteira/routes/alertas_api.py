@@ -152,8 +152,8 @@ def _executar_verificacoes_completas():
 def _detalhar_separacoes_cotadas():
     """Retorna detalhes completos das separações cotadas"""
     from app.separacao.models import Separacao
-    from app.pedidos.models import Pedido
     
+    # MIGRADO: Removido JOIN com Pedido VIEW, usa campos direto de Separacao
     # Buscar todas as separações cotadas com detalhes
     separacoes = db.session.query(
         Separacao.separacao_lote_id,
@@ -162,12 +162,11 @@ def _detalhar_separacoes_cotadas():
         Separacao.nome_produto,
         Separacao.qtd_saldo,
         Separacao.expedicao,
-        Pedido.raz_social_red.label('cliente'),
-        Pedido.data_pedido
-    ).join(
-        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+        Separacao.raz_social_red.label('cliente'),
+        Separacao.data_pedido
     ).filter(
-        Pedido.status == 'COTADO'
+        Separacao.status == 'COTADO',
+        Separacao.sincronizado_nf == False  # Garantir que não foi sincronizado
     ).all()
     
     detalhes = []

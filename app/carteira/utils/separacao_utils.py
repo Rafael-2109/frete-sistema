@@ -2,7 +2,6 @@
 Utilitários para separação e workspace
 """
 
-from sqlalchemy import func, and_
 from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraPrincipal
@@ -141,40 +140,8 @@ def buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
         return None
 
 
-def gerar_novo_lote_id():
-    """
-    Gera novo ID único para lotes de separação (NÃO SEQUENCIAL)
-    
-    FORMATO: LOTE_YYYYMMDD_HHMMSS_XXX
-    Exemplo: LOTE_20250702_143025_001
-    """
-    try:
-        import random
-        agora = datetime.now()
-        data_str = agora.strftime('%Y%m%d')
-        hora_str = agora.strftime('%H%M%S')
-        random_str = str(random.randint(1, 999)).zfill(3)
-        
-        lote_id = f"LOTE_{data_str}_{hora_str}_{random_str}"
-        
-        # Verificar se já existe (improvável mas garantir unicidade)
-        from app.separacao.models import Separacao
-        existe = db.session.query(Separacao).filter(
-            Separacao.separacao_lote_id == lote_id
-        ).first()
-        
-        if existe:
-            # Se existir, tentar novamente com timestamp mais preciso
-            microseg_str = str(agora.microsecond)[:3]
-            lote_id = f"LOTE_{data_str}_{hora_str}_{microseg_str}"
-        
-        return lote_id
-        
-    except Exception as e:
-        logger.error(f"Erro ao gerar lote ID: {e}")
-        # Fallback simples
-        timestamp = int(datetime.now().timestamp())
-        return f"LOTE_{timestamp}"
+# Função gerar_novo_lote_id movida para app.utils.lote_utils para padronização
+# Importada no topo do arquivo como alias para manter compatibilidade
 
 
 def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, agendamento=None, protocolo=None):
@@ -183,7 +150,6 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
     """
     try:
         from app.separacao.models import Separacao
-        from app.pedidos.models import Pedido
         from app.utils.timezone import agora_brasil
         
         # Buscar informações dos produtos na carteira
@@ -279,13 +245,6 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
                 'error': 'Nenhuma separação foi criada'
             }
 
-        # Atualizar pedido
-        pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
-        if pedido:
-            pedido.separacao_lote_id = lote_id
-            pedido.expedicao = expedicao_obj
-            pedido.agendamento = agendamento_obj
-            pedido.protocolo = protocolo
 
         db.session.commit()
 

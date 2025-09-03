@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard de Faturamentos Parciais - Carteira{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-percentage text-warning"></i>
+                Faturamentos Parciais - Justificativas
+            </h1>
+            <p class="text-muted mb-0">Gestão de divergências entre separação e faturamento</p>
+        </div>
+        <div>
+            <button class="btn btn-success" onclick="exportarRelatorio()">
+                <i class="fas fa-download"></i> Exportar Excel
+            </button>
+            <a href="{{ url_for('carteira.dashboard') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pendentes de Justificativa
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_pendentes }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Justificadas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_resolvidas }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total Saldo Pendente
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ "{:,.0f}".format(total_saldo) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Maior Divergência
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {% if justificativas %}
+                                    {{ "{:.1f}%".format(max(j.percentual_divergencia for j in justificativas) if justificativas else 0) }}
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Justificativas Pendentes -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-list"></i> Justificativas Pendentes
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if erro %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle"></i> Erro ao carregar dados: {{ erro }}
+            </div>
+            {% endif %}
+            
+            {% if total_pendentes == 0 %}
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-info-circle"></i> Nenhuma justificativa pendente</h5>
+                    <p>Não há faturamentos parciais aguardando justificativa no momento.</p>
+                    <p class="mb-0">As justificativas são criadas automaticamente quando há divergência > 1% entre separação e faturamento.</p>
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="tabela-pendentes">
+                        <thead>
+                            <tr>
+                                <th>Lote</th>
+                                <th>Pedido</th>
+                                <th>NF</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Qtd Separada</th>
+                                <th>Qtd Faturada</th>
+                                <th>Saldo</th>
+                                <th>Divergência</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for just in justificativas %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">{{ just.separacao_lote_id }}</span>
+                                </td>
+                                <td>{{ just.num_pedido }}</td>
+                                <td><strong>{{ just.numero_nf }}</strong></td>
+                                <td title="{{ just.nome_cliente }}">
+                                    {{ just.nome_cliente[:25] }}{{ '...' if just.nome_cliente|length > 25 else '' }}
+                                </td>
+                                <td title="{{ just.nome_produto }}">
+                                    <strong>{{ just.cod_produto }}</strong><br>
+                                    <small class="text-muted">{{ just.nome_produto[:30] }}{{ '...' if just.nome_produto|length > 30 else '' }}</small>
+                                </td>
+                                <td class="text-end">{{ "{:,.0f}".format(just.qtd_separada) }}</td>
+                                <td class="text-end">{{ "{:,.0f}".format(just.qtd_faturada) }}</td>
+                                <td class="text-end">
+                                    <span class="text-danger font-weight-bold">
+                                        {{ "{:,.0f}".format(just.qtd_saldo) }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    {% if just.percentual_divergencia > 10 %}
+                                        <span class="badge bg-danger">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
+                                    {% elif just.percentual_divergencia > 5 %}
+                                        <span class="badge bg-warning">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
+                                    {% else %}
+                                        <span class="badge bg-info">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="abrirModalJustificar({{ just.id }}, '{{ just.cod_produto }}', {{ just.qtd_saldo }})">
+                                        <i class="fas fa-edit"></i> Justificar
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Estatísticas de Motivos -->
+    {% if motivos_count %}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie"></i> Motivos Mais Frequentes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for motivo, count in motivos_count.items() %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                {% if motivo == 'RUPTURA_ESTOQUE' %}
+                                    <i class="fas fa-box-open text-danger"></i> Ruptura de Estoque
+                                {% elif motivo == 'AVARIA_PRODUTO' %}
+                                    <i class="fas fa-exclamation-triangle text-warning"></i> Avaria do Produto
+                                {% elif motivo == 'ERRO_SEPARACAO' %}
+                                    <i class="fas fa-user-times text-info"></i> Erro de Separação
+                                {% elif motivo == 'ALTERACAO_PEDIDO' %}
+                                    <i class="fas fa-edit text-primary"></i> Alteração do Pedido
+                                {% elif motivo == 'CANCELAMENTO_PARCIAL' %}
+                                    <i class="fas fa-ban text-danger"></i> Cancelamento Parcial
+                                {% elif motivo == 'RESTRICAO_TRANSPORTE' %}
+                                    <i class="fas fa-truck text-secondary"></i> Restrição de Transporte
+                                {% else %}
+                                    <i class="fas fa-question-circle"></i> {{ motivo }}
+                                {% endif %}
+                            </span>
+                            <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Justificar -->
+<div class="modal fade" id="modalJustificar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Justificar Faturamento Parcial
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formJustificar">
+                    <input type="hidden" id="justId">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Produto:</label>
+                            <input type="text" class="form-control" id="justProduto" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Quantidade Saldo:</label>
+                            <input type="text" class="form-control" id="justSaldo" readonly>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Motivo do Não Faturamento: <span class="text-danger">*</span></label>
+                        <select class="form-select" id="justMotivo" required>
+                            <option value="">Selecione...</option>
+                            <option value="RUPTURA_ESTOQUE">Ruptura de Estoque - Produto em falta</option>
+                            <option value="AVARIA_PRODUTO">Avaria do Produto - Defeito/Dano</option>
+                            <option value="ERRO_SEPARACAO">Erro de Separação - Quantidade errada</option>
+                            <option value="ALTERACAO_PEDIDO">Alteração do Pedido - Cliente alterou</option>
+                            <option value="CANCELAMENTO_PARCIAL">Cancelamento Parcial - Cliente cancelou parte</option>
+                            <option value="RESTRICAO_TRANSPORTE">Restrição de Transporte - Não coube no veículo</option>
+                            <option value="OUTROS">Outros Motivos</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Classificação do Saldo: <span class="text-danger">*</span></label>
+                        <select class="form-select" id="justClassificacao" required>
+                            <option value="">Selecione...</option>
+                            <option value="SALDO">Manter como Saldo - Pode ser reaproveitado</option>
+                            <option value="NECESSITA_COMPLEMENTO">Necessita Complemento - Aguarda reposição</option>
+                            <option value="RETORNA_CARTEIRA">Retorna à Carteira - Criar nova separação</option>
+                            <option value="EXCLUIR_DEFINITIVO">Excluir Definitivamente - Remover da carteira</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Ação Comercial:</label>
+                        <select class="form-select" id="justAcao">
+                            <option value="">Selecione...</option>
+                            <option value="AGUARDA_DECISAO">Aguardar Decisão Comercial</option>
+                            <option value="RETORNOU_CARTEIRA">Retornou à Carteira</option>
+                            <option value="NOVA_SEPARACAO">Criar Nova Separação</option>
+                            <option value="AGUARDA_REPOSICAO">Aguardar Reposição</option>
+                            <option value="DESCARTADO">Descartado</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Descrição Detalhada:</label>
+                        <textarea class="form-control" id="justDescricao" rows="3" 
+                                  placeholder="Descreva detalhes adicionais sobre a divergência..."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observações da Ação:</label>
+                        <textarea class="form-control" id="justObservacoes" rows="2" 
+                                  placeholder="Observações sobre a ação tomada..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success" onclick="confirmarJustificativa()">
+                    <i class="fas fa-check"></i> Confirmar Justificativa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalJustificar(id, produto, saldo) {
+    $('#justId').val(id);
+    $('#justProduto').val(produto);
+    $('#justSaldo').val(saldo);
+    $('#justMotivo').val('');
+    $('#justClassificacao').val('');
+    $('#justAcao').val('');
+    $('#justDescricao').val('');
+    $('#justObservacoes').val('');
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalJustificar'));
+    modal.show();
+}
+
+function confirmarJustificativa() {
+    const id = $('#justId').val();
+    const motivo = $('#justMotivo').val();
+    const classificacao = $('#justClassificacao').val();
+    const acao = $('#justAcao').val();
+    const descricao = $('#justDescricao').val();
+    const observacoes = $('#justObservacoes').val();
+
+    if (!motivo) {
+        alert('Por favor, selecione o motivo do não faturamento');
+        return;
+    }
+
+    if (!classificacao) {
+        alert('Por favor, selecione a classificação do saldo');
+        return;
+    }
+
+    // Enviar requisição
+    fetch(`/carteira/api/justificar-faturamento-parcial/${id}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            motivo_nao_faturamento: motivo,
+            classificacao_saldo: classificacao,
+            acao_comercial: acao,
+            descricao_detalhada: descricao,
+            observacoes_acao: observacoes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('Justificativa registrada com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro ao registrar justificativa: ' + data.erro);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao registrar justificativa: ' + error);
+    });
+
+    // Fechar modal
+    bootstrap.Modal.getInstance(document.getElementById('modalJustificar')).hide();
+}
+
+function exportarRelatorio() {
+    window.open('/carteira/api/exportar-faturamentos-parciais', '_blank');
+}
+
+// Inicializar DataTable
+$(document).ready(function() {
+    $('#tabela-pendentes').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
+        },
+        order: [[8, 'desc']], // Ordenar por divergência
+        pageLength: 25
+    });
+});
+</script>
+{% endblock %}

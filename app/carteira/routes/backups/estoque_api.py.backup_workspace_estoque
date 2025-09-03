@@ -1,0 +1,98 @@
+"""
+BACKUP da função obter_workspace_estoque ORIGINAL
+Data: 2025-01-30
+Motivo: Antes de corrigir com CadastroPalletizacao e workspace_utils
+"""
+
+@carteira_bp.route('/api/pedido/<num_pedido>/workspace-estoque', methods=['GET'])
+@login_required
+def obter_workspace_estoque(num_pedido):
+    """
+    Retorna dados completos de estoque para o workspace
+    Inclui projeções, produção programada e análise de ruptura
+    """
+    try:
+        # Buscar produtos do pedido com todos os dados
+        produtos = CarteiraPrincipal.query.filter_by(
+            num_pedido=num_pedido
+        ).all()
+        
+        produtos_completos = []
+        
+        for produto in produtos:
+            # USAR ServicoEstoqueTempoReal IGUAL ao workspace_api.py
+            try:
+                projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            except Exception as e:
+                logger.warning(f"Erro ao buscar projeção para produto {produto.cod_produto}: {e}")
+                projecao_completa = None
+            
+            if projecao_completa and isinstance(projecao_completa, dict):
+                # Usar dados calculados pelo serviço (VALORES REAIS)
+                produto_data = {
+                    'cod_produto': produto.cod_produto,
+                    'nome_produto': produto.nome_produto,
+                    'qtd_saldo_produto_pedido': float(produto.qtd_saldo_produto_pedido or 0),
+                    'preco_produto_pedido': float(produto.preco_produto_pedido or 0),
+                    
+                    # Estoque calculado pelo serviço
+                    'estoque': projecao_completa['estoque_atual'],
+                    'estoque_d0': projecao_completa.get('estoque_d0', projecao_completa['estoque_atual']),
+                    'saldo_estoque_pedido': float(produto.saldo_estoque_pedido or 0),
+                    'menor_estoque_produto_d7': projecao_completa.get('menor_estoque_d7', 0),
+                    'dia_ruptura': projecao_completa.get('dia_ruptura'),
+                    
+                    # Produção programada (se disponível)
+                    'producao_hoje': 0,  # Seria calculado com base em outra tabela se existisse
+                    
+                    # Peso e palletização
+                    'peso_unitario': float(produto.peso or 0) / float(produto.qtd_saldo_produto_pedido or 1) if produto.qtd_saldo_produto_pedido else 0,
+                    'palletizacao': 1000,  # Valor padrão, ajustar conforme necessário
+                }
+                
+                # Adicionar todas as projeções D0-D28 calculadas
+                for i, valor in enumerate(projecao_completa.get('projecao', [])):
+                    if i < 29:
+                        produto_data[f'estoque_d{i}'] = valor if valor is not None else 0
+            else:
+                # Fallback se o serviço falhar
+                produto_data = {
+                    'cod_produto': produto.cod_produto,
+                    'nome_produto': produto.nome_produto,
+                    'qtd_saldo_produto_pedido': float(produto.qtd_saldo_produto_pedido or 0),
+                    'preco_produto_pedido': float(produto.preco_produto_pedido or 0),
+                    
+                    # Estoque atual e projeções
+                    'estoque': float(produto.estoque or 0),
+                    'estoque_d0': float(produto.estoque_d0 or 0),
+                    'saldo_estoque_pedido': float(produto.saldo_estoque_pedido or 0),
+                    'menor_estoque_produto_d7': float(produto.menor_estoque_produto_d7 or 0),
+                    
+                    # Produção programada (se disponível)
+                    'producao_hoje': 0,  # Seria calculado com base em outra tabela se existisse
+                    
+                    # Peso e palletização
+                    'peso_unitario': float(produto.peso or 0) / float(produto.qtd_saldo_produto_pedido or 1) if produto.qtd_saldo_produto_pedido else 0,
+                    'palletizacao': 1000,  # Valor padrão, ajustar conforme necessário
+                }
+                
+                # Adicionar todas as projeções D0-D28
+                for i in range(29):
+                    campo = f'estoque_d{i}'
+                    if hasattr(produto, campo):
+                        produto_data[campo] = float(getattr(produto, campo, 0) or 0)
+            
+            produtos_completos.append(produto_data)
+        
+        return jsonify({
+            'success': True,
+            'produtos': produtos_completos,
+            'total': len(produtos_completos)
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar estoque completo do pedido {num_pedido}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

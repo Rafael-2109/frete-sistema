@@ -13,126 +13,7 @@ class PreSeparacaoManager {
         console.log('✅ Pré-Separação Manager inicializado');
     }
 
-    /**
-     * 🎯 AUTO-CRIAR PRÉ-SEPARAÇÃO NO DRAG & DROP
-     * CASO 3: Criar uma pré-separação ao realizar o "drag & drop" para o lote de maneira automática
-     * Um produto "dropado" em um lote vazio deve se tornar uma nova pré-separação automaticamente
-     */
-    async criarPreSeparacaoAutomatica(numPedido, codProduto, quantidade, dataExpedicao, loteId = null) {
-        console.log(`🎯 CASO 3: Auto-criar pré-separação - ${numPedido} - ${codProduto}`);
-        
-        try {
-            // Se não foi fornecido lote_id, gerar baseado na data
-            if (!loteId) {
-                loteId = this.gerarLoteIdPreSeparacao(dataExpedicao);
-            }
 
-            // Validar dados
-            this.validarDadosPreSeparacao(numPedido, codProduto, loteId, quantidade);
-
-            const response = await fetch('/carteira/api/pre-separacao/salvar', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCSRFToken()
-                },
-                body: JSON.stringify({
-                    num_pedido: numPedido,
-                    cod_produto: codProduto,
-                    lote_id: loteId,
-                    qtd_selecionada_usuario: quantidade,
-                    data_expedicao_editada: dataExpedicao
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log(`✅ Pré-separação criada automaticamente: ${result.message}`);
-                
-                // Atualizar dados locais se workspace estiver disponível
-                if (this.workspace) {
-                    this.atualizarDadosLocais(loteId, result.dados);
-                }
-                
-                return {
-                    success: true,
-                    lote_id: result.lote_id,
-                    pre_separacao_id: result.pre_separacao_id,
-                    dados: result.dados
-                };
-            } else {
-                console.error(`❌ Erro ao criar pré-separação: ${result.error}`);
-                return {
-                    success: false,
-                    error: result.error
-                };
-            }
-            
-        } catch (error) {
-            console.error('Erro ao criar pré-separação automática:', error);
-            return {
-                success: false,
-                error: error.message || 'Erro interno'
-            };
-        }
-    }
-
-    /**
-     * Salvar pré-separação via API (drag & drop - método legado)
-     */
-    async salvarPreSeparacao(numPedido, codProduto, loteId, quantidade, dataExpedicao = null) {
-        // Usar a nova função automática como padrão
-        const dataExpedicaoFinal = dataExpedicao || this.obterDataExpedicaoDefault();
-        return await this.criarPreSeparacaoAutomatica(numPedido, codProduto, quantidade, dataExpedicaoFinal, loteId);
-    }
-
-    /**
-     * Remover pré-separação via API
-     */
-    async removerPreSeparacao(preSeparacaoId) {
-        try {
-            const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/remover`, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRFToken': this.getCSRFToken()
-                }
-            });
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Erro ao remover pré-separação');
-            }
-
-            return result;
-
-        } catch (error) {
-            console.error('❌ Erro ao remover pré-separação:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Carregar pré-separações existentes de um pedido
-     */
-    async carregarPreSeparacoes(numPedido) {
-        try {
-            const response = await fetch(`/carteira/api/pedido/${numPedido}/pre-separacoes`);
-            const result = await response.json();
-
-            if (!response.ok) {
-                // Se não encontrou, não é erro (pedido sem pré-separações)
-                return { success: true, lotes: [] };
-            }
-
-            return result;
-
-        } catch (error) {
-            console.error('❌ Erro ao carregar pré-separações:', error);
-            return { success: false, error: error.message };
-        }
-    }
 
     /**
      * Confirmar pré-separação como separação definitiva
@@ -238,44 +119,9 @@ class PreSeparacaoManager {
         return produto;
     }
 
-    /**
-     * Atualizar status de lote (pré-separação → separação)
-     */
-    atualizarStatusLote(loteId, novoStatus) {
-        const loteData = this.workspace.preSeparacoes.get(loteId);
-        if (loteData) {
-            loteData.status = novoStatus;
-            loteData.produtos.forEach(p => p.status = novoStatus);
-            return loteData;
-        }
-        return null;
-    }
 
-    /**
-     * Utilitários
-     */
-    obterDataExpedicaoDefault() {
-        // Data padrão: amanhã
-        const amanha = new Date();
-        amanha.setDate(amanha.getDate() + 1);
-        return amanha.toISOString().split('T')[0];
-    }
 
-    validarDadosPreSeparacao(numPedido, codProduto, loteId, quantidade) {
-        if (!numPedido || !codProduto || !loteId) {
-            throw new Error('Dados obrigatórios ausentes: numPedido, codProduto, loteId');
-        }
 
-        if (!quantidade || quantidade <= 0) {
-            throw new Error('Quantidade deve ser maior que zero');
-        }
-
-        return true;
-    }
-
-    gerarLoteIdPreSeparacao(dataExpedicao) {
-        return `PRE-${dataExpedicao}`;
-    }
     
     /**
      * Obter CSRF Token de forma consistente
@@ -306,55 +152,8 @@ class PreSeparacaoManager {
     }
 }
 
-// 🎯 FUNÇÕES GLOBAIS PARA PRÉ-SEPARAÇÃO
 
-/**
- * FUNÇÃO GLOBAL PARA DRAG & DROP AUTOMÁTICO - CASO 3
- */
-function criarPreSeparacaoAuto(numPedido, codProduto, quantidade, dataExpedicao, loteId = null) {
-    if (window.preSeparacaoManagerGlobal) {
-        return window.preSeparacaoManagerGlobal.criarPreSeparacaoAutomatica(numPedido, codProduto, quantidade, dataExpedicao, loteId);
-    } else {
-        console.error('❌ Pré-Separação Manager global não inicializado');
-        return { success: false, error: 'Manager não inicializado' };
-    }
-}
 
-/**
- * FUNÇÃO GLOBAL PARA SALVAR PRÉ-SEPARAÇÃO
- */
-function salvarPreSeparacao(numPedido, codProduto, loteId, quantidade, dataExpedicao = null) {
-    if (window.preSeparacaoManagerGlobal) {
-        return window.preSeparacaoManagerGlobal.salvarPreSeparacao(numPedido, codProduto, loteId, quantidade, dataExpedicao);
-    } else {
-        console.error('❌ Pré-Separação Manager global não inicializado');
-        return { success: false, error: 'Manager não inicializado' };
-    }
-}
-
-/**
- * FUNÇÃO GLOBAL PARA REMOVER PRÉ-SEPARAÇÃO
- */
-function removerPreSeparacao(preSeparacaoId) {
-    if (window.preSeparacaoManagerGlobal) {
-        return window.preSeparacaoManagerGlobal.removerPreSeparacao(preSeparacaoId);
-    } else {
-        console.error('❌ Pré-Separação Manager global não inicializado');
-        return { success: false, error: 'Manager não inicializado' };
-    }
-}
-
-/**
- * FUNÇÃO GLOBAL PARA CONFIRMAR SEPARAÇÃO
- */
-function confirmarSeparacaoPreSeparacao(loteId, dadosConfirmacao) {
-    if (window.preSeparacaoManagerGlobal) {
-        return window.preSeparacaoManagerGlobal.confirmarSeparacao(loteId, dadosConfirmacao);
-    } else {
-        console.error('❌ Pré-Separação Manager global não inicializado');
-        return { success: false, error: 'Manager não inicializado' };
-    }
-}
 
 // Disponibilizar globalmente
 window.PreSeparacaoManager = PreSeparacaoManager;

@@ -14,13 +14,14 @@ if 'postgres' in os.getenv('DATABASE_URL', ''):
 
 from app import db
 from app.utils.timezone import agora_brasil
-from sqlalchemy import inspect
-from datetime import timedelta
 import logging
 from app.producao.models import ProgramacaoProducao
 from sqlalchemy import cast, Date
 
 logger = logging.getLogger(__name__)
+
+# MIGRADO: SaldoEstoque movido para camada de compatibilidade (02/09/2025)
+# Para usar SaldoEstoque, importe de: from app.estoque.services.compatibility_layer import SaldoEstoqueCompativel as SaldoEstoque
 
 class MovimentacaoEstoque(db.Model):
     """
@@ -42,7 +43,15 @@ class MovimentacaoEstoque(db.Model):
     # Quantidades
     qtd_movimentacao = db.Column(db.Numeric(15, 3), nullable=False)
 
-    # Observações
+    # Campos estruturados para sincronização NF (NOVO)
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de separação
+    numero_nf = db.Column(db.String(20), nullable=True, index=True)  # Número da NF
+    num_pedido = db.Column(db.String(50), nullable=True, index=True)  # Número do pedido
+    tipo_origem = db.Column(db.String(20), nullable=True)  # ODOO, TAGPLUS, MANUAL, LEGADO
+    status_nf = db.Column(db.String(20), nullable=True)  # FATURADO, CANCELADO
+    codigo_embarque = db.Column(db.Integer, db.ForeignKey('embarques.id', ondelete='SET NULL'), nullable=True)
+
+    # Observações (mantido para compatibilidade)
     observacao = db.Column(db.Text, nullable=True)
 
         
@@ -57,6 +66,11 @@ class MovimentacaoEstoque(db.Model):
     __table_args__ = (
         db.Index('idx_movimentacao_produto_data', 'cod_produto', 'data_movimentacao'),
         db.Index('idx_movimentacao_tipo_data', 'tipo_movimentacao', 'data_movimentacao'),
+        db.Index('idx_movimentacao_nf', 'numero_nf'),
+        db.Index('idx_movimentacao_lote', 'separacao_lote_id'),
+        db.Index('idx_movimentacao_pedido', 'num_pedido'),
+        db.Index('idx_movimentacao_tipo_origem', 'tipo_origem'),
+        db.Index('idx_movimentacao_status_nf', 'status_nf'),
     )
 
     def __repr__(self):
@@ -67,6 +81,12 @@ class MovimentacaoEstoque(db.Model):
             'id': self.id,
             'cod_produto': self.cod_produto,
             'nome_produto': self.nome_produto,
+            'separacao_lote_id': self.separacao_lote_id,
+            'numero_nf': self.numero_nf,
+            'num_pedido': self.num_pedido,
+            'tipo_origem': self.tipo_origem,
+            'status_nf': self.status_nf,
+            'codigo_embarque': self.codigo_embarque,
             'data_movimentacao': self.data_movimentacao.strftime('%d/%m/%Y') if self.data_movimentacao else None,
             'tipo_movimentacao': self.tipo_movimentacao,
             'local_movimentacao': self.local_movimentacao,
@@ -218,402 +238,4 @@ class UnificacaoCodigos(db.Model):
         self.ativo = False
         self.data_desativacao = agora_brasil()
         self.updated_by = usuario
-        self.motivo_desativacao = motivo 
-
-class SaldoEstoque:
-    """
-    Classe de serviço para cálculos de saldo de estoque em tempo real
-    Não é uma tabela persistente, mas sim um calculador que integra dados de:
-    - MovimentacaoEstoque (módulo já existente) - entrada/saída histórica
-    - ProgramacaoProducao (módulo já existente) - produção futura
-    - ✅ PreSeparacaoItem (principal) - saídas futuras por data de expedição
-    - ✅ Separacao (complementar) - saídas já separadas
-    - UnificacaoCodigos (módulo recém implementado) - códigos relacionados
-    
-    ❌ REMOVIDO: CarteiraPrincipal (não participa mais do cálculo de estoque futuro)
-    """
-    
-    @staticmethod
-    def obter_produtos_com_estoque():
-        """Obtém lista de produtos únicos que têm movimentação de estoque"""
-        try:
-            # VERIFICA SE EXISTE NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-            inspector = inspect(db.engine)
-            if inspector.has_table('estoque_tempo_real'):
-                from app.estoque.models_tempo_real import EstoqueTempoReal
-                # Usar novo sistema de tempo real (MUITO MAIS RÁPIDO)
-                produtos = db.session.query(
-                    EstoqueTempoReal.cod_produto,
-                    EstoqueTempoReal.nome_produto
-                ).all()
-                
-                if produtos:
-                    return [{
-                        'cod_produto': p.cod_produto,
-                        'nome_produto': p.nome_produto
-                    } for p in produtos]
-            
-            # Fallback: usar método antigo se não houver cache
-            if not inspector.has_table('movimentacao_estoque'):
-                return []
-            
-            # Buscar produtos únicos com movimentação
-            produtos = db.session.query(
-                MovimentacaoEstoque.cod_produto,
-                MovimentacaoEstoque.nome_produto
-            ).filter(
-                MovimentacaoEstoque.ativo == True
-            ).distinct().all()
-            
-            return produtos
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter produtos com estoque: {str(e)}")
-            return []
-    
-    @staticmethod
-    def calcular_estoque_inicial(cod_produto):
-        """Calcula estoque inicial (D0) baseado em todas as movimentações"""
-        try:
-            # VERIFICA SE EXISTE NOVO SISTEMA PRIMEIRO
-            inspector = inspect(db.engine)
-            if inspector.has_table('estoque_tempo_real'):
-                from app.estoque.models_tempo_real import EstoqueTempoReal
-                # Usar novo sistema de tempo real
-                estoque = EstoqueTempoReal.query.filter_by(cod_produto=cod_produto).first()
-                if estoque:
-                    return float(estoque.saldo_atual)
-            
-            # Fallback: cálculo tradicional se não houver cache
-            if not inspector.has_table('movimentacao_estoque'):
-                return 0
-            
-            # Buscar todos os códigos relacionados (considerando unificação)
-            try:
-                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
-            except (ValueError, TypeError):
-                # Se não for numérico, usar apenas o código original
-                codigos_relacionados = [str(cod_produto)]
-            
-            # Somar movimentações de todos os códigos relacionados
-            total_estoque = 0
-            for codigo in codigos_relacionados:
-                movimentacoes = MovimentacaoEstoque.query.filter(
-                    MovimentacaoEstoque.cod_produto == str(codigo),
-                    MovimentacaoEstoque.ativo == True
-                ).all()
-                
-                total_estoque += sum(float(m.qtd_movimentacao) for m in movimentacoes)
-            
-            return total_estoque
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular estoque inicial para {cod_produto}: {str(e)}")
-            return 0
-    
-    @staticmethod
-    def calcular_producao_periodo(cod_produto, data_inicio, data_fim):
-        """Calcula produção programada para um produto em um período"""
-        try:
-            inspector = inspect(db.engine)
-            if not inspector.has_table('programacao_producao'):
-                return 0
-            
-            # Buscar todos os códigos relacionados (considerando unificação)
-            try:
-                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
-            except (ValueError, TypeError):
-                # Se não for numérico, usar apenas o código original
-                codigos_relacionados = [str(cod_produto)]
-            
-            # Somar produção de todos os códigos relacionados
-            total_producao = 0
-            for codigo in codigos_relacionados:
-                
-                producoes = ProgramacaoProducao.query.filter(
-                    ProgramacaoProducao.cod_produto == str(codigo),
-                    cast(ProgramacaoProducao.data_programacao, Date) >= data_inicio,
-                    cast(ProgramacaoProducao.data_programacao, Date) <= data_fim
-                ).all()
-                
-                total_producao += sum(float(p.qtd_programada) for p in producoes)
-            
-            return total_producao
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular produção para {cod_produto}: {str(e)}")
-            return 0
-    
-
-    
-    @staticmethod
-    def calcular_projecao_completa(cod_produto):
-        """
-        Calcula projeção completa de estoque para 29 dias (D0 até D+28)
-        IMPLEMENTA LÓGICA JUST-IN-TIME CORRETA:
-        - EST INICIAL D0 = estoque atual (MovimentacaoEstoque)
-        - SAÍDA D0 = Separacao + PreSeparacaoItem (expedição D0)
-        - EST FINAL D0 = EST INICIAL D0 - SAÍDA D0 + PROD D0
-        - PROD D0 = ProgramacaoProducao (data_programacao D0)
-        - EST INICIAL D+1 = EST FINAL D0 (Just-in-Time!)
-        
-        ❌ CarteiraPrincipal NÃO participa do cálculo de saídas
-        """
-        try:
-            projecao = []
-            # CORREÇÃO: Usar data no timezone brasileiro
-            data_hoje = agora_brasil().date()
-            
-            # Estoque inicial (D0)
-            estoque_atual = SaldoEstoque.calcular_estoque_inicial(cod_produto)
-            
-            # Calcular para cada dia (D0 até D+28)
-            for dia in range(29):
-                data_calculo = data_hoje + timedelta(days=dia)
-                
-                # 📤 SAÍDAS do dia (todas as fontes com expedição = data_calculo)
-                saida_dia = SaldoEstoque._calcular_saidas_completas(cod_produto, data_calculo)
-                
-                # 🏭 PRODUÇÃO programada para o dia
-                producao_dia = SaldoEstoque.calcular_producao_periodo(cod_produto, data_calculo, data_calculo)
-                
-                # 📊 LÓGICA SEQUENCIAL CORRETA
-                if dia == 0:
-                    # D0: Estoque atual
-                    estoque_inicial_dia = estoque_atual
-                else:
-                    # D+1: EST FINAL anterior vira EST INICIAL do próximo dia
-                    estoque_inicial_dia = projecao[dia-1]['estoque_final']
-                
-                # ✅ CORREÇÃO: EST FINAL = EST INICIAL - SAÍDA + PRODUÇÃO DO MESMO DIA
-                # A produção deve aparecer no Est. Final do próprio dia
-                estoque_final_dia = estoque_inicial_dia - saida_dia + producao_dia
-                
-                # Dados do dia
-                dia_dados = {
-                    'dia': dia,
-                    'data': data_calculo,
-                    'data_formatada': data_calculo.strftime('%d/%m'),
-                    'estoque_inicial': estoque_inicial_dia,
-                    'saida_prevista': saida_dia,
-                    'producao_programada': producao_dia,  # Entra no Est. Final do mesmo dia
-                    'estoque_final': estoque_final_dia
-                }
-                
-                projecao.append(dia_dados)
-            
-            return projecao
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular projeção para {cod_produto}: {str(e)}")
-            return []
-    
-    @staticmethod
-    def calcular_previsao_ruptura(projecao):
-        """Calcula previsão de ruptura (menor estoque em 7 dias)"""
-        try:
-            if not projecao or len(projecao) < 8:
-                return 0
-            
-            # Pegar estoque final dos primeiros 8 dias (D0 até D7)
-            estoques_7_dias = [dia['estoque_final'] for dia in projecao[:8]]
-            
-            return min(estoques_7_dias)
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular previsão de ruptura: {str(e)}")
-            return 0
-    
-    @staticmethod
-    def obter_resumo_produto(cod_produto, nome_produto):
-        """Obtém resumo completo de um produto"""
-        try:
-            # PRIMEIRO: Tentar usar o novo sistema de tempo real
-            inspector = inspect(db.engine)
-            if inspector.has_table('estoque_tempo_real'):
-                try:
-                    from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
-                    projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
-                    if projecao_completa:
-                        # Converter para formato esperado
-                        return {
-                            'cod_produto': cod_produto,
-                            'nome_produto': projecao_completa.get('nome_produto', nome_produto),
-                            'estoque_inicial': projecao_completa.get('estoque_atual', 0),
-                            'qtd_total_carteira': SaldoEstoque._calcular_qtd_total_carteira(cod_produto),
-                            'previsao_ruptura': projecao_completa.get('dia_ruptura', ''),
-                            'projecao_29_dias': projecao_completa.get('projecao', []),
-                            'status_ruptura': 'CRÍTICO' if projecao_completa.get('dia_ruptura') else 'OK'
-                        }
-                except ImportError:
-                    logger.debug("Sistema de tempo real não disponível")
-                except Exception as e:
-                    logger.error(f"Erro ao usar sistema de tempo real: {e}")
-            
-            # Fallback: cálculo tradicional se não houver cache
-            # Calcular projeção completa
-            projecao = SaldoEstoque.calcular_projecao_completa(cod_produto)
-            
-            if not projecao:
-                return None
-            
-            # Dados principais
-            estoque_inicial = projecao[0]['estoque_inicial']
-            previsao_ruptura = SaldoEstoque.calcular_previsao_ruptura(projecao)
-            
-            # 📊 TOTAIS CARTEIRA (implementado com CarteiraPrincipal)
-            qtd_total_carteira = SaldoEstoque._calcular_qtd_total_carteira(cod_produto)
-            
-            resumo = {
-                'cod_produto': cod_produto,
-                'nome_produto': nome_produto,
-                'estoque_inicial': estoque_inicial,
-                'qtd_total_carteira': qtd_total_carteira,
-                'previsao_ruptura': previsao_ruptura,
-                'projecao_29_dias': projecao,
-                'status_ruptura': 'CRÍTICO' if previsao_ruptura <= 0 else 'ATENÇÃO' if previsao_ruptura < 10 else 'OK'
-            }
-            
-            return resumo
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter resumo do produto {cod_produto}: {str(e)}")
-            return None
-    
-    @staticmethod
-    def _calcular_saidas_completas(cod_produto, data_expedicao):
-        """
-        Calcula TODAS as saídas previstas para uma data específica
-        ✅ CORRIGIDO: SAÍDA = Separacao + PreSeparacaoItem (SEM CarteiraPrincipal)
-        CarteiraPrincipal não participa do cálculo - apenas Separacao e PreSeparacaoItem
-        """
-        try:
-            # Buscar todos os códigos relacionados (considerando unificação)
-            try:
-                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
-            except (ValueError, TypeError):
-                # Se não for numérico, usar apenas o código original
-                codigos_relacionados = [str(cod_produto)]
-            
-            total_saida = 0
-            
-            for codigo in codigos_relacionados:
-                # 📦 1. SEPARAÇÕES já efetivadas
-                # ✅ CORRETO: Linkar Separacao com Pedido pelo separacao_lote_id
-                # Data expedição e status estão na tabela Pedido, não Separacao
-                try:
-                    from app.separacao.models import Separacao
-                    from app.pedidos.models import Pedido
-                    
-                    # Buscar separações linkadas com pedidos
-                    # Usar cast para garantir compatibilidade de tipos de data
-                    from sqlalchemy import cast, Date
-                    separacoes = Separacao.query.join(
-                        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-                    ).filter(
-                        Separacao.cod_produto == str(codigo),
-                        cast(Pedido.expedicao, Date) == data_expedicao,  # Cast para Date
-                        Pedido.status.in_(['ABERTO', 'COTADO'])  # Status vem do Pedido
-                    ).all()
-                    
-                    for sep in separacoes:
-                        if sep.qtd_saldo and sep.qtd_saldo > 0:
-                            total_saida += float(sep.qtd_saldo)
-                                
-                except Exception as e:
-                    logger.debug(f"Erro ao buscar Separacao para {codigo}: {e}")
-                
-                # 📦 2. PRÉ-SEPARAÇÕES planejadas
-                try:
-                    from app.carteira.models import PreSeparacaoItem
-                    from sqlalchemy import cast, Date
-                    pre_separacoes = PreSeparacaoItem.query.filter(
-                        PreSeparacaoItem.cod_produto == str(codigo),
-                        cast(PreSeparacaoItem.data_expedicao_editada, Date) == data_expedicao,
-                        PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-                    ).all()
-                    
-                    for pre_sep in pre_separacoes:
-                        if pre_sep.qtd_selecionada_usuario and pre_sep.qtd_selecionada_usuario > 0:
-                            total_saida += float(pre_sep.qtd_selecionada_usuario)
-                            
-                except Exception as e:
-                    logger.debug(f"Erro ao buscar PreSeparacaoItem para {codigo}: {e}")
-            
-            return total_saida
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular saídas completas para {cod_produto} em {data_expedicao}: {str(e)}")
-            return 0
-
-    @staticmethod
-    def _calcular_qtd_total_carteira(cod_produto):
-        """
-        Calcula quantidade total em carteira para um produto específico
-        Soma todos os itens pendentes de separação na CarteiraPrincipal
-        """
-        try:
-            from app.carteira.models import CarteiraPrincipal
-            
-            # Buscar todos os códigos relacionados (considerando unificação)
-            # Não converter para int se o código for alfanumérico
-            try:
-                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
-            except (ValueError, TypeError):
-                # Se não for numérico, usar apenas o código original
-                codigos_relacionados = [str(cod_produto)]
-            
-            total_carteira = 0
-            for codigo in codigos_relacionados:
-                # Somar itens ainda não separados (sem separacao_lote_id)
-                itens_carteira = CarteiraPrincipal.query.filter(
-                    CarteiraPrincipal.cod_produto == str(codigo),
-                    CarteiraPrincipal.separacao_lote_id.is_(None),  # Ainda não separado
-                    CarteiraPrincipal.ativo == True
-                ).all()
-                
-                for item in itens_carteira:
-                    if item.qtd_saldo_produto_pedido:
-                        total_carteira += float(item.qtd_saldo_produto_pedido)
-            
-            return total_carteira
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular qtd total carteira para {cod_produto}: {str(e)}")
-            return 0
-
-    @staticmethod
-    def processar_ajuste_estoque(cod_produto, qtd_ajuste, motivo, usuario):
-        """Processa ajuste de estoque gerando movimentação automática"""
-        try:
-            # Buscar nome do produto
-            produto_existente = MovimentacaoEstoque.query.filter_by(
-                cod_produto=str(cod_produto),
-                ativo=True
-            ).first()
-            
-            if not produto_existente:
-                raise ValueError(f"Produto {cod_produto} não encontrado nas movimentações")
-            
-            # Criar movimentação de ajuste
-            ajuste = MovimentacaoEstoque(
-                cod_produto=str(cod_produto),
-                nome_produto=produto_existente.nome_produto,
-                tipo_movimentacao='AJUSTE',
-                local_movimentacao='CD',
-                data_movimentacao=agora_brasil().date(),
-                qtd_movimentacao=float(qtd_ajuste),
-                observacao=f'Ajuste manual: {motivo}',
-                criado_por=usuario,
-                atualizado_por=usuario
-            )
-            
-            db.session.add(ajuste)
-            db.session.commit()
-            
-            return True
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao processar ajuste de estoque: {str(e)}")
-            raise e 
+        self.motivo_desativacao = motivo

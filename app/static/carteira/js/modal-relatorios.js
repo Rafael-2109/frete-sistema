@@ -66,21 +66,6 @@ class RelatoriosManager {
                             <!-- Botões de Exportação -->
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <div class="card h-100 text-center border-primary">
-                                        <div class="card-body">
-                                            <i class="fas fa-layer-group fa-3x text-primary mb-3"></i>
-                                            <h5 class="card-title">Pré-Separações</h5>
-                                            <p class="card-text text-muted">
-                                                Exportar pré-separações com status CRIADO e RECOMPOSTO
-                                            </p>
-                                            <button class="btn btn-primary btn-block" data-relatorio="pre_separacoes">
-                                                <i class="fas fa-download"></i> Exportar
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="col-md-6 mb-3">
                                     <div class="card h-100 text-center border-success">
                                         <div class="card-body">
                                             <i class="fas fa-truck-loading fa-3x text-success mb-3"></i>

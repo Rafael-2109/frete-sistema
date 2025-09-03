@@ -35,7 +35,7 @@ class Separacao(db.Model):
     tipo_envio = db.Column(db.String(10), default='total', nullable=True)  # total, parcial
     
     # 🔄 CAMPOS DE CONTROLE DE SINCRONIZAÇÃO (FASE 3)
-    sincronizado_nf = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi sincronizado com NF
+    sincronizado_nf = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi sincronizado com NF, gatilho principal para projetar saidas de estoque
     numero_nf = db.Column(db.String(20), nullable=True)  # NF associada quando sincronizada
     data_sincronizacao = db.Column(db.DateTime, nullable=True)  # Data/hora da sincronização
     zerado_por_sync = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi zerado por sincronização
@@ -55,6 +55,9 @@ class Separacao(db.Model):
     separacao_impressa = db.Column(db.Boolean, default=False, nullable=False)
     separacao_impressa_em = db.Column(db.DateTime, nullable=True)
     separacao_impressa_por = db.Column(db.String(100), nullable=True)
+    
+    # Relacionamento com cotação (para manter compatibilidade com Pedido)
+    cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=True)
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -66,6 +69,10 @@ class Separacao(db.Model):
         db.Index('idx_sep_num_pedido', 'num_pedido'),
         db.Index('idx_sep_pedido_sync', 'num_pedido', 'sincronizado_nf'),
         
+        # NOVOS ÍNDICES OTIMIZADOS para workspace_api.py
+        db.Index('idx_sep_pedido_produto_sync', 'num_pedido', 'cod_produto', 'sincronizado_nf'),
+        db.Index('idx_sep_produto_qtd_sync', 'cod_produto', 'qtd_saldo'),
+        
         # Índices para estoque projetado
         db.Index('idx_sep_estoque_projetado', 'cod_produto', 'expedicao'),
         db.Index('idx_sep_expedicao_produto', 'expedicao', 'cod_produto'),
@@ -75,6 +82,7 @@ class Separacao(db.Model):
         db.Index('idx_sep_nf', 'numero_nf', 'sincronizado_nf'),
         db.Index('idx_sep_cnpj', 'cnpj_cpf', 'sincronizado_nf'),
         db.Index('idx_sep_expedicao', 'expedicao', 'sincronizado_nf'),
+        db.Index('idx_sep_cotacao', 'cotacao_id'),
     )
 
     def __repr__(self):

@@ -12,8 +12,8 @@ from app.faturamento.services.processar_faturamento import ProcessadorFaturament
 from app.embarques.models import EmbarqueItem
 from app.carteira.models import CarteiraCopia
 from app.estoque.models import MovimentacaoEstoque
-from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
-from sqlalchemy import and_
+# MIGRADO: ServicoEstoqueTempoReal -> ServicoEstoqueSimples (02/09/2025)
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples as ServicoEstoqueTempoReal
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,18 @@ class ProcessadorFaturamentoTagPlus:
                 except Exception as e:
                     logger.error(f"Erro ao atualizar EmbarqueItem: {e}")
                     erros_etapa.append(f"Atualizar EmbarqueItem: {str(e)}")
+
+                # NOVO: Sincronizar Separacao.sincronizado_nf (seguindo padrão do ProcessadorFaturamento)
+                if separacao_lote_id:
+                    try:
+                        self._sincronizar_separacao_com_nf(
+                            separacao_lote_id, 
+                            faturamento_produto.numero_nf,
+                            num_pedido
+                        )
+                    except Exception as e:
+                        logger.error(f"Erro ao sincronizar Separacao: {e}")
+                        erros_etapa.append(f"Sincronizar Separacao: {str(e)}")
 
                 # Caso 1 ou 3: Abater MovimentacaoPrevista usando data da Separacao (sem fallback)
                 try:
@@ -228,25 +240,52 @@ class ProcessadorFaturamentoTagPlus:
             return None
 
     def _criar_movimentacao_estoque(self, faturamento, separacao_lote_id):
-        """Cria movimentação de estoque igual ao Odoo"""
+        """Cria movimentação de estoque com campos estruturados"""
         try:
-            # Define observação igual ao Odoo
+            # Define observação para compatibilidade
             if separacao_lote_id:
                 observacao = f"Baixa automática NF {faturamento.numero_nf} - Lote {separacao_lote_id}"
             else:
                 observacao = f"Baixa automática NF {faturamento.numero_nf} - Sem Separação"
 
-            # Verifica se já existe para evitar duplicação
+            # NOVO: Verifica se já existe usando campos estruturados
             existe = MovimentacaoEstoque.query.filter(
-                MovimentacaoEstoque.cod_produto == faturamento.cod_produto,
-                MovimentacaoEstoque.observacao.contains(f"NF {faturamento.numero_nf}"),
+                MovimentacaoEstoque.numero_nf == faturamento.numero_nf,
+                MovimentacaoEstoque.cod_produto == faturamento.cod_produto
             ).first()
+            
+            if not existe:
+                # FALLBACK: Verifica pelo texto antigo
+                existe = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.cod_produto == faturamento.cod_produto,
+                    MovimentacaoEstoque.observacao.contains(f"NF {faturamento.numero_nf}"),
+                    MovimentacaoEstoque.numero_nf.is_(None)  # Apenas registros antigos
+                ).first()
 
             if existe:
                 logger.info(f"Movimentação já existe para NF {faturamento.numero_nf}")
                 return
 
-            # Cria movimentação igual ao Odoo
+            # Buscar dados adicionais se tiver lote (seguindo padrão do ProcessadorFaturamento)
+            pedido = None
+            embarque_item = None
+            num_pedido = None
+            
+            if separacao_lote_id:
+                # Buscar Pedido pelo lote
+                from app.pedidos.models import Pedido
+                pedido = Pedido.query.filter_by(separacao_lote_id=separacao_lote_id).first()
+                if pedido:
+                    num_pedido = pedido.num_pedido
+                    
+                    # Buscar EmbarqueItem se existir
+                    from app.embarques.models import EmbarqueItem
+                    embarque_item = EmbarqueItem.query.filter_by(
+                        separacao_lote_id=separacao_lote_id,
+                        nota_fiscal=faturamento.numero_nf
+                    ).first()
+
+            # Cria movimentação com campos estruturados
             mov = MovimentacaoEstoque()
             mov.cod_produto = faturamento.cod_produto
             mov.nome_produto = faturamento.nome_produto
@@ -254,6 +293,16 @@ class ProcessadorFaturamentoTagPlus:
             mov.local_movimentacao = "VENDA"
             mov.data_movimentacao = faturamento.data_fatura
             mov.qtd_movimentacao = -abs(faturamento.qtd_produto_faturado)  # Negativo para saída
+            
+            # NOVO: Campos estruturados
+            mov.separacao_lote_id = separacao_lote_id
+            mov.numero_nf = faturamento.numero_nf
+            mov.num_pedido = num_pedido  # Pode ser None se não encontrar
+            mov.tipo_origem = 'TAGPLUS'  # ProcessadorFaturamentoTagPlus processa dados do TagPlus
+            mov.status_nf = 'FATURADO'
+            mov.codigo_embarque = embarque_item.embarque_id if embarque_item else None
+            
+            # Manter observação para compatibilidade
             mov.observacao = observacao
             mov.criado_por = "Sistema"  # Igual ao Odoo
 
@@ -305,6 +354,45 @@ class ProcessadorFaturamentoTagPlus:
 
         except Exception as e:
             logger.error(f"Erro ao sincronizar CarteiraPrincipal: {e}")
+            raise
+
+    def _sincronizar_separacao_com_nf(self, lote_id, numero_nf, num_pedido):
+        """
+        Sincroniza Separacao.sincronizado_nf = True quando NF é processada
+        Seguindo exatamente o padrão do ProcessadorFaturamento
+        """
+        try:
+            from app.separacao.models import Separacao
+            from datetime import datetime
+            
+            logger.info(f"🔄 Sincronizando Separações do lote {lote_id} com NF {numero_nf}")
+            
+            # Buscar todas as separações do lote
+            separacoes = Separacao.query.filter_by(
+                separacao_lote_id=lote_id
+            ).all()
+            
+            if not separacoes:
+                logger.warning(f"⚠️ Nenhuma separação encontrada para lote {lote_id}")
+                return
+            
+            # Marcar todas como sincronizadas
+            separacoes_atualizadas = 0
+            for sep in separacoes:
+                if not sep.sincronizado_nf:
+                    sep.sincronizado_nf = True
+                    sep.numero_nf = numero_nf
+                    sep.data_sincronizacao = datetime.now()
+                    separacoes_atualizadas += 1
+                    logger.debug(f"  ✓ Separação {sep.cod_produto} marcada como sincronizada")
+            
+            if separacoes_atualizadas > 0:
+                logger.info(f"✅ {separacoes_atualizadas} separações marcadas como sincronizadas com NF {numero_nf}")
+            else:
+                logger.info(f"ℹ️ Todas as separações do lote {lote_id} já estavam sincronizadas")
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao sincronizar separações com NF {numero_nf}: {e}")
             raise
 
     def _consolidar_relatorio(self, faturamento, num_pedido=None):

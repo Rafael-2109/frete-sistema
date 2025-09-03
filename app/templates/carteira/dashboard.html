@@ -172,67 +172,6 @@
         </div>
     </div>
 
-    <!-- Expedições Próximas -->
-    {% if expedicoes_proximas %}
-    <div class="row mb-4">
-        <div class="col-lg-12">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-truck"></i> Expedições Próximas (7 dias)
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Data Expedição</th>
-                                    <th>Pedido</th>
-                                    <th>Cliente</th>
-                                    <th>Produto</th>
-                                    <th>Quantidade</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in expedicoes_proximas[:10] %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-primary pill">
-                                            {{ item.expedicao.strftime('%d/%m') if item.expedicao else 'N/A' }}
-                                        </span>
-                                    </td>
-                                    <td><strong>{{ item.num_pedido }}</strong></td>
-                                    <td>{{ item.raz_social_red or item.raz_social }}</td>
-                                    <td>{{ item.nome_produto[:30] }}...</td>
-                                    <td>{{ "{:,.0f}".format(item.qtd_saldo_produto_pedido or 0) }}</td>
-                                    <td>
-                                        <span class="badge bg-success pill 
-                                            {% if item.status_pedido == 'ATIVO' %}badge-success
-                                            {% elif item.status_pedido == 'PENDENTE' %}badge-warning
-                                            {% else %}badge-secondary pill{% endif %}">
-                                            {{ item.status_pedido or 'N/A' }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% if expedicoes_proximas|length > 10 %}
-                    <div class="text-center mt-3">
-                        <a href="{{ url_for('carteira.listar_principal') }}?filtro_expedicao=7_dias" class="btn btn-sm btn-outline-primary">
-                            Ver todas as {{ expedicoes_proximas|length }} expedições
-                        </a>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Ações Rápidas - SEMPRE VISÍVEL -->
     <div class="row mb-4">
         <!-- Top Vendedores (apenas se houver dados) -->

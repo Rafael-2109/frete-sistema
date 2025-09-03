@@ -265,7 +265,8 @@ class SincronizacaoIntegradaService:
                 # Garantir que a sessão seja limpa em caso de erro
                 try:
                     db.session.rollback()
-                except:
+                except Exception as e:
+                    logger.error(f"❌ Erro ao fazer rollback: {e}")
                     pass
                 
                 problemas.append({

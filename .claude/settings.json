@@ -105,6 +105,5 @@
       }
     ]
   },
-  "includeCoAuthoredBy": true,
-  "enabledMcpjsonServers": ["claude-flow", "ruv-swarm"]
+  "includeCoAuthoredBy": true
 }

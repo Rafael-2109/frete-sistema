@@ -11,11 +11,11 @@ from app.carteira.main_routes import carteira_bp
 from .agrupados import *
 
 # APIs padronizadas
-from .agendamento_api import *
 from .workspace_api import *
 from .endereco_api import *
 from .separacao_api import *
 from .pre_separacao_api import *
+from .agendamento_confirmacao_api import *
 from .cardex_api import *
 from .detalhes_api import *
 from .separacoes_api import *

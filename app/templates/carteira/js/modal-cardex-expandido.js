@@ -279,10 +279,11 @@ class ModalCardexExpandido {
             
             // Calcular totais
             const totalQtd = pedidos.reduce((sum, p) => sum + p.qtd, 0);
-            // Mapear campos corretos do backend
+            // Mapear campos corretos do backend (cardex_api.py linha 193-197)
             const estoqueInicial = projecao.saldo_inicial || 0;
             const estoqueFinal = projecao.saldo_final || 0;
-            const producao = projecao.entrada || 0;
+            const producao = projecao.entrada || 0;  // 'entrada' é o campo de produção
+            const saidas = projecao.saida || 0;  // 'saida' é o total de saídas
             
             grupos.push({
                 data: data,
@@ -291,6 +292,7 @@ class ModalCardexExpandido {
                 estoqueInicial: estoqueInicial,
                 estoqueFinal: estoqueFinal,
                 producao: producao,
+                saidas: saidas,
                 temRuptura: estoqueFinal < 0
             });
         });
@@ -364,8 +366,9 @@ class ModalCardexExpandido {
                             <div class="text-end">
                                 <small>
                                     Est: ${this.formatarQuantidade(grupo.estoqueInicial)} | 
-                                    Saí: ${this.formatarQuantidade(grupo.totalQtd)} | 
-                                    Sld: ${this.formatarQuantidade(grupo.estoqueFinal)} |
+                                    Saí: ${this.formatarQuantidade(grupo.saidas || grupo.totalQtd)} | 
+                                    Prod: ${this.formatarQuantidade(grupo.producao)} | 
+                                    Final: ${this.formatarQuantidade(grupo.estoqueFinal)} |
                                     ${grupo.pedidos.length} peds
                                 </small>
                                 <i class="fas fa-chevron-down ms-2"></i>

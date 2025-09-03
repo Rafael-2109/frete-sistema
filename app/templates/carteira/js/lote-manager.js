@@ -13,13 +13,15 @@ class LoteManager {
         console.log('✅ Lote Manager inicializado');
     }
 
+    // Função removida - usar app.utils.lote_utils.gerar_lote_id() no backend
+    // Mantida temporariamente apenas como fallback até migração completa
     gerarNovoLoteId() {
+        // TODO: Migrar para chamada do backend
         const hoje = new Date();
         const data = hoje.toISOString().slice(0, 10).replace(/-/g, '');
         const hora = hoje.toTimeString().slice(0, 8).replace(/:/g, '');
         const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-
-        return `LOTE-${data}-${random}-${hora}`;
+        return `LOTE_${data}_${hora}_${random}`; // Formato alinhado com backend
     }
 
     criarNovoLote(numPedido) {
@@ -57,319 +59,363 @@ class LoteManager {
     }
 
     renderizarCardLote(loteId) {
-        const loteData = this.workspace.preSeparacoes.get(loteId);
-        const temProdutos = loteData.produtos.length > 0;
-
-        // CORREÇÃO: Verificar se há saldo disponível para adicionar produtos
-        // Deve mostrar o botão sempre que houver saldo no pedido
-        // (CarteiraPrincipal - Separações - PreSeparações > 0)
-        const mostrarBotaoAdicionar = true; // Sempre mostrar para novos lotes, a validação é feita ao adicionar
-
-        return `
-            <div class="card lote-card h-100" data-lote-id="${loteId}">
-                <div class="card-header bg-gradient-primary text-black">
-                    <h6 class="mb-0">
-                        <i class="fas fa-box me-2"></i>
-                        PRÉ-SEPARAÇÃO
-                        <small class="text-muted ms-2" title="Alterações são salvas automaticamente">
-                            <i class="fas fa-save"></i> Auto-save
-                        </small>
-                    </h6>
-                    <small>${loteId}</small>
-                </div>
-                
-                <div class="card-body">
-                    <div class="produtos-lote mb-3">
-                        ${temProdutos ? this.renderizarProdutosDoLote(loteData.produtos, loteId) :
-                '<p class="text-muted text-center"><i class="fas fa-hand-pointer me-2"></i>Selecione produtos e clique em "Adicionar Selecionados"</p>'}
-                    </div>
-                    
-                    ${temProdutos ? `
-                        <div class="totais-lote border-top pt-2">
-                            <div class="row text-center">
-                                <div class="col-3">
-                                    <strong class="text-success">${this.formatarMoeda(loteData.totais.valor)}</strong>
-                                    <br><small class="text-muted">Valor</small>
-                                </div>
-                                <div class="col-3">
-                                    <strong class="text-primary">${this.formatarPeso(loteData.totais.peso)}</strong>
-                                    <br><small class="text-muted">Peso</small>
-                                </div>
-                                <div class="col-3">
-                                    <strong class="text-info">${this.formatarPallet(loteData.totais.pallet)}</strong>
-                                    <br><small class="text-muted">Pallets</small>
-                                </div>
-                                <div class="col-3">
-                                    <strong class="text-dark">${loteData.produtos.length}</strong>
-                                    <br><small class="text-muted">Itens</small>
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <div class="card-footer">
-                    <div class="btn-group-vertical w-100">
-                        ${mostrarBotaoAdicionar ? `
-                            <button class="btn btn-success btn-sm mb-1" 
-                                    onclick="workspace.adicionarProdutosSelecionados('${loteId}')">
-                                <i class="fas fa-plus-circle me-1"></i> Adicionar Selecionados
-                            </button>
-                        ` : ''}
-                        <div class="btn-group w-100">
-                            <button class="btn btn-primary btn-sm" 
-                                    onclick="workspace.gerarSeparacao('${loteId}')"
-                                    ${!temProdutos ? 'disabled' : ''}>
-                                <i class="fas fa-play me-1"></i> Gerar Separação
-                            </button>
-                            <button class="btn btn-secondary btn-sm" 
-                                    onclick="workspace.editarDatasPreSeparacao('${loteId}')"
-                                    ${!temProdutos ? 'disabled' : ''}>
-                                <i class="fas fa-calendar-alt me-1"></i> Datas
-                            </button>
-                            <button class="btn btn-info btn-sm" 
-                                    onclick="workspace.abrirDetalhesLote('${loteId}')">
-                                <i class="fas fa-search me-1"></i>
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm" 
-                                    onclick="workspace.removerLote('${loteId}')">
-                                <i class="fas fa-trash me-1"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        // Obter dados do lote ou criar estrutura padrão
+        const loteData = this.workspace.preSeparacoes.get(loteId) || {
+            produtos: [],
+            totais: { valor: 0, peso: 0, pallet: 0 },
+            status: 'PREVISAO',
+            lote_id: loteId,
+            separacao_lote_id: loteId,
+            data_expedicao: null,
+            data_agendamento: null,
+            expedicao: null,
+            agendamento: null,
+            protocolo: null,
+            agendamento_confirmado: false
+        };
+        
+        // Garantir defaults
+        loteData.status = loteData.status || 'PREVISAO';
+        loteData.lote_id = loteData.lote_id || loteId;
+        
+        // USAR O CARD UNIVERSAL
+        return this.renderizarCardUniversal(loteData);
     }
 
-    renderizarCardPreSeparacao(loteData) {
-        const temProdutos = loteData.produtos.length > 0;
-        const isPre = loteData.status === 'pre_separacao';
+    /**
+     * 🔐 OBTER PERMISSÕES BASEADAS NO STATUS
+     * Centraliza toda lógica de permissões
+     */
+    obterPermissoes(status) {
+        return {
+            podeEditarDatas: ['PREVISAO', 'ABERTO'].includes(status),
+            podeAdicionarProdutos: ['PREVISAO', 'ABERTO'].includes(status),
+            podeRemoverProdutos: ['PREVISAO', 'ABERTO'].includes(status),
+            podeConfirmar: status === 'PREVISAO',
+            podeReverter: status === 'ABERTO',
+            podeExcluir: ['PREVISAO', 'ABERTO'].includes(status),
+            podeImprimir: true,
+            podeAgendarPortal: ['ABERTO', 'COTADO'].includes(status),
+            podeVerificarPortal: ['ABERTO', 'COTADO'].includes(status),
+            podeVerDetalhes: ['COTADO', 'EMBARCADO', 'FATURADO'].includes(status)
+        };
+    }
 
-        // DEBUG: Log para verificar o problema
-        console.log('🔍 renderizarCardPreSeparacao:', {
+    /**
+     * 🎨 RENDERIZAR CARD UNIVERSAL
+     * Card único para todos os status de separação
+     * Diferenciado apenas por cores e permissões
+     */
+    renderizarCardUniversal(loteData) {
+        // Configuração de cores por status
+        const configStatus = {
+            'PREVISAO': {
+                cor: 'secondary',     // Cinza claro
+                texto: 'SEPARAÇÃO',   // Sempre "SEPARAÇÃO", não "PRÉ-SEPARAÇÃO"
+                icone: 'clock',
+                badge: 'PREVISÃO'     // Badge indica o status real
+            },
+            'ABERTO': {
+                cor: 'warning',       // Amarelo
+                texto: 'SEPARAÇÃO',
+                icone: 'box-open',
+                badge: 'ABERTO'
+            },
+            'COTADO': {
+                cor: 'primary',       // Azul
+                texto: 'SEPARAÇÃO',
+                icone: 'truck',
+                badge: 'COTADO'
+            },
+            'EMBARCADO': {
+                cor: 'success',       // Verde
+                texto: 'SEPARAÇÃO',
+                icone: 'shipping-fast',
+                badge: 'EMBARCADO'
+            },
+            'FATURADO': {
+                cor: 'success',       // Verde
+                texto: 'SEPARAÇÃO',
+                icone: 'file-invoice-dollar',
+                badge: 'FATURADO'
+            },
+            'NF_CD': {
+                cor: 'danger',        // Vermelho
+                texto: 'SEPARAÇÃO',
+                icone: 'exclamation-triangle',
+                badge: 'NF NO CD'
+            }
+        };
+
+        // Compatibilidade com status antigo 'pre_separacao'
+        const status = loteData.status === 'pre_separacao' ? 'PREVISAO' : loteData.status;
+        const config = configStatus[status] || configStatus['PREVISAO'];
+        
+        // Usar método centralizado de permissões
+        const permissoes = this.obterPermissoes(status);
+        
+        const temProdutos = loteData.produtos && loteData.produtos.length > 0;
+        
+        console.log('🎨 Renderizando card universal:', {
             loteId: loteData.lote_id,
-            status: loteData.status,
-            isPre: isPre,
-            temProdutos: temProdutos,
-            qtdProdutos: loteData.produtos.length
+            status: status,
+            config: config,
+            permissoes: permissoes
         });
 
-        // CORREÇÃO: Verificar se há saldo disponível no pedido
-        // O botão deve aparecer sempre que:
-        // 1. É uma pré-separação (isPre = true)
-        // 2. Existe saldo disponível no pedido (qtd na CarteiraPrincipal - Separações - PreSeparações > 0)
-        
-        // Para pré-separações, sempre mostrar o botão de adicionar
-        // A validação de saldo é feita ao tentar adicionar o produto
-        const mostrarBotaoAdicionar = isPre;
-        
-        console.log('🔍 mostrarBotaoAdicionar:', mostrarBotaoAdicionar);
-
         return `
-            <div class="card lote-card h-100" data-lote-id="${loteData.lote_id}">
-                <div class="card-header ${isPre ? 'bg-warning' : 'bg-success'} text-black">
-                    <h6 class="mb-0">
-                        <i class="fas fa-${isPre ? 'clock' : 'check'} me-2"></i>
-                        ${isPre ? 'PRÉ-SEPARAÇÃO' : 'SEPARAÇÃO'}
-                    </h6>
+            <div class="card lote-card h-100 border-${config.cor}" data-lote-id="${loteData.lote_id}" data-status="${status}">
+                <div class="card-header bg-${config.cor} ${config.cor === 'warning' ? 'text-dark' : 'text-white'}">
                     <div class="d-flex justify-content-between align-items-center">
-                        <small>${loteData.lote_id}</small>
-                        <span class="badge ${isPre ? 'bg-light text-dark' : 'bg-dark text-white'}">
-                            ${isPre ? 'PLANEJADA' : 'CONFIRMADA'}
+                        <h6 class="mb-0">
+                            <i class="fas fa-${config.icone} me-2"></i>
+                            ${config.texto}
+                            ${status === 'PREVISAO' ? `
+                                <small class="text-muted ms-2" title="Alterações são salvas automaticamente">
+                                    <i class="fas fa-save"></i> Auto-save
+                                </small>
+                            ` : ''}
+                        </h6>
+                        <span class="badge ${config.cor === 'warning' ? 'bg-dark text-white' : 'bg-white text-dark'}">
+                            ${config.badge}
                         </span>
                     </div>
+                    <small class="d-block mt-1">${loteData.lote_id || loteData.separacao_lote_id}</small>
                 </div>
                 
                 <div class="card-body">
+                    <!-- Lista de produtos -->
                     <div class="produtos-lote mb-3">
-                        ${temProdutos ? this.renderizarProdutosDaPreSeparacao(loteData.produtos, loteData.lote_id) :
-                '<p class="text-muted text-center"><i class="fas fa-inbox me-2"></i>Nenhum produto</p>'}
+                        ${temProdutos ? this.renderizarProdutosUniversal(loteData.produtos, loteData.lote_id, permissoes.podeRemoverProdutos) :
+                            '<p class="text-muted text-center"><i class="fas fa-box-open me-2"></i>Nenhum produto neste lote</p>'}
                     </div>
                     
+                    <!-- Totais -->
                     ${temProdutos ? `
-                        <div class="totais-lote border-top pt-2">
+                        <div class="totais-lote border-top pt-3">
                             <div class="row text-center">
-                                <div class="col-3">
-                                    <strong class="text-success">${this.formatarMoeda(loteData.totais.valor)}</strong>
-                                    <br><small class="text-muted">Valor</small>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Valor</small>
+                                    <strong class="text-success total-valor-card">${this.formatarMoeda(loteData.totais?.valor || loteData.valor_total || 0)}</strong>
                                 </div>
-                                <div class="col-3">
-                                    <strong class="text-primary">${this.formatarPeso(loteData.totais.peso)}</strong>
-                                    <br><small class="text-muted">Peso</small>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Peso</small>
+                                    <strong class="text-primary total-peso-card">${this.formatarPeso(loteData.totais?.peso || loteData.peso_total || 0)}</strong>
                                 </div>
-                                <div class="col-3">
-                                    <strong class="text-info">${this.formatarPallet(loteData.totais.pallet)}</strong>
-                                    <br><small class="text-muted">Pallets</small>
-                                </div>
-                                <div class="col-3">
-                                    <strong class="text-dark">${loteData.produtos.length}</strong>
-                                    <br><small class="text-muted">Itens</small>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Pallets</small>
+                                    <strong class="text-info total-pallet-card">${this.formatarPallet(loteData.totais?.pallet || loteData.pallet_total || 0)}</strong>
                                 </div>
                             </div>
                         </div>
                     ` : ''}
                     
-                    ${loteData.data_expedicao ? `
-                        <div class="mt-2 text-center">
-                            <small class="text-muted">
-                                <i class="fas fa-calendar me-1"></i>
-                                Expedição: ${(() => {
-                    const v = loteData.data_expedicao;
-                    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-                        const [y, m, d] = v.split('-');
-                        return `${d}/${m}/${y}`;
-                    }
-                    return (new Date(v)).toLocaleDateString('pt-BR');
-                })()}
-                            </small>
+                    <!-- Datas -->
+                    <div class="datas-lote border-top pt-3 mt-3">
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Expedição</small>
+                                <div class="fw-bold data-expedicao-card">${this.formatarDataDisplay(loteData.expedicao || loteData.data_expedicao) || 'Não definida'}</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Agendamento</small>
+                                <div class="fw-bold data-agendamento-card">
+                                    <span class="data-agendamento-texto">${this.formatarDataDisplay(loteData.agendamento || loteData.data_agendamento) || 'Não definido'}</span>
+                                    ${loteData.agendamento_confirmado ? '<i class="fas fa-check-circle text-success ms-1 agendamento-confirmado-icon" title="Confirmado"></i>' : ''}
+                                </div>
+                            </div>
                         </div>
-                    ` : ''}
-                    
-                    ${loteData.data_agendamento ? `
-                        <div class="mt-2 text-center">
-                            <small class="text-muted">
-                                <i class="fas fa-clock me-1"></i>
-                                Agendamento: ${(() => {
-                                    const v = loteData.data_agendamento;
-                                    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-                                        const [y, m, d] = v.split('-');
-                                        return `${d}/${m}/${y}`;
-                                    }
-                                    return (new Date(v)).toLocaleDateString('pt-BR');
-                                })()}
-                                ${loteData.protocolo ? ` - ${loteData.protocolo}` : ''}
-                            </small>
-                            ${loteData.agendamento_confirmado ? `
-                                <br>
-                                <span class="badge bg-success mt-1">
-                                    <i class="fas fa-check-circle me-1"></i> Confirmado
-                                </span>
-                            ` : `
-                                <br>
-                                <span class="badge bg-warning text-dark mt-1">
-                                    <i class="fas fa-hourglass-half me-1"></i> Aguardando
-                                </span>
-                            `}
-                        </div>
-                    ` : ''}
+                        ${loteData.protocolo ? `
+                            <div class="row mt-2">
+                                <div class="col-12">
+                                    <small class="text-muted d-block">Protocolo</small>
+                                    <div class="fw-bold protocolo-card">${loteData.protocolo}</div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
                 
+                <!-- Footer com ações baseadas no status -->
                 <div class="card-footer">
-                    ${isPre ? `
-                        <div class="btn-group-vertical w-100">
-                            ${mostrarBotaoAdicionar ? `
-                                <button class="btn btn-success btn-sm mb-1" 
-                                        onclick="workspace.adicionarProdutosSelecionados('${loteData.lote_id}')">
-                                    <i class="fas fa-plus-circle me-1"></i> Adicionar Selecionados
-                                </button>
-                            ` : ''}
-                            <button class="btn btn-outline-primary btn-sm mb-1 w-100" 
-                                    onclick="workspace.editarDatasPreSeparacao('${loteData.lote_id}')"
-                                    ${!temProdutos ? 'disabled' : ''}>
-                                <i class="fas fa-calendar-alt me-1"></i> Alterar Datas
-                            </button>
-                            ${loteData.data_agendamento && !loteData.agendamento_confirmado ? `
-                                <button class="btn btn-outline-success btn-sm mb-1 w-100" 
-                                        onclick="workspace.confirmarAgendamentoLote('${loteData.lote_id}', 'pre')">
-                                    <i class="fas fa-calendar-check me-1"></i> Confirmar Agendamento
-                                </button>
-                            ` : ''}
-                            <div class="btn-group w-100">
-                                <button class="btn btn-primary btn-sm" 
-                                        onclick="workspace.confirmarSeparacao('${loteData.lote_id}')"
-                                        ${!temProdutos ? 'disabled' : ''}>
-                                    <i class="fas fa-check me-1"></i> Confirmar
-                                </button>
-                                <button class="btn btn-info btn-sm" 
-                                        onclick="workspace.abrirDetalhesLote('${loteData.lote_id}')">
-                                    <i class="fas fa-search me-1"></i>
-                                </button>
-                                <button class="btn btn-outline-danger btn-sm" 
-                                        onclick="workspace.removerLote('${loteData.lote_id}')">
-                                    <i class="fas fa-trash me-1"></i>
-                                </button>
-                            </div>
-                        </div>
-                    ` : `
-                        ${loteData.data_agendamento && !loteData.agendamento_confirmado ? `
-                            <button class="btn btn-outline-success btn-sm mb-1 w-100" 
-                                    onclick="workspace.confirmarAgendamentoLote('${loteData.lote_id}', 'sep')">
-                                <i class="fas fa-calendar-check me-1"></i> Confirmar Agendamento
-                            </button>
-                        ` : ''}
-                        ${loteData.data_agendamento && loteData.agendamento_confirmado ? `
-                            <button class="btn btn-outline-warning btn-sm mb-1 w-100" 
-                                    onclick="workspace.reverterAgendamentoLote('${loteData.lote_id}', 'sep')">
-                                <i class="fas fa-undo me-1"></i> Reverter Confirmação
-                            </button>
-                        ` : ''}
-                        <div class="btn-group w-100">
+                    <!-- Primeira linha: Botões principais -->
+                    <div class="btn-group mb-2" role="group">
+                        ${permissoes.podeEditarDatas ? `
                             <button class="btn btn-outline-primary btn-sm" 
-                                    onclick="workspace.editarSeparacao('${loteData.lote_id}')">
-                                <i class="fas fa-edit me-1"></i> Editar
+                                    onclick="workspace.editarDatas('${loteData.lote_id}', '${status}')">
+                                <i class="fas fa-calendar-alt"></i> Datas
                             </button>
-                            <button class="btn btn-outline-info btn-sm" 
-                                    onclick="workspace.abrirDetalhesLote('${loteData.lote_id}')">
-                                <i class="fas fa-search me-1"></i> Detalhes
+                        ` : ''}
+
+                        ${permissoes.podeAdicionarProdutos ? `
+                            <button class="btn btn-outline-success btn-sm" 
+                                    onclick="workspace.adicionarProdutosSelecionados('${loteData.lote_id}')">
+                                <i class="fas fa-plus"></i> Adicionar
                             </button>
+                        ` : ''}
+
+                        ${permissoes.podeConfirmar ? `
+                            <button class="btn btn-warning btn-sm" 
+                                    onclick="workspace.alterarStatusSeparacao('${loteData.lote_id}', 'ABERTO')"
+                                    title="Transformar em separação confirmada (ABERTO)">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        ` : ''}
+
+                        ${permissoes.podeReverter ? `
+                            <button class="btn btn-secondary btn-sm" 
+                                    onclick="workspace.alterarStatusSeparacao('${loteData.lote_id}', 'PREVISAO')"
+                                    title="Voltar para previsão">
+                                <i class="fas fa-undo"></i> Previsão
+                            </button>
+                        ` : ''}
+
+                        ${permissoes.podeExcluir ? `
+                            <button class="btn btn-outline-danger btn-sm" 
+                                    onclick="workspace.excluirLote('${loteData.lote_id}')"
+                                    title="Excluir separação">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <!-- Segunda linha: Botões do Portal -->
+                    ${(loteData.agendamento || loteData.data_agendamento) ? `
+                        <div class="btn-group mb-2" role="group">
+                            <button class="btn btn-outline-success btn-sm" 
+                                    onclick="carteiraAgrupada.agendarNoPortal('${loteData.lote_id || loteData.separacao_lote_id}')"
+                                    title="Agendar no portal do cliente">
+                                <i class="fas fa-calendar-plus"></i> Agendar
+                            </button>
+                        
+                            ${loteData.protocolo ? `
+                                <button class="btn btn-outline-info btn-sm"
+                                        onclick="carteiraAgrupada.verificarProtocoloPortal('${loteData.protocolo}')"
+                                        title="Verificar protocolo: ${loteData.protocolo}">
+                                    <i class="fas fa-check-circle"></i> Ver. Protocolo
+                                </button>
+                            ` : ''}
                         </div>
-                    `}
+                    ` : ''}
                 </div>
-            </div>
+            </div> 
         `;
     }
 
-    renderizarProdutosDaPreSeparacao(produtos, loteId) {
-        return produtos.map(produto => {
+    
+
+
+    /**
+     * 📅 FORMATAR DATA PARA DISPLAY
+     * Converte data em qualquer formato para dd/mm/yyyy
+     */
+    formatarDataDisplay(data) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.data) {
+            return window.Formatters.data(data);
+        }
+        
+        // Fallback para implementação original
+        if (!data) return null;
+        
+        // Se já está no formato dd/mm/yyyy, retornar como está
+        if (typeof data === 'string' && data.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+            return data;
+        }
+        
+        // Se está no formato yyyy-mm-dd
+        if (typeof data === 'string' && data.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [ano, mes, dia] = data.split('-');
+            return `${dia}/${mes}/${ano}`;
+        }
+        
+        // Se é um objeto Date ou string de data
+        try {
+            const dateObj = new Date(data);
+            if (!isNaN(dateObj.getTime())) {
+                const dia = String(dateObj.getDate()).padStart(2, '0');
+                const mes = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const ano = dateObj.getFullYear();
+                return `${dia}/${mes}/${ano}`;
+            }
+        } catch (e) {
+            console.warn('Erro ao formatar data:', e);
+        }
+        
+        return null;
+    }
+
+    /**
+     * 🎨 RENDERIZAR PRODUTOS UNIVERSAL
+     * Renderiza lista de produtos com permissão condicional de remoção
+     * Layout compacto: 1 linha por produto
+     */
+    renderizarProdutosUniversal(produtos, loteId, podeRemover = false) {
+        if (!produtos || produtos.length === 0) {
+            return '<p class="text-muted text-center"><i class="fas fa-box-open me-2"></i>Nenhum produto</p>';
+        }
+
+        return `<div class="produtos-lista">` + produtos.map(produto => {
+            // Compatibilidade com diferentes estruturas de dados
+            const codProduto = produto.codProduto || produto.cod_produto;
+            const nomeProduto = produto.nomeProduto || produto.nome_produto || '';
+            const quantidade = produto.quantidade || produto.qtd_saldo || 0;
+            const valor = produto.valor || produto.valor_saldo || 0;
+            
+            // Formatar valores
+            const qtdFormatada = Math.floor(quantidade).toLocaleString('pt-BR');
+            const valorFormatado = valor > 0 ? valor.toLocaleString('pt-BR', { 
+                minimumFractionDigits: 0, 
+                maximumFractionDigits: 0 
+            }) : '0';
+
             return `
-                <div class="produto-lote d-flex justify-content-between align-items-center mb-1">
-                    <div class="produto-info">
-                        <small><strong>${produto.cod_produto}</strong></small>
-                        <br><small class="text-muted">${produto.quantidade}un</small>
+                <div class="produto-lote d-flex align-items-center justify-content-between py-1 border-bottom">
+                    <div class="produto-info d-flex align-items-center flex-grow-1" style="min-width: 0;">
+                        <strong class="me-2 text-nowrap">${codProduto}</strong>
+                        <span class="text-truncate small text-muted me-2" style="max-width: 200px;" title="${nomeProduto}">
+                            ${nomeProduto}
+                        </span>
                     </div>
-                    <div class="produto-acoes">
-                        <span class="badge bg-info text-white">${this.formatarMoeda(produto.valor)}</span>
-                        <button class="btn btn-sm btn-outline-danger ms-1" 
-                                onclick="workspace.removerProdutoDoLote('${produto.loteId || produto.lote_id || loteId}', '${produto.cod_produto || produto.codProduto}')"
-                                title="Remover produto da pré-separação (salva automaticamente)">
-                            <i class="fas fa-times"></i>
-                        </button>
+                    <div class="produto-valores d-flex align-items-center text-nowrap">
+                        <span class="small me-3">
+                            <strong>${qtdFormatada}</strong>un
+                        </span>
+                        ${valor > 0 ? `
+                            <span class="small text-success me-3">
+                                R$ <strong>${valorFormatado}</strong>
+                            </span>
+                        ` : ''}
+                        ${podeRemover ? `
+                            <button class="btn btn-sm btn-link text-danger p-0 ms-2" 
+                                    onclick="workspace.loteManager.removerProdutoDoLote('${loteId}', '${codProduto}')"
+                                    title="Remover produto">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             `;
-        }).join('');
+        }).join('') + `</div>`;
     }
 
-    renderizarProdutosDoLote(produtos, loteId) {
-        return produtos.map(produto => {
-            const dadosProduto = this.workspace.dadosProdutos.get(produto.codProduto);
-            const estoqueData = dadosProduto ? dadosProduto.estoque_data_expedicao : 0;
-
-            return `
-                <div class="produto-lote d-flex justify-content-between align-items-center mb-1">
-                    <div class="produto-info">
-                        <small><strong>${produto.codProduto}</strong></small>
-                        <br><small class="text-muted">${produto.quantidade}un (${estoqueData})</small>
-                    </div>
-                    <button class="btn btn-sm btn-outline-danger" 
-                            onclick="workspace.removerProdutoDoLote('${produto.loteId || loteId}', '${produto.codProduto}')"
-                            title="Remover produto (salva automaticamente)">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-        }).join('');
-    }
+    // REMOVED: renderizarProdutosDoLote - Método não utilizado (wrapper desnecessário)
 
     async adicionarProdutoNoLote(loteId, dadosProduto) {
         try {
             // Obter data de expedição (usar amanhã como padrão)
             const dataExpedicao = dadosProduto.dataExpedicao || this.obterDataExpedicaoDefault();
 
-            // 🎯 USAR PreSeparacaoManager para manter consistência
-            const resultado = await this.workspace.preSeparacaoManager.salvarPreSeparacao(
-                this.workspace.obterNumeroPedido(),
+            // 🔍 DEBUG: Verificar qual pedido está sendo usado
+            const numPedido = this.workspace.obterNumeroPedido();
+            console.log(`🔍 DEBUG adicionarProdutoNoLote:
+                - Pedido atual: ${numPedido}
+                - Produto: ${dadosProduto.codProduto}
+                - Lote: ${loteId}`);
+
+            // 🎯 USAR API diretamente para salvar separação
+            const resultado = await this.salvarSeparacaoAPI(
+                numPedido,
                 dadosProduto.codProduto,
                 loteId,
                 dadosProduto.qtdPedido,
@@ -395,7 +441,7 @@ class LoteManager {
                 produtoExistente.valor = resultado.dados.valor;
                 produtoExistente.peso = resultado.dados.peso;
                 produtoExistente.pallet = resultado.dados.pallet;
-                produtoExistente.preSeparacaoId = resultado.pre_separacao_id;
+                produtoExistente.separacaoId = resultado.separacao_id;
 
                 // Mostrar feedback específico
                 this.workspace.mostrarFeedback(
@@ -410,7 +456,7 @@ class LoteManager {
                     valor: resultado.dados.valor,
                     peso: resultado.dados.peso,
                     pallet: resultado.dados.pallet,
-                    preSeparacaoId: resultado.pre_separacao_id,
+                    separacaoId: resultado.separacao_id,
                     loteId: loteId,
                     status: 'pre_separacao'
                 });
@@ -425,7 +471,7 @@ class LoteManager {
             // Re-renderizar o lote
             this.atualizarCardLote(loteId);
 
-            console.log(`✅ Produto ${dadosProduto.codProduto} persistido no lote ${loteId} (ID: ${resultado.pre_separacao_id})`);
+            console.log(`✅ Produto ${dadosProduto.codProduto} persistido no lote ${loteId} (ID: ${resultado.separacao_id})`);
 
             // DEBUG: Verificar estado antes de atualizar saldo
             console.log(`🔍 DEBUG antes de atualizarSaldoAposAdicao:`);
@@ -517,109 +563,23 @@ class LoteManager {
         }
     }
 
-    async removerLote(loteId) {
-        if (confirm(`Tem certeza que deseja remover o lote ${loteId}?`)) {
-            try {
-                const loteData = this.workspace.preSeparacoes.get(loteId);
-
-                if (loteData && loteData.produtos && loteData.produtos.length > 0) {
-                    // Guardar informações dos produtos antes de remover
-                    const produtosParaAtualizar = [...loteData.produtos];
-
-                    // Remover cada produto da pré-separação via API
-                    for (const produto of loteData.produtos) {
-                        if (produto.preSeparacaoId) {
-                            console.log(`🗑️ Removendo produto ${produto.codProduto} (ID: ${produto.preSeparacaoId})`);
-
-                            const response = await fetch(`/carteira/api/pre-separacao/${produto.preSeparacaoId}/remover`, {
-                                method: 'DELETE',
-                                headers: {
-                                    'X-CSRFToken': this.getCSRFToken()
-                                }
-                            });
-
-                            const result = await response.json();
-
-                            if (!result.success) {
-                                throw new Error(result.error || 'Erro ao remover pré-separação');
-                            }
-                        }
-                    }
-
-                    // Atualizar saldos de todos os produtos removidos
-                    for (const produto of produtosParaAtualizar) {
-                        if (window.workspaceQuantidades) {
-                            console.log(`🔄 Atualizando saldo após remover lote: ${produto.codProduto} (qtd: ${produto.quantidade})`);
-                            window.workspaceQuantidades.atualizarSaldoAposRemocao(produto.codProduto, produto.quantidade);
-                        }
-                    }
-
-                    // FORÇAR atualização visual após remover lote completo
-                    setTimeout(() => {
-                        console.log(`🔧 Forçando atualização de ${produtosParaAtualizar.length} produtos após remover lote`);
-
-                        for (const produto of produtosParaAtualizar) {
-                            const inputProduto = document.querySelector(`input.qtd-editavel[data-produto="${produto.codProduto}"]`);
-                            if (inputProduto && window.workspace) {
-                                const dadosProdutoAtualizado = window.workspace.dadosProdutos.get(produto.codProduto);
-                                if (dadosProdutoAtualizado) {
-                                    const saldoAtualizado = window.workspaceQuantidades.calcularSaldoDisponivel(dadosProdutoAtualizado);
-                                    const novoValor = Math.floor(saldoAtualizado.qtdEditavel);
-
-                                    console.log(`   - Atualizando ${produto.codProduto}: ${inputProduto.value} → ${novoValor}`);
-
-                                    inputProduto.value = novoValor;
-                                    inputProduto.setAttribute('value', novoValor);
-                                    inputProduto.dataset.qtdSaldo = novoValor;
-                                    inputProduto.max = novoValor;
-
-                                    // Atualizar span
-                                    const span = inputProduto.nextElementSibling;
-                                    if (span && span.classList.contains('input-group-text')) {
-                                        span.textContent = `/${novoValor}`;
-                                    }
-
-                                    // Atualizar valores calculados
-                                    window.workspaceQuantidades.atualizarColunasCalculadas(produto.codProduto, novoValor, dadosProdutoAtualizado);
-                                }
-                            }
-                        }
-                    }, 300);
-                }
-
-                // Remover do Map local
-                this.workspace.preSeparacoes.delete(loteId);
-
-                // Remover o card visual
-                const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`).closest('.col-md-4');
-                if (cardElement) {
-                    cardElement.remove();
-                }
-
-                console.log(`✅ Lote ${loteId} removido completamente`);
-                this.workspace.mostrarToast('Lote removido com sucesso!', 'success');
-
-            } catch (error) {
-                console.error('❌ Erro ao remover lote:', error);
-                this.workspace.mostrarToast(`Erro ao remover lote: ${error.message}`, 'error');
-            }
-        }
-    }
+    // Método removerLote removido - usar workspace.excluirLote() que é o método correto
 
     async removerProdutoDoLote(loteId, codProduto) {
         try {
             const loteData = this.workspace.preSeparacoes.get(loteId);
             if (!loteData) return;
 
-            // Encontrar produto para obter o ID da pré-separação
+            // Encontrar produto para obter o ID da separação
             const produto = loteData.produtos.find(p => p.codProduto === codProduto);
-            if (!produto || !produto.preSeparacaoId) {
-                console.warn(`⚠️ Produto ${codProduto} não tem ID de pré-separação`);
+            const separacaoId = produto?.separacaoId || produto?.preSeparacaoId;
+            if (!produto || !separacaoId) {
+                console.warn(`⚠️ Produto ${codProduto} não tem ID de separação`);
                 return;
             }
 
             // 🎯 REMOVER do backend via API
-            const response = await fetch(`/carteira/api/pre-separacao/${produto.preSeparacaoId}/remover`, {
+            const response = await fetch(`/carteira/api/separacao/${separacaoId}/remover`, {
                 method: 'DELETE',
                 headers: {
                     'X-CSRFToken': this.getCSRFToken()
@@ -645,7 +605,7 @@ class LoteManager {
             this.recalcularTotaisLote(loteId);
             this.atualizarCardLote(loteId);
 
-            console.log(`🗑️ Produto ${codProduto} removido do lote ${loteId} (ID: ${produto.preSeparacaoId})`);
+            console.log(`🗑️ Produto ${codProduto} removido do lote ${loteId} (ID: ${separacaoId})`);
 
             // IMPORTANTE: Atualizar saldo na tabela de origem após remover
             if (window.workspaceQuantidades) {
@@ -688,8 +648,13 @@ class LoteManager {
         }
     }
 
-    // Utilitários
+    // Utilitários - Usando módulo centralizado com fallback
     formatarMoeda(valor) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.moeda) {
+            return window.Formatters.moeda(valor);
+        }
+        // Fallback para implementação original
         if (!valor) return 'R$ 0,00';
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
@@ -698,20 +663,107 @@ class LoteManager {
     }
 
     formatarPeso(peso) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.peso) {
+            return window.Formatters.peso(peso);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPeso(peso);
+        }
+        // Fallback final
         if (!peso) return '0 kg';
         return `${parseFloat(peso).toFixed(1)} kg`;
     }
 
     formatarPallet(pallet) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.pallet) {
+            return window.Formatters.pallet(pallet);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPallet(pallet);
+        }
+        // Fallback final
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
+    }
+
+    /**
+     * 🔄 SALVAR SEPARAÇÃO VIA API
+     * Substitui a chamada ao PreSeparacaoManager obsoleto
+     */
+    async salvarSeparacaoAPI(numPedido, codProduto, loteId, quantidade, dataExpedicao) {
+        try {
+            const response = await fetch('/carteira/api/separacao/salvar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    num_pedido: numPedido,
+                    cod_produto: codProduto,
+                    separacao_lote_id: loteId,
+                    qtd_saldo: quantidade,
+                    expedicao: dataExpedicao,
+                    status: 'PREVISAO'  // Status inicial sempre PREVISAO
+                })
+            });
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'Erro ao salvar separação');
+            }
+
+            // Calcular valores localmente usando dados do produto
+            const dadosProduto = this.workspace.dadosProdutos.get(codProduto);
+            let valorCalculado = 0;
+            let pesoCalculado = 0;
+            let palletCalculado = 0;
+            
+            if (dadosProduto) {
+                const preco = parseFloat(dadosProduto.precoProdutoPedido) || 0;
+                const peso = parseFloat(dadosProduto.pesoProduto) || 0;
+                const palletizacao = parseFloat(dadosProduto.palletizacao) || 1;
+                
+                valorCalculado = quantidade * preco;
+                pesoCalculado = quantidade * peso;
+                palletCalculado = quantidade / palletizacao;
+            }
+
+            // Adaptar resposta para formato esperado
+            return {
+                success: true,
+                separacao_id: result.separacao_id,
+                dados: {
+                    quantidade: quantidade,
+                    valor: valorCalculado,
+                    peso: pesoCalculado,
+                    pallet: palletCalculado
+                }
+            };
+        } catch (error) {
+            console.error('❌ Erro ao salvar separação:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 
     /**
      * Obter CSRF Token de forma consistente
      */
     getCSRFToken() {
-        // Usar o mesmo método do PreSeparacaoManager
+        // Usar módulo centralizado se disponível
+        if (window.Security && window.Security.getCSRFToken) {
+            return window.Security.getCSRFToken();
+        }
+        
+        // Fallback para implementação original
         const cookieValue = document.cookie
             .split('; ')
             .find(row => row.startsWith('csrftoken='))

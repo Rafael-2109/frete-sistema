@@ -5,10 +5,12 @@ Utilitários específicos para o workspace de montagem
 from app.utils.timezone import agora_brasil
 from app import db
 from app.carteira.models import CarteiraPrincipal
-# NOTA: SaldoEstoque mantido apenas para compatibilidade de fallback
-# O sistema principal usa ServicoProjecaoEstoque (híbrido)
-from app.estoque.models import SaldoEstoque
+# MIGRADO: SaldoEstoque -> SaldoEstoqueCompativel (02/09/2025)
+# Usando camada de compatibilidade para migração gradual
+# from app.estoque.models import SaldoEstoque
+from app.estoque.services.compatibility_layer import SaldoEstoque
 from sqlalchemy import func
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,17 +52,46 @@ def calcular_estoque_na_data(projecao_29_dias, data_target):
 def calcular_data_disponibilidade_real(projecao_29_dias, qtd_necessaria):
     """
     Calcula quando o produto estará disponível baseado na projeção real
+    NÃO retorna datas passadas, apenas hoje ou futuro
     """
     try:
         if not projecao_29_dias:
-            return agora_brasil().date().isoformat()
+            return 'Sem previsão'
+
+        hoje = agora_brasil().date()
 
         # Verificar cada dia da projeção
         for dia_info in projecao_29_dias:
-            # Compatibilidade com novo formato (saldo_final) e antigo (estoque_final)
-            estoque_final = dia_info.get('saldo_final', dia_info.get('estoque_final', 0))
+            # Garantir que dia_info é um dicionário
+            if not isinstance(dia_info, dict):
+                continue
+            
+            # Obter a data do dia
+            dia_data = dia_info.get('data')
+            if not dia_data:
+                continue
+            
+            # Converter para date para comparação
+            if hasattr(dia_data, 'date'):
+                data_dia = dia_data.date() if hasattr(dia_data, 'date') else dia_data
+            else:
+                try:
+                    data_dia = datetime.strptime(str(dia_data), '%Y-%m-%d').date()
+                except:
+                    continue
+            
+            # Pular dias passados (mas incluir hoje)
+            if data_dia < hoje:
+                continue
+                
+            # Compatibilidade com diferentes formatos
+            estoque_final = (
+                dia_info.get('estoque_final', 0) or 
+                dia_info.get('saldo_final', 0) or 
+                0
+            )
+            
             if estoque_final >= qtd_necessaria:
-                dia_data = dia_info.get('data')
                 if hasattr(dia_data, 'isoformat'):
                     return dia_data.isoformat()
                 else:
@@ -71,7 +102,7 @@ def calcular_data_disponibilidade_real(projecao_29_dias, qtd_necessaria):
 
     except Exception as e:
         logger.error(f"Erro ao calcular data disponibilidade: {e}")
-        return agora_brasil().date().isoformat()
+        return 'Sem previsão'
 
 
 def contar_clientes_programados(cod_produto):
@@ -107,8 +138,16 @@ def obter_producao_hoje(cod_produto, resumo_estoque):
                 hoje_dados = projecao[0]
                 # Garantir que hoje_dados é um dicionário válido
                 if isinstance(hoje_dados, dict):
-                    # O campo pode ser producao_programada ou entrada
-                    return float(hoje_dados.get('producao_programada', hoje_dados.get('entrada', 0)))
+                    # Verificar diferentes formatos possíveis
+                    # get_projecao_completa retorna 'producao'
+                    # ServicoEstoqueSimples retorna 'entrada'
+                    producao = (
+                        hoje_dados.get('producao', 0) or 
+                        hoje_dados.get('entrada', 0) or 
+                        hoje_dados.get('producao_programada', 0) or 
+                        0
+                    )
+                    return float(producao)
                 else:
                     return 0
             else:
@@ -181,27 +220,50 @@ def gerar_alertas_reais(resumo_estoque, cardex_dados):
 
 def calcular_disponibilidade_para_pedido(projecao, qtd_pedido):
     """
-    Calcula quando o produto terá saldo suficiente para atender o pedido.
-    SALDO = Est. Inicial - Saída (antes de somar a Produção/Entrada)
-    Retorna a data e quantidade quando o SALDO for maior que a quantidade do pedido.
+    Calcula quando o produto terá estoque suficiente para atender o pedido.
+    Verifica o estoque FINAL de cada dia (após entrada/produção).
+    Retorna a data e quantidade do primeiro dia com estoque suficiente.
     """
     try:
         if not projecao or not qtd_pedido:
             return None, None
         
+        hoje = agora_brasil().date()
+        
         for dia_info in projecao:
-            # Calcular SALDO = Est. Inicial - Saída
-            # No cardex: Est.Inicial -> Saída -> SALDO -> Produção -> Est.Final
-            est_inicial = dia_info.get('saldo_inicial', 0)  # Est. Inicial do dia
-            saida = dia_info.get('saida', 0)  # Saída do dia
+            # Garantir que dia_info é um dicionário
+            if not isinstance(dia_info, dict):
+                continue
             
-            # SALDO = Est. Inicial - Saída (antes de somar a entrada/produção)
-            saldo = est_inicial - saida
+            # Obter a data do dia
+            data = dia_info.get('data')
+            if not data:
+                continue
+                
+            # Converter data para comparação
+            if hasattr(data, 'date'):
+                data_dia = data.date() if hasattr(data, 'date') else data
+            else:
+                try:
+                    data_dia = datetime.strptime(str(data), '%Y-%m-%d').date()
+                except:
+                    continue
             
-            # Verificar se o saldo é maior que a quantidade do pedido
-            if saldo > qtd_pedido:
-                data = dia_info.get('data')
-                return data, saldo
+            # Pular dias passados (incluindo hoje, pois queremos disponibilidade FUTURA)
+            if data_dia <= hoje:
+                continue
+                
+            # Usar o estoque FINAL do dia (após entrada/produção)
+            # Compatibilidade com diferentes formatos
+            estoque_final = (
+                dia_info.get('saldo_final', 0) or 
+                dia_info.get('estoque_final', 0) or 
+                0
+            )
+            
+            # Verificar se o estoque final é suficiente para o pedido
+            if estoque_final >= qtd_pedido:
+                return data, estoque_final
         
         return None, None
     except Exception as e:
@@ -237,19 +299,43 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
                 produto.expedicao
             )
             
-            # Calcular quando estará disponível com saldo maior que o pedido
-            data_disponibilidade, qtd_disponivel = calcular_disponibilidade_para_pedido(
-                projecao,
-                qtd_pedido
-            )
-            
-            # Se não encontrou, usar lógica antiga como fallback
-            if not data_disponibilidade:
-                data_disponibilidade = calcular_data_disponibilidade_real(
+            # Primeiro, verificar se tem estoque hoje suficiente
+            estoque_atual = resumo_estoque.get('estoque_atual', 0)
+            if estoque_atual >= qtd_pedido:
+                # Se tem estoque hoje, usar hoje como data de disponibilidade
+                data_disponibilidade = agora_brasil().date().isoformat()
+                qtd_disponivel = estoque_atual
+            else:
+                # Calcular quando estará disponível com saldo maior que o pedido
+                data_disponibilidade, qtd_disponivel = calcular_disponibilidade_para_pedido(
                     projecao,
                     qtd_pedido
                 )
-                qtd_disponivel = resumo_estoque.get('qtd_disponivel', 0)
+                
+                # Se não encontrou, usar lógica antiga como fallback
+                if not data_disponibilidade:
+                    data_disponibilidade_fallback = calcular_data_disponibilidade_real(
+                        projecao,
+                        qtd_pedido
+                    )
+                    
+                    # Se o fallback retornou uma data válida, buscar a quantidade nessa data
+                    if data_disponibilidade_fallback and data_disponibilidade_fallback != 'Sem previsão':
+                        # Buscar quantidade na data encontrada
+                        for dia in projecao:
+                            if isinstance(dia, dict):
+                                dia_data = dia.get('data')
+                                if dia_data and str(dia_data) == str(data_disponibilidade_fallback):
+                                    qtd_disponivel = (
+                                        dia.get('estoque_final', 0) or 
+                                        dia.get('saldo_final', 0) or 
+                                        0
+                                    )
+                                    break
+                        data_disponibilidade = data_disponibilidade_fallback
+                    else:
+                        data_disponibilidade = 'Sem previsão'
+                        qtd_disponivel = 0
         else:
             # Fallback se não conseguir calcular
             estoque_data_expedicao = float(estoque_hoje or 0)
@@ -261,13 +347,31 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
         
         # Obter produção de hoje
         producao_hoje = obter_producao_hoje(produto.cod_produto, resumo_estoque)
+        
+        # DEBUG: Log dos valores de estoque
+        logger.info(f"[DEBUG workspace_utils] Produto {produto.cod_produto}:")
+        logger.info(f"  - estoque_hoje (variável local): {estoque_hoje}")
+        logger.info(f"  - estoque_atual do resumo: {resumo_estoque.get('estoque_atual') if resumo_estoque else 'None'}")
+        logger.info(f"  - estoque_inicial do resumo: {resumo_estoque.get('estoque_inicial') if resumo_estoque else 'None'}")
 
+        # Calcular estoque_hoje uma vez
+        estoque_hoje_calculado = float(
+            resumo_estoque.get('estoque_atual', resumo_estoque.get('estoque_inicial', 0)) 
+            if resumo_estoque and isinstance(resumo_estoque, dict) 
+            else (estoque_hoje or 0)
+        )
+        
         return {
             'cod_produto': produto.cod_produto,
             'nome_produto': produto.nome_produto or '',
             'qtd_pedido': qtd_pedido,
-            'estoque_hoje': float(resumo_estoque.get('estoque_atual', resumo_estoque.get('estoque_inicial', 0)) if resumo_estoque else estoque_hoje or 0),
-            'menor_estoque_7d': float(resumo_estoque.get('menor_estoque_d7', resumo_estoque.get('menor_estoque_7d', 0)) if resumo_estoque else 0),
+            'estoque_hoje': estoque_hoje_calculado,
+            'estoque': estoque_hoje_calculado,  # ADICIONAR campo 'estoque' também
+            'menor_estoque_7d': float(
+                resumo_estoque.get('menor_estoque_d7', resumo_estoque.get('menor_estoque_7d', 0)) 
+                if resumo_estoque and isinstance(resumo_estoque, dict) 
+                else 0
+            ),
             'estoque_data_expedicao': float(estoque_data_expedicao),
             'data_disponibilidade': data_disponibilidade,
             'qtd_disponivel': float(qtd_disponivel) if qtd_disponivel else 0,
@@ -303,12 +407,31 @@ def converter_projecao_para_cardex(resumo_estoque):
         for dia_info in projecao:
             # Verificar se dia_info tem estrutura esperada
             if isinstance(dia_info, dict):
-                # Compatibilidade com novo formato (saldo_inicial, entrada, saida, saldo_final)
-                # e formato antigo (estoque_inicial, saida_prevista, producao_programada, estoque_final)
-                estoque_inicial = float(dia_info.get('saldo_inicial', dia_info.get('estoque_inicial', 0)))
-                saidas = float(dia_info.get('saida', dia_info.get('saida_prevista', 0)))
-                producao = float(dia_info.get('entrada', dia_info.get('producao_programada', 0)))
-                estoque_final = float(dia_info.get('saldo_final', dia_info.get('estoque_final', 0)))
+                # Compatibilidade com diferentes formatos
+                # ServicoEstoqueSimples: saldo_inicial, entrada, saida, saldo_final
+                # get_projecao_completa: estoque_inicial, saidas, producao, estoque_final
+                estoque_inicial = float(
+                    dia_info.get('estoque_inicial', 0) or 
+                    dia_info.get('saldo_inicial', 0) or 
+                    0
+                )
+                saidas = float(
+                    dia_info.get('saidas', 0) or 
+                    dia_info.get('saida', 0) or 
+                    dia_info.get('saida_prevista', 0) or 
+                    0
+                )
+                producao = float(
+                    dia_info.get('producao', 0) or 
+                    dia_info.get('entrada', 0) or 
+                    dia_info.get('producao_programada', 0) or 
+                    0
+                )
+                estoque_final = float(
+                    dia_info.get('estoque_final', 0) or 
+                    dia_info.get('saldo_final', 0) or 
+                    0
+                )
                 
                 cardex_dados.append({
                     'data': dia_info.get('data', '').isoformat() if hasattr(dia_info.get('data'), 'isoformat') else str(dia_info.get('data', '')),

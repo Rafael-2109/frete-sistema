@@ -415,11 +415,19 @@ class ModalSeparacoes {
     }
 
     formatarPeso(peso) {
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPeso(peso);
+        }
+        // Fallback
         if (!peso) return '0 kg';
         return `${parseFloat(peso).toFixed(1)} kg`;
     }
 
     formatarPallet(pallet) {
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPallet(pallet);
+        }
+        // Fallback
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
     }

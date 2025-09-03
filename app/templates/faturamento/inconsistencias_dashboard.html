@@ -388,7 +388,64 @@ function filtrarTipo(tipo) {
 }
 
 function resolverInconsistencia(id) {
-    if (!confirm('Deseja marcar esta inconsistência como resolvida?')) {
+    // Criar modal para capturar ação tomada
+    const acoesPossiveis = [
+        {value: 'CANCELAR_NF', text: 'Cancelar NF'},
+        {value: 'AJUSTE_MANUAL', text: 'Ajuste Manual'},
+        {value: 'CRIAR_SEPARACAO', text: 'Criar Separação'},
+        {value: 'VINCULAR_LOTE', text: 'Vincular Lote Existente'},
+        {value: 'IGNORAR', text: 'Ignorar - Correto'},
+        {value: 'AGUARDAR', text: 'Aguardar Resolução'}
+    ];
+    
+    let modalHtml = `
+        <div class="modal fade" id="modalResolverInc" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Resolver Inconsistência</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Ação Tomada:</label>
+                            <select id="acaoTomada" class="form-select">
+                                <option value="">Selecione...</option>
+                                ${acoesPossiveis.map(a => `<option value="${a.value}">${a.text}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Observação (opcional):</label>
+                            <textarea id="obsResolucao" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success" onclick="confirmarResolucao(${id})">
+                            <i class="fas fa-check"></i> Confirmar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Adicionar modal ao body se não existir
+    if (!document.getElementById('modalResolverInc')) {
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalResolverInc'));
+    modal.show();
+}
+
+function confirmarResolucao(id) {
+    const acaoTomada = document.getElementById('acaoTomada').value;
+    const observacao = document.getElementById('obsResolucao').value;
+    
+    if (!acaoTomada) {
+        alert('Por favor, selecione uma ação tomada');
         return;
     }
     
@@ -396,7 +453,11 @@ function resolverInconsistencia(id) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+            acao_tomada: acaoTomada,
+            observacao: observacao
+        })
     })
     .then(response => response.json())
     .then(data => {

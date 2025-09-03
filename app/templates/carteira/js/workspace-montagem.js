@@ -15,9 +15,11 @@ class WorkspaceMontagem {
         this.abortControllerEstoque = null;
 
         // Inicializar módulos
+        this.api = new WorkspaceAPI(); // 🆕 Módulo de API centralizado
         this.loteManager = new LoteManager(this);
         this.modalCardex = new ModalCardex();
-        this.preSeparacaoManager = new PreSeparacaoManager(this);
+        // PreSeparacaoManager removido - tudo é Separacao agora
+        // this.preSeparacaoManager = new PreSeparacaoManager(this); // DEPRECATED
 
         this.init();
     }
@@ -28,14 +30,8 @@ class WorkspaceMontagem {
     }
 
     setupEventListeners() {
-        // Detectar quando o dropdown de detalhes é aberto
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('.btn-expandir')) {
-                const btn = e.target.closest('.btn-expandir');
-                const numPedido = btn.dataset.pedido;
-                this.abrirWorkspace(numPedido);
-            }
-        });
+        // Event listener removido - carteira-agrupada.js já cuida da expansão
+        // e chama abrirWorkspace diretamente quando necessário
     }
 
     /**
@@ -57,10 +53,9 @@ class WorkspaceMontagem {
         // Limpar separações confirmadas
         this.separacoesConfirmadas = [];
         
-        // Cancelar requisições assíncronas pendentes
-        if (this.abortControllerEstoque) {
-            this.abortControllerEstoque.abort();
-            this.abortControllerEstoque = null;
+        // Cancelar requisições assíncronas pendentes via API
+        if (this.api) {
+            this.api.cancelarTodasRequisicoes();
         }
         
         // Limpar pedido atual
@@ -75,17 +70,14 @@ class WorkspaceMontagem {
         // 🧹 LIMPAR DADOS DO PEDIDO ANTERIOR
         this.limparDadosAnteriores();
         
-        // Armazenar novo pedido
+        // IMPORTANTE: Armazenar novo pedido ANTES de qualquer operação
+        // Isso garante que obterNumeroPedido() sempre retorne o pedido correto
         this.pedidoAtual = numPedido;
+        console.log(`📌 Pedido atual definido como: ${this.pedidoAtual}`);
 
         try {
-            // Carregar dados do workspace
-            const workspaceResponse = await fetch(`/carteira/api/pedido/${numPedido}/workspace`);
-            const workspaceData = await workspaceResponse.json();
-
-            if (!workspaceResponse.ok || !workspaceData.success) {
-                throw new Error(workspaceData.error || 'Erro ao carregar workspace');
-            }
+            // Carregar dados do workspace usando WorkspaceAPI
+            const workspaceData = await this.api.buscarWorkspace(numPedido);
             
             // Verificar se há produtos
             if (!workspaceData.produtos || workspaceData.produtos.length === 0) {
@@ -113,28 +105,33 @@ class WorkspaceMontagem {
             // Armazenar status do pedido
             this.statusPedido = workspaceData.status_pedido || 'ABERTO';
 
-            // Carregar pré-separações existentes usando o manager
-            const preSeparacoesData = await this.preSeparacaoManager.carregarPreSeparacoes(numPedido);
-
-            if (preSeparacoesData.success && preSeparacoesData.lotes) {
-                // Processar pré-separações carregadas
-                const preSeparacoesMap = this.preSeparacaoManager.processarPreSeparacoesCarregadas(preSeparacoesData.lotes);
-
-                // Atualizar Map local
-                preSeparacoesMap.forEach((value, key) => {
-                    this.preSeparacoes.set(key, value);
-                });
-
-                console.log(`✅ Carregadas ${preSeparacoesData.lotes.length} pré-separações existentes`);
-            }
-
-            // Carregar separações confirmadas
-            const separacoesResponse = await fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`);
-            const separacoesData = await separacoesResponse.json();
+            // 🎯 ÚNICA API: Carregar TODAS as separações (incluindo PREVISAO)
+            const separacoesData = await this.api.buscarSeparacoes(numPedido);
 
             if (separacoesData.success && separacoesData.separacoes) {
-                this.separacoesConfirmadas = separacoesData.separacoes;
-                console.log(`✅ Carregadas ${separacoesData.separacoes.length} separações confirmadas`);
+                // Processar TODAS as separações de uma vez
+                this.todasSeparacoes = separacoesData.separacoes;
+                
+                // Atualizar Map local para compatibilidade
+                separacoesData.separacoes.forEach(sep => {
+                    this.preSeparacoes.set(sep.separacao_lote_id, {
+                        produtos: sep.produtos || [],
+                        totais: {
+                            valor: sep.valor_total || 0,
+                            peso: sep.peso_total || 0,
+                            pallet: sep.pallet_total || 0
+                        },
+                        status: sep.status,
+                        lote_id: sep.separacao_lote_id,
+                        expedicao: sep.expedicao,
+                        agendamento: sep.agendamento,
+                        protocolo: sep.protocolo,
+                        agendamento_confirmado: sep.agendamento_confirmado || false,
+                        embarque: sep.embarque
+                    });
+                });
+                
+                console.log(`✅ Carregadas ${separacoesData.separacoes.length} separações totais`);
             }
 
             // Renderizar workspace no container de detalhes
@@ -149,9 +146,9 @@ class WorkspaceMontagem {
                 loadingDiv.style.display = 'none';
             }
 
-            // Renderizar lotes existentes se houver
-            if (preSeparacoesData.success && preSeparacoesData.lotes) {
-                await this.renderizarLotesExistentes(numPedido, preSeparacoesData.lotes);
+            // 🎯 RENDERIZAÇÃO ÚNICA: Todas as separações em uma única área
+            if (this.todasSeparacoes && this.todasSeparacoes.length > 0) {
+                await this.renderizarTodasSeparacoes(numPedido);
             }
 
             // Configurar checkboxes e adição de produtos
@@ -173,57 +170,45 @@ class WorkspaceMontagem {
         }
     }
 
-    async renderizarLotesExistentes(numPedido, lotes) {
+    async renderizarTodasSeparacoes(numPedido) {
         const container = document.getElementById(`lotes-container-${numPedido}`);
-        if (!container || lotes.length === 0) return;
-
-        // Remover placeholder
+        if (!container || !this.todasSeparacoes || this.todasSeparacoes.length === 0) return;
+        
+        // Remover placeholder se ainda existir
         const placeholder = container.querySelector('.lote-placeholder');
         if (placeholder) {
             placeholder.remove();
         }
-
-        // Renderizar cada lote existente
-        for (const lote of lotes) {
-            // Garantir que o mapa interno tenha os dados necessários para edição de datas
-            try {
-                if (!this.preSeparacoes) {
-                    this.preSeparacoes = new Map();
-                }
-                // Normalizar produtos carregados do backend para o formato usado pelos handlers
-                const produtos = (Array.isArray(lote.produtos) ? lote.produtos : []).map((p) => ({
-                    codProduto: p.cod_produto || p.codProduto,
-                    preSeparacaoId: p.pre_separacao_id || p.preSeparacaoId,
-                    quantidade: p.quantidade,
-                    valor: p.valor,
-                    peso: p.peso,
-                    pallet: p.pallet,
-                    loteId: lote.lote_id,
-                }));
-                this.preSeparacoes.set(lote.lote_id, {
-                    loteId: lote.lote_id,
-                    dataExpedicao: lote.data_expedicao || '',
-                    data_agendamento: lote.data_agendamento || '',  // Usar nome correto do campo
-                    protocolo: lote.protocolo || '',
-                    agendamento_confirmado: lote.agendamento_confirmado || false,  // Campo faltando!
-                    produtos: produtos,
-                    status: lote.status || 'pre_separacao',
-                    pre_separacao_id: lote.pre_separacao_id
-                });
-            } catch (e) {
-                console.warn('Não foi possível registrar lote no mapa de pré-separações:', e);
-            }
+        
+        // Renderizar TODAS as separações usando o card universal
+        for (const separacao of this.todasSeparacoes) {
+            // Preparar dados no formato do card universal
+            const loteData = {
+                lote_id: separacao.separacao_lote_id,
+                separacao_lote_id: separacao.separacao_lote_id,
+                status: separacao.status || 'ABERTO',
+                produtos: separacao.produtos || [],
+                totais: {
+                    valor: separacao.valor_total || 0,
+                    peso: separacao.peso_total || 0,
+                    pallet: separacao.pallet_total || 0
+                },
+                expedicao: separacao.expedicao,
+                agendamento: separacao.agendamento,
+                protocolo: separacao.protocolo,
+                agendamento_confirmado: separacao.agendamento_confirmado || false,
+                embarque: separacao.embarque
+            };
+            
             const loteCard = document.createElement('div');
             loteCard.className = 'col-md-4 mb-3';
-            loteCard.innerHTML = this.loteManager.renderizarCardPreSeparacao(lote);
+            loteCard.innerHTML = this.loteManager.renderizarCardUniversal(loteData);
             container.appendChild(loteCard);
-
-            // Drag & drop removido - usando checkboxes
-            const newCard = loteCard.querySelector('.lote-card');
         }
-
-        console.log(`✅ Renderizados ${lotes.length} lotes de pré-separação`);
+        
+        console.log(`✅ Renderizadas ${this.todasSeparacoes.length} separações no total`);
     }
+    
 
     renderizarWorkspace(numPedido, data) {
         return `
@@ -257,29 +242,18 @@ class WorkspaceMontagem {
                         </span>
                     </h6>
                     <div id="tabela-produtos-container-${numPedido}">
-                        ${this.renderizarTabelaProdutosBasica(data.produtos)}
+                        ${this.renderizarTabelaProdutos(data.produtos)}
                     </div>
                 </div>
 
-                <!-- Área de Separações Confirmadas -->
-                ${this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0 ? `
-                <div class="workspace-separacoes-confirmadas p-3 bg-light">
-                    <h6 class="mb-3">
-                        <i class="fas fa-check-circle text-success me-2"></i>
-                        Separações Confirmadas
-                    </h6>
-                    <div class="separacoes-confirmadas-container row" id="separacoes-confirmadas-${numPedido}">
-                        ${this.renderizarSeparacoesConfirmadas()}
-                    </div>
-                </div>
-                ` : ''}
-
-                <!-- Área de Lotes (Destino) -->
+                <!-- Área Unificada de Separações -->
                 <div class="workspace-lotes p-3">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="mb-0">
                             <i class="fas fa-layer-group me-2"></i>
-                            Pré-Separações
+                            Separações
+                            ${this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0 ? 
+                                `<span class="badge bg-secondary ms-2">${this.separacoesConfirmadas.length}</span>` : ''}
                         </h6>
                         <button class="btn btn-success btn-sm" onclick="workspace.criarNovoLote('${numPedido}')">
                             <i class="fas fa-plus me-1"></i> Novo Lote
@@ -307,7 +281,8 @@ class WorkspaceMontagem {
         return `<div class="alert alert-warning">Módulo de tabela não carregado</div>`;
     }
 
-    renderizarSeparacoesConfirmadas() {
+    renderizarSeparacoesNaAreaUnificada() {
+        // Método principal para renderizar todas as separações
         return this.separacoesConfirmadas.map(separacao => {
             const statusClass = this.getStatusClass(separacao.status);
 
@@ -452,7 +427,7 @@ class WorkspaceMontagem {
                                 <div>
                                     ${separacao.status === 'ABERTO' ? `
                                         <button class="btn btn-warning btn-sm" onclick="workspace.reverterSeparacao('${separacao.separacao_lote_id}')">
-                                            <i class="fas fa-undo me-1"></i> Reverter para Pré-Separação
+                                            <i class="fas fa-undo me-1"></i> Reverter para Previsão
                                         </button>
                                         <button class="btn btn-info btn-sm ms-2" onclick="workspace.editarDatasSeparacao('${separacao.separacao_lote_id}')">
                                             <i class="fas fa-edit me-1"></i> Editar Datas
@@ -472,6 +447,7 @@ class WorkspaceMontagem {
 
     getStatusClass(status) {
         const statusMap = {
+            'PREVISAO': 'secondary',
             'ABERTO': 'warning',
             'FATURADO': 'info',
             'COTADO': 'primary',
@@ -481,12 +457,33 @@ class WorkspaceMontagem {
         return statusMap[status] || 'secondary';
     }
 
+    /**
+     * 🎯 DELEGAR FORMATAÇÃO DE QUANTIDADE (primeira ocorrência)
+     * Usa workspace-quantidades para formatação
+     */
     formatarQuantidade(qtd) {
-        if (!qtd) return '0';
-        return parseFloat(qtd).toFixed(0);
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.quantidade) {
+            const formatted = window.Formatters.quantidade(qtd);
+            // Para esta primeira ocorrência, queremos sem decimais
+            return formatted ? formatted.split(',')[0] : '0';
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            const formatted = window.workspaceQuantidades.formatarQuantidade(qtd);
+            return formatted ? formatted.split(',')[0] : '0';
+        }
+        // Fallback final
+        return (!qtd) ? '0' : parseFloat(qtd).toFixed(0);
     }
 
     formatarData(data) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.data) {
+            return window.Formatters.data(data);
+        }
+        
+        // Fallback completo
         if (!data) return '-';
         // Garantir formato dd/mm/yyyy
         let d;
@@ -505,18 +502,18 @@ class WorkspaceMontagem {
         return `${dia}/${mes}/${ano}`;
     }
 
+    /**
+     * 🎯 DELEGAR CÁLCULO DE STATUS DE DISPONIBILIDADE
+     * Usa workspace-quantidades para cálculo completo
+     */
     calcularStatusDisponibilidade(produto) {
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.calcularStatusDisponibilidade(produto);
+        }
+        // Fallback simplificado se workspace-quantidades não estiver disponível
         if (produto.estoque_hoje >= produto.qtd_pedido) {
             return { classe: 'bg-success', texto: 'Hoje' };
         }
-
-        if (produto.data_disponibilidade) {
-            const diasAte = this.calcularDiasAte(produto.data_disponibilidade);
-            if (diasAte <= 7) {
-                return { classe: 'bg-warning', texto: `${diasAte}d` };
-            }
-        }
-
         return { classe: 'bg-danger', texto: 'Sem est.' };
     }
 
@@ -529,10 +526,10 @@ class WorkspaceMontagem {
 
     /**
      * 🎯 CALCULAR SALDO DISPONÍVEL DO PRODUTO
-     * Fórmula: Qtd Pedido - Qtd em Separações - Qtd em Pré-Separações
+     * Já está delegando corretamente para WorkspaceQuantidades
      */
     calcularSaldoDisponivel(produto) {
-        // Delegado para WorkspaceQuantidades
+        // Já está delegado para WorkspaceQuantidades
         if (window.workspaceQuantidades) {
             return window.workspaceQuantidades.calcularSaldoDisponivel(produto);
         }
@@ -674,7 +671,7 @@ class WorkspaceMontagem {
                 const loteData = this.preSeparacoes.get(loteId);
                 const produtoExistente = loteData?.produtos.find(p => p.codProduto === produto.codProduto);
 
-                await this.adicionarProdutoNoLote(loteId, produto);
+                await this.loteManager.adicionarProdutoNoLote(loteId, produto);
 
                 if (produtoExistente) {
                     produtosAtualizados++;
@@ -759,6 +756,12 @@ class WorkspaceMontagem {
      * 🎯 MOSTRAR FEEDBACK VISUAL
      */
     mostrarFeedback(mensagem, tipo = 'info') {
+        // Usar módulo centralizado se disponível
+        if (window.Notifications && window.Notifications.toast) {
+            return window.Notifications.toast(mensagem, tipo);
+        }
+        
+        // Fallback completo
         // Criar toast notification
         const toast = document.createElement('div');
         toast.className = `toast-feedback toast-${tipo}`;
@@ -785,18 +788,11 @@ class WorkspaceMontagem {
         }, 3000);
     }
 
-    criarLote(numPedido, loteId) {
-        this.loteManager.criarLote(numPedido, loteId);
-    }
-
-    removerProdutoDoLote(loteId, codProduto) {
-        this.loteManager.removerProdutoDoLote(loteId, codProduto);
-    }
 
     obterNumeroPedido() {
-        // Buscar o número do pedido do workspace ativo
-        const workspaceElement = document.querySelector('.workspace-montagem[data-pedido]');
-        return workspaceElement ? workspaceElement.dataset.pedido : null;
+        // CORREÇÃO: Usar o pedido armazenado no objeto, não buscar no DOM
+        // Isso evita pegar o pedido errado quando há múltiplos workspaces no DOM
+        return this.pedidoAtual;
     }
 
     resetarQuantidadeProduto(codProduto) {
@@ -819,16 +815,6 @@ class WorkspaceMontagem {
         }
     }
 
-    // Delegação para LoteManager (método removido - usar this.loteManager.renderizarCardLote)
-
-    // Delegação para LoteManager (método removido - usar this.loteManager.renderizarProdutosDoLote)
-
-    adicionarProdutoNoLote(loteId, dadosProduto) {
-        this.loteManager.adicionarProdutoNoLote(loteId, dadosProduto);
-
-        // Não atualizar aqui - o loteManager já faz isso
-        // this.atualizarSaldoNaTabela(dadosProduto.codProduto);
-    }
 
     /**
      * 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA APÓS MUDANÇAS
@@ -870,10 +856,6 @@ class WorkspaceMontagem {
         }
     }
 
-    // Delegação para LoteManager (método removido - usar this.loteManager.recalcularTotaisLote)
-
-    // Delegação para LoteManager (método removido - usar this.loteManager.atualizarCardLote)
-
     async abrirCardex(codProduto) {
         await this.modalCardex.abrirCardex(codProduto, this.dadosProdutos);
     }
@@ -899,47 +881,32 @@ class WorkspaceMontagem {
         }
     }
 
-    // Delegação para ModalCardex (método removido - usar this.modalCardex.mostrarModalCardex)
-
-    // Delegação para ModalCardex (método removido - usar this.modalCardex.renderizarModalCardex)
-
-    // Delegação para ModalCardex (método removido - usar this.modalCardex.renderizarLinhasCardex)
-
-    // Delegação para ModalCardex (método removido - usar this.modalCardex.getStatusClasseCardex)
-
-    // Delegação para ModalCardex (método removido - usar this.modalCardex.renderizarAlertas)
-
-    // Delegação para ModalCardex (método removido - usar this.modalCardex.formatarData)
-
     exportarCardex(codProduto) {
         this.modalCardex.exportarCardex(codProduto);
     }
 
-    async gerarSeparacao(loteId) {
-        console.log(`⚡ Gerar separação para lote ${loteId}`);
 
-        const loteData = this.preSeparacoes.get(loteId);
-        if (!loteData || loteData.produtos.length === 0) {
-            alert('❌ Lote vazio! Adicione produtos antes de gerar a separação.');
+    
+    // Método unificado para excluir lote/separação (qualquer status)
+    async excluirLote(loteId) {
+        if (!confirm('Tem certeza que deseja excluir esta separação?')) {
             return;
         }
-
-        // Obter número do pedido
-        const numPedido = this.obterNumeroPedido();
-        if (!numPedido) {
-            alert('❌ Não foi possível identificar o número do pedido.');
-            return;
-        }
-
-        // 🎯 TRANSFORMAR ESTE LOTE ESPECÍFICO EM SEPARAÇÃO
-        if (window.separacaoManager) {
-            await window.separacaoManager.transformarLoteEmSeparacao(loteId);
-
-            // Não remover mais o lote após gerar separação (mantém histórico)
-            // this.loteManager.removerLote(loteId);
+        
+        console.log(`🗑️ Excluindo lote ${loteId}`);
+        
+        // Usar separacao-manager método unificado
+        if (window.separacaoManager && typeof window.separacaoManager.excluirSeparacao === 'function') {
+            const numPedido = this.numPedidoAtual || document.querySelector('.workspace-montagem')?.dataset.pedido;
+            const resultado = await window.separacaoManager.excluirSeparacao(loteId, numPedido);
+            if (resultado && resultado.success) {
+                this.showToast('Separação excluída com sucesso', 'success');
+                location.reload(); // Recarregar para atualizar
+            } else {
+                this.showToast(resultado?.error || 'Erro ao excluir', 'error');
+            }
         } else {
-            console.error('❌ Separação Manager não disponível');
-            alert('❌ Sistema de separação não está disponível');
+            this.showToast('Função não disponível', 'error');
         }
     }
 
@@ -965,30 +932,12 @@ class WorkspaceMontagem {
         }
     }
 
-
-    obterNumeroPedido() {
-        // Extrair número do pedido do workspace atual
-        const workspaceElement = document.querySelector('.workspace-montagem[data-pedido]');
-        return workspaceElement ? workspaceElement.dataset.pedido : null;
-    }
-
     async confirmarAgendamentoLote(loteId, tipo) {
         try {
             console.log(`🔄 Confirmando agendamento do lote ${loteId} (${tipo})`);
             
-            let endpoint;
-            if (tipo === 'pre') {
-                // Para pré-separações, precisamos buscar o ID do item
-                const loteData = this.preSeparacoes.get(loteId);
-                if (!loteData || !loteData.pre_separacao_id) {
-                    alert('❌ Não foi possível identificar a pré-separação');
-                    return;
-                }
-                endpoint = `/carteira/api/pre-separacao/${loteData.pre_separacao_id}/confirmar-agendamento`;
-            } else {
-                // Para separações, usar o lote_id
-                endpoint = `/carteira/api/separacao/${loteId}/confirmar-agendamento`;
-            }
+            // Usar sempre o endpoint unificado por lote_id
+            const endpoint = `/carteira/api/separacao/${loteId}/confirmar-agendamento`;
             
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -1034,19 +983,8 @@ class WorkspaceMontagem {
             
             console.log(`🔄 Revertendo confirmação do agendamento do lote ${loteId} (${tipo})`);
             
-            let endpoint;
-            if (tipo === 'pre') {
-                // Para pré-separações, precisamos buscar o ID do item
-                const loteData = this.preSeparacoes.get(loteId);
-                if (!loteData || !loteData.pre_separacao_id) {
-                    alert('❌ Não foi possível identificar a pré-separação');
-                    return;
-                }
-                endpoint = `/carteira/api/pre-separacao/${loteData.pre_separacao_id}/reverter-agendamento`;
-            } else {
-                // Para separações, usar o lote_id
-                endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
-            }
+            // Usar sempre o endpoint unificado por lote_id
+            const endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
             
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -1130,8 +1068,20 @@ class WorkspaceMontagem {
         }
     }
 
-    // Utilitários
+    /**
+     * 🎯 UTILITÁRIOS DE FORMATAÇÃO
+     * Delegam todas as formatações para workspace-quantidades
+     */
     formatarMoeda(valor) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.moeda) {
+            return window.Formatters.moeda(valor);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarMoeda(valor);
+        }
+        // Fallback final se nenhum módulo estiver disponível
         if (!valor) return 'R$ 0,00';
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
@@ -1139,18 +1089,33 @@ class WorkspaceMontagem {
         }).format(valor);
     }
 
-    formatarQuantidade(qtd) {
-        if (!qtd) return '0';
-        // Para quantidades, sempre mostrar como inteiro
-        return Math.floor(qtd).toLocaleString('pt-BR');
-    }
+    // Segunda ocorrência de formatarQuantidade - remover duplicação
+    // Já definida anteriormente na linha 479
 
     formatarPeso(peso) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.peso) {
+            return window.Formatters.peso(peso);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPeso(peso);
+        }
+        // Fallback final
         if (!peso) return '0 kg';
         return `${parseFloat(peso).toFixed(1)} kg`;
     }
 
     formatarPallet(pallet) {
+        // Usar módulo centralizado se disponível
+        if (window.Formatters && window.Formatters.pallet) {
+            return window.Formatters.pallet(pallet);
+        }
+        // Fallback para workspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.formatarPallet(pallet);
+        }
+        // Fallback final
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
     }
@@ -1204,35 +1169,18 @@ class WorkspaceMontagem {
         }
     }
 
-    async reverterSeparacao(loteId) {
-        // Usar SweetAlert2 para confirmação elegante
-        const result = await Swal.fire({
-            title: 'Confirmar Reversão',
-            text: 'Deseja reverter esta separação para pré-separação?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#f39c12',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="fas fa-undo me-1"></i> Sim, Reverter',
-            cancelButtonText: 'Cancelar'
-        });
-
-        if (!result.isConfirmed) {
-            return;
+    // Método unificado de alteração de status
+    async alterarStatusSeparacao(loteId, novoStatus) {
+        console.log(`🔄 Alterando status de ${loteId} para ${novoStatus}`);
+        
+        // Usar separacao-manager se disponível
+        if (window.separacaoManager && typeof window.separacaoManager.alterarStatus === 'function') {
+            return await window.separacaoManager.alterarStatus(loteId, novoStatus);
         }
-
-        // Mostrar loading
-        Swal.fire({
-            title: 'Processando...',
-            text: 'Revertendo separação para pré-separação',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
-
+        
+        // Fallback direto para API
         try {
-            const response = await fetch(`/carteira/api/separacao/${loteId}/reverter`, {
+            const response = await fetch(`/carteira/api/separacao/${loteId}/alterar-status`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1286,8 +1234,9 @@ class WorkspaceMontagem {
                 // Atualizar workspace localmente sem reload
                 try {
                     await this.carregarDadosPedido(); // Recarregar dados
-                    this.renderizarSeparacoes(); // Re-renderizar separações
-                    this.renderizarPreSeparacoes(); // Re-renderizar pré-separações
+                    // this.renderizarTodasSeparacoes(this.numPedidoAtual); // Re-renderizar tudo
+                    // Por enquanto, recarregar a página para atualizar
+                    location.reload();
                 } catch (updateError) {
                     console.warn('Aviso: Atualizando via reload:', updateError);
                     // Se falhar atualização local, fazer reload suave após 1s
@@ -1319,177 +1268,89 @@ class WorkspaceMontagem {
     }
     
     getCSRFToken() {
+        // Usar módulo centralizado se disponível
+        if (window.Security && window.Security.getCSRFToken) {
+            return window.Security.getCSRFToken();
+        }
+        
+        // Fallback simples
         const meta = document.querySelector('meta[name="csrf-token"]');
         return meta ? meta.getAttribute('content') : '';
     }
 
+    /**
+     * 📅 EDITAR DATAS - SIMPLIFICADO (2 níveis em vez de 4)
+     * Ponto de entrada único para edição de datas
+     */
     editarDatasSeparacao(loteId) {
-        this.abrirModalEdicaoDatas('separacao', loteId);
+        console.log(`📅 Editando datas da separação ${loteId}`);
+        this.editarDatas(loteId);
     }
-
+    
+    // Manter por compatibilidade mas redirecionar
     editarDatasPreSeparacao(loteId) {
-        this.abrirModalEdicaoDatas('pre-separacao', loteId);
+        console.log(`📅 Editando datas (compatível) ${loteId}`);
+        this.editarDatas(loteId);
     }
     
-    // Novas funções que recebem os dados diretamente
-    editarDatasSeparacaoComDados(loteId, dados) {
-        this.abrirModalEdicaoDatasDireto('separacao', loteId, dados);
-    }
-    
-    editarDatasPreSeparacaoComDados(loteId, dados) {
-        this.abrirModalEdicaoDatasDireto('pre-separacao', loteId, dados);
-    }
-    
-    // Função que abre o modal diretamente com os dados fornecidos
-    abrirModalEdicaoDatasDireto(tipo, loteId, dadosAtuais) {
-        // Formatar datas para exibição no modal (dd/mm/yyyy)
-        const formatarDataParaExibicao = (data) => {
-            if (!data) return '';
-            if (data && data.includes('-')) {
-                const [ano, mes, dia] = data.split('-');
-                return `${dia}/${mes}/${ano}`;
-            }
-            return data;
-        };
-        
-        // Criar modal
-        const modalHtml = `
-            <div class="modal fade" id="modalEdicaoDatas" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="fas fa-calendar-alt me-2"></i>
-                                Editar Datas - ${tipo === 'pre-separacao' ? 'Pré-Separação' : 'Separação'}
-                                <span class="badge bg-primary ms-2">${loteId}</span>
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="formEdicaoDatas">
-                                <div class="mb-3">
-                                    <label class="form-label">Data de Expedição <span class="text-danger">*</span></label>
-                                    <input type="date" class="form-control" id="dataExpedicao" 
-                                           value="${dadosAtuais.expedicao}" required>
-                                    ${dadosAtuais.expedicao ? `<small class="text-muted">Data atual: ${formatarDataParaExibicao(dadosAtuais.expedicao)}</small>` : ''}
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Data de Agendamento</label>
-                                    <input type="date" class="form-control" id="dataAgendamento" 
-                                           value="${dadosAtuais.agendamento}">
-                                    ${dadosAtuais.agendamento ? `<small class="text-muted">Data atual: ${formatarDataParaExibicao(dadosAtuais.agendamento)}</small>` : ''}
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Protocolo</label>
-                                    <input type="text" class="form-control" id="protocolo" 
-                                           value="${dadosAtuais.protocolo || ''}" 
-                                           placeholder="Digite o protocolo">
-                                    ${dadosAtuais.protocolo ? `<small class="text-success">Protocolo atual: ${dadosAtuais.protocolo}</small>` : ''}
-                                </div>
-                                <div class="mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="agendamentoConfirmado" 
-                                               ${dadosAtuais.agendamento_confirmado ? 'checked' : ''}>
-                                        <label class="form-check-label" for="agendamentoConfirmado">
-                                            <i class="fas fa-check-circle text-success"></i> Agendamento Confirmado
-                                        </label>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="workspace.salvarEdicaoDatas('${tipo}', '${loteId}')">
-                                <i class="fas fa-save me-1"></i> Salvar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Remover modal anterior se existir
-        const modalExistente = document.getElementById('modalEdicaoDatas');
-        if (modalExistente) {
-            modalExistente.remove();
-        }
-
-        // Adicionar modal ao body
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-        // Mostrar modal
-        const modal = new bootstrap.Modal(document.getElementById('modalEdicaoDatas'));
-        modal.show();
-    }
-
-    async abrirModalEdicaoDatas(tipo, loteId) {
-        // Buscar dados atuais
+    // Método principal simplificado - busca dados e abre modal diretamente
+    async editarDatas(loteId) {
+        // 1. Buscar dados de qualquer fonte disponível
         let dadosAtuais = {};
-
-        if (tipo === 'pre-separacao') {
-            // Buscar dados da pré-separação
-            const loteData = this.preSeparacoes.get(loteId);
-            if (loteData) {
-                // Usar diretamente os campos do loteData, como no card que funciona
-                const exp = loteData.dataExpedicao || loteData.data_expedicao || '';
-                const ag = loteData.data_agendamento || '';
-                
+        
+        // Tentar separações confirmadas
+        const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
+        if (separacao) {
+            dadosAtuais = {
+                expedicao: separacao.expedicao || '',
+                agendamento: separacao.agendamento || '',
+                protocolo: separacao.protocolo || '',
+                agendamento_confirmado: separacao.agendamento_confirmado || false
+            };
+        } 
+        // Tentar pré-separações
+        else {
+            const preSep = this.preSeparacoes.get(loteId);
+            if (preSep) {
+                const exp = preSep.dataExpedicao || preSep.data_expedicao || preSep.expedicao || '';
+                const ag = preSep.dataAgendamento || preSep.data_agendamento || preSep.agendamento || '';
                 dadosAtuais = {
-                    expedicao: (typeof exp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exp)) ? exp : '',
-                    agendamento: (typeof ag === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ag)) ? ag : '',
-                    protocolo: loteData.protocolo || '',
-                    agendamento_confirmado: loteData.agendamento_confirmado || false
+                    expedicao: exp,
+                    agendamento: ag,
+                    protocolo: preSep.protocolo || '',
+                    agendamento_confirmado: preSep.agendamento_confirmado || false
                 };
-            }
-        } else {
-            // Para separações, buscar dos dados carregados
-            const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
-            if (separacao) {
-                dadosAtuais = {
-                    expedicao: separacao.expedicao || '',
-                    agendamento: separacao.agendamento || '',
-                    protocolo: separacao.protocolo || '',
-                    agendamento_confirmado: separacao.agendamento_confirmado || false
-                };
-            } else {
-                // Se não encontrar nos dados locais, buscar da carteira agrupada
-                if (window.carteiraAgrupada && window.carteiraAgrupada.separacoesPorPedido) {
-                    for (const [pedido, separacoes] of window.carteiraAgrupada.separacoesPorPedido) {
-                        const sep = separacoes.find(s => s.separacao_lote_id === loteId);
-                        if (sep) {
+            } 
+            // Tentar buscar da API se necessário
+            else {
+                try {
+                    const response = await fetch(`/carteira/api/separacao/${loteId}/detalhes`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.separacao) {
                             dadosAtuais = {
-                                expedicao: sep.expedicao || '',
-                                agendamento: sep.agendamento || '',
-                                protocolo: sep.protocolo || '',
-                                agendamento_confirmado: sep.agendamento_confirmado || false
+                                expedicao: data.separacao.expedicao || '',
+                                agendamento: data.separacao.agendamento || '',
+                                protocolo: data.separacao.protocolo || '',
+                                agendamento_confirmado: data.separacao.agendamento_confirmado || false
                             };
-                            break;
                         }
                     }
-                }
-                
-                // Se ainda não encontrou, buscar da API diretamente
-                if (!dadosAtuais.expedicao) {
-                    try {
-                        const response = await fetch(`/carteira/api/separacao/${loteId}/detalhes`);
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success && data.separacao) {
-                                dadosAtuais = {
-                                    expedicao: data.separacao.expedicao || '',
-                                    agendamento: data.separacao.agendamento || '',
-                                    protocolo: data.separacao.protocolo || '',
-                                    agendamento_confirmado: data.separacao.agendamento_confirmado || false
-                                };
-                            }
-                        }
-                    } catch (error) {
-                        console.error(`Erro ao buscar dados da separação ${loteId}:`, error);
-                    }
+                } catch (error) {
+                    console.error(`Erro ao buscar dados da separação ${loteId}:`, error);
                 }
             }
         }
-
+        
+        // 2. Abrir modal diretamente com os dados
+        this.abrirModalDatas(loteId, dadosAtuais);
+    }
+    
+    /**
+     * 📅 ABRIR MODAL DE DATAS - SIMPLIFICADO
+     * Método único para abrir o modal com os dados fornecidos
+     */
+    abrirModalDatas(loteId, dadosAtuais = {}) {
         // Formatar datas para exibição no modal (dd/mm/yyyy)
         const formatarDataParaExibicao = (data) => {
             if (!data) return '';
@@ -1508,7 +1369,7 @@ class WorkspaceMontagem {
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="fas fa-calendar-alt me-2"></i>
-                                Editar Datas - ${tipo === 'pre-separacao' ? 'Pré-Separação' : 'Separação'}
+                                Editar Datas - Separação
                                 <span class="badge bg-primary ms-2">${loteId}</span>
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1547,7 +1408,7 @@ class WorkspaceMontagem {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="workspace.salvarEdicaoDatas('${tipo}', '${loteId}')">
+                            <button type="button" class="btn btn-primary" onclick="workspace.salvarEdicaoDatas('separacao', '${loteId}')">
                                 <i class="fas fa-save me-1"></i> Salvar
                             </button>
                         </div>
@@ -1568,6 +1429,12 @@ class WorkspaceMontagem {
         // Mostrar modal
         const modal = new bootstrap.Modal(document.getElementById('modalEdicaoDatas'));
         modal.show();
+    }
+
+    // DEPRECATED - Manter vazio para compatibilidade apenas
+    // Redireciona para o novo método simplificado
+    abrirModalEdicaoDatasDireto(tipo, loteId, dadosAtuais) {
+        this.abrirModalDatas(loteId, dadosAtuais);
     }
 
     async salvarEdicaoDatas(tipo, loteId) {
@@ -1597,9 +1464,8 @@ class WorkspaceMontagem {
         });
 
         try {
-            const endpoint = tipo === 'pre-separacao'
-                ? `/carteira/api/pre-separacao/${loteId}/atualizar-datas`
-                : `/carteira/api/separacao/${loteId}/atualizar-datas`;
+            // Sempre usar endpoint de separação (pre-separacao é compatível)
+            const endpoint = `/carteira/api/separacao/${loteId}/atualizar-datas`;
 
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -1622,65 +1488,61 @@ class WorkspaceMontagem {
                 modal.hide();
 
                 // Atualizar dados localmente sem recarregar a página
-                if (tipo === 'pre-separacao') {
-                    const loteData = this.preSeparacoes.get(loteId);
-                    if (loteData) {
-                        loteData.dataExpedicao = expedicao;
-                        loteData.data_expedicao = expedicao;
-                        loteData.data_agendamento = agendamento;
-                        loteData.protocolo = protocolo;
-                        loteData.agendamento_confirmado = agendamentoConfirmado;
-                        
-                        // Atualizar card
-                        const card = document.querySelector(`.card[data-lote-id="${loteId}"]`);
-                        if (card) {
-                            // Atualizar campos de data no card
-                            const expedicaoElem = card.querySelector('.text-info');
-                            if (expedicaoElem) {
-                                expedicaoElem.innerHTML = `<i class="fas fa-calendar-day"></i> Expedição: ${this.formatarData(expedicao)}`;
-                            }
-                            
-                            const agendamentoElem = card.querySelector('.text-warning');
-                            if (agendamentoElem && agendamento) {
-                                agendamentoElem.innerHTML = `<i class="fas fa-clock"></i> Agendamento: ${this.formatarData(agendamento)}`;
-                            }
-                            
-                            const protocoloElem = card.querySelector('.text-success');
-                            if (protocoloElem && protocolo) {
-                                protocoloElem.innerHTML = `<i class="fas fa-hashtag"></i> Protocolo: ${protocolo}`;
-                            }
-                        }
-                    }
-                } else {
-                    // Atualizar dados de separação
-                    const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
-                    if (separacao) {
-                        separacao.expedicao = expedicao;
-                        separacao.agendamento = agendamento;
-                        separacao.protocolo = protocolo;
-                        separacao.agendamento_confirmado = agendamentoConfirmado;
-                        
-                        // Atualizar card
-                        const card = document.querySelector(`.card[data-lote-id="${loteId}"]`);
-                        if (card) {
-                            // Atualizar campos de data no card
-                            const expedicaoElem = card.querySelector('.text-info');
-                            if (expedicaoElem) {
-                                expedicaoElem.innerHTML = `<i class="fas fa-calendar-day"></i> Expedição: ${this.formatarData(expedicao)}`;
-                            }
-                            
-                            const agendamentoElem = card.querySelector('.text-warning');
-                            if (agendamentoElem && agendamento) {
-                                agendamentoElem.innerHTML = `<i class="fas fa-clock"></i> Agendamento: ${this.formatarData(agendamento)}`;
-                            }
-                            
-                            const protocoloElem = card.querySelector('.text-success');
-                            if (protocoloElem && protocolo) {
-                                protocoloElem.innerHTML = `<i class="fas fa-hashtag"></i> Protocolo: ${protocolo}`;
-                            }
+                // Atualizar em TODAS as estruturas de dados para garantir consistência
+                
+                // 1. Atualizar preSeparacoes (se existir)
+                const loteData = this.preSeparacoes.get(loteId);
+                if (loteData) {
+                    loteData.dataExpedicao = expedicao;
+                    loteData.data_expedicao = expedicao;
+                    loteData.expedicao = expedicao;  // IMPORTANTE: campo usado na view compacta
+                    loteData.data_agendamento = agendamento;
+                    loteData.agendamento = agendamento;  // IMPORTANTE: campo usado na view compacta
+                    loteData.protocolo = protocolo;
+                    loteData.agendamento_confirmado = agendamentoConfirmado;
+                }
+                
+                // 2. Atualizar separacoesConfirmadas
+                const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
+                if (separacao) {
+                    separacao.expedicao = expedicao;
+                    separacao.agendamento = agendamento;
+                    separacao.protocolo = protocolo;
+                    separacao.agendamento_confirmado = agendamentoConfirmado;
+                }
+                
+                // 3. Atualizar na carteira agrupada (se existir) - CRÍTICO para view compacta
+                if (window.carteiraAgrupada && window.carteiraAgrupada.separacoesPorPedido) {
+                    for (const [pedido, separacoes] of window.carteiraAgrupada.separacoesPorPedido) {
+                        const sep = separacoes.find(s => s.separacao_lote_id === loteId);
+                        if (sep) {
+                            sep.expedicao = expedicao;
+                            sep.agendamento = agendamento;
+                            sep.protocolo = protocolo;
+                            sep.agendamento_confirmado = agendamentoConfirmado;
+                            break;
                         }
                     }
                 }
+                
+                // 4. Atualizar card visual
+                const card = document.querySelector(`.card[data-lote-id="${loteId}"]`);
+                if (card && this.loteManager) {
+                    // Atualizar dados no Map
+                    const loteData = this.preSeparacoes.get(loteId);
+                    if (loteData) {
+                        loteData.expedicao = expedicao;
+                        loteData.agendamento = agendamento;
+                        loteData.protocolo = protocolo;
+                        loteData.agendamento_confirmado = agendamentoConfirmado;
+                        
+                        // Re-renderizar o card inteiro para garantir consistência
+                        this.loteManager.atualizarCardLote(loteId);
+                    }
+                }
+                
+                // 5. Atualizar a view compacta (CORREÇÃO DO PROBLEMA PRINCIPAL)
+                this.atualizarViewCompactaDireto(loteId, expedicao, agendamento, protocolo, agendamentoConfirmado);
 
                 // Mostrar sucesso
                 Swal.fire({
@@ -1717,53 +1579,14 @@ class WorkspaceMontagem {
         window.open(`/carteira/separacao/${loteId}/imprimir`, '_blank');
     }
 
-    async confirmarAgendamentoLote(loteId, tipo) {
-        try {
-            console.log(`🔄 Confirmando agendamento do lote ${loteId} (${tipo})`);
-            
-            let endpoint;
-            if (tipo === 'pre') {
-                // Para pré-separação, usar endpoint de lote
-                endpoint = `/carteira/api/pre-separacao/lote/${loteId}/confirmar-agendamento`;
-            } else {
-                // Para separação
-                endpoint = `/carteira/api/separacao/${loteId}/confirmar-agendamento`;
-            }
-            
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': this.getCSRFToken()
-                }
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.mostrarToast('Agendamento confirmado com sucesso!', 'success');
-                // Recarregar dados
-                location.reload();
-            } else {
-                this.mostrarToast('Erro ao confirmar agendamento: ' + result.error, 'error');
-            }
-        } catch (error) {
-            console.error('Erro ao confirmar agendamento:', error);
-            this.mostrarToast('Erro ao confirmar agendamento', 'error');
-        }
-    }
+    // Função duplicada removida - usar a primeira implementação acima
     
     async reverterAgendamentoLote(loteId, tipo) {
         try {
             console.log(`🔄 Revertendo confirmação do lote ${loteId} (${tipo})`);
             
-            let endpoint;
-            if (tipo === 'pre') {
-                // Para pré-separação, usar endpoint de lote
-                endpoint = `/carteira/api/pre-separacao/lote/${loteId}/reverter-agendamento`;
-            } else {
-                // Para separação
-                endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
-            }
+            // Usar sempre o endpoint unificado por lote_id
+            const endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
             
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -1903,7 +1726,12 @@ class WorkspaceMontagem {
     }
 
     mostrarToast(mensagem, tipo = 'info') {
-        // Usar SweetAlert2 se disponível, senão usar alert
+        // Usar módulo centralizado se disponível
+        if (window.Notifications && window.Notifications.toast) {
+            return window.Notifications.toast(mensagem, tipo);
+        }
+        
+        // Fallback para SweetAlert2
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: tipo,
@@ -1914,230 +1742,12 @@ class WorkspaceMontagem {
                 showConfirmButton: false
             });
         } else {
+            // Fallback final
             const icone = tipo === 'success' ? '✅' : tipo === 'error' ? '❌' : 'ℹ️';
             alert(`${icone} ${mensagem}`);
         }
     }
 
-    /**
-     * 🆕 RENDERIZAÇÃO COMPACTA DE SEPARAÇÕES E PRÉ-SEPARAÇÕES
-     * Mostra todas as separações e pré-separações em uma tabela compacta
-     */
-    renderizarSeparacoesCompactas(numPedido) {
-        // Combinar separações confirmadas e pré-separações
-        const todasSeparacoes = [];
-        
-        // Adicionar separações confirmadas
-        if (this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0) {
-            this.separacoesConfirmadas.forEach(sep => {
-                todasSeparacoes.push({
-                    tipo: 'Separação',
-                    status: sep.status || '',
-                    loteId: sep.separacao_lote_id,
-                    valor: sep.valor_total || 0,
-                    peso: sep.peso_total || 0,
-                    pallet: sep.pallet_total || 0,
-                    expedicao: sep.expedicao,
-                    agendamento: sep.agendamento,
-                    protocolo: sep.protocolo,
-                    agendamento_confirmado: sep.agendamento_confirmado,
-                    embarque: sep.embarque,
-                    isSeparacao: true
-                });
-            });
-        }
-        
-        // Adicionar pré-separações
-        if (this.preSeparacoes && this.preSeparacoes.size > 0) {
-            this.preSeparacoes.forEach((preSepa, loteId) => {
-                // Calcular totais se não existirem
-                let valorTotal = 0;
-                let pesoTotal = 0;
-                let palletTotal = 0;
-                
-                if (preSepa.produtos && preSepa.produtos.length > 0) {
-                    preSepa.produtos.forEach(prod => {
-                        valorTotal += prod.valor || 0;
-                        pesoTotal += prod.peso || 0;
-                        palletTotal += prod.pallet || 0;
-                    });
-                }
-                
-                todasSeparacoes.push({
-                    tipo: 'Pré-separação',
-                    status: '', // Pré-separação não tem status
-                    loteId: loteId,
-                    valor: valorTotal || preSepa.totais?.valor || 0,
-                    peso: pesoTotal || preSepa.totais?.peso || 0,
-                    pallet: palletTotal || preSepa.totais?.pallet || 0,
-                    expedicao: preSepa.dataExpedicao || preSepa.data_expedicao,
-                    agendamento: preSepa.data_agendamento,
-                    protocolo: preSepa.protocolo,
-                    agendamento_confirmado: preSepa.agendamento_confirmado || false,
-                    embarque: null, // Pré-separações não têm embarque
-                    isSeparacao: false
-                });
-            });
-        }
-        
-        // Se não houver nenhuma separação ou pré-separação
-        if (todasSeparacoes.length === 0) {
-            return `
-                <div class="text-center text-muted py-2">
-                    <small><i class="fas fa-info-circle me-1"></i>Nenhuma separação ou pré-separação encontrada</small>
-                </div>
-            `;
-        }
-        
-        // Renderizar tabela compacta
-        return `
-            <h6 class="mb-3">
-                <i class="fas fa-truck me-2"></i>
-                Separações e Pré-Separações
-                <span class="badge bg-secondary ms-2">${todasSeparacoes.length}</span>
-            </h6>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th width="100">Tipo</th>
-                            <th width="80">Status</th>
-                            <th class="text-end">Valor</th>
-                            <th class="text-end">Peso</th>
-                            <th class="text-end">Pallet</th>
-                            <th class="text-center">Expedição</th>
-                            <th class="text-center">Agendamento</th>
-                            <th>Protocolo</th>
-                            <th class="text-center">Confirmação</th>
-                            <th>Embarque</th>
-                            <th width="200" class="text-center">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${todasSeparacoes.map(item => this.renderizarLinhaSeparacaoCompacta(item, numPedido)).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-    
-    /**
-     * 🆕 RENDERIZAR LINHA INDIVIDUAL DA SEPARAÇÃO COMPACTA
-     */
-    renderizarLinhaSeparacaoCompacta(item, numPedido) {
-        const tipoClass = item.isSeparacao ? 'text-primary' : 'text-warning';
-        const statusBadge = item.status ? 
-            (item.status === 'COTADO' ? '<span class="badge bg-warning text-dark">COTADO</span>' : 
-             item.status === 'ABERTO' ? '<span class="badge bg-secondary">ABERTO</span>' : '') : '';
-        
-        const confirmacaoBadge = item.agendamento ? 
-            (item.agendamento_confirmado ? 
-                '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Confirmado</span>' :
-                '<span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Aguardando</span>') : '-';
-        
-        const embarqueInfo = item.embarque ? 
-            `<span title="${item.embarque.transportadora || 'Sem transportadora'}" style="cursor: help;">
-                #${item.embarque.numero || '-'} | ${item.embarque.data_prevista_embarque ? this.formatarData(item.embarque.data_prevista_embarque) : '-'}
-             </span>` : '-';
-        
-        return `
-            <tr>
-                <td><strong class="${tipoClass}">${item.tipo}</strong></td>
-                <td>${statusBadge}</td>
-                <td class="text-end text-success">${this.formatarMoeda(item.valor)}</td>
-                <td class="text-end">${this.formatarPeso(item.peso)}</td>
-                <td class="text-end">${this.formatarPallet(item.pallet)}</td>
-                <td class="text-center">${item.expedicao ? this.formatarData(item.expedicao) : '-'}</td>
-                <td class="text-center">${item.agendamento ? this.formatarData(item.agendamento) : '-'}</td>
-                <td><small>${item.protocolo || '-'}</small></td>
-                <td class="text-center">${confirmacaoBadge}</td>
-                <td><small>${embarqueInfo}</small></td>
-                <td class="text-center">
-                    <div class="btn-group btn-group-sm">
-                        ${item.isSeparacao ? `
-                            <button class="btn btn-outline-primary btn-sm" 
-                                    onclick="workspace.editarDatasSeparacao('${item.loteId}')"
-                                    title="Editar datas">
-                                <i class="fas fa-calendar-alt"></i> Datas
-                            </button>
-                        ` : `
-                            <button class="btn btn-outline-primary btn-sm" 
-                                    onclick="workspace.editarDatasPreSeparacao('${item.loteId}')"
-                                    title="Editar datas">
-                                <i class="fas fa-calendar-alt"></i> Datas
-                            </button>
-                            <button class="btn btn-outline-success btn-sm" 
-                                    onclick="workspace.confirmarSeparacao('${item.loteId}')"
-                                    title="Confirmar separação">
-                                <i class="fas fa-check"></i> Confirmar
-                            </button>
-                        `}
-                        ${item.agendamento && !item.protocolo ? `
-                            <button class="btn btn-outline-success btn-sm" 
-                                    onclick="workspace.agendarNoPortal('${item.loteId}', '${item.agendamento}')"
-                                    title="Agendar no portal">
-                                <i class="fas fa-calendar-plus"></i> Agendar
-                            </button>
-                        ` : ''}
-                    </div>
-                </td>
-            </tr>
-        `;
-    }
-    
-    /**
-     * 🆕 RENDERIZAR TABELA DE PRODUTOS BÁSICA (sem estoque)
-     * Carrega apenas dados da CarteiraPrincipal inicialmente
-     */
-    renderizarTabelaProdutosBasica(produtos) {
-        // Usar WorkspaceTabela se disponível, mas sem dados de estoque
-        if (window.workspaceTabela) {
-            // Garantir valores numéricos válidos em vez de null
-            const produtosBasicos = produtos.map(p => ({
-                ...p,
-                qtd_pedido: p.qtd_pedido || p.qtd_saldo_produto_pedido || 0,
-                estoque_hoje: 0,  // Usar 0 em vez de null
-                estoque: 0,       // Adicionar campo alternativo
-                menor_estoque_7d: 0,  // Usar 0 em vez de null
-                menor_estoque_produto_d7: 0,  // Campo alternativo
-                producao_hoje: 0,  // Usar 0 em vez de null
-                estoque_data_expedicao: 0,  // Usar 0 em vez de null
-                data_disponibilidade: null,  // Pode ser null
-                qtd_disponivel: 0,
-                preco_unitario: p.preco_unitario || p.preco_produto_pedido || 0,
-                peso_unitario: p.peso_unitario || 0,
-                palletizacao: p.palletizacao || 1000
-            }));
-            return window.workspaceTabela.renderizarTabelaProdutos(produtosBasicos);
-        }
-        
-        // Fallback simples se WorkspaceTabela não estiver disponível
-        return `
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Produto</th>
-                            <th>Quantidade</th>
-                            <th>Valor</th>
-                            <th>Estoque</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${produtos.map(p => `
-                            <tr>
-                                <td>${p.cod_produto} - ${p.nome_produto || ''}</td>
-                                <td>${p.qtd_saldo_produto_pedido || 0}</td>
-                                <td>${this.formatarMoeda((p.qtd_saldo_produto_pedido || 0) * (p.preco_produto_pedido || 0))}</td>
-                                <td><span class="spinner-border spinner-border-sm"></span></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-    
     /**
      * 🆕 CARREGAR DADOS DE ESTOQUE DE FORMA ASSÍNCRONA
      * Carrega estoque, projeções e menor_estoque após renderização inicial
@@ -2153,40 +1763,40 @@ class WorkspaceMontagem {
         try {
             console.log(`📊 Carregando dados de estoque assincronamente para pedido ${numPedido}`);
             
-            // Cancelar requisição anterior se existir
-            if (this.abortControllerEstoque) {
-                this.abortControllerEstoque.abort();
-            }
-            
-            // Criar novo AbortController
-            this.abortControllerEstoque = new AbortController();
-            
             // Mostrar loading
             const loadingSpinner = document.getElementById(`loading-produtos-${numPedido}`);
             if (loadingSpinner) {
                 loadingSpinner.style.display = 'inline-block';
             }
             
-            // Fazer requisição para obter dados completos com estoque
-            const response = await fetch(`/carteira/api/pedido/${numPedido}/workspace-estoque`, {
-                signal: this.abortControllerEstoque.signal
-            });
-            const data = await response.json();
-            
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Erro ao carregar estoque');
-            }
+            // Fazer requisição usando WorkspaceAPI
+            const data = await this.api.buscarEstoqueAssincrono(numPedido);
             
             // Atualizar dados locais com informações de estoque
+            console.log('🔄 Atualizando dados de estoque assíncronos para', data.produtos.length, 'produtos');
             data.produtos.forEach(produto => {
                 const dadosExistentes = this.dadosProdutos.get(produto.cod_produto);
                 if (dadosExistentes) {
+                    // DEBUG: Log do que está sendo atualizado
+                    console.log(`📦 Atualizando produto ${produto.cod_produto}:`, {
+                        estoque_hoje: produto.estoque_hoje || produto.estoque || 0,
+                        data_disponibilidade: produto.data_disponibilidade,
+                        qtd_disponivel: produto.qtd_disponivel
+                    });
+                    
                     // Mesclar dados de estoque com dados existentes (garantir que não sejam undefined)
                     Object.assign(dadosExistentes, {
-                        estoque_hoje: produto.estoque || produto.estoque_d0 || 0,
-                        menor_estoque_7d: produto.menor_estoque_produto_d7 || 0,
+                        // Campos principais de estoque
+                        estoque_hoje: produto.estoque_hoje || produto.estoque || produto.estoque_d0 || 0,
+                        estoque: produto.estoque || produto.estoque_hoje || produto.estoque_d0 || 0,
+                        menor_estoque_7d: produto.menor_estoque_7d || produto.menor_estoque_produto_d7 || 0,
                         producao_hoje: produto.producao_hoje || 0,
-                        estoque_data_expedicao: produto.saldo_estoque_pedido || 0,
+                        estoque_data_expedicao: produto.estoque_data_expedicao || produto.saldo_estoque_pedido || 0,
+                        
+                        // IMPORTANTE: Adicionar campos de disponibilidade
+                        data_disponibilidade: produto.data_disponibilidade || null,
+                        qtd_disponivel: produto.qtd_disponivel || 0,
+                        
                         // Adicionar projeções D0-D28 se disponíveis
                         ...Object.fromEntries(
                             Object.entries(produto)
@@ -2197,17 +1807,132 @@ class WorkspaceMontagem {
                 }
             });
             
-            // Re-renderizar tabela com dados completos
-            const container = document.getElementById(`tabela-produtos-container-${numPedido}`);
-            if (container && window.workspaceTabela) {
-                container.innerHTML = window.workspaceTabela.renderizarTabelaProdutos(Array.from(this.dadosProdutos.values()));
-                
-                // 🆕 IMPORTANTE: Re-configurar checkboxes após re-renderizar
-                // Aguardar DOM atualizar e re-aplicar event listeners
-                requestAnimationFrame(() => {
-                    console.log('🔄 Re-configurando checkboxes após carregamento de estoque...');
-                    this.configurarCheckboxes(numPedido);
+            // 🆕 OPÇÃO 1: Atualizar apenas os valores nas células existentes (sem re-renderizar)
+            // Isso evita o flicker e mantém a estrutura da tabela estável
+            const tabelaBody = document.querySelector(`#tabela-produtos-container-${numPedido} tbody`);
+            if (tabelaBody) {
+                // Percorrer cada linha da tabela e atualizar apenas os valores de estoque
+                data.produtos.forEach(produto => {
+                    const row = tabelaBody.querySelector(`tr[data-produto="${produto.cod_produto}"]`);
+                    if (row) {
+                        // CORREÇÃO: Usar índices de células em vez de seletores de classe
+                        
+                        // Atualizar célula de Est.Hoje (6ª coluna - cells[6])
+                        const estoqueCell = row.cells[6];
+                        if (estoqueCell) {
+                            const estoque = Math.floor(produto.estoque || produto.estoque_d0 || 0);
+                            const badgeClass = estoque > 100 ? 'bg-success' : estoque > 0 ? 'bg-warning' : 'bg-danger';
+                            estoqueCell.innerHTML = `
+                                <span class="badge ${badgeClass}" title="Estoque disponível hoje">
+                                    ${estoque.toLocaleString('pt-BR')}
+                                </span>
+                            `;
+                        }
+                        
+                        // Atualizar célula de Est.Min.D+7 (7ª coluna - cells[7])
+                        const menor7dCell = row.cells[7];
+                        if (menor7dCell) {
+                            const menorEstoque = Math.floor(produto.menor_estoque_produto_d7 || 0);
+                            const badgeClass = menorEstoque <= 0 ? 'bg-danger' : menorEstoque <= 20 ? 'bg-warning' : 'bg-secondary';
+                            menor7dCell.innerHTML = `
+                                <span class="badge ${badgeClass}" title="Menor estoque projetado nos próximos 7 dias">
+                                    ${menorEstoque.toLocaleString('pt-BR')}
+                                </span>
+                            `;
+                        }
+                        
+                        // Atualizar célula de Prod.Hoje (8ª coluna - cells[8])
+                        const prodHojeCell = row.cells[8];
+                        if (prodHojeCell) {
+                            const producao = Math.floor(produto.producao_hoje || 0);
+                            const badgeClass = producao > 0 ? 'bg-info' : 'bg-secondary';
+                            prodHojeCell.innerHTML = `
+                                <span class="badge ${badgeClass}" title="Quantidade programada para produzir hoje">
+                                    ${producao.toLocaleString('pt-BR')}
+                                </span>
+                            `;
+                        }
+                        
+                        // Atualizar célula de Disponível (9ª coluna - td:nth-child(10))
+                        const disponibilidadeCell = row.cells[9]; // 10ª célula (index 9)
+                        if (disponibilidadeCell) {
+                            // Calcular status de disponibilidade usando a mesma lógica do workspace-tabela.js
+                            const qtdPedido = produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0;
+                            const estoqueHoje = produto.estoque || produto.estoque_d0 || 0;
+                            const dataDisponivel = produto.data_disponibilidade;
+                            const qtdDisponivel = produto.qtd_disponivel || 0;
+                            
+                            let statusDisponibilidade;
+                            
+                            // Se tem estoque hoje suficiente
+                            if (estoqueHoje >= qtdPedido) {
+                                statusDisponibilidade = {
+                                    class: 'bg-success text-white',
+                                    texto: 'DISPONÍVEL',
+                                    detalhes: `${Math.floor(estoqueHoje).toLocaleString('pt-BR')} unidades`
+                                };
+                            }
+                            // Se tem data de disponibilidade futura
+                            else if (dataDisponivel && dataDisponivel !== 'Sem previsão') {
+                                const hoje = new Date().toISOString().split('T')[0];
+                                if (dataDisponivel > hoje) {
+                                    const diasFuturo = Math.ceil((new Date(dataDisponivel) - new Date()) / (1000 * 60 * 60 * 24));
+                                    // Calcular a data formatada
+                                    const dataFutura = new Date();
+                                    dataFutura.setDate(dataFutura.getDate() + diasFuturo);
+                                    const dia = String(dataFutura.getDate()).padStart(2, '0');
+                                    const mes = String(dataFutura.getMonth() + 1).padStart(2, '0');
+                                    const dataFormatada = `${dia}/${mes}`;
+                                    
+                                    statusDisponibilidade = {
+                                        class: 'bg-info text-white',
+                                        texto: `${Math.floor(qtdDisponivel).toLocaleString('pt-BR')}`,
+                                        detalhes: `D+${diasFuturo} | ${dataFormatada}`
+                                    };
+                                } else if (qtdDisponivel > 0) {
+                                    statusDisponibilidade = {
+                                        class: 'bg-warning text-dark',
+                                        texto: 'PARCIAL',
+                                        detalhes: `${Math.floor(qtdDisponivel).toLocaleString('pt-BR')} disponível`
+                                    };
+                                }
+                            }
+                            // Se tem estoque parcial
+                            else if (estoqueHoje > 0) {
+                                statusDisponibilidade = {
+                                    class: 'bg-warning text-dark',
+                                    texto: 'PARCIAL',
+                                    detalhes: `${Math.floor(estoqueHoje).toLocaleString('pt-BR')} de ${Math.floor(qtdPedido).toLocaleString('pt-BR')}`
+                                };
+                            }
+                            // Sem estoque e sem previsão
+                            else {
+                                statusDisponibilidade = {
+                                    class: 'bg-danger text-white',
+                                    texto: 'INDISPONÍVEL',
+                                    detalhes: 'Sem estoque'
+                                };
+                            }
+                            
+                            // Atualizar HTML da célula
+                            disponibilidadeCell.innerHTML = `
+                                <span class="badge ${statusDisponibilidade.class}">
+                                    ${statusDisponibilidade.texto}
+                                </span>
+                                ${statusDisponibilidade.detalhes ? `<br><small class="text-muted">${statusDisponibilidade.detalhes}</small>` : ''}
+                            `;
+                        }
+                        
+                        // Atualizar ícone de ruptura se existir
+                        const rupturaIcon = row.querySelector('.ruptura-icon');
+                        if (rupturaIcon && produto.dia_ruptura) {
+                            rupturaIcon.innerHTML = `<i class="fas fa-exclamation-triangle text-danger" title="Ruptura prevista"></i>`;
+                        }
+                    }
                 });
+                
+                // Não precisa re-configurar checkboxes pois a estrutura não mudou
+                console.log('✅ Valores de estoque atualizados sem re-renderizar');
             }
             
             // Esconder loading
@@ -2248,6 +1973,103 @@ class WorkspaceMontagem {
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 `;
                 container.insertBefore(alertDiv, container.firstChild);
+            }
+        }
+    }
+    
+    // Método para atualizar diretamente a view compacta sem re-renderizar
+    atualizarViewCompactaDireto(loteId, expedicao, agendamento, protocolo, agendamentoConfirmado) {
+        console.log(`🔄 Atualizando view compacta para lote ${loteId}`);
+        console.log(`   Dados: exp=${expedicao}, age=${agendamento}, prot=${protocolo}, conf=${agendamentoConfirmado}`);
+        
+        // Buscar linha da separação compacta - tentar diferentes seletores
+        let linhaCompacta = document.querySelector(`tr[data-lote-id="${loteId}"]`);
+        if (!linhaCompacta) {
+            // Tentar com ID direto
+            const idVariacoes = [
+                `separacoes-compactas-${loteId.replace(/_/g, '')}`,
+                `separacoes-compactas-${loteId}`,
+                loteId
+            ];
+            
+            for (const id of idVariacoes) {
+                linhaCompacta = document.getElementById(id);
+                if (linhaCompacta) break;
+            }
+        }
+        
+        if (linhaCompacta) {
+            console.log(`✅ Encontrou linha compacta:`, linhaCompacta);
+            
+            // Buscar células da linha
+            const celulas = linhaCompacta.querySelectorAll('td');
+            
+            // IMPORTANTE: Usar índices FIXOS baseados na estrutura da tabela
+            // Estrutura das colunas (carteira-agrupada.js linha 1221-1231):
+            // 0: Tipo | 1: Status | 2: Valor | 3: Peso | 4: Pallet | 
+            // 5: Expedição | 6: Agendamento | 7: Protocolo | 8: Confirmação | 9: Embarque | 10: Botões
+            
+            // Atualizar coluna 5 - Expedição
+            if (celulas[5]) {
+                console.log(`📅 Atualizando expedição na coluna 5`);
+                celulas[5].innerHTML = expedicao ? this.formatarData(expedicao) : '-';
+                celulas[5].className = 'text-center';
+            }
+            
+            // Atualizar coluna 6 - Agendamento
+            if (celulas[6]) {
+                console.log(`📅 Atualizando agendamento na coluna 6`);
+                celulas[6].innerHTML = agendamento ? this.formatarData(agendamento) : '-';
+                celulas[6].className = 'text-center';
+            }
+            
+            // Atualizar coluna 7 - Protocolo
+            if (celulas[7]) {
+                console.log(`🔢 Atualizando protocolo na coluna 7`);
+                celulas[7].innerHTML = `<small>${protocolo || '-'}</small>`;
+            }
+            
+            // Atualizar coluna 8 - Confirmação
+            if (celulas[8]) {
+                console.log(`✅ Atualizando confirmação na coluna 8`);
+                if (agendamentoConfirmado) {
+                    celulas[8].innerHTML = '<span class="badge bg-success">Confirmado</span>';
+                } else if (protocolo) {
+                    celulas[8].innerHTML = '<span class="badge bg-warning">Aguardando</span>';
+                } else {
+                    celulas[8].innerHTML = '<span class="badge bg-secondary">-</span>';
+                }
+                celulas[8].className = 'text-center';
+            }
+            
+            // Atualizar também o botão de Datas se existir para passar os novos valores
+            const botaoDatas = linhaCompacta.querySelector('button[onclick*="abrirModalDatas"]');
+            if (botaoDatas) {
+                const novoOnclick = `carteiraAgrupada.abrirModalDatas('${loteId}', true, '${expedicao || ''}', '${agendamento || ''}', '${protocolo || ''}', ${agendamentoConfirmado})`;
+                botaoDatas.setAttribute('onclick', novoOnclick);
+                console.log(`🔄 Atualizado onclick do botão Datas`);
+            }
+        } else {
+            console.warn(`⚠️ Não encontrou linha compacta para lote ${loteId}`);
+        }
+        
+        // Atualizar também no carteiraAgrupada se existir
+        if (window.carteiraAgrupada) {
+            // Atualizar dadosAgrupados
+            if (window.carteiraAgrupada.dadosAgrupados && window.carteiraAgrupada.dadosAgrupados.grupos) {
+                for (const grupo of window.carteiraAgrupada.dadosAgrupados.grupos) {
+                    if (grupo.separacoes_compactas) {
+                        const sepCompacta = grupo.separacoes_compactas.find(s => s.lote_id === loteId);
+                        if (sepCompacta) {
+                            sepCompacta.expedicao = expedicao;
+                            sepCompacta.agendamento = agendamento;
+                            sepCompacta.protocolo = protocolo;
+                            sepCompacta.agendamento_confirmado = agendamentoConfirmado;
+                            console.log(`✅ Atualizado sepCompacta em dadosAgrupados`);
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
