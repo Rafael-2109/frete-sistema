@@ -627,9 +627,14 @@ def reset_status_pedido(pedido_id):
         status_anterior = pedido.status
         nf_anterior = pedido.nf
         
-        # PASSO 1: Limpar NF e nf_cd
-        pedido.nf = None
-        pedido.nf_cd = False
+        # PASSO 1: Limpar NF e nf_cd em Separacao
+        if pedido.separacao_lote_id:
+            Separacao.query.filter_by(
+                separacao_lote_id=pedido.separacao_lote_id
+            ).update({
+                'numero_nf': None,
+                'nf_cd': False
+            })
         
         # PASSO 2: Buscar em EmbarqueItem
         embarque_item = None
@@ -650,8 +655,11 @@ def reset_status_pedido(pedido_id):
         
         # Processar resultado da busca
         if embarque_item and embarque_item.nota_fiscal:
-            # CASO 1-A: Encontrou NF no EmbarqueItem
-            pedido.nf = embarque_item.nota_fiscal
+            # CASO 1-A: Encontrou NF no EmbarqueItem - atualizar em Separacao
+            if pedido.separacao_lote_id:
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update({'numero_nf': embarque_item.nota_fiscal})
             
             # PASSO 3: Verificar em FaturamentoProduto
             faturamento_existe = FaturamentoProduto.query.filter_by(
@@ -660,18 +668,30 @@ def reset_status_pedido(pedido_id):
             
             if faturamento_existe:
                 # CASO 2-A: NF existe no faturamento
-                pedido.status = 'FATURADO'
+                if pedido.separacao_lote_id:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id
+                    ).update({'status': 'FATURADO'})
             else:
                 # CASO 2-B: NF não existe no faturamento (mas existe no embarque)
-                pedido.status = 'COTADO'
+                if pedido.separacao_lote_id:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id
+                    ).update({'status': 'COTADO'})
                 
         elif embarque_item and embarque_ativo:
             # CASO 1-B: Encontrou EmbarqueItem ativo mas sem NF
-            pedido.status = 'COTADO'
+            if pedido.separacao_lote_id:
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update({'status': 'COTADO'})
             
         else:
             # CASO 1-C: Não encontrou EmbarqueItem ativo
-            pedido.status = 'ABERTO'
+            if pedido.separacao_lote_id:
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update({'status': 'ABERTO'})
         
         # Salvar alterações
         db.session.commit()
@@ -1002,8 +1022,12 @@ def atualizar_status():
         for pedido in pedidos:
             status_correto = pedido.status_calculado
             if pedido.status != status_correto:
-                pedido.status = status_correto
-                atualizados += 1
+                # Atualizar status em Separacao
+                if pedido.separacao_lote_id:
+                    Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id
+                    ).update({'status': status_correto})
+                    atualizados += 1
         
         if atualizados > 0:
             db.session.commit()
@@ -1208,9 +1232,14 @@ def processar_cotacao_manual():
 
         # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens
         for pedido in pedidos:
-            pedido.cotacao_id = cotacao.id
-            pedido.transportadora = transportadora.razao_social
-            pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar cotação manual
+            if pedido.separacao_lote_id:
+                # Atualiza em Separacao (transportadora ignorado conforme orientação)
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update({
+                    'cotacao_id': cotacao.id,
+                    'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao criar cotação manual
+                })
             # Status será calculado automaticamente
 
         # Commit final
@@ -1389,10 +1418,17 @@ def embarque_fob():
                 # Atualiza o embarque com a cotação FOB
                 embarque.cotacao_id = cotacao_fob.id
             
-            # Atualiza o pedido - usar cotacao_fob.id apenas se foi criada
-            pedido.cotacao_id = embarque.cotacao_id or (cotacao_fob.id if cotacao_fob else None)
-            pedido.transportadora = transportadora_fob.razao_social
-            pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar embarque FOB
+            # ✅ NOVO: Atualizar pedidos com cotação FOB
+            if pedido.separacao_lote_id:
+                update_data = {'nf_cd': False}  # ✅ NOVO: Reseta flag NF no CD
+                
+                if embarque.cotacao_id or (cotacao_fob and cotacao_fob.id):
+                    update_data['cotacao_id'] = embarque.cotacao_id or cotacao_fob.id
+                
+                # Atualiza em Separacao (transportadora ignorado conforme orientação)
+                Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).update(update_data)
             # O status será calculado automaticamente como COTADO pelo trigger
 
         # Commit final

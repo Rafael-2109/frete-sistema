@@ -307,11 +307,11 @@ class FaturamentoService:
         
         status_map = {
             'draft': 'RASCUNHO',
-            'posted': 'ATIVO',
+            'posted': 'Lançado',
             'cancel': 'CANCELADO',
-            'sale': 'ATIVO',
-            'done': 'ATIVO',
-            'sent': 'ATIVO'
+            'sale': 'Lançado',
+            'done': 'Lançado',
+            'sent': 'Lançado'
         }
         
         return status_map.get(status_odoo.lower(), 'ATIVO')
