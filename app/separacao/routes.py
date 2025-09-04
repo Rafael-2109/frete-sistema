@@ -2,7 +2,7 @@ import os
 import tempfile
 import numpy as np
 import pandas as pd
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask import Blueprint, render_template, redirect, flash, request, jsonify
 from flask_login import login_required
 
 from app import db
@@ -180,7 +180,6 @@ def importar():
 
             # Ao fim, em vez de voltar pra 'separacao.listar', 
             # chamamos direto o gerar_resumo:
-            return redirect(url_for('pedidos.gerar_resumo'))
 
         except Exception as e:
             db.session.rollback()
