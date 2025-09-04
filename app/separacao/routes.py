@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from flask import Blueprint, render_template, redirect, flash, request, jsonify
 from flask_login import login_required
-
+from app.utils.lote_utils import gerar_lote_id
 from app import db
 from app.separacao.models import Separacao
 from app.separacao.forms import ImportarExcelForm
@@ -123,7 +123,7 @@ def importar():
 
             # Processar arquivo Excel
             df = pd.read_excel(temp_filepath)
-
+            lote_id = gerar_lote_id()
             for i, row in df.iterrows():
 
                 # Exemplo: se QTD_SALDO for int, mas às vezes vem com pontos/virgula
@@ -162,6 +162,7 @@ def importar():
                         expedicao=parse_date(row.get('EXPEDIÇÃO')),
                         agendamento=parse_date(row.get('AGENDAMENTO')),
                         protocolo=parse_str(row.get('PROTOCOLO')),
+                        separacao_lote_id=lote_id
                     )
                     db.session.add(pedido)
                     db.session.flush()  # tenta inserir/validar já

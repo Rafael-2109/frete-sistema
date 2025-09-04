@@ -110,13 +110,15 @@ import os
 
 # Configurações básicas
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
-workers = 1
-worker_class = 'sync'
+workers = 4  # Aumentado para aproveitar melhor 2GB RAM
+worker_class = 'gthread'  # Mudado para gthread (melhor para I/O)
+threads = 2  # 2 threads por worker = 8 conexões simultâneas
 timeout = 300
 max_requests = 1000
 max_requests_jitter = 100
 keepallive = 10
 preload_app = False  # Desabilitar preload para permitir registro de tipos
+worker_connections = 1000  # Máximo de conexões por worker
 
 def on_starting(server):
     """Executado ANTES do Gunicorn iniciar"""
