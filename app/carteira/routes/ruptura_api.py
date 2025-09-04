@@ -35,7 +35,8 @@ try:
     REDIS_CLIENT.ping()
     REDIS_DISPONIVEL = True
     REDIS_TTL = int(os.environ.get('REDIS_TTL', 30))  # 30 segundos de cache por padrão
-except:
+except Exception as e:
+    logger.error(f"Erro ao conectar ao Redis: {e}")
     REDIS_CLIENT = None
     REDIS_DISPONIVEL = False
     logger.warning("Redis não disponível - usando processamento direto")
@@ -415,7 +416,7 @@ def status_cache_ruptura():
 
 
 @carteira_bp.route('/api/ruptura/cache/limpar', methods=['POST'])
-def limpar_cache_ruptura():
+def limpar_cache_ruptura_endpoint():
     """
     Limpa cache Redis de análises de ruptura
     """
@@ -443,6 +444,9 @@ def limpar_cache_ruptura():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ENDPOINTS REMOVIDOS - Usar ruptura_api_async.py para processamento em lote
 
 
 @carteira_bp.route('/api/pedido/<num_pedido>/detalhes-completo', methods=['GET'])

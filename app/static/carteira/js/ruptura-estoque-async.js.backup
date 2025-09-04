@@ -1,0 +1,487 @@
+/**
+ * Sistema de Análise de Ruptura de Estoque - Versão Assíncrona
+ * Processa em lotes de 20 pedidos sem cache
+ */
+
+class RupturaEstoqueAsyncManager {
+    constructor() {
+        console.log('🚀 RupturaEstoqueAsyncManager: Iniciando versão assíncrona...');
+        this.pedidosParaAnalisar = [];
+        this.resultadosProcessados = new Map();
+        this.tamanhoLote = 20;
+        this.maxWorkers = 5;
+        this.processandoLote = false;
+        this.init();
+    }
+    
+    init() {
+        console.log('📋 RupturaEstoqueAsyncManager: Aguardando DOM...');
+        setTimeout(() => {
+            console.log('🔍 RupturaEstoqueAsyncManager: Iniciando análise...');
+            this.adicionarBotoesRuptura();
+            this.iniciarAnaliseLote();
+        }, 1000);
+    }
+    
+    /**
+     * Adiciona botões de análise de ruptura
+     */
+    adicionarBotoesRuptura() {
+        const tabela = document.getElementById('tabela-carteira');
+        
+        if (!tabela) {
+            console.error('❌ Tabela #tabela-carteira não encontrada!');
+            setTimeout(() => this.adicionarBotoesRuptura(), 2000);
+            return;
+        }
+        
+        console.log('✅ Tabela encontrada');
+        
+        // Coletar todos os pedidos para análise
+        const rows = tabela.querySelectorAll('tbody tr.pedido-row');
+        console.log(`📊 ${rows.length} pedidos encontrados`);
+        
+        rows.forEach((row) => {
+            const numPedido = row.dataset.pedido;
+            
+            if (!numPedido) return;
+            
+            // Adicionar à lista para processar em lote
+            this.pedidosParaAnalisar.push(numPedido);
+            
+            // Adicionar área de resultado na coluna de observações
+            const celulaObs = row.querySelector('.coluna-entrega-obs');
+            
+            if (!celulaObs) {
+                console.warn(`⚠️ Pedido ${numPedido}: Célula .coluna-entrega-obs não encontrada`);
+                return;
+            }
+            
+            // Criar container para resultado
+            const resultContainer = document.createElement('div');
+            resultContainer.className = 'ruptura-resultado mt-2';
+            resultContainer.id = `ruptura-${numPedido}`;
+            resultContainer.innerHTML = `
+                <span class="badge bg-secondary">
+                    <i class="fas fa-spinner fa-spin me-1"></i>
+                    Aguardando análise...
+                </span>
+            `;
+            
+            celulaObs.appendChild(resultContainer);
+        });
+        
+        console.log(`✅ ${this.pedidosParaAnalisar.length} pedidos preparados para análise`);
+    }
+    
+    /**
+     * Inicia análise em lotes
+     */
+    async iniciarAnaliseLote() {
+        if (this.pedidosParaAnalisar.length === 0) {
+            console.log('✅ Nenhum pedido para analisar');
+            return;
+        }
+        
+        console.log(`📦 Iniciando análise de ${this.pedidosParaAnalisar.length} pedidos em lotes de ${this.tamanhoLote}`);
+        
+        // Mostrar progresso geral
+        this.mostrarProgressoGeral();
+        
+        // Dividir em lotes
+        const lotes = [];
+        for (let i = 0; i < this.pedidosParaAnalisar.length; i += this.tamanhoLote) {
+            lotes.push(this.pedidosParaAnalisar.slice(i, i + this.tamanhoLote));
+        }
+        
+        console.log(`📦 ${lotes.length} lotes criados`);
+        
+        // Processar todos os lotes de uma vez
+        try {
+            const response = await fetch('/carteira/api/ruptura/analisar-lote-async', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    pedidos: this.pedidosParaAnalisar,
+                    tamanho_lote: this.tamanhoLote,
+                    max_workers: this.maxWorkers
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.resultados) {
+                console.log(`✅ Análise concluída em ${data.estatisticas.tempo_total_segundos}s`);
+                console.log(`   OK: ${data.estatisticas.pedidos_ok} | Ruptura: ${data.estatisticas.pedidos_com_ruptura}`);
+                
+                // Processar resultados
+                this.processarResultados(data.resultados);
+                
+                // Atualizar progresso final
+                this.atualizarProgressoGeral(100, data.estatisticas);
+            } else {
+                console.error('❌ Erro na resposta:', data);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao processar lotes:', error);
+            this.mostrarErroGeral(error.message);
+        }
+    }
+    
+    /**
+     * Processa e renderiza resultados
+     */
+    processarResultados(resultados) {
+        for (const [numPedido, resultado] of Object.entries(resultados)) {
+            const container = document.getElementById(`ruptura-${numPedido}`);
+            
+            if (!container) {
+                console.warn(`Container não encontrado para pedido ${numPedido}`);
+                continue;
+            }
+            
+            // Limpar loading
+            container.innerHTML = '';
+            
+            if (!resultado.success) {
+                // Erro no processamento
+                container.innerHTML = `
+                    <span class="badge bg-danger">
+                        <i class="fas fa-times"></i> Erro
+                    </span>
+                `;
+                continue;
+            }
+            
+            if (resultado.pedido_ok) {
+                // Pedido OK
+                container.innerHTML = `
+                    <span class="badge bg-success">
+                        <i class="fas fa-check"></i> Estoque OK
+                    </span>
+                `;
+                
+                // Adicionar classe de sucesso na linha
+                const row = document.querySelector(`tr[data-pedido="${numPedido}"]`);
+                if (row) {
+                    row.classList.add('ruptura-ok');
+                }
+            } else {
+                // Pedido com ruptura
+                const resumo = resultado.resumo;
+                const cores = {
+                    'CRITICA': 'danger',
+                    'ALTA': 'warning',
+                    'MEDIA': 'info',
+                    'BAIXA': 'secondary'
+                };
+                
+                container.innerHTML = `
+                    <div class="ruptura-alerta">
+                        <span class="badge bg-${cores[resumo.criticidade]} mb-1">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            ${resumo.qtd_itens_ruptura} item(s) em ruptura
+                        </span>
+                        <small class="d-block text-muted">
+                            ${resumo.percentual_ruptura.toFixed(1)}% do valor em risco
+                        </small>
+                        <button class="btn btn-sm btn-link p-0 mt-1" 
+                                onclick="rupturaAsyncManager.mostrarDetalhes('${numPedido}', ${JSON.stringify(resultado).replace(/"/g, '&quot;')})">
+                            <i class="fas fa-eye"></i> Ver detalhes
+                        </button>
+                    </div>
+                `;
+                
+                // Adicionar classe de ruptura na linha
+                const row = document.querySelector(`tr[data-pedido="${numPedido}"]`);
+                if (row) {
+                    row.classList.add('ruptura-' + resumo.criticidade.toLowerCase());
+                }
+            }
+            
+            // Salvar resultado
+            this.resultadosProcessados.set(numPedido, resultado);
+        }
+    }
+    
+    /**
+     * Mostra modal com detalhes da ruptura
+     */
+    mostrarDetalhes(numPedido, resultado) {
+        // Criar modal se não existir
+        let modal = document.getElementById('modalRupturaAsync');
+        if (!modal) {
+            modal = this.criarModalRuptura();
+        }
+        
+        const resumo = resultado.resumo;
+        const cores = {
+            'CRITICA': 'danger',
+            'ALTA': 'warning',
+            'MEDIA': 'info',
+            'BAIXA': 'secondary'
+        };
+        
+        // Título
+        document.getElementById('modalRupturaTitulo').innerHTML = `
+            Análise de Ruptura - Pedido ${numPedido}
+            <span class="badge bg-${cores[resumo.criticidade]}">
+                ${resumo.criticidade}
+            </span>
+        `;
+        
+        // Resumo
+        document.getElementById('modalRupturaResumo').innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>% em Ruptura:</strong> 
+                    <span class="text-danger">${resumo.percentual_ruptura}%</span>
+                </div>
+                <div class="col-md-6">
+                    <strong>Itens Afetados:</strong> 
+                    ${resumo.qtd_itens_ruptura} de ${resumo.total_itens}
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <strong>Valor Total:</strong> 
+                    R$ ${this.formatarMoeda(resumo.valor_total_pedido)}
+                </div>
+                <div class="col-md-6">
+                    <strong>Valor em Risco:</strong> 
+                    <span class="text-danger">
+                        R$ ${this.formatarMoeda(resumo.valor_com_ruptura)}
+                    </span>
+                </div>
+            </div>
+        `;
+        
+        // Tabela de itens
+        const tbody = document.getElementById('modalRupturaItens');
+        tbody.innerHTML = '';
+        
+        resultado.itens.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.cod_produto}</td>
+                <td>${item.nome_produto}</td>
+                <td class="text-end">${this.formatarNumero(item.qtd_saldo)}</td>
+                <td class="text-end">${this.formatarNumero(item.estoque_min_d7)}</td>
+                <td class="text-end text-danger fw-bold">
+                    ${this.formatarNumero(item.ruptura_qtd)}
+                </td>
+                <td class="text-center">
+                    ${item.data_producao ? `
+                        <span class="badge bg-success">
+                            ${this.formatarData(item.data_producao)}<br>
+                            Qtd: ${this.formatarNumero(item.qtd_producao)}
+                        </span>
+                    ` : '<span class="text-muted">-</span>'}
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // Mostrar modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+    
+    /**
+     * Cria estrutura do modal
+     */
+    criarModalRuptura() {
+        const modalHtml = `
+            <div class="modal fade" id="modalRupturaAsync" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title" id="modalRupturaTitulo">
+                                Análise de Ruptura
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" 
+                                    data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="modalRupturaResumo" class="alert alert-light">
+                                <!-- Resumo -->
+                            </div>
+                            
+                            <h6 class="mt-3">Itens com Ruptura de Estoque:</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Produto</th>
+                                            <th class="text-end">Qtd Saldo</th>
+                                            <th class="text-end">Est.Min D+7</th>
+                                            <th class="text-end">Ruptura</th>
+                                            <th class="text-center">Produção</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="modalRupturaItens">
+                                        <!-- Itens -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" 
+                                    data-bs-dismiss="modal">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        return document.getElementById('modalRupturaAsync');
+    }
+    
+    /**
+     * Mostra progresso geral
+     */
+    mostrarProgressoGeral() {
+        if (!document.getElementById('ruptura-progresso-geral')) {
+            const progresso = document.createElement('div');
+            progresso.id = 'ruptura-progresso-geral';
+            progresso.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: white;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 15px 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 1000;
+                min-width: 300px;
+            `;
+            progresso.innerHTML = `
+                <h6 class="mb-2">Análise de Ruptura</h6>
+                <div class="progress mb-2">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%">0%</div>
+                </div>
+                <small class="text-muted">Processando ${this.pedidosParaAnalisar.length} pedidos...</small>
+            `;
+            document.body.appendChild(progresso);
+        }
+    }
+    
+    /**
+     * Atualiza progresso geral
+     */
+    atualizarProgressoGeral(percentual, estatisticas = null) {
+        const progresso = document.getElementById('ruptura-progresso-geral');
+        if (!progresso) return;
+        
+        const progressBar = progresso.querySelector('.progress-bar');
+        progressBar.style.width = `${percentual}%`;
+        progressBar.textContent = `${percentual}%`;
+        
+        if (percentual === 100 && estatisticas) {
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-success');
+            
+            progresso.querySelector('small').innerHTML = `
+                ✅ Concluído em ${estatisticas.tempo_total_segundos}s<br>
+                OK: ${estatisticas.pedidos_ok} | 
+                Ruptura: ${estatisticas.pedidos_com_ruptura} | 
+                Erros: ${estatisticas.erros}
+            `;
+            
+            // Remover após 5 segundos
+            setTimeout(() => {
+                progresso.remove();
+            }, 5000);
+        }
+    }
+    
+    /**
+     * Mostra erro geral
+     */
+    mostrarErroGeral(mensagem) {
+        const progresso = document.getElementById('ruptura-progresso-geral');
+        if (progresso) {
+            progresso.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Erro ao processar: ${mensagem}
+                </div>
+            `;
+            
+            setTimeout(() => {
+                progresso.remove();
+            }, 5000);
+        }
+    }
+    
+    // Funções auxiliares
+    formatarMoeda(valor) {
+        return (valor || 0).toFixed(2).replace('.', ',');
+    }
+    
+    formatarNumero(valor) {
+        return (valor || 0).toFixed(3).replace('.', ',');
+    }
+    
+    formatarData(dataString) {
+        if (!dataString) return '-';
+        const [ano, mes, dia] = dataString.split('-');
+        return `${dia}/${mes}/${ano}`;
+    }
+}
+
+// Adicionar CSS
+const style = document.createElement('style');
+style.textContent = `
+    .ruptura-ok {
+        background-color: #d4edda20 !important;
+    }
+    
+    .ruptura-critica {
+        background-color: #f8d7da40 !important;
+    }
+    
+    .ruptura-alta {
+        background-color: #fff3cd40 !important;
+    }
+    
+    .ruptura-media {
+        background-color: #d1ecf140 !important;
+    }
+    
+    .ruptura-baixa {
+        background-color: #e2e3e540 !important;
+    }
+    
+    .ruptura-alerta {
+        padding: 5px;
+        border-radius: 4px;
+        background: #f8f9fa;
+    }
+`;
+document.head.appendChild(style);
+
+// Inicializar
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📄 DOM carregado, inicializando RupturaEstoqueAsyncManager...');
+    window.rupturaAsyncManager = new RupturaEstoqueAsyncManager();
+});
+
+// Re-analisar se tabela for atualizada
+document.addEventListener('tabela-atualizada', () => {
+    console.log('📊 Tabela atualizada, re-analisando...');
+    if (window.rupturaAsyncManager) {
+        window.rupturaAsyncManager = new RupturaEstoqueAsyncManager();
+    }
+});

@@ -342,8 +342,8 @@ def tela_cotacao():
         for p_data in pedidos_data_sessao:
             # Criar objeto compatível com Pedido
             pedido_obj = type('PedidoTemp', (), {
-                'id': p_data.get('id', p_data.get('separacao_lote_id')),
-                'separacao_lote_id': p_data.get('separacao_lote_id', p_data.get('id')),
+                'id': p_data.get('separacao_lote_id'),
+                'separacao_lote_id': p_data.get('separacao_lote_id'),
                 'num_pedido': p_data.get('num_pedido', ''),
                 'data_pedido': datetime.fromisoformat(p_data['data_pedido']) if p_data.get('data_pedido') else None,
                 'cnpj_cpf': p_data.get('cnpj_cpf', ''),

@@ -1,0 +1,471 @@
+/**
+ * Sistema de Análise de Ruptura de Estoque Integrado
+ * Versão com Workers e Polling
+ * 
+ * Fluxo:
+ * 1. Ao carregar: Enfileira todos os pedidos para os workers
+ * 2. Polling: Busca resultados prontos a cada 2 segundos
+ * 3. Clique individual: Se não está pronto, usa análise síncrona
+ */
+
+class RupturaEstoqueIntegrado {
+    constructor() {
+        console.log('🚀 Sistema de Ruptura com Workers iniciando...');
+        this.resultados = new Map();
+        this.pedidosPendentes = new Set();
+        this.pollingInterval = null;
+        this.pollingAtivo = false;
+        this.init();
+    }
+    
+    init() {
+        console.log('📋 Configurando sistema de ruptura...');
+        
+        // Aguardar DOM
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.inicializar());
+        } else {
+            this.inicializar();
+        }
+    }
+    
+    inicializar() {
+        // 1. Adicionar botões de análise individual
+        this.adicionarBotoesIndividuais();
+        
+        // 2. Enfileirar análise em lote para workers
+        this.enfileirarLoteWorkers();
+    }
+    
+    /**
+     * Enfileira todos os pedidos para processamento pelos workers
+     */
+    async enfileirarLoteWorkers() {
+        console.log('🔄 Enfileirando pedidos para workers...');
+        
+        const tabela = document.getElementById('tabela-carteira');
+        if (!tabela) {
+            console.log('Tabela não encontrada, aguardando...');
+            setTimeout(() => this.enfileirarLoteWorkers(), 1000);
+            return;
+        }
+        
+        // Coletar todos os pedidos
+        const pedidos = [];
+        const rows = tabela.querySelectorAll('tbody tr.pedido-row');
+        
+        rows.forEach(row => {
+            const numPedido = row.dataset.pedido;
+            if (numPedido) {
+                pedidos.push(numPedido);
+                this.pedidosPendentes.add(numPedido);
+                // Mostrar indicador de processamento
+                this.mostrarProcessandoWorker(row);
+            }
+        });
+        
+        if (pedidos.length === 0) {
+            console.log('Nenhum pedido encontrado para análise');
+            return;
+        }
+        
+        console.log(`📦 Enfileirando ${pedidos.length} pedidos para workers`);
+        
+        try {
+            // Enfileirar para os workers (não espera resultado)
+            const response = await fetch('/carteira/api/ruptura/analisar-lote-async', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    pedidos: pedidos,
+                    tamanho_lote: 20
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log(`✅ ${data.total_pedidos} pedidos enfileirados em ${data.lotes_enfileirados} lotes`);
+                
+                // Iniciar polling para buscar resultados
+                this.iniciarPolling();
+            } else {
+                console.error('❌ Erro ao enfileirar:', data.error);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao enfileirar pedidos:', error);
+        }
+    }
+    
+    /**
+     * Inicia polling para buscar resultados prontos
+     */
+    iniciarPolling() {
+        if (this.pollingAtivo) return;
+        
+        console.log('🔄 Iniciando polling de resultados...');
+        this.pollingAtivo = true;
+        
+        // Fazer primeira busca imediatamente
+        this.buscarResultadosProntos();
+        
+        // Continuar buscando a cada 2 segundos
+        this.pollingInterval = setInterval(() => {
+            if (this.pedidosPendentes.size > 0) {
+                this.buscarResultadosProntos();
+            } else {
+                this.pararPolling();
+            }
+        }, 2000);
+    }
+    
+    /**
+     * Para o polling
+     */
+    pararPolling() {
+        if (this.pollingInterval) {
+            console.log('⏹️ Parando polling - todos os pedidos processados');
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+            this.pollingAtivo = false;
+        }
+    }
+    
+    /**
+     * Busca resultados que já foram processados pelos workers
+     */
+    async buscarResultadosProntos() {
+        if (this.pedidosPendentes.size === 0) return;
+        
+        const pedidosArray = Array.from(this.pedidosPendentes);
+        
+        try {
+            const response = await fetch('/carteira/api/ruptura/buscar-resultados', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    pedidos: pedidosArray
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.resultados) {
+                const qtdProntos = Object.keys(data.resultados).length;
+                
+                if (qtdProntos > 0) {
+                    console.log(`📥 ${qtdProntos} resultados recebidos dos workers`);
+                    
+                    // Processar e renderizar resultados prontos
+                    for (const [numPedido, resultado] of Object.entries(data.resultados)) {
+                        this.renderizarResultadoWorker(numPedido, resultado);
+                        this.resultados.set(numPedido, resultado);
+                        this.pedidosPendentes.delete(numPedido);
+                    }
+                }
+                
+                // Log do status
+                if (this.pedidosPendentes.size > 0) {
+                    console.log(`⏳ Ainda aguardando: ${this.pedidosPendentes.size} pedidos`);
+                } else {
+                    console.log('✅ Todos os pedidos foram processados!');
+                    this.pararPolling();
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao buscar resultados:', error);
+        }
+    }
+    
+    /**
+     * Adiciona botões de análise individual
+     */
+    adicionarBotoesIndividuais() {
+        console.log('🔘 Adicionando botões de análise individual...');
+        
+        const tabela = document.getElementById('tabela-carteira');
+        if (!tabela) {
+            setTimeout(() => this.adicionarBotoesIndividuais(), 1000);
+            return;
+        }
+        
+        const rows = tabela.querySelectorAll('tbody tr.pedido-row');
+        
+        rows.forEach(row => {
+            const numPedido = row.dataset.pedido;
+            if (!numPedido) return;
+            
+            // Verificar se já existe botão
+            if (document.getElementById(`ruptura-novo-${numPedido}`)) {
+                return;
+            }
+            
+            // Encontrar coluna de ações
+            const celulaAcoes = row.querySelector('.coluna-entrega-obs') || 
+                                 row.querySelector('td:last-child');
+            
+            if (!celulaAcoes) return;
+            
+            // Container para ruptura
+            const container = document.createElement('div');
+            container.className = 'ruptura-container-novo mt-2';
+            container.id = `ruptura-novo-${numPedido}`;
+            
+            // Botão de análise manual
+            const btnAnalise = document.createElement('button');
+            btnAnalise.className = 'btn btn-sm btn-outline-primary btn-ruptura-manual-novo';
+            btnAnalise.innerHTML = '<i class="fas fa-sync me-1"></i>Verificar Agora';
+            btnAnalise.onclick = () => this.analisarIndividual(numPedido);
+            
+            // Área de resultado
+            const resultado = document.createElement('div');
+            resultado.className = 'ruptura-resultado-novo mt-2';
+            resultado.id = `ruptura-resultado-novo-${numPedido}`;
+            
+            container.appendChild(btnAnalise);
+            container.appendChild(resultado);
+            celulaAcoes.appendChild(container);
+        });
+    }
+    
+    /**
+     * Análise individual síncrona (quando clica no botão)
+     */
+    async analisarIndividual(numPedido) {
+        console.log(`🔍 Análise individual do pedido ${numPedido}`);
+        
+        // Verificar se já temos o resultado
+        if (this.resultados.has(numPedido)) {
+            console.log('Resultado já disponível no cache');
+            return;
+        }
+        
+        const btn = document.querySelector(`#ruptura-novo-${numPedido} .btn-ruptura-manual-novo`);
+        const resultado = document.getElementById(`ruptura-resultado-novo-${numPedido}`);
+        
+        // Mostrar loading
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Analisando...';
+        }
+        
+        try {
+            // Usar API síncrona original (ruptura_api.py)
+            const response = await fetch(`/carteira/api/ruptura/analisar/${numPedido}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const resultadoPedido = await response.json();
+            
+            if (resultadoPedido) {
+                this.renderizarResultadoIndividual(numPedido, resultadoPedido);
+                this.resultados.set(numPedido, resultadoPedido);
+                this.pedidosPendentes.delete(numPedido);
+            }
+            
+        } catch (error) {
+            console.error(`❌ Erro ao analisar pedido ${numPedido}:`, error);
+            if (resultado) {
+                resultado.innerHTML = `
+                    <span class="badge bg-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Erro na análise
+                    </span>
+                `;
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync me-1"></i>Re-analisar';
+            }
+        }
+    }
+    
+    /**
+     * Renderiza resultado vindo dos workers
+     */
+    renderizarResultadoWorker(numPedido, resultado) {
+        const row = document.querySelector(`tr[data-pedido="${numPedido}"]`);
+        if (!row) return;
+        
+        // Remover indicador de processamento
+        const loading = row.querySelector('.ruptura-loading');
+        if (loading) loading.remove();
+        
+        // Adicionar badge
+        const badge = this.criarBadgeRuptura(resultado);
+        const container = document.getElementById(`ruptura-resultado-novo-${numPedido}`);
+        
+        if (container) {
+            container.innerHTML = badge;
+        } else {
+            // Criar container se não existir
+            const colunaObs = row.querySelector('.coluna-entrega-obs') || row.querySelector('td:last-child');
+            if (colunaObs) {
+                const novoContainer = document.createElement('div');
+                novoContainer.id = `ruptura-resultado-novo-${numPedido}`;
+                novoContainer.className = 'ruptura-resultado-lote-novo';
+                novoContainer.innerHTML = badge;
+                colunaObs.appendChild(novoContainer);
+            }
+        }
+        
+        // Colorir linha
+        this.colorirLinha(row, resultado);
+        
+        // Esconder botão se resultado já está disponível
+        const btn = document.querySelector(`#ruptura-novo-${numPedido} .btn-ruptura-manual-novo`);
+        if (btn) {
+            btn.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Renderiza resultado da análise individual
+     */
+    renderizarResultadoIndividual(numPedido, resultado) {
+        const container = document.getElementById(`ruptura-resultado-novo-${numPedido}`);
+        if (!container) return;
+        
+        const badge = this.criarBadgeRuptura(resultado);
+        container.innerHTML = badge;
+        
+        // Colorir linha
+        const row = document.querySelector(`tr[data-pedido="${numPedido}"]`);
+        if (row) {
+            this.colorirLinha(row, resultado);
+        }
+    }
+    
+    /**
+     * Cria badge de ruptura
+     */
+    criarBadgeRuptura(resultado) {
+        if (!resultado || !resultado.success) {
+            return `<span class="badge bg-secondary">
+                <i class="fas fa-question"></i> Erro
+            </span>`;
+        }
+        
+        if (resultado.pedido_ok) {
+            return `<span class="badge bg-success">
+                <i class="fas fa-check"></i> Estoque OK
+            </span>`;
+        }
+        
+        const resumo = resultado.resumo;
+        if (!resumo) {
+            return `<span class="badge bg-secondary">
+                <i class="fas fa-question"></i> Sem dados
+            </span>`;
+        }
+        
+        const cores = {
+            'CRITICA': 'danger',
+            'ALTA': 'warning', 
+            'MEDIA': 'info',
+            'BAIXA': 'secondary'
+        };
+        
+        return `
+            <span class="badge bg-${cores[resumo.criticidade] || 'secondary'}">
+                <i class="fas fa-exclamation-triangle"></i> 
+                ${resumo.qtd_itens_ruptura} item(s) em ruptura
+            </span>
+            <small class="d-block text-muted mt-1">
+                ${(resumo.percentual_ruptura || 0).toFixed(1)}% em risco
+            </small>
+        `;
+    }
+    
+    /**
+     * Colore linha baseado no resultado
+     */
+    colorirLinha(row, resultado) {
+        // Limpar classes anteriores
+        row.classList.remove('ruptura-ok', 'ruptura-critica', 'ruptura-alta', 'ruptura-media', 'ruptura-baixa');
+        
+        if (!resultado || !resultado.success) return;
+        
+        if (resultado.pedido_ok) {
+            row.classList.add('ruptura-ok');
+        } else if (resultado.resumo) {
+            const classe = 'ruptura-' + resultado.resumo.criticidade.toLowerCase();
+            row.classList.add(classe);
+        }
+    }
+    
+    /**
+     * Mostra indicador de processamento pelos workers
+     */
+    mostrarProcessandoWorker(row) {
+        const loading = document.createElement('span');
+        loading.className = 'badge bg-secondary ruptura-loading';
+        loading.innerHTML = '<i class="fas fa-cloud-upload-alt me-1"></i>Enviado p/ workers';
+        
+        const colunaObs = row.querySelector('.coluna-entrega-obs') || row.querySelector('td:last-child');
+        if (colunaObs) {
+            colunaObs.appendChild(loading);
+        }
+    }
+}
+
+// CSS para visual
+const styleRuptura = document.createElement('style');
+styleRuptura.textContent = `
+    .ruptura-ok {
+        background-color: #d4edda20 !important;
+    }
+    
+    .ruptura-critica {
+        background-color: #f8d7da30 !important;
+    }
+    
+    .ruptura-alta {
+        background-color: #fff3cd30 !important;
+    }
+    
+    .ruptura-media {
+        background-color: #d1ecf130 !important;
+    }
+    
+    .ruptura-baixa {
+        background-color: #e2e3e530 !important;
+    }
+    
+    .ruptura-container-novo {
+        padding: 5px;
+        border-radius: 4px;
+    }
+    
+    .ruptura-resultado-lote-novo {
+        display: inline-block;
+        margin-left: 10px;
+    }
+    
+    .btn-ruptura-manual-novo {
+        font-size: 0.75rem;
+    }
+    
+    .ruptura-loading {
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+`;
+document.head.appendChild(styleRuptura);
+
+// Inicializar automaticamente
+window.rupturaIntegrado = new RupturaEstoqueIntegrado();

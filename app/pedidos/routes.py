@@ -1053,25 +1053,34 @@ def cotacao_manual():
     Processa a cotação manual dos pedidos selecionados
     """
     if request.method == 'POST':
-        # Recebe os IDs dos pedidos selecionados
-        lista_ids_str = request.form.getlist("pedido_ids")
+        # Tenta primeiro por separacao_lote_ids (novo padrão)
+        lista_ids_str = request.form.getlist("separacao_lote_ids")
+        
+        # Fallback para pedido_ids (retrocompatibilidade)
+        if not lista_ids_str:
+            lista_ids_str = request.form.getlist("pedido_ids")
+        
         if not lista_ids_str:
             flash("Nenhum pedido selecionado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
 
-        lista_ids = [int(x) for x in lista_ids_str]
+        # Não converter para int se forem lotes (strings)
+        if lista_ids_str and lista_ids_str[0].startswith('LOTE'):
+            lista_ids = lista_ids_str
+        else:
+            lista_ids = [int(x) for x in lista_ids_str if x.isdigit()]
 
         # Armazena no session para usar nas rotas subsequentes
         session["cotacao_manual_pedidos"] = lista_ids
 
         # Carrega os pedidos do banco
-        # Converter IDs para lotes se necessário
         from app.separacao.models import Separacao
-        # Se lista_ids contém strings de lote, usar diretamente
+        
+        # Se lista_ids contém strings de lote (LOTE_xxx), usar diretamente
         if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
             pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         else:
-            # Se são IDs numéricos, precisa converter para num_pedido ou buscar lotes
+            # Se são IDs numéricos, converter para string e buscar por num_pedido
             pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
         
         if not pedidos:
@@ -1278,22 +1287,31 @@ def embarque_fob():
     Valida se todos os pedidos selecionados têm rota "FOB"
     """
     try:
-        # Recebe os IDs dos pedidos selecionados
-        lista_ids_str = request.form.getlist("pedido_ids")
+        # Tenta primeiro por separacao_lote_ids (novo padrão)
+        lista_ids_str = request.form.getlist("separacao_lote_ids")
+        
+        # Fallback para pedido_ids (retrocompatibilidade)
+        if not lista_ids_str:
+            lista_ids_str = request.form.getlist("pedido_ids")
+        
         if not lista_ids_str:
             flash("Nenhum pedido selecionado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
 
-        lista_ids = [int(x) for x in lista_ids_str]
+        # Não converter para int se forem lotes (strings)
+        if lista_ids_str and lista_ids_str[0].startswith('LOTE'):
+            lista_ids = lista_ids_str
+        else:
+            lista_ids = [int(x) for x in lista_ids_str if x.isdigit()]
 
         # Carrega os pedidos do banco
-        # Converter IDs para lotes se necessário
         from app.separacao.models import Separacao
-        # Se lista_ids contém strings de lote, usar diretamente
+        
+        # Se lista_ids contém strings de lote (LOTE_xxx), usar diretamente
         if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
             pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         else:
-            # Se são IDs numéricos, precisa converter para num_pedido ou buscar lotes
+            # Se são IDs numéricos, converter para string e buscar por num_pedido
             pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
         
         if not pedidos:

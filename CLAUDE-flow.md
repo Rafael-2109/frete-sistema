@@ -1186,39 +1186,3 @@ Remember: **Claude Flow coordinates, Claude Code creates!** Start with `mcp__cla
 
 
 
-# No Shell do Render:
-flask shell
-
-# Depois dentro do shell Python:
-from app.monitoramento.models import EntregaMonitorada
-from app.separacao.models import Separacao
-from app import db
-from sqlalchemy import func
-
-# Código simplificado direto no shell
-entregas = EntregaMonitorada.query.filter(
-    EntregaMonitorada.numero_nf.isnot(None),
-    EntregaMonitorada.separacao_lote_id.isnot(None)
-).all()
-
-print(f"Total de entregas com NF e lote_id: {len(entregas)}")
-
-# Agrupa e atualiza
-for entrega in entregas:
-    Separacao.query.filter_by(
-        separacao_lote_id=entrega.separacao_lote_id
-    ).update({
-        'numero_nf': entrega.numero_nf,
-        'sincronizado_nf': True
-    })
-
-db.session.commit()
-
-
-# Verifica resultado
-total = Separacao.query.count()
-sem_nf = Separacao.query.filter(
-    (Separacao.numero_nf.is_(None)) | (Separacao.numero_nf == '')
-).count()
-
-print(f"Total: {total}, Sem NF: {sem_nf}({sem_nf/total*100:.1f}%)")
