@@ -1055,8 +1055,7 @@ def fechar_frete():
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
-                peso_total=peso_total,
-                pallet_total=pallets_total
+                peso_total=peso_total
             )
             db.session.add(cotacao)
             db.session.flush()  # Força geração do ID da cotação
@@ -1119,8 +1118,7 @@ def fechar_frete():
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
-                peso_total=peso_total,
-                pallet_total=pallets_total
+                peso_total=peso_total
             )
             db.session.add(cotacao)
             db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
@@ -1210,9 +1208,8 @@ def fechar_frete():
                     cliente=pedido.raz_social_red,
                     pedido=pedido.num_pedido,
                     peso=pedido.peso_total,
-                    pallet_total=pedido.pallet_total,
                     valor=pedido.valor_saldo_total,
-                    pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
+                    pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
                     uf_destino=uf_correto,
                     cidade_destino=cidade_formatada,
                     volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação normal
@@ -1384,8 +1381,7 @@ def fechar_frete_grupo():
             status='Fechada',
             tipo_carga=tipo,
             valor_total=valor_total,
-            peso_total=peso_total,
-            pallet_total=pallets_total
+            peso_total=peso_total
         )
         db.session.add(cotacao)
         db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
@@ -1480,9 +1476,8 @@ def fechar_frete_grupo():
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
                 peso=pedido.peso_total,
-                pallet_total=pedido.pallet_total,
                 valor=pedido.valor_saldo_total,
-                pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
+                pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
                 uf_destino=uf_correto,
                 cidade_destino=cidade_formatada,
                 volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação por grupo

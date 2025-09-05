@@ -52,7 +52,7 @@ def gerar_separacao_completa_pedido(num_pedido):
         # Verificar se já existe separação para este pedido
         separacao_existente = Separacao.query.filter(
             Separacao.num_pedido == num_pedido,
-            Separacao.status.in_(['ABERTO', 'FATURADO', 'EMBARCADO'])  # MIGRADO: Não PREVISAO
+            Separacao.sincronizado_nf == False
         ).first()
         
         if separacao_existente:

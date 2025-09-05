@@ -66,6 +66,7 @@ class CotacaoItem(db.Model):
     cliente = db.Column(db.String(100), nullable=False)
     peso = db.Column(db.Float, nullable=False)
     valor = db.Column(db.Float, nullable=False)
+    
 
     # Parâmetros da tabela de frete
     modalidade = db.Column(db.String(20))
