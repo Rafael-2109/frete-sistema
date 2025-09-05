@@ -593,7 +593,12 @@ def create_app(config_name=None):
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
     from app.odoo.routes.manufatura_routes import manufatura_odoo_bp  # Integração Manufatura/Odoo
-    from app.claude_ai import claude_ai_bp
+    
+    # Claude AI - importar apenas se habilitado
+    if os.getenv('ENABLE_CLAUDE_AI', 'false').lower() == 'true':
+        from app.claude_ai import claude_ai_bp
+    else:
+        claude_ai_bp = None
     
     # 🔍 Blueprint de diagnóstico PG
     try:
@@ -658,7 +663,9 @@ def create_app(config_name=None):
     app.register_blueprint(manufatura_odoo_bp)  # Integração Manufatura/Odoo
     
     # 🤖 Claude AI Integration
-    app.register_blueprint(claude_ai_bp)
+    # Claude AI - registrar apenas se habilitado
+    if claude_ai_bp:
+        app.register_blueprint(claude_ai_bp)
     
     # 🔐 Sistema de Permissões
     
@@ -735,12 +742,15 @@ def create_app(config_name=None):
         except ImportError:
             pass
             
-        # Configurar Claude AI
-        from app.claude_ai import setup_claude_ai
-        if setup_claude_ai(app, redis_cache_instance):
-            app.logger.info("✅ Claude AI configurado com sucesso")
+        # Configurar Claude AI (apenas se habilitado)
+        if os.getenv('ENABLE_CLAUDE_AI', 'false').lower() == 'true':
+            from app.claude_ai import setup_claude_ai
+            if setup_claude_ai(app, redis_cache_instance):
+                app.logger.info("✅ Claude AI configurado com sucesso")
+            else:
+                app.logger.warning("⚠️ Claude AI configurado com funcionalidades limitadas")
         else:
-            app.logger.warning("⚠️ Claude AI configurado com funcionalidades limitadas")
+            app.logger.info("⏭️ Claude AI desabilitado por configuração")
     except Exception as e:
         app.logger.error(f"❌ Erro ao configurar Claude AI: {e}")
 
@@ -790,18 +800,6 @@ def create_app(config_name=None):
                 print("💡 Continuando sem criação automática de tabelas")
 
 
-    # ✅ EXECUTAR CORREÇÕES NO BANCO DE DADOS
-    with app.app_context():
-        try:
-            from app.init_db_fixes import run_all_fixes
-            run_all_fixes(app, db)
-            app.logger.info("✅ Correções no banco de dados executadas")
-        except ImportError:
-            # Se o arquivo não existir, não há problema
-            pass
-        except Exception as e:
-            app.logger.warning(f"⚠️ Erro ao executar correções no banco: {e}")
-
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
     @app.before_request
     def ensure_db_connection():
@@ -843,28 +841,29 @@ def create_app(config_name=None):
     
     # ✅ MIDDLEWARE DE LOGGING E PERFORMANCE
     
-    # Inicializar sistemas de autonomia do Claude AI
-    try:
-        from app.claude_ai.security_guard import init_security_guard
-        from app.claude_ai.auto_command_processor import init_auto_processor
-        from app.claude_ai.claude_code_generator import init_code_generator
-        
-        with app.app_context():
-            # Inicializar sistema de segurança
-            security_guard = init_security_guard()
-            app.logger.info("🔒 Sistema de segurança Claude AI inicializado")
+    # Inicializar sistemas de autonomia do Claude AI (apenas se habilitado)
+    if os.getenv('ENABLE_CLAUDE_AI', 'false').lower() == 'true':
+        try:
+            from app.claude_ai.security_guard import init_security_guard
+            from app.claude_ai.auto_command_processor import init_auto_processor
+            from app.claude_ai.claude_code_generator import init_code_generator
             
-            # Inicializar processador automático de comandos
-            auto_processor = init_auto_processor()
-            app.logger.info("🤖 Processador automático de comandos inicializado")
-            
-            # Inicializar gerador de código
-            code_generator = init_code_generator()
-            app.logger.info("🚀 Gerador de código Claude AI inicializado")
-            
-    except Exception as e:
-        app.logger.warning(f"⚠️ Erro ao inicializar sistemas de autonomia: {e}")
-        # Sistema continua funcionando sem autonomia
+            with app.app_context():
+                # Inicializar sistema de segurança
+                security_guard = init_security_guard()
+                app.logger.info("🔒 Sistema de segurança Claude AI inicializado")
+                
+                # Inicializar processador automático de comandos
+                auto_processor = init_auto_processor()
+                app.logger.info("🤖 Processador automático de comandos inicializado")
+                
+                # Inicializar gerador de código
+                code_generator = init_code_generator()
+                app.logger.info("🚀 Gerador de código Claude AI inicializado")
+                
+        except Exception as e:
+            app.logger.warning(f"⚠️ Erro ao inicializar sistemas de autonomia: {e}")
+            # Sistema continua funcionando sem autonomia
 
     
 

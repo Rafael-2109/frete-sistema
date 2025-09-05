@@ -924,6 +924,7 @@ class ProcessadorFaturamento:
             # Buscar separações com NF mas sem status FATURADO
             separacoes_com_nf = Separacao.query.filter(
                 Separacao.numero_nf.isnot(None),
+                Separacao.status != 'FATURADO',
                 Separacao.numero_nf != "",
             ).all()
             
