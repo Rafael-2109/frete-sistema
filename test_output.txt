@@ -1,0 +1,23 @@
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)
+✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)
+✅ Módulo pg_types_config também importado
+✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py
+2025-09-05 09:39:07,497 - frete_sistema - INFO - 🚀 Sistema de Fretes iniciado com monitoramento ativo
+2025-09-05 09:39:07,498 - frete_sistema - INFO - 💻 STATUS SISTEMA: CPU: 0.0% | Memória Processo: 67.2MB | Memória Sistema: 12.7% | PID: 45005
+⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'
+Traceback (most recent call last):
+  File "/home/rafaelnascimento/projetos/frete_sistema/test_unificacao_ruptura.py", line 84, in <module>
+    test_unificacao_4759098()
+  File "/home/rafaelnascimento/projetos/frete_sistema/test_unificacao_ruptura.py", line 17, in test_unificacao_4759098
+    app = create_app()
+          ^^^^^^^^^^^^
+  File "/home/rafaelnascimento/projetos/frete_sistema/app/__init__.py", line 505, in create_app
+    from app.carteira.utils.formatters import formatar_moeda, formatar_peso, formatar_pallet
+  File "/home/rafaelnascimento/projetos/frete_sistema/app/carteira/__init__.py", line 2, in <module>
+    from .routes import carteira_bp
+  File "/home/rafaelnascimento/projetos/frete_sistema/app/carteira/routes/__init__.py", line 60, in <module>
+    from . import ruptura_batch_otimizada  # API batch otimizada para performance máxima
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ImportError: cannot import name 'ruptura_batch_otimizada' from partially initialized module 'app.carteira.routes' (most likely due to a circular import) (/home/rafaelnascimento/projetos/frete_sistema/app/carteira/routes/__init__.py)

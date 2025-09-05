@@ -1190,6 +1190,7 @@ def processar_cotacao_manual():
             cotacao_item = CotacaoItem(
                 cotacao_id=cotacao.id,
                 separacao_lote_id=pedido.separacao_lote_id,  
+                pedido_id_old=pedido.id if hasattr(pedido, 'id') else 0,  # Adiciona pedido_id_old com fallback
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 peso=pedido.peso_total or 0,

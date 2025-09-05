@@ -1017,6 +1017,7 @@ def fechar_frete():
         # Calcula totais das mercadorias
         valor_mercadorias = sum(safe_float(p.get('valor')) for p in pedidos_data)
         peso_total = sum(safe_float(p.get('peso')) for p in pedidos_data)
+        pallets_total = sum(safe_float(p.get('pallets')) for p in pedidos_data)
 
         # ✅ USA VALORES CORRETOS DA SESSÃO
         valor_frete_bruto = safe_float(opcao_escolhida.get('valor_total', 0))
@@ -1043,6 +1044,7 @@ def fechar_frete():
             embarque_existente.tipo_carga = tipo
             embarque_existente.valor_total = valor_mercadorias
             embarque_existente.peso_total = peso_total
+            embarque_existente.pallet_total = pallets_total
             embarque_existente.transportadora_optante = transportadora.optante
             
             # Cria nova cotação
@@ -1053,7 +1055,8 @@ def fechar_frete():
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
-                peso_total=peso_total
+                peso_total=peso_total,
+                pallet_total=pallets_total
             )
             db.session.add(cotacao)
             db.session.flush()  # Força geração do ID da cotação
@@ -1116,7 +1119,8 @@ def fechar_frete():
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
-                peso_total=peso_total
+                peso_total=peso_total,
+                pallet_total=pallets_total
             )
             db.session.add(cotacao)
             db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
@@ -1149,6 +1153,7 @@ def fechar_frete():
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
                 peso_total=peso_total,
+                pallet_total=pallets_total,
                 criado_em=datetime.now(),
                 criado_por=current_user.nome,
                 cotacao_id=cotacao.id,
@@ -1205,6 +1210,7 @@ def fechar_frete():
                     cliente=pedido.raz_social_red,
                     pedido=pedido.num_pedido,
                     peso=pedido.peso_total,
+                    pallet_total=pedido.pallet_total,
                     valor=pedido.valor_saldo_total,
                     pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
                     uf_destino=uf_correto,
@@ -1341,7 +1347,7 @@ def fechar_frete_grupo():
         # Calcula totais
         valor_total = sum(p.valor_saldo_total or 0 for p in todos_pedidos)
         peso_total = sum(p.peso_total or 0 for p in todos_pedidos)
-        
+        pallets_total = sum(p.pallet_total or 0 for p in todos_pedidos)
         # ✅ NOVO: Verifica se já existe embarque recente (últimos 10 segundos) com os mesmos pedidos
         from datetime import timedelta
         tempo_limite = datetime.now() - timedelta(seconds=10)
@@ -1378,7 +1384,8 @@ def fechar_frete_grupo():
             status='Fechada',
             tipo_carga=tipo,
             valor_total=valor_total,
-            peso_total=peso_total
+            peso_total=peso_total,
+            pallet_total=pallets_total
         )
         db.session.add(cotacao)
         db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
@@ -1432,6 +1439,7 @@ def fechar_frete_grupo():
             tipo_carga=tipo,
             valor_total=valor_total,
             peso_total=peso_total,
+            pallet_total=pallets_total,
             criado_em=datetime.now(),
             criado_por=current_user.nome,
             cotacao_id=cotacao.id,
@@ -1472,6 +1480,7 @@ def fechar_frete_grupo():
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
                 peso=pedido.peso_total,
+                pallet_total=pedido.pallet_total,
                 valor=pedido.valor_saldo_total,
                 pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
                 uf_destino=uf_correto,
@@ -1656,6 +1665,7 @@ def otimizar():
         transportadora = opcao_atual.get('transportadora', 'N/A')
         modalidade = opcao_atual.get('modalidade', 'N/A')
         peso_total = sum(p.peso_total or 0 for p in pedidos)
+        pallets_total = sum(p.pallet_total or 0 for p in pedidos)
         valor_liquido = opcao_atual.get('valor_liquido', 0)
         frete_atual_kg = valor_liquido / peso_total if peso_total > 0 else 0
         

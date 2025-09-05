@@ -1,57 +1,18 @@
-📋 RESUMO DA IMPLEMENTAÇÃO
+1- Montar lista/dict com os produtos de CarteriaPrincipal
+2- Query de todos os produtos da CarteiraPrincipal ou de todos geral em MovimentacaoEstoque
+3- Query de todos os produtos da CarteiraPrincipal ou de todos geral em ProgramacaoProducao por data
+4- Query de todas as Separações com sincronizado_nf=False
+5- Montar uma matriz eixo X - produto
+6- Eixo Y - D0= MovimentacaoEstoque, D1= "D"(1-1) + ProgramacaoProducao"D"(1-1) - Separacao.sincronizado=False"D"(1-1), D2= "D"(2-1) + ProgramacaoProducao"D"(2-1) - Separacao.sincronizado=False"D"(2-1)....
+ruptura_7d=min(D0:D7)
+7- Comparar qtd_saldo_produto_pedido com ruptura_7d:
+If qtd_saldo_produto_pedido > ruptura_7d
+then
+Disponivel
+Else
+if qtd_saldo_produto_pedido > D7 then (linha debaixo) else (testa pra cima) if qtd_saldo_produto_pedido > D8 ....
+if qtd_saldo_produto_pedido > D6 then (linha debaixo) else D7 (visto que D7 já testou na linha acima)
+if qtd_saldo_produto_pedido > D5 then....
 
-  Criei uma solução segura com workers que NÃO modifica seus arquivos
-  funcionais:
-
-  ✅ ARQUIVOS CRIADOS:
-
-  1. ruptura_worker_api.py - Nova API para workers
-  2. ruptura_worker_novo.py - Worker que processa em lotes
-  3. ruptura-worker-addon.js - JavaScript addon que adiciona workers
-  4. INTEGRACAO_WORKERS_RUPTURA.md - Instruções completas
-
-  🎯 CARACTERÍSTICAS DA SOLUÇÃO:
-
-  - ZERO RISCO: Não modifica ruptura_api.py nem ruptura-estoque.js
-  - OPCIONAL: Ativado via flag (desligado por padrão)
-  - FALLBACK: Se workers falharem, volta ao modo normal
-  - 2 WORKERS: Processamento paralelo conforme solicitado
-  - POLLING 2s: Atualização a cada 2 segundos
-  - CACHE 15s: Redis com TTL de 15 segundos
-
-  🔧 MODIFICAÇÕES MÍNIMAS NECESSÁRIAS:
-
-  1. Em app/carteira/routes/__init__.py:
-
-  from .ruptura_worker_api import *  # Adicionar esta linha
-
-  2. Em agrupados_balanceado.html (após linha 616):
-
-  <!-- Addon de Workers (não modifica sistema atual) -->
-  <script src="{{ url_for('static', 
-  filename='carteira/js/ruptura-worker-addon.js') }}"></script>
-
-  3. Para TESTAR (opcional):
-
-  <script>
-      window.RUPTURA_USE_WORKERS = true;  // Ativar workers
-  </script>
-
-  🚀 COMO FUNCIONA:
-
-  1. SEM FLAG: Sistema funciona exatamente como hoje
-  2. COM FLAG: Addon intercepta e redireciona para workers
-  3. INTEGRAÇÃO SUAVE: Detecta rupturaManager existente e adiciona
-  funcionalidade
-  4. VISUAL: Indicador "Workers Ativos (2)" aparece quando ativo
-
-  ✨ VANTAGENS:
-
-  - Mantém sistema atual 100% funcional
-  - Adiciona workers como camada opcional
-  - Fácil de ativar/desativar
-  - Fallback automático se houver problemas
-  - Visual feedback com barra de progresso
-
-  O sistema está pronto para uso. Você só precisa adicionar as 2 linhas de
-   código mencionadas e iniciar os workers quando quiser testar!
+8- Depois disso, terá os itens "Disponivel" e a data possivel para cada item de cada pedido, ai se faz um "max.cod_produto.por pedido"
+9- Com isso monta %valor.Disponivel | "max.cod_produto.por pedido"

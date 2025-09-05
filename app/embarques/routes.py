@@ -1285,6 +1285,7 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                         tipo_carga='FOB',
                         valor_total=0,
                         peso_total=0,
+                        pallet_total=0,
                         modalidade='FOB',
                         nome_tabela='FOB - COLETA',
                         frete_minimo_valor=0,

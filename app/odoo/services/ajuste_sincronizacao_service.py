@@ -141,6 +141,18 @@ class AjusteSincronizacaoService:
         Returns:
             Lista de dicts com {lote_id, tipo, status}
         """
+        # 🔴 PROTEÇÃO: Verificar se pedido tem NF processada sem lote (não deve ser alterado)
+        from app.faturamento.models import FaturamentoProduto
+        
+        nf_sem_lote = FaturamentoProduto.query.filter_by(
+            origem=num_pedido,
+            status_nf='SEM_LOTE'
+        ).first()
+        
+        if nf_sem_lote:
+            logger.warning(f"⚠️ PROTEÇÃO: Pedido {num_pedido} tem NF {nf_sem_lote.numero_nf} processada sem lote (status_nf='SEM_LOTE') - NÃO será alterado para evitar redução indevida")
+            return []  # Retorna vazio para não processar alterações
+        
         lotes = []
 
         # Buscar separações não sincronizadas e com status alterável

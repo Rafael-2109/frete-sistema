@@ -1175,7 +1175,8 @@ class CarteiraAgrupada {
     renderizarLinhaSeparacaoCompacta(item) {
         const tipoClass = item.isSeparacao ? 'text-primary' : 'text-warning';
         const statusBadge = item.status ? 
-            (item.status === 'COTADO' ? '<span class="badge bg-warning text-dark">COTADO</span>' : 
+            (item.status === 'PREVISAO' ? '<span class="badge bg-secondary">PREVISAO</span>' :
+             item.status === 'COTADO' ? '<span class="badge bg-warning text-dark">COTADO</span>' : 
              item.status === 'ABERTO' ? '<span class="badge bg-secondary">ABERTO</span>' : '') : '';
         
         const confirmacaoBadge = item.agendamento ? 

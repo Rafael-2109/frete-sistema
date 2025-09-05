@@ -468,7 +468,7 @@ class ModalPedidoDetalhes {
                 window.rupturaManager.analisarRuptura(numPedido, btn);
             } else {
                 // Se não encontrar o botão, chamar diretamente
-                const response = await fetch(`/carteira/api/ruptura/analisar-pedido/${numPedido}`);
+                const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
                 const data = await response.json();
                 if (data.success) {
                     window.rupturaManager.mostrarModalRuptura(data);

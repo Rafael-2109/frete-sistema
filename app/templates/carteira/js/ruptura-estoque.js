@@ -334,7 +334,7 @@ class RupturaEstoqueManager {
             // Atualizar indicador
             this.atualizarIndicador('processando');
             
-            const response = await fetch(`/carteira/api/ruptura/analisar-pedido/${numPedido}`, {
+            const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`, {
                 signal: controller.signal
             });
             
@@ -414,7 +414,7 @@ class RupturaEstoqueManager {
             btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analisando...';
             
             // EVIDÊNCIA: Rotas confirmadas via Python - /carteira/api/ruptura/...
-            const response = await fetch(`/carteira/api/ruptura/analisar-pedido/${numPedido}`);
+            const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
             const data = await response.json();
             
             console.log('📦 Resposta da API:', data);
@@ -617,11 +617,11 @@ class RupturaEstoqueManager {
                 </td>
                 <td>${item.nome_produto}</td>
                 <td class="text-end">${this.formatarNumero(item.qtd_saldo)}</td>
+                <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : ''}">
+                    ${this.formatarNumero(item.estoque_atual || 0)}
+                </td>
                 <td class="text-end ${item.estoque_min_d7 < 0 ? 'text-danger' : ''}">
                     ${this.formatarNumero(item.estoque_min_d7)}
-                </td>
-                <td class="text-end text-danger fw-bold">
-                    ${this.formatarNumero(item.ruptura_qtd)}
                 </td>
                 <td class="text-center">
                     ${item.data_producao ? 
@@ -687,11 +687,11 @@ class RupturaEstoqueManager {
                 </td>
                 <td>${item.nome_produto}</td>
                 <td class="text-end">${this.formatarNumero(item.qtd_saldo)}</td>
+                <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : 'text-success'}">
+                    ${this.formatarNumero(item.estoque_atual || 0)}
+                </td>
                 <td class="text-end text-success">
                     ${this.formatarNumero(item.estoque_min_d7)}
-                </td>
-                <td class="text-end text-success fw-bold">
-                    <i class="fas fa-check"></i> OK
                 </td>
                 <td class="text-center">
                     <span class="badge bg-success">
@@ -750,11 +750,11 @@ class RupturaEstoqueManager {
                         </td>
                         <td>${item.nome_produto}</td>
                         <td class="text-end">${this.formatarNumero(item.qtd_saldo)}</td>
+                        <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : ''}">
+                            ${this.formatarNumero(item.estoque_atual || 0)}
+                        </td>
                         <td class="text-end ${item.estoque_min_d7 < 0 ? 'text-danger' : ''}">
                             ${this.formatarNumero(item.estoque_min_d7)}
-                        </td>
-                        <td class="text-end text-danger fw-bold">
-                            ${this.formatarNumero(item.ruptura_qtd)}
                         </td>
                         <td class="text-center">
                             ${item.data_producao ? 
@@ -803,11 +803,11 @@ class RupturaEstoqueManager {
                         </td>
                         <td>${item.nome_produto}</td>
                         <td class="text-end">${this.formatarNumero(item.qtd_saldo)}</td>
+                        <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : 'text-success'}">
+                            ${this.formatarNumero(item.estoque_atual || 0)}
+                        </td>
                         <td class="text-end text-success">
                             ${this.formatarNumero(item.estoque_min_d7)}
-                        </td>
-                        <td class="text-end text-success fw-bold">
-                            <i class="fas fa-check"></i> OK
                         </td>
                         <td class="text-center">
                             <span class="badge bg-success">
@@ -912,8 +912,8 @@ class RupturaEstoqueManager {
                                             <th>Código</th>
                                             <th>Produto</th>
                                             <th class="text-end">Qtd Saldo</th>
+                                            <th class="text-end">Estoque</th>
                                             <th class="text-end">Est.Min D+7</th>
-                                            <th class="text-end">Ruptura</th>
                                             <th class="text-center">Produção</th>
                                             <th class="text-center">Disponível em</th>
                                         </tr>

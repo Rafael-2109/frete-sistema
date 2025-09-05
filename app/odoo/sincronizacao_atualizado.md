@@ -545,3 +545,4 @@ WARNING:frete_sistema:🐌 REQUISIÇÃO LENTA: /odoo/sync-integrada/executar em 
 2025-09-04 12:34:04,869 - frete_sistema - WARNING - 🐌 REQUISIÇÃO LENTA: /odoo/sync-integrada/executar em 116.040s
 12:34:04 | WARNING  | frete_sistema | 🐌 REQUISIÇÃO LENTA: /odoo/sync-integrada/executar em 116.040s
 10.214.237.162 - - [04/Sep/2025:12:34:04 +0000] "POST /odoo/sync-integrada/executar HTTP/1.1" 302 229 "https://sistema-fretes.onrender.com/odoo/sync-integrada/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+

@@ -239,5 +239,3 @@ class UnificacaoCodigos(db.Model):
         self.data_desativacao = agora_brasil()
         self.updated_by = usuario
         self.motivo_desativacao = motivo
-
-

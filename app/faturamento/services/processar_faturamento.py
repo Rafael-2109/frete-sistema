@@ -427,6 +427,15 @@ class ProcessadorFaturamento:
             
             if separacoes_atualizadas > 0:
                 logger.info(f"✅ {separacoes_atualizadas} Separações marcadas como sincronizadas")
+                
+                # 🔴 MARCAR FATURAMENTOPRODUTO COMO 'Lançado' (processado com sucesso)
+                FaturamentoProduto.query.filter_by(
+                    numero_nf=nf.numero_nf
+                ).update({
+                    'status_nf': 'Lançado',
+                    'updated_by': 'ProcessadorFaturamento - Com Separação'
+                })
+                logger.info(f"✅ FaturamentoProduto marcado como status_nf='Lançado' para NF {nf.numero_nf}")
             
             # 3. Criar MovimentacaoEstoque
             mov_criadas = self._criar_movimentacao_com_lote(nf, separacao_lote_id, usuario, cache_separacoes)
@@ -579,7 +588,6 @@ class ProcessadorFaturamento:
         # Verificar se já existe usando campos estruturados
         existe = MovimentacaoEstoque.query.filter(
             MovimentacaoEstoque.numero_nf == nf.numero_nf,
-            MovimentacaoEstoque.separacao_lote_id.is_(None),  # Sem lote
             MovimentacaoEstoque.status_nf == 'FATURADO'
         ).first()
 
@@ -589,6 +597,15 @@ class ProcessadorFaturamento:
 
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         logger.info(f"📦 Criando {len(produtos)} movimentações 'Sem Separação' para NF {nf.numero_nf}")
+        
+        # 🔴 MARCAR TODOS OS PRODUTOS COMO 'SEM_LOTE'
+        FaturamentoProduto.query.filter_by(
+            numero_nf=nf.numero_nf
+        ).update({
+            'status_nf': 'SEM_LOTE',
+            'updated_by': 'ProcessadorFaturamento - Sem Separação'
+        })
+        logger.info(f"⚠️ FaturamentoProduto marcado como status_nf='SEM_LOTE' para NF {nf.numero_nf}")
         
         # NOVO: Criar inconsistência NF_SEM_SEPARACAO
         self._criar_inconsistencia_nf_sem_separacao(nf, produtos, usuario)
@@ -632,7 +649,6 @@ class ProcessadorFaturamento:
         # Verificar se já existe movimentação sem lote para esta NF
         movs_sem_lote = MovimentacaoEstoque.query.filter(
             MovimentacaoEstoque.numero_nf == nf.numero_nf,
-            MovimentacaoEstoque.separacao_lote_id.is_(None),
             MovimentacaoEstoque.status_nf == 'FATURADO'
         ).all()
         
@@ -643,6 +659,19 @@ class ProcessadorFaturamento:
                 mov.separacao_lote_id = lote_id
                 mov.atualizado_em = datetime.now()
                 mov.atualizado_por = 'ProcessadorFaturamento - Lote preenchido'
+            
+            # 🔴 ATUALIZAR STATUS_NF DE 'SEM_LOTE' PARA 'Lançado'
+            produtos_atualizados = FaturamentoProduto.query.filter_by(
+                numero_nf=nf.numero_nf,
+                status_nf='SEM_LOTE'
+            ).update({
+                'status_nf': 'Lançado',
+                'updated_by': 'ProcessadorFaturamento - Lote encontrado'
+            })
+            
+            if produtos_atualizados > 0:
+                logger.info(f"✅ {produtos_atualizados} produtos atualizados: status_nf='SEM_LOTE' → 'Lançado' para NF {nf.numero_nf}")
+            
             return len(movs_sem_lote)
         
         # Criar novas movimentações se não existirem
@@ -728,13 +757,14 @@ class ProcessadorFaturamento:
         """
         try:
             # Primeiro verificar se existe item para atualizar
-            item = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id, nota_fiscal=None).first()
+            item = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id, nota_fiscal=None, status='ativo').first()
             
             if not item:
                 # Verificar se já foi atualizado anteriormente
                 item_ja_atualizado = EmbarqueItem.query.filter_by(
                     separacao_lote_id=lote_id, 
-                    nota_fiscal=numero_nf
+                    nota_fiscal=numero_nf,
+                    status='ativo'
                 ).first()
                 
                 if item_ja_atualizado:
@@ -895,7 +925,6 @@ class ProcessadorFaturamento:
             separacoes_com_nf = Separacao.query.filter(
                 Separacao.numero_nf.isnot(None),
                 Separacao.numero_nf != "",
-                Separacao.sincronizado_nf == False,
             ).all()
             
             logger.info(f"📊 Encontradas {len(separacoes_com_nf)} separações com NF mas sem status FATURADO")

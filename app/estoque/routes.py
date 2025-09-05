@@ -1542,7 +1542,18 @@ def exportar_dados_movimentacoes():
                 'Tipo': mov.tipo_movimentacao,
                 'Quantidade': formatar_valor_brasileiro(mov.qtd_movimentacao),
                 'Observações': mov.observacao,
-                'Local': mov.local_movimentacao
+                'Local': mov.local_movimentacao,
+                'Lote': mov.separacao_lote_id,
+                'NF': mov.numero_nf,
+                'Pedido': mov.num_pedido,
+                'Origem': mov.tipo_origem,
+                'Status NF': mov.status_nf,
+                'Embarque': mov.codigo_embarque,
+                'Criado Em': mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '',
+                'Criado Por': mov.criado_por,
+                'Atualizado Em': mov.atualizado_em.strftime('%d/%m/%Y %H:%M') if mov.atualizado_em else '',
+                'Atualizado Por': mov.atualizado_por,
+                'Ativo': mov.ativo
             })
         
         df = pd.DataFrame(dados)
