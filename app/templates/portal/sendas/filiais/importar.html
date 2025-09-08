@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Sendas - Importar Filiais De-Para{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <h1 class="h3">Importar Filiais De-Para - Sendas</h1>
+        <a href="{{ url_for('portal.sendas_depara.listar_filiais') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-excel"></i> Importação de Filiais via CSV/Excel
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Instruções -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Instruções:</h6>
+                        <ol class="mb-0">
+                            <li>Prepare um arquivo CSV ou Excel com as colunas obrigatórias</li>
+                            <li>O CNPJ pode estar com ou sem formatação</li>
+                            <li>O sistema criará novas filiais ou atualizará as existentes</li>
+                            <li>Use UTF-8 para evitar problemas com caracteres especiais</li>
+                        </ol>
+                    </div>
+
+                    <!-- Formato esperado -->
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-file-csv"></i> Formato esperado do arquivo:</h6>
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>cnpj</th>
+                                    <th>filial</th>
+                                    <th>nome_filial</th>
+                                    <th>cidade</th>
+                                    <th>uf</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>12.345.678/0001-90</td>
+                                    <td>001</td>
+                                    <td>Sendas Centro (opcional)</td>
+                                    <td>Rio de Janeiro (opcional)</td>
+                                    <td>RJ (opcional)</td>
+                                </tr>
+                                <tr>
+                                    <td>12345678000234</td>
+                                    <td>002</td>
+                                    <td>Sendas Copacabana (opcional)</td>
+                                    <td>Rio de Janeiro (opcional)</td>
+                                    <td>RJ (opcional)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <small class="text-muted">
+                            * CNPJ pode ser formatado ou apenas números<br>
+                            * Apenas CNPJ e código da filial são obrigatórios
+                        </small>
+                    </div>
+
+                    <!-- Formulário de Upload -->
+                    <form method="POST" enctype="multipart/form-data" id="formImportar">
+                        
+                        <div class="mb-3">
+                            <label for="arquivo" class="form-label">Arquivo CSV ou Excel <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" 
+                                   accept=".csv,.xlsx,.xls" required>
+                            <small class="text-muted">Formatos aceitos: CSV (.csv) ou Excel (.xlsx, .xls)</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-primary" id="btnImportar">
+                                <i class="fas fa-upload"></i> Importar Arquivo
+                            </button>
+                            <a href="{{ url_for('portal.sendas_depara.listar_filiais') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modelo de Arquivo -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-download"></i> Modelo de Arquivo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p>Baixe um modelo de arquivo para facilitar a importação:</p>
+                    <button class="btn btn-outline-success" onclick="baixarModelo()">
+                        <i class="fas fa-file-excel"></i> Baixar Modelo CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dicas Importantes -->
+            <div class="card mt-3">
+                <div class="card-header bg-warning">
+                    <h6 class="mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> Dicas Importantes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>Certifique-se de que os códigos de filial estão corretos conforme usado no portal Sendas</li>
+                        <li>CNPJs duplicados serão atualizados, não criados novamente</li>
+                        <li>A importação é atômica: ou todos os registros são importados ou nenhum em caso de erro</li>
+                        <li>Recomenda-se fazer backup antes de importações em massa</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Validação do formulário
+    $('#formImportar').on('submit', function() {
+        const arquivo = $('#arquivo').val();
+        if (!arquivo) {
+            toastr.error('Selecione um arquivo para importar');
+            return false;
+        }
+        
+        $('#btnImportar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+    });
+});
+
+function baixarModelo() {
+    // Criar CSV de modelo
+    const csv = 'cnpj,filial,nome_filial,cidade,uf\n' +
+                '12.345.678/0001-90,001,Sendas Centro,Rio de Janeiro,RJ\n' +
+                '12.345.678/0002-71,002,Sendas Copacabana,Rio de Janeiro,RJ\n' +
+                '98.765.432/0001-10,010,Sendas Barra,Rio de Janeiro,RJ';
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'modelo_filiais_sendas.csv');
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toastr.success('Modelo baixado com sucesso!');
+}
+</script>
+{% endblock %}

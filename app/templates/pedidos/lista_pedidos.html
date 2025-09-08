@@ -843,8 +843,8 @@
                     <div class="btn-group-vertical btn-group-sm" role="group">
                       <button type="button" 
                               class="btn btn-outline-primary btn-sm" 
-                              data-pedido-id="{{ p.separacao_lote_id }}"
-                              onclick="abrirEdicaoPedido(this.dataset.pedidoId)"
+                              data-lote-id="{{ p.separacao_lote_id }}"
+                              onclick="abrirEdicaoPedido(this.dataset.loteId)"
                               title="Editar pedido">
                         <i class="fas fa-edit"></i>
                       </button>
@@ -852,9 +852,9 @@
                       <button type="button" 
                               class="btn btn-outline-danger btn-sm" 
                               title="Excluir pedido"
-                              data-pedido-id="{{ p.separacao_lote_id }}"
+                              data-lote-id="{{ p.separacao_lote_id }}"
                               data-pedido-numero="{{ p.num_pedido }}"
-                              onclick="confirmarExclusao(this.dataset.pedidoId, this.dataset.pedidoNumero)">
+                              onclick="confirmarExclusao(this.dataset.loteId, this.dataset.pedidoNumero)">
                         <i class="fas fa-trash"></i>
                       </button>
                     </div>
@@ -873,9 +873,9 @@
                       <button type="button" 
                               class="btn btn-outline-warning btn-sm" 
                               title="Desvincular de embarque cancelado (remove vínculos órfãos)"
-                              data-pedido-id="{{ p.separacao_lote_id }}"
+                              data-lote-id="{{ p.separacao_lote_id }}"
                               data-pedido-numero="{{ p.num_pedido }}"
-                              onclick="confirmarDesvinculacao(this.dataset.pedidoId, this.dataset.pedidoNumero)">
+                              onclick="confirmarDesvinculacao(this.dataset.loteId, this.dataset.pedidoNumero)">
                         <i class="fas fa-unlink"></i>
                       </button>
                       {% else %}
@@ -1175,7 +1175,7 @@ function abrirEmbarqueFOB() {
 }
 
 // ✅ NOVA FUNÇÃO: Confirmar exclusão de pedido
-function confirmarExclusao(pedidoId, numeroPedido) {
+function confirmarExclusao(loteId, numeroPedido) {
     const mensagem = `Tem certeza que deseja excluir o pedido ${numeroPedido}?\n\n` +
                     `⚠️ ATENÇÃO: Esta ação também removerá todos os itens de separação relacionados e NÃO PODE SER DESFEITA!`;
     
@@ -1183,7 +1183,7 @@ function confirmarExclusao(pedidoId, numeroPedido) {
         // Cria formulário para excluir via POST
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = `/pedidos/excluir/${pedidoId}`;
+        form.action = `/pedidos/excluir/${loteId}`;
         
         // Adiciona o token CSRF
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
@@ -1200,7 +1200,7 @@ function confirmarExclusao(pedidoId, numeroPedido) {
 }
 
 // 🛠️ NOVA FUNÇÃO: Confirmar desvinculação de pedido de embarque cancelado
-function confirmarDesvinculacao(pedidoId, numeroPedido) {
+function confirmarDesvinculacao(loteId, numeroPedido) {
     const mensagem = `🛠️ DESVINCULAÇÃO DE EMBARQUE CANCELADO\n\n` +
                     `Pedido: ${numeroPedido}\n\n` +
                     `Esta ação irá:\n` +
@@ -1216,7 +1216,7 @@ function confirmarDesvinculacao(pedidoId, numeroPedido) {
         // Cria formulário para desvincular via POST
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = `/embarques/admin/desvincular-pedido/${pedidoId}`;
+        form.action = `/embarques/admin/desvincular-pedido/${loteId}`;
         
         // Adiciona o token CSRF
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
@@ -1291,9 +1291,9 @@ function mostrarContatoAgendamento(cnpj, forma, contato, observacao) {
 }
 
 // ✅ NOVA FUNÇÃO: Abrir edição de pedido em pop-up
-function abrirEdicaoPedido(pedidoId) {
+function abrirEdicaoPedido(loteId) {
     // Faz requisição AJAX para carregar o formulário de edição
-    fetch(`/pedidos/editar/${pedidoId}?ajax=1`)
+    fetch(`/pedidos/editar/${loteId}?ajax=1`)
         .then(response => response.text())
         .then(html => {
             // Remove modal anterior se existir
@@ -1375,7 +1375,7 @@ function abrirEdicaoPedido(pedidoId) {
 }
 
 // ✅ NOVA FUNÇÃO: Reset Status do Pedido
-function resetStatusPedido(pedidoId) {
+function resetStatusPedido(loteId) {
     if (!confirm('⚠️ Tem certeza que deseja resetar o status deste pedido?\n\nIsso irá:\n- Limpar a NF atual\n- Buscar NF em EmbarqueItem ativo\n- Recalcular o status baseado em EmbarqueItem e FaturamentoProduto')) {
         return;
     }
@@ -1386,7 +1386,7 @@ function resetStatusPedido(pedidoId) {
     btnReset.disabled = true;
     btnReset.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     
-    fetch(`/pedidos/reset_status/${pedidoId}`, {
+    fetch(`/pedidos/reset_status/${loteId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

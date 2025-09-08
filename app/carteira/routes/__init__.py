@@ -53,6 +53,10 @@ carteira_bp.register_blueprint(standby_bp)
 carteira_bp.register_blueprint(alertas_separacao_api)
 carteira_bp.register_blueprint(alertas_visualizacao_bp)
 
+# Importar e registrar blueprint de Programação em Lote
+from .programacao_em_lote import programacao_em_lote_bp
+carteira_bp.register_blueprint(programacao_em_lote_bp)
+
 # Importar rotas de ruptura (não é um blueprint separado, usa carteira_bp)
 from . import ruptura_api
 from . import ruptura_worker_api  # API de workers para ruptura

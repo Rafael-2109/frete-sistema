@@ -221,7 +221,7 @@ def importar():
                                     logger.warning(f"Arquivo com extensão Excel mas é CSV! Lido com {encoding}")
                                     flash('⚠️ Arquivo parece ser CSV com extensão Excel. Processado com sucesso.', 'warning')
                                     break
-                                except:
+                                except Exception as e:
                                     continue
                             
                             if df is None:
@@ -286,7 +286,7 @@ def importar():
                     
                 except Exception as e:
                     contador_erro += 1
-                    erros.append(f"Linha {index + 2}: {str(e)}")
+                    erros.append(f"Linha {index + 2}: {str(e)}")  # type: ignore
                     if contador_erro > 10:  # Limitar erros mostrados
                         break
             

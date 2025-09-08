@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Sendas - Gerenciar Produtos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <h1 class="h3">Portal Sendas - Gerenciar Produtos</h1>
+        <a href="{{ url_for('portal.central_portais') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar à Central
+        </a>
+    </div>
+    
+    <div class="row">
+        <!-- Card Principal De-Para Produtos -->
+        <div class="col-md-8 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-barcode"></i> De-Para Produtos Sendas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        O De-Para do Sendas converte nossos códigos internos de produtos para os 
+                        códigos reconhecidos pelo portal do Sendas, permitindo agendamentos automáticos.
+                    </p>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Importante:</strong> 
+                        Cada produto que será agendado no portal precisa ter seu De-Para configurado.
+                    </div>
+
+                    <div class="btn-group-vertical w-100">
+                        <a href="{{ url_for('portal.sendas_depara.listar_produtos') }}" class="btn btn-outline-primary text-start">
+                            <i class="fas fa-list"></i> Listar De-Para
+                            <small class="d-block text-muted">Visualize e gerencie todos os mapeamentos cadastrados</small>
+                        </a>
+                        <a href="{{ url_for('portal.sendas_depara.novo_produto') }}" class="btn btn-outline-success text-start">
+                            <i class="fas fa-plus"></i> Novo De-Para
+                            <small class="d-block text-muted">Cadastre um novo mapeamento manualmente</small>
+                        </a>
+                        <a href="{{ url_for('portal.sendas_depara.importar_produtos') }}" class="btn btn-outline-info text-start">
+                            <i class="fas fa-file-excel"></i> Importar CSV ou XLSX
+                            <small class="d-block text-muted">Importe múltiplos mapeamentos via arquivo</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card de Estatísticas -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar"></i> Estatísticas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <strong>Total de Produtos:</strong> 
+                            <span class="badge bg-primary">{{ total_produtos | default(0) }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-toggle-on text-success"></i>
+                            <strong>Produtos Ativos:</strong> 
+                            <span class="badge bg-success">{{ produtos_ativos | default(0) }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-toggle-off text-danger"></i>
+                            <strong>Produtos Inativos:</strong> 
+                            <span class="badge bg-danger">{{ produtos_inativos | default(0) }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card de Instruções -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle"></i> Como Funciona
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-1 text-primary"></i> Configure o De-Para</h6>
+                            <p class="small">Cadastre ou importe o mapeamento entre seu código interno e o código do Sendas.</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-2 text-primary"></i> Sistema Converte</h6>
+                            <p class="small">Durante o agendamento, o sistema converte automaticamente os códigos.</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-3 text-primary"></i> Agendamento Automático</h6>
+                            <p class="small">O portal do Sendas recebe o código correto e o agendamento é processado.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Adicionar animação aos cards
+    $('.card').addClass('animate__animated animate__fadeIn');
+});
+</script>
+{% endblock %}

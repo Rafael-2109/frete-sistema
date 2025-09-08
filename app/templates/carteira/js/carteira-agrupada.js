@@ -1115,25 +1115,6 @@ class CarteiraAgrupada {
             });
         }
         
-        /** Adicionar pré-separações
-        if (preSeparacoesData && preSeparacoesData.success && preSeparacoesData.lotes) {
-            preSeparacoesData.lotes.forEach(lote => {
-                todasSeparacoes.push({
-                    tipo: 'Pré-separação',
-                    status: '',
-                    loteId: lote.lote_id,
-                    valor: lote.totais?.valor || 0,
-                    peso: lote.totais?.peso || 0,
-                    pallet: lote.totais?.pallet || 0,
-                    expedicao: lote.data_expedicao,
-                    agendamento: lote.data_agendamento,
-                    protocolo: lote.protocolo,
-                    agendamento_confirmado: lote.agendamento_confirmado || false,
-                    embarque: null,
-                    isSeparacao: false
-                });
-            });
-        }**/
         
         // Se não houver nenhuma separação
         if (todasSeparacoes.length === 0) {
@@ -1222,7 +1203,7 @@ class CarteiraAgrupada {
                             </button>
                         ` : ''}
                         <button class="btn btn-outline-info btn-sm" 
-                                onclick="carteiraAgrupada.agendarPortal('${item.loteId}', '${item.agendamento || ''}')"
+                                onclick="carteiraAgrupada.agendarNoPortal('${item.loteId}', '${item.agendamento || ''}')"
                                 title="Agendar no portal">
                             <i class="fas fa-calendar-plus"></i> Agendar
                         </button>
@@ -1367,7 +1348,7 @@ class CarteiraAgrupada {
                 if (novoStatus === 'ABERTO' && dadosSeparacao && dadosSeparacao.agendamento && !dadosSeparacao.protocolo) {
                     console.log('🤖 Agendando automaticamente no portal após confirmação...');
                     setTimeout(() => {
-                        this.agendarPortal(loteId, dadosSeparacao.agendamento);
+                        this.agendarNoPortal(loteId, dadosSeparacao.agendamento);
                     }, 2000); // Aguardar 2 segundos após confirmação
                 }
             } else {
@@ -1387,7 +1368,7 @@ class CarteiraAgrupada {
                         if (dadosSeparacao && dadosSeparacao.agendamento && !dadosSeparacao.protocolo) {
                             console.log('🤖 Agendando automaticamente no portal após confirmação...');
                             setTimeout(() => {
-                                this.agendarPortal(loteId, dadosSeparacao.agendamento);
+                                this.agendarNoPortal(loteId, dadosSeparacao.agendamento);
                             }, 2000);
                         } else {
                             location.reload();
@@ -1401,29 +1382,18 @@ class CarteiraAgrupada {
         }
     }
     
-    async agendarPortal(loteId, dataAgendamento) {
-        console.log(`📆 Agendando no portal ${loteId}`);
-        
-        // Redirecionar para workspace se disponível
-        if (window.workspace && window.workspace.agendarNoPortal) {
-            window.workspace.agendarNoPortal(loteId, dataAgendamento);
-        } else if (window.modalSeparacoes && window.modalSeparacoes.agendarNoPortal) {
-            window.modalSeparacoes.agendarNoPortal(loteId, dataAgendamento);
-        } else {
-            alert('Função de agendamento no portal em desenvolvimento');
-        }
+    
+    // Alias para compatibilidade
+    async agendarNoPortal(loteId, dataAgendamento) {
+        return window.PortalAgendamento.agendarNoPortal(loteId, dataAgendamento);
     }
     
+    // Delegar para módulo centralizado
     async verificarAgendamento(loteId, protocolo) {
-        console.log(`🔍 Verificando agendamento ${protocolo} para ${loteId}`);
-        
-        // Redirecionar para workspace se disponível
-        if (window.workspace && window.workspace.verificarProtocoloNoPortal) {
-            window.workspace.verificarProtocoloNoPortal(loteId, protocolo);
-        } else if (window.modalSeparacoes && window.modalSeparacoes.verificarProtocoloNoPortal) {
-            window.modalSeparacoes.verificarProtocoloNoPortal(loteId, protocolo);
+        if (protocolo) {
+            return window.PortalAgendamento.verificarProtocoloNoPortal(loteId, protocolo);
         } else {
-            alert('Função de verificação de protocolo em desenvolvimento');
+            return window.PortalAgendamento.verificarPortal(loteId);
         }
     }
     

@@ -227,7 +227,7 @@ def agendar_pedido():
                 elementos_agend = page.locator('[class*="agend"], :has-text("agend")').all()
                 for i, elem in enumerate(elementos_agend[:5]):  # Listar até 5 elementos
                     try:
-                        texto = elem.text_content()[:100] if elem.text_content() else ""
+                        texto = elem.text_content()[:100] if elem.text_content() else ""  # type: ignore
                         classe = elem.get_attribute('class') or ""
                         print(f"      {i+1}. Classe: {classe[:50]}, Texto: {texto[:50]}")
                     except Exception:

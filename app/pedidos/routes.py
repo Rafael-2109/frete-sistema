@@ -492,9 +492,9 @@ def lista_pedidos():
         filtro_url=filtro_url
     )
 
-@pedidos_bp.route('/editar/<int:pedido_id>', methods=['GET', 'POST'])
+@pedidos_bp.route('/editar/<string:lote_id>', methods=['GET', 'POST'])
 @login_required
-def editar_pedido(pedido_id):
+def editar_pedido(lote_id):
     """
     Edita campos específicos de um pedido (agenda, protocolo, expedição)
     e sincroniza as alterações com a separação relacionada.
@@ -502,7 +502,7 @@ def editar_pedido(pedido_id):
     Suporta requisições AJAX para pop-up.
     """
     
-    pedido = Pedido.query.get_or_404(pedido_id)
+    pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
     
     
     # ✅ NOVO: Busca contato de agendamento para este CNPJ
@@ -608,9 +608,9 @@ def editar_pedido(pedido_id):
     
     return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, contato_agendamento=contato_agendamento)
 
-@pedidos_bp.route('/reset_status/<int:pedido_id>', methods=['POST'])
+@pedidos_bp.route('/reset_status/<string:lote_id>', methods=['POST'])
 @login_required
-def reset_status_pedido(pedido_id):
+def reset_status_pedido(lote_id):
     """
     Reset do status do pedido:
     1. Limpa NF e nf_cd
@@ -622,7 +622,7 @@ def reset_status_pedido(pedido_id):
     from app.faturamento.models import FaturamentoProduto
     
     try:
-        pedido = Pedido.query.get_or_404(pedido_id)
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
         
         # Guarda status anterior para log
         status_anterior = pedido.status
@@ -680,7 +680,7 @@ def reset_status_pedido(pedido_id):
                 if pedido.separacao_lote_id:
                     Separacao.query.filter_by(
                         separacao_lote_id=pedido.separacao_lote_id
-                    ).update({'status': 'COTADO'})
+                    ).update({'status': 'FATURADO'})
                 
         elif embarque_item and embarque_ativo:
             # CASO 1-B: Encontrou EmbarqueItem ativo mas sem NF
@@ -721,15 +721,15 @@ def reset_status_pedido(pedido_id):
             'message': f'Erro ao resetar status: {str(e)}'
         }), 500
 
-@pedidos_bp.route('/excluir/<int:pedido_id>', methods=['POST'])
+@pedidos_bp.route('/excluir/<string:lote_id>', methods=['POST'])
 @login_required
-def excluir_pedido(pedido_id):
+def excluir_pedido(lote_id):
     """
     Exclui um pedido e todas as separações relacionadas.
     Permite exclusão apenas de pedidos com status "ABERTO".
     Limpa automaticamente vínculos órfãos com embarques cancelados.
     """
-    pedido = Pedido.query.get_or_404(pedido_id)
+    pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
     
     # ✅ VALIDAÇÃO: Só permite excluir pedidos com status ABERTO
     if pedido.status_calculado != 'ABERTO':
@@ -797,7 +797,6 @@ def excluir_pedido(pedido_id):
         # 🔧 NOVA FUNCIONALIDADE: Excluir itens de cotação relacionados
         from app.cotacao.models import CotacaoItem
         itens_cotacao_excluidos = 0
-        # Usar separacao_lote_id ao invés de pedido_id
         if pedido.separacao_lote_id:
             itens_cotacao = CotacaoItem.query.filter_by(separacao_lote_id=pedido.separacao_lote_id).all()
             for item_cotacao in itens_cotacao:
@@ -1056,7 +1055,6 @@ def cotacao_manual():
         # Tenta primeiro por separacao_lote_ids (novo padrão)
         lista_ids_str = request.form.getlist("separacao_lote_ids")
         
-        # Fallback para pedido_ids (retrocompatibilidade)
         if not lista_ids_str:
             lista_ids_str = request.form.getlist("pedido_ids")
         
@@ -1073,9 +1071,6 @@ def cotacao_manual():
         # Armazena no session para usar nas rotas subsequentes
         session["cotacao_manual_pedidos"] = lista_ids
 
-        # Carrega os pedidos do banco
-        from app.separacao.models import Separacao
-        
         # Se lista_ids contém strings de lote (LOTE_xxx), usar diretamente
         if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
             pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()

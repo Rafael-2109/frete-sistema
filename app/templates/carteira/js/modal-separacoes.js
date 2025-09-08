@@ -286,19 +286,19 @@ class ModalSeparacoes {
                                 <button class="btn btn-success btn-sm" 
                                         data-lote="${separacao.separacao_lote_id}"
                                         data-agendamento="${separacao.agendamento || ''}"
-                                        onclick="window.modalSeparacoes.agendarNoPortal(this.dataset.lote, this.dataset.agendamento)">
+                                        onclick="window.PortalAgendamento.agendarNoPortal(this.dataset.lote, this.dataset.agendamento)">
                                     <i class="fas fa-calendar-plus me-1"></i> Agendar no Portal
                                 </button>
                                 <button class="btn btn-info btn-sm"
                                         data-lote="${separacao.separacao_lote_id}"
-                                        onclick="window.modalSeparacoes.verificarPortal(this.dataset.lote)">
+                                        onclick="window.PortalAgendamento.verificarPortal(this.dataset.lote)">
                                     <i class="fas fa-search me-1"></i> Status
                                 </button>
                                 ${separacao.protocolo ? `
                                     <button class="btn btn-warning btn-sm"
                                             data-lote="${separacao.separacao_lote_id}"
                                             data-protocolo="${separacao.protocolo}"
-                                            onclick="window.modalSeparacoes.verificarProtocoloNoPortal(this.dataset.lote, this.dataset.protocolo)">
+                                            onclick="window.PortalAgendamento.verificarProtocoloNoPortal(this.dataset.lote, this.dataset.protocolo)">
                                         <i class="fas fa-sync me-1"></i> Verificar Protocolo
                                     </button>
                                     <span class="badge bg-success align-self-center ms-auto">
@@ -473,374 +473,21 @@ class ModalSeparacoes {
         }
     }
 
-    // Funções do Portal
-    async agendarNoPortal(loteId, dataAgendamento) {
-        console.log(`📅 Agendando lote ${loteId} no portal`);
-        
-        // Primeiro verificar se todos os produtos têm De-Para cadastrado
-        Swal.fire({
-            title: 'Verificando De-Para...',
-            text: 'Validando mapeamento de produtos',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
 
-        try {
-            // Verificar De-Para
-            const verificacaoResponse = await fetch(`/portal/atacadao/agendamento/verificar_depara/${loteId}`);
-            const verificacao = await verificacaoResponse.json();
 
-            if (!verificacao.success) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro',
-                    text: verificacao.message || 'Erro ao verificar De-Para',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-
-            // Se tem produtos sem De-Para, avisar o usuário
-            if (verificacao.sem_depara > 0) {
-                const produtosSemDePara = verificacao.produtos_sem_depara.map(p => 
-                    `<li><strong>${p.codigo}</strong> - ${p.descricao}</li>`
-                ).join('');
-
-                const result = await Swal.fire({
-                    icon: 'warning',
-                    title: 'Produtos sem De-Para',
-                    html: `
-                        <p>${verificacao.sem_depara} produto(s) não têm mapeamento De-Para cadastrado:</p>
-                        <ul style="text-align: left; max-height: 200px; overflow-y: auto;">
-                            ${produtosSemDePara}
-                        </ul>
-                        <p>Deseja continuar mesmo assim?</p>
-                    `,
-                    showCancelButton: true,
-                    confirmButtonText: 'Continuar',
-                    cancelButtonText: 'Cadastrar De-Para',
-                    confirmButtonColor: '#ffc107',
-                    cancelButtonColor: '#007bff'
-                });
-
-                if (result.dismiss === Swal.DismissReason.cancel) {
-                    // Abrir modal de De-Para
-                    this.abrirModalDePara(verificacao.produtos_sem_depara);
-                    return;
-                }
-
-                if (!result.isConfirmed) {
-                    return;
-                }
-            }
-
-            // Preparar dados de agendamento
-            const preparacaoResponse = await fetch(`/portal/atacadao/agendamento/preparar/${loteId}`);
-            const preparacao = await preparacaoResponse.json();
-
-            if (!preparacao.success) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro',
-                    text: preparacao.message || 'Erro ao preparar dados',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-
-            // Se não tem data de agendamento, usar a da preparação ou solicitar
-            if (!dataAgendamento || dataAgendamento === '') {
-                dataAgendamento = preparacao.data_agendamento;
-                
-                if (!dataAgendamento) {
-                    const { value: data } = await Swal.fire({
-                        title: 'Data de Agendamento',
-                        input: 'date',
-                        inputLabel: 'Selecione a data para agendamento',
-                        inputPlaceholder: 'dd/mm/aaaa',
-                        inputAttributes: {
-                            min: new Date().toISOString().split('T')[0]
-                        },
-                        showCancelButton: true,
-                        confirmButtonText: 'Continuar',
-                        cancelButtonText: 'Cancelar'
-                    });
-
-                    if (!data) {
-                        return;
-                    }
-                    dataAgendamento = data;
-                }
-            }
-
-            // Mostrar resumo dos produtos convertidos
-            const produtosHtml = preparacao.produtos.map(p => 
-                `<tr>
-                    <td>${p.codigo_atacadao}</td>
-                    <td>${p.descricao_atacadao}</td>
-                    <td>${p.quantidade.toFixed(2)}</td>
-                    <td>${p.pallets.toFixed(2)}</td>
-                </tr>`
-            ).join('');
-
-            // Formatar data para exibição
-            const dataFormatada = this.formatarData(dataAgendamento);
-
-            const confirmResult = await Swal.fire({
-                title: 'Confirmar Agendamento',
-                html: `
-                    <p><strong>Data:</strong> ${dataFormatada}</p>
-                    <p><strong>Produtos convertidos:</strong> ${preparacao.total_convertidos} de ${preparacao.total_itens}</p>
-                    <table class="table table-sm" style="font-size: 0.85em;">
-                        <thead>
-                            <tr>
-                                <th>Cód. Atacadão</th>
-                                <th>Descrição</th>
-                                <th>Qtd</th>
-                                <th>Pallets</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${produtosHtml}
-                        </tbody>
-                    </table>
-                `,
-                showCancelButton: true,
-                confirmButtonText: 'Confirmar e Agendar',
-                cancelButtonText: 'Cancelar',
-                width: '600px'
-            });
-
-            if (!confirmResult.isConfirmed) {
-                return;
-            }
-
-            // Mostrar loading
-            Swal.fire({
-                title: 'Processando...',
-                text: 'Realizando agendamento no portal do cliente',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-
-            // Fazer o agendamento ASSÍNCRONO com Redis Queue
-            const response = await fetch('/portal/api/solicitar-agendamento-async', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
-                },
-                body: JSON.stringify({
-                    lote_id: loteId,
-                    tipo: 'separacao',
-                    portal: 'atacadao',
-                    data_agendamento: dataAgendamento,
-                    produtos_convertidos: preparacao.produtos  // Enviar produtos já convertidos
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Se tem protocolo, gravar na Separacao
-                if (data.protocolo) {
-                    await fetch('/portal/atacadao/agendamento/gravar_protocolo', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
-                        },
-                        body: JSON.stringify({
-                            lote_id: loteId,
-                            protocolo: data.protocolo
-                        })
-                    });
-                }
-
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Agendamento Realizado!',
-                    html: `
-                        <p><strong>Protocolo:</strong> ${data.protocolo || 'Aguardando confirmação'}</p>
-                        <p>${data.message}</p>
-                    `,
-                    confirmButtonText: 'OK'
-                }).then(() => {
-                    // Recarregar as separações para mostrar o protocolo
-                    const numPedido = document.getElementById('modal-pedido-numero').textContent;
-                    this.carregarSeparacoes(numPedido);
-                });
-            } else {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro no Agendamento',
-                    text: data.message || 'Erro ao processar agendamento',
-                    confirmButtonText: 'OK'
-                });
-            }
-        } catch (error) {
-            console.error('Erro ao agendar:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro',
-                text: 'Erro ao comunicar com o servidor',
-                confirmButtonText: 'OK'
-            });
-        }
-    }
-
+    // Delegar para módulo centralizado
     async verificarPortal(loteId) {
-        console.log(`🔍 Verificando lote ${loteId} no portal`);
-        
-        // Mostrar loading
-        Swal.fire({
-            title: 'Verificando Status...',
-            text: 'Consultando informações do agendamento',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
-
-        try {
-            // Verificar De-Para e status
-            const [verificacaoResponse, preparacaoResponse] = await Promise.all([
-                fetch(`/portal/atacadao/agendamento/verificar_depara/${loteId}`),
-                fetch(`/portal/atacadao/agendamento/preparar/${loteId}`)
-            ]);
-
-            const verificacao = await verificacaoResponse.json();
-            const preparacao = await preparacaoResponse.json();
-
-            if (!verificacao.success || !preparacao.success) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro',
-                    text: 'Erro ao buscar informações do agendamento',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-
-            // Buscar informações da separação para ver se tem protocolo
-            const separacao = this.separacoes.find(s => s.separacao_lote_id === loteId);
-            
-            // Montar HTML do status
-            let statusHtml = '<div style="text-align: left;">';
-            
-            // Status do protocolo
-            if (separacao && separacao.protocolo) {
-                statusHtml += `
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle"></i> <strong>Agendamento Realizado</strong><br>
-                        Protocolo: <strong>${separacao.protocolo}</strong><br>
-                        Status: ${separacao.agendamento_confirmado ? 
-                            '<span class="badge bg-success">Confirmado</span>' : 
-                            '<span class="badge bg-warning">Aguardando Confirmação</span>'}
-                    </div>
-                `;
-            } else {
-                statusHtml += `
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> <strong>Agendamento Pendente</strong><br>
-                        Este lote ainda não foi agendado no portal
-                    </div>
-                `;
-            }
-
-            // Status De-Para
-            statusHtml += '<h6 class="mt-3">Status De-Para:</h6>';
-            if (verificacao.sem_depara === 0) {
-                statusHtml += `
-                    <div class="alert alert-success">
-                        <i class="fas fa-check"></i> Todos os ${verificacao.total_produtos} produtos têm De-Para cadastrado
-                    </div>
-                `;
-            } else {
-                statusHtml += `
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle"></i> 
-                        ${verificacao.sem_depara} de ${verificacao.total_produtos} produtos SEM De-Para
-                    </div>
-                `;
-                
-                if (verificacao.produtos_sem_depara.length > 0) {
-                    statusHtml += '<p>Produtos sem mapeamento:</p>';
-                    statusHtml += '<ul style="max-height: 150px; overflow-y: auto;">';
-                    verificacao.produtos_sem_depara.forEach(prod => {
-                        statusHtml += `<li><strong>${prod.codigo}</strong> - ${prod.descricao}</li>`;
-                    });
-                    statusHtml += '</ul>';
-                }
-            }
-
-            // Dados para agendamento
-            if (preparacao.produtos.length > 0) {
-                statusHtml += '<h6 class="mt-3">Produtos Preparados para Agendamento:</h6>';
-                statusHtml += `
-                    <table class="table table-sm" style="font-size: 0.85em;">
-                        <thead>
-                            <tr>
-                                <th>Cód. Atacadão</th>
-                                <th>Qtd</th>
-                                <th>Pallets</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                
-                preparacao.produtos.forEach(prod => {
-                    statusHtml += `
-                        <tr>
-                            <td>${prod.codigo_atacadao}</td>
-                            <td>${prod.quantidade.toFixed(2)}</td>
-                            <td>${prod.pallets.toFixed(2)}</td>
-                        </tr>
-                    `;
-                });
-                
-                statusHtml += '</tbody></table>';
-            }
-
-            statusHtml += '</div>';
-
-            // Mostrar modal com status
-            Swal.fire({
-                title: `Status do Agendamento - Lote ${loteId}`,
-                html: statusHtml,
-                width: '700px',
-                showCancelButton: verificacao.sem_depara > 0,
-                confirmButtonText: separacao && separacao.protocolo ? 'OK' : 'Agendar Agora',
-                cancelButtonText: 'Cadastrar De-Para',
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#007bff'
-            }).then((result) => {
-                if (result.isConfirmed && (!separacao || !separacao.protocolo)) {
-                    // Se não tem protocolo e clicou em "Agendar Agora"
-                    this.agendarNoPortal(loteId, preparacao.data_agendamento);
-                } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    // Abrir modal de De-Para
-                    this.abrirModalDePara(verificacao.produtos_sem_depara);
-                }
-            });
-
-        } catch (error) {
-            console.error('Erro ao verificar status:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro',
-                text: 'Erro ao verificar status do agendamento',
-                confirmButtonText: 'OK'
-            });
-        }
+        return window.PortalAgendamento.verificarPortal(loteId);
     }
 
-    // Nova função para abrir modal de cadastro De-Para
+
+    // Delegar para módulo centralizado
     abrirModalDePara(produtosSemDePara) {
+        return window.PortalAgendamento.abrirModalDePara(produtosSemDePara);
+    }
+
+    // FUNÇÃO ORIGINAL REMOVIDA - implementação em portal-agendamento.js
+    abrirModalDePara_OLD(produtosSemDePara) {
         if (!produtosSemDePara || produtosSemDePara.length === 0) {
             return;
         }
@@ -1151,7 +798,13 @@ class ModalSeparacoes {
         }
     }
 
+    // Delegar para módulo centralizado
     async verificarProtocoloNoPortal(loteId, protocolo) {
+        return window.PortalAgendamento.verificarProtocoloNoPortal(loteId, protocolo);
+    }
+
+    // FUNÇÃO ORIGINAL REMOVIDA - implementação em portal-agendamento.js
+    async verificarProtocoloNoPortal_OLD(loteId, protocolo) {
         console.log(`🔍 Verificando protocolo ${protocolo} no portal`);
         
         // Mostrar loading

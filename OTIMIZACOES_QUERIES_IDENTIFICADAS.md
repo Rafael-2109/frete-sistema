@@ -418,7 +418,7 @@ LIMIT 20;
 -- Verificar índices não utilizados
 SELECT 
     schemaname,
-    tablename,
+    relname,
     indexname,
     idx_scan,
     idx_tup_read,
@@ -426,7 +426,7 @@ SELECT
 FROM pg_stat_user_indexes
 WHERE schemaname = 'public'
 AND idx_scan = 0
-ORDER BY tablename, indexname;
+ORDER BY relname, indexname;
 
 -- Verificar tamanho das tabelas
 SELECT 

@@ -395,7 +395,7 @@ def processar_importacao_movimentacoes():
                     data_movimentacao = None
                 
                 if not data_movimentacao:
-                    erros.append(f"Linha {index + 1}: Data inválida")
+                    erros.append(f"Linha {index + 1}: Data inválida") # type: ignore
                     continue
                 
                 # 📝 DADOS BÁSICOS
@@ -437,7 +437,7 @@ def processar_importacao_movimentacoes():
                 produtos_importados += 1
                 
             except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
+                erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
         
         # Commit das alterações
@@ -943,18 +943,18 @@ def processar_importacao_unificacao():
                 
                 # Validações
                 if pd.isna(codigo_origem) or pd.isna(codigo_destino):
-                    erros.append(f"Linha {index + 1}: Códigos obrigatórios")
+                    erros.append(f"Linha {index + 1}: Códigos obrigatórios") # type: ignore
                     continue
                 
                 try:
                     codigo_origem = int(codigo_origem)
                     codigo_destino = int(codigo_destino)
                 except (ValueError, TypeError):
-                    erros.append(f"Linha {index + 1}: Códigos devem ser inteiros")
+                    erros.append(f"Linha {index + 1}: Códigos devem ser inteiros") # type: ignore
                     continue
                 
                 if codigo_origem == codigo_destino:
-                    erros.append(f"Linha {index + 1}: Códigos não podem ser iguais")
+                    erros.append(f"Linha {index + 1}: Códigos não podem ser iguais") # type: ignore
                     continue
                 
                 # Verificar se já existe
@@ -977,7 +977,7 @@ def processar_importacao_unificacao():
                 ).first()
                 
                 if ciclo:
-                    erros.append(f"Linha {index + 1}: Ciclo detectado {codigo_destino}→{codigo_origem}")
+                    erros.append(f"Linha {index + 1}: Ciclo detectado {codigo_destino}→{codigo_origem}") # type: ignore
                     continue
                 
                 # Criar nova unificação
@@ -992,7 +992,7 @@ def processar_importacao_unificacao():
                 unificacoes_importadas += 1
                 
             except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
+                erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
         
         db.session.commit()
@@ -1486,7 +1486,7 @@ def baixar_modelo_movimentacoes():
             'cod_produto': ['EXEMPLO001'],
             'nome_produto': ['Produto de exemplo'],
             'tipo_movimentacao': ['ENTRADA'],  # ENTRADA ou SAIDA
-            'quantidade': [100],
+            'qtd_movimentacao': [100],
             'observacoes': ['Observação da movimentação'],
             'local_movimentacao': ['Linha de Produção']
         }

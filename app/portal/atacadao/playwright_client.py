@@ -45,13 +45,11 @@ class AtacadaoPlaywrightClient:
         self.playwright = sync_playwright().start()
         
         # Configuracoes do navegador - IGUAL AO SCRIPT QUE FUNCIONA
-        # REMOVIDO: args=['--disable-blink-features=AutomationControlled']
         self.browser = self.playwright.chromium.launch(
             headless=self.headless
         )
         
         # Contexto com sessao salva ou novo - IGUAL AO SCRIPT QUE FUNCIONA
-        # REMOVIDO: viewport={'width': 1280, 'height': 720}
         if os.path.exists(self.storage_file) and not salvar_login:
             logger.info(f"Carregando sessao salva de {self.storage_file}")
             self.context = self.browser.new_context(

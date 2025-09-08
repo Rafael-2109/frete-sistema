@@ -548,6 +548,16 @@
     {% include 'carteira/js/utils/notifications.js' %}
 </script>
 
+<!-- Módulo centralizado de agendamento - DEVE VIR PRIMEIRO -->
+<script>
+    {% include 'carteira/js/agendamento/atacadao/portal-atacadao.js' %}
+</script>
+
+<!-- Roteador de Portais - DEVE VIR DEPOIS das implementações específicas -->
+<script>
+    {% include 'carteira/js/agendamento/destinacao-portais.js' %}
+</script>
+
 <script>
     {% include 'carteira/js/dropdown-separacoes.js' %}
 </script>
@@ -568,10 +578,6 @@
 
 <script>
     {% include 'carteira/js/modal-separacoes.js' %}
-</script>
-
-<script>
-    {% include 'carteira/js/pre-separacao-manager.js' %}
 </script>
 
 <script>

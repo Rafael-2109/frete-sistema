@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Sessão Sendas - Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>🔐 Gerenciador de Sessão - Portal Sendas</h2>
+            <hr>
+            
+            <!-- Status da Sessão -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">📊 Status da Sessão</h5>
+                </div>
+                <div class="card-body">
+                    <div id="status-container">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Instruções -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">📋 Como Capturar os Cookies</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning mb-3">
+                        <strong>⚠️ Atenção: Cookies de Terceiros</strong><br>
+                        Se você vir avisos sobre "Third-party cookie will be blocked":<br>
+                        • Vá em Chrome → Configurações → Privacidade → Cookies<br>
+                        • Escolha "Permitir todos os cookies" temporariamente<br>
+                        • Ou adicione <code>[*.]trizy.com.br</code> como exceção
+                    </div>
+                    
+                    <ol>
+                        <li><strong>Abra o Chrome</strong> (não use modo anônimo)</li>
+                        <li><strong>Acesse:</strong> <a href="https://login.trizy.com.br/access/auth/login/" target="_blank">https://login.trizy.com.br/access/auth/login/</a></li>
+                        <li><strong>Faça login normalmente</strong> (resolva o captcha manualmente)</li>
+                        <li><strong>Após logar, pressione F12</strong> para abrir o DevTools</li>
+                        <li><strong>Vá para aba Console</strong></li>
+                        <li><strong>Cole e execute</strong> o código abaixo:</li>
+                    </ol>
+                    
+                    <div class="bg-dark text-white p-3 rounded mb-3">
+                        <code id="capture-script">
+// Script melhorado para capturar TODOS os dados de autenticação
+const captureData = {
+    // Cookies em formato array com atributos
+    cookies: document.cookie.split('; ').map(c => {
+        const [name, ...value] = c.split('=');
+        return {
+            name: name,
+            value: value.join('='),
+            domain: '.trizy.com.br', // Importante para subdomínios
+            path: '/',
+            secure: true,
+            httpOnly: false,
+            sameSite: 'None' // Permite cross-site
+        };
+    }),
+    // Cookies raw para backup
+    cookiesRaw: document.cookie,
+    // Todos os storages
+    localStorage: {},
+    sessionStorage: {},
+    tokens: {},
+    // Informações do contexto
+    domain: window.location.hostname,
+    url: window.location.href,
+    timestamp: new Date().toISOString()
+};
+
+// Capturar localStorage completo
+Object.keys(localStorage).forEach(key => {
+    captureData.localStorage[key] = localStorage.getItem(key);
+    if (key.toLowerCase().includes('token') || 
+        key.toLowerCase().includes('auth') || 
+        key.toLowerCase().includes('bearer') ||
+        key.toLowerCase().includes('jwt')) {
+        captureData.tokens[key] = localStorage.getItem(key);
+    }
+});
+
+// Capturar sessionStorage completo
+Object.keys(sessionStorage).forEach(key => {
+    captureData.sessionStorage[key] = sessionStorage.getItem(key);
+    if (key.toLowerCase().includes('token') || 
+        key.toLowerCase().includes('auth') || 
+        key.toLowerCase().includes('bearer') ||
+        key.toLowerCase().includes('jwt')) {
+        captureData.tokens[key] = sessionStorage.getItem(key);
+    }
+});
+
+// Copiar para área de transferência
+copy(JSON.stringify(captureData));
+
+// Logs detalhados
+console.log('✅ Dados capturados e copiados!');
+console.log('📊 Resumo:');
+console.log('  • Cookies:', captureData.cookies.length, 'items');
+console.log('  • LocalStorage:', Object.keys(captureData.localStorage).length, 'items');
+console.log('  • SessionStorage:', Object.keys(captureData.sessionStorage).length, 'items');
+console.log('  • Tokens:', Object.keys(captureData.tokens).length, 'items');
+console.log('  • URL:', captureData.url);
+console.log('\n🔴 IMPORTANTE: Cole (Ctrl+V) no formulário abaixo!');
+                        </code>
+                    </div>
+                    
+                    <button class="btn btn-sm btn-secondary" onclick="copyScript()">📋 Copiar Código</button>
+                    
+                    <div class="alert alert-info mt-3">
+                        <strong>7.</strong> Após executar o código, <strong>cole (Ctrl+V)</strong> o resultado no campo abaixo
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Formulário para Colar Dados -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📝 Colar Dados Capturados</h5>
+                </div>
+                <div class="card-body">
+                    <form id="session-form">
+                        <div class="form-group">
+                            <label for="captured-data">Cole aqui os dados capturados:</label>
+                            <textarea 
+                                class="form-control" 
+                                id="captured-data" 
+                                rows="10" 
+                                placeholder='Cole aqui o JSON capturado ou apenas os cookies no formato: "cookie1=valor1; cookie2=valor2"'
+                            ></textarea>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-success btn-block">
+                                    💾 Salvar Sessão
+                                </button>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-info btn-block" onclick="testarSessao()">
+                                    🧪 Testar Sessão
+                                </button>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-danger btn-block" onclick="limparSessao()">
+                                    🗑️ Limpar Sessão
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Logs -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">📜 Logs</h5>
+                </div>
+                <div class="card-body">
+                    <div id="logs" class="bg-dark text-white p-3 rounded" style="height: 200px; overflow-y: auto;">
+                        <small>Aguardando ações...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variáveis globais
+let logContainer = document.getElementById('logs');
+
+// Função para adicionar log
+function addLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    const color = {
+        'info': '#17a2b8',
+        'success': '#28a745',
+        'error': '#dc3545',
+        'warning': '#ffc107'
+    }[type] || '#6c757d';
+    
+    logContainer.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// Copiar script de captura
+function copyScript() {
+    const script = document.getElementById('capture-script').textContent;
+    navigator.clipboard.writeText(script).then(() => {
+        alert('✅ Código copiado! Cole no Console do Chrome (F12)');
+        addLog('Script de captura copiado', 'info');
+    });
+}
+
+// Carregar status ao iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    carregarStatus();
+    
+    // Form submit
+    document.getElementById('session-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        salvarSessao();
+    });
+});
+
+// Carregar status da sessão
+function carregarStatus() {
+    fetch('/portal/sendas/sessao/status')
+        .then(response => response.json())
+        .then(data => {
+            let statusHtml = '';
+            
+            if (data.exists) {
+                const ageClass = data.age_minutes < 60 ? 'success' : 
+                               data.age_minutes < 240 ? 'warning' : 'danger';
+                
+                statusHtml = `
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="alert alert-${ageClass}">
+                                <strong>Status:</strong> Sessão Ativa
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-info">
+                                <strong>Idade:</strong> ${Math.round(data.age_minutes)} min
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-info">
+                                <strong>Cookies:</strong> ${data.cookies_count}
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-info">
+                                <strong>Tokens:</strong> ${data.has_tokens ? '✅' : '❌'}
+                            </div>
+                        </div>
+                    </div>
+                    <small class="text-muted">Última atualização: ${data.timestamp}</small>
+                `;
+                
+                addLog(`Sessão carregada: ${data.cookies_count} cookies, idade: ${Math.round(data.age_minutes)} min`, 'info');
+            } else {
+                statusHtml = `
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Nenhuma sessão salva</strong><br>
+                        Siga as instruções acima para capturar uma nova sessão.
+                    </div>
+                `;
+                addLog('Nenhuma sessão encontrada', 'warning');
+            }
+            
+            document.getElementById('status-container').innerHTML = statusHtml;
+        })
+        .catch(error => {
+            document.getElementById('status-container').innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Erro ao carregar status:</strong> ${error.message}
+                </div>
+            `;
+            addLog(`Erro ao carregar status: ${error.message}`, 'error');
+        });
+}
+
+// Salvar sessão
+function salvarSessao() {
+    const rawData = document.getElementById('captured-data').value.trim();
+    
+    if (!rawData) {
+        alert('❌ Por favor, cole os dados capturados');
+        return;
+    }
+    
+    let dataToSend = {};
+    
+    try {
+        // Tentar fazer parse como JSON
+        const parsed = JSON.parse(rawData);
+        dataToSend = parsed;
+        addLog(`Dados JSON parseados: ${parsed.cookies ? 'cookies encontrados' : 'formato personalizado'}`, 'info');
+    } catch {
+        // Se não for JSON, assumir que são cookies diretos
+        dataToSend = {
+            cookies: rawData,
+            tokens: {},
+            localStorage: {}
+        };
+        addLog('Dados tratados como cookies diretos', 'info');
+    }
+    
+    // Enviar para o servidor
+    fetch('/portal/sendas/sessao/salvar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSend)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            addLog(data.message, 'success');
+            document.getElementById('captured-data').value = '';
+            carregarStatus();
+        } else {
+            alert(`❌ Erro: ${data.message}`);
+            addLog(`Erro ao salvar: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        alert(`❌ Erro: ${error.message}`);
+        addLog(`Erro ao salvar: ${error.message}`, 'error');
+    });
+}
+
+// Testar sessão
+function testarSessao() {
+    addLog('Testando sessão...', 'info');
+    
+    fetch('/portal/sendas/sessao/testar', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            addLog(data.message, 'success');
+        } else {
+            alert(`❌ ${data.message}`);
+            addLog(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        alert(`❌ Erro ao testar: ${error.message}`);
+        addLog(`Erro ao testar: ${error.message}`, 'error');
+    });
+}
+
+// Limpar sessão
+function limparSessao() {
+    if (!confirm('⚠️ Tem certeza que deseja limpar a sessão salva?')) {
+        return;
+    }
+    
+    fetch('/portal/sendas/sessao/limpar', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            addLog(data.message, 'success');
+            carregarStatus();
+        } else {
+            alert(`❌ ${data.message}`);
+            addLog(`Erro: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        alert(`❌ Erro: ${error.message}`);
+        addLog(`Erro ao limpar: ${error.message}`, 'error');
+    });
+}
+
+// Auto-refresh status a cada 30 segundos
+setInterval(carregarStatus, 30000);
+</script>
+
+<style>
+code {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre;
+    display: block;
+    overflow-x: auto;
+}
+</style>
+{% endblock %}

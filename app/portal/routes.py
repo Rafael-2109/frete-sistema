@@ -9,7 +9,6 @@ from app.portal import portal_bp
 from app.portal.models import PortalIntegracao, PortalConfiguracao, PortalLog
 from app.portal.atacadao.models import ProdutoDeParaAtacadao
 from app.portal.utils.grupo_empresarial import GrupoEmpresarial
-#from app.portal.atacadao.playwright_client_simple import AtacadaoPlaywrightSimple
 from app.portal.atacadao.playwright_client import AtacadaoPlaywrightClient
 from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
 from app.separacao.models import Separacao
@@ -917,7 +916,6 @@ def executar_agendamento_portal(integracao_id):
             resultado = None
             try:
                 logger.info("🚀 Usando Playwright para automação")
-                #client = AtacadaoPlaywrightSimple(headless=True)
                 client = AtacadaoPlaywrightClient(headless=True)
                 
                 # Garantir sessão válida (faz re-login automático se necessário)

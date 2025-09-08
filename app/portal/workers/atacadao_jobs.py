@@ -107,8 +107,8 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 integracao.resposta_portal = resultado
                 integracao.atualizado_em = datetime.utcnow()
                 
-                # Atualizar Separacao e Pedido se houver protocolo
-                if resultado.get('protocolo') and dados_agendamento.get('lote_id'):
+                # Atualizar registros no banco de dados
+                if resultado.get('protocolo'):
                     # Importar modelo Pedido
                     from app.pedidos.models import Pedido
                     
@@ -142,6 +142,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                     # Atualizar Separacao
                     for sep in separacoes:
                         sep.protocolo = resultado.get('protocolo')
+                        sep.agendamento_confirmado = False  # Status aguardando confirmação
                         if data_agendamento_convertida:
                             sep.agendamento = data_agendamento_convertida
                     

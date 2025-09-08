@@ -194,7 +194,6 @@ class SaldoEstoqueCompativel:
         """
         try:
             from app.estoque.models import MovimentacaoEstoque
-            from app.utils.timezone import agora_brasil
             
             # Determinar tipo de ajuste baseado no valor
             tipo_ajuste = 'AJUSTE'

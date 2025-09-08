@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Sendas - {{ 'Editar' if action == 'editar' else 'Nova' }} Filial De-Para{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <h1 class="h3">{{ 'Editar' if action == 'editar' else 'Nova' }} Filial De-Para - Sendas</h1>
+        <a href="{{ url_for('portal.sendas_depara.listar_filiais') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        
+                        <div class="row">
+                            <!-- CNPJ -->
+                            <div class="col-md-6 mb-3">
+                                <label for="cnpj" class="form-label">
+                                    CNPJ <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="cnpj" name="cnpj" 
+                                       value="{{ filial.cnpj if filial else '' }}" 
+                                       placeholder="00.000.000/0000-00"
+                                       required>
+                                <small class="text-muted">Formato: 00.000.000/0000-00 ou apenas números</small>
+                            </div>
+
+                            <!-- Código Filial -->
+                            <div class="col-md-6 mb-3">
+                                <label for="filial" class="form-label">
+                                    Código Filial Sendas <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="filial" name="filial" 
+                                       value="{{ filial.filial if filial else '' }}" required>
+                                <small class="text-muted">Código usado no portal do Sendas</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Nome Filial -->
+                            <div class="col-md-12 mb-3">
+                                <label for="nome_filial" class="form-label">Nome da Filial</label>
+                                <input type="text" class="form-control" id="nome_filial" name="nome_filial" 
+                                       value="{{ filial.nome_filial if filial else '' }}"
+                                       placeholder="Ex: Sendas - Loja Centro">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Cidade -->
+                            <div class="col-md-8 mb-3">
+                                <label for="cidade" class="form-label">Cidade</label>
+                                <input type="text" class="form-control" id="cidade" name="cidade" 
+                                       value="{{ filial.cidade if filial else '' }}"
+                                       placeholder="Ex: Rio de Janeiro">
+                            </div>
+
+                            <!-- UF -->
+                            <div class="col-md-4 mb-3">
+                                <label for="uf" class="form-label">UF</label>
+                                <select class="form-control" id="uf" name="uf">
+                                    <option value="">Selecione...</option>
+                                    {% set estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] %}
+                                    {% for estado in estados %}
+                                    <option value="{{ estado }}" {% if filial and filial.uf == estado %}selected{% endif %}>
+                                        {{ estado }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="ativo" name="ativo" 
+                                       {% if not filial or filial.ativo %}checked{% endif %}>
+                                <label class="form-check-label" for="ativo">
+                                    Ativo
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Informações de Auditoria -->
+                        {% if filial %}
+                        <div class="alert alert-light">
+                            <small>
+                                <strong>Criado em:</strong> {{ filial.criado_em.strftime('%d/%m/%Y %H:%M') if filial.criado_em else '-' }}<br>
+                                <strong>Criado por:</strong> {{ filial.criado_por or '-' }}<br>
+                                {% if filial.atualizado_em %}
+                                <strong>Última atualização:</strong> {{ filial.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        {% endif %}
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                            <a href="{{ url_for('portal.sendas_depara.listar_filiais') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Card de Ajuda -->
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle"></i> Informações Importantes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li><strong>CNPJ:</strong> Pode ser informado com ou sem formatação</li>
+                        <li><strong>Código Filial:</strong> Deve ser exatamente como usado no portal Sendas</li>
+                        <li><strong>Nome/Cidade/UF:</strong> Campos opcionais para melhor identificação</li>
+                        <li><strong>Único:</strong> Cada CNPJ e código de filial devem ser únicos no sistema</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Máscara para CNPJ
+    $('#cnpj').mask('00.000.000/0000-00');
+    
+    // Validação adicional
+    $('form').on('submit', function() {
+        const cnpj = $('#cnpj').val();
+        const filial = $('#filial').val();
+        
+        if (!cnpj || !filial) {
+            toastr.error('CNPJ e Código da Filial são obrigatórios');
+            return false;
+        }
+        
+        // Remover máscara para validar tamanho
+        const cnpjLimpo = cnpj.replace(/\D/g, '');
+        if (cnpjLimpo.length !== 14) {
+            toastr.error('CNPJ deve ter 14 dígitos');
+            return false;
+        }
+        
+        return true;
+    });
+});
+</script>
+{% endblock %}

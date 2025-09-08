@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}Programação em Lote - {{ rede }} SP{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-network-wired text-warning"></i>
+                Programação em Lote - {{ rede }} SP 
+                <span style="font-size: 0.8em; font-weight: bold;">- {{ vendedor or 'Sem vendedor' }} - {{ equipe_vendas or 'Sem equipe' }}</span>
+            </h1>
+            <p class="text-muted mb-0">
+                Gestão unificada de pedidos para {{ rede }} em São Paulo
+            </p>
+        </div>
+        <div>
+            <button class="btn btn-info me-2" id="btnAnalisarEstoques">
+                <i class="fas fa-chart-line"></i> Analisar Estoques
+            </button>
+            <button class="btn btn-warning me-2" id="btnSugerirDatas">
+                <i class="fas fa-magic"></i> Sugerir Datas
+            </button>
+            <button class="btn btn-primary me-2" id="btnSelecionarTodos">
+                <i class="fas fa-check-square"></i> Selecionar Todos
+            </button>
+            <button class="btn btn-success me-2" id="btnProcessarLote" disabled>
+                <i class="fas fa-calendar-alt"></i> Agendar Selecionados
+            </button>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de CNPJs
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_cnpjs }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-building fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Valor Total
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                R$ <span id="valorTotalGeral">0,00</span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Peso Total
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                <span id="pesoTotalGeral">0</span> kg
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-weight fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pallets Total
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                <span id="palletsTotalGeral">0</span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-pallet fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dropdown de Análise de Estoques (inicialmente oculto) -->
+    <div class="card shadow mb-4 d-none" id="cardAnaliseEstoques">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-chart-line"></i> Análise de Estoques - Itens da Rede
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-sm table-bordered" id="tabelaAnaliseEstoques">
+                    <thead class="sticky-top bg-white">
+                        <tr>
+                            <th>Código</th>
+                            <th>Produto</th>
+                            <th>Qtd Total</th>
+                            <th>Valor Total</th>
+                            <th>Estoque Atual</th>
+                            <th>Data Disponível</th>
+                            <th>Projeção 15 dias</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de CNPJs -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-list"></i> Clientes {{ rede }} SP
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabelaProgramacao">
+                    <thead>
+                        <tr class="bg-light">
+                            <th width="40">
+                                <input type="checkbox" id="checkTodos" />
+                            </th>
+                            <th>CNPJ</th>
+                            <th>Razão Social</th>
+                            <th>Cidade</th>
+                            <th>Sub-rota</th>
+                            <th>Valor Total</th>
+                            <th>Peso (kg)</th>
+                            <th>Pallets</th>
+                            <th>Expedição</th>
+                            <th>Agendamento</th>
+                            <th>Status</th>
+                            <th width="150">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cnpj_data in dados_cnpj %}
+                        <tr class="cnpj-row" data-cnpj="{{ cnpj_data.cnpj }}">
+                            <td class="text-center">
+                                <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}" />
+                            </td>
+                            <td style="font-size: 0.9em;">
+                                {{ cnpj_data.cnpj_formatado }}
+                            </td>
+                            <td>{{ cnpj_data.raz_social }}</td>
+                            <td>{{ cnpj_data.cidade }}</td>
+                            <td>{{ cnpj_data.sub_rota or '-' }}</td>
+                            <td class="text-end">R$ {{ "{:,.2f}".format(cnpj_data.total_valor) }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(cnpj_data.total_peso) }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(cnpj_data.total_pallets) }}</td>
+                            <td>
+                                <input type="date" class="form-control form-control-sm data-expedicao" 
+                                       data-cnpj="{{ cnpj_data.cnpj }}" 
+                                       value="{{ cnpj_data.expedicao_sugerida }}"
+                                       style="width: 110px; font-size: 0.85em;">
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <input type="date" class="form-control form-control-sm data-agendamento" 
+                                           data-cnpj="{{ cnpj_data.cnpj }}"
+                                           value="{{ cnpj_data.agendamento_sugerido }}"
+                                           style="width: 110px; font-size: 0.85em;">
+                                    {% if cnpj_data.tem_protocolo %}
+                                        <i class="fas fa-clock ms-1 text-info" title="Protocolo: {{ cnpj_data.protocolo }}"></i>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                {% if cnpj_data.agendamento_confirmado %}
+                                    <i class="fas fa-check-circle text-success" title="Confirmado"></i>
+                                {% elif cnpj_data.tem_pendencias %}
+                                    <i class="fas fa-exclamation-triangle text-warning" title="Pendências"></i>
+                                {% else %}
+                                    <i class="fas fa-clock text-muted" title="Aguardando"></i>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-warning btn-priorizar" 
+                                        data-cnpj="{{ cnpj_data.cnpj }}"
+                                        title="Priorizar">
+                                    <i class="fas fa-arrow-up"></i>
+                                </button>
+                                <button class="btn btn-sm btn-primary btn-analisar-ruptura" 
+                                        data-cnpj="{{ cnpj_data.cnpj }}"
+                                        data-pedidos="{{ cnpj_data.pedidos | tojson | e }}"
+                                        title="Analisar ruptura"
+                                        style="min-width: 120px; font-size: 0.75em;">
+                                    <span class="ruptura-info">Analisando...</span>
+                                </button>
+                                <button class="btn btn-sm btn-info btn-expandir" 
+                                        data-cnpj="{{ cnpj_data.cnpj }}"
+                                        title="Ver detalhes">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        
+                        <!-- Linha de detalhes (inicialmente oculta) -->
+                        <tr class="detail-row d-none" data-cnpj-detail="{{ cnpj_data.cnpj }}">
+                            <td colspan="12">
+                                <div class="p-3 bg-light">
+                                    <h6 class="mb-3">
+                                        <i class="fas fa-clipboard-list"></i> 
+                                        Detalhes dos Pedidos - {{ cnpj_data.raz_social }}
+                                    </h6>
+                                    
+                                    {% for pedido in cnpj_data.pedidos %}
+                                    <div class="card mb-2">
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-2">
+                                                    <strong>Pedido:</strong><br>
+                                                    {{ pedido.num_pedido }}
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <strong>Data:</strong><br>
+                                                    {{ pedido.data_pedido.strftime('%d/%m/%Y') if pedido.data_pedido else '-' }}
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <strong>Pedido Cliente:</strong><br>
+                                                    {{ pedido.pedido_cliente or '-' }}
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <strong>Status:</strong><br>
+                                                    <span class="badge 
+                                                        {% if pedido.status == 'PENDENTE' %}bg-warning
+                                                        {% elif pedido.status == 'NF_CD_SEM_CARTEIRA' %}bg-danger
+                                                        {% else %}bg-info{% endif %}">
+                                                        {{ pedido.status }}
+                                                    </span>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <strong>Observações:</strong><br>
+                                                    {{ pedido.observacoes or '-' }}
+                                                </div>
+                                            </div>
+                                            
+                                            {% if pedido.qtd_pendente > 0 %}
+                                            <div class="mt-2">
+                                                <span class="text-muted">Pendente:</span>
+                                                <span class="badge bg-warning">
+                                                    R$ {{ "{:,.2f}".format(pedido.valor_pendente) }} |
+                                                    {{ "{:,.2f}".format(pedido.peso_pendente) }} kg |
+                                                    {{ "{:,.2f}".format(pedido.pallets_pendente) }} pallets
+                                                </span>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            {% if pedido.separacoes %}
+                                            <div class="mt-2">
+                                                <strong>Separações:</strong>
+                                                {% for sep in pedido.separacoes %}
+                                                <div class="ms-3">
+                                                    <span class="text-muted">{{ sep.separacao_lote_id }}:</span>
+                                                    <span class="badge bg-info">
+                                                        {{ sep.status }} |
+                                                        Exp: {{ sep.expedicao.strftime('%d/%m') if sep.expedicao else '-' }} |
+                                                        Agenda: {{ sep.agendamento.strftime('%d/%m') if sep.agendamento else '-' }}
+                                                        {% if sep.protocolo %}| Prot: {{ sep.protocolo }}{% endif %}
+                                                    </span>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            
+                                            {% if pedido.nfs_cd %}
+                                            <div class="mt-2">
+                                                <strong>NFs no CD:</strong>
+                                                {% for nf in pedido.nfs_cd %}
+                                                <div class="ms-3">
+                                                    <span class="text-muted">NF {{ nf.numero_nf }}:</span>
+                                                    <span class="badge bg-danger">
+                                                        {{ nf.status }} |
+                                                        R$ {{ "{:,.2f}".format(nf.valor) }} |
+                                                        {{ "{:,.2f}".format(nf.peso) }} kg
+                                                    </span>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Agendamento em Lote -->
+<div class="modal fade" id="modalAgendamento" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-calendar-alt"></i> Agendamento em Lote
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="qtdSelecionados">0</span> CNPJs selecionados para agendamento
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Data de Expedição:</label>
+                        <input type="date" class="form-control" id="dataExpedicao" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Data de Agendamento:</label>
+                        <input type="date" class="form-control" id="dataAgendamento">
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Observações:</label>
+                    <textarea class="form-control" id="observacoesLote" rows="3"></textarea>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Esta ação irá processar o agendamento de todos os pedidos pendentes dos CNPJs selecionados.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnConfirmarAgendamento">
+                    <i class="fas fa-check"></i> Confirmar Agendamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/programacao-lote.js') }}"></script>
+
+{% endblock %}

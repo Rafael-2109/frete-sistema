@@ -235,8 +235,8 @@ class SeparacaoManager {
                         if (confirmarAgendamento) {
                             console.log('✅ Usuário confirmou agendamento automático');
                             // Chamar função de agendamento do carteiraAgrupada se disponível
-                            if (window.carteiraAgrupada && window.carteiraAgrupada.agendarPortal) {
-                                window.carteiraAgrupada.agendarPortal(data.lote_id, dataExpedicao.agendamento);
+                            if (window.carteiraAgrupada && window.carteiraAgrupada.agendarNoPortal) {
+                                window.carteiraAgrupada.agendarNoPortal(data.lote_id, dataExpedicao.agendamento);
                             } else {
                                 // Fallback: redirecionar para portal de agendamento
                                 console.log('📆 Redirecionando para portal de agendamento...');

@@ -36,6 +36,9 @@
                 <a href="{{ url_for('portal.central_portais') }}" class="btn btn-primary me-2">
                     <i class="fas fa-globe"></i> Portais de Agendamento
                 </a>
+            <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalClientesRedeSP">
+                <i class="fas fa-network-wired"></i> Clientes Rede SP
+            </button>
             <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success">
                 <i class="fas fa-boxes"></i> Carteira de Pedidos
             </a>
@@ -584,5 +587,42 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(carregarPedidosProgramados, 300000);
 });
 </script>
+
+<!-- Modal Clientes Rede SP -->
+<div class="modal fade" id="modalClientesRedeSP" tabindex="-1" aria-labelledby="modalClientesRedeSPLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalClientesRedeSPLabel">
+                    <i class="fas fa-network-wired"></i> Selecione a Rede SP
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <a href="{{ url_for('carteira.programacao_em_lote.listar', rede='atacadao') }}" class="btn btn-lg btn-outline-primary w-100 py-3">
+                            <i class="fas fa-shopping-cart fa-2x mb-2"></i><br>
+                            <strong>Atacadão SP</strong>
+                        </a>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <a href="{{ url_for('carteira.programacao_em_lote.listar', rede='sendas') }}" class="btn btn-lg btn-outline-success w-100 py-3">
+                            <i class="fas fa-store fa-2x mb-2"></i><br>
+                            <strong>Sendas SP</strong>
+                        </a>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i> 
+                    <small>Selecione a rede para visualizar e programar pedidos em lote de clientes localizados em São Paulo.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %} 

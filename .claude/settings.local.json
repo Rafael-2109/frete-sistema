@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "mcp__ruv-swarm",
-      "mcp__claude-flow",
       "Bash(python3:*)"
     ],
     "deny": []

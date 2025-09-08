@@ -705,6 +705,12 @@ def create_app(config_name=None):
         from app.portal import portal_bp
         app.register_blueprint(portal_bp)
         app.logger.info("✅ Portal de integração registrado com sucesso")
+        
+        # Registrar blueprint do Sendas para gerenciamento de sessão
+        from app.portal.sendas.routes import sendas_bp
+        app.register_blueprint(sendas_bp)
+        app.logger.info("✅ Portal Sendas (gerenciamento de sessão) registrado com sucesso")
+        
     except ImportError as e:
         app.logger.error(f"❌ Portal de integração - ImportError: {e}")
         import traceback

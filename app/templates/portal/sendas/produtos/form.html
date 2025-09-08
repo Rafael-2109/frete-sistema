@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Sendas - {{ 'Editar' if action == 'editar' else 'Novo' }} Produto De-Para{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <h1 class="h3">{{ 'Editar' if action == 'editar' else 'Novo' }} Produto De-Para - Sendas</h1>
+        <a href="{{ url_for('portal.sendas_depara.listar_produtos') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        
+                        <div class="row">
+                            <!-- Nosso Código -->
+                            <div class="col-md-6 mb-3">
+                                <label for="codigo_nosso" class="form-label">
+                                    Nosso Código <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="codigo_nosso" name="codigo_nosso" 
+                                           value="{{ mapeamento.codigo_nosso if mapeamento else '' }}" 
+                                           required onblur="buscarDescricao()">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="buscarDescricao()">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Código Sendas -->
+                            <div class="col-md-6 mb-3">
+                                <label for="codigo_sendas" class="form-label">
+                                    Código Sendas <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="codigo_sendas" name="codigo_sendas" 
+                                       value="{{ mapeamento.codigo_sendas if mapeamento else '' }}" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Nossa Descrição -->
+                            <div class="col-md-6 mb-3">
+                                <label for="descricao_nosso" class="form-label">Nossa Descrição</label>
+                                <input type="text" class="form-control" id="descricao_nosso" name="descricao_nosso" 
+                                       value="{{ mapeamento.descricao_nosso if mapeamento else '' }}" readonly>
+                                <small class="text-muted">Preenchido automaticamente ao buscar o código</small>
+                            </div>
+
+                            <!-- Descrição Sendas -->
+                            <div class="col-md-6 mb-3">
+                                <label for="descricao_sendas" class="form-label">Descrição Sendas</label>
+                                <input type="text" class="form-control" id="descricao_sendas" name="descricao_sendas" 
+                                       value="{{ mapeamento.descricao_sendas if mapeamento else '' }}">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- CNPJ Cliente -->
+                            <div class="col-md-6 mb-3">
+                                <label for="cnpj_cliente" class="form-label">CNPJ Cliente (Opcional)</label>
+                                <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente" 
+                                       value="{{ mapeamento.cnpj_cliente if mapeamento else '' }}"
+                                       placeholder="Deixe em branco para mapeamento genérico">
+                                <small class="text-muted">Use para mapeamentos específicos por cliente</small>
+                            </div>
+
+                            <!-- Fator de Conversão -->
+                            <div class="col-md-6 mb-3">
+                                <label for="fator_conversao" class="form-label">Fator de Conversão</label>
+                                <input type="number" class="form-control" id="fator_conversao" name="fator_conversao" 
+                                       value="{{ mapeamento.fator_conversao if mapeamento else '1.0' }}" 
+                                       step="0.0001" min="0.0001" required>
+                                <small class="text-muted">Multiplicador para converter quantidades</small>
+                            </div>
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="mb-3">
+                            <label for="observacoes" class="form-label">Observações</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3">{{ mapeamento.observacoes if mapeamento else '' }}</textarea>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="ativo" name="ativo" 
+                                       {% if not mapeamento or mapeamento.ativo %}checked{% endif %}>
+                                <label class="form-check-label" for="ativo">
+                                    Ativo
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Informações de Auditoria -->
+                        {% if mapeamento %}
+                        <div class="alert alert-light">
+                            <small>
+                                <strong>Criado em:</strong> {{ mapeamento.criado_em.strftime('%d/%m/%Y %H:%M') if mapeamento.criado_em else '-' }}<br>
+                                <strong>Criado por:</strong> {{ mapeamento.criado_por or '-' }}<br>
+                                {% if mapeamento.atualizado_em %}
+                                <strong>Última atualização:</strong> {{ mapeamento.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        {% endif %}
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                            <a href="{{ url_for('portal.sendas_depara.listar_produtos') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function buscarDescricao() {
+    const codigo = document.getElementById('codigo_nosso').value;
+    if (!codigo) return;
+    
+    fetch(`{{ url_for('portal.sendas_depara.buscar_produto_nosso', codigo='') }}${codigo}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('descricao_nosso').value = data.descricao;
+                toastr.success('Descrição encontrada!');
+            } else {
+                document.getElementById('descricao_nosso').value = '';
+                toastr.warning('Produto não encontrado no cadastro');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            toastr.error('Erro ao buscar produto');
+        });
+}
+
+// Máscara para CNPJ
+$(document).ready(function() {
+    $('#cnpj_cliente').mask('00.000.000/0000-00');
+});
+</script>
+{% endblock %}

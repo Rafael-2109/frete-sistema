@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Sendas - Importar Produtos De-Para{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <h1 class="h3">Importar Produtos De-Para - Sendas</h1>
+        <a href="{{ url_for('portal.sendas_depara.listar_produtos') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-excel"></i> Importação de Produtos via CSV/Excel
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Instruções -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Instruções:</h6>
+                        <ol class="mb-0">
+                            <li>Prepare um arquivo CSV ou Excel com as colunas obrigatórias</li>
+                            <li>O sistema criará novos mapeamentos ou atualizará os existentes</li>
+                            <li>A descrição do nosso produto será preenchida automaticamente se encontrada</li>
+                            <li>Use UTF-8 para evitar problemas com caracteres especiais</li>
+                        </ol>
+                    </div>
+
+                    <!-- Formato esperado -->
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-file-csv"></i> Formato esperado do arquivo:</h6>
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>codigo_nosso</th>
+                                    <th>descricao_nosso</th>
+                                    <th>codigo_sendas</th>
+                                    <th>descricao_sendas</th>
+                                    <th>fator_conversao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1001</td>
+                                    <td>Produto A (opcional)</td>
+                                    <td>SND001</td>
+                                    <td>Produto Sendas A</td>
+                                    <td>1.0</td>
+                                </tr>
+                                <tr>
+                                    <td>1002</td>
+                                    <td>Produto B (opcional)</td>
+                                    <td>SND002</td>
+                                    <td>Produto Sendas B</td>
+                                    <td>0.5</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Formulário de Upload -->
+                    <form method="POST" enctype="multipart/form-data" id="formImportar">
+                        
+                        <div class="mb-3">
+                            <label for="cnpj_cliente" class="form-label">CNPJ Cliente (Opcional)</label>
+                            <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente"
+                                   placeholder="Deixe em branco para mapeamento genérico">
+                            <small class="text-muted">Use para importar mapeamentos específicos de um cliente</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="arquivo" class="form-label">Arquivo CSV ou Excel <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" 
+                                   accept=".csv,.xlsx,.xls" required>
+                            <small class="text-muted">Formatos aceitos: CSV (.csv) ou Excel (.xlsx, .xls)</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-primary" id="btnImportar">
+                                <i class="fas fa-upload"></i> Importar Arquivo
+                            </button>
+                            <a href="{{ url_for('portal.sendas_depara.listar_produtos') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modelo de Arquivo -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-download"></i> Modelo de Arquivo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p>Baixe um modelo de arquivo para facilitar a importação:</p>
+                    <button class="btn btn-outline-success" onclick="baixarModelo()">
+                        <i class="fas fa-file-excel"></i> Baixar Modelo CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Máscara CNPJ
+    $('#cnpj_cliente').mask('00.000.000/0000-00');
+    
+    // Validação do formulário
+    $('#formImportar').on('submit', function() {
+        const arquivo = $('#arquivo').val();
+        if (!arquivo) {
+            toastr.error('Selecione um arquivo para importar');
+            return false;
+        }
+        
+        $('#btnImportar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+    });
+});
+
+function baixarModelo() {
+    // Criar CSV de modelo
+    const csv = 'codigo_nosso,descricao_nosso,codigo_sendas,descricao_sendas,fator_conversao\n' +
+                '1001,Produto Exemplo A,SND001,Produto Sendas A,1.0\n' +
+                '1002,Produto Exemplo B,SND002,Produto Sendas B,1.0';
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'modelo_produtos_sendas.csv');
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toastr.success('Modelo baixado com sucesso!');
+}
+</script>
+{% endblock %}

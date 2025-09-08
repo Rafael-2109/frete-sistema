@@ -36,3 +36,13 @@ portal_bp.register_blueprint(tenda_depara_bp)
 # Registrar rotas de Agendamento do Tenda
 from app.portal.tenda.routes_agendamento import bp as tenda_agendamento_bp
 portal_bp.register_blueprint(tenda_agendamento_bp)
+
+# Registrar rotas de Identificação de Portal
+from app.portal.utils.identificacao_portal import identificacao_portal_bp
+portal_bp.register_blueprint(identificacao_portal_bp, url_prefix='/utils')
+
+# ========== PORTAL SENDAS ==========
+
+# Registrar rotas De-Para do Sendas
+from app.portal.sendas.routes_depara import bp as sendas_depara_bp
+portal_bp.register_blueprint(sendas_depara_bp)

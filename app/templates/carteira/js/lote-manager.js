@@ -283,14 +283,14 @@ class LoteManager {
                     ${(loteData.agendamento || loteData.data_agendamento) ? `
                         <div class="btn-group mb-2" role="group">
                             <button class="btn btn-outline-success btn-sm" 
-                                    onclick="carteiraAgrupada.agendarNoPortal('${loteData.lote_id || loteData.separacao_lote_id}')"
+                                    onclick="window.PortalAgendamento.agendarNoPortal('${loteData.lote_id || loteData.separacao_lote_id}')"
                                     title="Agendar no portal do cliente">
                                 <i class="fas fa-calendar-plus"></i> Agendar
                             </button>
                         
                             ${loteData.protocolo ? `
                                 <button class="btn btn-outline-info btn-sm"
-                                        onclick="carteiraAgrupada.verificarProtocoloPortal('${loteData.protocolo}')"
+                                        	onclick="window.PortalAgendamento.verificarProtocoloNoPortal('${loteData.lote_id || loteData.separacao_lote_id}', '${loteData.protocolo}')"
                                         title="Verificar protocolo: ${loteData.protocolo}">
                                     <i class="fas fa-check-circle"></i> Ver. Protocolo
                                 </button>
@@ -536,6 +536,7 @@ class LoteManager {
 
     recalcularTotaisLote(loteId) {
         const loteData = this.workspace.preSeparacoes.get(loteId);
+        
         if (!loteData) return;
 
         let valor = 0;

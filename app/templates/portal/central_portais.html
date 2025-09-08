@@ -40,12 +40,6 @@
                             <i class="fas fa-barcode"></i> De-Para Códigos Atacadão
                             <small class="text-muted d-block">Mapeamento de códigos internos para códigos do portal</small>
                         </a>
-                        <!-- Verificação de Protocolos (Em desenvolvimento)
-                        <a href="#" class="list-group-item list-group-item-action disabled">
-                            <i class="fas fa-check-circle"></i> Verificar Protocolos
-                            <small class="text-muted d-block">Consultar status de agendamentos</small>
-                        </a>
-                        -->
                     </div>
                 </div>
                 <div class="card-footer text-muted">
@@ -90,29 +84,39 @@
             </div>
         </div>
 
-        <!-- Portal Sendas (Em Breve) -->
+        <!-- Portal Sendas -->
         <div class="col-md-4 mb-4">
-            <div class="card h-100 border-secondary">
-                <div class="card-header bg-secondary text-white">
+            <div class="card h-100 border-info">
+                <div class="card-header bg-info text-white">
                     <h5 class="mb-0">
                         <i class="fas fa-truck"></i> Portal Sendas/Assaí
                     </h5>
                 </div>
                 <div class="card-body">
                     <p class="card-text">
-                        <strong>Status:</strong> <span class="badge bg-secondary">Em Breve</span>
+                        <strong>Status:</strong> <span class="badge bg-warning text-dark">Desenvolvimento</span>
                     </p>
-                    <div class="text-center py-5">
-                        <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">Em Breve</h5>
-                        <p class="text-muted">
-                            A integração com o portal Sendas/Assaí será disponibilizada em breve.
-                        </p>
+                    <p class="card-text">
+                        Sistema de agendamento integrado com o portal Trizy do Sendas/Assaí.
+                    </p>
+                    <div class="list-group list-group-flush mb-3">
+                        <a href="/portal/sendas/sessao" class="list-group-item list-group-item-action bg-light">
+                            <i class="fas fa-key text-danger"></i> <strong>Gerenciar Sessão/Cookies</strong>
+                            <small class="text-muted d-block">Capturar e gerenciar cookies de acesso ao portal</small>
+                        </a>
+                        <a href="/portal/sendas/depara/produtos" class="list-group-item list-group-item-action">
+                            <i class="fas fa-barcode"></i> De-Para Códigos Sendas
+                            <small class="text-muted d-block">Mapeamento de códigos de produtos</small>
+                        </a>
+                        <a href="/portal/sendas/depara/filiais" class="list-group-item list-group-item-action">
+                            <i class="fas fa-store"></i> De-Para Filiais
+                            <small class="text-muted d-block">Mapeamento de CNPJ para filiais</small>
+                        </a>
                     </div>
                 </div>
                 <div class="card-footer text-muted">
                     <small>
-                        <i class="fas fa-info-circle"></i> Em desenvolvimento
+                        <i class="fas fa-link"></i> Portal: login.trizy.com.br
                     </small>
                 </div>
             </div>
@@ -161,9 +165,10 @@
                                                 <div class="bg-light p-2 rounded mt-2">
                                                     <small class="text-muted">Sistema recebe dados reais:</small>
                                                     <pre class="mb-0"><code>Pedido: #932955
-Cliente: Atacadão Campinas - CNPJ: 75.315.333/0085-02
-Produto: 4320162 - AZEITONA VERDE FATIADA (30 caixas)
-Data desejada: 28/08/2025</code></pre>
+                                                        Cliente: Atacadão Campinas - CNPJ: 75.315.333/0085-02
+                                                        Produto: 4320162 - AZEITONA VERDE FATIADA (30 caixas)
+                                                        Data desejada: 28/08/2025</code>
+                                                    </pre>
                                                 </div>
                                             </div>
                                         </div>

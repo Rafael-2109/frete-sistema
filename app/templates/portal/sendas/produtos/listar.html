@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Sendas - Listar Produtos De-Para{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <h1 class="h3">De-Para Produtos - Sendas</h1>
+        <div>
+            <a href="{{ url_for('portal.sendas_depara.novo_produto') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Novo Produto
+            </a>
+            <a href="{{ url_for('portal.sendas_depara.importar_produtos') }}" class="btn btn-info">
+                <i class="fas fa-file-excel"></i> Importar XLSX
+            </a>
+            <a href="{{ url_for('portal.sendas_depara.exportar_produtos') }}" class="btn btn-warning">
+                <i class="fas fa-download"></i> Exportar XLSX
+            </a>
+            <a href="{{ url_for('portal.sendas_depara.index_produtos') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Barra de Pesquisa -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" action="{{ url_for('portal.sendas_depara.listar_produtos') }}">
+                <div class="input-group">
+                    <input type="text" class="form-control" name="search" 
+                           placeholder="Buscar por código ou descrição..." 
+                           value="{{ search }}">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    {% if search %}
+                    <a href="{{ url_for('portal.sendas_depara.listar_produtos') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Mapeamentos -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nosso Código</th>
+                            <th>Nossa Descrição</th>
+                            <th>Código Sendas</th>
+                            <th>Descrição Sendas</th>
+                            <th>CNPJ Cliente</th>
+                            <th>Fator Conv.</th>
+                            <th>Status</th>
+                            <th width="150">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in mapeamentos.items %}
+                        <tr>
+                            <td>{{ item.codigo_nosso }}</td>
+                            <td>{{ item.descricao_nosso[:50] }}{% if item.descricao_nosso|length > 50 %}...{% endif %}</td>
+                            <td>{{ item.codigo_sendas }}</td>
+                            <td>{{ item.descricao_sendas[:50] }}{% if item.descricao_sendas|length > 50 %}...{% endif %}</td>
+                            <td>
+                                {% if item.cnpj_cliente %}
+                                    <small class="text-muted">{{ item.cnpj_cliente }}</small>
+                                {% else %}
+                                    <span class="badge bg-secondary">Genérico</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.fator_conversao }}</td>
+                            <td>
+                                {% if item.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('portal.sendas_depara.editar_produto', id=item.id) }}" 
+                                       class="btn btn-warning" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-danger" 
+                                            onclick="excluirMapeamento({{ item.id }}, 'produto')" 
+                                            title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>Nenhum mapeamento de produto encontrado.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if mapeamentos.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination justify-content-center">
+                    {% if mapeamentos.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('portal.sendas_depara.listar_produtos', page=mapeamentos.prev_num, search=search) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in mapeamentos.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num != mapeamentos.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('portal.sendas_depara.listar_produtos', page=page_num, search=search) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if mapeamentos.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('portal.sendas_depara.listar_produtos', page=mapeamentos.next_num, search=search) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function excluirMapeamento(id, tipo) {
+    if (!confirm('Tem certeza que deseja excluir este mapeamento?')) {
+        return;
+    }
+    
+    let url = tipo === 'produto' ? 
+        "{{ url_for('portal.sendas_depara.excluir_produto', id=0) }}".replace('0', id) :
+        "{{ url_for('portal.sendas_depara.excluir_filial', id=0) }}".replace('0', id);
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(data.message);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('Erro ao excluir mapeamento');
+        console.error(error);
+    });
+}
+</script>
+{% endblock %}

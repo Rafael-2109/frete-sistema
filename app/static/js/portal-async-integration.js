@@ -29,7 +29,7 @@ window.PortalAsync = {
 };
 
 // ========================================
-// FUNÇÃO PRINCIPAL - SUBSTITUI agendarNoPortalAtacadao
+// FUNÇÃO PRINCIPAL 
 // ========================================
 
 window.agendarNoPortalAtacadaoAsync = async function(entregaId, numeroNf) {
@@ -112,88 +112,6 @@ window.agendarNoPortalAtacadaoAsync = async function(entregaId, numeroNf) {
     }
 };
 
-// ========================================
-// FUNÇÃO PARA WORKSPACE (SUBSTITUI agendarNoPortal)
-// ========================================
-
-window.agendarNoPortalAsync = async function(loteId, dataAgendamento) {
-    console.log('🚀 Iniciando agendamento assíncrono para lote:', loteId);
-    
-    // Usar data fornecida ou data atual
-    dataAgendamento = dataAgendamento || new Date().toISOString().split('T')[0];
-    
-    // Apenas log, sem modal intrusivo
-    console.log('📤 Enviando agendamento para processamento...');
-    
-    try {
-        // 1. Enviar para fila assíncrona
-        const response = await fetch('/portal/api/solicitar-agendamento-async', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                lote_id: loteId,
-                data_agendamento: dataAgendamento,
-                tipo_veiculo: '11'  // Default: Toco-Baú
-            })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Erro ao enviar agendamento');
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.message || 'Erro ao processar agendamento');
-        }
-        
-        console.log('✅ Job enfileirado:', data.job_id);
-        // Notificação discreta ao invés de modal intrusivo
-        
-        // 2. Monitorar status
-        const resultado = await monitorarStatusJob(
-            data.job_id,
-            data.integracao_id,
-            loteId
-        );
-        
-        // 3. Processar resultado
-        if (resultado.status === 'finished' && resultado.resultado?.success) {
-            mostrarSucessoPortal(
-                `Agendamento criado com sucesso!`,
-                `Protocolo: ${resultado.resultado.protocolo || 'Aguardando'}`,
-                loteId
-            );
-            
-            // Atualizar workspace se existir
-            if (window.workspace) {
-                await workspace.carregarDadosPedido();
-            }
-            
-            // Recarregar após 3 segundos
-            setTimeout(() => {
-                location.reload();
-            }, 3000);
-            
-        } else if (resultado.status === 'failed') {
-            throw new Error(resultado.error || 'Agendamento falhou');
-        }
-        
-        return resultado;
-        
-    } catch (error) {
-        console.error('❌ Erro:', error);
-        mostrarErroPortal('Erro no Agendamento', error.message);
-        throw error;
-    } finally {
-        // Limpar notificação se ainda estiver visível
-        esconderNotificacaoDiscreta();
-    }
-};
 
 // ========================================
 // FUNÇÃO DE MONITORAMENTO COM FEEDBACK VISUAL
@@ -628,19 +546,6 @@ window.verificarStatusFilas = async function() {
 // ========================================
 // COMPATIBILIDADE - REDIRECIONAR ANTIGAS
 // ========================================
-
-// Substituir função antiga em listar_entregas.html
-if (typeof agendarNoPortalAtacadao !== 'undefined') {
-    console.log('🔄 Substituindo agendarNoPortalAtacadao por versão assíncrona');
-    window.agendarNoPortalAtacadao = window.agendarNoPortalAtacadaoAsync;
-}
-
-// Substituir função antiga em workspace
-if (typeof workspace !== 'undefined' && workspace.agendarNoPortal) {
-    console.log('🔄 Substituindo workspace.agendarNoPortal por versão assíncrona');
-    const originalAgendarNoPortal = workspace.agendarNoPortal.bind(workspace);
-    workspace.agendarNoPortal = window.agendarNoPortalAsync;
-}
 
 // ========================================
 // INICIALIZAÇÃO
