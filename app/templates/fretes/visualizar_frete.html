@@ -455,8 +455,7 @@
                                             {% endif %}
 
                                             <!-- Botão Excluir Despesa -->
-                                            {% if not frete.fatura_frete or frete.fatura_frete.status_conferencia !=
-                                            'CONFERIDO' %}
+                                            {% if not despesa.numero_documento or despesa.numero_documento == 'PENDENTE_FATURA' or despesa.numero_documento == '' %}
                                             <form method="POST"
                                                 action="{{ url_for('fretes.excluir_despesa_extra', despesa_id=despesa.id) }}"
                                                 style="display: inline-block;"
@@ -469,7 +468,7 @@
                                             </form>
                                             {% else %}
                                             <button class="btn btn-sm btn-outline-danger" disabled
-                                                title="Não é possível excluir despesa de fatura conferida">
+                                                title="Não é possível excluir despesa com documento fiscal ({{ despesa.numero_documento }})">
                                                 <i class="fas fa-lock"></i> Protegida
                                             </button>
                                             {% endif %}
