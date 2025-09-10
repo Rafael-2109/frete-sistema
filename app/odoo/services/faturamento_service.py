@@ -302,20 +302,21 @@ class FaturamentoService:
     def _mapear_status(self, status_odoo: Optional[str]) -> str:
         """
         Mapeia status do Odoo para status do sistema
+        Mantém consistência com valores esperados no banco
         """
         if not status_odoo:
-            return 'ATIVO'
+            return 'Lançado'
         
         status_map = {
-            'draft': 'RASCUNHO',
+            'draft': 'Provisório',
             'posted': 'Lançado',
-            'cancel': 'CANCELADO',
+            'cancel': 'Cancelado',  # Usar 'Cancelado' com inicial maiúscula conforme modelo
             'sale': 'Lançado',
             'done': 'Lançado',
             'sent': 'Lançado'
         }
         
-        return status_map.get(status_odoo.lower(), 'ATIVO')
+        return status_map.get(status_odoo.lower(), 'Lançado')
     
     def _parse_date(self, date_input) -> Optional[datetime]:
         """
@@ -573,11 +574,13 @@ class FaturamentoService:
                             logger.debug(f"✏️ UPDATE: NF {numero_nf} produto {cod_produto} - status: {registro_info['status_atual']} → {status_odoo}")
                             
                             # 🚨 Se mudou para CANCELADO, processar imediatamente
-                            if status_odoo_raw == 'cancel' and registro_info['status_atual'] != 'CANCELADO':
+                            # Comparação case-insensitive para garantir detecção
+                            status_atual_upper = registro_info['status_atual'].upper() if registro_info['status_atual'] else ''
+                            if status_odoo_raw == 'cancel' and status_atual_upper != 'CANCELADO':
                                 logger.info(f"🚨 Processando CANCELAMENTO da NF {numero_nf} (Odoo state='cancel')")
                                 self._processar_cancelamento_nf(numero_nf)
                             # 🔄 Se mudou DE cancelado PARA ativo, precisa reprocessar
-                            elif registro_info['status_atual'] == 'CANCELADO' and status_odoo != 'CANCELADO':
+                            elif status_atual_upper == 'CANCELADO' and status_odoo.upper() != 'CANCELADO':
                                 nfs_reprocessar.append(numero_nf)
                                 logger.info(f"🔄 NF {numero_nf} voltou de CANCELADO para {status_odoo}, marcada para reprocessamento")
                         # Se status igual, não faz nada (otimização)
