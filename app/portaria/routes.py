@@ -1,18 +1,12 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
-from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 import traceback
 import logging
-
-logger = logging.getLogger(__name__)
-
 from app import db
-
 # 🔒 Importar decoradores de permissão
 from app.utils.auth_decorators import require_portaria
-
 from app.portaria.models import Motorista, ControlePortaria
 from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
 from app.embarques.models import Embarque
@@ -20,6 +14,9 @@ from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
 from app.utils.file_storage import get_file_storage
+
+logger = logging.getLogger(__name__)
+
 
 portaria_bp = Blueprint('portaria', __name__, url_prefix='/portaria')
 
@@ -181,7 +178,6 @@ def registrar_movimento():
     Registra chegada, entrada ou saída de veículo
     """
     # 🔒 VALIDAÇÃO CSRF ROBUSTA
-    from flask_wtf.csrf import validate_csrf
     from app.utils.csrf_helper import validate_api_csrf
     
     try:
@@ -288,10 +284,15 @@ def registrar_movimento():
                             # ✅ PROPAGAR data_embarque para tabela Separacao
                             for item in embarque.itens:
                                 if item.separacao_lote_id:
-                                    Separacao.query.filter_by(
+                                    num_atualizados = Separacao.query.filter_by(
                                         separacao_lote_id=item.separacao_lote_id
-                                    ).update({'data_embarque': registro.data_saida})
-                                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id} atualizado com data_embarque")
+                                    ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
+                                    
+                                    if num_atualizados > 0:
+                                        print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
+                                    else:
+                                        print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
+                                        flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
                             
                             # Sincroniza com sistema de entregas para cada item do embarque
                             if embarque.itens:
@@ -451,7 +452,8 @@ def excluir_motorista(id):
                         foto_path = os.path.join(current_app.root_path, 'static', motorista.foto_documento)
                         if os.path.exists(foto_path):
                             os.remove(foto_path)
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao excluir foto do motorista: {str(e)}")
                     pass  # Ignora erro na exclusão do arquivo
             
             db.session.delete(motorista)
@@ -459,6 +461,7 @@ def excluir_motorista(id):
             flash('Motorista excluído com sucesso!', 'success')
             
     except Exception as e:
+        logger.error(f"Erro ao excluir motorista: {str(e)}")
         db.session.rollback()
         flash(f'Erro ao excluir motorista: {str(e)}', 'danger')
     
@@ -646,10 +649,15 @@ def adicionar_embarque():
             # ✅ PROPAGAR data_embarque para tabela Separacao
             for item in embarque.itens:
                 if item.separacao_lote_id:
-                    Separacao.query.filter_by(
+                    num_atualizados = Separacao.query.filter_by(
                         separacao_lote_id=item.separacao_lote_id
-                    ).update({'data_embarque': registro.data_saida})
-                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id} atualizado com data_embarque")
+                    ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
+                    
+                    if num_atualizados > 0:
+                        print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
+                    else:
+                        print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
+                        flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
             
             # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
             if embarque.itens:
@@ -707,10 +715,14 @@ def excluir_embarque():
             # ✅ LIMPAR data_embarque da tabela Separacao
             for item in embarque.itens:
                 if item.separacao_lote_id:
-                    Separacao.query.filter_by(
+                    num_atualizados = Separacao.query.filter_by(
                         separacao_lote_id=item.separacao_lote_id
-                    ).update({'data_embarque': None})
-                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id} - data_embarque removida")
+                    ).update({'data_embarque': None}, synchronize_session='fetch')
+                    
+                    if num_atualizados > 0:
+                        print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) - data_embarque removida")
+                    else:
+                        print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para limpar!")
             
             # 2. Ajusta sistema de entregas para cada NF do embarque
             if embarque.itens:

@@ -2932,12 +2932,7 @@ def excluir_despesa_extra(despesa_id):
     despesa = DespesaExtra.query.get_or_404(despesa_id)
     frete = despesa.frete
     
-    try:
-        # Verifica se fatura está conferida
-        if not despesa.numero_documento or despesa.numero_documento == 'PENDENTE_FATURA':
-            flash('❌ Não é possível excluir despesa de fatura conferida!', 'error')
-            return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
-        
+    try:        
         # Salva dados para o flash
         tipo_despesa = despesa.tipo_despesa
         numero_documento = despesa.numero_documento

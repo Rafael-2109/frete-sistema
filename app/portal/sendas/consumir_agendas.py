@@ -8,6 +8,9 @@ import os
 import sys
 import asyncio
 import logging
+import subprocess
+import json
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -163,6 +166,15 @@ class ConsumirAgendasSendas:
         """
         try:
             logger.debug("🔍 Verificando presença de modal ou painel de releases...")
+            
+            # CORREÇÃO 3: Não fechar o modal de upload sem querer
+            try:
+                iframe_modal_count = await self.portal.page.frame_locator("#iframe-servico").locator(".rs-modal, .rs-modal-wrapper").count()
+                if iframe_modal_count > 0:
+                    logger.debug("📋 Modal de upload detectado no iframe - NÃO será fechado")
+                    return False  # há um modal válido do fluxo aberto; não feche nada
+            except:
+                pass
             
             # 1. Primeiro, verificar o releases-panel (notas de lançamento Trizy)
             releases_panel = self.portal.page.locator('releases-panel[opened]')
@@ -387,67 +399,90 @@ class ConsumirAgendasSendas:
                         # Aguardar o modal aparecer
                         await self.portal.page.wait_for_timeout(2000)
                         
-                        # Procurar o modal de upload
+                        # CORREÇÃO CRÍTICA: Procurar o modal DENTRO DO IFRAME, não no page!
+                        logger.info("🔍 Procurando modal de upload DENTRO DO IFRAME...")
+                        
+                        # O modal está no iframe, não no page principal
                         modal_selectors = [
+                            '[role="dialog"].rs-modal',
                             '.rs-modal-wrapper',
-                            '[role="dialog"]',
                             '.rs-modal'
                         ]
                         
-                        modal_encontrado = False
+                        modal = None
                         for selector in modal_selectors:
-                            if await self.portal.page.locator(selector).is_visible(timeout=1000):
-                                logger.info(f"🎆 Modal de upload encontrado: {selector}")
-                                modal_encontrado = True
+                            temp_modal = iframe.locator(selector).first
+                            if await temp_modal.is_visible(timeout=1000):
+                                logger.info(f"🎆 Modal de upload encontrado no IFRAME: {selector}")
+                                modal = temp_modal
                                 break
                         
-                        if modal_encontrado:
-                            # Agora procurar o dropzone ou input file DENTRO do modal
-                            logger.info("🔍 Procurando área de upload dentro do modal...")
+                        if modal:
+                            # CORREÇÃO 1: Sempre usar o iframe para tudo que for modal de upload
+                            logger.info("🔍 Procurando input de arquivo DENTRO DO MODAL (no iframe)...")
                             
-                            # Primeiro tentar o input file diretamente
-                            input_file = self.portal.page.locator('input[type="file"][name="arquivoExcel"]')
-                            if not await input_file.is_visible():
-                                # Se não encontrar, procurar qualquer input file
-                                input_file = self.portal.page.locator('input[type="file"]').first
+                            # Input específico do modal com name="arquivoExcel"
+                            file_input = modal.locator('input[name="arquivoExcel"]').first
                             
-                            if await input_file.count() > 0:
-                                logger.info("📁 Input file encontrado, enviando arquivo...")
-                                await input_file.set_input_files(arquivo_planilha)
-                                logger.info(f"✅ Arquivo enviado: {arquivo_planilha}")
+                            # Se não encontrar pelo name, tentar pelo type
+                            if await file_input.count() == 0:
+                                logger.info("⚠️ Input arquivoExcel não encontrado, tentando input[type=file]...")
+                                file_input = modal.locator('input[type="file"]').first
+                            
+                            if await file_input.count() > 0:
+                                logger.info("📁 Input file encontrado NO MODAL/IFRAME, enviando arquivo...")
+                                await file_input.set_input_files(arquivo_planilha)
+                                logger.info(f"📤 Arquivo setado no input do modal: {arquivo_planilha}")
                                 
-                                # Aguardar processamento
-                                await self.portal.page.wait_for_timeout(3000)
+                                # COMPORTAMENTO CORRETO: Modal desaparece automaticamente após processar o arquivo
+                                logger.info("⏳ Aguardando modal processar arquivo e desaparecer...")
                                 
-                                # Verificar se precisa clicar em algum botão de confirmação
-                                confirm_buttons = [
-                                    'button:has-text("Enviar")',
-                                    'button:has-text("Upload")',
-                                    'button:has-text("Confirmar")',
-                                    'button:has-text("OK")',
-                                    '.rs-btn-primary'
-                                ]
-                                
-                                for btn_selector in confirm_buttons:
-                                    confirm_btn = self.portal.page.locator(btn_selector)
-                                    if await confirm_btn.is_visible(timeout=1000):
-                                        logger.info(f"🔘 Botão de confirmação encontrado: {btn_selector}")
-                                        await confirm_btn.click()
-                                        break
-                                
-                                # Aguardar processamento final
-                                await self.portal.page.wait_for_timeout(5000)
-                                
-                                # Confirmar demanda após upload
-                                logger.info("🔍 Procurando botão CONFIRMAR DEMANDA...")
-                                confirm_success = await self.confirmar_demanda(iframe)
-                                
-                                if confirm_success:
-                                    logger.info("✅ Upload e confirmação concluídos com sucesso")
-                                else:
-                                    logger.warning("⚠️ Upload realizado mas confirmação pode ter falhado")
-                                
-                                return True
+                                try:
+                                    # Aguardar o modal desaparecer (isso indica que o upload foi processado)
+                                    await modal.wait_for(state="hidden", timeout=30000)
+                                    logger.info("✅ Modal desapareceu - upload foi processado!")
+                                    
+                                    # Aguardar um pouco para estabilizar
+                                    await self.portal.page.wait_for_timeout(2000)
+                                    
+                                    # Verificar se apareceu erro após o modal fechar
+                                    if await self._verificar_erro_servidor(iframe):
+                                        logger.error("❌ Erro detectado após modal desaparecer")
+                                        return False
+                                    
+                                    # Procurar mensagem de sucesso no iframe
+                                    success_msg = iframe.locator(
+                                        'text=/arquivo.*enviado|upload.*realizado|processado.*sucesso|demanda.*criada/i, '
+                                        '.rs-notification-item-success, '
+                                        '.rs-message-success, '
+                                        '.alert-success'
+                                    ).first
+                                    
+                                    if await success_msg.is_visible(timeout=3000):
+                                        logger.info("✅ Mensagem de sucesso encontrada após upload!")
+                                        
+                                    # Tentar clicar em CONFIRMAR DEMANDA se existir
+                                    await self.confirmar_demanda(iframe)
+                                    
+                                    logger.info("✅ Upload concluído com sucesso!")
+                                    return True
+                                    
+                                except TimeoutError:
+                                    logger.error("⏱️ Timeout: Modal não desapareceu após 30 segundos")
+                                    
+                                    # Verificar se há erro visível
+                                    if await self._verificar_erro_servidor(iframe):
+                                        logger.error("❌ Erro detectado no modal")
+                                        return False
+                                    
+                                    # Tentar fechar o modal manualmente se ainda estiver aberto
+                                    close_btn = modal.locator('.rs-modal-header-close, .rs-btn-close').first
+                                    if await close_btn.is_visible(timeout=1000):
+                                        logger.info("🔄 Tentando fechar modal manualmente...")
+                                        await close_btn.click()
+                                        await self.portal.page.wait_for_timeout(2000)
+                                    
+                                    return False
                             else:
                                 # Se não encontrar input file, tentar clicar no dropzone
                                 logger.info("⚠️ Input file não encontrado, tentando dropzone...")
@@ -460,9 +495,10 @@ class ConsumirAgendasSendas:
                                 ]
                                 
                                 for dz_selector in dropzone_selectors:
-                                    dropzone = self.portal.page.locator(dz_selector)
+                                    # CORREÇÃO: Procurar dropzone no IFRAME, não no page!
+                                    dropzone = iframe.locator(dz_selector)
                                     if await dropzone.is_visible(timeout=1000):
-                                        logger.info(f"📦 Dropzone encontrado: {dz_selector}")
+                                        logger.info(f"📦 Dropzone encontrado NO IFRAME: {dz_selector}")
                                         
                                         # Verificar se arquivo existe e é acessível
                                         if not os.path.exists(arquivo_planilha):
@@ -477,21 +513,136 @@ class ConsumirAgendasSendas:
                                         logger.info(f"📁 Tamanho: {os.path.getsize(arquivo_planilha)} bytes")
                                         
                                         try:
-                                            # Preparar para file chooser com timeout
-                                            logger.info("⏳ Aguardando file chooser...")
-                                            async with self.portal.page.expect_file_chooser(timeout=10000) as fc_info:
-                                                await dropzone.click()
-                                                logger.info("🖱️ Dropzone clicado")
+                                            # Aguardar um pouco para garantir que a página está pronta
+                                            logger.info("⏳ Aguardando página estabilizar...")
+                                            await self.portal.page.wait_for_timeout(2000)
                                             
-                                            logger.info("📂 File chooser apareceu")
-                                            file_chooser = await fc_info.value
+                                            # PRIMEIRO: Procurar o input específico do modal baseado na gravação
+                                            logger.info("🔍 Procurando input file específico do modal...")
+                                            
+                                            # Seletores baseados na gravação do Chrome
+                                            input_selectors = [
+                                                'div.rs-modal-wrapper input[type="file"]',
+                                                '#file-uploader input[type="file"]',
+                                                'input[name="arquivoExcel"]',
+                                                'input[type="file"]'
+                                            ]
+                                            
+                                            for selector in input_selectors:
+                                                try:
+                                                    # CORREÇÃO CRÍTICA: Procurar input no IFRAME, não no page!
+                                                    file_input = iframe.locator(selector).first
+                                                    if await file_input.count() > 0:
+                                                        logger.info(f"✅ Input encontrado NO IFRAME com seletor: {selector}")
+                                                        
+                                                        # REMOVIDO page.evaluate - set_input_files funciona com input invisível
+                                                        # Fazer upload direto
+                                                        await file_input.set_input_files(arquivo_planilha)
+                                                        logger.info(f"📤 Arquivo enviado via {selector}, aguardando resposta...")
+                                                        
+                                                        # Aguardar processamento
+                                                        await self.portal.page.wait_for_timeout(5000)
+                                                        
+                                                        # Verificar se deu erro ANTES de considerar sucesso (passando iframe!)
+                                                        if await self._verificar_erro_servidor(iframe):
+                                                            logger.error(f"❌ Internal Server Error detectado após envio via {selector}")
+                                                            logger.error("❌ O upload FALHOU - servidor retornou erro")
+                                                            # Não continuar tentando outros seletores
+                                                            # Retornar falha imediatamente
+                                                            return False
+                                                        
+                                                        # Sucesso! (só chega aqui se NÃO teve erro)
+                                                        logger.info("✅ Upload processado sem erros pelo servidor")
+                                                        await self.confirmar_demanda(iframe)
+                                                        return True
+                                                        
+                                                except Exception as e:
+                                                    logger.debug(f"Seletor {selector} não funcionou: {e}")
+                                                    continue
+                                            
+                                            # Se nenhum seletor específico funcionou, tentar método genérico
+                                            logger.info("🔍 Tentando método genérico de busca de inputs NO IFRAME...")
+                                            file_inputs = await iframe.locator('input[type="file"]').all()
+                                            
+                                            if file_inputs:
+                                                logger.info(f"📁 Encontrados {len(file_inputs)} inputs de arquivo")
+                                                
+                                                for i, file_input in enumerate(file_inputs):
+                                                    try:
+                                                        # REMOVIDO page.evaluate - set_input_files funciona com input invisível
+                                                        # Fazer upload direto no input
+                                                        await file_input.set_input_files(arquivo_planilha)
+                                                        logger.info(f"📤 Arquivo enviado diretamente no input {i}, aguardando resposta...")
+                                                        
+                                                        # Aguardar processamento
+                                                        await self.portal.page.wait_for_timeout(5000)
+                                                        
+                                                        # Verificar se deu erro ANTES de considerar sucesso (passando iframe!)
+                                                        if await self._verificar_erro_servidor(iframe):
+                                                            logger.error(f"❌ Internal Server Error detectado no input {i}")
+                                                            logger.error("❌ O upload FALHOU - servidor retornou erro")
+                                                            # Parar de tentar outros inputs
+                                                            # Retornar falha imediatamente
+                                                            return False
+                                                        
+                                                        # Se chegou aqui, upload foi bem-sucedido
+                                                        logger.info("✅ Upload processado sem erros pelo servidor")
+                                                        await self.confirmar_demanda(iframe)
+                                                        return True
+                                                        
+                                                    except Exception as e:
+                                                        logger.warning(f"⚠️ Input {i} não funcionou: {e}")
+                                                        continue
+                                            
+                                            # SE NENHUM INPUT FUNCIONOU, tentar método antigo com file chooser
+                                            logger.info("⚠️ Upload direto não funcionou, tentando com file chooser...")
+                                            
+                                            try:
+                                                async with self.portal.page.expect_file_chooser(timeout=5000) as fc_info:
+                                                    await dropzone.click()
+                                                    logger.info("🖱️ Dropzone clicado")
+                                                
+                                                logger.info("📂 File chooser apareceu")
+                                                file_chooser = await fc_info.value
+                                            except TimeoutError:
+                                                logger.error("⏱️ Timeout: File chooser não apareceu após clicar no dropzone")
+                                                logger.error("💡 Isso indica que o dropzone não está abrindo o seletor de arquivo")
+                                                logger.error("💡 Possível causa: Sessão expirada ou problema de autenticação")
+                                                return False
                                             
                                             logger.info("📤 Setando arquivo no file chooser...")
+                                            
+                                            # Adicionar um pequeno delay antes de setar o arquivo
+                                            await self.portal.page.wait_for_timeout(1000)
+                                            
+                                            # Verificar se o contexto ainda está correto
+                                            current_url = self.portal.page.url
+                                            logger.info(f"📍 URL atual antes do upload: {current_url}")
+                                            
                                             await file_chooser.set_files(arquivo_planilha)
                                             logger.info(f"✅ Arquivo selecionado via dropzone: {arquivo_planilha}")
                                             
                                             # Aguardar processamento
                                             await self.portal.page.wait_for_timeout(5000)
+                                            
+                                            # Verificar se apareceu erro no servidor (passando iframe!)
+                                            if await self._verificar_erro_servidor(iframe):
+                                                logger.error("❌ ERRO DO SERVIDOR DETECTADO após file chooser")
+                                                logger.error("❌ O portal Sendas retornou Internal Server Error")
+                                                logger.error("💡 Possíveis causas:")
+                                                logger.error("   1. Sessão expirada - tente fazer login novamente")
+                                                logger.error("   2. Formato de dados incompatível")
+                                                logger.error("   3. Problema temporário no servidor Sendas")
+                                                
+                                                # Capturar screenshot para debug
+                                                try:
+                                                    screenshot_path = f"/tmp/sendas_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                                                    await self.portal.page.screenshot(path=screenshot_path)
+                                                    logger.info(f"📸 Screenshot salvo em: {screenshot_path}")
+                                                except:
+                                                    pass
+                                                
+                                                return False
                                             
                                             # Confirmar demanda após upload
                                             logger.info("🔍 Procurando botão CONFIRMAR DEMANDA...")
@@ -506,13 +657,13 @@ class ConsumirAgendasSendas:
                                             
                                         except TimeoutError as te:
                                             logger.error(f"⏱️ Timeout esperando file chooser: {te}")
-                                            # Tentar método alternativo - input direto
-                                            logger.info("🔄 Tentando método alternativo...")
+                                            # Tentar método alternativo - input direto NO IFRAME
+                                            logger.info("🔄 Tentando método alternativo no iframe...")
                                             try:
-                                                file_input = self.portal.page.locator('input[type="file"]')
+                                                file_input = iframe.locator('input[type="file"]')
                                                 if await file_input.count() > 0:
                                                     await file_input.set_input_files(arquivo_planilha)
-                                                    logger.info("✅ Arquivo enviado via input direto (fallback)")
+                                                    logger.info("✅ Arquivo enviado via input direto no iframe (fallback)")
                                                     await self.portal.page.wait_for_timeout(3000)
                                                     
                                                     # Confirmar demanda após upload
@@ -531,7 +682,6 @@ class ConsumirAgendasSendas:
                                         except Exception as e:
                                             logger.error(f"❌ Erro ao interagir com dropzone: {e}")
                                             logger.error(f"❌ Tipo do erro: {type(e).__name__}")
-                                            import traceback
                                             logger.error(f"❌ Stack trace:\n{traceback.format_exc()}")
                                             return False
                         else:
@@ -636,7 +786,6 @@ class ConsumirAgendasSendas:
                     except Exception as dropzone_error:
                         logger.error(f"❌ Erro ao enviar via dropzone: {dropzone_error}")
                         logger.error(f"❌ Tipo do erro: {type(dropzone_error).__name__}")
-                        import traceback
                         logger.error(f"❌ Stack trace:\n{traceback.format_exc()}")
                         return False
                     
@@ -664,9 +813,66 @@ class ConsumirAgendasSendas:
             return False
         except Exception as e:
             logger.error(f"❌ Erro durante upload: {e}")
-            import traceback
             traceback.print_exc()
             return False
+    
+    async def _verificar_erro_servidor(self, iframe=None) -> bool:
+        """
+        Verifica se apareceu erro do servidor na página ou iframe
+        
+        Args:
+            iframe: Frame locator opcional. Se fornecido, prioriza busca no iframe
+        
+        Returns:
+            True se detectou erro, False caso contrário
+        """
+        # CORREÇÃO 2: Verificador de erro ciente do iframe
+        seletores = [
+            'text="Internal Server Error"',
+            'text="500"', 
+            'text=/Erro (no servidor|interno)/i',
+            '.alert-danger',
+            '.error-message',
+            '.rs-message-error',
+            '.rs-notification-item-error'
+        ]
+        
+        contexts = []
+        if iframe:
+            contexts.append(iframe)
+        contexts.append(self.portal.page)
+        
+        for ctx in contexts:
+            for s in seletores:
+                try:
+                    if await ctx.locator(s).is_visible(timeout=1000):
+                        context_name = "iframe" if ctx != self.portal.page else "page"
+                        logger.error(f"❌ ERRO DO SERVIDOR DETECTADO no {context_name}: {s}")
+                        logger.error(f"❌ Portal Sendas retornou erro ao processar o upload (contexto: {context_name})")
+                        
+                        # Capturar screenshot para debug
+                        try:
+                            screenshot_path = f"/tmp/sendas_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                            await self.portal.page.screenshot(path=screenshot_path, full_page=True)
+                            logger.info(f"📸 Screenshot do erro salvo em: {screenshot_path}")
+                            
+                            # Capturar URL atual para debug
+                            current_url = self.portal.page.url
+                            logger.info(f"📍 URL quando erro ocorreu: {current_url}")
+                            
+                            # Informação adicional sobre o contexto
+                            logger.error(f"💡 Erro encontrado no contexto: {context_name}")
+                            if context_name == "iframe":
+                                logger.error("💡 Isso confirma que o modal/erro está no iframe, não no page principal")
+                            
+                        except Exception as e:
+                            logger.debug(f"Erro ao capturar detalhes: {e}")
+                        
+                        return True
+                except:
+                    pass
+        
+        return False
     
     async def confirmar_demanda(self, iframe) -> bool:
         """
@@ -751,7 +957,8 @@ class ConsumirAgendasSendas:
                         text = await msg.text_content()
                         logger.info(f"✅ Mensagem de sucesso: {text}")
                         return
-                except:
+                except Exception as e:
+                    logger.debug(f"Erro ao verificar mensagem de sucesso: {e}")
                     continue
             
             # Verificar mensagens de erro
@@ -762,7 +969,8 @@ class ConsumirAgendasSendas:
                         text = await msg.text_content()
                         logger.warning(f"⚠️ Mensagem de erro: {text}")
                         return
-                except:
+                except Exception as e:
+                    logger.debug(f"Erro ao verificar mensagem de erro: {e}")
                     continue
                     
             logger.info("ℹ️ Nenhuma mensagem específica detectada após confirmação")
@@ -1008,8 +1216,6 @@ class ConsumirAgendasSendas:
         Returns:
             Caminho do arquivo baixado ou None se falhar
         """
-        import subprocess
-        import json
         
         try:
             # Caminho do script subprocess
@@ -1112,8 +1318,6 @@ class ConsumirAgendasSendas:
         Returns:
             True se upload bem-sucedido
         """
-        import subprocess
-        import json
         
         try:
             # Caminho do script subprocess
@@ -1175,7 +1379,6 @@ class ConsumirAgendasSendas:
         except Exception as e:
             logger.error(f"❌ Erro ao executar subprocess: {e}")
             logger.error(f"❌ Tipo do erro: {type(e).__name__}")
-            import traceback
             logger.error(f"❌ Stack trace: {traceback.format_exc()}")
             return False
     

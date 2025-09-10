@@ -22,8 +22,7 @@ from app.estoque.models import MovimentacaoEstoque
 from app.producao.models import ProgramacaoProducao
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
-    buscar_rota_por_uf,
-    buscar_sub_rota_por_uf_cidade,
+    buscar_rota_por_uf
 )
 from app.utils.lote_utils import gerar_lote_id
 
@@ -1240,10 +1239,10 @@ def processar_agendamento_sendas():
             arquivo_planilha = consumidor.baixar_planilha_modelo()
             
             if not arquivo_planilha:
-                logger.error("❌ Erro ao baixar planilha do portal")
+                logger.error("❌ Erro ao baixar planilha do portal - NÃO há fallback")
                 return jsonify({
                     'success': False,
-                    'error': 'Não foi possível baixar a planilha do portal Sendas. Verifique as credenciais e conexão.'
+                    'error': 'Não foi possível baixar a planilha do portal Sendas. Verifique as credenciais, conexão e logs do servidor.'
                 }), 500
                 
         except ValueError as ve:

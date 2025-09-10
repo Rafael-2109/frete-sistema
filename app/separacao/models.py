@@ -1,6 +1,6 @@
 from app import db  # ou de onde você estiver importando seu `db`
 from datetime import datetime
-from sqlalchemy import text
+from sqlalchemy import text, event
 from sqlalchemy.ext.hybrid import hybrid_property
 
 # models.py
@@ -191,3 +191,195 @@ class Separacao(db.Model):
 
     def __repr__(self):
         return f'<Separacao #{self.id} - {self.num_pedido} - Lote: {self.separacao_lote_id} - Tipo: {self.tipo_envio}>'
+
+
+# ============================================================================
+# EVENT LISTENERS PARA SINCRONIZAÇÃO AUTOMÁTICA DE STATUS
+# ============================================================================
+
+@event.listens_for(Separacao, 'before_insert')
+@event.listens_for(Separacao, 'before_update')
+def atualizar_status_automatico(mapper, connection, target):
+    """
+    Atualiza automaticamente o campo status baseado nos outros campos
+    antes de salvar no banco de dados.
+    
+    REGRAS DE PRIORIDADE (ordem importa):
+    1. PREVISAO - Status manual, não sobrescrever
+    2. NF no CD - Flag nf_cd é True
+    3. FATURADO - Tem NF (sincronizado_nf=True ou numero_nf preenchido)
+    4. EMBARCADO - Tem data_embarque
+    5. COTADO - Tem cotacao_id
+    6. ABERTO - Estado padrão
+    
+    REVERSÕES AUTOMÁTICAS:
+    - Se data_embarque for removida: volta de EMBARCADO para COTADO ou ABERTO
+    - Se cotacao_id for removida: volta de COTADO para ABERTO
+    - Se sincronizado_nf for False e numero_nf vazia: volta de FATURADO
+    """
+    
+    # REGRA 1: Nunca sobrescrever status PREVISAO (é manual)
+    if target.status == 'PREVISAO':
+        return
+    
+    # Calcular o status correto baseado nos campos
+    status_anterior = target.status if hasattr(target, '_sa_instance_state') and target._sa_instance_state.key else None
+    
+    # REGRA 2: NF no CD tem prioridade máxima
+    if getattr(target, 'nf_cd', False):
+        target.status = 'NF no CD'
+    
+    # REGRA 3: FATURADO - tem NF
+    elif target.sincronizado_nf or (target.numero_nf and str(target.numero_nf).strip()):
+        target.status = 'FATURADO'
+    
+    # REGRA 4: EMBARCADO - tem data de embarque
+    elif target.data_embarque:
+        target.status = 'EMBARCADO'
+    
+    # REGRA 5: COTADO - tem cotação
+    elif target.cotacao_id:
+        target.status = 'COTADO'
+    
+    # REGRA 6: ABERTO - estado padrão
+    else:
+        target.status = 'ABERTO'
+    
+    # Log de mudança (apenas em desenvolvimento)
+    if status_anterior and status_anterior != target.status:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"[STATUS_SYNC] Separação {target.id}: {status_anterior} → {target.status}")
+
+
+@event.listens_for(Separacao, 'after_update')
+def log_reversao_status(mapper, connection, target):
+    """
+    Registra reversões de status para auditoria e debugging.
+    Útil para identificar quando pedidos voltam de um status para outro.
+    """
+    # Verificar se houve mudança de status
+    if not hasattr(target, '_sa_instance_state'):
+        return
+    
+    history = db.inspect(target).attrs.status.history
+    if history.has_changes():
+        status_anterior = history.deleted[0] if history.deleted else None
+        status_novo = target.status
+        
+        # Detectar reversões importantes
+        reversoes = {
+            ('EMBARCADO', 'COTADO'): "Removido do embarque",
+            ('EMBARCADO', 'ABERTO'): "Removido do embarque (sem cotação)",
+            ('COTADO', 'ABERTO'): "Cotação removida",
+            ('FATURADO', 'EMBARCADO'): "NF cancelada (mantém embarque)",
+            ('FATURADO', 'COTADO'): "NF cancelada (mantém cotação)",
+            ('FATURADO', 'ABERTO'): "NF cancelada (sem vínculos)",
+            ('NF no CD', 'FATURADO'): "NF saiu do CD"
+        }
+        
+        if (status_anterior, status_novo) in reversoes:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[REVERSÃO] Separação {target.id}: {reversoes[(status_anterior, status_novo)]}")
+
+
+# ============================================================================
+# MÉTODOS AUXILIARES PARA REVERSÃO MANUAL
+# ============================================================================
+
+def remover_do_embarque(separacao_lote_id, num_pedido=None):
+    """
+    Remove separação do embarque, zerando data_embarque.
+    O status será recalculado automaticamente pelo event listener.
+    """
+    from sqlalchemy import text
+    
+    if num_pedido:
+        sql = text("""
+            UPDATE separacao 
+            SET data_embarque = NULL
+            WHERE separacao_lote_id = :lote_id
+            AND num_pedido = :num_pedido
+        """)
+        db.session.execute(sql, {
+            'lote_id': separacao_lote_id,
+            'num_pedido': num_pedido
+        })
+    else:
+        sql = text("""
+            UPDATE separacao 
+            SET data_embarque = NULL
+            WHERE separacao_lote_id = :lote_id
+        """)
+        db.session.execute(sql, {
+            'lote_id': separacao_lote_id
+        })
+    
+    db.session.commit()
+
+
+def remover_cotacao(separacao_lote_id, num_pedido=None):
+    """
+    Remove cotação da separação, zerando cotacao_id.
+    O status será recalculado automaticamente pelo event listener.
+    """
+    from sqlalchemy import text
+    
+    if num_pedido:
+        sql = text("""
+            UPDATE separacao 
+            SET cotacao_id = NULL
+            WHERE separacao_lote_id = :lote_id
+            AND num_pedido = :num_pedido
+        """)
+        db.session.execute(sql, {
+            'lote_id': separacao_lote_id,
+            'num_pedido': num_pedido
+        })
+    else:
+        sql = text("""
+            UPDATE separacao 
+            SET cotacao_id = NULL
+            WHERE separacao_lote_id = :lote_id
+        """)
+        db.session.execute(sql, {
+            'lote_id': separacao_lote_id
+        })
+    
+    db.session.commit()
+
+
+def cancelar_faturamento(separacao_lote_id, num_pedido=None):
+    """
+    Cancela o faturamento da separação, limpando campos de NF.
+    O status será recalculado automaticamente pelo event listener.
+    """
+    from sqlalchemy import text
+    
+    if num_pedido:
+        sql = text("""
+            UPDATE separacao 
+            SET sincronizado_nf = FALSE,
+                numero_nf = NULL,
+                data_sincronizacao = NULL
+            WHERE separacao_lote_id = :lote_id
+            AND num_pedido = :num_pedido
+        """)
+        db.session.execute(sql, {
+            'lote_id': separacao_lote_id,
+            'num_pedido': num_pedido
+        })
+    else:
+        sql = text("""
+            UPDATE separacao 
+            SET sincronizado_nf = FALSE,
+                numero_nf = NULL,
+                data_sincronizacao = NULL
+            WHERE separacao_lote_id = :lote_id
+        """)
+        db.session.execute(sql, {
+            'lote_id': separacao_lote_id
+        })
+    
+    db.session.commit()

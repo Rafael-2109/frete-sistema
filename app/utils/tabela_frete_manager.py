@@ -153,6 +153,8 @@ class TabelaFreteManager:
             'frete_minimo_valor': round(limpar_valor(row.get('VALOR')), 2),
             'frete_minimo_peso': round(limpar_valor(row.get('PESO')), 2),
             'percentual_gris': round(limpar_valor(row.get('GRIS')) * 100, 4),
+            'gris_minimo': round(limpar_valor(row.get('GRIS MINIMO', 0)), 2),
+            'adv_minimo': round(limpar_valor(row.get('ADV MINIMO', 0)), 2),
             'pedagio_por_100kg': round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2),
             'valor_tas': round(limpar_valor(row.get('TAS')), 2),
             'percentual_adv': round(limpar_valor(row.get('ADV')) * 100, 4),
@@ -161,8 +163,6 @@ class TabelaFreteManager:
             'valor_cte': round(limpar_valor(row.get('CTE')), 2),
             'icms_incluso': True if str(row.get('INC.', '')).strip().upper() == 'S' else False,
             # ===== NOVOS CAMPOS (opcionais no CSV) =====
-            'gris_minimo': round(limpar_valor(row.get('GRIS MINIMO', 0)), 2),
-            'adv_minimo': round(limpar_valor(row.get('ADV MINIMO', 0)), 2),
             'icms_proprio': round(limpar_valor(row.get('ICMS PROPRIO', 0)) * 100, 4) if row.get('ICMS PROPRIO') else None
         }
     

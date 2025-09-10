@@ -272,7 +272,6 @@ def analisar_ruptura_pedido_sem_cache(num_pedido):
             }), 404
         
         produtos_unicos = list(set([item.cod_produto for item in itens]))
-        logger.info(f"📦 Analisando {len(produtos_unicos)} produtos únicos (SEM CACHE)")
         
         # ===== EXPANDIR CÓDIGOS COM UNIFICAÇÃO =====
         produtos_expandidos = expandir_codigos_unificados(produtos_unicos)
@@ -282,7 +281,6 @@ def analisar_ruptura_pedido_sem_cache(num_pedido):
         for codigos in produtos_expandidos.values():
             todos_codigos.update(codigos)
         
-        logger.info(f"📊 Expandido para {len(todos_codigos)} códigos totais com unificação")
         
         # ===== EXECUTAR QUERY OTIMIZADA =====
         inicio_query = time.time()
@@ -346,7 +344,6 @@ def analisar_ruptura_pedido_sem_cache(num_pedido):
                 }
         
         tempo_query = (time.time() - inicio_query) * 1000
-        logger.info(f"⚡ Query executada em {tempo_query:.2f}ms")
         
         # ===== BUSCAR PRODUÇÕES FUTURAS (Query Simples) =====
         # IMPORTANTE: Buscar produções para TODOS os códigos expandidos, não apenas os originais

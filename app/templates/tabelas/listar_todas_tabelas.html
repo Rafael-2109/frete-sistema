@@ -91,7 +91,10 @@
           🚨 Apenas Tabelas Órfãs
         </label>
       </div>
-      <button class="btn btn-primary">Filtrar</button>
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+      <button type="submit" formaction="{{ url_for('tabelas.exportar_tabelas') }}" class="btn btn-success ms-2">
+        <i class="fas fa-file-excel"></i> Exportar Excel
+      </button>
     </div>
   </form>
 
@@ -414,35 +417,35 @@
           <td>{{ tabela.nome_tabela }}</td>
           <td>{{ tabela.tipo_carga }}</td>
           <td>{{ tabela.modalidade }}</td>
-          <td>R$ {{ "%.2f"|format(tabela.frete_minimo_valor or 0) }}</td>
-          <td>{{ "%.2f"|format(tabela.frete_minimo_peso or 0) }} kg</td>
-          <td>R$ {{ "%.4f"|format(tabela.valor_kg or 0) }}</td>
-          <td>{{ "%.2f"|format(tabela.percentual_valor or 0) }} %</td>
-          <td>{{ "%.2f"|format(tabela.percentual_gris or 0) }} %</td>
-          <td>{{ "%.2f"|format(tabela.percentual_adv or 0) }} %</td>
-          <td>{{ "%.2f"|format(tabela.percentual_rca or 0) }} %</td>
-          <td>R$ {{ "%.2f"|format(tabela.valor_despacho or 0) }}</td>
-          <td>R$ {{ "%.2f"|format(tabela.valor_cte or 0) }}</td>
-          <td>R$ {{ "%.2f"|format(tabela.valor_tas or 0) }}</td>
-          <td>R$ {{ "%.2f"|format(tabela.pedagio_por_100kg or 0) }}</td>
+          <td>{{ tabela.frete_minimo_valor | valor_br }}</td>
+          <td>{{ tabela.frete_minimo_peso | peso_br }}</td>
+          <td>{{ tabela.valor_kg | valor_br(4) }}</td>
+          <td>{{ tabela.percentual_valor | numero_br }} %</td>
+          <td>{{ tabela.percentual_gris | numero_br }} %</td>
+          <td>{{ tabela.percentual_adv | numero_br }} %</td>
+          <td>{{ tabela.percentual_rca | numero_br }} %</td>
+          <td>{{ tabela.valor_despacho | valor_br }}</td>
+          <td>{{ tabela.valor_cte | valor_br }}</td>
+          <td>{{ tabela.valor_tas | valor_br }}</td>
+          <td>{{ tabela.pedagio_por_100kg | valor_br }}</td>
           <td>{{ 'Sim' if tabela.icms_incluso else 'Não' }}</td>
           <td>
             {% if tabela.gris_minimo %}
-              R$ {{ "%.2f"|format(tabela.gris_minimo) }}
+              {{ tabela.gris_minimo | valor_br }}
             {% else %}
               -
             {% endif %}
           </td>
           <td>
             {% if tabela.adv_minimo %}
-              R$ {{ "%.2f"|format(tabela.adv_minimo) }}
+              {{ tabela.adv_minimo | valor_br }}
             {% else %}
               -
             {% endif %}
           </td>
           <td>
             {% if tabela.icms_proprio %}
-              {{ "%.2f"|format(tabela.icms_proprio) }}%
+              {{ tabela.icms_proprio | numero_br }}%
             {% else %}
               -
             {% endif %}

@@ -1,13 +1,10 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, MultipleFileField
-from wtforms import StringField, FloatField, DateField, SelectField, TextAreaField, BooleanField, IntegerField, SubmitField
+from wtforms import StringField, FloatField, DateField, SelectField, TextAreaField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
 from app.fretes.models import DespesaExtra
 from app.utils.valores_brasileiros import validar_valor_brasileiro
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from wtforms.fields.core import UnboundField
 
 class FreteForm(FlaskForm):
     """Formulário para registro de frete"""
@@ -135,13 +132,13 @@ class DespesaExtraCompletoForm(FlaskForm):
     
     # Documento (só aparece quando há fatura)
     tipo_documento = SelectField('Tipo do Documento',
-                               choices=[
-                                   ('CTE', 'CTe'),
-                                   ('NFS', 'Nota Fiscal de Serviço'),
-                                   ('RECIBO', 'Recibo'),
-                                   ('OUTROS', 'Outros')
-                               ],
-                               validators=[DataRequired()])
+        choices=[
+            ('CTE', 'CTe'),
+            ('NFS', 'Nota Fiscal de Serviço'),
+            ('RECIBO', 'Recibo'),
+            ('OUTROS', 'Outros')
+        ],
+        validators=[DataRequired()])
     
     numero_documento = StringField('Número do Documento', validators=[DataRequired(), Length(max=50)])
     
@@ -156,12 +153,12 @@ class DespesaExtraCompletoForm(FlaskForm):
 class AprovacaoFreteForm(FlaskForm):
     """Formulário para aprovação de frete"""
     status = SelectField('Status da Aprovação',
-                        choices=[
-                            ('PENDENTE', 'Pendente'),
-                            ('APROVADO', 'Aprovado'),
-                            ('REJEITADO', 'Rejeitado')
-                        ],
-                        validators=[DataRequired()])
+        choices=[
+            ('PENDENTE', 'Pendente'),
+            ('APROVADO', 'Aprovado'),
+            ('REJEITADO', 'Rejeitado')
+        ],
+        validators=[DataRequired()])
     
     observacoes_aprovacao = TextAreaField('Observações da Aprovação', validators=[DataRequired()])
     
@@ -170,12 +167,12 @@ class AprovacaoFreteForm(FlaskForm):
 class ContaCorrenteForm(FlaskForm):
     """Formulário para movimentações da conta corrente"""
     tipo_movimentacao = SelectField('Tipo de Movimentação',
-                                   choices=[
-                                       ('CREDITO', 'Crédito'),
-                                       ('DEBITO', 'Débito'),
-                                       ('COMPENSACAO', 'Compensação')
-                                   ],
-                                   validators=[DataRequired()])
+        choices=[
+            ('CREDITO', 'Crédito'),
+            ('DEBITO', 'Débito'),
+            ('COMPENSACAO', 'Compensação')
+        ],
+        validators=[DataRequired()])
     
     valor_diferenca = FloatField('Valor da Diferença', validators=[DataRequired()])
     descricao = StringField('Descrição', validators=[DataRequired(), Length(max=255)])
@@ -227,14 +224,14 @@ class CompensacaoContaCorrenteForm(FlaskForm):
 class RelatorioFretesForm(FlaskForm):
     """Formulário para geração de relatórios de fretes"""
     tipo_relatorio = SelectField('Tipo de Relatório',
-                                choices=[
-                                    ('FRETES_PERIODO', 'Fretes por Período'),
-                                    ('CONTA_CORRENTE', 'Conta Corrente por Transportadora'),
-                                    ('DESPESAS_EXTRAS', 'Despesas Extras'),
-                                    ('APROVACOES_PENDENTES', 'Aprovações Pendentes'),
-                                    ('FATURAS_CONFERIR', 'Faturas a Conferir')
-                                ],
-                                validators=[DataRequired()])
+        choices=[
+            ('FRETES_PERIODO', 'Fretes por Período'),
+            ('CONTA_CORRENTE', 'Conta Corrente por Transportadora'),
+            ('DESPESAS_EXTRAS', 'Despesas Extras'),
+            ('APROVACOES_PENDENTES', 'Aprovações Pendentes'),
+            ('FATURAS_CONFERIR', 'Faturas a Conferir')
+        ],
+        validators=[DataRequired()])
     
     data_inicio = DateField('Data Início', validators=[DataRequired()])
     data_fim = DateField('Data Fim', validators=[DataRequired()])

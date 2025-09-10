@@ -33,7 +33,9 @@ class TabelaFreteForm(FlaskForm):
     frete_minimo_valor = StringField('Frete Mínimo por Valor')
 
     percentual_gris = StringField('% GRIS')
+    gris_minimo = StringField('GRIS Mínimo (R$)')
     percentual_adv = StringField('% ADV')
+    adv_minimo = StringField('ADV Mínimo (R$)')
     percentual_rca = StringField('% RCA / Fluvial')
     pedagio_por_100kg = StringField('Pedágio por 100kg')
 
@@ -42,6 +44,7 @@ class TabelaFreteForm(FlaskForm):
     valor_tas = StringField('TAS (R$)')
 
     icms_incluso = BooleanField('ICMS incluso no valor')
+    icms_proprio = StringField('% ICMS Próprio')
 
     submit = SubmitField('Salvar')
     

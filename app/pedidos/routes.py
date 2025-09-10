@@ -17,8 +17,6 @@ from datetime import datetime
 from app.utils.tabela_frete_manager import TabelaFreteManager
 
 
-
-
 # routes.py
 pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
 
@@ -725,21 +723,26 @@ def excluir_pedido(lote_id):
     Permite exclusão apenas de pedidos com status "ABERTO".
     Limpa automaticamente vínculos órfãos com embarques cancelados.
     """
-    pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
+    # Busca primeira separação do lote para validações
+    primeira_separacao = Separacao.query.filter_by(separacao_lote_id=lote_id).first()
+    
+    if not primeira_separacao:
+        flash(f"Pedido com lote {lote_id} não encontrado.", "error")
+        return redirect(url_for('pedidos.lista_pedidos'))
     
     # ✅ VALIDAÇÃO: Só permite excluir pedidos com status ABERTO
-    if pedido.status_calculado != 'ABERTO':
-        flash(f"Não é possível excluir o pedido {pedido.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser excluídos. Status atual: {pedido.status_calculado}", "error")
+    if primeira_separacao.status_calculado != 'ABERTO':
+        flash(f"Não é possível excluir o pedido {primeira_separacao.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser excluídos. Status atual: {primeira_separacao.status_calculado}", "error")
         return redirect(url_for('pedidos.lista_pedidos'))
     
     try:
         # ✅ BACKUP de informações para log
-        num_pedido = pedido.num_pedido
-        lote_id = pedido.separacao_lote_id
+        num_pedido = primeira_separacao.num_pedido
+        lote_id_backup = primeira_separacao.separacao_lote_id
         
         # 🔧 NOVA FUNCIONALIDADE: Limpa vínculos órfãos com embarques cancelados
         vinculos_limpos = False
-        if pedido.cotacao_id or pedido.transportadora or pedido.nf or pedido.data_embarque:
+        if primeira_separacao.cotacao_id or primeira_separacao.numero_nf or primeira_separacao.data_embarque:
             from app.embarques.models import Embarque, EmbarqueItem
             
             # Busca se há embarque relacionado
@@ -752,9 +755,9 @@ def excluir_pedido(lote_id):
             # Se o embarque estiver cancelado, limpa os vínculos órfãos
             if embarque_relacionado and embarque_relacionado.status == 'cancelado':
                 print(f"[DEBUG] 🧹 Limpando vínculos órfãos com embarque cancelado #{embarque_relacionado.numero}")
-                if pedido.separacao_lote_id:
+                if lote_id:
                     Separacao.query.filter_by(
-                        separacao_lote_id=pedido.separacao_lote_id
+                        separacao_lote_id=lote_id
                     ).update({
                         'numero_nf': None,
                         'data_embarque': None,
@@ -767,7 +770,7 @@ def excluir_pedido(lote_id):
         # ✅ BUSCA E EXCLUI SEPARAÇÕES RELACIONADAS
         separacoes_excluidas = 0
         
-        # Primeiro busca por lote
+        # Busca por lote
         if lote_id:
             separacoes_relacionadas = Separacao.query.filter_by(
                 separacao_lote_id=lote_id
@@ -780,10 +783,10 @@ def excluir_pedido(lote_id):
         # Se não encontrou por lote, busca por chave composta
         if separacoes_excluidas == 0:
             separacoes_relacionadas = Separacao.query.filter_by(
-                num_pedido=pedido.num_pedido,
-                expedicao=pedido.expedicao,
-                agendamento=pedido.agendamento,
-                protocolo=pedido.protocolo
+                num_pedido=primeira_separacao.num_pedido,
+                expedicao=primeira_separacao.expedicao,
+                agendamento=primeira_separacao.agendamento,
+                protocolo=primeira_separacao.protocolo
             ).all()
             
             for separacao in separacoes_relacionadas:
@@ -793,23 +796,20 @@ def excluir_pedido(lote_id):
         # 🔧 NOVA FUNCIONALIDADE: Excluir itens de cotação relacionados
         from app.cotacao.models import CotacaoItem
         itens_cotacao_excluidos = 0
-        if pedido.separacao_lote_id:
-            itens_cotacao = CotacaoItem.query.filter_by(separacao_lote_id=pedido.separacao_lote_id).all()
+        if lote_id:
+            itens_cotacao = CotacaoItem.query.filter_by(separacao_lote_id=lote_id).all()
             for item_cotacao in itens_cotacao:
                 db.session.delete(item_cotacao)
                 itens_cotacao_excluidos += 1
         
         if itens_cotacao_excluidos > 0:
             print(f"[DEBUG] 🗑️ Removendo {itens_cotacao_excluidos} item(ns) de cotação relacionados")
-
-        # ✅ EXCLUI O PEDIDO
-        db.session.delete(pedido)
         
         # ✅ COMMIT das exclusões
         db.session.commit()
         
         # ✅ MENSAGEM DE SUCESSO
-        mensagem_base = f"Pedido {num_pedido} excluído com sucesso! {separacoes_excluidas} item(ns) de separação também foram removidos."
+        mensagem_base = f"Pedido {num_pedido} excluído com sucesso! {separacoes_excluidas} item(ns) de separação foram removidos."
         if itens_cotacao_excluidos > 0:
             mensagem_base += f" {itens_cotacao_excluidos} item(ns) de cotação também foram removidos."
         if vinculos_limpos:
@@ -819,7 +819,7 @@ def excluir_pedido(lote_id):
         
         # ✅ LOG da exclusão
         print(f"[DELETE] Pedido {num_pedido} excluído:")
-        print(f"  - Lote de separação: {lote_id}")
+        print(f"  - Lote de separação: {lote_id_backup}")
         print(f"  - Separações removidas: {separacoes_excluidas}")
         
     except Exception as e:

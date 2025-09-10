@@ -712,9 +712,40 @@ def cancelar_embarque(id):
                     item.nota_fiscal = None  # Remove a NF
                     nfs_removidas += 1
             
-            # 2. Cancela todos os itens do embarque
+            # 2. Cancela todos os itens do embarque e reverte campos nas Separações
+            from app.separacao.models import Separacao
+            lotes_revertidos = set()
+            
             for item in embarque.itens:
                 item.status = 'cancelado'
+                
+                # ✅ REVERTER campos nas Separações quando cancela embarque completo
+                if item.separacao_lote_id and item.separacao_lote_id not in lotes_revertidos:
+                    lotes_revertidos.add(item.separacao_lote_id)
+                    
+                    # Atualizar TODAS as linhas do lote
+                    separacoes = Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id
+                    ).all()
+                    
+                    for sep in separacoes:
+                        mudancas = []
+                        
+                        # Limpar data_embarque se corresponder
+                        if embarque.data_embarque and sep.data_embarque == embarque.data_embarque:
+                            sep.data_embarque = None
+                            mudancas.append('data_embarque')
+                        
+                        # Limpar cotacao_id se corresponder
+                        if embarque.cotacao_id and sep.cotacao_id == embarque.cotacao_id:
+                            sep.cotacao_id = None
+                            mudancas.append('cotacao_id')
+                        
+                        if mudancas:
+                            print(f"[CANCEL] Lote {item.separacao_lote_id}, produto {sep.cod_produto}: {', '.join(mudancas)} limpos")
+            
+            if lotes_revertidos:
+                print(f"[CANCEL] Total de {len(lotes_revertidos)} lotes revertidos do embarque #{embarque.numero}")
             
             # 3. ✅ USAR SINCRONIZAÇÃO COMPLETA: Sincroniza as mudanças com os pedidos
             print(f"[CANCEL] 🔄 Iniciando sincronização para embarque #{embarque.numero}")
@@ -1545,6 +1576,54 @@ def cancelar_item_embarque(item_id):
     try:
         # Cancelar o item (exclusão lógica)
         item.status = 'cancelado'
+        
+        # ✅ REVERSÃO SIMPLIFICADA: Como 1 lote = 1 NF = 1 unidade, podemos reverter com segurança
+        if item.separacao_lote_id:
+            
+            # Buscar TODAS as separações do lote (todos os produtos)
+            # Não precisa filtrar por num_pedido pois 1 lote = 1 pedido
+            separacoes = Separacao.query.filter_by(
+                separacao_lote_id=item.separacao_lote_id
+            ).all()
+            
+            campos_revertidos = []
+            
+            # Para cada linha do lote (cada produto)
+            for sep in separacoes:
+                mudancas = []
+                
+                # 1. REVERTER DATA_EMBARQUE se corresponder a este embarque
+                if embarque.data_embarque and sep.data_embarque == embarque.data_embarque:
+                    sep.data_embarque = None
+                    mudancas.append('data_embarque')
+                
+                # 2. REVERTER COTACAO_ID se corresponder a cotação deste embarque
+                # Como o lote inteiro sai do embarque, podemos limpar a cotação
+                if embarque.cotacao_id and sep.cotacao_id == embarque.cotacao_id:
+                    # Verificar se não há OUTRO embarque ativo com este mesmo lote
+                    outro_embarque = EmbarqueItem.query.join(Embarque).filter(
+                        EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
+                        EmbarqueItem.status == 'ativo',
+                        Embarque.status == 'ativo',
+                        Embarque.id != embarque.id
+                    ).first()
+                    
+                    if not outro_embarque:
+                        # Seguro limpar - este lote não está em outro embarque
+                        sep.cotacao_id = None
+                        mudancas.append('cotacao_id')
+                    else:
+                        print(f"[AVISO] Lote {item.separacao_lote_id} está em outro embarque, mantendo cotacao_id")
+                
+                if mudancas:
+                    campos_revertidos.extend(mudancas)
+                    print(f"[REVERSÃO] Separação {sep.id} (produto {sep.cod_produto}): {', '.join(mudancas)} limpos")
+            
+            if campos_revertidos:
+                print(f"[RESUMO] Lote {item.separacao_lote_id} removido do embarque #{embarque.numero}")
+                print(f"         Total de reversões: {len(set(campos_revertidos))} campos únicos")
+                # O status será recalculado automaticamente pelo event listener para todas as linhas
+        
         db.session.commit()
         
         # ✅ USAR NOVA SINCRONIZAÇÃO COMPLETA
@@ -1718,3 +1797,108 @@ def alterar_cotacao(embarque_id):
     except Exception as e:
         flash(f'❌ Erro ao iniciar alteração de cotação: {str(e)}', 'danger')
         return redirect(url_for('embarques.listar_embarques'))
+
+@embarques_bp.route('/admin/desvincular-pedido/<string:lote_id>', methods=['POST'])
+@login_required
+def desvincular_pedido(lote_id):
+    """
+    Desvincula um pedido de embarques cancelados.
+    Remove vínculos órfãos (cotação, NF, data embarque) de pedidos que estão
+    vinculados a embarques cancelados, permitindo que voltem ao status ABERTO.
+    
+    Apenas para administradores.
+    """
+    # Verifica se o usuário é administrador
+    if not hasattr(current_user, 'perfil') or current_user.perfil != 'administrador':
+        flash("Acesso negado. Esta função é restrita a administradores.", "error")
+        return redirect(url_for('pedidos.lista_pedidos'))
+    
+    try:
+        # Busca separações do lote
+        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+        
+        if not separacoes:
+            flash(f"Pedido com lote {lote_id} não encontrado.", "error")
+            return redirect(url_for('pedidos.lista_pedidos'))
+        
+        primeira_separacao = separacoes[0]
+        num_pedido = primeira_separacao.num_pedido
+        
+        # Verifica se há embarque relacionado
+        embarque_relacionado = None
+        embarque_cancelado = False
+        
+        if lote_id:
+            item_embarque = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id).first()
+            if item_embarque:
+                embarque_relacionado = Embarque.query.get(item_embarque.embarque_id)
+                if embarque_relacionado:
+                    embarque_cancelado = embarque_relacionado.status == 'cancelado'
+        
+        # Se não há embarque ou o embarque não está cancelado, verifica se pode desvincular mesmo assim
+        if not embarque_cancelado:
+            # Permite desvinculação se o pedido tem vínculos mas está em status que permite
+            status_atual = primeira_separacao.status_calculado
+            if status_atual not in ['ABERTO', 'COTADO', 'EMBARCADO']:
+                flash(f"Pedido {num_pedido} não pode ser desvinculado. Status: {status_atual}", "warning")
+                return redirect(url_for('pedidos.lista_pedidos'))
+        
+        # Realiza a desvinculação
+        vinculos_removidos = []
+        
+        # Remove vínculos de todas as separações do lote
+        update_data = {}
+        
+        if primeira_separacao.cotacao_id:
+            update_data['cotacao_id'] = None
+            vinculos_removidos.append("cotação")
+            
+        if primeira_separacao.numero_nf:
+            update_data['numero_nf'] = None
+            update_data['sincronizado_nf'] = False
+            vinculos_removidos.append("nota fiscal")
+            
+        if primeira_separacao.data_embarque:
+            update_data['data_embarque'] = None
+            vinculos_removidos.append("data de embarque")
+            
+        if primeira_separacao.nf_cd:
+            update_data['nf_cd'] = False
+            vinculos_removidos.append("flag NF no CD")
+        
+        # Atualiza status para ABERTO
+        update_data['status'] = 'ABERTO'
+        
+        if update_data:
+            Separacao.query.filter_by(
+                separacao_lote_id=lote_id
+            ).update(update_data)
+            
+            # Remove item de embarque se existir e o embarque estiver cancelado
+            if embarque_cancelado and item_embarque:
+                db.session.delete(item_embarque)
+                vinculos_removidos.append(f"item do embarque #{embarque_relacionado.numero}")
+            
+            db.session.commit()
+            
+            # Mensagem de sucesso
+            if vinculos_removidos:
+                vinculos_texto = ", ".join(vinculos_removidos)
+                flash(f"✅ Pedido {num_pedido} desvinculado com sucesso! Removidos: {vinculos_texto}", "success")
+            else:
+                flash(f"✅ Pedido {num_pedido} já estava sem vínculos órfãos.", "info")
+                
+            # Log da operação
+            print(f"[DESVINCULAR] Pedido {num_pedido}:")
+            print(f"  - Lote: {lote_id}")
+            print(f"  - Embarque cancelado: {'Sim' if embarque_cancelado else 'Não'}")
+            print(f"  - Vínculos removidos: {vinculos_removidos}")
+        else:
+            flash(f"Pedido {num_pedido} não possui vínculos para remover.", "info")
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao desvincular pedido: {str(e)}", "error")
+        print(f"[ERRO DESVINCULAR] {str(e)}")
+    
+    return redirect(url_for('pedidos.lista_pedidos'))

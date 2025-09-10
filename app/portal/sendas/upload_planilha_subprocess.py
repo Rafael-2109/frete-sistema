@@ -8,12 +8,13 @@ import sys
 import os
 import asyncio
 import json
+import traceback
+import logging
 
 # Adicionar o diretório atual ao path para garantir imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from consumir_agendas import ConsumirAgendasSendas
-import logging
 
 # Configurar logging
 logging.basicConfig(
@@ -50,19 +51,57 @@ async def fazer_upload_async(arquivo_planilha: str) -> dict:
         
         consumidor = ConsumirAgendasSendas()
         
-        # Executar upload
-        resultado = await consumidor.run_upload_planilha(arquivo_planilha)
+        # Executar upload com mais detalhes de erro
+        logger.info("🌐 Iniciando processo de upload...")
         
-        return {
-            'success': resultado,
-            'error': None if resultado else 'Upload falhou no portal Sendas'
-        }
+        try:
+            resultado = await consumidor.run_upload_planilha(arquivo_planilha)
+            
+            if resultado:
+                logger.info("✅ Upload concluído com sucesso no portal")
+                return {
+                    'success': True,
+                    'error': None
+                }
+            else:
+                # Tentar capturar mais detalhes do erro
+                error_detail = 'Upload falhou no portal Sendas'
+                
+                # Verificar se há screenshots de erro
+                import glob
+                screenshots = glob.glob('/tmp/sendas_error_*.png')
+                if screenshots:
+                    latest_screenshot = sorted(screenshots)[-1]
+                    error_detail += f' - Screenshot: {latest_screenshot}'
+                    logger.error(f"📸 Screenshot de erro disponível: {latest_screenshot}")
+                
+                logger.error(f"❌ {error_detail}")
+                
+                return {
+                    'success': False,
+                    'error': error_detail
+                }
+                
+        except TimeoutError as te:
+            error_msg = f"Timeout durante upload: {str(te)}"
+            logger.error(f"⏱️ {error_msg}")
+            return {
+                'success': False,
+                'error': error_msg
+            }
+        except Exception as upload_err:
+            error_msg = f"Erro específico no upload: {str(upload_err)}"
+            logger.error(f"❌ {error_msg}")
+            logger.error(f"❌ Tipo: {type(upload_err).__name__}")
+            return {
+                'success': False,
+                'error': error_msg
+            }
         
     except Exception as e:
         error_msg = f"Erro no upload: {str(e)}"
         logger.error(f"❌ {error_msg}")
         logger.error(f"❌ Tipo do erro: {type(e).__name__}")
-        import traceback
         logger.error(f"❌ Stack trace:\n{traceback.format_exc()}")
         return {
             'success': False,

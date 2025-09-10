@@ -21,26 +21,32 @@ def cadastrar_transportadora():
         # Mantém o CNPJ como digitado (sem limpeza)
         cnpj_digitado = form.cnpj.data.strip()
         
-        nova = Transportadora(
-            cnpj=cnpj_digitado,
-            razao_social=form.razao_social.data,
-            cidade=form.cidade.data,
-            uf=form.uf.data.upper(),
-            optante=form.optante.data == 'True',
-            condicao_pgto=form.condicao_pgto.data,
-            freteiro=form.freteiro.data == 'True'
-        )
-        db.session.add(nova)
-        try:
-            db.session.commit()
-            flash('Transportadora cadastrada com sucesso!', 'success')
-            return redirect(url_for('transportadoras.cadastrar_transportadora'))
-        except IntegrityError:
-            db.session.rollback()
-            flash('Erro ao cadastrar transportadora. CNPJ já existe.', 'danger')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Erro ao cadastrar transportadora: {str(e)}', 'danger')
+        # Verifica se o CNPJ já existe ANTES de tentar criar
+        transportadora_existente = Transportadora.query.filter_by(cnpj=cnpj_digitado).first()
+        if transportadora_existente:
+            flash(f'ERRO: CNPJ {cnpj_digitado} já está cadastrado para a transportadora "{transportadora_existente.razao_social}". Não é permitido cadastrar duas transportadoras com o mesmo CNPJ.', 'danger')
+            # Não processa o cadastro, apenas retorna o formulário com o erro
+        else:
+            nova = Transportadora(
+                cnpj=cnpj_digitado,
+                razao_social=form.razao_social.data,
+                cidade=form.cidade.data,
+                uf=form.uf.data.upper(),
+                optante=form.optante.data == 'True',
+                condicao_pgto=form.condicao_pgto.data,
+                freteiro=form.freteiro.data == 'True'
+            )
+            db.session.add(nova)
+            try:
+                db.session.commit()
+                flash('Transportadora cadastrada com sucesso!', 'success')
+                return redirect(url_for('transportadoras.cadastrar_transportadora'))
+            except IntegrityError:
+                db.session.rollback()
+                flash(f'ERRO: CNPJ {cnpj_digitado} já existe no banco de dados. Verifique se não está tentando cadastrar uma transportadora duplicada.', 'danger')
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Erro ao cadastrar transportadora: {str(e)}', 'danger')
     
     transportadoras = Transportadora.query.order_by(Transportadora.razao_social.asc()).all()
     return render_template('transportadoras/transportadoras.html', 
@@ -143,7 +149,7 @@ def editar_transportadora_ajax(id):
         if cnpj_existente:
             return jsonify({
                 'success': False, 
-                'message': f'CNPJ já cadastrado para a transportadora: {cnpj_existente.razao_social}'
+                'message': f'ERRO: CNPJ {cnpj_recebido} já está cadastrado para a transportadora "{cnpj_existente.razao_social}". Não é permitido ter duas transportadoras com o mesmo CNPJ. Por favor, verifique o CNPJ informado.'
             })
         
         # Atualiza os dados

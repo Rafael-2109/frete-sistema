@@ -8,12 +8,13 @@ import sys
 import os
 import asyncio
 import json
+import traceback
+import logging
 
 # Adicionar o diretório atual ao path para garantir imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from consumir_agendas import ConsumirAgendasSendas
-import logging
 
 # Configurar logging
 logging.basicConfig(
@@ -30,34 +31,66 @@ async def baixar_planilha_async() -> dict:
     try:
         # Forçar variável de ambiente para garantir headless em produção
         # Este script roda em subprocess separado
-        if '/opt/render' in os.getcwd():
+        is_render = os.getenv('RENDER') is not None
+        is_render_path = '/opt/render' in os.getcwd()
+        
+        if is_render or is_render_path:
             os.environ['IS_PRODUCTION'] = 'true'
-            logger.info("🚀 Detectado ambiente Render - Forçando IS_PRODUCTION=true")
+            logger.info(f"🚀 Ambiente PRODUÇÃO detectado - RENDER={is_render}, PATH={is_render_path}")
+            logger.info(f"📁 CWD: {os.getcwd()}")
+        else:
+            logger.info(f"💻 Ambiente DESENVOLVIMENTO - CWD: {os.getcwd()}")
+        
+        # Verificar credenciais antes de criar consumidor
+        usuario = os.getenv('SENDAS_USUARIO')
+        senha = os.getenv('SENDAS_SENHA')
+        logger.info(f"🔐 Credenciais: usuário={'CONFIGURADO' if usuario else 'NÃO CONFIGURADO'}, senha={'CONFIGURADA' if senha else 'NÃO CONFIGURADA'}")
+        
+        if not usuario or not senha:
+            return {
+                'success': False,
+                'arquivo': None,
+                'error': 'Credenciais SENDAS_USUARIO e SENDAS_SENHA não configuradas'
+            }
         
         consumidor = ConsumirAgendasSendas()
+        logger.info("✅ ConsumirAgendasSendas criado com sucesso")
         
         # Executar download
+        logger.info("📥 Iniciando download da planilha...")
         arquivo = await consumidor.run_baixar_planilha()
         
         if arquivo:
+            logger.info(f"✅ Download concluído: {arquivo}")
             return {
                 'success': True,
                 'arquivo': arquivo,
                 'error': None
             }
         else:
+            logger.error("❌ run_baixar_planilha retornou None")
             return {
                 'success': False,
                 'arquivo': None,
-                'error': 'Não foi possível baixar a planilha'
+                'error': 'run_baixar_planilha retornou None - verificar logs do playwright'
             }
         
-    except Exception as e:
-        logger.error(f"Erro no download: {e}")
+    except ValueError as ve:
+        # Erro de credenciais
+        logger.error(f"❌ Erro de configuração: {ve}")
         return {
             'success': False,
             'arquivo': None,
-            'error': str(e)
+            'error': f'Erro de configuração: {str(ve)}'
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro no download: {e}")
+        logger.error(f"❌ Tipo do erro: {type(e).__name__}")
+        logger.error(f"❌ Stack trace:\n{traceback.format_exc()}")
+        return {
+            'success': False,
+            'arquivo': None,
+            'error': f'{type(e).__name__}: {str(e)}'
         }
 
 

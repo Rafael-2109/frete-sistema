@@ -11,7 +11,7 @@ from app.tabelas.forms import TabelaFreteForm, ImportarTabelaFreteForm, GerarTem
 from app.tabelas.models import TabelaFrete, HistoricoTabelaFrete
 from app.transportadoras.models import Transportadora
 from app.localidades.models import Cidade
-from app.utils.utils_frete import float_or_none
+# float_or_none removido - usando converter_valor_brasileiro de valores_brasileiros
 from app.utils.ufs import UF_LIST
 from app.vinculos.models import CidadeAtendida
 
@@ -39,9 +39,10 @@ def cadastrar_tabela_frete():
     if form.validate_on_submit():
         try:
             from app.utils.tabela_frete_manager import TabelaFreteManager
+            from app.utils.valores_brasileiros import converter_valor_brasileiro
             
-            # Prepara dados do formulário
-            dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, float_or_none)
+            # Prepara dados do formulário com conversão de valores brasileiros
+            dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, converter_valor_brasileiro)
             
             # Cria TabelaFrete
             nova = TabelaFrete(
@@ -124,10 +125,10 @@ def importar_tabela_frete():
                     return redirect(request.url)
 
             for index, row in df.iterrows():
-                print(f"📊 Processando linha {index + 2}: {dict(row)}")
+                print(f"📊 Processando linha {index + 2}: {dict(row)}")    # type: ignore # +2 para começar do 1
                 
                 if str(row['ATIVO']).strip().upper() != 'A':
-                    print(f"⏭️ Linha {index + 2} ignorada - ATIVO = {row['ATIVO']}")
+                    print(f"⏭️ Linha {index + 2} ignorada - ATIVO = {row['ATIVO']}") # +2 para começar do 1 # type: ignore
                     continue  # Ignorar tabelas inativas
 
                 cnpj = str(row['CÓD. TRANSP']).strip()
@@ -139,8 +140,8 @@ def importar_tabela_frete():
                 transportadora = Transportadora.query.filter_by(cnpj=cnpj).first()
                 if not transportadora:
                     erros += 1
-                    print(f"❌ Transportadora {cnpj} não encontrada (linha {index+2})")
-                    flash(f"Transportadora {cnpj} não cadastrada (linha {index+2}). Por favor, cadastre a transportadora primeiro.", "danger")
+                    print(f"❌ Transportadora {cnpj} não encontrada (linha {index+2})") # type: ignore
+                    flash(f"Transportadora {cnpj} não cadastrada (linha {index+2}). Por favor, cadastre a transportadora primeiro.", "danger") # type: ignore
                     continue
                 
                 print(f"✅ Transportadora encontrada: {transportadora.razao_social}")
@@ -157,7 +158,7 @@ def importar_tabela_frete():
                     if not vinculo_existente:
                         # ❌ REJEITA: Tabela sem vínculo correspondente
                         rejeitadas_sem_vinculo.append({
-                            'linha': index + 2,
+                            'linha': index + 2, # type: ignore
                             'transportadora': transportadora.razao_social,
                             'uf_destino': uf_destino,
                             'nome_tabela': nome_tabela,
@@ -166,7 +167,8 @@ def importar_tabela_frete():
                         continue  # Pula esta linha - NÃO importa
                 else:
                     # Template sem nome de tabela - gera nome automático
-                    nome_tabela = f"TEMPLATE_{transportadora.razao_social}_{uf_destino}_{modalidade}"
+                    modalidade = str(row['FRETE']).upper()
+                    nome_tabela = f"TEMPLATE_{transportadora.razao_social}_{uf_destino}_{modalidade}" # type: ignore
                     print(f"📋 Template detectado - gerando nome automático: {nome_tabela}")
 
                 tipo_carga = str(row['CARGA']).upper()
@@ -188,14 +190,14 @@ def importar_tabela_frete():
 
                 if modalidade not in modalidades_validas:
                     erros += 1
-                    flash(f"Modalidade inválida '{modalidade}' (linha {index+2})", "danger")
+                    flash(f"Modalidade inválida '{modalidade}' (linha {index+2})", "danger") # type: ignore
                     continue
 
                 modalidade = modalidades_validas[modalidade]
 
                 if tipo_carga not in TIPOS_CARGA_VALIDOS:
                     erros += 1
-                    flash(f"Tipo carga inválido '{tipo_carga}' (linha {index+2})", "danger")
+                    flash(f"Tipo carga inválido '{tipo_carga}' (linha {index+2})", "danger") # type: ignore
                     continue
 
                 # Função para limpar valores nan/vazios
@@ -249,7 +251,7 @@ def importar_tabela_frete():
                 TabelaFreteManager.atribuir_campos_tabela(historico, dados_csv)
                 db.session.add(historico)
                 sucesso += 1
-                print(f"✅ Tabela criada/atualizada com sucesso (linha {index + 2})")
+                print(f"✅ Tabela criada/atualizada com sucesso (linha {index + 2})") # type: ignore
 
             db.session.commit()
             print(f"💾 Commit realizado - {sucesso} tabelas processadas")
@@ -258,7 +260,7 @@ def importar_tabela_frete():
             if rejeitadas_sem_vinculo:
                 flash(f"❌ {len(rejeitadas_sem_vinculo)} tabela(s) REJEITADA(S) por não terem vínculos correspondentes:", "danger")
                 for rejeitada in rejeitadas_sem_vinculo[:10]:  # Mostra apenas as primeiras 5
-                    flash(f"• Linha {rejeitada['linha']}: {rejeitada['transportadora']} → {rejeitada['uf_destino']} → {rejeitada['nome_tabela']} → {rejeitada['modalidade']}", "warning")
+                    flash(f"• Linha {rejeitada['linha']}: {rejeitada['transportadora']} → {rejeitada['uf_destino']} → {rejeitada['nome_tabela']} → {rejeitada['modalidade']}", "warning") # type: ignore
                 if len(rejeitadas_sem_vinculo) > 10:
                     flash(f"... e mais {len(rejeitadas_sem_vinculo) - 10} tabela(s). Importe os vínculos primeiro!", "warning")
             
@@ -560,6 +562,9 @@ def listar_todas_tabelas():
         'valor_tas': TabelaFrete.valor_tas,
         'pedagio_por_100kg': TabelaFrete.pedagio_por_100kg,
         'icms_incluso': TabelaFrete.icms_incluso,
+        'gris_minimo': TabelaFrete.gris_minimo,
+        'adv_minimo': TabelaFrete.adv_minimo,
+        'icms_proprio': TabelaFrete.icms_proprio,
         'criado_por': TabelaFrete.criado_por,
         'criado_em': TabelaFrete.criado_em
     }
@@ -645,15 +650,8 @@ def editar_tabela_frete(tabela_id):
                     logger.warning(f"⚠️ Problema de encoding corrigido em: {value}")
                     return str(value).encode('ascii', errors='ignore').decode('ascii')
             
-            # Função para conversão segura de float
-            def safe_float(value):
-                if not value or value == '':
-                    return 0.0
-                try:
-                    return float(str(value).replace(',', '.'))
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"⚠️ Valor numérico inválido: {value}, usando 0.0")
-                    return 0.0
+            # Importa funções de conversão de valores brasileiros
+            from app.utils.valores_brasileiros import converter_valor_brasileiro
             
             from app.utils.tabela_frete_manager import TabelaFreteManager
             
@@ -664,8 +662,8 @@ def editar_tabela_frete(tabela_id):
             tabela.tipo_carga = sanitize_string(form.tipo_carga.data)
             tabela.criado_por = sanitize_string(current_user.nome)
             
-            # Prepara e atribui campos de frete usando TabelaFreteManager
-            dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, safe_float)
+            # Prepara e atribui campos de frete usando TabelaFreteManager com conversão brasileira
+            dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, converter_valor_brasileiro)
             # Aplica sanitização no nome_tabela e modalidade
             if 'nome_tabela' in dados_tabela:
                 dados_tabela['nome_tabela'] = sanitize_string(dados_tabela['nome_tabela'])
@@ -755,7 +753,7 @@ def gerar_template_frete():
             colunas = [
                 'ATIVO', 'CÓD. TRANSP', 'ORIGEM', 'DESTINO', 'NOME TABELA',
                 'CARGA', 'FRETE', 'INC.', 'VALOR', 'PESO', 'FRETE PESO', 
-                'FRETE VALOR', 'GRIS', 'ADV', 'RCA SEGURO FLUVIAL %',
+                'FRETE VALOR', 'GRIS', 'GRIS MINIMO', 'ADV', 'ADV MINIMO', 'RCA SEGURO FLUVIAL %',
                 'DESPACHO / CTE / TAS', 'CTE', 'TAS', 'PEDAGIO FRAÇÃO 100 KGS'
             ]
             
@@ -768,15 +766,17 @@ def gerar_template_frete():
                     'ORIGEM': form.uf_origem.data,
                     'DESTINO': form.uf_destino.data,
                     'NOME TABELA': '',  # Usuário deve preencher
-                     'CARGA': form.tipo_carga.data,
-                     'FRETE': form.modalidade.data,
-                     'INC.': form.icms_incluso.data,
-                     'VALOR': 0,
+                    'CARGA': form.tipo_carga.data,
+                    'FRETE': form.modalidade.data,
+                    'INC.': form.icms_incluso.data,
+                    'VALOR': 0,
                     'PESO': 0,
                     'FRETE PESO': 0,
                     'FRETE VALOR': 0,
                     'GRIS': 0,
+                    'GRIS MINIMO': 0,
                     'ADV': 0,
+                    'ADV MINIMO': 0,
                     'RCA SEGURO FLUVIAL %': 0,
                     'DESPACHO / CTE / TAS': 0,
                     'CTE': 0,
@@ -848,3 +848,186 @@ def gerar_template_frete():
                 flash(f'Erro no campo {field}: {error}', 'error')
     
     return render_template('tabelas/gerar_template_frete.html', form=form)
+
+@tabelas_bp.route('/exportar_tabelas', methods=['GET', 'POST'])
+@login_required
+def exportar_tabelas():
+    """Exporta as tabelas filtradas para Excel"""
+    try:
+        from flask import make_response
+        import io
+        from app.utils.valores_brasileiros import formatar_valor_brasileiro
+        
+        # Constrói a mesma query da listagem
+        query = TabelaFrete.query.join(Transportadora)
+        
+        # Aplica os mesmos filtros da listagem
+        transportadora_id = request.args.get('transportadora', type=int)
+        uf_destino = request.args.get('uf_destino', '')
+        cidade = request.args.get('cidade', '')
+        nome_tabela = request.args.get('nome_tabela', '')
+        tipo_carga = request.args.get('tipo_carga', '')
+        modalidade = request.args.get('modalidade', '')
+        status = request.args.get('status', '')
+        apenas_orfas = request.args.get('apenas_orfas', '')
+        
+        if transportadora_id:
+            query = query.filter(TabelaFrete.transportadora_id == transportadora_id)
+        
+        if uf_destino:
+            query = query.filter(TabelaFrete.uf_destino == uf_destino)
+        
+        if cidade:
+            from app.vinculos.models import CidadeAtendida
+            subquery_cidades = db.session.query(CidadeAtendida.nome_tabela, CidadeAtendida.transportadora_id).join(
+                Cidade, CidadeAtendida.cidade_id == Cidade.id
+            ).filter(
+                Cidade.nome.ilike(f"%{cidade}%")
+            ).distinct().subquery()
+            
+            query = query.filter(
+                db.session.query(literal(True)).filter(
+                    and_(
+                        subquery_cidades.c.transportadora_id == TabelaFrete.transportadora_id,
+                        subquery_cidades.c.nome_tabela == TabelaFrete.nome_tabela
+                    )
+                ).exists()
+            )
+        
+        if nome_tabela:
+            query = query.filter(TabelaFrete.nome_tabela.ilike(f"%{nome_tabela}%"))
+        
+        if tipo_carga:
+            query = query.filter(TabelaFrete.tipo_carga == tipo_carga)
+        
+        if modalidade:
+            query = query.filter(TabelaFrete.modalidade == modalidade)
+        
+        # Filtros de status/órfãs
+        if status or apenas_orfas:
+            from app.vinculos.models import CidadeAtendida
+            
+            if apenas_orfas or status == 'orfa':
+                query = query.filter(
+                    ~db.session.query(literal(True)).filter(
+                        and_(
+                            CidadeAtendida.transportadora_id == TabelaFrete.transportadora_id,
+                            CidadeAtendida.nome_tabela == TabelaFrete.nome_tabela
+                        )
+                    ).exists()
+                )
+            elif status == 'ok':
+                query = query.filter(
+                    db.session.query(literal(True)).filter(
+                        and_(
+                            CidadeAtendida.transportadora_id == TabelaFrete.transportadora_id,
+                            CidadeAtendida.nome_tabela == TabelaFrete.nome_tabela
+                        )
+                    ).exists()
+                )
+            elif status == 'grupo_empresarial':
+                query = query.filter(
+                    ~db.session.query(literal(True)).filter(
+                        and_(
+                            CidadeAtendida.transportadora_id == TabelaFrete.transportadora_id,
+                            CidadeAtendida.nome_tabela == TabelaFrete.nome_tabela
+                        )
+                    ).exists(),
+                    db.session.query(literal(True)).filter(
+                        and_(
+                            CidadeAtendida.nome_tabela == TabelaFrete.nome_tabela,
+                            CidadeAtendida.transportadora_id != TabelaFrete.transportadora_id
+                        )
+                    ).exists()
+                )
+        
+        # Aplica ordenação
+        query = query.order_by(
+            Transportadora.razao_social,
+            TabelaFrete.uf_origem,
+            TabelaFrete.uf_destino,
+            TabelaFrete.nome_tabela,
+            TabelaFrete.modalidade
+        )
+        
+        # Busca todas as tabelas (sem paginação para exportação)
+        tabelas = query.all()
+        
+        # Cria DataFrame para exportação
+        dados = []
+        for tabela in tabelas:
+            dados.append({
+                'Transportadora': tabela.transportadora.razao_social,
+                'CNPJ': tabela.transportadora.cnpj,
+                'UF Origem': tabela.uf_origem,
+                'UF Destino': tabela.uf_destino,
+                'Nome Tabela': tabela.nome_tabela,
+                'Tipo Carga': tabela.tipo_carga,
+                'Modalidade': tabela.modalidade,
+                'Frete Mín. Valor (R$)': formatar_valor_brasileiro(tabela.frete_minimo_valor),
+                'Frete Mín. Peso (kg)': formatar_valor_brasileiro(tabela.frete_minimo_peso),
+                'Valor/kg (R$)': formatar_valor_brasileiro(tabela.valor_kg, 4),
+                '% Sobre Valor': formatar_valor_brasileiro(tabela.percentual_valor),
+                '% GRIS': formatar_valor_brasileiro(tabela.percentual_gris),
+                'GRIS Mín. (R$)': formatar_valor_brasileiro(tabela.gris_minimo) if tabela.gris_minimo else '',
+                '% ADV': formatar_valor_brasileiro(tabela.percentual_adv),
+                'ADV Mín. (R$)': formatar_valor_brasileiro(tabela.adv_minimo) if tabela.adv_minimo else '',
+                '% RCA': formatar_valor_brasileiro(tabela.percentual_rca),
+                'Despacho (R$)': formatar_valor_brasileiro(tabela.valor_despacho),
+                'CTE (R$)': formatar_valor_brasileiro(tabela.valor_cte),
+                'TAS (R$)': formatar_valor_brasileiro(tabela.valor_tas),
+                'Pedágio/100kg (R$)': formatar_valor_brasileiro(tabela.pedagio_por_100kg),
+                'ICMS Incluso': 'Sim' if tabela.icms_incluso else 'Não',
+                '% ICMS Próprio': formatar_valor_brasileiro(tabela.icms_proprio) if tabela.icms_proprio else '',
+                'Criado Por': tabela.criado_por,
+                'Criado Em': tabela.criado_em.strftime('%d/%m/%Y %H:%M') if tabela.criado_em else ''
+            })
+        
+        # Cria DataFrame
+        df = pd.DataFrame(dados)
+        
+        # Cria arquivo Excel em memória
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Tabelas_Frete', index=False)
+            
+            # Acessa a planilha para formatação
+            worksheet = writer.sheets['Tabelas_Frete']
+            
+            # Ajusta largura das colunas
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            # Congela primeira linha (cabeçalho)
+            worksheet.freeze_panes = 'A2'
+        
+        output.seek(0)
+        
+        # Nome do arquivo com data/hora
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_arquivo = f"tabelas_frete_{timestamp}.xlsx"
+        
+        # Cria resposta para download
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
+        
+        flash(f'✅ Exportação concluída! {len(tabelas)} tabelas exportadas.', 'success')
+        return response
+        
+    except Exception as e:
+        print(f"❌ Erro ao exportar tabelas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Erro ao exportar tabelas: {str(e)}', 'error')
+        return redirect(url_for('tabelas.listar_todas_tabelas'))
