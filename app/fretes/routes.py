@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session, send_from_directory
 from flask_login import login_required, current_user
 from datetime import datetime
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, or_, desc, func
 import os
 import logging
 from app.transportadoras.models import Transportadora
@@ -976,7 +976,7 @@ def listar_faturas():
 def nova_fatura():
     """Cadastra nova fatura de frete"""
     form = FaturaFreteForm()
-    
+    transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
     if form.validate_on_submit():
         nova_fatura = FaturaFrete(
             transportadora_id=request.form.get('transportadora_id'),
@@ -1017,7 +1017,6 @@ def nova_fatura():
         flash('Fatura cadastrada com sucesso!', 'success')
         return redirect(url_for('fretes.listar_faturas'))
     
-    transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
     return render_template('fretes/nova_fatura.html', form=form, transportadoras=transportadoras)
 
 @fretes_bp.route('/faturas/<int:fatura_id>/conferir')
@@ -1299,7 +1298,6 @@ def editar_fatura(fatura_id):
         flash('❌ Fatura conferida não pode ser editada! Use a opção "Reabrir" primeiro.', 'error')
         return redirect(url_for('fretes.listar_faturas'))
     
-    from app.transportadoras.models import Transportadora
     
     if request.method == 'POST':
         try:
@@ -1567,7 +1565,12 @@ def criar_despesa_extra_frete(frete_id):
 def confirmar_despesa_extra():
     """Etapa 3: Pergunta sobre fatura para despesa já criada"""
     despesa_id = session.get('despesa_criada_id')
+    despesa_data = session.get('despesa_data')
     
+    if not despesa_data:
+        flash('Dados da despesa não encontrados. Reinicie o processo.', 'error')
+        return redirect(url_for('fretes.nova_despesa_extra_por_nf'))
+
     if not despesa_id:
         flash('Despesa não encontrada. Reinicie o processo.', 'error')
         return redirect(url_for('fretes.nova_despesa_extra_por_nf'))
@@ -2118,7 +2121,6 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
             return False, "Embarque não encontrado"
         
         # ✅ NOVA VALIDAÇÃO: Se transportadora for "FOB - COLETA", não gera frete
-        from app.transportadoras.models import Transportadora
         transportadora = Transportadora.query.get(embarque.transportadora_id)
         if transportadora and transportadora.razao_social == "FOB - COLETA":
             return True, f"Embarque FOB - não gera frete automaticamente (Transportadora: {transportadora.razao_social})"
@@ -2785,8 +2787,6 @@ def listar_contas_correntes():
     """Lista todas as contas correntes das transportadoras"""
     try:
         # Busca todas as transportadoras com movimentações de conta corrente
-        from sqlalchemy import func
-        from app.transportadoras.models import Transportadora
         
         transportadoras_com_conta = db.session.query(
             Transportadora.id,
@@ -2934,7 +2934,7 @@ def excluir_despesa_extra(despesa_id):
     
     try:
         # Verifica se fatura está conferida
-        if frete.fatura_frete and frete.fatura_frete.status_conferencia == 'CONFERIDO':
+        if not despesa.numero_documento or despesa.numero_documento == 'PENDENTE_FATURA':
             flash('❌ Não é possível excluir despesa de fatura conferida!', 'error')
             return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
         
