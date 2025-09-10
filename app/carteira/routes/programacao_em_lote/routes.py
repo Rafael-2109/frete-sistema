@@ -1348,12 +1348,8 @@ def processar_agendamento_sendas():
                         sep_existente.protocolo = protocolo_temp
                         sep_existente.agendamento_confirmado = False  # SOLICITADO, não confirmado
                         
-                        # Atualizar observação se não tiver ou adicionar ao existente
-                        obs_sendas = f"Agendamento Sendas - {data_agendamento.strftime('%d/%m/%Y')}"
-                        if not sep_existente.observ_ped_1:
-                            sep_existente.observ_ped_1 = obs_sendas
-                        elif obs_sendas not in sep_existente.observ_ped_1:
-                            sep_existente.observ_ped_1 = f"{sep_existente.observ_ped_1} | {obs_sendas}"
+                        # NÃO alterar observ_ped_1 - campo importado do Odoo
+                        # Preservar valor original
                 
                 # 2. Também atualizar separações com nf_cd=True se existirem
                 separacoes_nf_cd = Separacao.query.filter(
@@ -1430,7 +1426,7 @@ def processar_agendamento_sendas():
                             pedido_cliente=item.pedido_cliente if hasattr(item, 'pedido_cliente') else None,
                             status='ABERTO',
                             tipo_envio='total',
-                            observ_ped_1=f"Agendamento Sendas - {data_agendamento.strftime('%d/%m/%Y')}",
+                            observ_ped_1=item.observ_ped_1 if hasattr(item, 'observ_ped_1') else None,  # Preservar valor do Odoo
                             sincronizado_nf=False,
                             nf_cd=False
                         )

@@ -522,10 +522,6 @@ def editar_pedido(lote_id):
                 'agendamento_confirmado': pedido.agendamento_confirmado
             }
             
-            # ✅ CORRIGIDO: Atualiza APENAS Separacao (Pedido é VIEW, não pode receber UPDATE)
-            # NOTA: NÃO atualizar diretamente o pedido, ele é uma VIEW!
-            # pedido.expedicao = form.expedicao.data  ❌ ERRO - Pedido é VIEW
-            
             # ✅ ATUALIZA DIRETAMENTE NA TABELA SEPARACAO
             separacoes_atualizadas = 0
             if pedido.separacao_lote_id:
