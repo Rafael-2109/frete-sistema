@@ -1,7 +1,7 @@
 """
 API para gerar separação de pedidos completos na carteira agrupada
 Versão unificada com suporte a parciais HTML e JSON
-MIGRADO: PreSeparacaoItem → Separacao (status='PREVISAO')
+MIGRADO: PreSeparacaoItem → Separacao (status='ABERTO')
 """
 from flask import jsonify, request, render_template
 from flask_login import login_required, current_user
@@ -141,7 +141,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 agendamento_confirmado=agendamento_confirmado,
                 pedido_cliente=item.pedido_cliente,
                 tipo_envio="total",  # SEMPRE total quando vem de gerar_separacao_completa
-                status='PREVISAO',  # CORRIGIDO: Cria como PREVISAO primeiro
+                status='ABERTO',  # CORRIGIDO: Cria como ABERTO primeiro
                 sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
                 # vendedor=item.vendedor,  # REMOVIDO: campo não existe em Separacao
                 criado_em=agora_brasil(),
@@ -190,7 +190,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 "valor_total": valor_total,
                 "peso_total": peso_total,
                 "pallet_total": pallet_total,
-                "status_criado": "PREVISAO",  # Indicar que foi criado como PREVISAO
+                "status_criado": "ABERTO",  # Indicar que foi criado como ABERTO
                 "pode_enviar_separacao": True  # Flag para frontend mostrar checkbox
             })
         else:
@@ -203,7 +203,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 "valor_total": valor_total,
                 "peso_total": peso_total,
                 "pallet_total": pallet_total,
-                "status_criado": "PREVISAO",  # Indicar que foi criado como PREVISAO
+                "status_criado": "ABERTO",  # Indicar que foi criado como ABERTO
                 "pode_enviar_separacao": True  # Flag para frontend mostrar checkbox
             })
 
@@ -213,16 +213,6 @@ def gerar_separacao_completa_pedido(num_pedido):
         return jsonify({"success": False, "error": f"Erro interno: {str(e)}"}), 500
 
 
-@carteira_bp.route("/api/lote/<lote_id>/transformar-separacao", methods=["POST"])
-@login_required
-def transformar_lote_em_separacao(lote_id):
-    """
-    DEPRECATED: Use /api/separacao/<lote_id>/alterar-status
-    Mantida para compatibilidade - redireciona para rota genérica
-    """
-    # Forçar status ABERTO e chamar a rota genérica
-    request.json = {"status": "ABERTO"}
-    return alterar_status_separacao(lote_id)
 
 
 # Funções auxiliares para buscar dados
@@ -288,18 +278,6 @@ def _get_pedido_completo(num_pedido):
     return pedido
 
 
-@carteira_bp.route("/api/lote/<lote_id>/reverter-separacao", methods=["POST"])
-@login_required
-def reverter_separacao(lote_id):
-    """
-    DEPRECATED: Use /api/separacao/<lote_id>/alterar-status
-    Mantida para compatibilidade - redireciona para rota genérica
-    """
-    # Forçar status PREVISAO e chamar a rota genérica
-    request.json = {"status": "PREVISAO"}
-    return alterar_status_separacao(lote_id)
-
-
 # =============================================================================
 # APIs GENÉRICAS PARA SEPARAÇÃO (drag & drop, edição individual)
 # =============================================================================
@@ -310,7 +288,7 @@ def salvar_separacao_generic():
     """
     API genérica para salvar separação (drag & drop individual)
     Cria ou atualiza uma linha de Separacao
-    Por padrão cria com status='PREVISAO'
+    Por padrão cria com status='ABERTO'
     """
     try:
         data = request.get_json()
@@ -319,7 +297,7 @@ def salvar_separacao_generic():
         separacao_lote_id = data.get("lote_id") or data.get("separacao_lote_id")
         qtd_selecionada = data.get("qtd_selecionada_usuario") or data.get("qtd_saldo")
         data_expedicao = data.get("data_expedicao_editada") or data.get("expedicao")
-        status = data.get("status", "PREVISAO")  # Por padrão cria como PREVISAO
+        status = data.get("status", "ABERTO")  # Por padrão cria como ABERTO
 
         # Se não foi fornecido separacao_lote_id, gerar um novo
         if not separacao_lote_id:

@@ -75,7 +75,6 @@ class AtualizarDadosService:
                     # ========================================
                     
                     # Buscar TODAS as separações não sincronizadas deste pedido
-                    # Isso inclui status='PREVISAO', 'ABERTO', 'COTADO', etc.
                     separacoes = Separacao.query.filter(
                         Separacao.num_pedido == num_pedido,
                         Separacao.sincronizado_nf == False

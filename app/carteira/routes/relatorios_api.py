@@ -30,8 +30,6 @@ def exportar_separacoes():
         # MIGRADO: Removido JOIN com Pedido VIEW, usa sincronizado_nf=False
         query = Separacao.query
         
-        # Filtrar apenas separações não sincronizadas (inclui PREVISAO, ABERTO, COTADO)
-        # Permitir incluir FATURADO apenas se explicitamente solicitado
         incluir_faturado = data.get('incluir_faturado', False) if data else False
         if not incluir_faturado:
             query = query.filter(
@@ -219,7 +217,7 @@ def exportar_carteira_detalhada():
             Separacao.cod_produto,
             func.sum(Separacao.qtd_saldo).label('qtd_total')
         ).filter(
-            Separacao.sincronizado_nf == False  # Inclui PREVISAO, ABERTO, COTADO
+            Separacao.sincronizado_nf == False  
         ).group_by(
             Separacao.num_pedido,
             Separacao.cod_produto
@@ -350,7 +348,6 @@ def exportar_carteira_detalhada():
             }
             dados.append(linha_pedido)
             
-            # REMOVIDO: Pré-separações migradas para Separacao com status='PREVISAO'
             
             # OTIMIZAÇÃO: Buscar separações do índice em O(1) em vez de fazer query
             # Cada linha é por separacao_lote_id + cod_produto

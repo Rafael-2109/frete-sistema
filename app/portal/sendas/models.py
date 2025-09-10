@@ -49,31 +49,19 @@ class ProdutoDeParaSendas(db.Model):
         
         Args:
             codigo_nosso: Nosso código de produto
-            cnpj_cliente: CNPJ do cliente (opcional)
+            cnpj_cliente: CNPJ do cliente (opcional) - IGNORADO
             
         Returns:
             Código do Sendas ou None se não encontrar
         """
-        query = cls.query.filter_by(
+        # Ignorar CNPJ completamente - buscar apenas por código
+        depara = cls.query.filter_by(
             codigo_nosso=codigo_nosso,
             ativo=True
-        )
+        ).first()
         
-        if cnpj_cliente:
-            # Primeiro tentar com CNPJ específico
-            depara = query.filter_by(cnpj_cliente=cnpj_cliente).first()
-            if depara:
-                return depara.codigo_sendas
-            
-            # Se não encontrar, tentar genérico (cnpj_cliente = NULL)
-            depara = query.filter(cls.cnpj_cliente.is_(None)).first()
-            if depara:
-                return depara.codigo_sendas
-        else:
-            # Buscar genérico
-            depara = query.filter(cls.cnpj_cliente.is_(None)).first()
-            if depara:
-                return depara.codigo_sendas
+        if depara:
+            return depara.codigo_sendas
         
         return None
     
@@ -84,31 +72,19 @@ class ProdutoDeParaSendas(db.Model):
         
         Args:
             codigo_sendas: Código do produto no Sendas
-            cnpj_cliente: CNPJ do cliente (opcional)
+            cnpj_cliente: CNPJ do cliente (opcional) - IGNORADO
             
         Returns:
             Nosso código ou None se não encontrar
         """
-        query = cls.query.filter_by(
+        # Ignorar CNPJ completamente - buscar apenas por código
+        depara = cls.query.filter_by(
             codigo_sendas=codigo_sendas,
             ativo=True
-        )
+        ).first()
         
-        if cnpj_cliente:
-            # Primeiro tentar com CNPJ específico
-            depara = query.filter_by(cnpj_cliente=cnpj_cliente).first()
-            if depara:
-                return depara.codigo_nosso
-            
-            # Se não encontrar, tentar genérico
-            depara = query.filter(cls.cnpj_cliente.is_(None)).first()
-            if depara:
-                return depara.codigo_nosso
-        else:
-            # Buscar genérico
-            depara = query.filter(cls.cnpj_cliente.is_(None)).first()
-            if depara:
-                return depara.codigo_nosso
+        if depara:
+            return depara.codigo_nosso
         
         return None
     

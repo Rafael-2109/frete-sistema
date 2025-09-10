@@ -11,7 +11,7 @@ from playwright.async_api import async_playwright
 import logging
 from dotenv import load_dotenv
 from playwright.async_api import TimeoutError as PWTimeout
-from gravar_acoes import GravadorAcoes
+# from gravar_acoes import GravadorAcoes
 
 # Configurar path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
@@ -168,7 +168,7 @@ class SendasPortal:
                     if user_element:
                         user_text = await user_element.text_content()
                         logger.info(f"👤 Usuário detectado: {user_text}")
-                except:
+                except Exception:
                     pass  # Não é crítico se não encontrar
                 
                 return True
@@ -514,7 +514,7 @@ class SendasPortal:
             com_gravacao: Se True, inicia gravação de ações
         """
         gravador = None
-        
+
         if com_gravacao:
             # Iniciar gravação automaticamente
             gravador = GravadorAcoes(self.page)
@@ -549,7 +549,7 @@ class SendasPortal:
             logger.info("  4. Qual o próximo passo?")
             logger.info("\nPressione Ctrl+C quando quiser fechar o navegador")
             logger.info("=" * 60 + "\n")
-        
+
         try:
             # Loop interativo com comandos
             import select

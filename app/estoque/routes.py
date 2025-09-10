@@ -373,6 +373,7 @@ def processar_importacao_movimentacoes():
                 cod_produto = str(row.get('cod_produto', '')).strip() if pd.notna(row.get('cod_produto')) else ''
                 tipo_movimentacao = str(row.get('tipo_movimentacao', '')).strip() if pd.notna(row.get('tipo_movimentacao')) else ''
                 
+                
                 if not cod_produto or cod_produto == 'nan' or not tipo_movimentacao or tipo_movimentacao == 'nan':
                     continue
                 
@@ -547,7 +548,7 @@ def processar_nova_movimentacao():
         data_movimentacao = request.form.get('data_movimentacao', '').strip()
         local_movimentacao = request.form.get('local_movimentacao', '').strip()
         documento_origem = request.form.get('documento_origem', '').strip()
-        observacoes = request.form.get('observacoes', '').strip()
+        observacao = request.form.get('observacao', '').strip()
         
         # Validações básicas
         if not cod_produto:
@@ -591,7 +592,7 @@ def processar_nova_movimentacao():
         nova_movimentacao.qtd_movimentacao = quantidade_float
         nova_movimentacao.data_movimentacao = data_movimentacao_dt
         nova_movimentacao.local_movimentacao = local_movimentacao or 'ESTOQUE PRINCIPAL'
-        nova_movimentacao.observacao = observacoes
+        nova_movimentacao.observacao = observacao
         nova_movimentacao.criado_por = current_user.nome
         nova_movimentacao.documento_origem = documento_origem
         
@@ -669,7 +670,7 @@ def processar_edicao_movimentacao(id):
         data_movimentacao = request.form.get('data_movimentacao', '').strip()
         local_movimentacao = request.form.get('local_movimentacao', '').strip()
         documento_origem = request.form.get('documento_origem', '').strip()
-        observacoes = request.form.get('observacoes', '').strip()
+        observacao = request.form.get('observacao', '').strip()
         
         # Validações básicas
         if not tipo_movimentacao:
@@ -698,7 +699,7 @@ def processar_edicao_movimentacao(id):
         movimentacao.qtd_movimentacao = quantidade_float
         movimentacao.data_movimentacao = data_movimentacao_dt
         movimentacao.local_movimentacao = local_movimentacao or 'ESTOQUE PRINCIPAL'
-        movimentacao.observacao = observacoes
+        movimentacao.observacao = observacao
         movimentacao.atualizado_por = current_user.nome
         
         # Adicionar campo documento_origem se existir
@@ -1487,7 +1488,7 @@ def baixar_modelo_movimentacoes():
             'nome_produto': ['Produto de exemplo'],
             'tipo_movimentacao': ['ENTRADA'],  # ENTRADA ou SAIDA
             'qtd_movimentacao': [100],
-            'observacoes': ['Observação da movimentação'],
+            'observacao': ['Observação da movimentação'],
             'local_movimentacao': ['Linha de Produção']
         }
         
@@ -1536,24 +1537,24 @@ def exportar_dados_movimentacoes():
         for mov in movimentacoes:
             dados.append({
                 'ID': mov.id,
-                'Data': mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '',
-                'Código Produto': str(mov.cod_produto),
-                'Descrição': mov.nome_produto,
-                'Tipo': mov.tipo_movimentacao,
-                'Quantidade': formatar_valor_brasileiro(mov.qtd_movimentacao),
-                'Observações': mov.observacao,
-                'Local': mov.local_movimentacao,
-                'Lote': mov.separacao_lote_id,
-                'NF': mov.numero_nf,
-                'Pedido': mov.num_pedido,
-                'Origem': mov.tipo_origem,
-                'Status NF': mov.status_nf,
-                'Embarque': mov.codigo_embarque,
-                'Criado Em': mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '',
-                'Criado Por': mov.criado_por,
-                'Atualizado Em': mov.atualizado_em.strftime('%d/%m/%Y %H:%M') if mov.atualizado_em else '',
-                'Atualizado Por': mov.atualizado_por,
-                'Ativo': mov.ativo
+                'data_movimentacao': mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '',
+                'cod_produto': str(mov.cod_produto),
+                'nome_produto': mov.nome_produto,
+                'tipo_movimentacao': mov.tipo_movimentacao,
+                'qtd_movimentacao': formatar_valor_brasileiro(mov.qtd_movimentacao),
+                'observacao': mov.observacao,
+                'local_movimentacao': mov.local_movimentacao,
+                'separacao_lote_id': mov.separacao_lote_id,
+                'numero_nf': mov.numero_nf,
+                'num_pedido': mov.num_pedido,
+                'tipo_origem': mov.tipo_origem,
+                'status_nf': mov.status_nf,
+                'codigo_embarque': mov.codigo_embarque,
+                'criado_em': mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '',
+                'criado_por': mov.criado_por,
+                'atualizado_em': mov.atualizado_em.strftime('%d/%m/%Y %H:%M') if mov.atualizado_em else '',
+                'atualizado_por': mov.atualizado_por,
+                'ativo': mov.ativo
             })
         
         df = pd.DataFrame(dados)

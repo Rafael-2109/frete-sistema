@@ -1,14 +1,5 @@
 [
   {
-    "name": "chatWidgetWindowStateB4A912C8E68E4FEB9885DF64988ACED5",
-    "value": "false",
-    "domain": ".trizy.com.br",
-    "path": "/",
-    "secure": true,
-    "httpOnly": false,
-    "sameSite": "None"
-  },
-  {
     "name": "trizy-theme-settings",
     "value": "eyJ0aGVtZU1vZGUiOiJkYXJrIiwidGhlbWVDb250cmFzdCI6ImRlZmF1bHQiLCJ0aGVtZUxheW91dCI6ZmFsc2UsInRoZW1lU3RyZXRjaCI6ZmFsc2UsImlzRnVsbFNjcmVlbiI6ZmFsc2UsImxhc3RNb2RpZmllZCI6MTc1NzE3ODE4MjAwMH0=",
     "domain": ".trizy.com.br",
@@ -18,35 +9,8 @@
     "sameSite": "None"
   },
   {
-    "name": "_clck",
-    "value": "1kqmkbq%5E2%5Efz4%5E0%5E2076",
-    "domain": ".trizy.com.br",
-    "path": "/",
-    "secure": true,
-    "httpOnly": false,
-    "sameSite": "None"
-  },
-  {
     "name": "trizy_access_token",
-    "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2RlIjoiIiwiZXhwIjoxNzg5MzEyMTI5LCJpYXQiOjE3NTcyNTcxMjksImlzcyI6ImlhbS50cml6eS5jb20uYnIiLCJqdGkiOiJhMWQ3MDZhNS04YjY1LTQ3YjMtNjRkOS1kNTBhZWI4ZDI2MDQiLCJzdWIiOiI2ZjEyZGQ1YS03NGRhLTQ4YjEtNmU1OC0yNWNjYjVkNjNiODgifQ.cLqsPVdRl50w5jG2IPjn2WxqdxUG17shrYqdULH6a3zl4FWXOb0_pxoIZtiMnwRSQW1P0ecfspShMaVmiVY41M9tKbipO6qclKFM80265XQ9GcuTZQrr20Nx9StsiVaR9eilPRKg8veSYMrkHD0Q4YjqOShoQTG8DfK-YpiXnEhjVaBssno_vif2HJtANveLAjFlzAsL18jK0R1X81BeVsRcDM5DXRdCCL5rsAL6JaQxJzugiVqzM3-lera3tWJ3I2RUeCsmnISRnqEvTs3bKKH21h09STXMGZGXehDM36N-igG6ue8NnyzY0f0JYD9WxZHkAkzQQ3MNlkhpL8TBB_jHM_fwjOTUqdDnwUcPvV4E9qQYxJqvk_GXx8Pl1eqLsq4dyi9Nj6el2ixYG1zf-Y_VdmvNEKRmmlFrlACvsxERqKvwQ_AWrH0FL5M3P6xfvg9npGRnn4XjxtjXKHTU3uAph85qY2ArxAonJa9ibEuehALD8vHoOmQOMRTBJ_lpBf4Bf0st4jG1E8rJtrUO9Hi1Xrd1F66PYph5VyNNvLxKA6EoB1e-0pmtOELA5rFu9YmW8t88TEm_HzoUeqct57FkkDBXQjXhJKueuveE5RXmuVWc5Pu3kL8Wo6SD-NkisKIram1o6xm0dKcYZBrTbAZNGtoh61jjtprxQCGHfcE",
-    "domain": ".trizy.com.br",
-    "path": "/",
-    "secure": true,
-    "httpOnly": false,
-    "sameSite": "None"
-  },
-  {
-    "name": "_ga",
-    "value": "GA1.3.481300548.1757257712",
-    "domain": ".trizy.com.br",
-    "path": "/",
-    "secure": true,
-    "httpOnly": false,
-    "sameSite": "None"
-  },
-  {
-    "name": "_gid",
-    "value": "GA1.3.1567472912.1757257712",
+    "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2RlIjoiIiwiZXhwIjoxNzg5NDc4NzI1LCJpYXQiOjE3NTc0MjM3MjUsImlzcyI6ImlhbS50cml6eS5jb20uYnIiLCJqdGkiOiI0NmUzODBmMC0wYTNiLTQ2Y2UtNjE1Ni04YjBiMzNiNDgxZmMiLCJzdWIiOiI2ZjEyZGQ1YS03NGRhLTQ4YjEtNmU1OC0yNWNjYjVkNjNiODgifQ.sVTgDtdgDtP4dfaIOuGZNMpuZCfBE8K-ytP39hiXh5q5GxOzCXrNhdDM_NYscJ7QJG6qUya_n0yXlJj_7kT7OzfINz0qFL9AN0yWsC5WP2NXJto3ScnQHVYYYuJ0hnrBOi8Q5_AIboisxaeR5e5-S5n_MsNyScup5qFKwCeX3X8u4GW8s012E5y5VWBWqEvfyn9c-RMdXclHptQNSJgvrzQfOloO6M-5rBBbOo42eqyDYX466qVtT6V0h-nUaoUDFFjCgerosaYzY2pddfNwXwopD26r2_GVgWmijDoziXo3cfdY2cDCNFbp2DTyC7-AmHD4kxaz4B_igL2bEXjN4iDIwcCRP5B5S_ZuUR67qp0aX9qRUzjDnSCxapd38Yc9ec4XQQTFVI0ufHhQLzvsNjxatPxjUfhIuIdO7ZNN8opwEcuIOTUjAkoDRBF4sZiqApZWtSE8UPWYA8YEyASM8XMS0x-oK_kvBsu5W4usyal54wUpSEhPkwr81UxBl_SCiDJJNDM2jyM9RFUXWklwD9ftpmGD5C6ZL0eIhB1D3Q4uiP10wTZS30TUY6eWWIdyEt-AujqLW9yFAhlOBkwcwJIO5KNB086HdvUmqKUcR4v53nsEmuFnyVCp2df7QQY8bSKIIy7gBV4DY-bipnFEHZ1F0Bx8OpOJNNiP5HnE6AI",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,
@@ -55,7 +19,34 @@
   },
   {
     "name": "prod_trizy-method-access-login",
-    "value": "eyJpc1RyaXp5SWQiOmZhbHNlLCJpZGVudGlmaWNhZG9yIjoiZGFuaWVsbGUudmllaXJhQG5hY29tZ295YS5jb20uYnIiLCJsYXN0TW9kaWZpZWQiOjE3NTcyNTk0NjAwOTEsInR5cGUiOiJkZWZhdWx0Iiwic3RhdHVzUHJvY2Vzc0xvZ2luIjoiZmluaXNoIn0=",
+    "value": "eyJpc1RyaXp5SWQiOmZhbHNlLCJpZGVudGlmaWNhZG9yIjoiZGFuaWVsbGUudmllaXJhQG5hY29tZ295YS5jb20uYnIiLCJsYXN0TW9kaWZpZWQiOjE3NTc0MjQyOTU0MzQsInR5cGUiOiJkZWZhdWx0Iiwic3RhdHVzUHJvY2Vzc0xvZ2luIjoiZmluaXNoIn0=",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "_clck",
+    "value": "o09yfl%5E2%5Efz6%5E0%5E2078",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.3.1925053264.1757424309",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "_gid",
+    "value": "GA1.3.1803990133.1757424309",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,
@@ -72,8 +63,17 @@
     "sameSite": "None"
   },
   {
+    "name": "chatWidgetWindowStateB4A912C8E68E4FEB9885DF64988ACED5",
+    "value": "false",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
     "name": "_ga_F5L3X45X5E",
-    "value": "GS2.3.s1757257712$o1$g1$t1757259488$j38$l0$h0",
+    "value": "GS2.3.s1757447938$o4$g1$t1757447943$j55$l0$h0",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,
@@ -82,7 +82,7 @@
   },
   {
     "name": "_clsk",
-    "value": "o47iqw%5E1757259491967%5E14%5E1%5Ei.clarity.ms%2Fcollect",
+    "value": "oid74o%5E1757447963288%5E4%5E1%5Ez.clarity.ms%2Fcollect",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,

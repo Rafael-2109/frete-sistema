@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let cnpjsSelecionados = new Set();
     let dadosRuptura = {};
     
+    // Garantir que window.dadosRuptura esteja disponível globalmente
+    window.dadosRuptura = dadosRuptura;
+    
     // Inicializar
     inicializar();
     
@@ -91,69 +94,152 @@ document.addEventListener('DOMContentLoaded', function() {
     async function analisarRupturaSimplificada(cnpj, btn) {
         try {
             // Tentar parsear pedidos se existir
-            let pedidos = [];
-            try {
-                if (btn.dataset.pedidos) {
-                    pedidos = JSON.parse(btn.dataset.pedidos);
-                }
-            } catch (e) {
-                console.log('Sem dados de pedidos, usando valores padrão');
-            }
+            let pedidosData = [];
+            let numerosPedidos = [];
             
-            let disponibilidade = 100;
-            let dataCompleta = 'Disponível';
-            
-            // Verificar se tem pedidos pendentes ou usar valor aleatório para demonstração
-            const temPendente = pedidos.length > 0 && pedidos.some(p => 
-                p.status === 'PENDENTE' || p.qtd_pendente > 0
-            );
-            
-            if (temPendente || pedidos.length === 0) {
-                // Valores de demonstração
-                disponibilidade = Math.floor(Math.random() * 30) + 70; // 70-100%
-                if (disponibilidade < 100) {
-                    const diasFuturo = Math.floor(Math.random() * 7) + 1;
-                    const data = new Date();
-                    data.setDate(data.getDate() + diasFuturo);
-                    dataCompleta = data.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+            // Processar pedidos - agora é uma string simples separada por vírgula
+            if (btn.dataset.pedidos) {
+                const pedidosString = btn.dataset.pedidos.trim();
+                console.log('Valor de data-pedidos:', pedidosString);
+                
+                if (pedidosString) {
+                    // Dividir por vírgula e remover espaços
+                    numerosPedidos = pedidosString
+                        .split(',')
+                        .map(p => p.trim())
+                        .filter(p => p && p !== '');
+                    
+                    console.log('Números de pedidos extraídos:', numerosPedidos);
                 }
             }
             
-            // Atualizar botão
-            const span = btn.querySelector('.ruptura-info');
-            if (!span) {
-                console.error('Span .ruptura-info não encontrado');
+            console.log('Números de pedidos extraídos:', numerosPedidos);
+            console.log('Quantidade de pedidos:', numerosPedidos.length);
+            
+            // Se não há pedidos, mostrar como disponível
+            if (!numerosPedidos || numerosPedidos.length === 0) {
+                const span = btn.querySelector('.ruptura-info');
+                if (span) {
+                    span.innerHTML = `100% | Disponível`;
+                    btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
+                    btn.classList.add('btn-success');
+                }
                 return;
             }
             
-            if (disponibilidade === 100) {
-                span.innerHTML = `100% | Disponível`;
-                btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
-                btn.classList.add('btn-success');
-            } else if (disponibilidade > 0) {
-                span.innerHTML = `${disponibilidade}% | ${dataCompleta}`;
-                btn.classList.remove('btn-primary', 'btn-success', 'btn-danger');
-                btn.classList.add('btn-warning');
-            } else {
-                span.innerHTML = `0% | Indisponível`;
-                btn.classList.remove('btn-primary', 'btn-success', 'btn-warning');
-                btn.classList.add('btn-danger');
+            // Pegar o primeiro pedido para análise real via API
+            const numPedido = numerosPedidos[0];
+            console.log(`Analisando ruptura para CNPJ ${cnpj}, pedido ${numPedido}`);
+            
+            // Fazer chamada real à API de ruptura
+            console.log(`Fazendo requisição para: /carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
+            const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
+            
+            console.log('Status da resposta:', response.status);
+            console.log('Status OK?', response.ok);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Erro na resposta da API:', response.status, errorText);
+                throw new Error(`API retornou erro ${response.status}: ${errorText}`);
             }
             
-            // Guardar dados
-            dadosRuptura[cnpj] = {
-                disponibilidade: disponibilidade,
-                dataCompleta: dataCompleta
-            };
+            const data = await response.json();
+            console.log('Dados da API de ruptura:', data);
+            console.log('Estrutura detalhada:');
+            console.log('- data.success:', data.success);
+            console.log('- data.data:', data.data);
+            console.log('- data.data?.resumo:', data.data?.resumo);
+            console.log('- data.message:', data.message);
+            console.log('- Chaves em data:', Object.keys(data));
+            if (data.data) {
+                console.log('- Chaves em data.data:', Object.keys(data.data));
+            }
+            
+            // A API retorna diretamente o objeto resultado, não tem campo 'success' no nível principal
+            // Verificar se tem a estrutura esperada: data.resumo ou data.data.resumo
+            const dadosRupturaAPI = data.data || data;  // Pode vir em data.data ou direto em data
+            
+            if (dadosRupturaAPI && dadosRupturaAPI.resumo) {
+                const resumo = dadosRupturaAPI.resumo;
+                const disponibilidade = Math.round(resumo.percentual_disponibilidade || 0);
+                
+                // Debug da data
+                console.log('Data disponibilidade no resumo:', resumo.data_disponibilidade_total);
+                console.log('Data disponibilidade no dadosRupturaAPI:', dadosRupturaAPI.data_disponibilidade_total);
+                
+                // Usar data_disponibilidade_total que vem da API
+                let dataCompleta = resumo.data_disponibilidade_total || dadosRupturaAPI.data_disponibilidade_total || 'Disponível';
+                
+                // Formatar data se vier no formato YYYY-MM-DD
+                if (dataCompleta && dataCompleta !== 'Disponível' && dataCompleta.includes('-')) {
+                    const partes = dataCompleta.split('-');
+                    if (partes.length === 3) {
+                        const [ano, mes, dia] = partes;
+                        dataCompleta = `${dia}/${mes}`;  // Formato DD/MM
+                    }
+                } else if (dataCompleta === null || dataCompleta === 'null' || !dataCompleta) {
+                    dataCompleta = 'Disponível';
+                }
+                
+                // Atualizar botão
+                const span = btn.querySelector('.ruptura-info');
+                if (!span) {
+                    console.error('Span .ruptura-info não encontrado');
+                    return;
+                }
+                
+                // Formatação consistente: X% | Disp. DD/MM ou X% | Disponível
+                if (disponibilidade === 100) {
+                    span.innerHTML = `100% | Disponível`;
+                    btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
+                    btn.classList.add('btn-success');
+                } else if (disponibilidade >= 80) {
+                    // Se tem data, mostrar "Disp. DD/MM", senão "Parcial"
+                    const textoData = (dataCompleta && dataCompleta !== 'Disponível') ? `Disp. ${dataCompleta}` : 'Parcial';
+                    span.innerHTML = `${disponibilidade}% | ${textoData}`;
+                    btn.classList.remove('btn-primary', 'btn-success', 'btn-danger');
+                    btn.classList.add('btn-warning');
+                } else {
+                    // Se tem data, mostrar "Disp. DD/MM", senão "Ruptura"
+                    const textoData = (dataCompleta && dataCompleta !== 'Disponível') ? `Disp. ${dataCompleta}` : 'Ruptura';
+                    span.innerHTML = `${disponibilidade}% | ${textoData}`;
+                    btn.classList.remove('btn-primary', 'btn-success', 'btn-warning');
+                    btn.classList.add('btn-danger');
+                }
+                
+                // Guardar dados reais da API
+                dadosRuptura[cnpj] = {
+                    disponibilidade: disponibilidade,
+                    dataCompleta: dataCompleta,
+                    resumo: resumo,
+                    itens: dadosRupturaAPI.itens || [],
+                    itens_disponiveis: dadosRupturaAPI.itens_disponiveis || []
+                };
+                
+                console.log(`Ruptura analisada para ${cnpj}:`, disponibilidade + '%', dataCompleta);
+            } else {
+                // Se falhou, mostrar como disponível
+                console.log('Falha na API ou sem dados, mostrando como disponível');
+                const span = btn.querySelector('.ruptura-info');
+                if (span) {
+                    span.innerHTML = `100% | Disponível`;
+                    btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
+                    btn.classList.add('btn-success');
+                }
+            }
             
         } catch (error) {
-            console.error('Erro ao analisar ruptura:', error);
+            console.error('Erro ao analisar ruptura para CNPJ', cnpj, ':', error);
+            console.error('Mensagem:', error.message);
+            console.error('Stack:', error.stack);
+            
             const span = btn.querySelector('.ruptura-info');
             if (span) {
-                // Mostrar valor padrão ao invés de erro
-                span.innerHTML = '100% | Disponível';
-                btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
-                btn.classList.add('btn-success');
+                // Mostrar erro ao invés de valor padrão
+                span.innerHTML = 'Erro ao analisar';
+                btn.classList.remove('btn-primary', 'btn-success', 'btn-warning');
+                btn.classList.add('btn-danger');
             }
         }
     }
@@ -330,20 +416,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    // Adicionar indicador na linha se houver ruptura
-                    if (row && datas.tem_ruptura) {
-                        const rupturaIndicator = row.querySelector('.ruptura-indicator');
-                        if (!rupturaIndicator) {
-                            const tdValor = row.querySelector('td:nth-child(3)'); // Coluna de valor
-                            if (tdValor) {
-                                const indicator = document.createElement('span');
-                                indicator.className = 'ruptura-indicator badge bg-warning ms-2';
-                                indicator.textContent = '⚠️ Ruptura';
-                                indicator.title = `Estoque disponível em: ${datas.disponibilidade_estoque}`;
-                                tdValor.appendChild(indicator);
-                            }
-                        }
-                    }
+                    // Badge de ruptura removido - não mais necessário
+                    // O indicador de ruptura agora é mostrado apenas no campo de agendamento (amarelo)
                 }
                 
                 // Preparar mensagem detalhada
@@ -405,12 +479,35 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Analisar ruptura individual - mostrar detalhes
     async function handleAnalisarRupturaIndividual(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
         const btn = e.currentTarget;
         const cnpj = btn.dataset.cnpj;
-        const pedidos = JSON.parse(btn.dataset.pedidos || '[]');
+        
+        // Parsear e extrair números de pedidos
+        let pedidosData = [];
+        let numerosPedidos = [];
+        
+        // Processar pedidos - agora é uma string simples separada por vírgula
+        const pedidosString = (btn.dataset.pedidos || '').trim();
+        console.log('Valor de data-pedidos (click):', pedidosString);
+        
+        if (pedidosString) {
+            // Dividir por vírgula e remover espaços
+            numerosPedidos = pedidosString
+                .split(',')
+                .map(p => p.trim())
+                .filter(p => p && p !== '');
+            
+            console.log('Números de pedidos extraídos:', numerosPedidos);
+        }
+        
+        console.log('handleAnalisarRupturaIndividual chamado para CNPJ:', cnpj);
+        console.log('Números de pedidos extraídos:', numerosPedidos);
         
         // Se não há pedidos para este CNPJ, retornar
-        if (!pedidos || pedidos.length === 0) {
+        if (!numerosPedidos || numerosPedidos.length === 0) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Sem pedidos',
@@ -419,8 +516,21 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Verificar se já temos dados em cache
+        if (dadosRuptura[cnpj] && dadosRuptura[cnpj].resumo) {
+            console.log('Usando dados em cache para', cnpj);
+            console.log('Itens disponíveis em cache:', dadosRuptura[cnpj].itens_disponiveis?.length || 0);
+            mostrarModalRupturaDetalhado({
+                resumo: dadosRuptura[cnpj].resumo,
+                itens: dadosRuptura[cnpj].itens || [],
+                itens_disponiveis: dadosRuptura[cnpj].itens_disponiveis || []
+            }, cnpj);
+            return;
+        }
+        
         // Pegar o primeiro pedido (principal) para análise
-        const numPedido = pedidos[0];
+        const numPedido = numerosPedidos[0];
+        console.log('Fazendo chamada à API para pedido:', numPedido);
         
         try {
             // Mostrar loading
@@ -429,17 +539,43 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analisando...';
             
             // Fazer requisição para API de ruptura
+            console.log(`Fazendo requisição manual para: /carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
             const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
+            
+            console.log('Status da resposta (manual):', response.status);
+            console.log('Status OK?', response.ok);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Erro na resposta da API (manual):', response.status, errorText);
+                throw new Error(`API retornou erro ${response.status}: ${errorText}`);
+            }
+            
             const data = await response.json();
+            console.log('Resposta da API (manual):', data);
             
             // Restaurar botão
             btn.disabled = false;
             btn.innerHTML = originalText;
             
-            if (data.success) {
-                // Criar e mostrar modal de ruptura similar ao da carteira agrupada
-                mostrarModalRupturaDetalhado(data.data, cnpj);
+            // A API retorna diretamente o objeto resultado
+            const dadosRupturaAPI = data.data || data;
+            
+            if (dadosRupturaAPI && dadosRupturaAPI.resumo) {
+                // Salvar em cache de forma segura (usando o objeto global)
+                dadosRuptura[cnpj] = {
+                    ...(dadosRuptura[cnpj] || {}),
+                    resumo: dadosRupturaAPI.resumo,
+                    itens: dadosRupturaAPI.itens || [],
+                    itens_disponiveis: dadosRupturaAPI.itens_disponiveis || []
+                };
+                
+                // Criar e mostrar modal de ruptura
+                console.log('Chamando mostrarModalRupturaDetalhado');
+                console.log('Itens disponíveis:', dadosRupturaAPI.itens_disponiveis?.length || 0);
+                mostrarModalRupturaDetalhado(dadosRupturaAPI, cnpj);
             } else {
+                console.error('API retornou erro:', data);
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro na análise',
@@ -454,93 +590,448 @@ document.addEventListener('DOMContentLoaded', function() {
             Swal.fire({
                 icon: 'error',
                 title: 'Erro',
-                text: 'Erro ao analisar ruptura do pedido'
+                text: 'Erro ao analisar ruptura do pedido: ' + error.message
             });
         }
     }
+    
+    // Funções auxiliares de formatação
+    function formatarValor(valor) {
+        if (valor === null || valor === undefined) return '0,00';
+        return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    function formatarNumero(numero) {
+        if (numero === null || numero === undefined) return '0';
+        // Sem casas decimais para quantidades
+        return Math.round(numero).toLocaleString('pt-BR');
+    }
+    
+    function formatarNumeroDecimal(numero) {
+        if (numero === null || numero === undefined) return '0,00';
+        return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    // Função para formatar data de YYYY-MM-DD para DD/MM/YYYY
+    function formatarData(data) {
+        if (!data) return '-';
+        const partes = data.split('-');
+        if (partes.length === 3) {
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+        return data;
+    }
+    
+    // Variável global para guardar dados do modal atual
+    let dadosModalAtual = null;
     
     // Função para mostrar modal detalhado de ruptura
     function mostrarModalRupturaDetalhado(data, cnpj) {
-        const resumo = data.resumo;
-        const cores = {
-            'CRITICA': 'danger',
-            'ALTA': 'warning', 
-            'MEDIA': 'info',
-            'BAIXA': 'success'
-        };
+        console.log('Mostrando modal de ruptura para CNPJ:', cnpj);
+        console.log('Dados recebidos:', data);
         
-        // Criar modal se não existir
-        let modal = document.getElementById('modalRupturaLote');
-        if (!modal) {
-            modal = criarModalRupturaLote();
+        // Guardar dados para uso nas abas
+        dadosModalAtual = data;
+        window.dadosModalAtual = data; // Disponibilizar globalmente
+        
+        try {
+            const resumo = data.resumo;
+            const cores = {
+                'CRITICA': 'danger',
+                'ALTA': 'warning', 
+                'MEDIA': 'info',
+                'BAIXA': 'secondary'
+            };
+            
+            // Criar modal se não existir
+            let modal = document.getElementById('modalRupturaLote');
+            if (!modal) {
+                console.log('Modal não existe, criando...');
+                modal = criarModalRupturaLote();
+            }
+            
+            // Verificar se elementos existem antes de atualizar
+            const tituloElement = document.getElementById('modalRupturaLoteTitulo');
+            if (!tituloElement) {
+                console.error('Elemento modalRupturaLoteTitulo não encontrado');
+                return;
+            }
+            
+            // Atualizar título com botões de toggle como na carteira agrupada
+            tituloElement.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        Análise de Ruptura - Pedido ${resumo.num_pedido}
+                        <span class="badge bg-${cores[resumo.criticidade] || 'info'} ms-2">
+                            ${resumo.criticidade || 'MÉDIA'}
+                        </span>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-danger active" id="btnMostrarRuptura"
+                                onclick="window.mostrarItensRupturaModal()">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            Ruptura (${resumo.qtd_itens_ruptura || 0})
+                        </button>
+                        <button type="button" class="btn btn-outline-success" id="btnMostrarDisponiveis"
+                                onclick="window.mostrarItensDisponiveisModal()">
+                            <i class="fas fa-check-circle me-1"></i>
+                            Disponíveis (${resumo.qtd_itens_disponiveis || 0})
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="btnMostrarTodos"
+                                onclick="window.mostrarTodosItensModal()">
+                            <i class="fas fa-list me-1"></i>
+                            Todos (${resumo.total_itens || 0})
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Atualizar resumo igual à carteira agrupada
+            const resumoElement = document.getElementById('modalRupturaLoteResumo');
+            if (!resumoElement) {
+                console.error('Elemento modalRupturaLoteResumo não encontrado');
+                return;
+            }
+            
+            resumoElement.innerHTML = `
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <strong>Disponibilidade</strong><br>
+                            <span class="h4 text-success">${Math.round(resumo.percentual_disponibilidade || 0)}%</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <strong>Em Ruptura</strong><br>
+                            <span class="h4 text-danger">${resumo.percentual_ruptura || 0}%</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <strong>Valor Total</strong><br>
+                            <span class="h5">R$ ${formatarValor(resumo.valor_total_pedido)}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <strong>Valor em Risco</strong><br>
+                            <span class="h5 text-danger">R$ ${formatarValor(resumo.valor_com_ruptura)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Atualizar tabela de itens com campos corretos da API
+            const tbody = document.getElementById('modalRupturaLoteItens');
+            tbody.innerHTML = '';
+            
+            if (data.itens && data.itens.length > 0) {
+                data.itens.forEach(item => {
+                    const tr = document.createElement('tr');
+                    // Usar campos corretos: qtd_saldo, estoque_atual, estoque_min_d7, data_producao, qtd_producao, data_disponivel
+                    tr.innerHTML = `
+                        <td>${item.cod_produto}</td>
+                        <td>${item.nome_produto}</td>
+                        <td class="text-end">${formatarNumero(item.qtd_saldo)}</td>
+                        <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : ''}">
+                            ${formatarNumero(item.estoque_atual || 0)}
+                        </td>
+                        <td class="text-end ${item.estoque_min_d7 < 0 ? 'text-danger' : ''}">
+                            ${formatarNumero(item.estoque_min_d7)}
+                        </td>
+                        <td class="text-center">
+                            ${item.data_producao ? 
+                                `<span class="badge bg-primary">
+                                    ${formatarData(item.data_producao)}
+                                    <br>
+                                    <small>${formatarNumero(item.qtd_producao)} un</small>
+                                </span>` : 
+                                '<span class="badge bg-danger">Sem Produção</span>'
+                            }
+                        </td>
+                        <td class="text-center">
+                            ${item.data_disponivel ? 
+                                `<span class="badge bg-success">
+                                    ${formatarData(item.data_disponivel)}
+                                </span>` : 
+                                '<span class="badge bg-secondary">Indisponível</span>'
+                            }
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Nenhum item com ruptura
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            // Mostrar modal
+            console.log('Tentando mostrar modal...');
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+            console.log('Modal mostrado com sucesso');
+            
+        } catch (error) {
+            console.error('Erro ao mostrar modal de ruptura:', error);
+            console.error('Stack trace:', error.stack);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Erro ao exibir detalhes da ruptura: ' + error.message
+            });
+        }
+    }
+    
+    // Funções para alternar entre as abas do modal
+    window.mostrarItensRupturaModal = function() {
+        if (!dadosModalAtual) return;
+        
+        // Atualizar botões
+        document.querySelectorAll('#modalRupturaLote .btn-group button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('btnMostrarRuptura')?.classList.add('active');
+        
+        // Atualizar título da seção
+        const tituloSecao = document.querySelector('#modalRupturaLote h6');
+        if (tituloSecao) {
+            tituloSecao.innerHTML = '<i class="fas fa-exclamation-triangle text-danger me-2"></i>Itens com Ruptura de Estoque:';
         }
         
-        // Atualizar título
-        document.getElementById('modalRupturaLoteTitulo').innerHTML = `
-            Análise de Ruptura - CNPJ: ${cnpj}
-            <span class="badge bg-${cores[resumo.criticidade]} ms-2">
-                ${resumo.criticidade}
-            </span>
-        `;
-        
-        // Atualizar resumo
-        document.getElementById('modalRupturaLoteResumo').innerHTML = `
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <strong>Disponibilidade</strong><br>
-                        <span class="h4 text-success">${Math.round(resumo.percentual_disponibilidade)}%</span>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <strong>Data Completa</strong><br>
-                        <span class="h5">${resumo.data_completa || 'N/A'}</span>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <strong>Valor Total</strong><br>
-                        <span class="h5">R$ ${formatarValor(resumo.valor_total_pedido)}</span>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <strong>Itens com Ruptura</strong><br>
-                        <span class="h5 text-danger">${data.itens?.length || 0}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Atualizar tabela de itens
+        // Atualizar tabela
         const tbody = document.getElementById('modalRupturaLoteItens');
+        const itens = dadosModalAtual.itens || [];
+        
+        if (itens.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Nenhum item com ruptura
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        itens.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.cod_produto}</td>
+                <td>${item.nome_produto}</td>
+                <td class="text-end">${formatarNumero(item.qtd_saldo)}</td>
+                <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : ''}">
+                    ${formatarNumero(item.estoque_atual || 0)}
+                </td>
+                <td class="text-end ${item.estoque_min_d7 < 0 ? 'text-danger' : ''}">
+                    ${formatarNumero(item.estoque_min_d7)}
+                </td>
+                <td class="text-center">
+                    ${item.data_producao ? 
+                        `<span class="badge bg-primary">
+                            ${formatarData(item.data_producao)}
+                            <br>
+                            <small>${formatarNumero(item.qtd_producao)} un</small>
+                        </span>` : 
+                        '<span class="badge bg-danger">Sem Produção</span>'
+                    }
+                </td>
+                <td class="text-center">
+                    ${item.data_disponivel ? 
+                        `<span class="badge bg-success">
+                            ${formatarData(item.data_disponivel)}
+                        </span>` : 
+                        '<span class="badge bg-secondary">Indisponível</span>'
+                    }
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    };
+    
+    window.mostrarItensDisponiveisModal = function() {
+        if (!dadosModalAtual) return;
+        
+        // Atualizar botões
+        document.querySelectorAll('#modalRupturaLote .btn-group button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('btnMostrarDisponiveis')?.classList.add('active');
+        
+        // Atualizar título da seção
+        const tituloSecao = document.querySelector('#modalRupturaLote h6');
+        if (tituloSecao) {
+            tituloSecao.innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>Itens com Disponibilidade:';
+        }
+        
+        // Atualizar tabela
+        const tbody = document.getElementById('modalRupturaLoteItens');
+        const itens = dadosModalAtual.itens_disponiveis || [];
+        
+        if (itens.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        Nenhum item disponível
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        itens.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.cod_produto}</td>
+                <td>${item.nome_produto}</td>
+                <td class="text-end">${formatarNumero(item.qtd_saldo)}</td>
+                <td class="text-end text-success">
+                    ${formatarNumero(item.estoque_atual || 0)}
+                </td>
+                <td class="text-end text-success">
+                    ${formatarNumero(item.estoque_min_d7)}
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-success">
+                        <i class="fas fa-check"></i> Disponível
+                    </span>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-success">Agora</span>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    };
+    
+    window.mostrarTodosItensModal = function() {
+        if (!dadosModalAtual) return;
+        
+        // Atualizar botões
+        document.querySelectorAll('#modalRupturaLote .btn-group button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('btnMostrarTodos')?.classList.add('active');
+        
+        // Atualizar título da seção
+        const tituloSecao = document.querySelector('#modalRupturaLote h6');
+        if (tituloSecao) {
+            tituloSecao.innerHTML = '<i class="fas fa-list text-primary me-2"></i>Todos os Itens do Pedido:';
+        }
+        
+        // Atualizar tabela
+        const tbody = document.getElementById('modalRupturaLoteItens');
+        const itensRuptura = dadosModalAtual.itens || [];
+        const itensDisponiveis = dadosModalAtual.itens_disponiveis || [];
+        
         tbody.innerHTML = '';
         
-        if (data.itens && data.itens.length > 0) {
-            data.itens.forEach(item => {
+        // Adicionar itens com ruptura primeiro
+        if (itensRuptura.length > 0) {
+            const trHeader = document.createElement('tr');
+            trHeader.className = 'table-secondary';
+            trHeader.innerHTML = `
+                <td colspan="7" class="fw-bold">
+                    <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                    Itens com Ruptura (${itensRuptura.length})
+                </td>
+            `;
+            tbody.appendChild(trHeader);
+            
+            itensRuptura.forEach(item => {
                 const tr = document.createElement('tr');
-                tr.className = item.saldo_disponivel <= 0 ? 'table-danger' : 'table-warning';
                 tr.innerHTML = `
                     <td>${item.cod_produto}</td>
                     <td>${item.nome_produto}</td>
-                    <td class="text-end">${formatarNumero(item.qtd_pedido)}</td>
-                    <td class="text-end">${formatarNumero(item.saldo_disponivel)}</td>
-                    <td class="text-end">R$ ${formatarValor(item.valor_total)}</td>
-                    <td>${item.data_disponibilidade || 'Indisponível'}</td>
+                    <td class="text-end">${formatarNumero(item.qtd_saldo)}</td>
+                    <td class="text-end ${item.estoque_atual < 0 ? 'text-danger' : ''}">
+                        ${formatarNumero(item.estoque_atual || 0)}
+                    </td>
+                    <td class="text-end ${item.estoque_min_d7 < 0 ? 'text-danger' : ''}">
+                        ${formatarNumero(item.estoque_min_d7)}
+                    </td>
+                    <td class="text-center">
+                        ${item.data_producao ? 
+                            `<span class="badge bg-primary">
+                                ${formatarData(item.data_producao)}
+                                <br>
+                                <small>${formatarNumero(item.qtd_producao)} un</small>
+                            </span>` : 
+                            '<span class="badge bg-danger">Sem Produção</span>'
+                        }
+                    </td>
+                    <td class="text-center">
+                        ${item.data_disponivel ? 
+                            `<span class="badge bg-success">
+                                ${formatarData(item.data_disponivel)}
+                            </span>` : 
+                            '<span class="badge bg-secondary">Indisponível</span>'
+                        }
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
-        } else {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum item com ruptura</td></tr>';
         }
         
-        // Mostrar modal
-        const modalInstance = new bootstrap.Modal(modal);
-        modalInstance.show();
-    }
+        // Adicionar itens disponíveis
+        if (itensDisponiveis.length > 0) {
+            const trHeader = document.createElement('tr');
+            trHeader.className = 'table-secondary';
+            trHeader.innerHTML = `
+                <td colspan="7" class="fw-bold">
+                    <i class="fas fa-check-circle text-success me-2"></i>
+                    Itens Disponíveis (${itensDisponiveis.length})
+                </td>
+            `;
+            tbody.appendChild(trHeader);
+            
+            itensDisponiveis.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.cod_produto}</td>
+                    <td>${item.nome_produto}</td>
+                    <td class="text-end">${formatarNumero(item.qtd_saldo)}</td>
+                    <td class="text-end text-success">
+                        ${formatarNumero(item.estoque_atual || 0)}
+                    </td>
+                    <td class="text-end text-success">
+                        ${formatarNumero(item.estoque_min_d7)}
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-success">
+                            <i class="fas fa-check"></i> Disponível
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-success">Agora</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        if (itensRuptura.length === 0 && itensDisponiveis.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted">
+                        Nenhum item encontrado
+                    </td>
+                </tr>
+            `;
+        }
+    };
     
-    // Criar modal de ruptura para lote
+    // Criar modal de ruptura para lote (igual ao da carteira agrupada)
     function criarModalRupturaLote() {
         const modalHtml = `
             <div class="modal fade" id="modalRupturaLote" tabindex="-1">
@@ -558,7 +1049,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <!-- Resumo -->
                             </div>
                             
-                            <h6 class="mt-3">Itens com Ruptura de Estoque:</h6>
+                            <h6 class="mt-3">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                                Itens com Ruptura de Estoque:
+                            </h6>
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover">
                                     <thead>
@@ -566,9 +1060,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <th>Código</th>
                                             <th>Produto</th>
                                             <th class="text-end">Qtd Pedido</th>
-                                            <th class="text-end">Saldo</th>
-                                            <th class="text-end">Valor</th>
-                                            <th>Disponibilidade</th>
+                                            <th class="text-end">Estoque Atual</th>
+                                            <th class="text-end">Estoque D+7</th>
+                                            <th class="text-center">Produção</th>
+                                            <th class="text-center">Disponibilidade</th>
                                         </tr>
                                     </thead>
                                     <tbody id="modalRupturaLoteItens">
@@ -706,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Processar lote
-    function handleProcessarLote() {
+    async function handleProcessarLote() {
         if (cnpjsSelecionados.size === 0) {
             Swal.fire('Atenção', 'Selecione pelo menos um CNPJ', 'warning');
             return;
@@ -736,14 +1231,147 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Por enquanto, apenas mostrar confirmação
+        // Verificar se é portal Sendas
+        const portal = window.PORTAL_CONFIG?.portal;
+        
+        if (portal === 'sendas') {
+            // Fluxo específico do Sendas
+            await processarAgendamentoSendas(dadosAgendamento);
+        } else {
+            // Fluxo padrão (Atacadão ou outros)
+            Swal.fire({
+                icon: 'info',
+                title: 'Processamento em Lote',
+                html: `Pronto para processar ${cnpjsSelecionados.size} CNPJs<br>` +
+                      'Portal: ' + (portal || 'Não identificado'),
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+    
+    // Processar agendamento específico do Sendas
+    async function processarAgendamentoSendas(dadosAgendamento) {
+        // Mostrar loading com etapas
         Swal.fire({
-            icon: 'info',
-            title: 'Processamento em Lote',
-            html: `Pronto para processar ${cnpjsSelecionados.size} CNPJs<br>` +
-                  'Esta funcionalidade será ativada na próxima fase',
-            confirmButtonText: 'OK'
+            title: 'Processando Agendamento Sendas',
+            html: `
+                <div class="text-start">
+                    <p><strong>Executando processo automatizado:</strong></p>
+                    <ol>
+                        <li>📥 Baixando planilha do portal...</li>
+                        <li>📝 Preenchendo dados selecionados...</li>
+                        <li>📤 Fazendo upload no portal Sendas...</li>
+                        <li>🗂️ Gerando separações no sistema...</li>
+                    </ol>
+                    <br>
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Processando...</span>
+                        </div>
+                        <p class="mt-2"><small>Este processo pode levar alguns minutos...</small></p>
+                    </div>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            width: '500px',
+            didOpen: () => {
+                Swal.showLoading();
+            }
         });
+        
+        try {
+            // Chamar endpoint de processamento Sendas
+            const response = await fetch('/carteira/programacao-lote/api/processar-agendamento-sendas', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    portal: 'sendas',
+                    agendamentos: dadosAgendamento
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Se tiver URL de download, baixar automaticamente
+                if (result.download_url) {
+                    // Criar link temporário para download
+                    const link = document.createElement('a');
+                    link.href = result.download_url;
+                    link.download = result.arquivo;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+                
+                // Mostrar sucesso com detalhes
+                let detalhesHtml = '<div class="text-start">';
+                detalhesHtml += '<h5>✅ Processo concluído com sucesso!</h5>';
+                detalhesHtml += '<hr>';
+                
+                detalhesHtml += '<p><strong>Etapas realizadas:</strong></p>';
+                detalhesHtml += '<ol>';
+                detalhesHtml += '<li>✅ Planilha baixada do portal</li>';
+                detalhesHtml += '<li>✅ Dados preenchidos automaticamente</li>';
+                detalhesHtml += '<li>✅ Upload realizado no portal Sendas</li>';
+                detalhesHtml += '<li>✅ Separações geradas no sistema</li>';
+                detalhesHtml += '</ol>';
+                
+                if (result.separacoes_criadas && result.separacoes_criadas.length > 0) {
+                    detalhesHtml += '<hr>';
+                    detalhesHtml += '<p><strong>Separações criadas:</strong></p>';
+                    detalhesHtml += '<ul>';
+                    result.separacoes_criadas.forEach(sep => {
+                        detalhesHtml += `<li>Pedido ${sep.num_pedido}: ${sep.qtd_itens} itens</li>`;
+                    });
+                    detalhesHtml += '</ul>';
+                }
+                
+                detalhesHtml += '<hr>';
+                detalhesHtml += '<p class="text-success"><strong>Agendamento enviado para o portal Sendas!</strong></p>';
+                detalhesHtml += '<p class="text-muted">Aguarde a confirmação do protocolo no portal.</p>';
+                detalhesHtml += '</div>';
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso!',
+                    html: detalhesHtml,
+                    confirmButtonText: 'OK',
+                    width: '600px'
+                }).then(() => {
+                    // Recarregar a página para atualizar a lista
+                    window.location.reload();
+                });
+            } else {
+                // Verificar se tem CNPJs ignorados
+                let mensagemErro = result.error || 'Erro desconhecido';
+                
+                if (result.cnpjs_ignorados && result.cnpjs_ignorados.length > 0) {
+                    mensagemErro += '\n\nCNPJs ignorados (sem data de agendamento):\n';
+                    result.cnpjs_ignorados.forEach(cnpj => {
+                        mensagemErro += `• ${cnpj}\n`;
+                    });
+                    mensagemErro += '\n⚠️ Data de agendamento é OBRIGATÓRIA para o portal Sendas';
+                }
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro ao processar',
+                    html: mensagemErro.replace(/\n/g, '<br>'),
+                    width: '600px'
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao processar agendamento Sendas:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro de comunicação',
+                text: 'Não foi possível processar o agendamento. Tente novamente.'
+            });
+        }
     }
     
     // Converter número
@@ -760,9 +1388,11 @@ document.addEventListener('DOMContentLoaded', function() {
         let palletsTotal = 0;
         
         document.querySelectorAll('.cnpj-row').forEach(row => {
-            const valorText = row.cells[5].textContent;
-            const pesoText = row.cells[6].textContent;
-            const palletsText = row.cells[7].textContent;
+            // Nova estrutura de colunas após unificação:
+            // 0: Checkbox, 1: Cliente, 2: Cidade, 3: Valor, 4: Peso, 5: Pallets
+            const valorText = row.cells[3].textContent;
+            const pesoText = row.cells[4].textContent;
+            const palletsText = row.cells[5].textContent;
             
             const valor = converterParaNumero(valorText);
             const peso = converterParaNumero(pesoText);

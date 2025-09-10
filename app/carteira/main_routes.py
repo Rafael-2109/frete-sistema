@@ -430,50 +430,6 @@ FUNCIONALIDADES IMPLEMENTADAS:
    - Workflow de aprovação para mudanças críticas
 """
 
-@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>')
-@login_required
-def api_pre_separacao_detalhes(pre_sep_id):
-    """
-    API para obter detalhes de uma pré-separação
-    CRIADA: Rota estava faltando e sendo usada no JS linha 5687
-    """
-    try:
-        from app.carteira.models import PreSeparacaoItem
-        
-        pre_sep = PreSeparacaoItem.query.get(pre_sep_id)
-        if not pre_sep:
-            return jsonify({
-                'success': False,
-                'error': f'Pré-separação {pre_sep_id} não encontrada'
-            }), 404
-            
-        # Retornar dados da pré-separação
-        dados = {
-            'success': True,
-            'id': pre_sep.id,
-            'num_pedido': pre_sep.num_pedido,
-            'cod_produto': pre_sep.cod_produto,
-            'nome_produto': pre_sep.nome_produto,
-            'qtd_original_carteira': float(pre_sep.qtd_original_carteira or 0),
-            'qtd_selecionada_usuario': float(pre_sep.qtd_selecionada_usuario or 0),
-            'qtd_restante_calculada': float(pre_sep.qtd_restante_calculada or 0),
-            'data_expedicao_editada': pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else None,
-            'data_agendamento_editada': pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else None,
-            'protocolo_editado': pre_sep.protocolo_editado,
-            'observacoes_usuario': pre_sep.observacoes_usuario,
-            'status': pre_sep.status,
-            'criado_em': pre_sep.criado_em.strftime('%d/%m/%Y %H:%M') if pre_sep.criado_em else None,
-            'criado_por': pre_sep.criado_por
-        }
-        
-        return jsonify(dados)
-        
-    except Exception as e:
-        logger.error(f"Erro ao buscar pré-separação {pre_sep_id}: {e}")
-        return jsonify({
-            'success': False,
-            'error': f'Erro interno: {str(e)}'
-        }), 500
 
 @carteira_bp.route('/api/item/<item_id>/recalcular-estoques', methods=['POST'])
 @login_required

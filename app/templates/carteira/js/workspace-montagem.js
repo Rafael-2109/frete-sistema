@@ -18,8 +18,6 @@ class WorkspaceMontagem {
         this.api = new WorkspaceAPI(); // 🆕 Módulo de API centralizado
         this.loteManager = new LoteManager(this);
         this.modalCardex = new ModalCardex();
-        // PreSeparacaoManager removido - tudo é Separacao agora
-        // this.preSeparacaoManager = new PreSeparacaoManager(this); // DEPRECATED
 
         this.init();
     }
@@ -110,10 +108,10 @@ class WorkspaceMontagem {
                 // Processar TODAS as separações de uma vez
                 this.todasSeparacoes = separacoesData.separacoes;
                 
-                // Atualizar Map local para compatibilidade
+                // Atualizar Map local - MANTER ESTRUTURA ORIGINAL DO BACKEND
                 separacoesData.separacoes.forEach(sep => {
                     this.preSeparacoes.set(sep.separacao_lote_id, {
-                        produtos: sep.produtos || [],
+                        produtos: sep.produtos || [], // Manter estrutura original
                         totais: {
                             valor: sep.valor_total || 0,
                             peso: sep.peso_total || 0,
@@ -667,7 +665,11 @@ class WorkspaceMontagem {
 
             for (const produto of produtosParaAdicionar) {
                 const loteData = this.preSeparacoes.get(loteId);
-                const produtoExistente = loteData?.produtos.find(p => p.codProduto === produto.codProduto);
+                // Verificar se produto existe, compatível com ambas estruturas
+                const produtoExistente = loteData?.produtos.find(p => 
+                    (p.codProduto === produto.codProduto) || 
+                    (p.cod_produto === produto.codProduto)
+                );
 
                 await this.loteManager.adicionarProdutoNoLote(loteId, produto);
 

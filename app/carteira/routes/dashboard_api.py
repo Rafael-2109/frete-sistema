@@ -19,8 +19,6 @@ def api_separacoes_programadas():
     Retorna totais e valores por data de expedição
     """
     try:
-        # Buscar separações não sincronizadas (inclui PREVISAO, ABERTO, COTADO)
-        # MIGRADO: Removido JOIN com Pedido VIEW, usa sincronizado_nf=False
         separacoes = Separacao.query.filter(
             Separacao.sincronizado_nf == False
         ).all()

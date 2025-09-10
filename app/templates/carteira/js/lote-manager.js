@@ -63,7 +63,7 @@ class LoteManager {
         const loteData = this.workspace.preSeparacoes.get(loteId) || {
             produtos: [],
             totais: { valor: 0, peso: 0, pallet: 0 },
-            status: 'PREVISAO',
+            status: 'ABERTO',
             lote_id: loteId,
             separacao_lote_id: loteId,
             data_expedicao: null,
@@ -75,7 +75,7 @@ class LoteManager {
         };
         
         // Garantir defaults
-        loteData.status = loteData.status || 'PREVISAO';
+        loteData.status = loteData.status || 'ABERTO';
         loteData.lote_id = loteData.lote_id || loteId;
         
         // USAR O CARD UNIVERSAL
@@ -170,7 +170,7 @@ class LoteManager {
                         <h6 class="mb-0">
                             <i class="fas fa-${config.icone} me-2"></i>
                             ${config.texto}
-                            ${status === 'PREVISAO' ? `
+                            ${status === 'ABERTO' ? `
                                 <small class="text-muted ms-2" title="Alterações são salvas automaticamente">
                                     <i class="fas fa-save"></i> Auto-save
                                 </small>
@@ -196,15 +196,15 @@ class LoteManager {
                             <div class="row text-center">
                                 <div class="col-4">
                                     <small class="text-muted d-block">Valor</small>
-                                    <strong class="text-success total-valor-card">${this.formatarMoeda(loteData.totais?.valor || loteData.valor_total || 0)}</strong>
+                                    <strong class="text-success total-valor-card">${this.formatarMoeda(loteData.totais?.valor || loteData.valor_total || loteData.valor_saldo || 0)}</strong>
                                 </div>
                                 <div class="col-4">
                                     <small class="text-muted d-block">Peso</small>
-                                    <strong class="text-primary total-peso-card">${this.formatarPeso(loteData.totais?.peso || loteData.peso_total || 0)}</strong>
+                                    <strong class="text-primary total-peso-card">${this.formatarPeso(loteData.totais?.peso || loteData.peso_total || loteData.peso || 0)}</strong>
                                 </div>
                                 <div class="col-4">
                                     <small class="text-muted d-block">Pallets</small>
-                                    <strong class="text-info total-pallet-card">${this.formatarPallet(loteData.totais?.pallet || loteData.pallet_total || 0)}</strong>
+                                    <strong class="text-info total-pallet-card">${this.formatarPallet(loteData.totais?.pallet || loteData.pallet_total || loteData.pallet || 0)}</strong>
                                 </div>
                             </div>
                         </div>
@@ -356,18 +356,28 @@ class LoteManager {
         }
 
         return `<div class="produtos-lista">` + produtos.map(produto => {
-            // Compatibilidade com diferentes estruturas de dados
-            const codProduto = produto.codProduto || produto.cod_produto;
-            const nomeProduto = produto.nomeProduto || produto.nome_produto || '';
-            const quantidade = produto.quantidade || produto.qtd_saldo || 0;
-            const valor = produto.valor || produto.valor_saldo || 0;
+            // Compatibilidade com diferentes estruturas de dados - PRIORIZAR campos do backend
+            const codProduto = produto.cod_produto || produto.codProduto;
+            const nomeProduto = produto.nome_produto || produto.nomeProduto || '';
+            const quantidade = parseFloat(produto.qtd_saldo || produto.quantidade || 0);
+            const valor = parseFloat(produto.valor_saldo || produto.valor || 0);
+            const peso = parseFloat(produto.peso || 0);
+            const pallet = parseFloat(produto.pallet || 0);
             
             // Formatar valores
             const qtdFormatada = Math.floor(quantidade).toLocaleString('pt-BR');
             const valorFormatado = valor > 0 ? valor.toLocaleString('pt-BR', { 
-                minimumFractionDigits: 0, 
-                maximumFractionDigits: 0 
-            }) : '0';
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            }) : '0,00';
+            const pesoFormatado = peso > 0 ? peso.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }) : '0,00';
+            const palletFormatado = pallet > 0 ? pallet.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }) : '0,00';
 
             return `
                 <div class="produto-lote d-flex align-items-center justify-content-between py-1 border-bottom">
@@ -378,12 +388,22 @@ class LoteManager {
                         </span>
                     </div>
                     <div class="produto-valores d-flex align-items-center text-nowrap">
-                        <span class="small me-3">
+                        <span class="small me-2">
                             <strong>${qtdFormatada}</strong>un
                         </span>
                         ${valor > 0 ? `
-                            <span class="small text-success me-3">
+                            <span class="small text-success me-2">
                                 R$ <strong>${valorFormatado}</strong>
+                            </span>
+                        ` : ''}
+                        ${peso > 0 ? `
+                            <span class="small text-primary me-2">
+                                <strong>${pesoFormatado}</strong>kg
+                            </span>
+                        ` : ''}
+                        ${pallet > 0 ? `
+                            <span class="small text-info me-2">
+                                <strong>${palletFormatado}</strong>plt
                             </span>
                         ` : ''}
                         ${podeRemover ? `
@@ -398,8 +418,6 @@ class LoteManager {
             `;
         }).join('') + `</div>`;
     }
-
-    // REMOVED: renderizarProdutosDoLote - Método não utilizado (wrapper desnecessário)
 
     async adicionarProdutoNoLote(loteId, dadosProduto) {
         try {
@@ -433,15 +451,18 @@ class LoteManager {
             };
 
             // Verificar se produto já existe no lote
-            const produtoExistente = loteData.produtos.find(p => p.codProduto === dadosProduto.codProduto);
+            const produtoExistente = loteData.produtos.find(p => 
+                (p.cod_produto === dadosProduto.codProduto) || (p.codProduto === dadosProduto.codProduto)
+            );
 
             if (produtoExistente) {
-                // Somar quantidade ao produto existente
-                produtoExistente.quantidade = resultado.dados.quantidade; // Já vem somado da API
-                produtoExistente.valor = resultado.dados.valor;
+                // Somar quantidade ao produto existente - USAR NOMES DO BACKEND
+                produtoExistente.qtd_saldo = resultado.dados.quantidade; // Já vem somado da API
+                produtoExistente.valor_saldo = resultado.dados.valor;
                 produtoExistente.peso = resultado.dados.peso;
                 produtoExistente.pallet = resultado.dados.pallet;
                 produtoExistente.separacaoId = resultado.separacao_id;
+                produtoExistente.nome_produto = dadosProduto.nomeProduto || dadosProduto.nome_produto || '';
 
                 // Mostrar feedback específico
                 this.workspace.mostrarFeedback(
@@ -449,11 +470,12 @@ class LoteManager {
                     'success'
                 );
             } else {
-                // Adicionar novo produto com dados da API
+                // Adicionar novo produto com dados da API - USAR NOMES DO BACKEND
                 loteData.produtos.push({
-                    codProduto: dadosProduto.codProduto,
-                    quantidade: resultado.dados.quantidade,
-                    valor: resultado.dados.valor,
+                    cod_produto: dadosProduto.codProduto,
+                    nome_produto: dadosProduto.nomeProduto || dadosProduto.nome_produto || '',
+                    qtd_saldo: resultado.dados.quantidade,
+                    valor_saldo: resultado.dados.valor,
                     peso: resultado.dados.peso,
                     pallet: resultado.dados.pallet,
                     separacaoId: resultado.separacao_id,
@@ -544,8 +566,8 @@ class LoteManager {
         let pallet = 0;
 
         loteData.produtos.forEach(produto => {
-            // Usar valores já calculados pela API
-            valor += produto.valor || 0;
+            // Usar valores já calculados pela API - compatível com ambas estruturas
+            valor += produto.valor_saldo || produto.valor || 0;
             peso += produto.peso || 0;
             pallet += produto.pallet || 0;
         });
@@ -571,8 +593,10 @@ class LoteManager {
             const loteData = this.workspace.preSeparacoes.get(loteId);
             if (!loteData) return;
 
-            // Encontrar produto para obter o ID da separação
-            const produto = loteData.produtos.find(p => p.codProduto === codProduto);
+            // Encontrar produto para obter o ID da separação - compatível com ambas estruturas
+            const produto = loteData.produtos.find(p => 
+                p.codProduto === codProduto || p.cod_produto === codProduto
+            );
             const separacaoId = produto?.separacaoId || produto?.preSeparacaoId;
             if (!produto || !separacaoId) {
                 console.warn(`⚠️ Produto ${codProduto} não tem ID de separação`);
@@ -601,8 +625,10 @@ class LoteManager {
                 throw new Error(result.error || 'Erro ao remover pré-separação');
             }
 
-            // Remover do Map local
-            loteData.produtos = loteData.produtos.filter(p => p.codProduto !== codProduto);
+            // Remover do Map local - compatível com ambas estruturas
+            loteData.produtos = loteData.produtos.filter(p => 
+                p.codProduto !== codProduto && p.cod_produto !== codProduto
+            );
             this.recalcularTotaisLote(loteId);
             this.atualizarCardLote(loteId);
 
@@ -610,7 +636,8 @@ class LoteManager {
 
             // IMPORTANTE: Atualizar saldo na tabela de origem após remover
             if (window.workspaceQuantidades) {
-                window.workspaceQuantidades.atualizarSaldoAposRemocao(codProduto, produto.quantidade);
+                const quantidade = produto.quantidade || produto.qtd_saldo || 0;
+                window.workspaceQuantidades.atualizarSaldoAposRemocao(codProduto, quantidade);
             }
 
             // FORÇAR atualização visual do campo após remoção
@@ -709,7 +736,7 @@ class LoteManager {
                     separacao_lote_id: loteId,
                     qtd_saldo: quantidade,
                     expedicao: dataExpedicao,
-                    status: 'PREVISAO'  // Status inicial sempre PREVISAO
+                    status: 'ABERTO'  // Status inicial sempre ABERTO
                 })
             });
 
@@ -726,13 +753,14 @@ class LoteManager {
             let palletCalculado = 0;
             
             if (dadosProduto) {
-                const preco = parseFloat(dadosProduto.precoProdutoPedido) || 0;
-                const peso = parseFloat(dadosProduto.pesoProduto) || 0;
-                const palletizacao = parseFloat(dadosProduto.palletizacao) || 1;
+                // CORRIGIDO: Usar os campos corretos que existem em dadosProduto
+                const preco = parseFloat(dadosProduto.preco_produto_pedido) || parseFloat(dadosProduto.preco_unitario) || 0;
+                const peso = parseFloat(dadosProduto.peso_unitario) || 0;  // Campo correto: peso_unitario
+                const palletizacao = parseFloat(dadosProduto.palletizacao) || 1000;  // Default: 1000 (não 1)
                 
                 valorCalculado = quantidade * preco;
                 pesoCalculado = quantidade * peso;
-                palletCalculado = quantidade / palletizacao;
+                palletCalculado = palletizacao > 0 ? quantidade / palletizacao : 0;
             }
 
             // Adaptar resposta para formato esperado

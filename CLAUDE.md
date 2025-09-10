@@ -165,6 +165,7 @@ pallet = db.Column(db.Float, nullable=True)                     # ✅ Pallet
 numero_nf = db.Column(db.String(20), nullable=True)             # ✅ NF associada quando sincronizada
 
 # Campos de cliente:
+pedido_cliente = db.Column(db.String(100), nullable=True)       # ✅ Pedido de Compra do Cliente
 cnpj_cpf = db.Column(db.String(20), nullable=True)              # ✅ CNPJ cliente
 raz_social_red = db.Column(db.String(255), nullable=True)       # ✅ Razão Social reduzida
 nome_cidade = db.Column(db.String(100), nullable=True)          # ✅ Cidade

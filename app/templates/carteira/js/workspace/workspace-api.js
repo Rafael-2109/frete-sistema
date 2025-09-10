@@ -29,19 +29,6 @@ class WorkspaceAPI {
         return data;
     }
 
-    /**
-     * 🎯 BUSCAR PRÉ-SEPARAÇÕES
-     * Retorna lotes de pré-separação existentes
-     */
-    async buscarPreSeparacoes(numPedido) {
-        const response = await this.fetchWithAbort(
-            `pre_separacoes_${numPedido}`,
-            `${this.baseUrl}/pedido/${numPedido}/pre-separacoes`
-        );
-        
-        const data = await response.json();
-        return data;
-    }
 
     /**
      * 🎯 BUSCAR SEPARAÇÕES CONFIRMADAS

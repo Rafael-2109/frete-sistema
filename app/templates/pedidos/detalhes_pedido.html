@@ -59,6 +59,7 @@
                                                 <span class="badge bg-light text-dark">{{ pedido.status_calculado }}</span>
                                             {% endif %}
                                         {% else %}
+                                        <span class="badge bg-warning text-dark">{{pedido.status}}</span>
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>

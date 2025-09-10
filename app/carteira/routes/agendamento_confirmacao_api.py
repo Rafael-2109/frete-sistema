@@ -1,6 +1,6 @@
 """
 API simplificada para confirmação de agendamento em Separações
-Funciona para qualquer status (PREVISAO, ABERTO, etc.)
+Funciona para qualquer status
 """
 
 from flask import jsonify
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 def confirmar_agendamento_separacao(lote_id):
     """Confirmar agendamento de todas as separações de um lote (independente do status)"""
     try:
-        # Buscar todas as separações do lote (PREVISAO, ABERTO, qualquer status)
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
         
         if not separacoes:
@@ -63,7 +62,6 @@ def confirmar_agendamento_separacao(lote_id):
 def reverter_agendamento_separacao(lote_id):
     """Reverter confirmação de agendamento de todas as separações de um lote (independente do status)"""
     try:
-        # Buscar todas as separações do lote (PREVISAO, ABERTO, qualquer status)
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
         
         if not separacoes:
@@ -92,44 +90,3 @@ def reverter_agendamento_separacao(lote_id):
             'success': False,
             'error': str(e)
         }), 500
-
-
-# APIs de compatibilidade temporária - redirecionam para as novas APIs unificadas
-# Podem ser removidas após atualização completa do frontend
-
-@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>/confirmar-agendamento', methods=['POST'])
-@login_required
-def confirmar_agendamento_pre_separacao_compat(pre_sep_id):
-    """Compatibilidade: redireciona para API unificada"""
-    try:
-        # Buscar o lote_id da separação
-        sep = Separacao.query.get_or_404(pre_sep_id)
-        return confirmar_agendamento_separacao(sep.separacao_lote_id)
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>/reverter-agendamento', methods=['POST'])
-@login_required
-def reverter_agendamento_pre_separacao_compat(pre_sep_id):
-    """Compatibilidade: redireciona para API unificada"""
-    try:
-        # Buscar o lote_id da separação
-        sep = Separacao.query.get_or_404(pre_sep_id)
-        return reverter_agendamento_separacao(sep.separacao_lote_id)
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@carteira_bp.route('/api/pre-separacao/lote/<string:lote_id>/confirmar-agendamento', methods=['POST'])
-@login_required
-def confirmar_agendamento_lote_pre_separacao_compat(lote_id):
-    """Compatibilidade: redireciona para API unificada"""
-    return confirmar_agendamento_separacao(lote_id)
-
-
-@carteira_bp.route('/api/pre-separacao/lote/<string:lote_id>/reverter-agendamento', methods=['POST'])
-@login_required
-def reverter_agendamento_lote_pre_separacao_compat(lote_id):
-    """Compatibilidade: redireciona para API unificada"""
-    return reverter_agendamento_separacao(lote_id)

@@ -2,6 +2,50 @@
 
 {% block title %}Programação em Lote - {{ rede }} SP{% endblock %}
 
+{% block styles %}
+<style>
+    /* Estilos para as cores das linhas conforme status */
+    .table-danger {
+        background-color: rgba(220, 53, 69, 0.1) !important;
+    }
+    
+    .table-warning {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+    }
+    
+    .table-info {
+        background-color: rgba(13, 202, 240, 0.1) !important;
+    }
+    
+    .table-success {
+        background-color: rgba(25, 135, 84, 0.1) !important;
+    }
+    
+    /* Ajuste hover para linhas coloridas */
+    .table-hover tbody tr.table-danger:hover {
+        background-color: rgba(220, 53, 69, 0.2) !important;
+    }
+    
+    .table-hover tbody tr.table-warning:hover {
+        background-color: rgba(255, 193, 7, 0.2) !important;
+    }
+    
+    .table-hover tbody tr.table-info:hover {
+        background-color: rgba(13, 202, 240, 0.2) !important;
+    }
+    
+    .table-hover tbody tr.table-success:hover {
+        background-color: rgba(25, 135, 84, 0.2) !important;
+    }
+    
+    /* Estilos para badges de status */
+    .badge {
+        font-weight: 500;
+        letter-spacing: 0.3px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <!-- Header -->
@@ -160,10 +204,8 @@
                             <th width="40">
                                 <input type="checkbox" id="checkTodos" />
                             </th>
-                            <th>CNPJ</th>
-                            <th>Razão Social</th>
+                            <th>Cliente</th>
                             <th>Cidade</th>
-                            <th>Sub-rota</th>
                             <th>Valor Total</th>
                             <th>Peso (kg)</th>
                             <th>Pallets</th>
@@ -175,19 +217,21 @@
                     </thead>
                     <tbody>
                         {% for cnpj_data in dados_cnpj %}
-                        <tr class="cnpj-row" data-cnpj="{{ cnpj_data.cnpj }}">
+                        <tr class="cnpj-row {{ cnpj_data.cor_linha }}" data-cnpj="{{ cnpj_data.cnpj }}">
                             <td class="text-center">
                                 <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}" />
                             </td>
-                            <td style="font-size: 0.9em;">
-                                {{ cnpj_data.cnpj_formatado }}
+                            <td>
+                                <div style="font-size: 0.95em; font-weight: 500;">{{ cnpj_data.raz_social }}</div>
+                                <div style="font-size: 0.75em; color: #6c757d;">{{ cnpj_data.cnpj_formatado }}</div>
                             </td>
-                            <td>{{ cnpj_data.raz_social }}</td>
-                            <td>{{ cnpj_data.cidade }}</td>
-                            <td>{{ cnpj_data.sub_rota or '-' }}</td>
-                            <td class="text-end">R$ {{ "{:,.2f}".format(cnpj_data.total_valor) }}</td>
-                            <td class="text-end">{{ "{:,.2f}".format(cnpj_data.total_peso) }}</td>
-                            <td class="text-end">{{ "{:,.2f}".format(cnpj_data.total_pallets) }}</td>
+                            <td>
+                                <div>{{ cnpj_data.cidade }}</div>
+                                <div style="font-size: 0.75em; color: #6c757d;">Sub-Rota: {{ cnpj_data.sub_rota or '-' }}</div>
+                            </td>
+                            <td class="text-end" style="font-size: 0.9em;">R$ {{ "{:,.2f}".format(cnpj_data.total_valor) }}</td>
+                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_peso) }}</td>
+                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_pallets) }}</td>
                             <td>
                                 <input type="date" class="form-control form-control-sm data-expedicao" 
                                        data-cnpj="{{ cnpj_data.cnpj }}" 
@@ -195,23 +239,21 @@
                                        style="width: 110px; font-size: 0.85em;">
                             </td>
                             <td>
-                                <div class="d-flex align-items-center">
-                                    <input type="date" class="form-control form-control-sm data-agendamento" 
-                                           data-cnpj="{{ cnpj_data.cnpj }}"
-                                           value="{{ cnpj_data.agendamento_sugerido }}"
-                                           style="width: 110px; font-size: 0.85em;">
-                                    {% if cnpj_data.tem_protocolo %}
-                                        <i class="fas fa-clock ms-1 text-info" title="Protocolo: {{ cnpj_data.protocolo }}"></i>
-                                    {% endif %}
-                                </div>
+                                <input type="date" class="form-control form-control-sm data-agendamento" 
+                                       data-cnpj="{{ cnpj_data.cnpj }}"
+                                       value="{{ cnpj_data.agendamento_sugerido }}"
+                                       style="width: 110px; font-size: 0.85em;">
                             </td>
                             <td class="text-center">
-                                {% if cnpj_data.agendamento_confirmado %}
-                                    <i class="fas fa-check-circle text-success" title="Confirmado"></i>
-                                {% elif cnpj_data.tem_pendencias %}
-                                    <i class="fas fa-exclamation-triangle text-warning" title="Pendências"></i>
+                                {% if cnpj_data.status %}
+                                    <span class="badge 
+                                        {% if cnpj_data.status == 'Reagendar' %}bg-danger{% elif cnpj_data.status == 'Consolidar' %}bg-warning text-dark{% elif cnpj_data.status == 'Ag. Aprovação' %}bg-info{% elif cnpj_data.status == 'Pronto' %}bg-success{% else %}bg-secondary{% endif %}"
+                                        style="font-size: 0.8em; padding: 4px 8px;">
+                                        <i class="fas {{ cnpj_data.icone_status }} me-1"></i>
+                                        {{ cnpj_data.status }}
+                                    </span>
                                 {% else %}
-                                    <i class="fas fa-clock text-muted" title="Aguardando"></i>
+                                    <span style="color: #6c757d; font-size: 0.85em;">Pendente</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -222,7 +264,7 @@
                                 </button>
                                 <button class="btn btn-sm btn-primary btn-analisar-ruptura" 
                                         data-cnpj="{{ cnpj_data.cnpj }}"
-                                        data-pedidos="{{ cnpj_data.pedidos | tojson | e }}"
+                                        data-pedidos="{% if cnpj_data.pedidos %}{% for p in cnpj_data.pedidos %}{{ p.num_pedido }}{% if not loop.last %},{% endif %}{% endfor %}{% endif %}"
                                         title="Analisar ruptura"
                                         style="min-width: 120px; font-size: 0.75em;">
                                     <span class="ruptura-info">Analisando...</span>
@@ -237,7 +279,7 @@
                         
                         <!-- Linha de detalhes (inicialmente oculta) -->
                         <tr class="detail-row d-none" data-cnpj-detail="{{ cnpj_data.cnpj }}">
-                            <td colspan="12">
+                            <td colspan="10">
                                 <div class="p-3 bg-light">
                                     <h6 class="mb-3">
                                         <i class="fas fa-clipboard-list"></i> 
@@ -263,9 +305,9 @@
                                                 <div class="col-md-2">
                                                     <strong>Status:</strong><br>
                                                     <span class="badge 
-                                                        {% if pedido.status == 'PENDENTE' %}bg-warning
+                                                        {% if pedido.status == 'PENDENTE' %}bg-warning text-dark
                                                         {% elif pedido.status == 'NF_CD_SEM_CARTEIRA' %}bg-danger
-                                                        {% else %}bg-info{% endif %}">
+                                                        {% else %}bg-info text-dark{% endif %}">
                                                         {{ pedido.status }}
                                                     </span>
                                                 </div>
@@ -278,7 +320,7 @@
                                             {% if pedido.qtd_pendente > 0 %}
                                             <div class="mt-2">
                                                 <span class="text-muted">Pendente:</span>
-                                                <span class="badge bg-warning">
+                                                <span class="badge bg-warning text-dark">
                                                     R$ {{ "{:,.2f}".format(pedido.valor_pendente) }} |
                                                     {{ "{:,.2f}".format(pedido.peso_pendente) }} kg |
                                                     {{ "{:,.2f}".format(pedido.pallets_pendente) }} pallets
@@ -290,14 +332,30 @@
                                             <div class="mt-2">
                                                 <strong>Separações:</strong>
                                                 {% for sep in pedido.separacoes %}
-                                                <div class="ms-3">
+                                                <div class="ms-3 mb-1">
                                                     <span class="text-muted">{{ sep.separacao_lote_id }}:</span>
-                                                    <span class="badge bg-info">
-                                                        {{ sep.status }} |
+                                                    <span class="badge bg-info text-dark">
+                                                        {{ sep.status }}
+                                                    </span>
+                                                    <span class="badge bg-light text-dark border">
+                                                        R$ {{ "{:,.2f}".format(sep.valor_total) if sep.valor_total else '0,00' }} |
+                                                        {{ "{:,.2f}".format(sep.peso_total) if sep.peso_total else '0,00' }} kg |
+                                                        {{ "{:,.2f}".format(sep.pallet_total) if sep.pallet_total else '0,00' }} pallets
+                                                    </span>
+                                                    <span class="badge {% if sep.agendamento_confirmado %}bg-success{% else %}bg-secondary{% endif %}">
                                                         Exp: {{ sep.expedicao.strftime('%d/%m') if sep.expedicao else '-' }} |
                                                         Agenda: {{ sep.agendamento.strftime('%d/%m') if sep.agendamento else '-' }}
-                                                        {% if sep.protocolo %}| Prot: {{ sep.protocolo }}{% endif %}
                                                     </span>
+                                                    {% if sep.protocolo %}
+                                                    <span class="badge bg-primary">
+                                                        <i class="fas fa-check-circle"></i> Prot: {{ sep.protocolo }}
+                                                    </span>
+                                                    {% endif %}
+                                                    {% if sep.agendamento_confirmado %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check-double"></i> Confirmado
+                                                    </span>
+                                                    {% endif %}
                                                 </div>
                                                 {% endfor %}
                                             </div>
@@ -307,13 +365,27 @@
                                             <div class="mt-2">
                                                 <strong>NFs no CD:</strong>
                                                 {% for nf in pedido.nfs_cd %}
-                                                <div class="ms-3">
+                                                <div class="ms-3 mb-1">
                                                     <span class="text-muted">NF {{ nf.numero_nf }}:</span>
                                                     <span class="badge bg-danger">
-                                                        {{ nf.status }} |
-                                                        R$ {{ "{:,.2f}".format(nf.valor) }} |
-                                                        {{ "{:,.2f}".format(nf.peso) }} kg
+                                                        {{ nf.status }}
                                                     </span>
+                                                    <span class="badge bg-light text-dark border">
+                                                        R$ {{ "{:,.2f}".format(nf.valor) if nf.valor else '0,00' }} |
+                                                        {{ "{:,.2f}".format(nf.peso) if nf.peso else '0,00' }} kg |
+                                                        {{ "{:,.2f}".format(nf.pallet) if nf.pallet else '0,00' }} pallets
+                                                    </span>
+                                                    {% if nf.expedicao or nf.agendamento %}
+                                                    <span class="badge bg-secondary">
+                                                        Exp: {{ nf.expedicao.strftime('%d/%m') if nf.expedicao else '-' }} |
+                                                        Agenda: {{ nf.agendamento.strftime('%d/%m') if nf.agendamento else '-' }}
+                                                    </span>
+                                                    {% endif %}
+                                                    {% if nf.protocolo %}
+                                                    <span class="badge bg-primary">
+                                                        <i class="fas fa-check-circle"></i> Prot: {{ nf.protocolo }}
+                                                    </span>
+                                                    {% endif %}
                                                 </div>
                                                 {% endfor %}
                                             </div>
@@ -381,6 +453,13 @@
 
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    // Dados do portal para o JavaScript
+    window.PORTAL_CONFIG = {
+        portal: '{{ portal }}',
+        rede: '{{ rede }}'
+    };
+</script>
 <script src="{{ url_for('static', filename='js/programacao-lote.js') }}"></script>
 
 {% endblock %}
