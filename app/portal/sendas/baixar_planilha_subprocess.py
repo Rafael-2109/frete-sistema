@@ -28,6 +28,12 @@ async def baixar_planilha_async() -> dict:
     Baixa a planilha modelo e retorna o caminho
     """
     try:
+        # Forçar variável de ambiente para garantir headless em produção
+        # Este script roda em subprocess separado
+        if '/opt/render' in os.getcwd():
+            os.environ['IS_PRODUCTION'] = 'true'
+            logger.info("🚀 Detectado ambiente Render - Forçando IS_PRODUCTION=true")
+        
         consumidor = ConsumirAgendasSendas()
         
         # Executar download

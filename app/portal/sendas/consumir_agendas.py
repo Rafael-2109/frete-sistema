@@ -36,7 +36,32 @@ class ConsumirAgendasSendas:
         Args:
             download_dir: Diretório para salvar os downloads
         """
-        self.portal = SendasPortal(headless=False)  # Pode mudar para True em produção
+        # Detectar ambiente de produção (Render ou outras plataformas)
+        # IMPORTANTE: os.getenv retorna string ou None, não boolean
+        # No Render, a variável RENDER existe e tem valor "true"
+        is_render = os.getenv('RENDER') is not None
+        is_production_env = os.getenv('IS_PRODUCTION', '').lower() in ['true', '1', 'yes']
+        
+        # Detectar se está rodando em /opt/render (caminho específico do Render)
+        is_render_path = '/opt/render' in os.getcwd()
+        
+        # Em produção SEMPRE usar headless=True (sem interface gráfica)
+        is_production = is_render or is_production_env or is_render_path
+        headless_mode = True if is_production else False
+        
+        if is_production:
+            logger.info(f"🚀 Ambiente de PRODUÇÃO detectado - Forçando headless=True")
+        else:
+            logger.info(f"💻 Ambiente de desenvolvimento - headless={headless_mode}")
+        
+        # Inicializar portal com modo apropriado
+        self.portal = SendasPortal(headless=headless_mode)
+        
+        # Validar credenciais ANTES de tentar qualquer operação
+        if not self.portal.usuario or not self.portal.senha:
+            logger.error("❌ CREDENCIAIS SENDAS NÃO CONFIGURADAS!")
+            logger.error("Configure as variáveis de ambiente: SENDAS_USUARIO e SENDAS_SENHA")
+            raise ValueError("Credenciais Sendas não configuradas. Configure SENDAS_USUARIO e SENDAS_SENHA.")
         
         # Configurar diretório de downloads
         if download_dir:

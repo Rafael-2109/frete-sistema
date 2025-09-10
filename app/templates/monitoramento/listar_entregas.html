@@ -1673,7 +1673,8 @@ document.addEventListener('DOMContentLoaded', function() {
           
           // Configurar botões para Atacadão
           document.getElementById('btn-agendar-portal').onclick = function() {
-            agendarNoPortalAtacadao(entregaId, numeroNf);
+            // Chamar função assíncrona simplificada
+            agendarNoPortalAtacadaoSimples(entregaId, numeroNf);
           };
           document.getElementById('btn-verificar-protocolo').onclick = function() {
             verificarProtocoloNoPortal(entregaId);
@@ -1706,9 +1707,9 @@ document.addEventListener('DOMContentLoaded', function() {
     agendamentoModal.show();
   };
   
-  // Função para agendar no Portal Atacadão
-  function agendarNoPortalAtacadao(entregaId, numeroNf) {
-    // Mostrar modal de agendamento
+  // Função simplificada para agendar no Portal Atacadão (apenas data)
+  function agendarNoPortalAtacadaoSimples(entregaId, numeroNf) {
+    // Mostrar modal simplificado
     $('#modalAgendamentoPortal').modal('show');
     $('#modalAgendamentoPortal #entrega_id_portal').val(entregaId);
     $('#modalAgendamentoPortal #numero_nf_portal').val(numeroNf);
@@ -1716,14 +1717,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Preencher informações da NF no modal
     $('#modalAgendamentoPortal .nf-info').html(`
       <div class="alert alert-info">
-        <strong>NF: ${numeroNf}</strong> - Agendamento no Portal Atacadão
+        <strong>NF: ${numeroNf}</strong> - Agendamento Rápido no Portal Atacadão
       </div>
     `);
     
-    // Limpar campos do formulário
+    // Limpar e configurar formulário
     $('#formAgendamentoPortal')[0].reset();
     $('#formAgendamentoPortal #entrega_id_portal').val(entregaId);
     $('#formAgendamentoPortal #numero_nf_portal').val(numeroNf);
+    
+    // Definir data mínima como hoje
+    const hoje = new Date().toISOString().split('T')[0];
+    $('#data_agendamento_portal').attr('min', hoje).val(hoje);
+  }
+  
+  // Manter função antiga para compatibilidade (caso seja chamada de outro lugar)
+  function agendarNoPortalAtacadao(entregaId, numeroNf) {
+    agendarNoPortalAtacadaoSimples(entregaId, numeroNf);
   }
   
   // Função para verificar protocolo no portal
@@ -2157,58 +2167,83 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Função para processar agendamento no portal via numero_nf
+  // Função para processar agendamento no portal de forma assíncrona simplificada
   $('#formAgendamentoPortal').on('submit', function(e) {
     e.preventDefault();
     
+    const entregaId = $('#entrega_id_portal').val();
     const numeroNf = $('#numero_nf_portal').val();
-    const dados = {
-      numero_nf: numeroNf,
-      data_agendamento: $('#data_agendamento_portal').val(),
-      hora_agendamento: $('#hora_agendamento_portal').val(),
-      transportadora: $('#transportadora_portal').val(),
-      tipo_veiculo: $('#tipo_veiculo_portal').val(),
-      observacoes: $('#observacoes_portal').val()
-    };
+    const dataAgendamento = $('#data_agendamento_portal').val();
     
-    // Mostrar loading
-    Swal.fire({
-      title: 'Processando...',
-      text: 'Aguarde enquanto realizamos o agendamento no portal',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
+    // Validar data
+    if (!dataAgendamento) {
+      Swal.fire('Atenção', 'Por favor, selecione uma data de agendamento', 'warning');
+      return;
+    }
+    
+    // Fechar modal
+    $('#modalAgendamentoPortal').modal('hide');
+    
+    // Chamar função assíncrona já existente
+    if (typeof agendarNoPortalAtacadaoAsync === 'function') {
+      // Temporariamente setar o valor no elemento para a função async capturar
+      const tempInput = document.getElementById('data-agendamento-portal');
+      if (!tempInput) {
+        // Criar input temporário se não existir
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.id = 'data-agendamento-portal';
+        input.value = dataAgendamento;
+        document.body.appendChild(input);
+      } else {
+        tempInput.value = dataAgendamento;
       }
-    });
-    
-    // Chamar API ASSÍNCRONA com Redis Queue
-    $.ajax({
-      url: '/portal/api/solicitar-agendamento-nf-async',
-      type: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify(dados),
-      success: function(response) {
-        if (response.success) {
-          Swal.fire({
-            title: 'Agendamento Solicitado!',
-            html: `
-              <p>Protocolo: <strong>${response.protocolo || 'Aguardando...'}</strong></p>
-              <p>${response.message}</p>
-            `,
-            icon: 'success'
-          }).then(() => {
-            $('#modalAgendamentoPortal').modal('hide');
-            location.reload();
-          });
-        } else {
-          Swal.fire('Erro', response.message, 'error');
+      
+      // Chamar função async
+      agendarNoPortalAtacadaoAsync(entregaId, numeroNf);
+      
+      // Mostrar notificação
+      Swal.fire({
+        title: 'Agendamento Enviado!',
+        html: `
+          <p><strong>NF ${numeroNf}</strong></p>
+          <p>Data: ${new Date(dataAgendamento + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+          <p>O agendamento está sendo processado em segundo plano.</p>
+          <p>Você receberá uma notificação quando for concluído.</p>
+        `,
+        icon: 'info',
+        timer: 5000,
+        timerProgressBar: true
+      });
+    } else {
+      // Fallback: chamar API diretamente se função não estiver disponível
+      $.ajax({
+        url: '/portal/api/solicitar-agendamento-nf-async',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+          numero_nf: numeroNf,
+          entrega_id: entregaId,
+          data_agendamento: dataAgendamento
+        }),
+        success: function(response) {
+          if (response.success) {
+            Swal.fire({
+              title: 'Agendamento Solicitado!',
+              text: response.message || 'Processando em segundo plano...',
+              icon: 'success',
+              timer: 3000
+            });
+          } else {
+            Swal.fire('Erro', response.message, 'error');
+          }
+        },
+        error: function(xhr) {
+          const response = xhr.responseJSON || {};
+          Swal.fire('Erro', response.message || 'Erro ao processar agendamento', 'error');
         }
-      },
-      error: function(xhr) {
-        const response = xhr.responseJSON || {};
-        Swal.fire('Erro', response.message || 'Erro ao processar agendamento', 'error');
-      }
-    });
+      });
+    }
   });
 </script>
 <script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
@@ -2232,57 +2267,24 @@ document.addEventListener('DOMContentLoaded', function() {
           <input type="hidden" id="numero_nf_portal" name="numero_nf">
           
           <div class="row">
-            <div class="col-md-6">
-              <div class="form-group">
-                <label for="data_agendamento_portal">Data de Agendamento *</label>
-                <input type="date" class="form-control" id="data_agendamento_portal" required>
-              </div>
-            </div>
-            
-            <div class="col-md-6">
-              <div class="form-group">
-                <label for="hora_agendamento_portal">Hora (opcional)</label>
-                <input type="time" class="form-control" id="hora_agendamento_portal">
-              </div>
-            </div>
-          </div>
-          
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-group">
-                <label for="transportadora_portal">Transportadora *</label>
-                <select class="form-control" id="transportadora_portal" required>
-                  <option value="">Selecione...</option>
-                  <option value="PROPRIA">Própria</option>
-                  <option value="TERCEIRA">Terceira</option>
-                </select>
-              </div>
-            </div>
-            
-            <div class="col-md-6">
-              <div class="form-group">
-                <label for="tipo_veiculo_portal">Tipo de Veículo *</label>
-                <select class="form-control" id="tipo_veiculo_portal" required>
-                  <option value="">Selecione...</option>
-                  <option value="Truck">Truck</option>
-                  <option value="Carreta">Carreta</option>
-                  <option value="Bitrem">Bitrem</option>
-                  <option value="Rodotrem">Rodotrem</option>
-                  <option value="3/4">3/4</option>
-                  <option value="Toco">Toco</option>
-                  <option value="VUC">VUC</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          <div class="row">
             <div class="col-12">
               <div class="form-group">
-                <label for="observacoes_portal">Observações</label>
-                <textarea class="form-control" id="observacoes_portal" rows="2"></textarea>
+                <label for="data_agendamento_portal">
+                  <i class="fas fa-calendar-alt"></i> Data de Agendamento *
+                </label>
+                <input type="date" class="form-control form-control-lg" id="data_agendamento_portal" required>
+                <small class="form-text text-muted">
+                  Selecione a data desejada para o agendamento no portal Atacadão
+                </small>
               </div>
             </div>
+          </div>
+          
+          <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle"></i> 
+            <strong>Agendamento Assíncrono:</strong> 
+            O agendamento será processado em segundo plano. 
+            Você receberá uma notificação quando for concluído.
           </div>
           
           <div class="alert alert-info">
@@ -2292,9 +2294,11 @@ document.addEventListener('DOMContentLoaded', function() {
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-        <button type="submit" form="formAgendamentoPortal" class="btn btn-success">
-          <i class="fas fa-paper-plane"></i> Solicitar Agendamento
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button type="submit" form="formAgendamentoPortal" class="btn btn-primary">
+          <i class="fas fa-rocket"></i> Solicitar Agendamento
         </button>
       </div>
     </div>

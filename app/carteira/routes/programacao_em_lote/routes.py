@@ -1235,14 +1235,29 @@ def processar_agendamento_sendas():
         
         # 1. Baixar planilha do Sendas UMA VEZ
         logger.info("📥 Baixando planilha modelo do portal Sendas...")
-        consumidor = ConsumirAgendasSendas()
-        arquivo_planilha = consumidor.baixar_planilha_modelo()
-        
-        if not arquivo_planilha:
-            logger.error("❌ Erro ao baixar planilha do portal")
+        try:
+            consumidor = ConsumirAgendasSendas()
+            arquivo_planilha = consumidor.baixar_planilha_modelo()
+            
+            if not arquivo_planilha:
+                logger.error("❌ Erro ao baixar planilha do portal")
+                return jsonify({
+                    'success': False,
+                    'error': 'Não foi possível baixar a planilha do portal Sendas. Verifique as credenciais e conexão.'
+                }), 500
+                
+        except ValueError as ve:
+            # Erro de credenciais não configuradas
+            logger.error(f"❌ Erro de configuração: {ve}")
             return jsonify({
                 'success': False,
-                'error': 'Não foi possível baixar a planilha do portal Sendas'
+                'error': 'Credenciais do portal Sendas não configuradas. Configure SENDAS_USUARIO e SENDAS_SENHA no servidor.'
+            }), 500
+        except Exception as e:
+            logger.error(f"❌ Erro ao inicializar consumidor Sendas: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao conectar com portal Sendas: {str(e)}'
             }), 500
         
         # 2. Preencher planilha com TODOS os CNPJs e REMOVER linhas não agendadas

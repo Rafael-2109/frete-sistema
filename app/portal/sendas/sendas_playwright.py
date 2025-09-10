@@ -30,7 +30,19 @@ logger = logging.getLogger(__name__)
 
 class SendasPortal:
     def __init__(self, headless: bool = False):
-        self.headless = headless
+        # FORÇAR headless=True em produção (Render)
+        # Detectar ambiente de produção de várias formas
+        is_render = os.getenv('RENDER') is not None
+        is_production = os.getenv('IS_PRODUCTION', '').lower() in ['true', '1', 'yes']
+        is_render_path = '/opt/render' in os.getcwd()
+        
+        # Se estiver em produção, SEMPRE forçar headless=True
+        if is_render or is_production or is_render_path:
+            logger.warning(f"🚀 PRODUÇÃO DETECTADA - Forçando headless=True (parâmetro era {headless})")
+            self.headless = True
+        else:
+            self.headless = headless
+            
         self.browser = None
         self.page = None
         self.context = None
