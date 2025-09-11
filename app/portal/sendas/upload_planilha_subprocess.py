@@ -14,7 +14,7 @@ import logging
 # Adicionar o diretório atual ao path para garantir imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from consumir_agendas import ConsumirAgendasSendas
+from consumir_agendas import ConsumirAgendasSendas # noqa: E402
 
 # Configurar logging
 logging.basicConfig(
@@ -55,6 +55,15 @@ async def fazer_upload_async(arquivo_planilha: str) -> dict:
         logger.info("🌐 Iniciando processo de upload...")
         
         try:
+            # Adicionar mais logging de debug
+            logger.info("🔐 Verificando credenciais Sendas...")
+            if not consumidor.portal.usuario or not consumidor.portal.senha:
+                return {
+                    'success': False,
+                    'error': 'Credenciais Sendas não configuradas'
+                }
+            logger.info(f"✅ Credenciais disponíveis para usuário: {consumidor.portal.usuario[:3]}***")
+            
             resultado = await consumidor.run_upload_planilha(arquivo_planilha)
             
             if resultado:

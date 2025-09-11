@@ -10,7 +10,7 @@ from functools import wraps
 import time
 import logging
 from sqlalchemy.exc import OperationalError, DBAPIError, InterfaceError
-from typing import Optional, Callable, Any
+from typing import Callable, Any
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ def commit_with_retry(session, max_retries: int = 3) -> bool:
                         session.rollback()
                         session.close()
                         db.engine.dispose()
-                    except:
+                    except Exception:
                         pass
                     time.sleep(delay)
                     delay *= 2
@@ -194,7 +194,7 @@ def execute_in_chunks(items: list, chunk_size: int, operation: Callable,
             # Tenta fazer rollback
             try:
                 db.session.rollback()
-            except:
+            except Exception:
                 pass
     
     # Commit final se não estava commitando após cada chunk
