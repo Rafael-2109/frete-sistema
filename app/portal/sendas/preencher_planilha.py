@@ -18,6 +18,8 @@ from copy import copy
 from sqlalchemy import and_, func
 import logging
 import tempfile
+import pandas as pd
+import xlsxwriter
 
 # Adicionar o caminho do projeto
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
@@ -61,6 +63,65 @@ class PreencherPlanilhaSendas:
             # Se não há contexto (ex: script standalone), criar app
             self.app = app or create_app()
             # NÃO fazer push do contexto aqui - deixar para quando for necessário
+    
+    def _converter_para_xlsxwriter(self, arquivo_origem: str, arquivo_destino: str) -> bool:
+        """
+        Converte arquivo Excel para usar xlsxwriter (garante sharedStrings e datas corretas)
+        
+        Args:
+            arquivo_origem: Arquivo criado com openpyxl
+            arquivo_destino: Arquivo de saída com xlsxwriter
+            
+        Returns:
+            bool: True se sucesso, False se erro
+        """
+        try:
+            # Ler arquivo com pandas
+            df = pd.read_excel(arquivo_origem, header=None, dtype=object, engine='openpyxl')
+            
+            # Criar workbook com xlsxwriter
+            wb = xlsxwriter.Workbook(arquivo_destino, {
+                'strings_to_numbers': True,
+                'strings_to_formulas': False,
+                'strings_to_urls': False,
+                'use_zip64': False,
+                'nan_inf_to_errors': True,
+                'default_date_format': 'dd/mm/yyyy'
+            })
+            
+            ws = wb.add_worksheet('Planilha1')
+            date_format = wb.add_format({'num_format': 'dd/mm/yyyy'})
+            
+            # Escrever dados
+            for r, row in enumerate(df.itertuples(index=False, name=None)):
+                for c, v in enumerate(row):
+                    if v is not None and pd.notna(v):
+                        # Coluna 17 (R) é data - escrever como datetime
+                        if c == 17:
+                            if isinstance(v, (datetime, pd.Timestamp)):
+                                # Converter para date (sem hora)
+                                ws.write_datetime(r, c, v.date() if hasattr(v, 'date') else v, date_format)
+                            elif isinstance(v, date):
+                                ws.write_datetime(r, c, v, date_format)
+                            elif isinstance(v, str) and '/' in v:
+                                try:
+                                    # Converter string para date
+                                    dt = pd.to_datetime(v, format='%d/%m/%Y')
+                                    ws.write_datetime(r, c, dt.date(), date_format)
+                                except:
+                                    ws.write(r, c, v)
+                            else:
+                                ws.write(r, c, v)
+                        else:
+                            # Para outras colunas, escrever normalmente
+                            ws.write(r, c, v)
+            
+            wb.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"  ❌ Erro ao converter para xlsxwriter: {e}")
+            return False
     
     def determinar_tipo_caminhao(self, peso_total_kg: float) -> str:
         """
@@ -565,7 +626,22 @@ class PreencherPlanilhaSendas:
                 f"sendas_{cnpj[-4:]}_{timestamp}_preenchido.xlsx"
             )
         
-        wb.save(arquivo_destino)
+        # Salvar temporariamente com openpyxl
+        temp_file = tempfile.mktemp(suffix='_temp.xlsx')
+        wb.save(temp_file)
+        
+        # Converter para xlsxwriter (garante sharedStrings e datas corretas)
+        logger.info("  🔄 Convertendo para formato compatível com Sendas...")
+        sucesso = self._converter_para_xlsxwriter(temp_file, arquivo_destino)
+        
+        # Remover arquivo temporário
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+        
+        if not sucesso:
+            logger.error("  ❌ Erro na conversão para xlsxwriter")
+            return None
+            
         logger.info(f"  💾 Planilha salva: {arquivo_destino}")
         
         # Resumo
@@ -790,7 +866,22 @@ class PreencherPlanilhaSendas:
                 f"sendas_multi_{timestamp}.xlsx"
             )
         
-        wb_novo.save(arquivo_destino)
+        # Salvar temporariamente com openpyxl
+        temp_file = tempfile.mktemp(suffix='_temp.xlsx')
+        wb_novo.save(temp_file)
+        
+        # Converter para xlsxwriter (garante sharedStrings e datas corretas)
+        logger.info("  🔄 Convertendo para formato compatível com Sendas...")
+        sucesso = self._converter_para_xlsxwriter(temp_file, arquivo_destino)
+        
+        # Remover arquivo temporário
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+        
+        if not sucesso:
+            logger.error("  ❌ Erro na conversão para xlsxwriter")
+            return None
+            
         logger.info(f"\n💾 Planilha salva: {arquivo_destino}")
         
         # Resumo final

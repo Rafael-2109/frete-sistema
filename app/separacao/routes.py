@@ -245,7 +245,7 @@ def excluir_separacao(separacao_id):
         
         if pedido:
             status_pedido = pedido.status_calculado
-            if status_pedido != 'ABERTO':
+            if status_pedido == 'FATURADO' or status_pedido == 'COTADO' or status_pedido == 'EMBARCADO':
                 return jsonify({
                     'success': False, 
                     'message': f'Não é possível excluir! Pedido {separacao.num_pedido} está com status "{status_pedido}". Apenas pedidos com status "ABERTO" podem ter separações excluídas.'
@@ -293,7 +293,7 @@ def excluir_lote_separacao(lote_id):
         
         if pedido:
             status_pedido = pedido.status_calculado
-            if status_pedido != 'ABERTO':
+            if status_pedido == 'FATURADO' or status_pedido == 'COTADO' or status_pedido == 'EMBARCADO':
                 return jsonify({
                     'success': False, 
                     'message': f'Não é possível excluir! Pedido {primeira_separacao.num_pedido} está com status "{status_pedido}". Apenas pedidos com status "ABERTO" podem ter separações excluídas.'

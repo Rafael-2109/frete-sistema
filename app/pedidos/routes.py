@@ -732,7 +732,7 @@ def excluir_pedido(lote_id):
         return redirect(url_for('pedidos.lista_pedidos'))
     
     # ✅ VALIDAÇÃO: Só permite excluir pedidos com status ABERTO
-    if primeira_separacao.status_calculado != 'ABERTO':
+    if primeira_separacao.status_calculado == 'FATURADO' or primeira_separacao.status_calculado == 'COTADO' or primeira_separacao.status_calculado == 'EMBARCADO':
         flash(f"Não é possível excluir o pedido {primeira_separacao.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser excluídos. Status atual: {primeira_separacao.status_calculado}", "error")
         return redirect(url_for('pedidos.lista_pedidos'))
     

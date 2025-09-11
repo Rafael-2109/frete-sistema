@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from playwright.async_api import TimeoutError as PWTimeout, Download # noqa: E402
 from app.portal.sendas.sendas_playwright import SendasPortal # noqa: E402
-from app.portal.sendas.normalizar_sendas_com_template import normalizar_planilha_sendas # noqa: E402
+from app.portal.sendas.normalizar_com_libreoffice import normalizar_planilha_sendas # noqa: E402
 from app.portal.sendas.fechar_modal_releases import aguardar_e_fechar_modal_releases # noqa: E402
 
 # Configurar logging
@@ -57,6 +57,8 @@ class ConsumirAgendasSendas:
         
         if is_production:
             logger.info(f"🚀 Ambiente de PRODUÇÃO detectado - Forçando headless=True")
+            logger.info(f"   RENDER={is_render}, IS_PRODUCTION={is_production_env}, PATH={is_render_path}")
+            logger.info(f"   CWD={os.getcwd()}")
         else:
             logger.info(f"💻 Ambiente de desenvolvimento - headless={headless_mode}")
         
@@ -377,9 +379,9 @@ class ConsumirAgendasSendas:
             fd, arquivo_normalizado = tempfile.mkstemp(suffix='_normalizado.xlsx', dir='/tmp')
             os.close(fd)
             
-            # SOLUÇÃO DEFINITIVA: Usar template com estrutura correta do Sendas
-            logger.info("🎯 SOLUÇÃO DEFINITIVA: Usando template com estrutura validada")
-            logger.info("   (Mantém estilos e formatação que o Sendas espera!)")
+            # SOLUÇÃO DEFINITIVA: Abrir e salvar com LibreOffice (converte para sharedStrings)
+            logger.info("🎯 SOLUÇÃO DEFINITIVA: Normalizando com LibreOffice")
+            logger.info("   (Simula abrir/salvar do Excel - converte para sharedStrings!)")
             sucesso_norm, arquivo_para_upload = normalizar_planilha_sendas(
                 arquivo_planilha, 
                 arquivo_normalizado
@@ -1212,9 +1214,15 @@ class ConsumirAgendasSendas:
             while tentativas < 3:
                 try:
                     tentativas += 1
-                    async with self.portal.page.expect_download() as download_info:
+                    logger.info(f"📥 Tentativa {tentativas}/3 de download...")
+                    
+                    # Aumentar timeout em produção
+                    timeout_download = 60000 if os.getenv('RENDER') else 30000
+                    timeout_visibility = 10000 if os.getenv('RENDER') else 5000
+                    
+                    async with self.portal.page.expect_download(timeout=timeout_download) as download_info:
                         item_todos = iframe.get_by_role("menuitem", name="TODOS ITENS")
-                        await item_todos.wait_for(state="visible", timeout=5000)
+                        await item_todos.wait_for(state="visible", timeout=timeout_visibility)
                         await item_todos.click()
                     break  # Sucesso, sair do loop
                 except Exception as e:
@@ -1456,37 +1464,90 @@ class ConsumirAgendasSendas:
             logger.error(f"❌ Erro ao executar subprocess: {e}")
             return None
     
-    async def run_baixar_planilha(self) -> Optional[str]:
+    async def run_baixar_planilha(self, manter_aberto: bool = False) -> Optional[str]:
         """
         Executa o processo completo de download da planilha
+        
+        Args:
+            manter_aberto: Se True, mantém o navegador aberto após download para reutilização
         
         Returns:
             Caminho do arquivo baixado ou None se falhar
         """
         try:
+            logger.info("🚀 Iniciando run_baixar_planilha...")
+            
             # Inicializar navegador
-            await self.portal.iniciar_navegador()
+            logger.info("🌐 Etapa 1/4: Inicializando navegador...")
+            sucesso_init = await self.portal.iniciar_navegador()
+            if not sucesso_init:
+                logger.error("❌ ERRO CRÍTICO: Falha ao inicializar navegador")
+                logger.error("   Possíveis causas:")
+                logger.error("   - Playwright não instalado corretamente")
+                logger.error("   - Falta de recursos no servidor")
+                logger.error("   - Problema com modo headless em produção")
+                await self.portal.fechar()
+                return None
+            logger.info("✅ Navegador inicializado")
             
             # Login
+            logger.info("🔐 Etapa 2/4: Realizando login...")
             if not await self.portal.fazer_login():
-                logger.error("❌ Falha no login")
+                logger.error("❌ ERRO CRÍTICO: Falha no login")
+                logger.error("   Possíveis causas:")
+                logger.error("   - Credenciais incorretas")
+                logger.error("   - Portal Sendas fora do ar")
+                logger.error("   - Mudança na interface do portal")
+                await self.portal.fechar()
                 return None
+            logger.info("✅ Login realizado")
             
             # Navegar para gestão de pedidos
+            logger.info("📦 Etapa 3/4: Navegando para Gestão de Pedidos...")
             if not await self.navegar_para_gestao_pedidos():
-                logger.error("❌ Falha ao navegar para gestão de pedidos")
+                logger.error("❌ ERRO CRÍTICO: Falha ao navegar para gestão de pedidos")
+                logger.error("   Possíveis causas:")
+                logger.error("   - Mudança no menu do portal")
+                logger.error("   - Modal bloqueando navegação")
+                logger.error("   - Timeout na navegação")
+                await self.portal.fechar()
                 return None
+            logger.info("✅ Navegação concluída")
             
             # Baixar planilha
+            logger.info("📥 Etapa 4/4: Baixando planilha...")
             arquivo = await self.baixar_planilha_agendamentos()
             
-            # Fechar navegador
-            await self.portal.fechar()
+            if arquivo:
+                logger.info(f"✅ Download concluído com sucesso: {arquivo}")
+            else:
+                logger.error("❌ ERRO: baixar_planilha_agendamentos retornou None")
+                logger.error("   Possíveis causas:")
+                logger.error("   - Botões do menu mudaram")
+                logger.error("   - Download não foi disparado")
+                logger.error("   - Timeout esperando download")
+            
+            # Fechar navegador apenas se não for manter aberto
+            if not manter_aberto:
+                await self.portal.fechar()
+                logger.info("🔒 Navegador fechado")
+            else:
+                logger.info("🔓 Navegador mantido aberto para reutilização")
             
             return arquivo
             
         except Exception as e:
-            logger.error(f"❌ Erro ao executar download: {e}")
+            logger.error(f"❌ ERRO EXCEÇÃO em run_baixar_planilha: {e}")
+            logger.error(f"   Tipo: {type(e).__name__}")
+            logger.error(f"   Stack trace:\n{traceback.format_exc()}")
+            
+            # Tentar fechar navegador se ainda estiver aberto (apenas se não for manter aberto)
+            if not manter_aberto:
+                try:
+                    await self.portal.fechar()
+                except:
+                    pass
+                
             return None
     
     def fazer_upload_planilha_sync(self, arquivo_planilha: str) -> bool:

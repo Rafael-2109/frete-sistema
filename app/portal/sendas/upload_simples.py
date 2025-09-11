@@ -13,7 +13,7 @@ import logging
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from app.portal.sendas.sendas_playwright import SendasPortal # noqa: E402
-from app.portal.sendas.normalizar_sendas_com_template import normalizar_planilha_sendas # noqa: E402
+from app.portal.sendas.normalizar_com_libreoffice import normalizar_planilha_sendas # noqa: E402
 
 # Configurar logging
 logging.basicConfig(
@@ -22,7 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 async def upload_simples(arquivo_xlsx: str):
     """Upload simplificado - apenas o essencial"""
     
@@ -30,8 +29,8 @@ async def upload_simples(arquivo_xlsx: str):
         logger.error(f"❌ Arquivo não existe: {arquivo_xlsx}")
         return False
     
-    # NORMALIZAR USANDO TEMPLATE
-    logger.info("🔧 Normalizando arquivo usando template...")
+    # NORMALIZAR COM LIBREOFFICE (converte para sharedStrings)
+    logger.info("🔧 Normalizando com LibreOffice (abrir/salvar)...")
     sucesso_norm, arquivo_normalizado = normalizar_planilha_sendas(arquivo_xlsx)
     
     if sucesso_norm:
