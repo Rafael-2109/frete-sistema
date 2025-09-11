@@ -668,27 +668,28 @@ def reset_status_pedido(lote_id):
                     Separacao.query.filter_by(
                         separacao_lote_id=pedido.separacao_lote_id
                     ).update({'status': 'FATURADO',
-                    'sincronizado_nf': True})
+                    'sincronizado_nf': True,
+                    'status_calculado': 'FATURADO'})
             else:
                 # CASO 2-B: NF não existe no faturamento (mas existe no embarque)
                 if pedido.separacao_lote_id:
                     Separacao.query.filter_by(
                         separacao_lote_id=pedido.separacao_lote_id
-                    ).update({'status': 'FATURADO'})
+                    ).update({'status': 'FATURADO','status_calculado': 'FATURADO'})
                 
         elif embarque_item and embarque_ativo:
             # CASO 1-B: Encontrou EmbarqueItem ativo mas sem NF
             if pedido.separacao_lote_id:
                 Separacao.query.filter_by(
                     separacao_lote_id=pedido.separacao_lote_id
-                ).update({'status': 'COTADO'})
+                ).update({'status': 'COTADO','status_calculado': 'COTADO'})
             
         else:
             # CASO 1-C: Não encontrou EmbarqueItem ativo
             if pedido.separacao_lote_id:
                 Separacao.query.filter_by(
                     separacao_lote_id=pedido.separacao_lote_id
-                ).update({'status': 'ABERTO'})
+                ).update({'status': 'ABERTO','status_calculado': 'ABERTO'})
         
         # Salvar alterações
         db.session.commit()

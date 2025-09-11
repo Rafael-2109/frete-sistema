@@ -105,6 +105,7 @@ config_local.py
 # Claude Flow generated files
 .claude/settings.local.json
 .mcp.json
+.hive-mind/
 memory/sessions/*
 !memory/sessions/README.md
 memory/agents/*
@@ -118,4 +119,5 @@ coordination/orchestration/*
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
+hive-mind-prompt-*.txt
 app/mcp_sistema/.env.production

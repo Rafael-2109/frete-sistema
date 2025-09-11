@@ -1,7 +1,6 @@
 # 🔧 Correções de Sintaxe Aplicadas ao Sistema claude_ai_novo
 
 **Data:** 26/07/2025  
-**Responsável:** Claude-Flow  
 
 ## 📋 Resumo das Correções
 

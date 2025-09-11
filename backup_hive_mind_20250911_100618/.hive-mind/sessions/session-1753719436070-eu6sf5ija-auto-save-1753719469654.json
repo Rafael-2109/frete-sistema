@@ -1,0 +1,129 @@
+{
+  "sessionId": "session-1753719436070-eu6sf5ija",
+  "checkpointId": "checkpoint-1753719469655-1cl9z3aym",
+  "checkpointName": "auto-save-1753719469654",
+  "timestamp": "2025-07-28T16:17:49.655Z",
+  "data": {
+    "timestamp": "2025-07-28T16:17:49.654Z",
+    "changeCount": 9,
+    "changesByType": {
+      "swarm_created": [
+        {
+          "type": "swarm_created",
+          "data": {
+            "swarmId": "swarm-1753719436068-v4jago410",
+            "swarmName": "(swarm-permissoes)",
+            "objective": "Refatorar sistema de permissões.",
+            "workerCount": 8
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        }
+      ],
+      "agent_activity": [
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-0",
+            "activity": "spawned",
+            "data": {
+              "type": "researcher",
+              "name": "Researcher Worker 1"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-1",
+            "activity": "spawned",
+            "data": {
+              "type": "coder",
+              "name": "Coder Worker 2"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-2",
+            "activity": "spawned",
+            "data": {
+              "type": "analyst",
+              "name": "Analyst Worker 3"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-3",
+            "activity": "spawned",
+            "data": {
+              "type": "tester",
+              "name": "Tester Worker 4"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-4",
+            "activity": "spawned",
+            "data": {
+              "type": "architect",
+              "name": "Architect Worker 5"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-5",
+            "activity": "spawned",
+            "data": {
+              "type": "reviewer",
+              "name": "Reviewer Worker 6"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-6",
+            "activity": "spawned",
+            "data": {
+              "type": "optimizer",
+              "name": "Optimizer Worker 7"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753719436068-v4jago410-7",
+            "activity": "spawned",
+            "data": {
+              "type": "documenter",
+              "name": "Documenter Worker 8"
+            }
+          },
+          "timestamp": "2025-07-28T16:17:16.071Z"
+        }
+      ]
+    },
+    "statistics": {
+      "tasksProcessed": 0,
+      "tasksCompleted": 0,
+      "memoryUpdates": 0,
+      "agentActivities": 8,
+      "consensusDecisions": 0
+    }
+  }
+}

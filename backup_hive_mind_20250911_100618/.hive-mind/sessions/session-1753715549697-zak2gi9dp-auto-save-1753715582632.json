@@ -1,0 +1,129 @@
+{
+  "sessionId": "session-1753715549697-zak2gi9dp",
+  "checkpointId": "checkpoint-1753715582632-5tq1kg3tp",
+  "checkpointName": "auto-save-1753715582632",
+  "timestamp": "2025-07-28T15:13:02.633Z",
+  "data": {
+    "timestamp": "2025-07-28T15:13:02.632Z",
+    "changeCount": 9,
+    "changesByType": {
+      "swarm_created": [
+        {
+          "type": "swarm_created",
+          "data": {
+            "swarmId": "swarm-1753715549695-ufv1qbcej",
+            "swarmName": "swarm-mcp-sistema-logistica",
+            "objective": "Crie um MCP completo e autônomo com IA (claude 4 sonnet) que permita um agente responder perguntas de linguagem natural sobre dados do sistema logístico.\\",
+            "workerCount": 12
+          },
+          "timestamp": "2025-07-28T15:12:29.698Z"
+        }
+      ],
+      "agent_activity": [
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-0",
+            "activity": "spawned",
+            "data": {
+              "type": "researcher",
+              "name": "Researcher Worker 1"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.698Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-1",
+            "activity": "spawned",
+            "data": {
+              "type": "coder",
+              "name": "Coder Worker 2"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.698Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-2",
+            "activity": "spawned",
+            "data": {
+              "type": "analyst",
+              "name": "Analyst Worker 3"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.698Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-3",
+            "activity": "spawned",
+            "data": {
+              "type": "tester",
+              "name": "Tester Worker 4"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.699Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-4",
+            "activity": "spawned",
+            "data": {
+              "type": "architect",
+              "name": "Architect Worker 5"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.699Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-5",
+            "activity": "spawned",
+            "data": {
+              "type": "reviewer",
+              "name": "Reviewer Worker 6"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.699Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-6",
+            "activity": "spawned",
+            "data": {
+              "type": "optimizer",
+              "name": "Optimizer Worker 7"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.699Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753715549695-ufv1qbcej-7",
+            "activity": "spawned",
+            "data": {
+              "type": "documenter",
+              "name": "Documenter Worker 8"
+            }
+          },
+          "timestamp": "2025-07-28T15:12:29.699Z"
+        }
+      ]
+    },
+    "statistics": {
+      "tasksProcessed": 0,
+      "tasksCompleted": 0,
+      "memoryUpdates": 0,
+      "agentActivities": 8,
+      "consensusDecisions": 0
+    }
+  }
+}
