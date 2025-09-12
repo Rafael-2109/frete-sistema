@@ -1358,26 +1358,40 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Se for processamento assíncrono, fazer polling do status
             if (useAsync && result.job_id) {
-                // Mostrar que o processamento foi iniciado
+                // Mostrar notificação simples e continuar trabalhando
                 Swal.fire({
-                    title: '⏳ Processando...',
+                    icon: 'info',
+                    title: 'Agendamento em Processamento',
                     html: `
                         <div class="text-center">
-                            <p>Seu agendamento está sendo processado em background.</p>
-                            <p>Job ID: <code>${result.job_id}</code></p>
-                            <div class="spinner-border text-primary mt-3" role="status">
-                                <span class="visually-hidden">Processando...</span>
+                            <p><strong>${result.total_cnpjs || cnpjsSelecionados.size} CNPJs</strong> estão sendo agendados no portal Sendas.</p>
+                            <div class="progress mt-3" style="height: 25px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                     role="progressbar" style="width: 100%">
+                                    Processando no servidor...
+                                </div>
                             </div>
-                            <p class="mt-3 text-muted">Aguarde, isso pode levar alguns minutos...</p>
+                            <div class="alert alert-info mt-3 text-start" style="font-size: 0.9em;">
+                                <i class="fas fa-server"></i> <strong>Processamento no Servidor</strong><br>
+                                <small>
+                                    • O agendamento continua mesmo se você fechar esta página<br>
+                                    • Você pode fazer outras tarefas enquanto processa<br>
+                                    • Se permanecer na página, será notificado quando concluir
+                                </small>
+                            </div>
                         </div>
                     `,
-                    allowOutsideClick: false,
-                    showConfirmButton: false,
-                    didOpen: () => {
-                        // Iniciar polling do status
-                        checkJobStatus(result.job_id);
+                    confirmButtonText: 'OK, Entendi',
+                    timer: 8000,  // Aumentar para 8 segundos para dar tempo de ler
+                    timerProgressBar: true,
+                    didClose: () => {
+                        // Iniciar verificação em background (sem bloquear a tela)
+                        checkJobStatusSilently(result.job_id);
                     }
                 });
+                
+                // Mostrar notificação toast no canto
+                showToastNotification('info', 'Agendamento iniciado', 'Processando em segundo plano...');
                 return;
             }
             
@@ -1460,81 +1474,137 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Função para verificar status do job assíncrono
-    async function checkJobStatus(jobId) {
+    // Função para verificar status do job em background (sem bloquear interface)
+    async function checkJobStatusSilently(jobId) {
         try {
             const response = await fetch(`/carteira/programacao-lote/api/status-job-sendas/${jobId}`);
             const data = await response.json();
             
             if (data.status === 'finished') {
-                // Job concluído com sucesso
+                // Job concluído com sucesso - notificação amigável
+                showToastNotification('success', 'Agendamento Concluído!', 'Todos os CNPJs foram processados com sucesso.');
+                
+                // Modal de sucesso com opção de atualizar
                 Swal.fire({
                     icon: 'success',
-                    title: '✅ Processamento Concluído!',
+                    title: 'Agendamento Realizado!',
                     html: `
-                        <div class="text-start">
-                            <p><strong>Job ID:</strong> ${jobId}</p>
-                            <p><strong>Status:</strong> Concluído com sucesso</p>
-                            <hr>
-                            <p>O agendamento foi processado no portal Sendas.</p>
-                            ${data.result ? `
-                                <p><strong>Detalhes:</strong></p>
-                                <pre class="text-start" style="max-height: 200px; overflow-y: auto; font-size: 0.85em;">
-                                    ${JSON.stringify(data.result, null, 2)}
-                                </pre>
-                            ` : ''}
+                        <div class="text-center">
+                            <p class="mb-3">
+                                <i class="fas fa-check-circle text-success" style="font-size: 3em;"></i>
+                            </p>
+                            <p><strong>Todos os CNPJs foram agendados com sucesso no portal Sendas.</strong></p>
+                            <p class="text-muted mt-2">As separações foram geradas e estão prontas para processamento.</p>
+                            <hr class="my-3">
+                            <p class="text-info">
+                                <i class="fas fa-info-circle"></i> 
+                                <small>O processamento foi concluído mesmo que você tenha fechado a página.</small>
+                            </p>
                         </div>
                     `,
-                    confirmButtonText: 'OK',
-                    width: '600px'
+                    confirmButtonText: 'Atualizar Página',
+                    confirmButtonColor: '#28a745',
+                    showCancelButton: true,
+                    cancelButtonText: 'Continuar na Página',
+                    cancelButtonColor: '#6c757d'
+                }).then((result) => {
+                    // Só atualiza se o usuário escolher
+                    if (result.isConfirmed) {
+                        location.reload();
+                    } else {
+                        // Limpar os checkboxes selecionados
+                        cnpjsSelecionados.clear();
+                        document.querySelectorAll('.check-cnpj:checked').forEach(cb => {
+                            cb.checked = false;
+                        });
+                        document.getElementById('checkTodos').checked = false;
+                        atualizarBotaoProcessar();
+                        
+                        // Mostrar notificação de que pode continuar
+                        showToastNotification('info', 'Pronto!', 'Você pode continuar selecionando outros CNPJs.');
+                    }
                 });
                 
-                // Recarregar a página ou atualizar dados se necessário
-                setTimeout(() => {
-                    location.reload();
-                }, 3000);
-                
             } else if (data.status === 'failed') {
-                // Job falhou
+                // Erro no processamento - notificação amigável
+                showToastNotification('error', 'Erro no Agendamento', 'Houve um problema ao processar os agendamentos.');
+                
                 Swal.fire({
                     icon: 'error',
-                    title: '❌ Erro no Processamento',
+                    title: 'Erro no Agendamento',
                     html: `
-                        <div class="text-start">
-                            <p><strong>Job ID:</strong> ${jobId}</p>
-                            <p><strong>Erro:</strong> ${data.error || 'Erro desconhecido'}</p>
-                            <hr>
-                            <p>O processamento falhou. Por favor, tente novamente ou use o modo síncrono.</p>
+                        <div class="text-center">
+                            <p class="mb-3">
+                                <i class="fas fa-times-circle text-danger" style="font-size: 3em;"></i>
+                            </p>
+                            <p>Não foi possível completar o agendamento no portal Sendas.</p>
+                            <p class="text-muted mt-2">Por favor, tente novamente ou entre em contato com o suporte.</p>
                         </div>
                     `,
-                    confirmButtonText: 'OK',
-                    width: '600px'
+                    confirmButtonText: 'Entendi',
+                    confirmButtonColor: '#dc3545'
                 });
                 
             } else if (data.status === 'not_found') {
-                // Job não encontrado
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Job não encontrado',
-                    text: `O job ${jobId} não foi encontrado. Pode ter expirado ou sido cancelado.`,
-                    confirmButtonText: 'OK'
-                });
+                // Job expirou - não mostrar nada técnico
+                console.log('Job expirou ou foi cancelado:', jobId);
                 
             } else {
-                // Ainda processando - continuar polling
+                // Ainda processando - continuar verificando silenciosamente
                 setTimeout(() => {
-                    checkJobStatus(jobId);
+                    checkJobStatusSilently(jobId);
                 }, 5000); // Verificar novamente em 5 segundos
             }
             
         } catch (error) {
             console.error('Erro ao verificar status do job:', error);
-            
-            // Em caso de erro, tentar novamente em 10 segundos
+            // Em caso de erro de rede, tentar novamente em 10 segundos
             setTimeout(() => {
-                checkJobStatus(jobId);
+                checkJobStatusSilently(jobId);
             }, 10000);
         }
+    }
+    
+    // Função original mantida para compatibilidade (se chamada de outro lugar)
+    async function checkJobStatus(jobId) {
+        // Redirecionar para a versão silenciosa
+        checkJobStatusSilently(jobId);
+    }
+    
+    // Função auxiliar para mostrar notificações toast
+    function showToastNotification(type, title, message) {
+        // Verificar se já existe container de toasts
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Criar elemento do toast
+        const toastId = 'toast-' + Date.now();
+        const toastHtml = `
+            <div id="${toastId}" class="toast show align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0 mb-2" 
+                 role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px;">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <strong>${title}</strong><br>
+                        <small>${message}</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                            onclick="document.getElementById('${toastId}').remove()"></button>
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Auto remover após 5 segundos
+        setTimeout(() => {
+            const toast = document.getElementById(toastId);
+            if (toast) toast.remove();
+        }, 5000);
     }
     
     // Converter número

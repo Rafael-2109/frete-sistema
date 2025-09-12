@@ -33,6 +33,31 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
             logger.info(f"[Worker Sendas] Total de CNPJs: {len(lista_cnpjs_agendamento)}")
             logger.info(f"[Worker Sendas] Usuário: {usuario_nome}")
             
+            # Converter datas de string para date objects se necessário
+            # (os dados vêm do JSONB onde dates são armazenadas como strings)
+            from datetime import datetime
+            lista_cnpjs_processada = []
+            for item in lista_cnpjs_agendamento:
+                cnpj = item.get('cnpj')
+                data_agendamento = item.get('data_agendamento')
+                
+                # Converter string para date se necessário
+                if isinstance(data_agendamento, str) and data_agendamento:
+                    try:
+                        # Tentar formato ISO (YYYY-MM-DD)
+                        data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+                    except ValueError:
+                        # Se falhar, manter como está
+                        logger.warning(f"[Worker Sendas] Não foi possível converter data: {data_agendamento}")
+                
+                lista_cnpjs_processada.append({
+                    'cnpj': cnpj,
+                    'data_agendamento': data_agendamento
+                })
+            
+            # Usar a lista processada daqui em diante
+            lista_cnpjs_agendamento = lista_cnpjs_processada
+            
             # Buscar integração no banco
             integracao = PortalIntegracao.query.get(integracao_id)
             if not integracao:
@@ -94,7 +119,7 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
                 # Atualizar status da integração
                 integracao.status = 'concluido'
                 integracao.atualizado_em = datetime.utcnow()
-                integracao.resultado = {
+                integracao.resposta_portal = {
                     'sucesso': True,
                     'mensagem': 'Agendamentos processados com sucesso',
                     'timestamp': datetime.now().isoformat(),
@@ -133,7 +158,7 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
                 if integracao:
                     integracao.status = 'erro'
                     integracao.atualizado_em = datetime.utcnow()
-                    integracao.resultado = {
+                    integracao.resposta_portal = {
                         'sucesso': False,
                         'erro': str(e),
                         'timestamp': datetime.now().isoformat()

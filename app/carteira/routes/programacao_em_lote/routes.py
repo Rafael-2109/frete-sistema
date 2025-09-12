@@ -1674,21 +1674,36 @@ def processar_agendamento_sendas_async():
             return jsonify({'success': False, 'error': 'Nenhum dado fornecido'}), 400
         
         logger.info("🚀 [ASYNC] Iniciando processamento assíncrono Sendas")
-        logger.info(f"   Dados recebidos: {len(data.get('cnpjs', []))} CNPJs")
+        logger.info(f"   Dados recebidos: {len(data.get('cnpjs', []) or data.get('agendamentos', []))} CNPJs")
         
-        # Validar dados
-        cnpjs_data = data.get('cnpjs', [])
+        # Validar dados - aceitar tanto 'cnpjs' quanto 'agendamentos' para compatibilidade
+        cnpjs_data = data.get('cnpjs', []) or data.get('agendamentos', [])
         if not cnpjs_data:
             return jsonify({'success': False, 'error': 'Nenhum CNPJ fornecido'}), 400
         
-        # Filtrar apenas CNPJs com agendamento definido
+        # Filtrar CNPJs com datas válidas (como na função síncrona)
         cnpjs_validos = []
+        cnpjs_ignorados = []
+        
         for item in cnpjs_data:
-            if item.get('agendamento'):
-                cnpjs_validos.append(item)
-                logger.info(f"  ✅ CNPJ {item.get('cnpj')} - Agendamento: {item.get('agendamento')}")
-            else:
-                logger.warning(f"  ⚠️ CNPJ {item.get('cnpj')} - Sem data de agendamento")
+            cnpj = item.get('cnpj')
+            data_expedicao = item.get('expedicao')
+            data_agendamento = item.get('agendamento')
+            
+            # Verificar se tem CNPJ e data de expedição (obrigatórios)
+            if not all([cnpj, data_expedicao]):
+                logger.warning(f"  ⚠️ CNPJ {cnpj} ignorado: falta data de expedição")
+                cnpjs_ignorados.append(cnpj)
+                continue
+            
+            # Verificar se tem data de agendamento (OBRIGATÓRIA para Sendas)
+            if not data_agendamento:
+                logger.warning(f"  ⚠️ CNPJ {cnpj} ignorado: falta data de agendamento (obrigatória para portal Sendas)")
+                cnpjs_ignorados.append(cnpj)
+                continue
+            
+            cnpjs_validos.append(item)
+            logger.info(f"  ✅ CNPJ {cnpj} - Expedição: {data_expedicao}, Agendamento: {data_agendamento}")
         
         if not cnpjs_validos:
             return jsonify({
@@ -1696,25 +1711,52 @@ def processar_agendamento_sendas_async():
                 'error': 'Nenhum CNPJ com data de agendamento válida'
             }), 400
         
-        # Preparar lista de agendamentos
+        # Preparar lista de agendamentos com conversão de datas
         lista_cnpjs_agendamento = []
         for agendamento in cnpjs_validos:
             cnpj = agendamento.get('cnpj')
             data_agendamento = agendamento.get('agendamento')
             
+            # Converter data de string para date se necessário (como na versão síncrona)
+            if isinstance(data_agendamento, str) and data_agendamento:
+                from datetime import datetime
+                data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+            
+            # Para o worker, mantemos como date object
             lista_cnpjs_agendamento.append({
                 'cnpj': cnpj,
                 'data_agendamento': data_agendamento
             })
         
         # Criar registro de integração no banco
+        # Gerar lote_id único usando a função padrão
+        lote_id = gerar_lote_id()
+        
+        # Preparar dados para JSONB - converter dates para string ISO
+        lista_cnpjs_json = []
+        for item in lista_cnpjs_agendamento:
+            cnpj = item['cnpj']
+            data_agend = item['data_agendamento']
+            
+            # Converter date para string ISO para serialização JSON
+            if data_agend and hasattr(data_agend, 'isoformat'):
+                data_agend_str = data_agend.isoformat()
+            else:
+                data_agend_str = str(data_agend) if data_agend else None
+            
+            lista_cnpjs_json.append({
+                'cnpj': cnpj,
+                'data_agendamento': data_agend_str
+            })
+        
         integracao = PortalIntegracao(
             portal='sendas',
-            tipo='agendamento_lote',
+            lote_id=lote_id,
+            tipo_lote='agendamento_lote',
             status='aguardando',
-            dados_envio={
-                'cnpjs': lista_cnpjs_agendamento,
-                'total': len(lista_cnpjs_agendamento),
+            dados_enviados={
+                'cnpjs': lista_cnpjs_json,  # Usar versão com datas como string
+                'total': len(lista_cnpjs_json),
                 'usuario': current_user.nome if current_user else 'Sistema'
             }
         )
@@ -1765,7 +1807,7 @@ def processar_agendamento_sendas_async():
             
             # Atualizar status da integração
             integracao.status = 'erro'
-            integracao.resultado = {'erro': str(queue_error)}
+            integracao.resposta_portal = {'erro': str(queue_error)}
             db.session.commit()
             
             # Se Redis não estiver disponível, sugerir processamento síncrono
