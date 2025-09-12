@@ -32,7 +32,7 @@ def instalar_libreoffice_se_necessario():
         subprocess.run(['sudo', 'apt-get', 'install', '-y', 'libreoffice'], check=True)
         logger.info("✅ LibreOffice instalado com sucesso!")
         return True
-    except:
+    except Exception:
         logger.error("❌ Não foi possível instalar LibreOffice automaticamente")
         logger.info("Por favor, instale manualmente:")
         logger.info("  Ubuntu/Debian: sudo apt-get install libreoffice")
@@ -174,7 +174,7 @@ def normalizar_com_xlsxwriter(arquivo_entrada: str, arquivo_saida: str = None) -
                         if excel_date > 60:
                             excel_date -= 1  # Correção do bug do ano bissexto 1900
                         return base_date + timedelta(days=excel_date)
-                    except:
+                    except Exception:
                         return val
                 # Se já for datetime, mantém
                 elif isinstance(val, datetime):
@@ -184,7 +184,7 @@ def normalizar_com_xlsxwriter(arquivo_entrada: str, arquivo_saida: str = None) -
                     try:
                         # Tentar converter dd/mm/yyyy para datetime
                         return pd.to_datetime(val, format="%d/%m/%Y")
-                    except:
+                    except Exception:
                         return val
                 return val
             
@@ -193,7 +193,7 @@ def normalizar_com_xlsxwriter(arquivo_entrada: str, arquivo_saida: str = None) -
                 s = val.strip().replace(",", ".")
                 try:
                     return float(s) if "." in s else int(s)
-                except:
+                except Exception:
                     pass
             return val
         

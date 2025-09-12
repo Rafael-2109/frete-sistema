@@ -332,12 +332,14 @@ class ConsumirAgendasSendas:
             logger.error(f"❌ Erro ao navegar: {e}")
             return False
     
-    async def fazer_upload_planilha(self, arquivo_planilha: str) -> bool:
+    async def fazer_upload_planilha(self, arquivo_planilha: str, fechar_modal: bool = True) -> bool:
         """
         Faz upload da planilha preenchida no portal Sendas
         
         Args:
             arquivo_planilha: Caminho completo do arquivo Excel a ser enviado
+            fechar_modal: Se True, tenta fechar modal antes do upload (padrão: True)
+                         Deve ser False quando navegador já está aberto no fluxo contínuo
             
         Returns:
             True se upload bem-sucedido, False caso contrário
@@ -409,8 +411,9 @@ class ConsumirAgendasSendas:
                 logger.warning("   SUGESTÃO: Abra e salve o arquivo no Excel antes do upload")
                 logger.warning(f"   Arquivo problemático: {arquivo_planilha}")
             
-            # Usar estratégia otimizada para fechar modal antes do upload
-            await aguardar_e_fechar_modal_releases(self.portal.page, "antes do upload")
+            # Fechar modal apenas se solicitado (não aparece modal quando navegador já está aberto)
+            if fechar_modal:
+                await aguardar_e_fechar_modal_releases(self.portal.page, "antes do upload")
             
             # Aguardar estabilização mínima
             await self.portal.page.wait_for_timeout(500)
@@ -513,309 +516,333 @@ class ConsumirAgendasSendas:
             # Adicionar listener assíncrono ANTES de abrir o menu
             self.portal.page.on("response", response_handler)
             
-            # Primeiro precisamos acessar o menu AÇÕES novamente
-            logger.info("🔘 Clicando em AÇÕES para acessar opções de upload...")
-            btn_acoes = iframe.get_by_role("button", name="AÇÕES")
-            if await self.click_seguro(btn_acoes, "Clique em AÇÕES"):
-                await self.portal.page.wait_for_timeout(1000)
-                
-                # Agora procurar por CONSUMIR ITENS
-                logger.info("📋 Selecionando CONSUMIR ITENS...")
-                item_consumir = iframe.get_by_role("menuitem", name="CONSUMIR ITENS")
-                if await self.click_seguro(item_consumir, "Clique em CONSUMIR ITENS"):
-                    await self.portal.page.wait_for_timeout(1500)
+            # LÓGICA CONDICIONAL: Se fechar_modal=False, já estamos na tela certa
+            if fechar_modal:
+                # Fluxo normal: precisamos navegar até CONSUMIR ITENS
+                logger.info("🔘 Clicando em AÇÕES para acessar opções de upload...")
+                btn_acoes = iframe.get_by_role("button", name="AÇÕES")
+                if await self.click_seguro(btn_acoes, "Clique em AÇÕES"):
+                    await self.portal.page.wait_for_timeout(1000)
                     
-                    # Agora sim procurar o botão de upload
-                    logger.info("🔍 Procurando botão de Upload da planilha...")
-                    
-                    # Lista de seletores possíveis para o botão de upload
-                    upload_selectors = [
-                        'button:has-text("Upload da planilha")',
-                        'button:has-text("UPLOAD PLANILHA")',
-                        'button:has-text("Upload")',
-                        'button:has-text("Enviar planilha")',
-                        'button:has-text("Carregar planilha")',
-                        '.upload-button',
-                        'button[title*="upload" i]',
-                        'button:has(svg[width="16"][height="16"])',
-                        'button:has([data-icon="upload"])'
-                    ]
-                    
-                    botao_upload = None
-                    for selector in upload_selectors:
-                        temp_button = iframe.locator(selector).first
-                        if await temp_button.is_visible(timeout=1000):
-                            botao_upload = temp_button
-                            logger.info(f"✅ Botão encontrado com seletor: {selector}")
-                            break
+                    # Agora procurar por CONSUMIR ITENS
+                    logger.info("📋 Selecionando CONSUMIR ITENS...")
+                    item_consumir = iframe.get_by_role("menuitem", name="CONSUMIR ITENS")
+                    if await self.click_seguro(item_consumir, "Clique em CONSUMIR ITENS"):
+                        await self.portal.page.wait_for_timeout(1500)
+            else:
+                # Fluxo com navegador persistente: já estamos na tela de CONSUMIR ITENS
+                logger.info("🚀 Navegador persistente - já estamos na tela de upload")
+                logger.info("   Após download, o botão UPLOAD PLANILHA já está visível")
+                await self.portal.page.wait_for_timeout(500)
             
-                    if botao_upload:
-                        logger.info("✅ Botão de upload encontrado")
-                        
-                        # Clicar no botão para abrir o modal
-                        await botao_upload.click()
-                        logger.info("🖱️ Botão de upload clicado, aguardando modal...")
-                        
-                        # Aguardar o modal aparecer
-                        await self.portal.page.wait_for_timeout(2000)
-                        
-                        # CORREÇÃO CRÍTICA: Procurar o modal DENTRO DO IFRAME, não no page!
-                        logger.info("🔍 Procurando modal de upload DENTRO DO IFRAME...")
-                        
-                        # O modal está no iframe, não no page principal
-                        modal_selectors = [
-                            '[role="dialog"].rs-modal',
-                            '.rs-modal-wrapper',
-                            '.rs-modal'
-                        ]
-                        
-                        modal = None
-                        for selector in modal_selectors:
-                            temp_modal = iframe.locator(selector).first
-                            if await temp_modal.is_visible(timeout=1000):
-                                logger.info(f"🎆 Modal de upload encontrado no IFRAME: {selector}")
-                                modal = temp_modal
-                                break
-                        
-                        if modal:
-                            logger.info("🔍 Localizando o DevExtreme FileUploader DENTRO do modal...")
-                            
-                            # IMPORTANTE: Capturar a resposta do endpoint de upload
-                            logger.info("🎯 Preparando para interceptar resposta do endpoint de upload...")
-                            
-                            # Helpers
-                            async def esta_visivel(loc, timeout=1200) -> bool:
-                                try:
-                                    await loc.wait_for(state="visible", timeout=timeout)
-                                    return True
-                                except Exception:
-                                    return False
+            # Agora sim procurar o botão de upload (para ambos os fluxos)
+            logger.info("🔍 Procurando botão de Upload da planilha...")
+            
+            # Lista de seletores possíveis para o botão de upload
+            upload_selectors = [
+                'button:has-text("Upload da planilha")',
+                'button:has-text("UPLOAD PLANILHA")',
+                'button:has-text("Upload")',
+                'button:has-text("Enviar planilha")',
+                'button:has-text("Carregar planilha")',
+                '.upload-button',
+                'button[title*="upload" i]',
+                'button:has(svg[width="16"][height="16"])',
+                'button:has([data-icon="upload"])'
+            ]
+            
+            botao_upload = None
+            for selector in upload_selectors:
+                temp_button = iframe.locator(selector).first
+                if await temp_button.is_visible(timeout=1000):
+                    botao_upload = temp_button
+                    logger.info(f"✅ Botão encontrado com seletor: {selector}")
+                    break
+            
+            if botao_upload:
+                logger.info("✅ Botão de upload encontrado")
+                
+                # Clicar no botão para abrir o modal
+                await botao_upload.click()
+                logger.info("🖱️ Botão de upload clicado, aguardando modal...")
+                
+                # Aguardar o modal aparecer
+                await self.portal.page.wait_for_timeout(2000)
+                
+                # CORREÇÃO CRÍTICA: Procurar o modal DENTRO DO IFRAME, não no page!
+                logger.info("🔍 Procurando modal de upload DENTRO DO IFRAME...")
+                
+                # O modal está no iframe, não no page principal
+                modal_selectors = [
+                    '[role="dialog"].rs-modal',
+                    '.rs-modal-wrapper',
+                    '.rs-modal'
+                ]
+                
+                modal = None
+                for selector in modal_selectors:
+                    temp_modal = iframe.locator(selector).first
+                    if await temp_modal.is_visible(timeout=1000):
+                        logger.info(f"🎆 Modal de upload encontrado no IFRAME: {selector}")
+                        modal = temp_modal
+                        break
+                
+                if modal:
+                    logger.info("🔍 Localizando o DevExtreme FileUploader DENTRO do modal...")
+                    
+                    # IMPORTANTE: Capturar a resposta do endpoint de upload
+                    logger.info("🎯 Preparando para interceptar resposta do endpoint de upload...")
+                    
+                    # Helpers
+                    async def esta_visivel(loc, timeout=1200) -> bool:
+                        try:
+                            await loc.wait_for(state="visible", timeout=timeout)
+                            return True
+                        except Exception:
+                            return False
 
-                            async def aguardar_devextreme_reconhecer(uploader_root, timeout_ms=8000) -> bool:
-                                """Espera o DevExtreme remover 'dx-fileuploader-empty' e/ou mostrar item na lista."""
-                                loop = asyncio.get_running_loop()
-                                deadline = loop.time() + (timeout_ms / 1000.0)
-                                files_item = modal.locator('.dx-fileuploader-files-container .dx-fileuploader-file').first
-                                while loop.time() < deadline:
-                                    try:
-                                        classes = await uploader_root.get_attribute("class")
-                                        if classes and "dx-fileuploader-empty" not in classes:
-                                            # se houver card de arquivo melhor ainda
-                                            if await esta_visivel(files_item, 300):
-                                                return True
-                                            return True
-                                    except Exception:
-                                        pass
-                                    await self.portal.page.wait_for_timeout(200)
+                    async def aguardar_devextreme_reconhecer(uploader_root, timeout_ms=8000) -> bool:
+                        """Espera o DevExtreme remover 'dx-fileuploader-empty' e/ou mostrar item na lista."""
+                        loop = asyncio.get_running_loop()
+                        deadline = loop.time() + (timeout_ms / 1000.0)
+                        files_item = modal.locator('.dx-fileuploader-files-container .dx-fileuploader-file').first
+                        while loop.time() < deadline:
+                            try:
+                                classes = await uploader_root.get_attribute("class")
+                                if classes and "dx-fileuploader-empty" not in classes:
+                                    # se houver card de arquivo melhor ainda
+                                    if await esta_visivel(files_item, 300):
+                                        return True
+                                    return True
+                            except Exception:
+                                pass
+                            await self.portal.page.wait_for_timeout(200)
+                        return False
+
+                    # ESCOPAR NO MODAL: pega o root do uploader DENTRO do modal
+                    uploader_root = modal.locator('#file-uploader, [id^="file-uploader"]').first
+                    if await uploader_root.count() == 0 or not await esta_visivel(uploader_root, 1500):
+                        logger.warning("⚠️ Root do FileUploader não encontrado no modal. Tentando só pelos inputs.")
+                        uploader_root = modal  # degrade: vamos validar por toasts/erros
+
+                    # IMPORTANTE: Verificar se o input tem o nome correto "arquivoExcel"
+                    # Pegue TODOS os inputs file DENTRO do modal
+                    inputs = await modal.locator('input[type="file"]').all()
+                    if not inputs:
+                        logger.error("❌ Nenhum input[type=file] encontrado DENTRO do modal.")
+                        try:
+                            html_dump = await modal.inner_html()
+                            dump_path = f"/tmp/sendas_modal_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+                            with open(dump_path, "w", encoding="utf-8") as f:
+                                f.write(html_dump or "")
+                            logger.info(f"📝 Dump do HTML do modal salvo em: {dump_path}")
+                        except Exception:
+                            pass
+                        return False
+
+                    logger.info(f"📁 {len(inputs)} input(s) de arquivo encontrados no modal.")
+                    
+                    # Verificar e setar o atributo name para "arquivoExcel" se necessário
+                    for idx, file_input in enumerate(inputs):
+                        try:
+                            # Obter o nome atual do campo
+                            current_name = await file_input.get_attribute("name")
+                            logger.info(f"📝 Input[{idx}] tem name='{current_name}'")
+                            
+                            # Se não for "arquivoExcel", precisamos setar
+                            if current_name != "arquivoExcel":
+                                logger.warning(f"⚠️ Nome do campo incorreto: '{current_name}'. Corrigindo para 'arquivoExcel'...")
+                                await file_input.evaluate("""
+                                    (el) => {
+                                        el.setAttribute('name', 'arquivoExcel');
+                                        console.log('Campo name alterado para arquivoExcel');
+                                    }
+                                """)
+                        except Exception as e:
+                            logger.debug(f"Erro ao verificar/setar name do input[{idx}]: {e}")
+
+                    # O listener já foi adicionado antes de abrir o menu AÇÕES
+                    # Agora apenas referenciamos a variável upload_response que já existe
+                    
+                    reconhecido = False
+                    for idx, file_input in enumerate(inputs):
+                        try:
+                            # set_input_files funciona mesmo com input invisível
+                            logger.info(f"📤 Tentando set_input_files no input[{idx}] com campo name='arquivoExcel'...")
+                            await file_input.set_input_files(arquivo_planilha)
+                            # Força o 'change' a borbulhar
+                            try:
+                                await file_input.evaluate("el => el.dispatchEvent(new Event('change', { bubbles: true }))")
+                            except Exception:
+                                pass
+
+                            # Valida se o FileUploader saiu de 'empty' (se temos uploader_root)
+                            if await aguardar_devextreme_reconhecer(uploader_root, timeout_ms=9000):
+                                reconhecido = True
+                                logger.info("✅ DevExtreme reconheceu o arquivo (saiu de 'dx-fileuploader-empty').")
+                                break
+                            else:
+                                logger.warning(f"⚠️ Input[{idx}] não populou o uploader.")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Falha ao usar input[{idx}]: {e}")
+
+                    # Fallback: usar botão "Selecionar arquivo" do DevExtreme, ainda escopado ao modal
+                    if not reconhecido:
+                        select_btn = modal.locator('.dx-fileuploader-button[role="button"]').first
+                        if await select_btn.count() > 0 and await esta_visivel(select_btn, 1500):
+                            logger.info("🔄 Fallback: acionando file chooser do DevExtreme (no modal)...")
+                            try:
+                                async with self.portal.page.expect_file_chooser(timeout=6000) as fc_info:
+                                    await select_btn.click()
+                                fc = await fc_info.value
+                                await fc.set_files(arquivo_planilha)
+                                if not await aguardar_devextreme_reconhecer(uploader_root, timeout_ms=9000):
+                                    logger.error("❌ Mesmo com file chooser, o DevExtreme não populou (no modal).")
+                                    return False
+                                reconhecido = True
+                            except PWTimeout:
+                                logger.error("⏱️ Timeout ao abrir file chooser do DevExtreme (no modal).")
+                                return False
+                            except Exception as e:
+                                logger.error(f"❌ Erro no fallback de file chooser (no modal): {e}")
                                 return False
 
-                            # ESCOPAR NO MODAL: pega o root do uploader DENTRO do modal
-                            uploader_root = modal.locator('#file-uploader, [id^="file-uploader"]').first
-                            if await uploader_root.count() == 0 or not await esta_visivel(uploader_root, 1500):
-                                logger.warning("⚠️ Root do FileUploader não encontrado no modal. Tentando só pelos inputs.")
-                                uploader_root = modal  # degrade: vamos validar por toasts/erros
+                    if not reconhecido:
+                        logger.error("❌ Nenhuma tentativa populou o uploader no modal.")
+                        return False
 
-                            # IMPORTANTE: Verificar se o input tem o nome correto "arquivoExcel"
-                            # Pegue TODOS os inputs file DENTRO do modal
-                            inputs = await modal.locator('input[type="file"]').all()
-                            if not inputs:
-                                logger.error("❌ Nenhum input[type=file] encontrado DENTRO do modal.")
+                    # Se existir botão de upload, clique; caso contrário, ele é instant-upload
+                    upload_btn = modal.locator('.dx-fileuploader-upload-button').first
+                    if await upload_btn.count() > 0 and await esta_visivel(upload_btn, 1500):
+                        logger.info("🖱️ Clicando no botão de upload do DevExtreme (no modal)…")
+                        await upload_btn.click()
+                    else:
+                        logger.info("ℹ️ Sem botão de upload — assumindo 'instant upload'.")
+
+                    # Aguardar resposta do servidor (máximo 30 segundos)
+                    logger.info("⏳ Aguardando resposta do servidor após upload...")
+                    for _ in range(60):  # 30 segundos (60 x 500ms)
+                        if upload_response["hit"]:
+                            break
+                        await self.portal.page.wait_for_timeout(500)
+                    
+                    # Remover listener após upload
+                    self.portal.page.remove_listener("response", response_handler)
+                    
+                    # Verificar resposta do servidor
+                    if upload_response["hit"]:
+                        if upload_response["ok"]:
+                            logger.info("✅ Upload confirmado pela API com sucesso")
+                            logger.info(f"   📊 Status HTTP: {upload_response['status']}")
+                            if isinstance(upload_response["body"], dict):
+                                if 'demandaId' in upload_response["body"]:
+                                    logger.info(f"   🆔 ID da Demanda: {upload_response['body']['demandaId']}")
+                                if 'quantidade' in upload_response["body"]:
+                                    logger.info(f"   📦 Quantidade processada: {upload_response['body']['quantidade']}")
+                        else:
+                            logger.error("❌ Upload rejeitado pela API")
+                            logger.error(f"   📊 Status HTTP: {upload_response['status']}")
+                            # Tentar obter mensagem de erro
+                            if upload_response["body"]:
+                                if isinstance(upload_response["body"], dict):
+                                    logger.error(f"   📨 Mensagem: {upload_response['body'].get('message', 'Sem mensagem')}")
+                                    logger.error(f"   🔢 StatusCode: {upload_response['body'].get('statusCode', 'N/A')}")
+                                    if 'errors' in upload_response["body"]:
+                                        logger.error(f"   ⛔ Erros: {upload_response['body']['errors']}")
+                                else:
+                                    logger.error(f"   📄 Resposta: {upload_response['body'][:500]}")
+                            # Tentar capturar screenshot do erro
+                            try:
+                                error_path = f"/tmp/sendas_erro_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                                await self.portal.page.screenshot(path=error_path)
+                                logger.info(f"   📸 Screenshot do erro salvo em: {error_path}")
+                            except Exception:
+                                pass
+                            return False
+                    else:
+                        logger.warning("⚠️ Nenhuma resposta do endpoint de upload foi capturada")
+                        logger.warning("   Possíveis causas:")
+                        logger.warning("   - O endpoint pode estar em outro domínio")
+                        logger.warning("   - O upload pode não ter sido disparado") 
+                        logger.warning("   - Token JWT pode estar inválido")
+                        logger.warning("   - Arquivo pode estar no formato incorreto")
+                        
+                        # Fallback: verificar toasts de erro na interface
+                        erro = False
+                        for _ in range(10):  # 5s
+                            # Erro explícito em toasts/alertas
+                            for sel_err in ['.rs-notification-item-error', '.rs-message-error', '.alert-danger', '.error-message']:
+                                loc_err = modal.locator(sel_err).first
+                                if await esta_visivel(loc_err, 300):
+                                    erro = True
+                                    break
+                            if not erro:
                                 try:
-                                    html_dump = await modal.inner_html()
-                                    dump_path = f"/tmp/sendas_modal_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-                                    with open(dump_path, "w", encoding="utf-8") as f:
-                                        f.write(html_dump or "")
-                                    logger.info(f"📝 Dump do HTML do modal salvo em: {dump_path}")
+                                    loc_err_text = modal.get_by_text(re.compile(r'erro|falha|inválid|tamanho|formato', re.I))
+                                    if await esta_visivel(loc_err_text, 300):
+                                        erro = True
                                 except Exception:
                                     pass
-                                return False
+                            if erro:
+                                break
+                            await self.portal.page.wait_for_timeout(500)
 
-                            logger.info(f"📁 {len(inputs)} input(s) de arquivo encontrados no modal.")
-                            
-                            # Verificar e setar o atributo name para "arquivoExcel" se necessário
-                            for idx, file_input in enumerate(inputs):
-                                try:
-                                    # Obter o nome atual do campo
-                                    current_name = await file_input.get_attribute("name")
-                                    logger.info(f"📝 Input[{idx}] tem name='{current_name}'")
-                                    
-                                    # Se não for "arquivoExcel", precisamos setar
-                                    if current_name != "arquivoExcel":
-                                        logger.warning(f"⚠️ Nome do campo incorreto: '{current_name}'. Corrigindo para 'arquivoExcel'...")
-                                        await file_input.evaluate("""
-                                            (el) => {
-                                                el.setAttribute('name', 'arquivoExcel');
-                                                console.log('Campo name alterado para arquivoExcel');
-                                            }
-                                        """)
-                                except Exception as e:
-                                    logger.debug(f"Erro ao verificar/setar name do input[{idx}]: {e}")
+                        if erro:
+                            logger.error("❌ Portal exibiu erro após upload (no modal).")
+                            return False
 
-                            # O listener já foi adicionado antes de abrir o menu AÇÕES
-                            # Agora apenas referenciamos a variável upload_response que já existe
-                            
-                            reconhecido = False
-                            for idx, file_input in enumerate(inputs):
-                                try:
-                                    # set_input_files funciona mesmo com input invisível
-                                    logger.info(f"📤 Tentando set_input_files no input[{idx}] com campo name='arquivoExcel'...")
-                                    await file_input.set_input_files(arquivo_planilha)
-                                    # Força o 'change' a borbulhar
-                                    try:
-                                        await file_input.evaluate("el => el.dispatchEvent(new Event('change', { bubbles: true }))")
-                                    except Exception:
-                                        pass
-
-                                    # Valida se o FileUploader saiu de 'empty' (se temos uploader_root)
-                                    if await aguardar_devextreme_reconhecer(uploader_root, timeout_ms=9000):
-                                        reconhecido = True
-                                        logger.info("✅ DevExtreme reconheceu o arquivo (saiu de 'dx-fileuploader-empty').")
-                                        break
-                                    else:
-                                        logger.warning(f"⚠️ Input[{idx}] não populou o uploader.")
-                                except Exception as e:
-                                    logger.warning(f"⚠️ Falha ao usar input[{idx}]: {e}")
-
-                            # Fallback: usar botão "Selecionar arquivo" do DevExtreme, ainda escopado ao modal
-                            if not reconhecido:
-                                select_btn = modal.locator('.dx-fileuploader-button[role="button"]').first
-                                if await select_btn.count() > 0 and await esta_visivel(select_btn, 1500):
-                                    logger.info("🔄 Fallback: acionando file chooser do DevExtreme (no modal)...")
-                                    try:
-                                        async with self.portal.page.expect_file_chooser(timeout=6000) as fc_info:
-                                            await select_btn.click()
-                                        fc = await fc_info.value
-                                        await fc.set_files(arquivo_planilha)
-                                        if not await aguardar_devextreme_reconhecer(uploader_root, timeout_ms=9000):
-                                            logger.error("❌ Mesmo com file chooser, o DevExtreme não populou (no modal).")
-                                            return False
-                                        reconhecido = True
-                                    except PWTimeout:
-                                        logger.error("⏱️ Timeout ao abrir file chooser do DevExtreme (no modal).")
-                                        return False
-                                    except Exception as e:
-                                        logger.error(f"❌ Erro no fallback de file chooser (no modal): {e}")
-                                        return False
-
-                            if not reconhecido:
-                                logger.error("❌ Nenhuma tentativa populou o uploader no modal.")
-                                return False
-
-                            # Se existir botão de upload, clique; caso contrário, ele é instant-upload
-                            upload_btn = modal.locator('.dx-fileuploader-upload-button').first
-                            if await upload_btn.count() > 0 and await esta_visivel(upload_btn, 1500):
-                                logger.info("🖱️ Clicando no botão de upload do DevExtreme (no modal)…")
-                                await upload_btn.click()
-                            else:
-                                logger.info("ℹ️ Sem botão de upload — assumindo 'instant upload'.")
-
-                            # Aguardar resposta do servidor (máximo 30 segundos)
-                            logger.info("⏳ Aguardando resposta do servidor após upload...")
-                            for _ in range(60):  # 30 segundos (60 x 500ms)
-                                if upload_response["hit"]:
-                                    break
-                                await self.portal.page.wait_for_timeout(500)
-                            
-                            # Remover listener após upload
-                            self.portal.page.remove_listener("response", response_handler)
-                            
-                            # Verificar resposta do servidor
-                            if upload_response["hit"]:
-                                if upload_response["ok"]:
-                                    logger.info("✅ Upload confirmado pela API com sucesso")
-                                    logger.info(f"   📊 Status HTTP: {upload_response['status']}")
-                                    if isinstance(upload_response["body"], dict):
-                                        if 'demandaId' in upload_response["body"]:
-                                            logger.info(f"   🆔 ID da Demanda: {upload_response['body']['demandaId']}")
-                                        if 'quantidade' in upload_response["body"]:
-                                            logger.info(f"   📦 Quantidade processada: {upload_response['body']['quantidade']}")
-                                else:
-                                    logger.error("❌ Upload rejeitado pela API")
-                                    logger.error(f"   📊 Status HTTP: {upload_response['status']}")
-                                    # Tentar obter mensagem de erro
-                                    if upload_response["body"]:
-                                        if isinstance(upload_response["body"], dict):
-                                            logger.error(f"   📨 Mensagem: {upload_response['body'].get('message', 'Sem mensagem')}")
-                                            logger.error(f"   🔢 StatusCode: {upload_response['body'].get('statusCode', 'N/A')}")
-                                            if 'errors' in upload_response["body"]:
-                                                logger.error(f"   ⛔ Erros: {upload_response['body']['errors']}")
-                                        else:
-                                            logger.error(f"   📄 Resposta: {upload_response['body'][:500]}")
-                                    # Tentar capturar screenshot do erro
-                                    try:
-                                        error_path = f"/tmp/sendas_erro_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                                        await self.portal.page.screenshot(path=error_path)
-                                        logger.info(f"   📸 Screenshot do erro salvo em: {error_path}")
-                                    except Exception:
-                                        pass
-                                    return False
-                            else:
-                                logger.warning("⚠️ Nenhuma resposta do endpoint de upload foi capturada")
-                                logger.warning("   Possíveis causas:")
-                                logger.warning("   - O endpoint pode estar em outro domínio")
-                                logger.warning("   - O upload pode não ter sido disparado") 
-                                logger.warning("   - Token JWT pode estar inválido")
-                                logger.warning("   - Arquivo pode estar no formato incorreto")
-                                
-                                # Fallback: verificar toasts de erro na interface
-                                erro = False
-                                for _ in range(10):  # 5s
-                                    # Erro explícito em toasts/alertas
-                                    for sel_err in ['.rs-notification-item-error', '.rs-message-error', '.alert-danger', '.error-message']:
-                                        loc_err = modal.locator(sel_err).first
-                                        if await esta_visivel(loc_err, 300):
-                                            erro = True
-                                            break
-                                    if not erro:
-                                        try:
-                                            loc_err_text = modal.get_by_text(re.compile(r'erro|falha|inválid|tamanho|formato', re.I))
-                                            if await esta_visivel(loc_err_text, 300):
-                                                erro = True
-                                        except Exception:
-                                            pass
-                                    if erro:
-                                        break
-                                    await self.portal.page.wait_for_timeout(500)
-
-                                if erro:
-                                    logger.error("❌ Portal exibiu erro após upload (no modal).")
-                                    return False
-
-                            # Não espere o modal sumir sozinho; feche pela cruz
-                            close_btn = modal.locator('.rs-modal-header .rs-modal-header-close.rs-btn-close').first
-                            if await close_btn.count() > 0 and await esta_visivel(close_btn, 1500):
-                                logger.info("🧹 Fechando modal pelo botão de fechar…")
-                                await close_btn.click()
-                                await self.portal.page.wait_for_timeout(600)
-                            else:
-                                logger.info("ℹ️ Botão de fechar do modal não visível; seguindo.")
-
-                            # Segurança extra: verificador de erro geral
-                            if await self._verificar_erro_servidor(iframe):
-                                logger.error("❌ Erro detectado após upload.")
-                                return False
-
-                            # Confirmar demanda (se existir)
-                            logger.info("🔍 Procurando botão CONFIRMAR DEMANDA…")
-                            confirm_success = await self.confirmar_demanda(iframe)
-                            if confirm_success:
-                                logger.info("✅ Upload + confirmação concluídos.")
-                                return True
-                            else:
-                                logger.warning("⚠️ Upload OK, mas sem confirmação. Considerando sucesso do upload.")
-                                return True
-
-
-                        else:
-                            logger.warning("⚠️ Modal de upload não apareceu após clicar no botão")
-                
-                        # Já retornou True no bloco acima se conseguiu fazer upload
-                        logger.warning("⚠️ Não conseguiu fazer upload pelo modal")
+                    # Verificar se modal ainda está visível ou se fechou sozinho
+                    try:
+                        modal_ainda_visivel = await modal.is_visible(timeout=1000)
+                    except Exception:
+                        modal_ainda_visivel = False
+                        logger.info("ℹ️ Modal não está mais acessível")
                     
+                    if modal_ainda_visivel:
+                        # Modal ainda está aberto, tentar fechar
+                        logger.info("🔍 Modal ainda visível, tentando fechar...")
+                        close_btn = modal.locator('.rs-modal-header .rs-modal-header-close.rs-btn-close').first
+                        try:
+                            if await close_btn.count() > 0 and await close_btn.is_visible(timeout=500):
+                                logger.info("🧹 Fechando modal pelo botão de fechar…")
+                                await close_btn.click(timeout=5000)  # Timeout de 5 segundos para o clique
+                                await self.portal.page.wait_for_timeout(1000)
+                            else:
+                                logger.info("ℹ️ Botão de fechar não encontrado ou não visível")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Não foi possível fechar o modal: {e}")
+                            logger.info("   Continuando mesmo assim...")
                     else:
-                        logger.warning("⚠️ Botão de upload não encontrado após abrir menu AÇÕES")
+                        logger.info("✅ Modal fechou automaticamente após upload bem-sucedido")
+                    
+                    # IMPORTANTE: Aguardar a interface estabilizar após o modal fechar
+                    logger.info("⏳ Aguardando interface estabilizar após fechamento do modal...")
+                    await self.portal.page.wait_for_timeout(3000)  # 3 segundos para garantir
+
+                    # Segurança extra: verificador de erro geral
+                    if await self._verificar_erro_servidor(iframe):
+                        logger.error("❌ Erro detectado após upload.")
+                        return False
+
+                    # Confirmar demanda (se existir)
+                    logger.info("🔍 Procurando botão CONFIRMAR DEMANDA na tela principal...")
+                    confirm_success = await self.confirmar_demanda(iframe)
+                    if confirm_success:
+                        logger.info("✅ Upload + confirmação concluídos.")
+                        return True
+                    else:
+                        logger.warning("⚠️ Upload OK, mas sem confirmação. Considerando sucesso do upload.")
+                        return True
+
+
                 else:
-                    logger.warning("⚠️ Não foi possível clicar em CONSUMIR ITENS")
+                    logger.warning("⚠️ Modal de upload não apareceu após clicar no botão")
+                
+                # Já retornou True no bloco acima se conseguiu fazer upload
+                logger.warning("⚠️ Não conseguiu fazer upload pelo modal")
+            
+            else:
+                logger.warning("⚠️ Botão de upload não encontrado após abrir menu AÇÕES")
                 
             # Se não conseguiu pelo menu, tentar método alternativo
             logger.info("⚠️ Tentando método alternativo de upload...")
@@ -1035,37 +1062,76 @@ class ConsumirAgendasSendas:
             True se conseguiu confirmar, False caso contrário
         """
         try:
-            logger.info("🔍 Procurando botão CONFIRMAR DEMANDA...")
+            logger.info("🔍 Iniciando busca pelo botão CONFIRMAR DEMANDA...")
+            logger.info("   Contexto: Dentro do iframe #iframe-servico")
             
             # Aguardar um pouco para o botão aparecer após o upload
+            logger.info("⏳ Aguardando 2 segundos para botão aparecer...")
             await self.portal.page.wait_for_timeout(2000)
             
-            # Fechar modal se ainda estiver aberto
-            close_btn = iframe.locator('.rs-modal-header-close').first
-            if await close_btn.is_visible(timeout=1000):
-                logger.info("🔒 Fechando modal antes de confirmar...")
-                await close_btn.click()
-                await self.portal.page.wait_for_timeout(1000)
+            # Fechar modal se ainda estiver aberto (com proteção contra timeout)
+            try:
+                close_btn = iframe.locator('.rs-modal-header-close').first
+                if await close_btn.is_visible(timeout=500):
+                    logger.info("🔒 Fechando modal antes de confirmar...")
+                    await close_btn.click(timeout=3000)
+                    await self.portal.page.wait_for_timeout(1000)
+            except Exception as e:
+                logger.info(f"ℹ️ Modal não encontrado ou já fechado: {e}")
+            
+            # Capturar screenshot para debug
+            try:
+                screenshot_path = f"/tmp/sendas_antes_confirmar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                await self.portal.page.screenshot(path=screenshot_path)
+                logger.info(f"📸 Screenshot antes de procurar botão: {screenshot_path}")
+            except Exception:
+                pass
             
             # Procurar o botão CONFIRMAR DEMANDA com diferentes seletores
             confirm_selectors = [
                 'button:has-text("CONFIRMAR DEMANDA")',
+                'button:has-text("Confirmar a demanda")',
+                'button:has-text("Confirmar demanda")',
                 'button.rs-btn-primary:has-text("CONFIRMAR DEMANDA")',
                 '.rs-btn.rs-btn-primary:has-text("CONFIRMAR DEMANDA")',
-                'button[type="button"]:has-text("CONFIRMAR DEMANDA")'
+                'button[type="button"]:has-text("CONFIRMAR DEMANDA")',
+                # Seletores mais genéricos para debug
+                'button.rs-btn-primary',
+                'button.btn-primary'
             ]
             
+            # Listar todos os botões visíveis para debug
+            logger.info("🔍 Listando botões disponíveis no iframe...")
+            try:
+                all_buttons = await iframe.locator('button:visible').all()
+                logger.info(f"   Total de botões visíveis: {len(all_buttons)}")
+                for i, btn in enumerate(all_buttons[:10]):  # Mostrar até 10 botões
+                    try:
+                        text = await btn.text_content()
+                        if text:
+                            logger.info(f"   Botão {i+1}: '{text.strip()}'")
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"   Não foi possível listar botões: {e}")
+            
             confirmado = False
-            for selector in confirm_selectors:
+            for idx, selector in enumerate(confirm_selectors):
+                logger.info(f"🔍 Tentando seletor {idx+1}: {selector}")
                 btn_confirmar = iframe.locator(selector).first
-                if await btn_confirmar.is_visible(timeout=2000):
-                    logger.info(f"✅ Botão CONFIRMAR DEMANDA encontrado")
+                if await btn_confirmar.is_visible(timeout=1000):
+                    try:
+                        btn_text = await btn_confirmar.text_content()
+                        logger.info(f"✅ Botão encontrado: '{btn_text}'")
+                    except Exception:
+                        btn_text = "Texto não disponível"
+                        logger.info(f"✅ Botão encontrado (texto não disponível)")
                     
                     # Aguardar 500ms antes de clicar (estabilização da interface)
                     await self.portal.page.wait_for_timeout(500)
                     
                     # Clicar no botão
-                    await btn_confirmar.click()
+                    await btn_confirmar.click(timeout=5000)  # Timeout de 5 segundos
                     logger.info("🖱️ Clicou em CONFIRMAR DEMANDA")
                     
                     # Aguardar processamento
@@ -1262,6 +1328,122 @@ class ConsumirAgendasSendas:
             await self.portal.page.screenshot(path='erro_download.png')
             return None
     
+    async def executar_fluxo_completo_com_navegador_persistente(self, processar_planilha_callback=None) -> Dict[str, Any]:
+        """
+        Executa o fluxo completo mantendo navegador aberto entre download e upload
+        
+        Args:
+            processar_planilha_callback: Função callback para processar a planilha baixada
+                                        Deve receber o caminho do arquivo e retornar o caminho processado
+        
+        Returns:
+            Dicionário com resultado da operação
+        """
+        resultado = {
+            'sucesso': False,
+            'arquivo_download': None,
+            'arquivo_upload': None,
+            'upload_sucesso': False,
+            'mensagem': '',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        try:
+            logger.info("=" * 60)
+            logger.info("FLUXO COMPLETO SENDAS - NAVEGADOR PERSISTENTE")
+            logger.info("=" * 60)
+            
+            # 1. Iniciar navegador (uma vez só)
+            logger.info("🌐 Etapa 1/5: Iniciando navegador...")
+            if not await self.portal.iniciar_navegador():
+                resultado['mensagem'] = "Falha ao iniciar navegador"
+                return resultado
+            
+            # 2. Fazer login
+            logger.info("🔐 Etapa 2/5: Realizando login...")
+            if not await self.portal.fazer_login():
+                resultado['mensagem'] = "Falha no login"
+                await self.portal.fechar()
+                return resultado
+            
+            logger.info("✅ Login realizado com sucesso!")
+            
+            # 3. Navegar para gestão de pedidos
+            logger.info("📦 Etapa 3/5: Navegando para Gestão de Pedidos...")
+            if not await self.navegar_para_gestao_pedidos():
+                resultado['mensagem'] = "Falha ao navegar para gestão de pedidos"
+                await self.portal.fechar()
+                return resultado
+            
+            # Modal aparecerá aqui e será fechado automaticamente
+            
+            # 4. Baixar planilha
+            logger.info("📥 Etapa 4/5: Baixando planilha...")
+            arquivo_baixado = await self.baixar_planilha_agendamentos()
+            
+            if not arquivo_baixado:
+                resultado['mensagem'] = "Falha ao baixar planilha"
+                await self.portal.fechar()
+                return resultado
+            
+            resultado['arquivo_download'] = arquivo_baixado
+            logger.info(f"✅ Planilha baixada: {arquivo_baixado}")
+            
+            # 5. Processar planilha (se callback fornecido)
+            arquivo_para_upload = arquivo_baixado
+            if processar_planilha_callback:
+                logger.info("🔧 Processando planilha...")
+                try:
+                    arquivo_processado = processar_planilha_callback(arquivo_baixado)
+                    if arquivo_processado:
+                        arquivo_para_upload = arquivo_processado
+                        logger.info(f"✅ Planilha processada: {arquivo_para_upload}")
+                    else:
+                        logger.warning("⚠️ Processamento retornou None, usando arquivo original")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao processar planilha: {e}")
+                    logger.warning("⚠️ Continuando com arquivo original")
+            
+            # 6. Upload da planilha (SEM fechar modal, pois não aparecerá)
+            logger.info("📤 Etapa 5/5: Fazendo upload da planilha...")
+            logger.info("   ℹ️ Normalização com LibreOffice será aplicada automaticamente dentro do upload")
+            
+            # Chamar fazer_upload_planilha com fechar_modal=False - navegador já está aberto
+            # A NORMALIZAÇÃO acontece DENTRO deste método (linhas 369-412), igual ao processo com 2 navegadores
+            upload_sucesso = await self.fazer_upload_planilha(arquivo_para_upload, fechar_modal=False)
+            
+            resultado['arquivo_upload'] = arquivo_para_upload
+            resultado['upload_sucesso'] = upload_sucesso
+            
+            if upload_sucesso:
+                resultado['sucesso'] = True
+                resultado['mensagem'] = "Fluxo completo executado com sucesso"
+                logger.info("=" * 60)
+                logger.info("✅ FLUXO COMPLETO CONCLUÍDO COM SUCESSO!")
+                logger.info("=" * 60)
+            else:
+                resultado['mensagem'] = "Upload falhou"
+                logger.error("❌ Upload falhou")
+            
+            # 7. Fechar navegador
+            await self.portal.fechar()
+            logger.info("🔒 Navegador fechado")
+            
+            return resultado
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no fluxo completo: {e}")
+            logger.error(f"Stack trace:\n{traceback.format_exc()}")
+            resultado['mensagem'] = f"Erro: {str(e)}"
+            
+            # Tentar fechar navegador
+            try:
+                await self.portal.fechar()
+            except Exception:
+                pass
+            
+            return resultado
+
     async def executar_fluxo_completo(self) -> Dict[str, Any]:
         """
         Executa o fluxo completo de download de agendamentos
@@ -1545,82 +1727,171 @@ class ConsumirAgendasSendas:
             if not manter_aberto:
                 try:
                     await self.portal.fechar()
-                except:
+                except Exception:
                     pass
                 
             return None
     
-    def fazer_upload_planilha_sync(self, arquivo_planilha: str) -> bool:
+    def executar_fluxo_completo_sync(self, processar_planilha_callback=None) -> Dict[str, Any]:
+        """
+        Versão síncrona do fluxo completo com navegador persistente
+        
+        Args:
+            processar_planilha_callback: Função para processar a planilha
+        
+        Returns:
+            Dicionário com resultado da operação
+        """
+        try:
+            # Tentar usar nest_asyncio primeiro
+            try:
+                import nest_asyncio
+                nest_asyncio.apply()
+                
+                # Criar ou obter event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Executar fluxo completo
+                resultado = loop.run_until_complete(
+                    self.executar_fluxo_completo_com_navegador_persistente(processar_planilha_callback)
+                )
+                
+                return resultado
+                
+            except ImportError:
+                # Se nest_asyncio não disponível, usar asyncio.run
+                logger.info("⚠️ nest_asyncio não disponível, usando asyncio.run")
+                
+                resultado = asyncio.run(
+                    self.executar_fluxo_completo_com_navegador_persistente(processar_planilha_callback)
+                )
+                
+                return resultado
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao executar fluxo completo síncrono: {e}")
+            logger.error(f"Stack trace:\n{traceback.format_exc()}")
+            return {
+                'sucesso': False,
+                'mensagem': f"Erro: {str(e)}",
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def fazer_upload_planilha_sync(self, arquivo_planilha: str, manter_navegador_aberto: bool = False) -> bool:
         """
         Versão síncrona do fazer_upload_planilha para uso em endpoints Flask
-        Usa subprocess para isolar completamente do contexto Flask
+        Pode usar subprocess ou asyncio dependendo da necessidade
         
         Args:
             arquivo_planilha: Caminho completo do arquivo Excel
+            manter_navegador_aberto: Se True, mantém navegador aberto (para fluxo contínuo)
             
         Returns:
             True se upload bem-sucedido
         """
         
         try:
-            # Caminho do script subprocess
-            script_path = os.path.join(
-                os.path.dirname(__file__), 
-                'upload_planilha_subprocess.py'
-            )
-            
-            # Executar em processo separado
-            logger.info(f"🚀 Executando upload em processo separado: {arquivo_planilha}")
-            result = subprocess.run(
-                [sys.executable, script_path, arquivo_planilha],
-                capture_output=True,
-                text=True,
-                timeout=120  # Timeout de 2 minutos
-            )
-            
-            # Parse do resultado JSON (pegar última linha com JSON)
-            if result.stdout:
+            # Se já temos um navegador aberto e queremos mantê-lo, usar asyncio diretamente
+            if manter_navegador_aberto and hasattr(self.portal, 'page') and self.portal.page:
+                logger.info("🔄 Usando navegador existente para upload...")
+                
+                # Usar asyncio.run ou nest_asyncio para executar em contexto síncrono
                 try:
-                    # Procurar por JSON na saída (pode haver logs antes)
-                    lines = result.stdout.strip().split('\n')
-                    json_line = None
+                    import nest_asyncio
+                    nest_asyncio.apply()
                     
-                    # Procurar linha que começa com { e termina com }
-                    for line in reversed(lines):
-                        line = line.strip()
-                        if line.startswith('{') and line.endswith('}'):
-                            json_line = line
-                            break
+                    # Criar novo event loop se necessário
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
                     
-                    if json_line:
-                        response = json.loads(json_line)
-                        if response.get('success'):
-                            logger.info("✅ Upload concluído com sucesso")
-                            return True
+                    # Executar upload diretamente (sem abrir/fechar navegador)
+                    resultado = loop.run_until_complete(
+                        self.fazer_upload_planilha(arquivo_planilha)
+                    )
+                    
+                    logger.info(f"✅ Upload direto concluído: {resultado}")
+                    return resultado
+                    
+                except ImportError:
+                    # Se nest_asyncio não estiver disponível, usar asyncio.run
+                    logger.info("⚠️ nest_asyncio não disponível, usando asyncio.run")
+                    
+                    # Criar função wrapper para não reabrir navegador
+                    async def _upload_sem_reabrir():
+                        return await self.fazer_upload_planilha(arquivo_planilha)
+                    
+                    resultado = asyncio.run(_upload_sem_reabrir())
+                    logger.info(f"✅ Upload direto concluído: {resultado}")
+                    return resultado
+            
+            # Caso contrário, usar subprocess como antes (para isolamento completo)
+            else:
+                logger.info("🚀 Executando upload em processo separado...")
+                
+                # Caminho do script subprocess
+                script_path = os.path.join(
+                    os.path.dirname(__file__), 
+                    'upload_planilha_subprocess.py'
+                )
+                
+                # Executar em processo separado
+                result = subprocess.run(
+                    [sys.executable, script_path, arquivo_planilha],
+                    capture_output=True,
+                    text=True,
+                    timeout=120  # Timeout de 2 minutos
+                )
+                
+                # Parse do resultado JSON (pegar última linha com JSON)
+                if result.stdout:
+                    try:
+                        # Procurar por JSON na saída (pode haver logs antes)
+                        lines = result.stdout.strip().split('\n')
+                        json_line = None
+                        
+                        # Procurar linha que começa com { e termina com }
+                        for line in reversed(lines):
+                            line = line.strip()
+                            if line.startswith('{') and line.endswith('}'):
+                                json_line = line
+                                break
+                        
+                        if json_line:
+                            response = json.loads(json_line)
+                            if response.get('success'):
+                                logger.info("✅ Upload concluído com sucesso")
+                                return True
+                            else:
+                                logger.error(f"❌ Erro no upload: {response.get('error')}")
+                                return False
                         else:
-                            logger.error(f"❌ Erro no upload: {response.get('error')}")
+                            logger.error(f"❌ Nenhum JSON encontrado na resposta do subprocess")
+                            logger.debug(f"Stdout completo: {result.stdout}")
+                            if result.stderr:
+                                logger.error(f"Stderr: {result.stderr}")
                             return False
-                    else:
-                        logger.error(f"❌ Nenhum JSON encontrado na resposta do subprocess")
-                        logger.debug(f"Stdout completo: {result.stdout}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"❌ Erro ao decodificar JSON: {e}")
+                        logger.debug(f"Linha JSON tentada: {json_line}")
                         if result.stderr:
                             logger.error(f"Stderr: {result.stderr}")
                         return False
-                except json.JSONDecodeError as e:
-                    logger.error(f"❌ Erro ao decodificar JSON: {e}")
-                    logger.debug(f"Linha JSON tentada: {json_line}")
-                    if result.stderr:
-                        logger.error(f"Stderr: {result.stderr}")
+                else:
+                    logger.error(f"❌ Subprocess retornou vazio. Stderr: {result.stderr}")
                     return False
-            else:
-                logger.error(f"❌ Subprocess retornou vazio. Stderr: {result.stderr}")
-                return False
-                
+                    
         except subprocess.TimeoutExpired:
             logger.error("❌ Timeout no upload da planilha (120s)")
             return False
         except Exception as e:
-            logger.error(f"❌ Erro ao executar subprocess: {e}")
+            logger.error(f"❌ Erro ao executar upload: {e}")
             logger.error(f"❌ Tipo do erro: {type(e).__name__}")
             logger.error(f"❌ Stack trace: {traceback.format_exc()}")
             return False

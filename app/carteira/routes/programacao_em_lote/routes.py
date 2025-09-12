@@ -1232,18 +1232,64 @@ def processar_agendamento_sendas():
                 'data_agendamento': data_agendamento
             })
         
-        # 1. Baixar planilha do Sendas UMA VEZ
-        logger.info("📥 Baixando planilha modelo do portal Sendas...")
+        # NOVO FLUXO UNIFICADO: Download -> Preenchimento -> Upload (navegador persistente)
+        logger.info("🚀 Iniciando fluxo unificado Sendas (navegador persistente)...")
+        
         try:
             consumidor = ConsumirAgendasSendas()
-            arquivo_planilha = consumidor.baixar_planilha_modelo()
+            preenchedor = PreencherPlanilhaSendas()
             
-            if not arquivo_planilha:
-                logger.error("❌ Erro ao baixar planilha do portal - NÃO há fallback")
-                return jsonify({
-                    'success': False,
-                    'error': 'Não foi possível baixar a planilha do portal Sendas. Verifique as credenciais, conexão e logs do servidor.'
-                }), 500
+            # Criar callback para processar a planilha baixada
+            def processar_planilha_callback(arquivo_baixado):
+                """Callback para preencher a planilha com os dados selecionados"""
+                logger.info(f"📝 Processando planilha com {len(cnpjs_validos)} CNPJs...")
+                
+                # Usar o método que processa múltiplos CNPJs
+                arquivo_processado = preenchedor.preencher_multiplos_cnpjs(
+                    arquivo_origem=arquivo_baixado,
+                    lista_cnpjs_agendamento=lista_cnpjs_agendamento
+                )
+                
+                if arquivo_processado:
+                    logger.info(f"✅ Planilha processada: {arquivo_processado}")
+                else:
+                    logger.error("❌ Erro ao processar planilha")
+                
+                return arquivo_processado
+            
+            # Executar fluxo completo com navegador persistente
+            resultado = consumidor.executar_fluxo_completo_sync(
+                processar_planilha_callback=processar_planilha_callback
+            )
+            
+            # Verificar resultado
+            if not resultado.get('sucesso'):
+                erro_msg = resultado.get('mensagem', 'Erro desconhecido no fluxo Sendas')
+                logger.error(f"❌ Fluxo Sendas falhou: {erro_msg}")
+                
+                # Verificar tipo de erro para mensagem apropriada
+                if 'credenciais' in erro_msg.lower():
+                    return jsonify({
+                        'success': False,
+                        'error': 'Credenciais do portal Sendas não configuradas. Configure SENDAS_USUARIO e SENDAS_SENHA no servidor.'
+                    }), 500
+                elif 'login' in erro_msg.lower():
+                    return jsonify({
+                        'success': False,
+                        'error': 'Falha no login do portal Sendas. Verifique as credenciais.'
+                    }), 500
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Erro no processamento Sendas: {erro_msg}'
+                    }), 500
+            
+            # Sucesso no fluxo
+            arquivo_planilha = resultado.get('arquivo_download')
+            arquivo_preenchido = resultado.get('arquivo_upload')
+            upload_sucesso = resultado.get('upload_sucesso', False)
+            
+            logger.info(f"✅ Fluxo concluído - Upload: {'Sucesso' if upload_sucesso else 'Falhou'}")
                 
         except ValueError as ve:
             # Erro de credenciais não configuradas
@@ -1253,32 +1299,11 @@ def processar_agendamento_sendas():
                 'error': 'Credenciais do portal Sendas não configuradas. Configure SENDAS_USUARIO e SENDAS_SENHA no servidor.'
             }), 500
         except Exception as e:
-            logger.error(f"❌ Erro ao inicializar consumidor Sendas: {e}")
+            logger.error(f"❌ Erro ao executar fluxo Sendas: {e}")
             return jsonify({
                 'success': False,
                 'error': f'Erro ao conectar com portal Sendas: {str(e)}'
             }), 500
-        
-        # 2. Preencher planilha com TODOS os CNPJs e REMOVER linhas não agendadas
-        logger.info(f"📝 Preenchendo planilha com {len(cnpjs_validos)} CNPJs...")
-        preenchedor = PreencherPlanilhaSendas()
-        
-        # Usar o novo método que processa múltiplos CNPJs
-        arquivo_preenchido = preenchedor.preencher_multiplos_cnpjs(
-            arquivo_origem=arquivo_planilha,
-            lista_cnpjs_agendamento=lista_cnpjs_agendamento
-        )
-        
-        if not arquivo_preenchido:
-            logger.error("❌ Erro ao preencher planilha com múltiplos CNPJs")
-            return jsonify({
-                'success': False,
-                'error': 'Erro ao preencher a planilha com os dados selecionados'
-            }), 500
-        
-        # 3. Fazer upload da planilha ÚNICA no portal (via subprocess isolado)
-        logger.info("📤 Fazendo upload da planilha no portal Sendas...")
-        upload_sucesso = consumidor.fazer_upload_planilha_sync(arquivo_preenchido)
         
         if not upload_sucesso:
             logger.warning("⚠️ Upload falhou, mas continuando com geração de separações")

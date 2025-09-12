@@ -7,13 +7,10 @@ Garante uso de sharedStrings para compatibilidade com Portal Sendas.
 import os
 import sys
 import logging
-import tempfile
-import shutil
 from datetime import datetime, date
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 import pandas as pd
 import xlsxwriter
-from openpyxl import load_workbook
 
 # Configurar logging
 logging.basicConfig(
@@ -164,7 +161,7 @@ def preencher_planilha_com_template(
                                 # Converter string para date
                                 dt = pd.to_datetime(v, format='%d/%m/%Y')
                                 ws.write_datetime(r, c, dt.date(), date_format)
-                            except:
+                            except Exception:
                                 ws.write(r, c, v)
                         else:
                             ws.write(r, c, v)
@@ -208,7 +205,7 @@ def processar_celula(val, col_idx):
         elif isinstance(val, str) and '/' in val:
             try:
                 return pd.to_datetime(val, format='%d/%m/%Y')
-            except:
+            except Exception:
                 return val
     
     # Converter strings numéricas
@@ -217,7 +214,7 @@ def processar_celula(val, col_idx):
         if s.replace(',', '.').replace('.', '').replace('-', '').isdigit():
             try:
                 return float(s.replace(',', '.')) if '.' in s else int(s)
-            except:
+            except Exception:
                 pass
     
     return val
@@ -322,7 +319,7 @@ def criar_planilha_usando_template(
                                 # Converter string DD/MM/YYYY para date (sem hora)
                                 dt = pd.to_datetime(v, format='%d/%m/%Y')
                                 ws.write_datetime(r, c, dt.date(), date_format)
-                            except:
+                            except Exception:
                                 # Se falhar conversão, escrever como está
                                 ws.write(r, c, v)
                         else:
@@ -354,7 +351,6 @@ def criar_planilha_usando_template(
 
 if __name__ == "__main__":
     # Teste
-    import sys
     
     if len(sys.argv) > 1:
         planilha = sys.argv[1]
