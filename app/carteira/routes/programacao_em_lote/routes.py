@@ -309,6 +309,10 @@ def _analisar_status_cnpj(dados_cnpj):
     tem_saldo_pendente_parcial = False  # Saldo pendente mas não é o total do CNPJ
     primeiro_protocolo = None
     
+    # Variáveis para capturar datas sugeridas
+    data_expedicao_sugerida = None
+    data_agendamento_sugerida = None
+    
     # Contadores para validação
     total_separacoes_nfs = 0
     separacoes_com_protocolo = 0
@@ -366,6 +370,15 @@ def _analisar_status_cnpj(dados_cnpj):
                         tem_agendamento_passado = True
                     else:
                         tem_agendamento_futuro = True
+                        # Capturar primeira data de agendamento futura para sugestão
+                        if data_agendamento_sugerida is None:
+                            data_agendamento_sugerida = data_agenda
+                            # Capturar expedição se disponível
+                            if sep.get('expedicao'):
+                                data_exp = sep.get('expedicao')
+                                if isinstance(data_exp, str):
+                                    data_exp = date.fromisoformat(data_exp)
+                                data_expedicao_sugerida = data_exp
         
         # Verificar NFs no CD
         for nf in pedido.get('nfs_cd', []):
@@ -396,6 +409,15 @@ def _analisar_status_cnpj(dados_cnpj):
                         tem_agendamento_passado = True
                     else:
                         tem_agendamento_futuro = True
+                        # Capturar primeira data de agendamento futura para sugestão
+                        if data_agendamento_sugerida is None:
+                            data_agendamento_sugerida = data_agenda
+                            # Capturar expedição se disponível
+                            if nf.get('expedicao'):
+                                data_exp = nf.get('expedicao')
+                                if isinstance(data_exp, str):
+                                    data_exp = date.fromisoformat(data_exp)
+                                data_expedicao_sugerida = data_exp
     
     # Recalcular variáveis booleanas baseado nos contadores
     if total_separacoes_nfs > 0:
@@ -516,6 +538,16 @@ def _analisar_status_cnpj(dados_cnpj):
     dados_cnpj['icone_status'] = icone
     dados_cnpj['tem_protocolo'] = algum_tem_protocolo
     dados_cnpj['agendamento_confirmado'] = algum_confirmado
+    
+    # Preencher datas sugeridas quando status for "Ag. Aprovação" ou "Pronto"
+    if status in ['Ag. Aprovação', 'Pronto'] and data_agendamento_sugerida:
+        # Formatar as datas para input date HTML (YYYY-MM-DD)
+        dados_cnpj['agendamento_sugerido'] = data_agendamento_sugerida.strftime('%Y-%m-%d') if data_agendamento_sugerida else ''
+        dados_cnpj['expedicao_sugerida'] = data_expedicao_sugerida.strftime('%Y-%m-%d') if data_expedicao_sugerida else ''
+        logger.info(f"  => CNPJ {dados_cnpj.get('cnpj')}: Datas preenchidas - Expedição: {dados_cnpj['expedicao_sugerida']}, Agendamento: {dados_cnpj['agendamento_sugerido']}")
+    else:
+        dados_cnpj['agendamento_sugerido'] = ''
+        dados_cnpj['expedicao_sugerida'] = ''
     
     # Indicador de pendências: reagendamento necessário ou consolidação necessária
     dados_cnpj['tem_pendencias'] = status in ['Reagendar', 'Consolidar']

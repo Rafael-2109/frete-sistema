@@ -1134,45 +1134,93 @@ document.addEventListener('DOMContentLoaded', function() {
     // Selecionar todos
     function handleCheckTodos(e) {
         const isChecked = e.target.checked;
+        
+        // Limpar seleções anteriores
+        cnpjsSelecionados.clear();
+        
         document.querySelectorAll('.check-cnpj').forEach(checkbox => {
-            checkbox.checked = isChecked;
-            if (isChecked) {
+            const status = checkbox.dataset.status;
+            
+            // Selecionar apenas CNPJs com status "Pendente" ou "Reagendar"
+            if (isChecked && (status === 'Pendente' || status === 'Reagendar')) {
+                checkbox.checked = true;
                 cnpjsSelecionados.add(checkbox.value);
+            } else {
+                checkbox.checked = false;
             }
         });
         
-        if (!isChecked) {
-            cnpjsSelecionados.clear();
-        }
-        
         atualizarBotaoProcessar();
+        
+        // Mostrar mensagem informativa se alguns foram selecionados
+        if (isChecked && cnpjsSelecionados.size > 0) {
+            console.log(`${cnpjsSelecionados.size} CNPJs selecionados (apenas Pendente e Reagendar)`);
+            
+            // Mostrar toast informativo
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'info',
+                title: `${cnpjsSelecionados.size} CNPJs selecionados`,
+                text: 'Apenas status Pendente e Reagendar',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
+        }
     }
     
     // Botão selecionar todos
     function handleSelecionarTodos() {
         const checkboxes = document.querySelectorAll('.check-cnpj');
-        const todosChecados = Array.from(checkboxes).every(cb => cb.checked);
         
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = !todosChecados;
-            if (!todosChecados) {
-                cnpjsSelecionados.add(checkbox.value);
-            }
+        // Filtrar apenas checkboxes com status "Pendente" ou "Reagendar"
+        const checkboxesRelevantes = Array.from(checkboxes).filter(cb => {
+            const status = cb.dataset.status;
+            return status === 'Pendente' || status === 'Reagendar';
         });
         
-        if (todosChecados) {
-            cnpjsSelecionados.clear();
+        const todosRelevantesChecados = checkboxesRelevantes.every(cb => cb.checked);
+        
+        // Limpar seleções anteriores
+        cnpjsSelecionados.clear();
+        
+        // Desmarcar todos primeiro
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Marcar apenas os relevantes se não estavam todos marcados
+        if (!todosRelevantesChecados) {
+            checkboxesRelevantes.forEach(checkbox => {
+                checkbox.checked = true;
+                cnpjsSelecionados.add(checkbox.value);
+            });
         }
         
         if (checkTodos) {
-            checkTodos.checked = !todosChecados;
+            checkTodos.checked = !todosRelevantesChecados;
         }
         
-        btnSelecionarTodos.innerHTML = todosChecados ? 
+        btnSelecionarTodos.innerHTML = todosRelevantesChecados ? 
             '<i class="fas fa-check-square"></i> Selecionar Todos' :
             '<i class="fas fa-square"></i> Desselecionar Todos';
         
         atualizarBotaoProcessar();
+        
+        // Mostrar mensagem informativa
+        if (!todosRelevantesChecados && cnpjsSelecionados.size > 0) {
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'info',
+                title: `${cnpjsSelecionados.size} CNPJs selecionados`,
+                text: 'Apenas status Pendente e Reagendar',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
+        }
     }
     
     // Checkbox individual

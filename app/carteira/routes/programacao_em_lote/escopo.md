@@ -230,7 +230,7 @@ Condições:
 ### Status 2 - "Pronto"
 - Aguardando embarque e entrega
 -> Exibir "check" verde
--> Exibir a linha na cor azul
+-> Exibir a linha na cor verde
 
 Condições:
 

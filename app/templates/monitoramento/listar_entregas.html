@@ -398,6 +398,10 @@ body {
            class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
           ⚠️ Agend. Pendente {% if contadores.sem_agendamento %}({{ contadores.sem_agendamento }}){% endif %}
         </a>
+        <a href="?status=ag_aprovacao" 
+           class="btn {% if request.args.get('status') == 'ag_aprovacao' %}btn-info{% else %}btn-outline-info{% endif %}">
+          ⏳ Ag. Aprovação {% if contadores.ag_aprovacao %}({{ contadores.ag_aprovacao }}){% endif %}
+        </a>
         <a href="?status=com_comentarios" 
            class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
           💬 Comentários em NFs

@@ -559,6 +559,30 @@ def listar_entregas():
         query = query.filter(EntregaMonitorada.status_finalizacao == 'Devolvida')
     if status == 'nf_cd':
         query = query.filter(EntregaMonitorada.nf_cd == True)
+    
+    # ✅ NOVO FILTRO: Aguardando Aprovação de Agendamento (apenas o último agendamento)
+    if status == 'ag_aprovacao':
+        # Subquery para pegar a data/hora do último agendamento de cada entrega
+        # Isso garante que só verificamos o status do agendamento mais recente
+        subquery_ultimo_agend = db.session.query(
+            AgendamentoEntrega.entrega_id,
+            func.max(AgendamentoEntrega.criado_em).label('max_criado_em')
+        ).group_by(AgendamentoEntrega.entrega_id).subquery()
+        
+        # Buscar entregas onde o ÚLTIMO agendamento tem status "aguardando"
+        query = query.join(
+            AgendamentoEntrega, 
+            AgendamentoEntrega.entrega_id == EntregaMonitorada.id
+        ).join(
+            subquery_ultimo_agend,
+            db.and_(
+                AgendamentoEntrega.entrega_id == subquery_ultimo_agend.c.entrega_id,
+                AgendamentoEntrega.criado_em == subquery_ultimo_agend.c.max_criado_em
+            )
+        ).filter(
+            AgendamentoEntrega.status == 'aguardando',
+            EntregaMonitorada.status_finalizacao.is_(None)  # Não finalizada
+        )
 
     # ✅ CORRIGIDO: Filtro sem_agendamento como IF independente - USAR CAMPO DIRETO
     if status == 'sem_agendamento':
@@ -799,21 +823,26 @@ def listar_entregas():
     # ✅ CALCULANDO CONTADORES DOS FILTROS
     contadores = {}
     
+    # Base query para aplicar filtro de vendedor aos contadores
+    base_count_query = EntregaMonitorada.query
+    if vendedor_filtro is not None and vendedor_filtro != "ACESSO_NEGADO":
+        base_count_query = base_count_query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
+    
     # Contador Atrasadas
-    contadores['atrasadas'] = EntregaMonitorada.query.filter(
+    contadores['atrasadas'] = base_count_query.filter(
         EntregaMonitorada.status_finalizacao.is_(None),
         EntregaMonitorada.data_entrega_prevista.isnot(None),
         EntregaMonitorada.data_entrega_prevista < date.today()
     ).count()
     
     # Contador Sem Previsão  
-    contadores['sem_previsao'] = EntregaMonitorada.query.filter(
+    contadores['sem_previsao'] = base_count_query.filter(
         EntregaMonitorada.data_entrega_prevista.is_(None),
         EntregaMonitorada.status_finalizacao.is_(None)
     ).count()
     
     # Contador Reagendar
-    contadores['reagendar'] = EntregaMonitorada.query.filter(
+    contadores['reagendar'] = base_count_query.filter(
         EntregaMonitorada.reagendar == True,
         EntregaMonitorada.status_finalizacao.is_(None)
     ).count()
@@ -836,18 +865,41 @@ def listar_entregas():
     
     # ✅ USAR CAMPO DIRETO para o contador também (consistente com filtro)
     if cnpjs_contador:
-        contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
+        count_query_sem_agend = base_count_query.filter(
             db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_contador]),
             EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento (campo direto)
             EntregaMonitorada.status_finalizacao.is_(None)
-        ).count()
+        )
+        contadores['sem_agendamento'] = count_query_sem_agend.count()
     else:
         contadores['sem_agendamento'] = 0
     
     # Contador NF no CD
-    contadores['nf_cd'] = EntregaMonitorada.query.filter(
+    contadores['nf_cd'] = base_count_query.filter(
         EntregaMonitorada.nf_cd == True
     ).count()
+    
+    # ✅ NOVO CONTADOR: Aguardando Aprovação de Agendamento (apenas o último agendamento)
+    # Subquery para pegar o último agendamento de cada entrega
+    subquery_ultimo_contador = db.session.query(
+        AgendamentoEntrega.entrega_id,
+        func.max(AgendamentoEntrega.criado_em).label('max_criado_em')
+    ).group_by(AgendamentoEntrega.entrega_id).subquery()
+    
+    count_query_ag_aprov = base_count_query.join(
+        AgendamentoEntrega,
+        AgendamentoEntrega.entrega_id == EntregaMonitorada.id
+    ).join(
+        subquery_ultimo_contador,
+        db.and_(
+            AgendamentoEntrega.entrega_id == subquery_ultimo_contador.c.entrega_id,
+            AgendamentoEntrega.criado_em == subquery_ultimo_contador.c.max_criado_em
+        )
+    ).filter(
+        AgendamentoEntrega.status == 'aguardando',
+        EntregaMonitorada.status_finalizacao.is_(None)
+    )
+    contadores['ag_aprovacao'] = count_query_ag_aprov.count()
 
     page = request.args.get('page', 1, type=int)
     per_page = 20

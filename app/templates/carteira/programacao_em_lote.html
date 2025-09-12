@@ -207,7 +207,7 @@
                     <thead>
                         <tr class="bg-light">
                             <th width="40">
-                                <input type="checkbox" id="checkTodos" />
+                                <input type="checkbox" id="checkTodos" title="Selecionar apenas Pendentes e Reagendar" />
                             </th>
                             <th>Cliente</th>
                             <th>Cidade</th>
@@ -222,9 +222,9 @@
                     </thead>
                     <tbody>
                         {% for cnpj_data in dados_cnpj %}
-                        <tr class="cnpj-row {{ cnpj_data.cor_linha }}" data-cnpj="{{ cnpj_data.cnpj }}">
+                        <tr class="cnpj-row {{ cnpj_data.cor_linha }}" data-cnpj="{{ cnpj_data.cnpj }}" data-status="{{ cnpj_data.status }}">
                             <td class="text-center">
-                                <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}" />
+                                <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}" data-status="{{ cnpj_data.status }}" />
                             </td>
                             <td>
                                 <div style="font-size: 0.95em; font-weight: 500;">{{ cnpj_data.raz_social }}</div>

@@ -6,8 +6,15 @@ Colunas esperadas no Excel:
 - ID (números) -> Separacao.protocolo
 - Status ("Aprovada" ou "Pendente") -> Separacao.agendamento_confirmado
 - CNPJ Terminal (números sem formatação) -> Separacao.cnpj_cpf
-- Data Efetiva (DD/MM/YYYY HH:MM:SS) -> Separacao.agendamento
+- Data Efetiva (DD/MM/YYYY HH:MM:SS) -> Separacao.agendamento (quando Status=Aprovada)
+- Data/Hora Sugerida: (DD/MM/YYYY HH:MM:SS) -> Separacao.agendamento (quando Status=Pendente e não tem Data Efetiva)
 - Unidade Destino (nome da filial) -> para relatório de não encontrados
+
+Regras de processamento:
+1. Se Status=Aprovada e tem Data Efetiva: usa Data Efetiva com agendamento_confirmado=True
+2. Se Status=Pendente e tem Data/Hora Sugerida: usa Data/Hora Sugerida com agendamento_confirmado=False
+3. Se já existe protocolo+data+confirmado=True, ignora para não sobrescrever
+4. Sempre calcula expedicao = agendamento - 1 dia útil (para SP)
 """
 
 from flask import request, jsonify
@@ -83,6 +90,7 @@ def importar_agendamentos_assai():
                 status = str(row['Status']).strip().lower() if pd.notna(row['Status']) else ''
                 cnpj_terminal = str(row['CNPJ Terminal']).strip() if pd.notna(row['CNPJ Terminal']) else ''
                 data_efetiva = row.get('Data Efetiva')
+                data_hora_sugerida = row.get('Data/Hora Sugerida:')  # Nova coluna para agendamentos pendentes
                 unidade_destino = str(row.get('Unidade Destino', '')).strip() if 'Unidade Destino' in row else ''
                 
                 # Validações básicas
@@ -105,11 +113,16 @@ def importar_agendamentos_assai():
                 # Caso contrário -> False
                 agendamento_confirmado = 'aprovada' in status
                 
-                # Processar Data Efetiva (apenas quando Status = Aprovada)
+                # Processar datas de agendamento
                 data_agendamento = None
                 data_expedicao = None
                 
+                # Lógica de processamento de data:
+                # 1. Se Status = Aprovada e tem Data Efetiva -> usar Data Efetiva com confirmado=True
+                # 2. Se Status = Pendente (ou não tem Data Efetiva) e tem Data/Hora Sugerida -> usar Data/Hora Sugerida com confirmado=False
+                
                 if agendamento_confirmado and pd.notna(data_efetiva):
+                    # Caso 1: Agendamento aprovado com Data Efetiva
                     try:
                         # Converter para datetime e extrair apenas a data
                         if isinstance(data_efetiva, str):
@@ -125,7 +138,30 @@ def importar_agendamentos_assai():
                         data_expedicao = _subtrair_dia_util(data_agendamento)
                         
                     except Exception as e:
-                        erros.append(f"Linha {idx+2}: Data inválida: {data_efetiva} - {str(e)}") # type: ignore
+                        erros.append(f"Linha {idx+2}: Data Efetiva inválida: {data_efetiva} - {str(e)}") # type: ignore
+                        continue
+                        
+                elif not agendamento_confirmado and pd.notna(data_hora_sugerida):
+                    # Caso 2: Agendamento pendente com Data/Hora Sugerida
+                    try:
+                        # Converter para datetime e extrair apenas a data
+                        if isinstance(data_hora_sugerida, str):
+                            # Formato esperado: "16/09/2025 07:00:00" ou "16/09/2025"
+                            # Pegar apenas a parte da data
+                            data_parte = data_hora_sugerida.split()[0] if ' ' in data_hora_sugerida else data_hora_sugerida
+                            data_agendamento = datetime.strptime(data_parte, '%d/%m/%Y').date()
+                        else:
+                            # Se já for datetime do pandas
+                            data_agendamento = pd.to_datetime(data_hora_sugerida).date()
+                        
+                        # Para SP: expedicao = agendamento - 1 dia útil (mesma regra)
+                        data_expedicao = _subtrair_dia_util(data_agendamento)
+                        
+                        # IMPORTANTE: Manter agendamento_confirmado = False
+                        agendamento_confirmado = False
+                        
+                    except Exception as e:
+                        erros.append(f"Linha {idx+2}: Data/Hora Sugerida inválida: {data_hora_sugerida} - {str(e)}") # type: ignore
                         continue
                 
                 # Processar registro
@@ -292,7 +328,16 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
     ).all()
     
     for sep in separacoes_abertas:
-        # Atualizar protocolo (sempre sobrescreve)
+        # NOVA REGRA: Se já existe um protocolo confirmado com a mesma data, não sobrescrever
+        if (sep.protocolo == protocolo and 
+            sep.agendamento_confirmado == True and 
+            sep.agendamento == data_agendamento and
+            sep.agendamento is not None):
+            logger.info(f"Ignorando Separacao ID {sep.id}: já tem protocolo {protocolo} confirmado com data {data_agendamento}")
+            encontrado = True
+            continue
+        
+        # Atualizar protocolo
         sep.protocolo = protocolo
         sep.agendamento_confirmado = confirmado
         
@@ -326,7 +371,16 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
     ).all()
     
     for nf in nfs_cd:
-        # Atualizar protocolo (sempre sobrescreve)
+        # NOVA REGRA: Se já existe um protocolo confirmado com a mesma data, não sobrescrever
+        if (nf.protocolo == protocolo and 
+            nf.agendamento_confirmado == True and 
+            nf.agendamento == data_agendamento and
+            nf.agendamento is not None):
+            logger.info(f"Ignorando NF no CD ID {nf.id}: já tem protocolo {protocolo} confirmado com data {data_agendamento}")
+            encontrado = True
+            continue
+        
+        # Atualizar protocolo
         nf.protocolo = protocolo
         nf.agendamento_confirmado = confirmado
         
