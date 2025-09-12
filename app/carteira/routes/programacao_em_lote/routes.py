@@ -284,7 +284,13 @@ def _buscar_dados_por_rede(portal):
 def _analisar_status_cnpj(dados_cnpj):
     """
     Analisa os pedidos e separações para determinar status e cores
-    Hierarquia: Reagendar > Consolidar > Ag. Aprovação > Pronto > Pendente
+    Hierarquia de prioridade: Reagendar > Consolidar > Ag. Aprovação > Pronto > Pendente
+    
+    Status 1 - "Ag. Aprovação": protocolo em todas, agendamento futuro, não confirmado, sem saldo pendente
+    Status 2 - "Pronto": protocolo em todas, agendamento futuro, confirmado, sem saldo pendente
+    Status 3 - "Reagendar": agendamento passado
+    Status 4 - "Consolidar": agendamento futuro + (protocolo parcial OU protocolos diferentes OU saldo parcial)
+    Status 5 - "Pendente": sem separação/NF ou sem protocolo algum
     """
     from datetime import date
     
@@ -294,31 +300,42 @@ def _analisar_status_cnpj(dados_cnpj):
     tem_separacao_ou_nf = False
     tem_agendamento_passado = False
     tem_agendamento_futuro = False
-    # CORREÇÃO: Inicializar como False - só será True se HOUVER separações E todas tiverem protocolo
-    todos_tem_protocolo = False  
+    todos_tem_protocolo = False  # Só True se HOUVER separações E todas tiverem protocolo
     algum_tem_protocolo = False
     protocolos_iguais = True
     algum_confirmado = False
-    # CORREÇÃO: Inicializar como False - só será True se HOUVER separações E todas estiverem confirmadas
-    todos_confirmados = False
-    tem_saldo_pendente = False
+    todos_confirmados = False  # Só True se HOUVER separações E todas estiverem confirmadas
+    tem_saldo_pendente_sem_separacao = False  # Saldo que não está em Separação
+    tem_saldo_pendente_parcial = False  # Saldo pendente mas não é o total do CNPJ
     primeiro_protocolo = None
-    total_saldo_pedidos = Decimal('0')
-    total_separado = Decimal('0')
     
     # Contadores para validação
     total_separacoes_nfs = 0
     separacoes_com_protocolo = 0
     separacoes_confirmadas = 0
     
+    # Variáveis para análise de saldo
+    total_pedidos_cnpj = 0
+    pedidos_com_saldo_pendente = 0
+    
     # Analisar todos os pedidos
     for pedido in dados_cnpj['pedidos']:
-        # Verificar saldo pendente (comparar qtd_pendente com total)
-        if pedido.get('qtd_pendente', 0) > 0:
-            # Se tem saldo pendente mas não é o total do pedido
+        total_pedidos_cnpj += 1
+        
+        # Verificar saldo pendente do pedido
+        qtd_pendente = pedido.get('qtd_pendente', 0)
+        if qtd_pendente > 0:
+            pedidos_com_saldo_pendente += 1
+            
+            # Verificar se há separações para este pedido
             pedido_tem_separacao = len(pedido.get('separacoes', [])) > 0 or len(pedido.get('nfs_cd', [])) > 0
-            if pedido_tem_separacao:
-                tem_saldo_pendente = True
+            
+            if not pedido_tem_separacao:
+                # Há saldo sem nenhuma separação
+                tem_saldo_pendente_sem_separacao = True
+            else:
+                # Há saldo mas tem algumas separações (parcial)
+                tem_saldo_pendente_parcial = True
         
         # Verificar separações
         for sep in pedido.get('separacoes', []):
@@ -391,6 +408,16 @@ def _analisar_status_cnpj(dados_cnpj):
         todos_tem_protocolo = False
         todos_confirmados = False
     
+    # Verificar se é saldo pendente parcial (não é o total do CNPJ)
+    # Se todos os pedidos têm saldo pendente, então é total, não parcial
+    if pedidos_com_saldo_pendente == total_pedidos_cnpj and pedidos_com_saldo_pendente > 0:
+        # Todos os pedidos têm saldo pendente - é total, não parcial
+        tem_saldo_pendente_parcial = False
+    
+    # CORREÇÃO IMPORTANTE: Se não há agendamento passado e há separações/NFs, considerar como "potencial futuro"
+    # Isso é necessário para casos onde o agendamento ainda não foi preenchido
+    tem_potencial_agendamento_futuro = (not tem_agendamento_passado and tem_separacao_ou_nf)
+    
     # Log para debug
     logger.debug(f"CNPJ {dados_cnpj.get('cnpj')} - Análise de status:")
     logger.debug(f"  - tem_separacao_ou_nf: {tem_separacao_ou_nf}")
@@ -399,77 +426,99 @@ def _analisar_status_cnpj(dados_cnpj):
     logger.debug(f"  - todos_tem_protocolo: {todos_tem_protocolo}")
     logger.debug(f"  - algum_tem_protocolo: {algum_tem_protocolo}")
     logger.debug(f"  - todos_confirmados: {todos_confirmados}")
-    logger.debug(f"  - tem_saldo_pendente: {tem_saldo_pendente}")
+    logger.debug(f"  - tem_saldo_pendente_sem_separacao: {tem_saldo_pendente_sem_separacao}")
+    logger.debug(f"  - tem_saldo_pendente_parcial: {tem_saldo_pendente_parcial}")
     logger.debug(f"  - tem_agendamento_passado: {tem_agendamento_passado}")
     logger.debug(f"  - tem_agendamento_futuro: {tem_agendamento_futuro}")
+    logger.debug(f"  - tem_potencial_agendamento_futuro: {tem_potencial_agendamento_futuro}")
     
     # Determinar status baseado na hierarquia
+    # IMPORTANTE: A ordem de verificação IMPORTA devido à prioridade
     status = 'Pendente'
     cor_linha = ''  # sem cor especial
     icone = 'fa-hourglass-half'  # ícone padrão
     
-    # 1. REAGENDAR (prioridade máxima)
+    # 1. STATUS 3 - REAGENDAR (prioridade máxima)
+    # Condição: Caso tenha algum agendamento preenchido < hoje
     if tem_agendamento_passado:
         status = 'Reagendar'
         cor_linha = 'table-danger'  # vermelho
         icone = 'fa-redo'
+        logger.info(f"  => CNPJ {dados_cnpj.get('cnpj')}: Status REAGENDAR (agendamento passado)")
     
-    # 2. CONSOLIDAR
-    elif tem_agendamento_futuro and tem_separacao_ou_nf:
-        # Verificar condições de consolidação
+    # 2. STATUS 4 - CONSOLIDAR 
+    # Condição obrigatória: As datas de agendamento que estiverem preenchidas sejam futuras (ou não haver passado)
+    # Condições opcionais (qualquer uma dispara): protocolo parcial, protocolos diferentes, saldo pendente parcial
+    elif tem_agendamento_futuro or tem_potencial_agendamento_futuro:
         precisa_consolidar = False
+        motivo_consolidar = []
         
-        # Protocolo parcial (tem alguns mas não todos)
+        # Condição opcional 1: Haja protocolo porém não em todas as Separações/NF no CD
         if algum_tem_protocolo and not todos_tem_protocolo:
             precisa_consolidar = True
+            motivo_consolidar.append("protocolo parcial")
         
-        # Protocolos diferentes
+        # Condição opcional 2: Haja protocolo em todas as separações porém não são iguais
         if todos_tem_protocolo and not protocolos_iguais:
             precisa_consolidar = True
+            motivo_consolidar.append("protocolos diferentes")
         
-        # Saldo pendente parcial
-        if tem_saldo_pendente:
+        # Condição opcional 3: Haja saldo pendente sem separação porém que não seja o total do CNPJ
+        if tem_saldo_pendente_parcial:
             precisa_consolidar = True
+            motivo_consolidar.append("saldo pendente parcial")
         
         if precisa_consolidar:
             status = 'Consolidar'
             cor_linha = 'table-warning'  # amarelo
             icone = 'fa-exclamation-triangle'
+            logger.info(f"  => CNPJ {dados_cnpj.get('cnpj')}: Status CONSOLIDAR (motivos: {', '.join(motivo_consolidar)})")
+        # Para Ag. Aprovação e Pronto, EXIGIR que tenha agendamento futuro preenchido
+        elif tem_agendamento_futuro:
+            # Tem agendamento futuro mas não precisa consolidar, vamos verificar os próximos status
+            logger.debug(f"  => CNPJ {dados_cnpj.get('cnpj')}: Tem agendamento futuro, verificando Ag. Aprovação/Pronto...")
+            
+            # 3. STATUS 1 - AG. APROVAÇÃO
+            # Condições: protocolo em todas, agendamento futuro, não confirmado, sem saldo pendente sem separação
+            if (todos_tem_protocolo and not todos_confirmados and not tem_saldo_pendente_sem_separacao):
+                status = 'Ag. Aprovação'
+                cor_linha = 'table-info'  # azul
+                icone = 'fa-clock'
+                logger.info(f"  => CNPJ {dados_cnpj.get('cnpj')}: Status AG. APROVAÇÃO")
+            
+            # 4. STATUS 2 - PRONTO
+            # Condições: protocolo em todas, agendamento futuro, confirmado, sem saldo pendente sem separação
+            elif (todos_tem_protocolo and todos_confirmados and not tem_saldo_pendente_sem_separacao):
+                status = 'Pronto'
+                cor_linha = 'table-success'  # azul (mantendo success para verde/azul)
+                icone = 'fa-check-circle'
+                logger.info(f"  => CNPJ {dados_cnpj.get('cnpj')}: Status PRONTO")
+            else:
+                logger.debug(f"  => CNPJ {dados_cnpj.get('cnpj')}: Não atende Ag. Aprovação/Pronto. todos_tem_protocolo={todos_tem_protocolo}, todos_confirmados={todos_confirmados}, tem_saldo_pendente_sem_separacao={tem_saldo_pendente_sem_separacao}")
+        else:
+            # Tem potencial futuro mas sem agendamento preenchido, fica como pendente
+            logger.debug(f"  => CNPJ {dados_cnpj.get('cnpj')}: Sem agendamento preenchido, mantendo como Pendente")
     
-    # 3. AG. APROVAÇÃO
-    elif (todos_tem_protocolo and tem_agendamento_futuro and 
-          not todos_confirmados and not tem_saldo_pendente and tem_separacao_ou_nf):
-        status = 'Ag. Aprovação'
-        cor_linha = 'table-info'  # azul claro
-        icone = 'fa-clock'
-    
-    # 4. PRONTO
-    elif (todos_tem_protocolo and tem_agendamento_futuro and 
-          todos_confirmados and not tem_saldo_pendente and tem_separacao_ou_nf):
-        status = 'Pronto'
-        cor_linha = 'table-success'  # verde claro/azul
-        icone = 'fa-check-circle'
-    
-    # 5. PENDENTE (default)
+    # 5. STATUS 5 - PENDENTE (default)
+    # Condições: Não haja Separação e nem NF no CD OU Não haja protocolo em nenhuma Separação ou NF no CD
     else:
-        # Pendente se:
-        # - Não tem separação/NF alguma
-        # - Tem separação/NF mas sem protocolo algum
-        if not tem_separacao_ou_nf or (tem_separacao_ou_nf and not algum_tem_protocolo):
-            status = 'Pendente'
-            cor_linha = ''  # sem cor
-            icone = 'fa-hourglass-half'
+        status = 'Pendente'
+        cor_linha = ''  # sem cor (linha na cor original)
+        icone = 'fa-hourglass-half'
+        logger.info(f"  => CNPJ {dados_cnpj.get('cnpj')}: Status PENDENTE (não tem agendamento ou não tem separação/protocolo)")
     
     # Log do status final determinado
     logger.debug(f"  => Status final: {status} (cor: {cor_linha})")
     
-    # Atualizar dados do CNPJ
+    # Atualizar dados do CNPJ com status e indicadores visuais
     dados_cnpj['status'] = status
     dados_cnpj['cor_linha'] = cor_linha
     dados_cnpj['icone_status'] = icone
     dados_cnpj['tem_protocolo'] = algum_tem_protocolo
     dados_cnpj['agendamento_confirmado'] = algum_confirmado
-    dados_cnpj['tem_pendencias'] = tem_agendamento_passado or not todos_tem_protocolo
+    
+    # Indicador de pendências: reagendamento necessário ou consolidação necessária
+    dados_cnpj['tem_pendencias'] = status in ['Reagendar', 'Consolidar']
 
 
 def _adicionar_pedidos_cnpj(dados_cnpj, cnpj):

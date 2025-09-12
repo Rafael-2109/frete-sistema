@@ -140,6 +140,40 @@
                     </div>
                 </div>
 
+                <!-- Filtros de Clientes -->
+                <div class="badges-filtros-container">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="text-muted small me-2">Clientes:</span>
+                        <div class="badges-clientes-wrapper">
+                            <span class="badge bg-filtro badge-cliente"
+                                style="background-color: transparent; color: #0056b3; border: 2px solid #0056b3;"
+                                data-tipo="cliente" data-valor="atacadao"
+                                title="Clientes Atacadão">
+                                <i class="fas fa-store me-1"></i>
+                                Atacadão
+                            </span>
+                            <span class="badge bg-filtro badge-cliente ms-2"
+                                style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                                data-tipo="cliente" data-valor="sendas"
+                                title="Clientes Sendas/Assaí">
+                                <i class="fas fa-shopping-cart me-1"></i>
+                                Sendas
+                            </span>
+                            <span class="badge bg-filtro badge-cliente ms-2"
+                                style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                data-tipo="cliente" data-valor="outros"
+                                title="Outros clientes">
+                                <i class="fas fa-users me-1"></i>
+                                Outros
+                            </span>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-cliente"
+                            style="display:none;">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Badges de Rotas + Incoterms -->
                 <div class="badges-filtros-container">
                     <div class="d-flex align-items-center mb-2">
@@ -296,6 +330,7 @@
                                 data-agendamento-confirmado="{{ 'true' if pedido.agendamento_confirmado else 'false' }}"
                                 data-protocolo="{{ pedido.protocolo or '' }}"
                                 data-separacao-lote-id="{{ pedido.separacao_lote_id or '' }}"
+                                data-grupo-cliente="{{ pedido.grupo_cliente or 'outros' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
 
                                 <!-- Botão Expandir -->

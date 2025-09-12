@@ -141,6 +141,8 @@ class AgrupamentoService:
         try:
             # Importar funções de busca de rotas
             from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+            # Importar função para identificar grupo do cliente
+            from app.portal.utils.grupo_empresarial import GrupoEmpresarial
             
             # Calcular informações de separação
             qtd_separacoes, valor_separacoes, dados_separacao_completa = self._calcular_separacoes(pedido.num_pedido)
@@ -162,6 +164,16 @@ class AgrupamentoService:
             # Buscar rota e sub-rota das localidades
             rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
             sub_rota_calculada = buscar_sub_rota_por_uf_cidade(pedido.cod_uf, pedido.nome_cidade) if pedido.cod_uf and pedido.nome_cidade else None
+            
+            # Identificar grupo do cliente
+            grupo_cliente = 'outros'  # Default
+            if pedido.cnpj_cpf:
+                grupo = GrupoEmpresarial.identificar_grupo(pedido.cnpj_cpf)
+                if grupo == 'atacadao':
+                    grupo_cliente = 'atacadao'
+                elif grupo == 'assai':  # Assaí é mapeado para Sendas
+                    grupo_cliente = 'sendas'
+                # Se não for Atacadão nem Sendas, mantém 'outros'
             
             return {
                 'num_pedido': pedido.num_pedido,
@@ -194,7 +206,8 @@ class AgrupamentoService:
                 'qtd_separacoes': qtd_separacoes,
                 'totalmente_separado': totalmente_separado,
                 'tem_separacao_completa': dados_separacao_completa.get('tem_separacao_completa', False),
-                'separacao_lote_id': dados_separacao_completa.get('separacao_lote_id')  # Passar lote_id
+                'separacao_lote_id': dados_separacao_completa.get('separacao_lote_id'),  # Passar lote_id
+                'grupo_cliente': grupo_cliente  # Adicionar grupo do cliente
             }
             
         except Exception as e:
@@ -251,10 +264,20 @@ class AgrupamentoService:
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""
         from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+        from app.portal.utils.grupo_empresarial import GrupoEmpresarial
         
         # Buscar rota e sub-rota das localidades
         rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
         sub_rota_calculada = buscar_sub_rota_por_uf_cidade(pedido.cod_uf, pedido.nome_cidade) if pedido.cod_uf and pedido.nome_cidade else None
+        
+        # Identificar grupo do cliente
+        grupo_cliente = 'outros'
+        if pedido.cnpj_cpf:
+            grupo = GrupoEmpresarial.identificar_grupo(pedido.cnpj_cpf)
+            if grupo == 'atacadao':
+                grupo_cliente = 'atacadao'
+            elif grupo == 'assai':
+                grupo_cliente = 'sendas'
         
         return {
             'num_pedido': pedido.num_pedido,
@@ -286,5 +309,7 @@ class AgrupamentoService:
             'valor_saldo_restante': float(pedido.valor_total) if pedido.valor_total else 0,
             'qtd_separacoes': 0,
             'totalmente_separado': False,
-            'tem_separacao_completa': False
+            'tem_separacao_completa': False,
+            'separacao_lote_id': None,
+            'grupo_cliente': grupo_cliente
         }

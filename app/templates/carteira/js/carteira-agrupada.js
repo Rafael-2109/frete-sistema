@@ -10,7 +10,8 @@ class CarteiraAgrupada {
             rotas: new Set(),
             incoterms: new Set(),
             subrotas: new Set(),
-            agendamento: null  // null, 'com' ou 'sem'
+            agendamento: null,  // null, 'com', 'sem', 'completa-sem-confirmacao', 'completa-confirmado'
+            cliente: null  // null, 'atacadao', 'sendas', 'outros'
         };
         this.maxFiltrosAtivos = 3; // Máximo de badges selecionados simultaneamente
         
@@ -124,6 +125,7 @@ class CarteiraAgrupada {
         const limparRotas = document.getElementById('limpar-rotas');
         const limparSubrotas = document.getElementById('limpar-subrotas');
         const limparAgendamento = document.getElementById('limpar-agendamento');
+        const limparCliente = document.getElementById('limpar-cliente');
 
         if (limparRotas) {
             limparRotas.addEventListener('click', () => this.limparFiltrosRotas());
@@ -137,6 +139,10 @@ class CarteiraAgrupada {
             limparAgendamento.addEventListener('click', () => this.limparFiltrosAgendamento());
         }
         
+        if (limparCliente) {
+            limparCliente.addEventListener('click', () => this.limparFiltrosCliente());
+        }
+        
         console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.bg-filtro').length);
     }
 
@@ -147,6 +153,12 @@ class CarteiraAgrupada {
         // Tratamento especial para agendamento (exclusivo mútuo)
         if (tipo === 'agendamento') {
             this.toggleAgendamento(badge, valor);
+            return;
+        }
+        
+        // Tratamento especial para cliente (exclusivo mútuo)
+        if (tipo === 'cliente') {
+            this.toggleCliente(badge, valor);
             return;
         }
 
@@ -402,6 +414,75 @@ class CarteiraAgrupada {
         this.aplicarFiltros();
         document.getElementById('limpar-agendamento').style.display = 'none';
     }
+    
+    toggleCliente(badge, valor) {
+        // Remover ativo de todos os badges de cliente
+        document.querySelectorAll('.badge-cliente').forEach(b => {
+            b.classList.remove('ativo');
+            // Restaurar estilo outline (não clicado) baseado no valor do badge
+            const valorBadge = b.dataset.valor;
+            if (valorBadge === 'atacadao') {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#0056b3';
+                b.style.borderColor = '#0056b3';
+            } else if (valorBadge === 'sendas') {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#dc3545';
+                b.style.borderColor = '#dc3545';
+            } else if (valorBadge === 'outros') {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#6c757d';
+                b.style.borderColor = '#6c757d';
+            }
+        });
+        
+        // Se clicou no mesmo que já estava ativo, desativar
+        if (this.filtrosAtivos.cliente === valor) {
+            this.filtrosAtivos.cliente = null;
+            document.getElementById('limpar-cliente').style.display = 'none';
+        } else {
+            // Ativar o novo com estilo preenchido
+            badge.classList.add('ativo');
+            if (valor === 'atacadao') {
+                badge.style.backgroundColor = '#0056b3';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#0056b3';
+            } else if (valor === 'sendas') {
+                badge.style.backgroundColor = '#dc3545';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#dc3545';
+            } else if (valor === 'outros') {
+                badge.style.backgroundColor = '#6c757d';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#6c757d';
+            }
+            this.filtrosAtivos.cliente = valor;
+            document.getElementById('limpar-cliente').style.display = 'inline-block';
+        }
+        
+        this.aplicarFiltros();
+    }
+    
+    limparFiltrosCliente() {
+        document.querySelectorAll('.badge-cliente').forEach(badge => {
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            const valorBadge = badge.dataset.valor;
+            if (valorBadge === 'atacadao') {
+                badge.style.color = '#0056b3';
+                badge.style.borderColor = '#0056b3';
+            } else if (valorBadge === 'sendas') {
+                badge.style.color = '#dc3545';
+                badge.style.borderColor = '#dc3545';
+            } else if (valorBadge === 'outros') {
+                badge.style.color = '#6c757d';
+                badge.style.borderColor = '#6c757d';
+            }
+        });
+        this.filtrosAtivos.cliente = null;
+        this.aplicarFiltros();
+        document.getElementById('limpar-cliente').style.display = 'none';
+    }
 
     mostrarAlerta(mensagem) {
         // Usar módulo centralizado se disponível
@@ -484,6 +565,7 @@ class CarteiraAgrupada {
             const agendamento = linha.dataset.agendamento || 'sem';
             const separacaoCompleta = linha.dataset.separacaoCompleta === 'true';
             const agendamentoConfirmado = linha.dataset.agendamentoConfirmado === 'true';
+            const grupoCliente = linha.dataset.grupoCliente || 'outros';
 
             // Aplicar filtros básicos
             const matchBusca = !termoBusca || textoFiltro.includes(termoBusca);
@@ -503,6 +585,12 @@ class CarteiraAgrupada {
                     // Filtros originais (sem/com agendamento)
                     matchAgendamento = agendamento === this.filtrosAtivos.agendamento;
                 }
+            }
+            
+            // Filtro de cliente (Atacadão, Sendas, Outros)
+            let matchCliente = true;
+            if (this.filtrosAtivos.cliente) {
+                matchCliente = grupoCliente === this.filtrosAtivos.cliente;
             }
 
             let matchBadges = true;
@@ -537,7 +625,7 @@ class CarteiraAgrupada {
                 }
             }
 
-            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchBadges && matchSubrotas;
+            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchBadges && matchSubrotas;
 
             linha.style.display = mostrar ? '' : 'none';
 
