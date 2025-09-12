@@ -296,6 +296,11 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
         sep.protocolo = protocolo
         sep.agendamento_confirmado = confirmado
         
+        # IMPORTANTE: Se status é PREVISAO, mudar para ABERTO
+        if sep.status == 'PREVISAO':
+            sep.status = 'ABERTO'
+            logger.info(f"Status alterado de PREVISAO para ABERTO no ID {sep.id}")
+        
         if confirmado and data_agendamento:
             # Status Aprovada: preencher datas
             sep.agendamento = data_agendamento
@@ -371,7 +376,24 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                 total_pallet = 0
                 
                 for item in itens:
-                    qtd = float(item.qtd_saldo_produto_pedido or 0)
+                    qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+                    
+                    # IMPORTANTE: Abater o que já foi separado (sincronizado_nf=False)
+                    qtd_ja_separada = db.session.query(
+                        db.func.coalesce(db.func.sum(Separacao.qtd_saldo), 0)
+                    ).filter(
+                        Separacao.num_pedido == item.num_pedido,
+                        Separacao.cod_produto == item.cod_produto,
+                        Separacao.sincronizado_nf == False
+                    ).scalar()
+                    
+                    qtd = qtd_carteira - float(qtd_ja_separada)
+                    
+                    # Se não há saldo disponível, pular este item
+                    if qtd <= 0:
+                        logger.info(f"Produto {item.cod_produto} do pedido {num_pedido} não tem saldo disponível")
+                        continue
+                    
                     preco = float(item.preco_produto_pedido or 0)
                     
                     total_qtd += qtd
@@ -379,15 +401,21 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                     
                     # Calcular peso e pallet
                     try:
-                        peso_pallet = calcular_peso_pallet_produto(item.cod_produto, qtd)
-                        total_peso += peso_pallet.get('peso', 0)
-                        total_pallet += peso_pallet.get('pallet', 0)
+                        # calcular_peso_pallet_produto retorna tupla (peso, pallet)
+                        peso_calculado, pallet_calculado = calcular_peso_pallet_produto(item.cod_produto, qtd)
+                        total_peso += peso_calculado
+                        total_pallet += pallet_calculado
                     except Exception as e:
                         logger.warning(f"Erro ao calcular peso/pallet para produto {item.cod_produto}: {e}")
                 
-                # Criar nova Separacao com status PREVISAO
+                # Só criar Separacao se houver quantidade disponível
+                if total_qtd <= 0:
+                    logger.info(f"Pedido {num_pedido} não tem saldo disponível após abater separações existentes")
+                    continue
+                
+                # Criar nova Separacao com status ABERTO (vindo da CarteiraPrincipal)
                 nova_separacao = Separacao(
-                    separacao_lote_id=gerar_lote_id('AGD'),  # AGD = Agendamento
+                    separacao_lote_id=gerar_lote_id(),  # Gerar ID único do lote
                     num_pedido=num_pedido,
                     data_pedido=primeiro_item.data_pedido,
                     cnpj_cpf=cnpj,
@@ -406,7 +434,7 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                     agendamento=data_agendamento if confirmado else None,
                     expedicao=data_expedicao if confirmado else None,
                     tipo_envio='total',
-                    status='PREVISAO',  # Status especial para agendamentos importados
+                    status='ABERTO',  # Status especial para agendamentos importados
                     sincronizado_nf=False,
                     nf_cd=False,
                     observ_ped_1=f'Importado Assai {datetime.now().strftime("%d/%m/%Y %H:%M")} - Protocolo: {protocolo}'

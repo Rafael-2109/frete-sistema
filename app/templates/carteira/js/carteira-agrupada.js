@@ -1214,6 +1214,11 @@ class CarteiraAgrupada {
                                 <i class="fas fa-search"></i> Ver.Agenda
                             </button>
                         ` : ''}
+                        <button class="btn btn-outline-danger btn-sm" 
+                                onclick="carteiraAgrupada.excluirSeparacao('${item.loteId}')"
+                                title="Excluir separação">
+                            <i class="fas fa-trash"></i> Excluir
+                        </button>
                     </div>
                 </td>
             </tr>
@@ -1394,6 +1399,80 @@ class CarteiraAgrupada {
             return window.PortalAgendamento.verificarProtocoloNoPortal(loteId, protocolo);
         } else {
             return window.PortalAgendamento.verificarPortal(loteId);
+        }
+    }
+    
+    /**
+     * 🗑️ EXCLUIR SEPARAÇÃO COMPACTA
+     * Delega para o separacaoManager que já tem toda a lógica
+     */
+    async excluirSeparacao(loteId) {
+        console.log(`🗑️ Excluindo separação ${loteId}`);
+        
+        // Usar separacaoManager se disponível
+        if (window.separacaoManager && typeof window.separacaoManager.excluirSeparacao === 'function') {
+            // Buscar o número do pedido pela linha da tabela
+            const btn = event.target.closest('button');
+            const tr = btn.closest('tr');
+            const table = tr.closest('table');
+            const container = table.closest('.separacoes-compactas-container');
+            const pedidoRow = container.closest('.pedido-detalhes')?.previousElementSibling;
+            const numPedido = pedidoRow?.dataset?.pedido || pedidoRow?.dataset?.numPedido || '';
+            
+            const resultado = await window.separacaoManager.excluirSeparacao(loteId, numPedido);
+            
+            if (resultado && resultado.success) {
+                // Remover a linha da tabela imediatamente
+                tr.style.transition = 'opacity 0.3s';
+                tr.style.opacity = '0';
+                setTimeout(() => {
+                    tr.remove();
+                    
+                    // Se não houver mais linhas, esconder a tabela
+                    const tbody = table.querySelector('tbody');
+                    if (!tbody || tbody.children.length === 0) {
+                        container.remove();
+                    }
+                }, 300);
+                
+                // Atualizar cache se existir
+                if (window.separacoesCompactasCache && numPedido) {
+                    const cache = window.separacoesCompactasCache[numPedido];
+                    if (cache) {
+                        const index = cache.findIndex(s => s.lote_id === loteId || s.separacao_lote_id === loteId);
+                        if (index > -1) {
+                            cache.splice(index, 1);
+                        }
+                    }
+                }
+                
+                // Mostrar mensagem de sucesso
+                this.mostrarSucesso('Separação excluída com sucesso');
+            } else {
+                this.mostrarErro(resultado?.error || 'Erro ao excluir separação');
+            }
+        } else {
+            // Fallback direto para API se separacaoManager não estiver disponível
+            if (confirm('Confirma a exclusão desta separação?')) {
+                try {
+                    const response = await fetch(`/carteira/api/separacao/${loteId}/excluir`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        location.reload(); // Recarregar página como fallback
+                    } else {
+                        this.mostrarErro('Erro ao excluir separação');
+                    }
+                } catch (error) {
+                    console.error('Erro:', error);
+                    this.mostrarErro('Erro ao excluir separação');
+                }
+            }
         }
     }
     

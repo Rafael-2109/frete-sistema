@@ -294,15 +294,22 @@ def _analisar_status_cnpj(dados_cnpj):
     tem_separacao_ou_nf = False
     tem_agendamento_passado = False
     tem_agendamento_futuro = False
-    todos_tem_protocolo = True
+    # CORREÇÃO: Inicializar como False - só será True se HOUVER separações E todas tiverem protocolo
+    todos_tem_protocolo = False  
     algum_tem_protocolo = False
     protocolos_iguais = True
     algum_confirmado = False
-    todos_confirmados = True
+    # CORREÇÃO: Inicializar como False - só será True se HOUVER separações E todas estiverem confirmadas
+    todos_confirmados = False
     tem_saldo_pendente = False
     primeiro_protocolo = None
     total_saldo_pedidos = Decimal('0')
     total_separado = Decimal('0')
+    
+    # Contadores para validação
+    total_separacoes_nfs = 0
+    separacoes_com_protocolo = 0
+    separacoes_confirmadas = 0
     
     # Analisar todos os pedidos
     for pedido in dados_cnpj['pedidos']:
@@ -316,22 +323,21 @@ def _analisar_status_cnpj(dados_cnpj):
         # Verificar separações
         for sep in pedido.get('separacoes', []):
             tem_separacao_ou_nf = True
+            total_separacoes_nfs += 1
             
             # Verificar protocolo
             if sep.get('protocolo'):
                 algum_tem_protocolo = True
+                separacoes_com_protocolo += 1
                 if primeiro_protocolo is None:
                     primeiro_protocolo = sep.get('protocolo')
                 elif primeiro_protocolo != sep.get('protocolo'):
                     protocolos_iguais = False
-            else:
-                todos_tem_protocolo = False
             
             # Verificar confirmação
             if sep.get('agendamento_confirmado'):
                 algum_confirmado = True
-            else:
-                todos_confirmados = False
+                separacoes_confirmadas += 1
             
             # Verificar datas de agendamento
             if sep.get('agendamento'):
@@ -347,22 +353,21 @@ def _analisar_status_cnpj(dados_cnpj):
         # Verificar NFs no CD
         for nf in pedido.get('nfs_cd', []):
             tem_separacao_ou_nf = True
+            total_separacoes_nfs += 1
             
             # Verificar protocolo
             if nf.get('protocolo'):
                 algum_tem_protocolo = True
+                separacoes_com_protocolo += 1
                 if primeiro_protocolo is None:
                     primeiro_protocolo = nf.get('protocolo')
                 elif primeiro_protocolo != nf.get('protocolo'):
                     protocolos_iguais = False
-            else:
-                todos_tem_protocolo = False
             
             # Verificar confirmação
             if nf.get('agendamento_confirmado'):
                 algum_confirmado = True
-            else:
-                todos_confirmados = False
+                separacoes_confirmadas += 1
             
             # Verificar datas de agendamento
             if nf.get('agendamento'):
@@ -374,6 +379,29 @@ def _analisar_status_cnpj(dados_cnpj):
                         tem_agendamento_passado = True
                     else:
                         tem_agendamento_futuro = True
+    
+    # Recalcular variáveis booleanas baseado nos contadores
+    if total_separacoes_nfs > 0:
+        # Só pode ser "todos têm protocolo" se houver separações E todas tiverem
+        todos_tem_protocolo = (separacoes_com_protocolo == total_separacoes_nfs)
+        # Só pode ser "todos confirmados" se houver separações E todas estiverem confirmadas
+        todos_confirmados = (separacoes_confirmadas == total_separacoes_nfs)
+    else:
+        # Se não há separações, não pode dizer que "todos têm" algo
+        todos_tem_protocolo = False
+        todos_confirmados = False
+    
+    # Log para debug
+    logger.debug(f"CNPJ {dados_cnpj.get('cnpj')} - Análise de status:")
+    logger.debug(f"  - tem_separacao_ou_nf: {tem_separacao_ou_nf}")
+    logger.debug(f"  - total_separacoes_nfs: {total_separacoes_nfs}")
+    logger.debug(f"  - separacoes_com_protocolo: {separacoes_com_protocolo}")
+    logger.debug(f"  - todos_tem_protocolo: {todos_tem_protocolo}")
+    logger.debug(f"  - algum_tem_protocolo: {algum_tem_protocolo}")
+    logger.debug(f"  - todos_confirmados: {todos_confirmados}")
+    logger.debug(f"  - tem_saldo_pendente: {tem_saldo_pendente}")
+    logger.debug(f"  - tem_agendamento_passado: {tem_agendamento_passado}")
+    logger.debug(f"  - tem_agendamento_futuro: {tem_agendamento_futuro}")
     
     # Determinar status baseado na hierarquia
     status = 'Pendente'
@@ -431,6 +459,9 @@ def _analisar_status_cnpj(dados_cnpj):
             status = 'Pendente'
             cor_linha = ''  # sem cor
             icone = 'fa-hourglass-half'
+    
+    # Log do status final determinado
+    logger.debug(f"  => Status final: {status} (cor: {cor_linha})")
     
     # Atualizar dados do CNPJ
     dados_cnpj['status'] = status
