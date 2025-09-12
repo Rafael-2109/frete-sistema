@@ -87,6 +87,272 @@ body {
   z-index: 103 !important; /* Abaixo da paginação mas acima do conteúdo */
 }
 
+/* 🎯 ESTILOS DA NOVA NAVBAR DE FILTROS */
+#navbarFiltros {
+  background: transparent;
+}
+
+/* Estilo melhorado para a navbar de filtros */
+nav.navbar.navbar-light {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2) !important;
+}
+
+/* 🔥 FORÇAR GRADIENTE ROXO NO TEMA LIGHT */
+[data-theme="light"] nav.navbar.navbar-light {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2) !important;
+}
+
+/* 🌙 ADAPTAÇÃO PARA TEMA DARK */
+[data-theme="dark"] nav.navbar.navbar-light {
+  background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+}
+
+[data-theme="dark"] .bg-light {
+  background-color: #22262e !important;
+}
+
+[data-theme="dark"] .table {
+  background-color: #22262e;
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+  background-color: #262a32;
+}
+
+[data-theme="dark"] .table-hover tbody tr:hover {
+  background-color: #2d3139;
+}
+
+[data-theme="dark"] .sticky-col,
+[data-theme="dark"] .sticky-col-2,
+[data-theme="dark"] .sticky-col-3 {
+  background: #22262e !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+  border-right: 2px solid #3a3f47 !important;
+}
+
+[data-theme="dark"] .btn-outline-secondary,
+[data-theme="dark"] .btn-outline-danger,
+[data-theme="dark"] .btn-outline-warning,
+[data-theme="dark"] .btn-outline-success,
+[data-theme="dark"] .btn-outline-info,
+[data-theme="dark"] .btn-outline-primary,
+[data-theme="dark"] .btn-outline-dark {
+  background-color: #2d3139;
+  border-color: #3a3f47;
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .btn-outline-secondary:hover,
+[data-theme="dark"] .btn-outline-danger:hover,
+[data-theme="dark"] .btn-outline-warning:hover,
+[data-theme="dark"] .btn-outline-success:hover,
+[data-theme="dark"] .btn-outline-info:hover,
+[data-theme="dark"] .btn-outline-primary:hover,
+[data-theme="dark"] .btn-outline-dark:hover {
+  background-color: #383d47;
+  border-color: #4a5057;
+}
+
+/* Brand da navbar - SEMPRE BRANCO por causa do fundo roxo */
+nav.navbar .navbar-brand {
+  color: white !important;
+  font-weight: 600;
+}
+
+/* Links da navbar - SEMPRE BRANCO por causa do fundo roxo/escuro */
+nav.navbar .nav-link {
+  color: white !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-radius: 5px;
+  padding: 8px 15px !important;
+}
+
+/* 🔥 CORREÇÃO: Forçar cores escuras para textos no tema LIGHT */
+[data-theme="light"] .table {
+  color: #212529 !important;
+}
+
+[data-theme="light"] .text-muted {
+  color: #6c757d !important;
+}
+
+[data-theme="light"] .dropdown-item {
+  color: #212529 !important;
+}
+
+[data-theme="light"] .form-control,
+[data-theme="light"] .form-select {
+  color: #212529 !important;
+  background-color: #ffffff !important;
+}
+
+[data-theme="light"] h1, 
+[data-theme="light"] h2, 
+[data-theme="light"] h3, 
+[data-theme="light"] h4, 
+[data-theme="light"] h5, 
+[data-theme="light"] h6 {
+  color: #212529 !important;
+}
+
+[data-theme="light"] label {
+  color: #495057 !important;
+}
+
+[data-theme="light"] .card-body {
+  color: #212529 !important;
+}
+
+/* Hover nos links */
+nav.navbar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white !important;
+}
+
+/* Link ativo/selecionado */
+nav.navbar .nav-link.fw-bold {
+  background: rgba(255, 255, 255, 0.25);
+  color: white !important;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  border-radius: 10px;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
+  border: none;
+  padding: 10px 5px;
+  min-width: 250px;
+  animation: fadeInDropdown 0.3s ease;
+}
+
+@keyframes fadeInDropdown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Items do dropdown */
+.dropdown-item {
+  border-radius: 5px;
+  padding: 10px 15px;
+  margin: 2px 5px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  transform: translateX(5px);
+}
+
+.dropdown-item.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+}
+
+/* Badges nos dropdowns */
+.dropdown-item .badge {
+  font-size: 0.75rem;
+  padding: 3px 6px;
+}
+
+/* Badges de contadores na navbar */
+nav.navbar .badge.rounded-pill {
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  margin-left: 5px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Divider personalizado */
+.dropdown-divider {
+  border-color: rgba(102, 126, 234, 0.2);
+  margin: 8px 10px;
+}
+
+/* Botão toggle para mobile */
+.navbar-toggler {
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  padding: 4px 8px;
+}
+
+.navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.9%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* Botão limpar filtro */
+nav.navbar .nav-link.text-danger {
+  color: #ffc107 !important;
+  font-weight: 600;
+}
+
+nav.navbar .nav-link.text-danger:hover {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffeb3b !important;
+}
+
+/* Badge do status atual */
+nav.navbar .navbar-brand .badge.bg-primary {
+  background: rgba(255, 255, 255, 0.3) !important;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+/* Responsividade melhorada */
+@media (max-width: 992px) {
+  nav.navbar .navbar-collapse {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    padding: 15px;
+    margin-top: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  }
+  
+  nav.navbar .navbar-collapse .nav-link {
+    color: #667eea !important;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+    margin: 5px 0;
+  }
+  
+  nav.navbar .navbar-collapse .nav-link:hover {
+    background: rgba(102, 126, 234, 0.1);
+  }
+  
+  .dropdown-menu {
+    position: static !important;
+    transform: none !important;
+    box-shadow: none;
+    background: rgba(102, 126, 234, 0.05);
+    margin: 10px 0;
+  }
+}
+
 /* ✅ RESPONSIVIDADE PARA HÍBRIDA */
 @media (max-width: 768px) {
   #hybrid-pagination .col-md-4 {
@@ -347,92 +613,11 @@ body {
              value="{{ request.args.get('data_entrega', '') }}" id="data_entrega">
     </div>  
 
-    <div class="col-md-3">
-      <div class="form-check mt-4">
-          <input class="form-check-input" type="checkbox"
-                 name="agrupar" value="status" id="agrupar"
-               {% if agrupar %}checked{% endif %}>
-          <label class="form-check-label fw-bold {% if agrupar %}text-primary{% endif %}" 
-                 for="agrupar">
-          Agrupar por Status
-        </label>
-      </div>
-    </div>
-
-    <div class="col-md-3 text-end">
-      <a href="?status=pendencia_financeira"
-         class="btn {% if request.args.get('status') == 'pendencia_financeira' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-         ⚠️ Pendência Financeira
-      </a>
+    <div class="text-center">
       <button type="submit" class="btn btn-primary">Buscar</button>
         <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-secondary">
           Limpar
         </a>
-    </div>
-  </form>
-
-    <!-- Botões de filtro rápido e ações -->
-    <div class="d-flex flex-wrap gap-2 mt-3 justify-content-between align-items-center">
-      <div class="d-flex flex-wrap gap-2">
-        <a href="{{ url_for('monitoramento.listar_entregas') }}" 
-           class="btn {% if not request.args.get('status') %}btn-dark{% else %}btn-outline-dark{% endif %}">
-          📋 Todas
-        </a>
-        <a href="?status=no_prazo" 
-           class="btn {% if request.args.get('status') == 'no_prazo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-          ⚪ No Prazo
-        </a>
-        <a href="?status=atrasada" 
-           class="btn {% if request.args.get('status') == 'atrasada' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-          🔴 Atrasadas {% if contadores.atrasadas %}({{ contadores.atrasadas }}){% endif %}
-        </a>
-        <a href="?status=sem_previsao" 
-           class="btn {% if request.args.get('status') == 'sem_previsao' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-          🟡 Sem Previsão {% if contadores.sem_previsao %}({{ contadores.sem_previsao }}){% endif %}
-        </a>
-        <a href="?status=entregue" 
-           class="btn {% if request.args.get('status') == 'entregue' %}btn-success{% else %}btn-outline-success{% endif %}">
-          ✅ Entregues
-        </a>
-        <a href="?status=sem_agendamento" 
-           class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-          ⚠️ Agend. Pendente {% if contadores.sem_agendamento %}({{ contadores.sem_agendamento }}){% endif %}
-        </a>
-        <a href="?status=ag_aprovacao" 
-           class="btn {% if request.args.get('status') == 'ag_aprovacao' %}btn-info{% else %}btn-outline-info{% endif %}">
-          ⏳ Ag. Aprovação {% if contadores.ag_aprovacao %}({{ contadores.ag_aprovacao }}){% endif %}
-        </a>
-        <a href="?status=com_comentarios" 
-           class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
-          💬 Comentários em NFs
-        </a>    
-        <a href="?status=reagendar" 
-           class="btn {% if request.args.get('status') == 'reagendar' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-          🔁 Reagendar {% if contadores.reagendar %}({{ contadores.reagendar }}){% endif %}
-        </a>
-        <!-- ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS (só aparecem quando sem filtro principal) -->
-        {% if not request.args.get('status') or request.args.get('status') in ['troca_nf', 'cancelada', 'devolvida', 'nf_cd'] %}
-        <a href="?status=troca_nf" 
-           class="btn {% if request.args.get('status') == 'troca_nf' %}btn-info{% else %}btn-outline-info{% endif %}">
-          🔄 Troca de NF
-        </a>
-        <a href="?status=cancelada" 
-           class="btn {% if request.args.get('status') == 'cancelada' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-          ❌ Cancelada
-        </a>
-        <a href="?status=devolvida" 
-           class="btn {% if request.args.get('status') == 'devolvida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-          📦 Devolvida
-        </a>
-        <a href="?status=nf_cd" 
-           class="btn {% if request.args.get('status') == 'nf_cd' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-          🏢 NF no CD {% if contadores.nf_cd %}({{ contadores.nf_cd }}){% endif %}
-        </a>
-        {% endif %}
-      </div>
-      
-      <!-- Botões de Ação -->
-      <div class="d-flex gap-2">
         {% if current_user.perfil != 'vendedor' %}
         <a href="{{ url_for('monitoramento.upload_canhotos_lote') }}" 
            class="btn btn-primary" 
@@ -445,9 +630,183 @@ body {
            title="Exportar dados do monitoramento para Excel">
           <i class="fas fa-file-excel"></i> Exportar Excel
         </a>
-      </div>
     </div>
+  </form>
 
+    <!-- 🎯 NOVA NAVBAR DE FILTROS CATEGORIZADOS -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border rounded shadow-sm mt-3 p-2">
+      <div class="container-fluid">
+        <!-- Título/Brand da navbar de filtros -->
+        <span class="navbar-brand mb-0 h6">
+          <i class="fas fa-filter text-primary"></i> Filtros Rápidos
+          {% if request.args.get('status') %}
+            <span class="badge bg-primary ms-2">{{ request.args.get('status')|replace('_', ' ')|title }}</span>
+          {% endif %}
+        </span>
+
+        <!-- Botão toggle para mobile -->
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarFiltros">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <!-- Conteúdo colapsável da navbar -->
+        <div class="collapse navbar-collapse" id="navbarFiltros">
+          <ul class="navbar-nav ms-auto">
+            
+            <!-- 📋 Visualizar Todos -->
+            <li class="nav-item">
+              <a href="{{ url_for('monitoramento.listar_entregas') }}" 
+                 class="nav-link {% if not request.args.get('status') %}fw-bold text-dark{% endif %}">
+                <i class="fas fa-list"></i> Ver Todas
+              </a>
+            </li>
+
+            <!-- 🚚 DROPDOWN: Status de Entrega -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="dropdownEntrega" role="button" 
+                 data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-truck"></i> Status Entrega
+                {% set total_entrega = (contadores.atrasadas or 0) + (contadores.sem_previsao or 0) %}
+                {% if total_entrega > 0 %}
+                  <span class="badge bg-danger rounded-pill">{{ total_entrega }}</span>
+                {% endif %}
+              </a>
+              <ul class="dropdown-menu" aria-labelledby="dropdownEntrega">
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'no_prazo' %}active{% endif %}" 
+                     href="?status=no_prazo">
+                    <span class="badge bg-secondary me-2">⚪</span> No Prazo
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'atrasada' %}active{% endif %}" 
+                     href="?status=atrasada">
+                    <span class="badge bg-danger me-2">🔴</span> Atrasadas
+                    {% if contadores.atrasadas %}
+                      <span class="badge bg-danger float-end">{{ contadores.atrasadas }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'sem_previsao' %}active{% endif %}" 
+                     href="?status=sem_previsao">
+                    <span class="badge bg-warning me-2">🟡</span> Sem Previsão
+                    {% if contadores.sem_previsao %}
+                      <span class="badge bg-warning text-dark float-end">{{ contadores.sem_previsao }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'entregue' %}active{% endif %}" 
+                     href="?status=entregue">
+                    <span class="badge bg-success me-2">✅</span> Entregues
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <!-- 📅 DROPDOWN: Agendamento -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="dropdownAgendamento" role="button" 
+                 data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-calendar-alt"></i> Agendamento
+                {% set total_agend = (contadores.sem_agendamento or 0) + (contadores.ag_aprovacao or 0) + (contadores.reagendar or 0) %}
+                {% if total_agend > 0 %}
+                  <span class="badge bg-warning text-dark rounded-pill">{{ total_agend }}</span>
+                {% endif %}
+              </a>
+              <ul class="dropdown-menu" aria-labelledby="dropdownAgendamento">
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'sem_agendamento' %}active{% endif %}" 
+                     href="?status=sem_agendamento">
+                    <span class="badge bg-warning me-2">⚠️</span> Agend. Pendente
+                    {% if contadores.sem_agendamento %}
+                      <span class="badge bg-warning text-dark float-end">{{ contadores.sem_agendamento }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'ag_aprovacao' %}active{% endif %}" 
+                     href="?status=ag_aprovacao">
+                    <span class="badge bg-info me-2">⏳</span> Aguardando Aprovação
+                    {% if contadores.ag_aprovacao %}
+                      <span class="badge bg-info float-end">{{ contadores.ag_aprovacao }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'reagendar' %}active{% endif %}" 
+                     href="?status=reagendar">
+                    <span class="badge bg-danger me-2">🔁</span> Reagendar
+                    {% if contadores.reagendar %}
+                      <span class="badge bg-danger float-end">{{ contadores.reagendar }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <!-- 📝 DROPDOWN: Status Especiais -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="dropdownEspeciais" role="button" 
+                 data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-exclamation-circle"></i> Status Especiais
+                {% if contadores.nf_cd %}
+                  <span class="badge bg-primary rounded-pill">{{ contadores.nf_cd }}</span>
+                {% endif %}
+              </a>
+              <ul class="dropdown-menu" aria-labelledby="dropdownEspeciais">
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'com_comentarios' %}active{% endif %}" 
+                     href="?status=com_comentarios">
+                    <span class="badge bg-info me-2">💬</span> Com Comentários
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'troca_nf' %}active{% endif %}" 
+                     href="?status=troca_nf">
+                    <span class="badge bg-info me-2">🔄</span> Troca de NF
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'cancelada' %}active{% endif %}" 
+                     href="?status=cancelada">
+                    <span class="badge bg-secondary me-2">❌</span> Cancelada
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'devolvida' %}active{% endif %}" 
+                     href="?status=devolvida">
+                    <span class="badge bg-warning me-2">📦</span> Devolvida
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'nf_cd' %}active{% endif %}" 
+                     href="?status=nf_cd">
+                    <span class="badge bg-primary me-2">🏢</span> NF no CD
+                    {% if contadores.nf_cd %}
+                      <span class="badge bg-primary float-end">{{ contadores.nf_cd }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+              </ul>
+            </li>
+
+            <!-- 🔍 Indicador de Filtro Ativo -->
+            {% if request.args.get('status') %}
+            <li class="nav-item ms-3">
+              <a href="{{ url_for('monitoramento.listar_entregas') }}" 
+                 class="nav-link text-danger" title="Limpar filtro">
+                <i class="fas fa-times-circle"></i> Limpar
+              </a>
+            </li>
+            {% endif %}
+
+          </ul>
+        </div>
+      </div>
+    </nav>
   </div>
 </div>
 

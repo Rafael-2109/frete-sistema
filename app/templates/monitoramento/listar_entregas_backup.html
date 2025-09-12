@@ -1,0 +1,63 @@
+<!-- BACKUP DO TEMPLATE ORIGINAL - CRIADO EM {{ data }} -->
+<!-- Este arquivo contém a versão original dos filtros antes da reorganização em navbar com dropdowns -->
+
+    <!-- Botões de filtro rápido e ações ORIGINAIS -->
+    <div class="d-flex flex-wrap gap-2 mt-3 justify-content-center align-items-center">
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('monitoramento.listar_entregas') }}" 
+           class="btn {% if not request.args.get('status') %}btn-dark{% else %}btn-outline-dark{% endif %}">
+          📋 Todas
+        </a>
+        <a href="?status=no_prazo" 
+           class="btn {% if request.args.get('status') == 'no_prazo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+          ⚪ No Prazo
+        </a>
+        <a href="?status=atrasada" 
+           class="btn {% if request.args.get('status') == 'atrasada' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+          🔴 Atrasadas {% if contadores.atrasadas %}({{ contadores.atrasadas }}){% endif %}
+        </a>
+        <a href="?status=sem_previsao" 
+           class="btn {% if request.args.get('status') == 'sem_previsao' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+          🟡 Sem Previsão {% if contadores.sem_previsao %}({{ contadores.sem_previsao }}){% endif %}
+        </a>
+        <a href="?status=entregue" 
+           class="btn {% if request.args.get('status') == 'entregue' %}btn-success{% else %}btn-outline-success{% endif %}">
+          ✅ Entregues
+        </a>
+        <a href="?status=sem_agendamento" 
+           class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+          ⚠️ Agend. Pendente {% if contadores.sem_agendamento %}({{ contadores.sem_agendamento }}){% endif %}
+        </a>
+        <a href="?status=ag_aprovacao" 
+           class="btn {% if request.args.get('status') == 'ag_aprovacao' %}btn-info{% else %}btn-outline-info{% endif %}">
+          ⏳ Ag. Aprovação {% if contadores.ag_aprovacao %}({{ contadores.ag_aprovacao }}){% endif %}
+        </a>
+        <a href="?status=com_comentarios" 
+           class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
+          💬 Comentários em NFs
+        </a>    
+        <a href="?status=reagendar" 
+           class="btn {% if request.args.get('status') == 'reagendar' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+          🔁 Reagendar {% if contadores.reagendar %}({{ contadores.reagendar }}){% endif %}
+        </a>
+        <!-- ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS (só aparecem quando sem filtro principal) -->
+        {% if not request.args.get('status') or request.args.get('status') in ['troca_nf', 'cancelada', 'devolvida', 'nf_cd'] %}
+        <a href="?status=troca_nf" 
+           class="btn {% if request.args.get('status') == 'troca_nf' %}btn-info{% else %}btn-outline-info{% endif %}">
+          🔄 Troca de NF
+        </a>
+        <a href="?status=cancelada" 
+           class="btn {% if request.args.get('status') == 'cancelada' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+          ❌ Cancelada
+        </a>
+        <a href="?status=devolvida" 
+           class="btn {% if request.args.get('status') == 'devolvida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+          📦 Devolvida
+        </a>
+        <a href="?status=nf_cd" 
+           class="btn {% if request.args.get('status') == 'nf_cd' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+          🏢 NF no CD {% if contadores.nf_cd %}({{ contadores.nf_cd }}){% endif %}
+        </a>
+        {% endif %}
+      </div>     
+    </div>
