@@ -140,9 +140,21 @@ def converter_projecao_para_resumo(projecao):
 
 # Registrar filtro de formatação brasileira para o template
 @estoque_bp.app_template_filter('valor_br')
-def valor_br_filter(value):
+def valor_br_filter(value, decimais=2):
     """Filtro Jinja2 para formatar valores no padrão brasileiro"""
-    return formatar_valor_brasileiro(value)
+    if value is None or value == '':
+        return 'R$ 0,00'
+    
+    try:
+        valor_float = float(value)
+        if decimais == 0:
+            return f"R$ {valor_float:,.0f}".replace(',', '.')
+        else:
+            valor_formatado = f"{valor_float:,.{decimais}f}"
+            valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
+            return f"R$ {valor_formatado}"
+    except (ValueError, TypeError):
+        return 'R$ 0,00'
 
 @estoque_bp.route('/')
 @login_required
