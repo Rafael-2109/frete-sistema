@@ -63,7 +63,7 @@ def listar(rede):
         
         # Preparar dados para o template
         contexto = {
-            'rede': rede.title(),
+            'rede': rede,
             'portal': portal,
             'dados_cnpj': dados_cnpj,
             'total_cnpjs': len(dados_cnpj),
