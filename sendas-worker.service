@@ -1,0 +1,38 @@
+# Arquivo de serviço systemd para o worker RQ do Sendas
+# Copiar para: /etc/systemd/system/sendas-worker.service
+
+[Unit]
+Description=Worker RQ para processar jobs do portal Sendas
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=rafaelnascimento
+Group=rafaelnascimento
+WorkingDirectory=/home/rafaelnascimento/projetos/frete_sistema
+Environment="PATH=/home/rafaelnascimento/projetos/frete_sistema/venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Comando para executar o worker
+ExecStart=/home/rafaelnascimento/projetos/frete_sistema/venv/bin/rq worker sendas default --url redis://localhost:6379/0
+
+# Reiniciar se falhar
+Restart=always
+RestartSec=5
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+
+# Limites
+# Tempo máximo para parar o serviço
+TimeoutStopSec=30
+
+# Número máximo de processos
+LimitNPROC=100
+
+# Tamanho máximo de memória (opcional)
+# MemoryLimit=1G
+
+[Install]
+WantedBy=multi-user.target

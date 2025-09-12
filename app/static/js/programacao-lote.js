@@ -1281,19 +1281,51 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         try {
+            // Usar endpoint assíncrono se disponível
+            const useAsync = true; // Pode ser uma configuração
+            const endpoint = useAsync 
+                ? '/carteira/programacao-lote/api/processar-agendamento-sendas-async'
+                : '/carteira/programacao-lote/api/processar-agendamento-sendas';
+            
             // Chamar endpoint de processamento Sendas
-            const response = await fetch('/carteira/programacao-lote/api/processar-agendamento-sendas', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     portal: 'sendas',
-                    agendamentos: dadosAgendamento
+                    agendamentos: dadosAgendamento,
+                    cnpjs: dadosAgendamento  // O endpoint assíncrono espera 'cnpjs'
                 })
             });
             
             const result = await response.json();
+            
+            // Se for processamento assíncrono, fazer polling do status
+            if (useAsync && result.job_id) {
+                // Mostrar que o processamento foi iniciado
+                Swal.fire({
+                    title: '⏳ Processando...',
+                    html: `
+                        <div class="text-center">
+                            <p>Seu agendamento está sendo processado em background.</p>
+                            <p>Job ID: <code>${result.job_id}</code></p>
+                            <div class="spinner-border text-primary mt-3" role="status">
+                                <span class="visually-hidden">Processando...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Aguarde, isso pode levar alguns minutos...</p>
+                        </div>
+                    `,
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        // Iniciar polling do status
+                        checkJobStatus(result.job_id);
+                    }
+                });
+                return;
+            }
             
             if (result.success) {
                 // Se tiver URL de download, baixar automaticamente
@@ -1371,6 +1403,83 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: 'Erro de comunicação',
                 text: 'Não foi possível processar o agendamento. Tente novamente.'
             });
+        }
+    }
+    
+    // Função para verificar status do job assíncrono
+    async function checkJobStatus(jobId) {
+        try {
+            const response = await fetch(`/carteira/programacao-lote/api/status-job-sendas/${jobId}`);
+            const data = await response.json();
+            
+            if (data.status === 'finished') {
+                // Job concluído com sucesso
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ Processamento Concluído!',
+                    html: `
+                        <div class="text-start">
+                            <p><strong>Job ID:</strong> ${jobId}</p>
+                            <p><strong>Status:</strong> Concluído com sucesso</p>
+                            <hr>
+                            <p>O agendamento foi processado no portal Sendas.</p>
+                            ${data.result ? `
+                                <p><strong>Detalhes:</strong></p>
+                                <pre class="text-start" style="max-height: 200px; overflow-y: auto; font-size: 0.85em;">
+                                    ${JSON.stringify(data.result, null, 2)}
+                                </pre>
+                            ` : ''}
+                        </div>
+                    `,
+                    confirmButtonText: 'OK',
+                    width: '600px'
+                });
+                
+                // Recarregar a página ou atualizar dados se necessário
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+                
+            } else if (data.status === 'failed') {
+                // Job falhou
+                Swal.fire({
+                    icon: 'error',
+                    title: '❌ Erro no Processamento',
+                    html: `
+                        <div class="text-start">
+                            <p><strong>Job ID:</strong> ${jobId}</p>
+                            <p><strong>Erro:</strong> ${data.error || 'Erro desconhecido'}</p>
+                            <hr>
+                            <p>O processamento falhou. Por favor, tente novamente ou use o modo síncrono.</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'OK',
+                    width: '600px'
+                });
+                
+            } else if (data.status === 'not_found') {
+                // Job não encontrado
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Job não encontrado',
+                    text: `O job ${jobId} não foi encontrado. Pode ter expirado ou sido cancelado.`,
+                    confirmButtonText: 'OK'
+                });
+                
+            } else {
+                // Ainda processando - continuar polling
+                setTimeout(() => {
+                    checkJobStatus(jobId);
+                }, 5000); // Verificar novamente em 5 segundos
+            }
+            
+        } catch (error) {
+            console.error('Erro ao verificar status do job:', error);
+            
+            // Em caso de erro, tentar novamente em 10 segundos
+            setTimeout(() => {
+                checkJobStatus(jobId);
+            }, 10000);
         }
     }
     

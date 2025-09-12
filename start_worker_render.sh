@@ -5,7 +5,7 @@
 # =====================================================
 
 echo "=========================================="
-echo "🚀 INICIANDO WORKER ATACADÃO NO RENDER"
+echo "🚀 INICIANDO WORKER ATACADÃO/SENDAS NO RENDER"
 echo "=========================================="
 echo ""
 
@@ -142,7 +142,7 @@ WORKER_COUNT=${WORKER_CONCURRENCY:-2}
 echo "👷 Configuração do Worker:"
 echo "   Workers paralelos: $WORKER_COUNT"
 echo "   Timeout padrão: 30 minutos"
-echo "   Filas: atacadao, high, default"
+echo "   Filas: atacadao, sendas, high, default"
 echo ""
 
 # Iniciar worker
@@ -154,7 +154,7 @@ echo ""
 # Executar worker com configurações do Render
 exec python worker_atacadao.py \
     --workers $WORKER_COUNT \
-    --queues atacadao,high,default \
+    --queues atacadao,sendas,high,default \
     --verbose
 
 

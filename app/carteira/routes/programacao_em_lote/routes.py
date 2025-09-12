@@ -3,13 +3,14 @@ Rotas para programação em lote de Redes SP (Atacadão e Sendas)
 """
 
 from flask import render_template, request, jsonify, flash, redirect, url_for, send_file
-from flask_login import login_required
+from flask_login import login_required, current_user
 from sqlalchemy import func, and_, distinct
 from decimal import Decimal
 from datetime import date, timedelta, datetime
 import logging
 import os
 import tempfile
+import traceback
 
 from app import db
 from app.carteira.models import CarteiraPrincipal
@@ -1541,6 +1542,177 @@ def processar_agendamento_sendas():
             'error': erro_msg,
             'error_type': type(e).__name__
         }), 500
+
+
+@programacao_em_lote_bp.route('/api/processar-agendamento-sendas-async', methods=['POST'])
+@login_required
+def processar_agendamento_sendas_async():
+    """
+    Processa agendamento no portal Sendas de forma ASSÍNCRONA usando Redis Queue.
+    Retorna imediatamente com um job_id para acompanhamento.
+    """
+    try:
+        from app.portal.workers import enqueue_job
+        from app.portal.workers.sendas_jobs import processar_agendamento_sendas as processar_sendas_job
+        from app.portal.models import PortalIntegracao, PortalLog
+        
+        # Obter dados da requisição
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Nenhum dado fornecido'}), 400
+        
+        logger.info("🚀 [ASYNC] Iniciando processamento assíncrono Sendas")
+        logger.info(f"   Dados recebidos: {len(data.get('cnpjs', []))} CNPJs")
+        
+        # Validar dados
+        cnpjs_data = data.get('cnpjs', [])
+        if not cnpjs_data:
+            return jsonify({'success': False, 'error': 'Nenhum CNPJ fornecido'}), 400
+        
+        # Filtrar apenas CNPJs com agendamento definido
+        cnpjs_validos = []
+        for item in cnpjs_data:
+            if item.get('agendamento'):
+                cnpjs_validos.append(item)
+                logger.info(f"  ✅ CNPJ {item.get('cnpj')} - Agendamento: {item.get('agendamento')}")
+            else:
+                logger.warning(f"  ⚠️ CNPJ {item.get('cnpj')} - Sem data de agendamento")
+        
+        if not cnpjs_validos:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhum CNPJ com data de agendamento válida'
+            }), 400
+        
+        # Preparar lista de agendamentos
+        lista_cnpjs_agendamento = []
+        for agendamento in cnpjs_validos:
+            cnpj = agendamento.get('cnpj')
+            data_agendamento = agendamento.get('agendamento')
+            
+            lista_cnpjs_agendamento.append({
+                'cnpj': cnpj,
+                'data_agendamento': data_agendamento
+            })
+        
+        # Criar registro de integração no banco
+        integracao = PortalIntegracao(
+            portal='sendas',
+            tipo='agendamento_lote',
+            status='aguardando',
+            dados_envio={
+                'cnpjs': lista_cnpjs_agendamento,
+                'total': len(lista_cnpjs_agendamento),
+                'usuario': current_user.nome if current_user else 'Sistema'
+            }
+        )
+        db.session.add(integracao)
+        db.session.commit()
+        
+        logger.info(f"📝 Integração criada com ID: {integracao.id}")
+        
+        # Enfileirar job no Redis Queue
+        try:
+            job = enqueue_job(
+                processar_sendas_job,
+                integracao.id,
+                lista_cnpjs_agendamento,
+                current_user.nome if current_user else 'Sistema',
+                queue_name='sendas',  # Usa fila específica do Sendas
+                timeout='15m'  # Timeout de 15 minutos
+            )
+            
+            # Salvar job_id na integração
+            integracao.job_id = job.id
+            db.session.commit()
+            
+            logger.info(f"✅ Job {job.id} enfileirado na fila 'sendas'")
+            
+            # Log de enfileiramento
+            log = PortalLog(
+                integracao_id=integracao.id,
+                acao='job_enfileirado',
+                sucesso=True,
+                mensagem=f'Job {job.id} criado para processar {len(lista_cnpjs_agendamento)} CNPJs',
+                dados_contexto={'job_id': job.id, 'queue': 'sendas'}
+            )
+            db.session.add(log)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Processamento iniciado em background',
+                'job_id': job.id,
+                'integracao_id': integracao.id,
+                'total_cnpjs': len(lista_cnpjs_agendamento),
+                'status_url': f'/portal/api/status-job/{job.id}'
+            }), 202  # 202 Accepted - processamento assíncrono
+            
+        except Exception as queue_error:
+            logger.error(f"❌ Erro ao enfileirar job: {queue_error}")
+            
+            # Atualizar status da integração
+            integracao.status = 'erro'
+            integracao.resultado = {'erro': str(queue_error)}
+            db.session.commit()
+            
+            # Se Redis não estiver disponível, sugerir processamento síncrono
+            return jsonify({
+                'success': False,
+                'error': 'Fila de processamento indisponível. Use o endpoint síncrono ou verifique o Redis.',
+                'detalhes': str(queue_error)
+            }), 503  # 503 Service Unavailable
+            
+    except Exception as e:
+        logger.error(f"❌ Erro no endpoint assíncrono: {e}")
+        logger.error(traceback.format_exc())
+        
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao iniciar processamento: {str(e)}'
+        }), 500
+
+
+@programacao_em_lote_bp.route('/api/status-job-sendas/<job_id>', methods=['GET'])
+@login_required
+def status_job_sendas(job_id):
+    """
+    Verifica o status de um job Sendas no Redis Queue
+    """
+    try:
+        from rq.job import Job
+        from app.portal.workers import get_redis_connection
+        
+        redis_conn = get_redis_connection()
+        job = Job.fetch(job_id, connection=redis_conn)
+        
+        status = job.get_status()
+        result = None
+        error = None
+        
+        if status == 'finished':
+            result = job.result
+        elif status == 'failed':
+            error = str(job.exc_info) if job.exc_info else 'Erro desconhecido'
+        
+        return jsonify({
+            'job_id': job_id,
+            'status': status,
+            'created_at': job.created_at.isoformat() if job.created_at else None,
+            'started_at': job.started_at.isoformat() if job.started_at else None,
+            'ended_at': job.ended_at.isoformat() if job.ended_at else None,
+            'result': result,
+            'error': error,
+            'meta': job.meta
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao verificar status do job {job_id}: {e}")
+        return jsonify({
+            'job_id': job_id,
+            'status': 'not_found',
+            'error': str(e)
+        }), 404
 
 
 @programacao_em_lote_bp.route('/api/download-planilha-sendas/<filename>')

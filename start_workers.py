@@ -44,8 +44,8 @@ def start_worker(queue_names):
 def main():
     """Função principal"""
     # Configurações
-    NUM_WORKERS = int(os.environ.get('NUM_WORKERS', 2))
-    QUEUES = ['default', 'high', 'low', 'atacadao']
+    NUM_WORKERS = int(os.environ.get('NUM_WORKERS', 3))  # Aumentado para 3 workers
+    QUEUES = ['default', 'high', 'low', 'atacadao', 'sendas']  # Adicionado 'sendas'
     
     logger.info(f"Iniciando {NUM_WORKERS} workers para filas: {QUEUES}")
     

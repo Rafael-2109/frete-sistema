@@ -1,0 +1,1 @@
+# Workers para processamento assíncrono
