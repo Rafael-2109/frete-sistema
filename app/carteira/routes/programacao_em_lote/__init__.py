@@ -20,3 +20,6 @@ from .routes import (
     analisar_ruptura_lote,
     processar_lote
 )
+
+# Importar rota de importação de agendamentos Assai
+from .importar_agendamentos import importar_agendamentos_assai

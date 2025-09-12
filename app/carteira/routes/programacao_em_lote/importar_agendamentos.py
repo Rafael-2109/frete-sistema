@@ -12,7 +12,6 @@ Colunas esperadas no Excel:
 
 from flask import request, jsonify
 from flask_login import login_required
-from sqlalchemy import and_
 from datetime import datetime, timedelta
 import pandas as pd
 from io import BytesIO
@@ -88,17 +87,17 @@ def importar_agendamentos_assai():
                 
                 # Validações básicas
                 if not protocolo:
-                    erros.append(f"Linha {idx+2}: ID vazio")
+                    erros.append(f"Linha {idx+2}: ID vazio") # type: ignore
                     continue
                 
                 if not cnpj_terminal:
-                    erros.append(f"Linha {idx+2}: CNPJ Terminal vazio")
+                    erros.append(f"Linha {idx+2}: CNPJ Terminal vazio") # type: ignore
                     continue
                 
                 # Formatar CNPJ
                 cnpj_formatado = _formatar_cnpj_assai(cnpj_terminal)
                 if not cnpj_formatado:
-                    erros.append(f"Linha {idx+2}: CNPJ inválido: {cnpj_terminal}")
+                    erros.append(f"Linha {idx+2}: CNPJ inválido: {cnpj_terminal}") # type: ignore
                     continue
                 
                 # Determinar agendamento_confirmado baseado no Status
@@ -126,7 +125,7 @@ def importar_agendamentos_assai():
                         data_expedicao = _subtrair_dia_util(data_agendamento)
                         
                     except Exception as e:
-                        erros.append(f"Linha {idx+2}: Data inválida: {data_efetiva} - {str(e)}")
+                        erros.append(f"Linha {idx+2}: Data inválida: {data_efetiva} - {str(e)}") # type: ignore
                         continue
                 
                 # Processar registro
@@ -167,8 +166,8 @@ def importar_agendamentos_assai():
                 registros_processados.append(protocolo)
                 
             except Exception as e:
-                erros.append(f"Linha {idx+2}: Erro ao processar: {str(e)}")
-                logger.error(f"Erro na linha {idx+2}: {str(e)}\n{traceback.format_exc()}")
+                erros.append(f"Linha {idx+2}: Erro ao processar: {str(e)}") # type: ignore
+                logger.error(f"Erro na linha {idx+2}: {str(e)}\n{traceback.format_exc()}") # type: ignore   
         
         # Commit das alterações
         try:
@@ -219,6 +218,11 @@ def _formatar_cnpj_assai(cnpj_numerico):
     try:
         # Remover qualquer caractere não numérico
         cnpj_limpo = ''.join(filter(str.isdigit, str(cnpj_numerico)))
+        
+        # Se CNPJ tem 13 dígitos, adicionar zero à esquerda (Excel remove zeros iniciais)
+        if len(cnpj_limpo) == 13:
+            logger.info(f"CNPJ com 13 dígitos detectado: {cnpj_limpo}, adicionando zero inicial")
+            cnpj_limpo = '0' + cnpj_limpo
         
         # CNPJ deve ter exatamente 14 dígitos
         if len(cnpj_limpo) != 14:
