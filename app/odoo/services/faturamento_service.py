@@ -246,7 +246,20 @@ class FaturamentoService:
             from app.estoque.models import MovimentacaoEstoque
             from app.separacao.models import Separacao
             
-            # 1. Atualizar MovimentacaoEstoque
+            # 1. Atualizar FaturamentoProduto - IMPORTANTE!
+            faturamentos_atualizados = db.session.query(FaturamentoProduto).filter(
+                FaturamentoProduto.numero_nf == numero_nf,
+                FaturamentoProduto.status_nf != 'Cancelado'  # Apenas não cancelados
+            ).update({
+                'status_nf': 'Cancelado',
+                'updated_at': datetime.now(),
+                'updated_by': 'Sistema - NF Cancelada no Odoo'
+            })
+            
+            if faturamentos_atualizados > 0:
+                logger.info(f"   ✅ {faturamentos_atualizados} registros de faturamento marcados como Cancelado")
+            
+            # 2. Atualizar MovimentacaoEstoque
             movs_atualizadas = MovimentacaoEstoque.query.filter(
                 MovimentacaoEstoque.numero_nf == numero_nf,
                 MovimentacaoEstoque.ativo == True  # Buscar apenas ativos
@@ -258,9 +271,9 @@ class FaturamentoService:
             })
             
             if movs_atualizadas > 0:
-                logger.info(f"   ✅ {movs_atualizadas} movimentações de estoque marcadas como CANCELADO")
+                logger.info(f"   ✅ {movs_atualizadas} movimentações de estoque marcadas como CANCELADO e inativas")
             
-            # 2. Limpar EmbarqueItem (remover número da NF)
+            # 3. Limpar EmbarqueItem (remover número da NF)
             embarques_limpos = db.session.query(EmbarqueItem).filter(
                 EmbarqueItem.nota_fiscal == numero_nf
             ).update({
@@ -271,7 +284,7 @@ class FaturamentoService:
             if embarques_limpos > 0:
                 logger.info(f"   ✅ {embarques_limpos} itens de embarque atualizados")
             
-            # 3. Atualizar Separacao (reverter sincronização)
+            # 4. Atualizar Separacao (reverter sincronização)
             separacoes_atualizadas = db.session.query(Separacao).filter(
                 Separacao.numero_nf == numero_nf
             ).update({
@@ -282,14 +295,15 @@ class FaturamentoService:
             if separacoes_atualizadas > 0:
                 logger.info(f"   ✅ {separacoes_atualizadas} separações revertidas para não sincronizado")
             
-            # 4. Log de auditoria detalhado
+            # 5. Log de auditoria detalhado
             logger.info(f"✅ CANCELAMENTO COMPLETO: NF {numero_nf}")
-            logger.info(f"   - Movimentações canceladas: {movs_atualizadas}")
+            logger.info(f"   - Faturamentos cancelados: {faturamentos_atualizados}")
+            logger.info(f"   - Movimentações inativadas: {movs_atualizadas}")
             logger.info(f"   - Embarques limpos: {embarques_limpos}") 
             logger.info(f"   - Separações revertidas: {separacoes_atualizadas}")
             
             # Commit apenas se houve alterações
-            if movs_atualizadas > 0 or embarques_limpos > 0 or separacoes_atualizadas > 0:
+            if faturamentos_atualizados > 0 or movs_atualizadas > 0 or embarques_limpos > 0 or separacoes_atualizadas > 0:
                 db.session.commit()
                 
             return True
@@ -1269,6 +1283,123 @@ class FaturamentoService:
         }
         return estados_brasileiros.get(estado_nome.upper(), '')
 
+    def processar_nfs_canceladas_existentes(self) -> Dict[str, Any]:
+        """
+        Processa todas as NFs que estão canceladas no Odoo mas não foram marcadas corretamente no banco.
+        Este método é útil para corrigir NFs que foram importadas antes da correção do bug de cancelamento.
+        
+        Returns:
+            Dict com estatísticas do processamento
+        """
+        try:
+            logger.info("🔍 Buscando NFs canceladas no Odoo que precisam ser corrigidas...")
+            
+            # 1. Buscar TODAS as NFs canceladas no Odoo
+            if not self.connection:
+                return {
+                    'sucesso': False,
+                    'erro': 'Conexão com Odoo não disponível'
+                }
+            
+            # Buscar faturas canceladas
+            faturas_canceladas = self.connection.search_read(
+                'account.move',
+                [
+                    ('state', '=', 'cancel'),
+                    ('l10n_br_numero_nota_fiscal', '!=', False),
+                    '|',
+                    ('l10n_br_tipo_pedido', '=', 'venda'),
+                    ('l10n_br_tipo_pedido', '=', 'bonificacao')
+                ],
+                ['id', 'l10n_br_numero_nota_fiscal', 'state', 'date', 'partner_id'],
+                limit=1000  # Limitar para evitar timeout
+            )
+            
+            logger.info(f"📊 Encontradas {len(faturas_canceladas)} NFs canceladas no Odoo")
+            
+            if not faturas_canceladas:
+                return {
+                    'sucesso': True,
+                    'mensagem': 'Nenhuma NF cancelada encontrada no Odoo',
+                    'total_odoo': 0,
+                    'total_corrigidas': 0
+                }
+            
+            # 2. Para cada NF cancelada, verificar e corrigir no banco
+            contador_corrigidas = 0
+            contador_ja_corretas = 0
+            contador_nao_existentes = 0
+            erros = []
+            
+            for fatura in faturas_canceladas:
+                numero_nf = fatura.get('l10n_br_numero_nota_fiscal')
+                if not numero_nf:
+                    continue
+                
+                try:
+                    # Verificar se existe FaturamentoProduto com status diferente de 'Cancelado'
+                    faturamentos = FaturamentoProduto.query.filter(
+                        FaturamentoProduto.numero_nf == numero_nf,
+                        FaturamentoProduto.status_nf != 'Cancelado'
+                    ).first()
+                    
+                    if faturamentos:
+                        # NF existe e não está cancelada - CORRIGIR!
+                        logger.info(f"🔄 Corrigindo NF {numero_nf} que está cancelada no Odoo...")
+                        resultado = self._processar_cancelamento_nf(numero_nf)
+                        
+                        if resultado:
+                            contador_corrigidas += 1
+                            logger.info(f"   ✅ NF {numero_nf} corrigida com sucesso")
+                        else:
+                            erros.append(f"Erro ao corrigir NF {numero_nf}")
+                    else:
+                        # Verificar se existe mas já está cancelada
+                        fat_cancelado = FaturamentoProduto.query.filter_by(
+                            numero_nf=numero_nf,
+                            status_nf='Cancelado'
+                        ).first()
+                        
+                        if fat_cancelado:
+                            contador_ja_corretas += 1
+                            logger.debug(f"   ✓ NF {numero_nf} já está correta (Cancelado)")
+                        else:
+                            contador_nao_existentes += 1
+                            logger.debug(f"   ⚠️ NF {numero_nf} não existe no banco")
+                    
+                except Exception as e:
+                    erro_msg = f"Erro ao processar NF {numero_nf}: {e}"
+                    logger.error(erro_msg)
+                    erros.append(erro_msg)
+            
+            # 3. Estatísticas finais
+            logger.info(f"""
+            ✅ CORREÇÃO DE NFs CANCELADAS CONCLUÍDA:
+               - Total no Odoo: {len(faturas_canceladas)}
+               - Corrigidas: {contador_corrigidas}
+               - Já corretas: {contador_ja_corretas}
+               - Não existentes: {contador_nao_existentes}
+               - Erros: {len(erros)}
+            """)
+            
+            return {
+                'sucesso': True,
+                'total_odoo': len(faturas_canceladas),
+                'total_corrigidas': contador_corrigidas,
+                'ja_corretas': contador_ja_corretas,
+                'nao_existentes': contador_nao_existentes,
+                'erros': erros,
+                'mensagem': f'Processadas {contador_corrigidas} NFs canceladas de {len(faturas_canceladas)} encontradas'
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar NFs canceladas existentes: {e}")
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'total_corrigidas': 0
+            }
+    
     def estimar_performance_grandes_volumes(self, total_nfs: int = 5000) -> Dict[str, Any]:
         """
         🔍 CALCULADORA DE PERFORMANCE para grandes volumes
