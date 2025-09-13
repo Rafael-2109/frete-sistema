@@ -2049,9 +2049,18 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('mensagem-portal').textContent = 'Portal do Tenda ainda não disponível';
           
         } else if (prefixoCnpj === '06057223') {
-          // Cliente Assaí
-          document.getElementById('portal-indisponivel').style.display = 'block';
-          document.getElementById('mensagem-portal').textContent = 'Portal do Assaí ainda não disponível';
+          // Cliente Assaí/Sendas
+          document.getElementById('botoes-portal').style.display = 'block';
+          document.getElementById('nome-portal').textContent = 'Portal Sendas (Fila)';
+          
+          // Configurar botões para Sendas (usa sistema de fila)
+          document.getElementById('btn-agendar-portal').onclick = function() {
+            agendarNoPortalSendasFila(entregaId, numeroNf);
+          };
+          
+          document.getElementById('btn-verificar-protocolo').onclick = function() {
+            verificarFilaSendas();
+          };
         }
       }
     })
@@ -2608,6 +2617,181 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   });
+  
+  // Funções para o Portal Sendas (Sistema de Fila)
+  function agendarNoPortalSendasFila(entregaId, numeroNf) {
+    Swal.fire({
+      title: 'Agendar no Portal Sendas',
+      html: `
+        <div class="text-center">
+          <p>NF: <strong>${numeroNf}</strong></p>
+          <div class="form-group mt-3">
+            <label>Data de Agendamento:</label>
+            <input type="date" id="swal-data-agendamento" class="form-control" required>
+          </div>
+          <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle"></i> 
+            <strong>Sistema de Fila:</strong><br>
+            O agendamento será adicionado à fila e processado em lote com outros pedidos.
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Adicionar à Fila',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#28a745',
+      preConfirm: () => {
+        const dataAgendamento = document.getElementById('swal-data-agendamento').value;
+        if (!dataAgendamento) {
+          Swal.showValidationMessage('Por favor, selecione a data de agendamento');
+          return false;
+        }
+        return dataAgendamento;
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        adicionarNaFilaSendas(numeroNf, result.value);
+      }
+    });
+  }
+  
+  function adicionarNaFilaSendas(numeroNf, dataAgendamento) {
+    // Calcular data de expedição (D-1)
+    const agendDate = new Date(dataAgendamento);
+    const expedDate = new Date(agendDate);
+    expedDate.setDate(expedDate.getDate() - 1);
+    const dataExpedicao = expedDate.toISOString().split('T')[0];
+    
+    fetch('/portal/sendas/fila/adicionar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCSRFToken()
+      },
+      body: JSON.stringify({
+        tipo_origem: 'nf',
+        documento_origem: numeroNf,
+        data_expedicao: dataExpedicao,
+        data_agendamento: dataAgendamento
+      })
+    })
+    .then(response => response.json())
+    .then(result => {
+      if (result.success) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Adicionado à Fila!',
+          html: `
+            <div class="text-center">
+              <p>NF ${numeroNf} adicionada à fila do Sendas</p>
+              <div class="mt-3">
+                <h4><i class="fas fa-boxes"></i> ${result.pendentes_total}</h4>
+                <p>itens na fila aguardando processamento</p>
+              </div>
+              ${result.pendentes_total >= 5 ? 
+                '<button class="btn btn-success mt-2" onclick="processarFilaSendas()">Processar Fila Agora</button>' : 
+                '<small class="text-muted">A fila será processada automaticamente quando houver mais itens</small>'}
+            </div>
+          `,
+          confirmButtonText: 'OK'
+        });
+      } else {
+        Swal.fire('Erro', result.message || 'Erro ao adicionar na fila', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Erro:', error);
+      Swal.fire('Erro', 'Erro ao adicionar na fila', 'error');
+    });
+  }
+  
+  function verificarFilaSendas() {
+    fetch('/portal/sendas/fila/status?detalhes=true')
+    .then(response => response.json())
+    .then(data => {
+      let detalhesHtml = '';
+      if (data.detalhes && data.detalhes.length > 0) {
+        detalhesHtml = '<hr><h6>Detalhes por CNPJ:</h6><ul class="text-start">';
+        data.detalhes.forEach(item => {
+          detalhesHtml += `<li>${item.cnpj}: ${item.total_itens} itens para ${item.data_agendamento}</li>`;
+        });
+        detalhesHtml += '</ul>';
+      }
+      
+      Swal.fire({
+        icon: 'info',
+        title: 'Fila Portal Sendas',
+        html: `
+          <div class="text-center">
+            <h3><i class="fas fa-boxes"></i> ${data.pendentes_total}</h3>
+            <p>itens pendentes na fila</p>
+            ${detalhesHtml}
+            ${data.pendentes_total > 0 ? 
+              '<button class="btn btn-success mt-3" onclick="processarFilaSendas()">Processar Fila Agora</button>' : 
+              '<p class="text-muted mt-3">Fila vazia</p>'}
+          </div>
+        `,
+        confirmButtonText: 'Fechar',
+        width: '600px'
+      });
+    })
+    .catch(error => {
+      console.error('Erro:', error);
+      Swal.fire('Erro', 'Erro ao verificar fila', 'error');
+    });
+  }
+  
+  function processarFilaSendas() {
+    Swal.fire({
+      title: 'Processar Fila?',
+      text: 'Todos os itens na fila serão enviados para o portal Sendas',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sim, Processar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#28a745'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Processando...',
+          text: 'Enviando itens para o portal Sendas',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+        
+        fetch('/portal/sendas/fila/processar', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+          }
+        })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            Swal.fire({
+              icon: 'success',
+              title: 'Fila Processada!',
+              html: `${result.message}<br><small>O processamento está sendo feito em background</small>`,
+              confirmButtonText: 'OK'
+            });
+          } else {
+            Swal.fire('Erro', result.message, 'error');
+          }
+        })
+        .catch(error => {
+          Swal.fire('Erro', 'Erro ao processar fila', 'error');
+        });
+      }
+    });
+  }
+  
+  function getCSRFToken() {
+    const token = document.querySelector('meta[name="csrf-token"]');
+    return token ? token.getAttribute('content') : '';
+  }
 </script>
 <script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
 <!-- Modal de Agendamento no Portal -->

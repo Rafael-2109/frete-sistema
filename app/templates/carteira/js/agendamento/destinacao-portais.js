@@ -18,10 +18,16 @@ class PortalAgendamento {
     init() {
         console.log('✅ Roteador de Destinação de Portais inicializado');
         
-        // Pré-carregar portal Atacadão (pode ser expandido para carregar outros sob demanda)
+        // Pré-carregar portal Atacadão
         if (window.PortalAtacadao) {
             this.portaisCarregados.atacadao = window.PortalAtacadao;
             console.log('✅ Portal Atacadão detectado e registrado');
+        }
+        
+        // Pré-carregar portal Sendas (Sistema de Fila)
+        if (window.PortalSendas) {
+            this.portaisCarregados.sendas = window.PortalSendas;
+            console.log('✅ Portal Sendas (Fila) detectado e registrado');
         }
     }
 
