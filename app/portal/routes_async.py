@@ -101,27 +101,40 @@ def solicitar_agendamento_nf_async():
         # Buscar pedido_cliente através da cadeia de tabelas
         # FaturamentoProduto → origem → Separacao → pedido_cliente
         pedido_cliente = None
-        
+
         # Primeiro, buscar o número do pedido (origem) no FaturamentoProduto
         if produtos_faturamento and len(produtos_faturamento) > 0:
             num_pedido = produtos_faturamento[0].origem  # origem = número do pedido
-            
+
             if num_pedido:
                 # Buscar pedido_cliente na Separacao usando o num_pedido
                 from app.separacao.models import Separacao
                 separacao = Separacao.query.filter_by(num_pedido=num_pedido).first()
-                
+
                 if separacao and separacao.pedido_cliente:
                     pedido_cliente = separacao.pedido_cliente
                     logger.info(f"Pedido cliente encontrado via Separacao: {pedido_cliente}")
                 else:
-                    # Tentar buscar em CarteiraPrincipal como fallback
-                    from app.carteira.models import CarteiraPrincipal
-                    carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido).first()
-                    if carteira_item and carteira_item.pedido_cliente:
-                        pedido_cliente = carteira_item.pedido_cliente
-                        logger.info(f"Pedido cliente encontrado via CarteiraPrincipal: {pedido_cliente}")
-        
+                    # FALLBACK: Buscar pedido_cliente diretamente do Odoo
+                    logger.info(f"Pedido_cliente não encontrado localmente, buscando no Odoo para pedido {num_pedido}")
+                    try:
+                        from app.odoo.utils.pedido_cliente_utils import buscar_pedido_cliente_odoo
+                        pedido_cliente_odoo = buscar_pedido_cliente_odoo(num_pedido)
+
+                        if pedido_cliente_odoo:
+                            pedido_cliente = pedido_cliente_odoo
+                            logger.info(f"✅ Pedido cliente encontrado no Odoo: {pedido_cliente}")
+
+                            # Atualizar a Separacao com o pedido_cliente encontrado
+                            if separacao:
+                                separacao.pedido_cliente = pedido_cliente
+                                db.session.commit()
+                                logger.info(f"✅ Separacao atualizada com pedido_cliente do Odoo")
+                        else:
+                            logger.warning(f"Pedido_cliente não encontrado no Odoo para pedido {num_pedido}")
+                    except Exception as e:
+                        logger.error(f"Erro ao buscar pedido_cliente do Odoo: {e}")
+
         if not pedido_cliente:
             logger.warning(f"Pedido cliente não encontrado para NF {numero_nf}, usando NF como referência")
             pedido_cliente = f"NF-{numero_nf}"  # Usar NF como fallback

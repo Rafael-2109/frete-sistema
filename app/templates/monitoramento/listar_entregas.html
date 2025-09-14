@@ -1713,6 +1713,12 @@ nav.navbar .navbar-brand .badge.bg-primary {
 {% endblock %}
 
 {% block scripts %}
+<!-- ✅ CARREGAR SWEETALERT2 PRIMEIRO (NECESSÁRIO PARA MODAIS) -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- ✅ CARREGAR PORTAL-ASYNC-INTEGRATION (USA SWEETALERT2) -->
+<script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
+
 <!-- ✅ SCRIPT BÁSICO -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -2540,8 +2546,11 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Função para processar agendamento no portal de forma assíncrona simplificada
-  $('#formAgendamentoPortal').on('submit', function(e) {
-    e.preventDefault();
+  // IMPORTANTE: Usar document.addEventListener para garantir que funcione
+  document.addEventListener('DOMContentLoaded', function() {
+    $('#formAgendamentoPortal').on('submit', function(e) {
+      e.preventDefault();
+      console.log('🚀 Form submit interceptado!');
     
     const entregaId = $('#entrega_id_portal').val();
     const numeroNf = $('#numero_nf_portal').val();
@@ -2571,22 +2580,13 @@ document.addEventListener('DOMContentLoaded', function() {
         tempInput.value = dataAgendamento;
       }
       
-      // Chamar função async
+      // Chamar função async - ela já tem suas próprias notificações!
+      // A função mostra:
+      // 1. Notificação discreta no canto superior direito durante o processamento
+      // 2. SweetAlert2 com o resultado final (sucesso ou erro)
       agendarNoPortalAtacadaoAsync(entregaId, numeroNf);
-      
-      // Mostrar notificação
-      Swal.fire({
-        title: 'Agendamento Enviado!',
-        html: `
-          <p><strong>NF ${numeroNf}</strong></p>
-          <p>Data: ${new Date(dataAgendamento + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
-          <p>O agendamento está sendo processado em segundo plano.</p>
-          <p>Você receberá uma notificação quando for concluído.</p>
-        `,
-        icon: 'info',
-        timer: 5000,
-        timerProgressBar: true
-      });
+
+      // NÃO duplicar notificações - a função async já cuida de tudo
     } else {
       // Fallback: chamar API diretamente se função não estiver disponível
       $.ajax({
@@ -2617,7 +2617,8 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   });
-  
+  }); // Fim do DOMContentLoaded para o formulário
+
   // Funções para o Portal Sendas (Sistema de Fila)
   function agendarNoPortalSendasFila(entregaId, numeroNf) {
     Swal.fire({
@@ -2793,7 +2794,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return token ? token.getAttribute('content') : '';
   }
 </script>
-<script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
+
 <!-- Modal de Agendamento no Portal -->
 <div class="modal fade" id="modalAgendamentoPortal" tabindex="-1" aria-labelledby="modalAgendamentoPortalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">

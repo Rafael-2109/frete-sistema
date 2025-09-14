@@ -1335,11 +1335,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         try {
-            // Usar endpoint assíncrono se disponível
-            const useAsync = true; // Pode ser uma configuração
-            const endpoint = useAsync 
-                ? '/carteira/programacao-lote/api/processar-agendamento-sendas-async'
-                : '/carteira/programacao-lote/api/processar-agendamento-sendas';
+            // SEMPRE usar endpoint assíncrono
+            const endpoint = '/carteira/programacao-lote/api/processar-agendamento-sendas-async';
             
             // Chamar endpoint de processamento Sendas
             const response = await fetch(endpoint, {
@@ -1356,8 +1353,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const result = await response.json();
             
-            // Se for processamento assíncrono, fazer polling do status
-            if (useAsync && result.job_id) {
+            // Fazer polling do status do job assíncrono
+            if (result.job_id) {
                 // Mostrar notificação simples e continuar trabalhando
                 Swal.fire({
                     icon: 'info',
@@ -1564,13 +1561,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 10000);
         }
     }
-    
-    // Função original mantida para compatibilidade (se chamada de outro lugar)
-    async function checkJobStatus(jobId) {
-        // Redirecionar para a versão silenciosa
-        checkJobStatusSilently(jobId);
-    }
-    
+        
     // Função auxiliar para mostrar notificações toast
     function showToastNotification(type, title, message) {
         // Verificar se já existe container de toasts

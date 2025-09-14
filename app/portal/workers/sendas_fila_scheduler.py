@@ -48,19 +48,42 @@ def processar_fila_sendas_scheduled():
                     'total_processado': 0
                 }
             
-            # Agrupar CNPJs únicos
+            # Agrupar CNPJs únicos COM OS ITENS
             cnpjs_para_processar = []
             cnpjs_processados = set()
-            
+
             for chave, grupo in grupos.items():
                 cnpj = grupo['cnpj']
                 data_agendamento = grupo['data_agendamento']
-                
+
                 chave_unica = f"{cnpj}_{data_agendamento}"
                 if chave_unica not in cnpjs_processados:
+                    # Preparar itens do grupo
+                    itens_grupo = []
+                    for item in grupo['itens']:
+                        itens_grupo.append({
+                            'tipo_origem': 'separacao',  # Unificado para 'separacao'
+                            'id': item.id,
+                            'num_pedido': item.num_pedido,
+                            'pedido_cliente': item.pedido_cliente,
+                            'cod_produto': item.cod_produto,
+                            'nome_produto': item.nome_produto,
+                            'quantidade': float(item.quantidade),
+                            'data_expedicao': item.data_expedicao.isoformat() if item.data_expedicao else None
+                        })
+
+                    # Calcular data_expedicao (pegar do primeiro item ou calcular)
+                    data_expedicao = None
+                    if grupo['itens'] and grupo['itens'][0].data_expedicao:
+                        data_expedicao = grupo['itens'][0].data_expedicao
+
                     cnpjs_para_processar.append({
                         'cnpj': cnpj,
-                        'data_agendamento': data_agendamento.isoformat() if hasattr(data_agendamento, 'isoformat') else str(data_agendamento)
+                        'data_agendamento': data_agendamento.isoformat() if hasattr(data_agendamento, 'isoformat') else str(data_agendamento),
+                        'data_expedicao': data_expedicao.isoformat() if data_expedicao and hasattr(data_expedicao, 'isoformat') else str(data_expedicao) if data_expedicao else None,
+                        'protocolo': grupo.get('protocolo'),  # Incluir protocolo
+                        'itens': itens_grupo,  # INCLUIR OS ITENS!
+                        'tipo_fluxo': 'programacao_lote'  # Identificar tipo de fluxo
                     })
                     cnpjs_processados.add(chave_unica)
             

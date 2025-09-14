@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BI Fretes - Análise Regional</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- Leaflet para mapa -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        .navbar-bi {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .section-title {
+            border-left: 4px solid #667eea;
+            padding-left: 10px;
+            margin-bottom: 20px;
+        }
+        #mapaBrasil {
+            height: 500px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .region-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            margin-bottom: 15px;
+        }
+        .region-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .region-header {
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+            color: white;
+            font-weight: bold;
+        }
+        .region-norte { background: #27ae60; }
+        .region-nordeste { background: #e74c3c; }
+        .region-centro-oeste { background: #f39c12; }
+        .region-sudeste { background: #3498db; }
+        .region-sul { background: #9b59b6; }
+        .metric-row {
+            padding: 10px 15px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        .uf-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 15px;
+            background: #ecf0f1;
+            font-size: 0.85rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-bi">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-graph-up"></i> BI Fretes
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bi/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bi/transportadoras">Transportadoras</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/bi/regional">Análise Regional</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bi/despesas">Despesas Extras</a>
+                    </li>
+                </ul>
+                <div class="ms-auto">
+                    <button class="btn btn-outline-light btn-sm" onclick="executarETL()">
+                        <i class="bi bi-arrow-clockwise"></i> Atualizar Dados
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Mapa do Brasil -->
+        <h4 class="section-title">Mapa de Custos por UF</h4>
+        <div class="row">
+            <div class="col-md-8">
+                <div id="mapaBrasil"></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0">Legenda</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #27ae60;"></div>
+                            <span>Menor que R$ 0,30/kg</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #3498db;"></div>
+                            <span>R$ 0,30 - R$ 0,50/kg</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #f39c12;"></div>
+                            <span>R$ 0,50 - R$ 0,70/kg</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #e67e22;"></div>
+                            <span>R$ 0,70 - R$ 1,00/kg</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #e74c3c;"></div>
+                            <span>Maior que R$ 1,00/kg</span>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="mt-3">
+                            <h6>UF Selecionada</h6>
+                            <div id="info-uf-selecionada">
+                                <p class="text-muted">Clique em um estado no mapa</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards por Região -->
+        <h4 class="section-title mt-5">Análise por Região</h4>
+        <div class="row" id="cards-regioes">
+            <!-- Preenchido via JS -->
+        </div>
+
+        <!-- Gráficos Comparativos -->
+        <div class="row mt-4">
+            <!-- Custo Médio por Região -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-bar-chart text-primary"></i> Custo Médio por Região
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartCustoRegiao"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Volume por Região -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-pie-chart text-info"></i> Volume Transportado
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartVolumeRegiao"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Rotas -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-arrow-left-right text-success"></i> Top 10 Rotas (SP → Destino)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Origem</th>
+                                        <th>Destino</th>
+                                        <th>Entregas</th>
+                                        <th>Volume (kg)</th>
+                                        <th>Valor Total</th>
+                                        <th>Custo/kg</th>
+                                        <th>Lead Time</th>
+                                        <th>Transportadora Principal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-rotas">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Variáveis globais
+        let mapa;
+        let layerEstados;
+        let chartCustoRegiao, chartVolumeRegiao;
+        let dadosRegionais = {};
+
+        // Coordenadas das capitais dos estados
+        const coordenadasEstados = {
+            'AC': [-8.77, -70.55], 'AL': [-9.71, -35.73], 'AP': [1.41, -51.77],
+            'AM': [-3.07, -60.02], 'BA': [-12.96, -38.51], 'CE': [-3.71, -38.54],
+            'DF': [-15.83, -47.86], 'ES': [-19.19, -40.34], 'GO': [-16.64, -49.31],
+            'MA': [-2.55, -44.30], 'MT': [-12.64, -55.42], 'MS': [-20.51, -54.54],
+            'MG': [-18.10, -44.38], 'PA': [-5.53, -52.29], 'PB': [-7.06, -35.55],
+            'PR': [-24.89, -51.55], 'PE': [-8.28, -35.07], 'PI': [-8.28, -43.68],
+            'RJ': [-22.84, -43.15], 'RN': [-5.22, -36.52], 'RO': [-11.22, -62.80],
+            'RR': [1.89, -61.22], 'RS': [-30.01, -51.22], 'SC': [-27.33, -49.44],
+            'SP': [-23.55, -46.64], 'SE': [-10.90, -37.07], 'TO': [-10.25, -48.25]
+        };
+
+        // Formatar valores
+        function formatarMoeda(valor) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(valor);
+        }
+
+        function formatarNumero(numero) {
+            return new Intl.NumberFormat('pt-BR').format(numero);
+        }
+
+        // Obter cor baseada no custo/kg
+        function getCorCusto(custoKg) {
+            if (custoKg < 0.3) return '#27ae60';
+            if (custoKg < 0.5) return '#3498db';
+            if (custoKg < 0.7) return '#f39c12';
+            if (custoKg < 1.0) return '#e67e22';
+            return '#e74c3c';
+        }
+
+        // Inicializar mapa
+        function inicializarMapa() {
+            mapa = L.map('mapaBrasil').setView([-15.83, -47.86], 4);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(mapa);
+            
+            carregarDadosMapa();
+        }
+
+        // Carregar dados no mapa
+        function carregarDadosMapa() {
+            $.get('/bi/api/custo-por-kg-uf', function(data) {
+                dadosRegionais = data;
+                
+                // Adicionar marcadores para cada estado
+                for (const [uf, dados] of Object.entries(data)) {
+                    if (coordenadasEstados[uf]) {
+                        const cor = getCorCusto(dados.custo_kg);
+                        
+                        const circle = L.circleMarker(coordenadasEstados[uf], {
+                            radius: Math.min(20, Math.max(8, dados.peso_total / 100000)),
+                            fillColor: cor,
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(mapa);
+                        
+                        circle.bindPopup(`
+                            <strong>${uf}</strong><br>
+                            Custo/kg: ${formatarMoeda(dados.custo_kg)}<br>
+                            Volume: ${formatarNumero(dados.peso_total)} kg<br>
+                            Valor Total: ${formatarMoeda(dados.valor_total)}
+                        `);
+                        
+                        circle.on('click', function() {
+                            mostrarDetalhesUF(uf, dados);
+                        });
+                    }
+                }
+            });
+        }
+
+        // Mostrar detalhes da UF selecionada
+        function mostrarDetalhesUF(uf, dados) {
+            const html = `
+                <h5>${uf}</h5>
+                <p><strong>Custo/kg:</strong> ${formatarMoeda(dados.custo_kg)}</p>
+                <p><strong>Volume Total:</strong> ${formatarNumero(dados.peso_total)} kg</p>
+                <p><strong>Valor Total:</strong> ${formatarMoeda(dados.valor_total)}</p>
+            `;
+            $('#info-uf-selecionada').html(html);
+        }
+
+        // Carregar análise regional
+        function carregarAnaliseRegional() {
+            $.get('/bi/api/analise-regional', function(data) {
+                renderizarCardsRegioes(data);
+                renderizarGraficosRegionais(data);
+                renderizarTabelaRotas(data);
+            });
+        }
+
+        // Renderizar cards das regiões
+        function renderizarCardsRegioes(data) {
+            let html = '';
+            
+            data.forEach(function(regiao) {
+                const headerClass = `region-${regiao.regiao.toLowerCase().replace('-', '')}`;
+                
+                html += `
+                    <div class="col-md-4">
+                        <div class="card region-card">
+                            <div class="region-header ${headerClass}">
+                                ${regiao.regiao}
+                            </div>
+                            <div class="card-body">
+                                <div class="metric-row">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Custo Total</span>
+                                        <strong>${formatarMoeda(regiao.custo_total)}</strong>
+                                    </div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Volume</span>
+                                        <strong>${formatarNumero(regiao.peso_total)} kg</strong>
+                                    </div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Custo Médio/kg</span>
+                                        <strong>${formatarMoeda(regiao.custo_medio_kg || 0)}</strong>
+                                    </div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Clientes Ativos</span>
+                                        <strong>${regiao.qtd_clientes}</strong>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <strong>Estados:</strong><br>
+                                    ${regiao.estados.map(e => `
+                                        <span class="uf-badge">${e.uf}</span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            $('#cards-regioes').html(html);
+        }
+
+        // Renderizar gráficos regionais
+        function renderizarGraficosRegionais(data) {
+            // Gráfico de Custo por Região
+            const ctxCusto = document.getElementById('chartCustoRegiao').getContext('2d');
+            if (chartCustoRegiao) chartCustoRegiao.destroy();
+            
+            chartCustoRegiao = new Chart(ctxCusto, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.regiao),
+                    datasets: [{
+                        label: 'Custo Médio/kg',
+                        data: data.map(d => d.custo_medio_kg || 0),
+                        backgroundColor: [
+                            '#27ae60',
+                            '#e74c3c',
+                            '#f39c12',
+                            '#3498db',
+                            '#9b59b6'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatarMoeda(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Gráfico de Volume por Região
+            const ctxVolume = document.getElementById('chartVolumeRegiao').getContext('2d');
+            if (chartVolumeRegiao) chartVolumeRegiao.destroy();
+            
+            chartVolumeRegiao = new Chart(ctxVolume, {
+                type: 'pie',
+                data: {
+                    labels: data.map(d => d.regiao),
+                    datasets: [{
+                        data: data.map(d => d.peso_total),
+                        backgroundColor: [
+                            '#27ae60',
+                            '#e74c3c',
+                            '#f39c12',
+                            '#3498db',
+                            '#9b59b6'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + formatarNumero(context.parsed) + ' kg';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Renderizar tabela de rotas
+        function renderizarTabelaRotas(data) {
+            let html = '';
+            
+            // Simular top 10 rotas
+            const rotas = [
+                { origem: 'SP', destino: 'RJ', entregas: 450, volume: 125000, valor: 62500, custoKg: 0.50, leadTime: 2, transportadora: 'Transportadora A' },
+                { origem: 'SP', destino: 'MG', entregas: 380, volume: 98000, valor: 44100, custoKg: 0.45, leadTime: 1, transportadora: 'Transportadora B' },
+                { origem: 'SP', destino: 'PR', entregas: 320, volume: 87000, valor: 43500, custoKg: 0.50, leadTime: 2, transportadora: 'Transportadora C' },
+                { origem: 'SP', destino: 'RS', entregas: 280, volume: 76000, valor: 45600, custoKg: 0.60, leadTime: 3, transportadora: 'Transportadora A' },
+                { origem: 'SP', destino: 'BA', entregas: 240, volume: 65000, valor: 45500, custoKg: 0.70, leadTime: 4, transportadora: 'Transportadora D' },
+                { origem: 'SP', destino: 'GO', entregas: 210, volume: 58000, valor: 34800, custoKg: 0.60, leadTime: 3, transportadora: 'Transportadora B' },
+                { origem: 'SP', destino: 'PE', entregas: 180, volume: 48000, valor: 38400, custoKg: 0.80, leadTime: 5, transportadora: 'Transportadora E' },
+                { origem: 'SP', destino: 'SC', entregas: 160, volume: 42000, valor: 23100, custoKg: 0.55, leadTime: 2, transportadora: 'Transportadora C' },
+                { origem: 'SP', destino: 'ES', entregas: 140, volume: 38000, valor: 20900, custoKg: 0.55, leadTime: 2, transportadora: 'Transportadora A' },
+                { origem: 'SP', destino: 'MT', entregas: 120, volume: 32000, valor: 25600, custoKg: 0.80, leadTime: 4, transportadora: 'Transportadora F' }
+            ];
+            
+            rotas.forEach(function(rota) {
+                html += `
+                    <tr>
+                        <td>${rota.origem}</td>
+                        <td>${rota.destino}</td>
+                        <td>${rota.entregas}</td>
+                        <td>${formatarNumero(rota.volume)}</td>
+                        <td>${formatarMoeda(rota.valor)}</td>
+                        <td>${formatarMoeda(rota.custoKg)}</td>
+                        <td>${rota.leadTime} dias</td>
+                        <td>${rota.transportadora}</td>
+                    </tr>
+                `;
+            });
+            
+            $('#tbody-rotas').html(html);
+        }
+
+        // Executar ETL
+        function executarETL() {
+            if (confirm('Deseja executar a atualização dos dados agora?')) {
+                $.post('/bi/api/executar-etl', function(data) {
+                    if (data.sucesso) {
+                        alert('Dados atualizados com sucesso!');
+                        location.reload();
+                    } else {
+                        alert('Erro ao atualizar dados');
+                    }
+                });
+            }
+        }
+
+        // Carregar ao iniciar
+        $(document).ready(function() {
+            inicializarMapa();
+            carregarAnaliseRegional();
+        });
+    </script>
+</body>
+</html>

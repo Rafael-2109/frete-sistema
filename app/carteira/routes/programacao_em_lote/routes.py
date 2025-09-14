@@ -2,14 +2,12 @@
 Rotas para programação em lote de Redes SP (Atacadão e Sendas)
 """
 
-from flask import render_template, request, jsonify, flash, redirect, url_for, send_file
+from flask import render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func, and_, distinct
 from decimal import Decimal
 from datetime import date, timedelta, datetime
 import logging
-import os
-import tempfile
 import traceback
 
 from app import db
@@ -21,11 +19,8 @@ from app.localidades.models import CadastroSubRota
 from app.portal.utils.grupo_empresarial import GrupoEmpresarial
 from app.estoque.models import MovimentacaoEstoque
 from app.producao.models import ProgramacaoProducao
-from app.carteira.utils.separacao_utils import (
-    calcular_peso_pallet_produto,
-    buscar_rota_por_uf
-)
 from app.utils.lote_utils import gerar_lote_id
+from .busca_dados import buscar_dados_completos_cnpj
 
 from . import programacao_em_lote_bp
 
@@ -292,8 +287,8 @@ def _analisar_status_cnpj(dados_cnpj):
     Status 4 - "Consolidar": agendamento futuro + (protocolo parcial OU protocolos diferentes OU saldo parcial)
     Status 5 - "Pendente": sem separação/NF ou sem protocolo algum
     """
-    from datetime import date
-    
+    # date já está importado no topo do arquivo
+
     hoje = date.today()
     
     # Variáveis de análise
@@ -971,8 +966,8 @@ def sugerir_datas(rede):
     5. Considera disponibilidade de estoque para cada CNPJ
     """
     try:
-        from datetime import timedelta
-        
+        # timedelta já está importado no topo do arquivo
+
         dados = request.get_json()
         cnpjs_selecionados = dados.get('cnpjs', [])
         ordem = dados.get('ordem', {})  # Ordem de prioridade
@@ -1239,423 +1234,6 @@ def analisar_ruptura_lote():
         logger.error(f"Erro ao analisar ruptura em lote: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
-@programacao_em_lote_bp.route('/api/processar-lote', methods=['POST'])
-@login_required
-def processar_lote():
-    """
-    API para processar agendamento em lote (fase futura)
-    """
-    try:
-        dados = request.get_json()
-        
-        # TODO: Implementar processamento em lote com Redis/Workers
-        
-        return jsonify({
-            'success': True,
-            'message': 'Processamento em lote iniciado'
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar lote: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@programacao_em_lote_bp.route('/api/processar-agendamento-sendas', methods=['POST'])
-@login_required
-def processar_agendamento_sendas():
-    """
-    Processa agendamento específico para o portal Sendas
-    1. Baixa a planilha do Sendas
-    2. Preenche com os dados selecionados
-    3. Retorna a planilha para upload
-    4. Gera as separações
-    """
-    try:
-        dados = request.get_json()
-        portal = dados.get('portal')
-        cnpjs_agendamento = dados.get('agendamentos', [])
-        
-        if portal != 'sendas':
-            return jsonify({
-                'success': False,
-                'error': 'Este endpoint é específico para o portal Sendas'
-            }), 400
-        
-        if not cnpjs_agendamento:
-            return jsonify({
-                'success': False,
-                'error': 'Nenhum CNPJ selecionado para agendamento'
-            }), 400
-        
-        # Importar módulos do Sendas
-        from app.portal.sendas.consumir_agendas import ConsumirAgendasSendas
-        from app.portal.sendas.preencher_planilha import PreencherPlanilhaSendas
-        
-        # Filtrar apenas CNPJs que têm data de agendamento
-        cnpjs_validos = []
-        cnpjs_ignorados = []
-        
-        for agendamento in cnpjs_agendamento:
-            cnpj = agendamento.get('cnpj')
-            data_expedicao = agendamento.get('expedicao')
-            data_agendamento = agendamento.get('agendamento')
-            
-            # Verificar se tem CNPJ e data de expedição (obrigatórios)
-            if not all([cnpj, data_expedicao]):
-                logger.warning(f"⚠️ CNPJ {cnpj} ignorado: falta data de expedição")
-                cnpjs_ignorados.append(cnpj)
-                continue
-            
-            # Verificar se tem data de agendamento (OBRIGATÓRIA para Sendas)
-            if not data_agendamento:
-                logger.warning(f"⚠️ CNPJ {cnpj} ignorado: falta data de agendamento (obrigatória para portal Sendas)")
-                cnpjs_ignorados.append(cnpj)
-                continue
-            
-            cnpjs_validos.append(agendamento)
-        
-        # Se nenhum CNPJ válido, retornar erro
-        if not cnpjs_validos:
-            return jsonify({
-                'success': False,
-                'error': 'Nenhum CNPJ com data de agendamento válida. Data de agendamento é obrigatória para o portal Sendas.',
-                'cnpjs_ignorados': cnpjs_ignorados
-            }), 400
-        
-        logger.info(f"📅 Processando {len(cnpjs_validos)} CNPJs com datas válidas")
-        if cnpjs_ignorados:
-            logger.info(f"⚠️ {len(cnpjs_ignorados)} CNPJs ignorados por falta de data de agendamento")
-        
-        # Preparar lista de CNPJs com suas datas de agendamento
-        lista_cnpjs_agendamento = []
-        for agendamento in cnpjs_validos:
-            cnpj = agendamento.get('cnpj')
-            data_agendamento = agendamento.get('agendamento')
-            
-            # Converter data de string para date se necessário
-            if isinstance(data_agendamento, str) and data_agendamento:
-                data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
-            
-            lista_cnpjs_agendamento.append({
-                'cnpj': cnpj,
-                'data_agendamento': data_agendamento
-            })
-        
-        # NOVO FLUXO UNIFICADO: Download -> Preenchimento -> Upload (navegador persistente)
-        logger.info("🚀 Iniciando fluxo unificado Sendas (navegador persistente)...")
-        
-        try:
-            consumidor = ConsumirAgendasSendas()
-            preenchedor = PreencherPlanilhaSendas()
-            
-            # Criar callback para processar a planilha baixada
-            def processar_planilha_callback(arquivo_baixado):
-                """Callback para preencher a planilha com os dados selecionados"""
-                logger.info(f"📝 Processando planilha com {len(cnpjs_validos)} CNPJs...")
-                
-                # Usar o método que processa múltiplos CNPJs
-                arquivo_processado = preenchedor.preencher_multiplos_cnpjs(
-                    arquivo_origem=arquivo_baixado,
-                    lista_cnpjs_agendamento=lista_cnpjs_agendamento
-                )
-                
-                if arquivo_processado:
-                    logger.info(f"✅ Planilha processada: {arquivo_processado}")
-                else:
-                    logger.error("❌ Erro ao processar planilha")
-                
-                return arquivo_processado
-            
-            # Executar fluxo completo com navegador persistente
-            resultado = consumidor.executar_fluxo_completo_sync(
-                processar_planilha_callback=processar_planilha_callback
-            )
-            
-            # Verificar resultado
-            if not resultado.get('sucesso'):
-                erro_msg = resultado.get('mensagem', 'Erro desconhecido no fluxo Sendas')
-                logger.error(f"❌ Fluxo Sendas falhou: {erro_msg}")
-                
-                # Verificar tipo de erro para mensagem apropriada
-                if 'credenciais' in erro_msg.lower():
-                    return jsonify({
-                        'success': False,
-                        'error': 'Credenciais do portal Sendas não configuradas. Configure SENDAS_USUARIO e SENDAS_SENHA no servidor.'
-                    }), 500
-                elif 'login' in erro_msg.lower():
-                    return jsonify({
-                        'success': False,
-                        'error': 'Falha no login do portal Sendas. Verifique as credenciais.'
-                    }), 500
-                else:
-                    return jsonify({
-                        'success': False,
-                        'error': f'Erro no processamento Sendas: {erro_msg}'
-                    }), 500
-            
-            # Sucesso no fluxo
-            arquivo_planilha = resultado.get('arquivo_download')
-            arquivo_preenchido = resultado.get('arquivo_upload')
-            upload_sucesso = resultado.get('upload_sucesso', False)
-            
-            logger.info(f"✅ Fluxo concluído - Upload: {'Sucesso' if upload_sucesso else 'Falhou'}")
-                
-        except ValueError as ve:
-            # Erro de credenciais não configuradas
-            logger.error(f"❌ Erro de configuração: {ve}")
-            return jsonify({
-                'success': False,
-                'error': 'Credenciais do portal Sendas não configuradas. Configure SENDAS_USUARIO e SENDAS_SENHA no servidor.'
-            }), 500
-        except Exception as e:
-            logger.error(f"❌ Erro ao executar fluxo Sendas: {e}")
-            return jsonify({
-                'success': False,
-                'error': f'Erro ao conectar com portal Sendas: {str(e)}'
-            }), 500
-        
-        if not upload_sucesso:
-            logger.warning("⚠️ Upload falhou, mas continuando com geração de separações")
-        
-        # 4. Gerar separações para TODOS os CNPJs processados
-        logger.info("🗂️ Gerando separações para todos os CNPJs...")
-        separacoes_criadas = []
-        
-        # Processar cada CNPJ com tratamento individual de erros
-        for agendamento in cnpjs_validos:
-            cnpj = agendamento.get('cnpj')
-            data_expedicao = agendamento.get('expedicao')
-            data_agendamento = agendamento.get('agendamento')
-            
-            # Converter datas se necessário
-            if isinstance(data_expedicao, str) and data_expedicao:
-                data_expedicao = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
-            if isinstance(data_agendamento, str) and data_agendamento:
-                data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
-            
-            logger.info(f"  Processando separações para CNPJ {cnpj}")
-            
-            # Buscar pedidos do CNPJ na carteira com tratamento de erro de conexão
-            pedidos_carteira = []
-            try:
-                pedidos_carteira = CarteiraPrincipal.query.filter_by(
-                    cnpj_cpf=cnpj
-                ).filter(
-                    CarteiraPrincipal.qtd_saldo_produto_pedido > 0
-                ).all()
-            except Exception as e:
-                logger.warning(f"  ⚠️ Erro na conexão do banco para CNPJ {cnpj}: {e}")
-                # Tentar reconectar uma vez
-                try:
-                    db.session.rollback()
-                    db.session.close()
-                    db.session.remove()  # Remove a sessão do registro
-                    # Criar nova sessão
-                    pedidos_carteira = CarteiraPrincipal.query.filter_by(
-                        cnpj_cpf=cnpj
-                    ).filter(
-                        CarteiraPrincipal.qtd_saldo_produto_pedido > 0
-                    ).all()
-                    logger.info(f"  ✅ Reconexão bem-sucedida para CNPJ {cnpj}")
-                except Exception as e2:
-                    logger.error(f"  ❌ Falha na reconexão para CNPJ {cnpj}: {e2}")
-                    continue  # Pular este CNPJ e continuar com o próximo
-            
-            # Se não encontrou pedidos, pular para o próximo CNPJ
-            if not pedidos_carteira:
-                logger.info(f"  ℹ️ Nenhum pedido encontrado para CNPJ {cnpj}")
-                continue
-            
-            # Agrupar por num_pedido
-            pedidos_dict = {}
-            for item in pedidos_carteira:
-                if item.num_pedido not in pedidos_dict:
-                    pedidos_dict[item.num_pedido] = []
-                pedidos_dict[item.num_pedido].append(item)
-            
-            # Processar cada pedido do CNPJ
-            separacoes_cnpj = []
-            for num_pedido, itens in pedidos_dict.items():
-                logger.info(f"    Processando pedido {num_pedido} com {len(itens)} itens")
-                
-                # Protocolo temporário para este agendamento
-                protocolo_temp = f"AGEND_{cnpj.split('/')[-1]}_{data_agendamento.strftime('%Y%m%d')}"
-                
-                # 1. PRIMEIRO: Atualizar TODAS as separações existentes para este pedido
-                separacoes_existentes = Separacao.query.filter(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.sincronizado_nf == False  # Apenas não sincronizadas
-                ).all()
-                
-                if separacoes_existentes:
-                    logger.info(f"    Atualizando {len(separacoes_existentes)} separações existentes")
-                    for sep_existente in separacoes_existentes:
-                        # Atualizar datas e protocolo
-                        sep_existente.expedicao = data_expedicao
-                        sep_existente.agendamento = data_agendamento
-                        sep_existente.protocolo = protocolo_temp
-                        sep_existente.agendamento_confirmado = False  # SOLICITADO, não confirmado
-                        
-                        # NÃO alterar observ_ped_1 - campo importado do Odoo
-                        # Preservar valor original
-                
-                # 2. Também atualizar separações com nf_cd=True se existirem
-                separacoes_nf_cd = Separacao.query.filter(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.nf_cd == True
-                ).all()
-                
-                if separacoes_nf_cd:
-                    logger.info(f"    Atualizando {len(separacoes_nf_cd)} separações com NF no CD")
-                    for sep_nf in separacoes_nf_cd:
-                        sep_nf.expedicao = data_expedicao
-                        sep_nf.agendamento = data_agendamento
-                        sep_nf.protocolo = protocolo_temp
-                        sep_nf.agendamento_confirmado = False
-                
-                # 3. SEGUNDO: Verificar se há saldo na carteira para criar novas separações
-                # Buscar produtos já separados para comparar com carteira
-                produtos_ja_separados = {}
-                for sep in separacoes_existentes:
-                    if sep.cod_produto not in produtos_ja_separados:
-                        produtos_ja_separados[sep.cod_produto] = 0
-                    produtos_ja_separados[sep.cod_produto] += float(sep.qtd_saldo or 0)
-                
-                # Gerar ID do lote para novas separações (se houver)
-                separacao_lote_id = gerar_lote_id()
-                novas_separacoes = 0
-                
-                # Criar separações para itens com saldo disponível
-                for item in itens:
-                    # Calcular quantidade já separada
-                    qtd_ja_separada = produtos_ja_separados.get(item.cod_produto, 0)
-                    qtd_disponivel = float(item.qtd_saldo_produto_pedido) - qtd_ja_separada
-                    
-                    # Se há saldo disponível, criar nova separação
-                    if qtd_disponivel > 0.001:  # Tolerância para float
-                        logger.info(f"      Criando separação para {item.cod_produto}: {qtd_disponivel} unidades")
-                        
-                        # Calcular valores
-                        valor_unitario = float(item.preco_produto_pedido or 0)
-                        valor_separacao = qtd_disponivel * valor_unitario
-                        
-                        # Calcular peso e pallet
-                        peso_calculado, pallet_calculado = calcular_peso_pallet_produto(item.cod_produto, qtd_disponivel)
-                        
-                        # Calcular rota
-                        if hasattr(item, 'incoterm') and item.incoterm in ["RED", "FOB"]:
-                            rota_calculada = item.incoterm
-                        else:
-                            rota_calculada = buscar_rota_por_uf(item.estado or "SP")
-                        
-                        # Calcular sub_rota
-                        sub_rota_calculada = _buscar_sub_rota(item.nome_cidade, item.estado) if item.nome_cidade and item.estado else None
-                        
-                        separacao = Separacao(
-                            separacao_lote_id=separacao_lote_id,
-                            num_pedido=num_pedido,
-                            cod_produto=item.cod_produto,
-                            nome_produto=item.nome_produto,
-                            qtd_saldo=qtd_disponivel,
-                            valor_saldo=valor_separacao,
-                            peso=peso_calculado,
-                            pallet=pallet_calculado,
-                            rota=rota_calculada,
-                            sub_rota=sub_rota_calculada,
-                            cnpj_cpf=cnpj,
-                            raz_social_red=item.raz_social_red,
-                            nome_cidade=item.nome_cidade,
-                            cod_uf=item.estado,
-                            data_pedido=item.data_pedido,
-                            expedicao=data_expedicao,
-                            agendamento=data_agendamento,
-                            protocolo=protocolo_temp,
-                            agendamento_confirmado=False,  # SOLICITADO, não confirmado
-                            pedido_cliente=item.pedido_cliente if hasattr(item, 'pedido_cliente') else None,
-                            status='ABERTO',
-                            tipo_envio='total',
-                            observ_ped_1=item.observ_ped_1 if hasattr(item, 'observ_ped_1') else None,  # Preservar valor do Odoo
-                            sincronizado_nf=False,
-                            nf_cd=False
-                        )
-                        db.session.add(separacao)
-                        novas_separacoes += 1
-                
-                separacoes_cnpj.append({
-                    'cnpj': cnpj,
-                    'lote_id': separacao_lote_id if novas_separacoes > 0 else None,
-                    'num_pedido': num_pedido,
-                    'qtd_atualizadas': len(separacoes_existentes) + len(separacoes_nf_cd),
-                    'qtd_criadas': novas_separacoes
-                })
-            
-            # Fazer commit das mudanças apenas para este CNPJ
-            try:
-                db.session.commit()
-                total_atualizadas = sum(s['qtd_atualizadas'] for s in separacoes_cnpj)
-                total_criadas = sum(s['qtd_criadas'] for s in separacoes_cnpj)
-                logger.info(f"  ✅ CNPJ {cnpj}: {total_atualizadas} separações atualizadas, {total_criadas} novas criadas")
-                separacoes_criadas.extend(separacoes_cnpj)
-            except Exception as e:
-                logger.error(f"  ❌ Erro ao salvar separações para CNPJ {cnpj}: {e}")
-                db.session.rollback()
-                # Continuar com o próximo CNPJ mesmo se houver erro
-        
-        # Obter nome do arquivo para download
-        filename = os.path.basename(arquivo_preenchido) if arquivo_preenchido else None
-        
-        # Limpar sessão do banco antes de retornar
-        try:
-            db.session.remove()
-        except Exception as e:
-            logger.warning(f"Aviso ao limpar sessão: {e}")
-        
-        # Retornar resultado do processamento múltiplo
-        return jsonify({
-            'success': True,
-            'message': f'Agendamento processado para {len(cnpjs_validos)} CNPJs',
-            'cnpjs_processados': [ag['cnpj'] for ag in cnpjs_validos],
-            'cnpjs_ignorados': cnpjs_ignorados,
-            'arquivo': filename,
-            'separacoes_criadas': separacoes_criadas,
-            'total_separacoes': len(separacoes_criadas),
-            'upload_sucesso': upload_sucesso,
-            'download_url': url_for('carteira.programacao_em_lote.download_planilha_sendas', 
-                                  filename=filename) if filename else None
-        })
-            
-    except Exception as e:
-        logger.error(f"Erro ao processar agendamento Sendas: {str(e)}")
-        logger.error(f"Tipo do erro: {type(e).__name__}")
-        logger.error(f"Args do erro: {e.args if hasattr(e, 'args') else 'sem args'}")
-        import traceback
-        erro_completo = traceback.format_exc()
-        logger.error(f"Stack trace completo:\n{erro_completo}")
-        traceback.print_exc()
-        
-        # Limpar sessão em caso de erro também
-        try:
-            db.session.rollback()
-            db.session.remove()
-        except Exception as cleanup_error:
-            logger.warning(f"Aviso ao limpar sessão após erro: {cleanup_error}")
-        
-        # Retornar erro mais detalhado
-        erro_msg = str(e)
-        if len(erro_msg) > 500:
-            erro_msg = erro_msg[:500] + "..."
-            
-        return jsonify({
-            'success': False,
-            'error': erro_msg,
-            'error_type': type(e).__name__
-        }), 500
-
-
 @programacao_em_lote_bp.route('/api/processar-agendamento-sendas-async', methods=['POST'])
 @login_required
 def processar_agendamento_sendas_async():
@@ -1719,35 +1297,64 @@ def processar_agendamento_sendas_async():
             
             # Converter data de string para date se necessário (como na versão síncrona)
             if isinstance(data_agendamento, str) and data_agendamento:
-                from datetime import datetime
                 data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
-            
-            # Para o worker, mantemos como date object
-            lista_cnpjs_agendamento.append({
-                'cnpj': cnpj,
-                'data_agendamento': data_agendamento
-            })
+
+            # Buscar dados completos para esse CNPJ
+            # Calcular data_expedicao para SP (D-1 útil)
+            data_expedicao = agendamento.get('expedicao')
+            if isinstance(data_expedicao, str) and data_expedicao:
+                # datetime já está importado no topo do arquivo
+                data_expedicao = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
+
+            # Gerar protocolo único para este CNPJ
+            protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+
+            # CRIAR SEPARAÇÕES DO SALDO ANTES DO AGENDAMENTO
+            from app.carteira.routes.programacao_em_lote.busca_dados import criar_separacoes_do_saldo
+            try:
+                total_criadas_atualizadas = criar_separacoes_do_saldo(
+                    cnpj=cnpj,
+                    data_agendamento=data_agendamento,
+                    data_expedicao=data_expedicao,
+                    protocolo=protocolo
+                )
+                logger.info(f"  ✅ Separações preparadas para CNPJ {cnpj}: {total_criadas_atualizadas} registros")
+            except Exception as e:
+                logger.error(f"  ❌ Erro ao criar Separações para CNPJ {cnpj}: {e}")
+                # Continuar mesmo se houver erro (as separações existentes ainda podem ser agendadas)
+
+            # Buscar dados completos usando o novo módulo
+            # Agora vai buscar TODAS as Separações (incluindo as recém-criadas)
+            dados_completos = buscar_dados_completos_cnpj(
+                cnpj=cnpj,
+                data_agendamento=data_agendamento,
+                data_expedicao=data_expedicao
+            )
+
+            # Adicionar tipo_fluxo e protocolo para identificação no retorno
+            dados_completos['tipo_fluxo'] = 'programacao_lote'
+            dados_completos['protocolo'] = protocolo  # Garantir que o protocolo está presente
+
+            lista_cnpjs_agendamento.append(dados_completos)
         
         # Criar registro de integração no banco
         # Gerar lote_id único usando a função padrão
         lote_id = gerar_lote_id()
         
-        # Preparar dados para JSONB - converter dates para string ISO
+        # Preparar dados para JSONB - converter dates e estruturas complexas
         lista_cnpjs_json = []
         for item in lista_cnpjs_agendamento:
-            cnpj = item['cnpj']
-            data_agend = item['data_agendamento']
-            
-            # Converter date para string ISO para serialização JSON
-            if data_agend and hasattr(data_agend, 'isoformat'):
-                data_agend_str = data_agend.isoformat()
-            else:
-                data_agend_str = str(data_agend) if data_agend else None
-            
-            lista_cnpjs_json.append({
-                'cnpj': cnpj,
-                'data_agendamento': data_agend_str
-            })
+            # Serializar item para JSON, convertendo dates e Decimals
+            item_json = {
+                'cnpj': item['cnpj'],
+                'data_agendamento': item['data_agendamento'].isoformat() if item.get('data_agendamento') and hasattr(item['data_agendamento'], 'isoformat') else str(item.get('data_agendamento')),
+                'data_expedicao': item['data_expedicao'].isoformat() if item.get('data_expedicao') and hasattr(item['data_expedicao'], 'isoformat') else str(item.get('data_expedicao')),
+                'protocolo': item.get('protocolo'),
+                'peso_total': float(item.get('peso_total', 0)),
+                'tipo_fluxo': item.get('tipo_fluxo', 'programacao_lote'),
+                'total_itens': len(item.get('itens', []))
+            }
+            lista_cnpjs_json.append(item_json)
         
         integracao = PortalIntegracao(
             portal='sendas',
@@ -1755,9 +1362,12 @@ def processar_agendamento_sendas_async():
             tipo_lote='agendamento_lote',
             status='aguardando',
             dados_enviados={
-                'cnpjs': lista_cnpjs_json,  # Usar versão com datas como string
+                'cnpjs': lista_cnpjs_json,  # Dados resumidos para log
                 'total': len(lista_cnpjs_json),
-                'usuario': current_user.nome if current_user else 'Sistema'
+                'usuario': current_user.nome if current_user else 'Sistema',
+                # Incluir metadados do fluxo nos dados_enviados
+                'tipo_fluxo': 'programacao_lote',
+                'origem': 'programacao_em_lote'
             }
         )
         db.session.add(integracao)
@@ -1867,33 +1477,3 @@ def status_job_sendas(job_id):
             'status': 'not_found',
             'error': str(e)
         }), 404
-
-
-@programacao_em_lote_bp.route('/api/download-planilha-sendas/<filename>')
-@login_required
-def download_planilha_sendas(filename):
-    """
-    Endpoint para download da planilha Sendas preenchida
-    """
-    try:
-        # Validar nome do arquivo para segurança (aceitar sendas_agendamento_ ou sendas_multi_)
-        if not (filename.startswith('sendas_agendamento_') or filename.startswith('sendas_multi_')) or not filename.endswith('.xlsx'):
-            return jsonify({'error': 'Arquivo inválido'}), 400
-        
-        # Caminho do arquivo temporário
-        filepath = os.path.join(tempfile.gettempdir(), filename)
-        
-        if not os.path.exists(filepath):
-            return jsonify({'error': 'Arquivo não encontrado'}), 404
-        
-        # Retornar arquivo para download
-        return send_file(
-            filepath,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro ao fazer download da planilha: {str(e)}")
-        return jsonify({'error': str(e)}), 500

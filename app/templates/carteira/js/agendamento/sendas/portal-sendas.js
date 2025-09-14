@@ -146,7 +146,7 @@ class PortalSendas {
      */
     async processarFila() {
         console.log('🚀 [Sendas] Processando fila em lote');
-        
+
         Swal.fire({
             title: 'Processando Fila Sendas',
             html: `
@@ -160,64 +160,36 @@ class PortalSendas {
             allowOutsideClick: false,
             showConfirmButton: false
         });
-        
+
         try {
-            // Obter itens da fila agrupados
-            const statusResponse = await fetch('/portal/sendas/fila/status?detalhes=true');
-            const statusData = await statusResponse.json();
-            
-            if (!statusData.detalhes || statusData.detalhes.length === 0) {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Fila Vazia',
-                    text: 'Não há itens na fila para processar',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-            
-            // Preparar dados para o endpoint de lote existente
-            const cnpjsParaProcessar = statusData.detalhes.map(item => ({
-                cnpj: item.cnpj,
-                expedicao: new Date(item.data_agendamento).toISOString().split('T')[0],
-                agendamento: item.data_agendamento
-            }));
-            
-            // Chamar o endpoint de processamento em lote
-            const response = await fetch('/carteira/programacao-lote/api/processar-agendamento-sendas-async', {
+            // USAR O MESMO ENDPOINT DO SCHEDULER PARA GARANTIR CONSISTÊNCIA
+            // Este endpoint já processa corretamente com todos os itens
+            const response = await fetch('/portal/sendas/fila/processar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': this.getCSRFToken()
-                },
-                body: JSON.stringify({
-                    portal: 'sendas',
-                    cnpjs: cnpjsParaProcessar
-                })
+                }
             });
             
             const result = await response.json();
-            
-            if (result.success && result.job_id) {
-                // Marcar itens como processados
-                await fetch('/portal/sendas/fila/processar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCSRFToken()
-                    }
-                });
-                
+
+            if (result.success) {
+                // O endpoint /processar já marca os itens como processados internamente
+
                 Swal.fire({
                     icon: 'success',
                     title: 'Fila Processada!',
                     html: `
                         <div class="text-center">
-                            <p><strong>${cnpjsParaProcessar.length}</strong> grupos enviados para processamento</p>
-                            <p class="text-muted mt-2">
-                                <i class="fas fa-info-circle"></i> 
-                                O processamento está sendo feito em background
-                            </p>
+                            <p><strong>${result.total_processado || 0}</strong> grupos enviados para processamento</p>
+                            ${result.job_id ? `
+                                <p class="text-muted mt-2">
+                                    <i class="fas fa-info-circle"></i>
+                                    O processamento está sendo feito em background
+                                </p>
+                                <small>Job ID: ${result.job_id}</small>
+                            ` : ''}
                         </div>
                     `,
                     confirmButtonText: 'OK'

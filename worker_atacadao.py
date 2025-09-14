@@ -16,6 +16,8 @@ Uso:
 import os
 import sys
 import logging
+import threading
+import time
 from redis import Redis
 from rq import Worker, Queue, Connection
 from rq.job import Job
@@ -52,6 +54,47 @@ def worker_shutdown():
     logger.info("🛑 WORKER ATACADÃO - ENCERRANDO")
     logger.info(f"📅 Data/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("="*60)
+
+def run_sendas_scheduler():
+    """
+    Thread separada para o scheduler Sendas
+    Executa a cada 20 minutos verificando a fila
+    """
+    # Importar aqui para evitar importação circular
+    from app import create_app
+    from app.portal.workers.sendas_fila_scheduler import processar_fila_sendas_scheduled
+
+    logger.info("🚀 [Scheduler Sendas] Iniciado em thread separada")
+
+    # Aguardar 2 minutos antes da primeira execução para dar tempo dos workers iniciarem
+    logger.info("⏳ [Scheduler Sendas] Aguardando 2 minutos antes da primeira verificação...")
+    time.sleep(120)
+
+    while True:
+        try:
+            logger.info(f"⏰ [Scheduler Sendas] Verificando fila - {datetime.now().strftime('%H:%M:%S')}")
+
+            # Executar com contexto da aplicação
+            app = create_app()
+            with app.app_context():
+                resultado = processar_fila_sendas_scheduled()
+
+                if resultado['success']:
+                    if resultado['total_processado'] > 0:
+                        logger.info(f"✅ [Scheduler Sendas] {resultado['message']}")
+                    else:
+                        logger.debug("📭 [Scheduler Sendas] Fila vazia")
+                else:
+                    logger.error(f"❌ [Scheduler Sendas] Erro: {resultado['message']}")
+
+            # Aguardar 20 minutos
+            logger.info("⏳ [Scheduler Sendas] Aguardando 20 minutos para próxima verificação...")
+            time.sleep(20 * 60)  # 20 minutos
+
+        except Exception as e:
+            logger.error(f"❌ Erro no scheduler Sendas: {e}")
+            logger.info("⏳ [Scheduler Sendas] Aguardando 5 minutos antes de tentar novamente...")
+            time.sleep(5 * 60)  # 5 minutos em caso de erro
 
 def job_success_handler(job, connection, result, *args, **kwargs):
     """Handler para jobs bem-sucedidos"""
@@ -108,6 +151,19 @@ def run_worker(workers, verbose, burst, queues):
         'date_format': '%Y-%m-%d %H:%M:%S'
     }
     
+    # Iniciar scheduler Sendas em thread separada (se habilitado)
+    enable_scheduler = os.environ.get('ENABLE_SENDAS_SCHEDULER', 'true').lower() == 'true'
+    if enable_scheduler:
+        scheduler_thread = threading.Thread(
+            target=run_sendas_scheduler,
+            daemon=True,
+            name='SendasScheduler'
+        )
+        scheduler_thread.start()
+        logger.info("✅ [Scheduler Sendas] Habilitado - verificação a cada 20 minutos")
+    else:
+        logger.info("⚠️ [Scheduler Sendas] Desabilitado (ENABLE_SENDAS_SCHEDULER=false)")
+
     try:
         with Connection(redis_conn):
             # Startup

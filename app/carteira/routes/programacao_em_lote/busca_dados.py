@@ -1,0 +1,410 @@
+"""
+Módulo de busca de dados para programação em lote
+Move a lógica de busca do preencher_planilha.py para cá
+Tornando preencher_planilha.py universal
+"""
+
+from typing import Dict, Any, List
+from decimal import Decimal
+from datetime import date
+from sqlalchemy import func, and_
+import logging
+
+from app import db
+from app.carteira.models import CarteiraPrincipal
+from app.separacao.models import Separacao
+from app.producao.models import CadastroPalletizacao
+from app.odoo.utils.pedido_cliente_utils import buscar_pedido_cliente_odoo
+
+logger = logging.getLogger(__name__)
+
+
+def buscar_dados_completos_cnpj(cnpj: str, data_agendamento: date = None,
+                                data_expedicao: date = None) -> Dict[str, Any]:
+    """
+    Busca dados completos de um CNPJ para agendamento Sendas
+    Consolida dados de 2 fontes:
+    1. CarteiraPrincipal (inclui tudo não faturado - sincronizado_nf=False)
+    2. Separacao com nf_cd=True (NFs que voltaram ao CD)
+
+    Args:
+        cnpj: CNPJ para buscar dados
+        data_agendamento: Data de agendamento
+        data_expedicao: Data de expedição (para SP, será D-1 do agendamento)
+
+    Returns:
+        Dicionário com estrutura unificada para agendamento
+    """
+    logger.info(f"📊 Buscando dados completos para CNPJ: {cnpj}")
+
+    # Gerar protocolo único
+    protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}" if data_agendamento else None
+
+    dados = {
+        'cnpj': cnpj,
+        'data_agendamento': data_agendamento,
+        'data_expedicao': data_expedicao,
+        'protocolo': protocolo,
+        'itens': [],
+        'peso_total': Decimal('0'),
+        'pallets_total': Decimal('0'),
+        'valor_total': Decimal('0')
+    }
+
+    # BUSCAR TODAS AS SEPARAÇÕES DE UMA VEZ (sincronizado_nf=False + nf_cd=True)
+    # Nota: NÃO buscamos mais em CarteiraPrincipal pois já criamos Separações do saldo
+    logger.info("  📋 Buscando todas as Separações (não faturadas + NFs no CD)...")
+    itens_separacao = _buscar_todas_separacoes(cnpj, protocolo)
+    dados['itens'].extend(itens_separacao)
+
+    # 3. GARANTIR pedido_cliente PARA TODOS OS ITENS
+    logger.info("  🔍 Validando pedido_cliente...")
+    _garantir_pedido_cliente(dados['itens'])
+
+    # 4. CALCULAR TOTAIS
+    for item in dados['itens']:
+        dados['peso_total'] += Decimal(str(item.get('peso', 0)))
+        dados['pallets_total'] += Decimal(str(item.get('pallets', 0)))
+        dados['valor_total'] += Decimal(str(item.get('valor', 0)))
+
+    # 5. ADICIONAR DADOS DE EXPEDIÇÃO
+    if data_expedicao:
+        for item in dados['itens']:
+            item['data_expedicao'] = data_expedicao
+
+    logger.info(f"  ✅ Total: {len(dados['itens'])} itens, Peso: {dados['peso_total']:.2f} kg")
+
+    return dados
+
+
+def _buscar_todas_separacoes(cnpj: str, protocolo: str = None) -> List[Dict[str, Any]]:
+    """
+    Busca TODAS as Separações relevantes para agendamento:
+    - sincronizado_nf=False (não faturadas, incluindo as criadas do saldo)
+    - nf_cd=True (NFs que voltaram ao CD)
+
+    Com o protocolo fornecido, busca apenas as do agendamento atual.
+    """
+    itens = []
+
+    try:
+        # Query unificada: buscar TODAS as separações relevantes
+        query = db.session.query(Separacao).filter(
+            and_(
+                Separacao.cnpj_cpf == cnpj,
+                db.or_(
+                    Separacao.sincronizado_nf == False,  # Não faturadas
+                    Separacao.nf_cd == True              # NFs no CD
+                )
+            )
+        )
+
+        # Se temos protocolo, filtrar apenas as deste agendamento
+        if protocolo:
+            query = query.filter(Separacao.protocolo == protocolo)
+
+        separacoes = query.all()
+        logger.info(f"    Encontradas {len(separacoes)} separações para o CNPJ {cnpj}")
+
+        for sep in separacoes:
+            # Buscar nome do produto se não tiver
+            nome_produto = sep.nome_produto
+            if not nome_produto:
+                pallet_cadastro = db.session.query(
+                    CadastroPalletizacao.nome_produto
+                ).filter(
+                    CadastroPalletizacao.cod_produto == sep.cod_produto
+                ).first()
+
+                if pallet_cadastro:
+                    nome_produto = pallet_cadastro.nome_produto
+
+            # Tipo origem unificado - tudo é Separação agora
+            tipo_origem = 'separacao'
+
+            itens.append({
+                'id': sep.id,  # Para update posterior
+                'tipo_origem': tipo_origem,
+                'separacao_lote_id': sep.separacao_lote_id,
+                'num_pedido': sep.num_pedido,
+                'numero_nf': sep.numero_nf if hasattr(sep, 'numero_nf') else None,
+                'pedido_cliente': sep.pedido_cliente,
+                'cod_produto': sep.cod_produto,
+                'nome_produto': nome_produto or f"Produto {sep.cod_produto}",
+                'quantidade': float(sep.qtd_saldo or 0),
+                'peso': float(sep.peso or 0),
+                'pallets': float(sep.pallet or 0),
+                'valor': float(sep.valor_saldo or 0),
+                'expedicao': sep.expedicao,
+                'agendamento': sep.agendamento,
+                'protocolo': sep.protocolo,
+                'observacoes': sep.observ_ped_1,
+                'status': sep.status,
+                'tipo_envio': sep.tipo_envio if hasattr(sep, 'tipo_envio') else None,
+                'nf_cd': sep.nf_cd,
+                'sincronizado_nf': sep.sincronizado_nf
+            })
+    except Exception as e:
+        logger.error(f"Erro ao buscar separações: {e}")
+        db.session.rollback()
+
+    return itens
+
+
+def _garantir_pedido_cliente(itens: List[Dict[str, Any]]) -> None:
+    """
+    Garante que todos os itens tenham pedido_cliente preenchido
+    Busca do Odoo quando necessário
+    """
+    # Agrupar por num_pedido para buscar uma vez só
+    pedidos_sem_cliente = {}
+
+    for item in itens:
+        if not item.get('pedido_cliente') and item.get('num_pedido'):
+            pedidos_sem_cliente[item['num_pedido']] = None
+
+    # Buscar do Odoo em lote se houver pedidos sem cliente
+    if pedidos_sem_cliente:
+        logger.info(f"    📡 Buscando pedido_cliente do Odoo para {len(pedidos_sem_cliente)} pedidos...")
+
+        for num_pedido in pedidos_sem_cliente:
+            try:
+                pedido_cliente = buscar_pedido_cliente_odoo(num_pedido)
+                if pedido_cliente:
+                    pedidos_sem_cliente[num_pedido] = pedido_cliente
+                    logger.info(f"      ✅ Pedido {num_pedido}: {pedido_cliente}")
+                else:
+                    logger.warning(f"      ⚠️ Pedido {num_pedido}: não encontrado no Odoo")
+            except Exception as e:
+                logger.error(f"      ❌ Erro ao buscar pedido {num_pedido}: {e}")
+
+        # Atualizar itens com pedido_cliente do Odoo
+        for item in itens:
+            if not item.get('pedido_cliente') and item.get('num_pedido'):
+                pedido_cliente_odoo = pedidos_sem_cliente.get(item['num_pedido'])
+                if pedido_cliente_odoo:
+                    item['pedido_cliente'] = pedido_cliente_odoo
+
+
+def buscar_dados_multiplos_cnpjs(lista_cnpjs_agendamento: List[Dict]) -> List[Dict[str, Any]]:
+    """
+    Busca dados completos para múltiplos CNPJs
+
+    Args:
+        lista_cnpjs_agendamento: Lista de dicts com cnpj, data_agendamento, data_expedicao
+
+    Returns:
+        Lista de dicionários com dados completos por CNPJ
+    """
+    dados_completos = []
+
+    for config in lista_cnpjs_agendamento:
+        cnpj = config.get('cnpj')
+        data_agendamento = config.get('data_agendamento')
+        data_expedicao = config.get('data_expedicao')
+
+        if not cnpj:
+            continue
+
+        dados = buscar_dados_completos_cnpj(
+            cnpj=cnpj,
+            data_agendamento=data_agendamento,
+            data_expedicao=data_expedicao
+        )
+
+        dados_completos.append(dados)
+
+    return dados_completos
+
+
+def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao: date = None,
+                              protocolo: str = None) -> int:
+    """
+    Cria Separações com status='PREVISAO' a partir do saldo LÍQUIDO da CarteiraPrincipal
+    (descontando o que já está em Separacao.sincronizado_nf=False)
+    e atualiza Separações existentes com o protocolo do agendamento.
+
+    Args:
+        cnpj: CNPJ para criar separações
+        data_agendamento: Data de agendamento
+        data_expedicao: Data de expedição (para SP, será D-1 do agendamento)
+        protocolo: Protocolo único do agendamento (se não fornecido, será gerado)
+
+    Returns:
+        Número total de registros criados/atualizados
+    """
+    from app.separacao.models import Separacao
+    from app.utils.lote_utils import gerar_lote_id
+
+    logger.info(f"📦 Criando Separações do saldo para CNPJ: {cnpj}")
+
+    # Gerar protocolo se não fornecido
+    if not protocolo:
+        protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+
+    contador_criadas = 0
+    contador_atualizadas = 0
+
+    try:
+        # 1. BUSCAR O QUE JÁ ESTÁ EM SEPARAÇÃO (para descontar do saldo)
+        logger.info("  📊 Calculando saldo líquido...")
+
+        # Agrupar quantidades já em separação por num_pedido e cod_produto
+        ja_em_separacao = db.session.query(
+            Separacao.num_pedido,
+            Separacao.cod_produto,
+            func.sum(Separacao.qtd_saldo).label('qtd_ja_separada')
+        ).filter(
+            and_(
+                Separacao.cnpj_cpf == cnpj,
+                Separacao.sincronizado_nf == False  # Apenas não faturadas
+            )
+        ).group_by(
+            Separacao.num_pedido,
+            Separacao.cod_produto
+        ).all()
+
+        # Criar dicionário para lookup rápido
+        dict_ja_separado = {}
+        pedidos_com_separacao = set()  # Para rastrear pedidos que já têm separação
+        for sep in ja_em_separacao:
+            chave = f"{sep.num_pedido}_{sep.cod_produto}"
+            dict_ja_separado[chave] = float(sep.qtd_ja_separada or 0)
+            pedidos_com_separacao.add(sep.num_pedido)  # Marcar pedido como tendo separação
+
+        # 2. CRIAR SEPARAÇÕES DO SALDO LÍQUIDO DA CARTEIRA PRINCIPAL
+        logger.info("  📋 Buscando saldo em CarteiraPrincipal...")
+
+        # Buscar todos os itens com saldo
+        itens_carteira = db.session.query(
+            CarteiraPrincipal
+        ).filter(
+            and_(
+                CarteiraPrincipal.cnpj_cpf == cnpj,
+                CarteiraPrincipal.ativo == True,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            )
+        ).all()
+
+        logger.info(f"    Encontrados {len(itens_carteira)} itens com saldo")
+
+        # Gerar UM ÚNICO separacao_lote_id para TODOS os produtos deste CNPJ
+        separacao_lote_id = gerar_lote_id() if itens_carteira else None
+
+        for item in itens_carteira:
+            # Calcular saldo líquido
+            chave_item = f"{item.num_pedido}_{item.cod_produto}"
+            qtd_ja_separada = dict_ja_separado.get(chave_item, 0)
+            saldo_liquido = float(item.qtd_saldo_produto_pedido) - qtd_ja_separada
+
+            if saldo_liquido <= 0:
+                logger.debug(f"      Item {chave_item} sem saldo líquido (tudo já está em separação)")
+                continue
+
+            # Buscar dados de palletização
+            pallet_info = db.session.query(
+                CadastroPalletizacao
+            ).filter(
+                CadastroPalletizacao.cod_produto == item.cod_produto
+            ).first()
+
+            peso_item = Decimal('0')
+            pallets_item = Decimal('0')
+
+            if pallet_info:
+                qtd_decimal = Decimal(str(saldo_liquido))  # Usar saldo líquido
+                peso_item = qtd_decimal * Decimal(str(pallet_info.peso_bruto or 0))
+                if pallet_info.palletizacao and pallet_info.palletizacao > 0:
+                    pallets_item = qtd_decimal / Decimal(str(pallet_info.palletizacao))
+
+            # Determinar tipo_envio: 'parcial' se já existe separação, 'total' se não
+            tipo_envio = 'parcial' if item.num_pedido in pedidos_com_separacao else 'total'
+
+            # Criar nova Separação com status='PREVISAO'
+            nova_separacao = Separacao(
+                separacao_lote_id=separacao_lote_id,
+                status='PREVISAO',  # Status para separações criadas para agendamento
+                sincronizado_nf=False,  # Sempre False para aparecer na carteira
+                nf_cd=False,  # Não é NF no CD
+
+                # Dados do pedido
+                num_pedido=item.num_pedido,
+                pedido_cliente=item.pedido_cliente,
+                cod_produto=item.cod_produto,
+                qtd_saldo=saldo_liquido,  # SALDO LÍQUIDO!
+                valor_saldo=float(Decimal(str(saldo_liquido)) * Decimal(str(item.preco_produto_pedido or 0))),
+                peso=float(peso_item),
+                pallet=float(pallets_item),
+
+                # Dados do cliente
+                cnpj_cpf=cnpj,
+                raz_social_red=item.raz_social_red,
+                nome_cidade=item.municipio,
+                cod_uf=item.estado,
+
+                # Dados do agendamento
+                protocolo=protocolo,
+                agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
+                expedicao=None,    # ZERAR - para validar se foi realmente agendado
+
+                # Manter observ_ped_1 original se houver
+                observ_ped_1=item.observ_ped_1,
+
+                # Tipo de envio baseado em se já existe separação
+                tipo_envio=tipo_envio
+            )
+
+            db.session.add(nova_separacao)
+            contador_criadas += 1
+
+            # Após criar, marcar o pedido como tendo separação
+            pedidos_com_separacao.add(item.num_pedido)
+
+            logger.debug(f"      Criada Separação para {chave_item}: {saldo_liquido} unidades (tipo: {tipo_envio})")
+
+        # 3. ATUALIZAR SEPARAÇÕES EXISTENTES COM O PROTOCOLO
+        # IMPORTANTE: Zerar datas de agendamento/expedição primeiro para validação posterior
+
+        # Separações não faturadas
+        logger.info("  📝 Atualizando Separações não faturadas...")
+        resultado_nao_fat = Separacao.query.filter(
+            and_(
+                Separacao.cnpj_cpf == cnpj,
+                Separacao.sincronizado_nf == False,
+                Separacao.status != 'PREVISAO'  # Não atualizar as que acabamos de criar
+            )
+        ).update({
+            'protocolo': protocolo,  # Sobrescreve protocolo anterior se houver
+            'agendamento': None,  # ZERAR para preencher apenas no retorno
+            'expedicao': None     # ZERAR para validar se foi realmente agendado
+            # NÃO mexer em observ_ped_1
+        })
+        contador_atualizadas += resultado_nao_fat
+
+        # NFs no CD
+        logger.info("  📄 Atualizando NFs no CD...")
+        resultado_nf_cd = Separacao.query.filter(
+            and_(
+                Separacao.cnpj_cpf == cnpj,
+                Separacao.nf_cd == True
+            )
+        ).update({
+            'protocolo': protocolo,  # Sobrescreve protocolo anterior se houver
+            'agendamento': None,  # ZERAR para preencher apenas no retorno
+            'expedicao': None     # ZERAR para validar se foi realmente agendado
+            # NÃO mexer em observ_ped_1
+        })
+        contador_atualizadas += resultado_nf_cd
+
+        # Commit das mudanças
+        db.session.commit()
+
+        logger.info(f"  ✅ Total: {contador_criadas} Separações criadas, {contador_atualizadas} atualizadas")
+        logger.info(f"  ✅ Protocolo: {protocolo}")
+
+        return contador_criadas + contador_atualizadas
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar Separações do saldo: {e}")
+        db.session.rollback()
+        raise

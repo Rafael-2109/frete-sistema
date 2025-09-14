@@ -245,7 +245,8 @@ class SafeOdooConnection:
                     if isinstance(move_id_data, (list, tuple)):
                         record['move_id'] = move_id_data
                         move_ids.add(move_id_data[0])
-            except:
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao enriquecer com dados de fatura: {e}")
                 record['move_id'] = False
         
         # Buscar dados das faturas de forma segura
@@ -293,7 +294,8 @@ class SafeOdooConnection:
                     if isinstance(partner_id_data, (list, tuple)):
                         record['partner_id'] = partner_id_data
                         partner_ids.add(partner_id_data[0])
-            except:
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao enriquecer com dados de cliente: {e}")
                 record['partner_id'] = False
         
         return records
@@ -317,7 +319,8 @@ class SafeOdooConnection:
                     if isinstance(product_id_data, (list, tuple)):
                         record['product_id'] = product_id_data
                         product_ids.add(product_id_data[0])
-            except:
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao enriquecer com dados de produto: {e}")
                 record['product_id'] = False
         
         return records

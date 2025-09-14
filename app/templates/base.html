@@ -160,6 +160,22 @@
               <i class="fas fa-exclamation-triangle"></i> Pendências Financeiras
             </a></li>
             {% endif %}
+            {#<!--/***
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📊 Business Intelligence</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('bi.dashboard') }}">
+              <i class="fas fa-chart-pie"></i> Dashboard BI
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('bi.transportadoras') }}">
+              <i class="fas fa-truck-moving"></i> Análise Transportadoras
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('bi.regional') }}">
+              <i class="fas fa-map-marked-alt"></i> Análise Regional
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('bi.despesas') }}">
+              <i class="fas fa-file-invoice-dollar"></i> Despesas Extras
+            </a></li>
+            ***/-->#}
             {% endif %}
           </ul>
         </li>
@@ -414,7 +430,7 @@
 {% if current_user.is_authenticated %}
   {% include 'claude_ai/widget.html' %}
 {% endif %}
-*/ -->
+
 
 <!-- Scripts adicionais -->
 <script>

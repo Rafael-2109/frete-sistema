@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BI Fretes - Análise de Despesas Extras</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .navbar-bi {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .section-title {
+            border-left: 4px solid #667eea;
+            padding-left: 10px;
+            margin-bottom: 20px;
+        }
+        .despesa-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .despesa-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .despesa-header {
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+            color: white;
+            font-weight: bold;
+        }
+        .tipo-reentrega { background: #e74c3c; }
+        .tipo-tde { background: #f39c12; }
+        .tipo-devolucao { background: #9b59b6; }
+        .tipo-complemento { background: #3498db; }
+        .tipo-outros { background: #95a5a6; }
+        
+        .setor-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin: 2px;
+            display: inline-block;
+        }
+        .setor-comercial { background: #3498db; color: white; }
+        .setor-qualidade { background: #27ae60; color: white; }
+        .setor-fiscal { background: #8e44ad; color: white; }
+        .setor-financeiro { background: #f39c12; color: white; }
+        .setor-logistica { background: #e74c3c; color: white; }
+        .setor-compras { background: #34495e; color: white; }
+        
+        .chart-container {
+            position: relative;
+            height: 350px;
+            margin-top: 20px;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .trend-indicator {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .trend-up { color: #e74c3c; }
+        .trend-down { color: #27ae60; }
+        .trend-stable { color: #95a5a6; }
+        
+        .motivo-pill {
+            background: #ecf0f1;
+            padding: 8px 12px;
+            border-radius: 20px;
+            margin: 3px;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+        .table-motivos {
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-bi">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-graph-up"></i> BI Fretes
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bi/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bi/transportadoras">Transportadoras</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bi/regional">Análise Regional</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/bi/despesas">Despesas Extras</a>
+                    </li>
+                </ul>
+                <div class="ms-auto">
+                    <button class="btn btn-outline-light btn-sm" onclick="executarETL()">
+                        <i class="bi bi-arrow-clockwise"></i> Atualizar Dados
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Filtros -->
+        <div class="filter-section">
+            <div class="row align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Período</label>
+                    <select class="form-select" id="filtro-periodo">
+                        <option value="mes">Mês Atual</option>
+                        <option value="trimestre">Trimestre</option>
+                        <option value="semestre">Semestre</option>
+                        <option value="ano">Ano</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo de Despesa</label>
+                    <select class="form-select" id="filtro-tipo">
+                        <option value="">Todos</option>
+                        <option value="REENTREGA">Reentrega</option>
+                        <option value="TDE">TDE</option>
+                        <option value="DEVOLUÇÃO">Devolução</option>
+                        <option value="COMPLEMENTO DE FRETE">Complemento de Frete</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Setor Responsável</label>
+                    <select class="form-select" id="filtro-setor">
+                        <option value="">Todos</option>
+                        <option value="COMERCIAL">Comercial</option>
+                        <option value="QUALIDADE">Qualidade</option>
+                        <option value="FISCAL">Fiscal</option>
+                        <option value="FINANCEIRO">Financeiro</option>
+                        <option value="LOGISTICA">Logística</option>
+                        <option value="COMPRAS">Compras</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" onclick="aplicarFiltros()">
+                        <i class="bi bi-funnel"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards de Resumo -->
+        <h4 class="section-title">Resumo de Despesas Extras</h4>
+        <div class="row" id="cards-despesas">
+            <!-- Preenchido via JS -->
+        </div>
+
+        <!-- Gráficos -->
+        <div class="row mt-4">
+            <!-- Distribuição por Tipo -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-pie-chart text-primary"></i> Distribuição por Tipo
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartTipos"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Distribuição por Setor -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-bar-chart text-info"></i> Responsabilidade por Setor
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartSetores"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Evolução Temporal -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up text-success"></i> Evolução Temporal das Despesas
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartEvolucao"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Motivos -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-exclamation-triangle text-warning"></i> Top 10 Motivos de Despesas
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="top-motivos">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transportadoras com Mais Despesas -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-truck text-danger"></i> Transportadoras com Mais Despesas
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="top-transportadoras-despesas">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela Detalhada -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-table text-secondary"></i> Análise Detalhada por Tipo/Setor
+                        </h5>
+                        <button class="btn btn-sm btn-outline-primary" onclick="exportarDespesas()">
+                            <i class="bi bi-download"></i> Exportar
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-motivos">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Setor</th>
+                                        <th>Motivo Principal</th>
+                                        <th>Ocorrências</th>
+                                        <th>Valor Total</th>
+                                        <th>Valor Médio</th>
+                                        <th>% do Total</th>
+                                        <th>Tendência</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-detalhado">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Variáveis globais
+        let chartTipos, chartSetores, chartEvolucao;
+        let dadosDespesas = [];
+
+        // Formatar valores
+        function formatarMoeda(valor) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(valor);
+        }
+
+        function formatarNumero(numero) {
+            return new Intl.NumberFormat('pt-BR').format(numero);
+        }
+
+        // Obter classe do tipo de despesa
+        function getTipoClass(tipo) {
+            const classes = {
+                'REENTREGA': 'tipo-reentrega',
+                'TDE': 'tipo-tde',
+                'DEVOLUÇÃO': 'tipo-devolucao',
+                'COMPLEMENTO DE FRETE': 'tipo-complemento'
+            };
+            return classes[tipo] || 'tipo-outros';
+        }
+
+        // Obter classe do setor
+        function getSetorClass(setor) {
+            return 'setor-' + setor.toLowerCase();
+        }
+
+        // Carregar dados de despesas
+        function carregarDespesas() {
+            $.get('/bi/api/despesas-por-tipo', function(data) {
+                dadosDespesas = data;
+                renderizarCards(data);
+                renderizarGraficos(data);
+                renderizarTopMotivos(data);
+                renderizarTabela(data);
+            });
+        }
+
+        // Renderizar cards de resumo
+        function renderizarCards(data) {
+            let html = '';
+            let totalGeral = data.reduce((acc, d) => acc + d.valor, 0);
+            
+            data.slice(0, 4).forEach(function(tipo) {
+                const percentual = (tipo.valor / totalGeral * 100).toFixed(1);
+                const headerClass = getTipoClass(tipo.tipo);
+                
+                html += `
+                    <div class="col-md-3">
+                        <div class="card despesa-card">
+                            <div class="despesa-header ${headerClass}">
+                                ${tipo.tipo}
+                            </div>
+                            <div class="card-body">
+                                <h4>${formatarMoeda(tipo.valor)}</h4>
+                                <p class="mb-1">${tipo.qtd} ocorrências</p>
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar" style="width: ${percentual}%"></div>
+                                </div>
+                                <small>${percentual}% do total</small>
+                                
+                                <hr>
+                                
+                                <small class="text-muted">Principais setores:</small><br>
+                                ${tipo.setores.slice(0, 2).map(s => `
+                                    <span class="setor-badge ${getSetorClass(s.nome)}">${s.nome}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            $('#cards-despesas').html(html);
+        }
+
+        // Renderizar gráficos
+        function renderizarGraficos(data) {
+            // Gráfico de Tipos
+            const ctxTipos = document.getElementById('chartTipos').getContext('2d');
+            if (chartTipos) chartTipos.destroy();
+            
+            chartTipos = new Chart(ctxTipos, {
+                type: 'doughnut',
+                data: {
+                    labels: data.map(d => d.tipo),
+                    datasets: [{
+                        data: data.map(d => d.valor),
+                        backgroundColor: [
+                            '#e74c3c',
+                            '#f39c12',
+                            '#9b59b6',
+                            '#3498db',
+                            '#95a5a6'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + formatarMoeda(context.parsed);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Gráfico de Setores
+            const setoresData = {};
+            data.forEach(tipo => {
+                tipo.setores.forEach(setor => {
+                    if (!setoresData[setor.nome]) {
+                        setoresData[setor.nome] = 0;
+                    }
+                    setoresData[setor.nome] += setor.valor;
+                });
+            });
+            
+            const ctxSetores = document.getElementById('chartSetores').getContext('2d');
+            if (chartSetores) chartSetores.destroy();
+            
+            chartSetores = new Chart(ctxSetores, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(setoresData),
+                    datasets: [{
+                        label: 'Valor Total',
+                        data: Object.values(setoresData),
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatarMoeda(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Gráfico de Evolução (simulado)
+            const ctxEvolucao = document.getElementById('chartEvolucao').getContext('2d');
+            if (chartEvolucao) chartEvolucao.destroy();
+            
+            const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
+            chartEvolucao = new Chart(ctxEvolucao, {
+                type: 'line',
+                data: {
+                    labels: meses,
+                    datasets: [
+                        {
+                            label: 'REENTREGA',
+                            data: meses.map(() => 0), // Será atualizado com dados reais
+                            borderColor: '#e74c3c',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'TDE',
+                            data: meses.map(() => 0), // Será atualizado com dados reais
+                            borderColor: '#f39c12',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'DEVOLUÇÃO',
+                            data: meses.map(() => 0), // Será atualizado com dados reais
+                            borderColor: '#9b59b6',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatarMoeda(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Renderizar top motivos
+        function renderizarTopMotivos(data) {
+            // Simular top motivos
+            const motivos = [
+                { motivo: 'PEDIDO EM DESACORDO', valor: 45000, qtd: 120 },
+                { motivo: 'SEM AGENDA', valor: 38000, qtd: 95 },
+                { motivo: 'DIVERGENCIA DE CADASTRO', valor: 32000, qtd: 85 },
+                { motivo: 'PROBLEMA NO CLIENTE', valor: 28000, qtd: 72 },
+                { motivo: 'FALTA MERCADORIA', valor: 24000, qtd: 68 },
+                { motivo: 'ATRASO', valor: 21000, qtd: 55 },
+                { motivo: 'VAZAMENTO', valor: 18000, qtd: 42 },
+                { motivo: 'INVERSÃO', valor: 15000, qtd: 38 },
+                { motivo: 'ARQUIVO XML', valor: 12000, qtd: 30 },
+                { motivo: 'FORA DO PADRÃO', valor: 10000, qtd: 25 }
+            ];
+            
+            let html = '';
+            motivos.forEach((m, idx) => {
+                html += `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <span class="badge bg-secondary me-2">${idx + 1}º</span>
+                            <span>${m.motivo}</span>
+                        </div>
+                        <div class="text-end">
+                            <strong>${formatarMoeda(m.valor)}</strong><br>
+                            <small class="text-muted">${m.qtd} ocorrências</small>
+                        </div>
+                    </div>
+                `;
+            });
+            $('#top-motivos').html(html);
+
+            // Top transportadoras com despesas
+            const transportadoras = [
+                { nome: 'Transportadora A', valor: 52000, percentual: 15 },
+                { nome: 'Transportadora B', valor: 43000, percentual: 12 },
+                { nome: 'Transportadora C', valor: 38000, percentual: 10 },
+                { nome: 'Transportadora D', valor: 31000, percentual: 8 },
+                { nome: 'Transportadora E', valor: 25000, percentual: 7 }
+            ];
+            
+            html = '';
+            transportadoras.forEach((t, idx) => {
+                html += `
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <span class="badge bg-danger me-2">${idx + 1}º</span>
+                            <span>${t.nome}</span>
+                        </div>
+                        <div class="text-end">
+                            <strong>${formatarMoeda(t.valor)}</strong><br>
+                            <div class="progress" style="width: 100px; height: 5px;">
+                                <div class="progress-bar bg-danger" style="width: ${t.percentual * 5}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            $('#top-transportadoras-despesas').html(html);
+        }
+
+        // Renderizar tabela detalhada
+        function renderizarTabela(data) {
+            let html = '';
+            let totalGeral = data.reduce((acc, d) => acc + d.valor, 0);
+            
+            // Simular dados detalhados
+            const detalhes = [
+                { tipo: 'REENTREGA', setor: 'COMERCIAL', motivo: 'PEDIDO EM DESACORDO', qtd: 45, valor: 18500, medio: 411, tendencia: 'up' },
+                { tipo: 'REENTREGA', setor: 'QUALIDADE', motivo: 'VAZAMENTO', qtd: 32, valor: 12800, medio: 400, tendencia: 'stable' },
+                { tipo: 'TDE', setor: 'FISCAL', motivo: 'ARQUIVO XML', qtd: 28, valor: 11200, medio: 400, tendencia: 'down' },
+                { tipo: 'TDE', setor: 'LOGISTICA', motivo: 'ATRASO', qtd: 25, valor: 10000, medio: 400, tendencia: 'up' },
+                { tipo: 'DEVOLUÇÃO', setor: 'COMERCIAL', motivo: 'SEM AGENDA', qtd: 22, valor: 8800, medio: 400, tendencia: 'stable' },
+                { tipo: 'DEVOLUÇÃO', setor: 'QUALIDADE', motivo: 'FORA DO PADRÃO', qtd: 18, valor: 7200, medio: 400, tendencia: 'down' },
+                { tipo: 'COMPLEMENTO DE FRETE', setor: 'FINANCEIRO', motivo: 'DIVERGENTE IMPOSTO', qtd: 15, valor: 6000, medio: 400, tendencia: 'up' }
+            ];
+            
+            detalhes.forEach(function(d) {
+                const percentual = (d.valor / totalGeral * 100).toFixed(1);
+                let trendIcon = '';
+                let trendClass = '';
+                
+                if (d.tendencia === 'up') {
+                    trendIcon = '↑';
+                    trendClass = 'trend-up';
+                } else if (d.tendencia === 'down') {
+                    trendIcon = '↓';
+                    trendClass = 'trend-down';
+                } else {
+                    trendIcon = '→';
+                    trendClass = 'trend-stable';
+                }
+                
+                html += `
+                    <tr>
+                        <td><span class="motivo-pill">${d.tipo}</span></td>
+                        <td><span class="setor-badge ${getSetorClass(d.setor)}">${d.setor}</span></td>
+                        <td>${d.motivo}</td>
+                        <td>${d.qtd}</td>
+                        <td>${formatarMoeda(d.valor)}</td>
+                        <td>${formatarMoeda(d.medio)}</td>
+                        <td>${percentual}%</td>
+                        <td><span class="trend-indicator ${trendClass}">${trendIcon}</span></td>
+                    </tr>
+                `;
+            });
+            
+            $('#tbody-detalhado').html(html);
+        }
+
+        // Aplicar filtros
+        function aplicarFiltros() {
+            carregarDespesas();
+        }
+
+        // Exportar despesas
+        function exportarDespesas() {
+            alert('Funcionalidade de exportação em desenvolvimento');
+        }
+
+        // Executar ETL
+        function executarETL() {
+            if (confirm('Deseja executar a atualização dos dados agora?')) {
+                $.post('/bi/api/executar-etl', function(data) {
+                    if (data.sucesso) {
+                        alert('Dados atualizados com sucesso!');
+                        carregarDespesas();
+                    } else {
+                        alert('Erro ao atualizar dados');
+                    }
+                });
+            }
+        }
+
+        // Carregar ao iniciar
+        $(document).ready(function() {
+            carregarDespesas();
+        });
+    </script>
+</body>
+</html>

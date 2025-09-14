@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from app import create_app, db
 from app.portal.models import PortalIntegracao, PortalLog
-import json
+from app.portal.sendas.retorno_agendamento import processar_retorno_agendamento
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -35,28 +35,51 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
             
             # Converter datas de string para date objects se necessário
             # (os dados vêm do JSONB onde dates são armazenadas como strings)
-            from datetime import datetime
+            # MAS PRESERVAR TODA A ESTRUTURA DE DADOS!
             lista_cnpjs_processada = []
             for item in lista_cnpjs_agendamento:
-                cnpj = item.get('cnpj')
-                data_agendamento = item.get('data_agendamento')
-                
-                # Converter string para date se necessário
+                # Criar cópia profunda do item para não modificar o original
+                item_processado = dict(item)
+
+                # Converter data_agendamento se necessário
+                data_agendamento = item_processado.get('data_agendamento')
                 if isinstance(data_agendamento, str) and data_agendamento:
                     try:
-                        # Tentar formato ISO (YYYY-MM-DD)
-                        data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+                        item_processado['data_agendamento'] = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
                     except ValueError:
-                        # Se falhar, manter como está
-                        logger.warning(f"[Worker Sendas] Não foi possível converter data: {data_agendamento}")
-                
-                lista_cnpjs_processada.append({
-                    'cnpj': cnpj,
-                    'data_agendamento': data_agendamento
-                })
-            
+                        logger.warning(f"[Worker Sendas] Não foi possível converter data_agendamento: {data_agendamento}")
+
+                # Converter data_expedicao se existir (campo documentado em TECHNICAL_SPEC_SENDAS.md)
+                data_expedicao = item_processado.get('data_expedicao')
+                if isinstance(data_expedicao, str) and data_expedicao:
+                    try:
+                        item_processado['data_expedicao'] = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
+                    except ValueError:
+                        logger.warning(f"[Worker Sendas] Não foi possível converter data_expedicao: {data_expedicao}")
+
+                # Se houver itens, converter datas dentro dos itens também
+                if 'itens' in item_processado and item_processado['itens']:
+                    for subitem in item_processado['itens']:
+                        # Converter data_expedicao do item se necessário
+                        if 'data_expedicao' in subitem and isinstance(subitem['data_expedicao'], str):
+                            try:
+                                subitem['data_expedicao'] = datetime.strptime(subitem['data_expedicao'], '%Y-%m-%d').date()
+                            except (ValueError, TypeError):
+                                pass
+
+                # PRESERVAR TODA A ESTRUTURA!
+                # Incluindo: cnpj, data_agendamento, data_expedicao, protocolo, itens, peso_total, etc.
+                lista_cnpjs_processada.append(item_processado)
+
             # Usar a lista processada daqui em diante
             lista_cnpjs_agendamento = lista_cnpjs_processada
+
+            # Log para debug - mostrar se preservamos a estrutura
+            if lista_cnpjs_agendamento and isinstance(lista_cnpjs_agendamento[0], dict):
+                campos_preservados = list(lista_cnpjs_agendamento[0].keys())
+                logger.info(f"[Worker Sendas] Campos preservados: {campos_preservados}")
+                if 'itens' in lista_cnpjs_agendamento[0]:
+                    logger.info(f"[Worker Sendas] ✅ Estrutura completa preservada com {len(lista_cnpjs_agendamento[0].get('itens', []))} itens")
             
             # Buscar integração no banco
             integracao = PortalIntegracao.query.get(integracao_id)
@@ -98,9 +121,15 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
                 """Callback para preencher a planilha com os dados selecionados"""
                 logger.info(f"[Worker Sendas] Preenchendo planilha: {arquivo_baixado}")
                 
+                # Detectar se temos dados completos fornecidos
+                usar_dados_fornecidos = False
+                if lista_cnpjs_agendamento and isinstance(lista_cnpjs_agendamento[0], dict):
+                    usar_dados_fornecidos = 'itens' in lista_cnpjs_agendamento[0]
+
                 arquivo_processado = preenchedor.preencher_multiplos_cnpjs(
                     arquivo_origem=arquivo_baixado,
-                    lista_cnpjs_agendamento=lista_cnpjs_agendamento
+                    lista_cnpjs_agendamento=lista_cnpjs_agendamento,
+                    usar_dados_fornecidos=usar_dados_fornecidos
                 )
                 
                 logger.info(f"[Worker Sendas] Planilha preenchida: {arquivo_processado}")
@@ -115,7 +144,32 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
             # Processar resultado
             if resultado:
                 logger.info("[Worker Sendas] ✅ Processamento concluído com sucesso")
-                
+
+                # Processar retorno e salvar protocolos nos locais corretos
+                protocolo = resultado.get('protocolo') or resultado.get('arquivo_upload', '').split('_')[-1].replace('.xlsx', '')
+                if protocolo and lista_cnpjs_agendamento:
+                    # Preparar dados para retorno universal
+                    dados_retorno = {
+                        'protocolo': protocolo,
+                        'cnpj': lista_cnpjs_agendamento[0].get('cnpj') if isinstance(lista_cnpjs_agendamento[0], dict) else lista_cnpjs_agendamento[0],
+                        'data_agendamento': lista_cnpjs_agendamento[0].get('data_agendamento') if isinstance(lista_cnpjs_agendamento[0], dict) else None,
+                        'data_expedicao': lista_cnpjs_agendamento[0].get('data_expedicao') if isinstance(lista_cnpjs_agendamento[0], dict) else None,
+                        'itens': lista_cnpjs_agendamento[0].get('itens', []) if isinstance(lista_cnpjs_agendamento[0], dict) else [],
+                        # Buscar tipo_fluxo e origem de dados_enviados (campo correto)
+                        'tipo_fluxo': integracao.dados_enviados.get('tipo_fluxo') if integracao.dados_enviados else 'programacao_lote',
+                        'documento_origem': integracao.dados_enviados.get('documento_origem') if integracao.dados_enviados else None
+                    }
+
+                    # Processar retorno
+                    try:
+                        retorno_sucesso = processar_retorno_agendamento(dados_retorno)
+                        if retorno_sucesso:
+                            logger.info("[Worker Sendas] ✅ Protocolos salvos com sucesso")
+                        else:
+                            logger.warning("[Worker Sendas] ⚠️ Falha ao salvar alguns protocolos")
+                    except Exception as e:
+                        logger.error(f"[Worker Sendas] ❌ Erro ao processar retorno: {e}")
+
                 # Atualizar status da integração
                 integracao.status = 'concluido'
                 integracao.atualizado_em = datetime.utcnow()
@@ -123,7 +177,8 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
                     'sucesso': True,
                     'mensagem': 'Agendamentos processados com sucesso',
                     'timestamp': datetime.now().isoformat(),
-                    'total_cnpjs': len(lista_cnpjs_agendamento)
+                    'total_cnpjs': len(lista_cnpjs_agendamento),
+                    'protocolo': protocolo
                 }
                 db.session.commit()
                 

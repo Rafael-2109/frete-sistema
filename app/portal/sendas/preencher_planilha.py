@@ -108,7 +108,8 @@ class PreencherPlanilhaSendas:
                                     # Converter string para date
                                     dt = pd.to_datetime(v, format='%d/%m/%Y')
                                     ws.write_datetime(r, c, dt.date(), date_format)
-                                except:
+                                except Exception as e:
+                                    logger.warning(f"  ⚠️ Erro ao converter data: {e}")
                                     ws.write(r, c, v)
                             else:
                                 ws.write(r, c, v)
@@ -144,10 +145,14 @@ class PreencherPlanilhaSendas:
         1. CarteiraPrincipal (pedidos com pedido_cliente)
         2. Separacao (sincronizado_nf=False)
         3. NFs no CD (sincronizado_nf=True e nf_cd=True)
-        
+
+        ⚠️ IMPORTANTE: Este método NÃO deve ser chamado quando usar_dados_fornecidos=True
+        pois os dados já foram buscados anteriormente (em busca_dados.py ou routes_fila.py)
+        e estão sendo fornecidos completos, incluindo o campo crítico pedido_cliente.
+
         Args:
             cnpj: CNPJ para buscar dados
-            
+
         Returns:
             Dicionário com dados do CNPJ
         """
@@ -286,73 +291,13 @@ class PreencherPlanilhaSendas:
                 dados['pallets_total'] += pallets_item
                 dados['valor_total'] += Decimal(str(item.qtd_saldo_produto_pedido)) * Decimal(str(item.preco_produto_pedido or 0))
         
-        # 2. BUSCAR SEPARAÇÕES (sincronizado_nf=False)
-        logger.info("  📋 Buscando em Separacao...")
+        # 2. NÃO BUSCAR SEPARAÇÕES COM sincronizado_nf=False
+        # Motivo: CarteiraPrincipal JÁ INCLUI todos os itens não faturados
+        logger.info("  ℹ️ Separações não faturadas já estão na CarteiraPrincipal")
         
-        separacoes = db.session.query(
-            Separacao.num_pedido,
-            Separacao.cod_produto,
-            Separacao.qtd_saldo,
-            Separacao.peso,
-            Separacao.pallet,
-            Separacao.valor_saldo,
-            Separacao.expedicao,
-            Separacao.agendamento,
-            Separacao.protocolo,
-            Separacao.observ_ped_1,
-            Separacao.pedido_cliente
-        ).filter(
-            and_(
-                Separacao.cnpj_cpf == cnpj,
-                Separacao.sincronizado_nf == False
-            )
-        ).all()
-        
-        logger.info(f"    Encontradas {len(separacoes)} separações")
-        
-        # Criar set de chaves já adicionadas da carteira para evitar duplicatas
-        chaves_carteira = set()
-        for item in dados['itens']:
-            if item['origem'] == 'carteira':
-                chaves_carteira.add(f"{item['num_pedido']}_{item['cod_produto']}")
-        
-        for sep in separacoes:
-            # Pular se já foi adicionado da carteira
-            chave = f"{sep.num_pedido}_{sep.cod_produto}"
-            if chave in chaves_carteira:
-                continue
-            
-            # Buscar nome do produto
-            nome_produto = None
-            pallet_cadastro = db.session.query(CadastroPalletizacao.nome_produto).filter(
-                CadastroPalletizacao.cod_produto == sep.cod_produto
-            ).first()
-            if pallet_cadastro:
-                nome_produto = pallet_cadastro.nome_produto
-            
-            dados['itens'].append({
-                'num_pedido': sep.num_pedido,
-                'pedido_cliente': sep.pedido_cliente,  # Pode estar NULL mas vamos incluir
-                'cod_produto': sep.cod_produto,
-                'nome_produto': nome_produto or f"Produto {sep.cod_produto}",
-                'quantidade': float(sep.qtd_saldo or 0),
-                'peso': float(sep.peso or 0),
-                'pallets': float(sep.pallet or 0),
-                'valor': float(sep.valor_saldo or 0),
-                'expedicao': sep.expedicao,
-                'agendamento': sep.agendamento,
-                'protocolo': sep.protocolo,
-                'observacoes': sep.observ_ped_1,
-                'origem': 'separacao'
-            })
-            
-            dados['peso_total'] += Decimal(str(sep.peso or 0))
-            dados['pallets_total'] += Decimal(str(sep.pallet or 0))
-            dados['valor_total'] += Decimal(str(sep.valor_saldo or 0))
-        
-        # 3. BUSCAR NFs NO CD (sincronizado_nf=True e nf_cd=True)
-        logger.info("  📄 Buscando NFs no CD...")
-        
+        # 2. BUSCAR NFs NO CD (apenas nf_cd=True)
+        logger.info("  📄 Buscando NFs no CD (Separacao com nf_cd=True)...")
+
         nfs_cd = db.session.query(
             Separacao.num_pedido,
             Separacao.numero_nf,
@@ -369,8 +314,7 @@ class PreencherPlanilhaSendas:
         ).filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
-                Separacao.sincronizado_nf == True,
-                Separacao.nf_cd == True
+                Separacao.nf_cd == True  # Apenas NFs no CD
             )
         ).all()
         
@@ -640,7 +584,7 @@ class PreencherPlanilhaSendas:
         
         if not sucesso:
             logger.error("  ❌ Erro na conversão para xlsxwriter")
-            return None
+            return ''
             
         logger.info(f"  💾 Planilha salva: {arquivo_destino}")
         
@@ -666,15 +610,16 @@ class PreencherPlanilhaSendas:
         
         return arquivo_destino
     
-    def preencher_multiplos_cnpjs(self, arquivo_origem, lista_cnpjs_agendamento, arquivo_destino=None):
+    def preencher_multiplos_cnpjs(self, arquivo_origem, lista_cnpjs_agendamento, arquivo_destino=None, usar_dados_fornecidos=False):
         """
         Preenche planilha para MÚLTIPLOS CNPJs de uma vez e REMOVE linhas não agendadas
-        
+
         Args:
             arquivo_origem: Caminho da planilha baixada do portal
-            lista_cnpjs_agendamento: Lista de dict com {'cnpj': str, 'data_agendamento': date}
+            lista_cnpjs_agendamento: Lista de dict com dados para agendamento
             arquivo_destino: Caminho opcional para salvar
-        
+            usar_dados_fornecidos: Se True, usa dados fornecidos sem buscar no banco
+
         Returns:
             str: Caminho do arquivo salvo ou None se erro
         """
@@ -698,25 +643,63 @@ class PreencherPlanilhaSendas:
         # Coletar dados de TODOS os CNPJs
         todos_dados = {}
         peso_total_geral = Decimal('0')
-        
-        for idx, agendamento in enumerate(lista_cnpjs_agendamento, 1):
-            cnpj = agendamento['cnpj']
-            data_agendamento = agendamento['data_agendamento']
-            
-            logger.info(f"\n  [{idx}/{len(lista_cnpjs_agendamento)}] Coletando dados do CNPJ: {cnpj}")
-            
-            # Buscar dados do CNPJ
-            dados_cnpj = self.buscar_dados_cnpj(cnpj)
-            if not dados_cnpj or not dados_cnpj['itens']:
-                logger.warning(f"    ⚠️ Sem dados para CNPJ {cnpj}")
-                continue
-            
-            todos_dados[cnpj] = {
-                'data_agendamento': data_agendamento,
-                'dados': dados_cnpj,
-                'filial': FilialDeParaSendas.cnpj_to_filial(cnpj)
-            }
-            peso_total_geral += dados_cnpj['peso_total']
+        protocolos_unicos = set()  # Para rastrear protocolos únicos
+
+        # Verificar se deve usar dados fornecidos ou buscar
+        if usar_dados_fornecidos and lista_cnpjs_agendamento and isinstance(lista_cnpjs_agendamento[0], dict) and 'itens' in lista_cnpjs_agendamento[0]:
+            # USAR DADOS FORNECIDOS
+            logger.info("✅ Usando dados PRÉ-PROCESSADOS fornecidos")
+
+            for idx, grupo in enumerate(lista_cnpjs_agendamento, 1):
+                cnpj = grupo.get('cnpj')
+                if not cnpj:
+                    continue
+
+                logger.info(f"\n  [{idx}/{len(lista_cnpjs_agendamento)}] Processando CNPJ: {cnpj}")
+                logger.info(f"    {len(grupo.get('itens', []))} itens fornecidos")
+
+                # Rastrear protocolo único
+                protocolo = grupo.get('protocolo')
+                if protocolo:
+                    protocolos_unicos.add(protocolo)
+
+                todos_dados[cnpj] = {
+                    'data_agendamento': grupo.get('data_agendamento'),
+                    'protocolo': protocolo,  # Adicionar protocolo
+                    'dados': {
+                        'cnpj': cnpj,
+                        'itens': grupo.get('itens', []),
+                        'peso_total': Decimal(str(grupo.get('peso_total', 0))),
+                        'pallets_total': Decimal(str(grupo.get('pallets_total', 0))),
+                        'valor_total': Decimal(str(grupo.get('valor_total', 0)))
+                    },
+                    'filial': FilialDeParaSendas.cnpj_to_filial(cnpj)
+                }
+                peso_total_geral += todos_dados[cnpj]['dados']['peso_total']
+        else:
+            # BUSCAR DO BANCO (compatibilidade - apenas quando NÃO temos dados fornecidos)
+            logger.info("📋 Buscando dados do banco (modo compatibilidade - SEM dados fornecidos)")
+            logger.info("⚠️ NOTA: Esta busca deveria ser evitada quando dados já foram fornecidos!")
+
+            for idx, agendamento in enumerate(lista_cnpjs_agendamento, 1):
+                cnpj = agendamento['cnpj']
+                data_agendamento = agendamento['data_agendamento']
+
+                logger.info(f"\n  [{idx}/{len(lista_cnpjs_agendamento)}] Coletando dados do CNPJ: {cnpj}")
+
+                # BUSCA NO BANCO - idealmente deveria ser evitada quando usar_dados_fornecidos=True
+                # TODO: Remover esta busca quando o fluxo estiver totalmente unificado
+                dados_cnpj = self.buscar_dados_cnpj(cnpj)
+                if not dados_cnpj or not dados_cnpj['itens']:
+                    logger.warning(f"    ⚠️ Sem dados para CNPJ {cnpj}")
+                    continue
+
+                todos_dados[cnpj] = {
+                    'data_agendamento': data_agendamento,
+                    'dados': dados_cnpj,
+                    'filial': FilialDeParaSendas.cnpj_to_filial(cnpj)
+                }
+                peso_total_geral += dados_cnpj['peso_total']
         
         if not todos_dados:
             logger.error("❌ Nenhum dado encontrado para processar")
@@ -730,16 +713,37 @@ class PreencherPlanilhaSendas:
         observacao_unica = f"AG_MULTI_{timestamp_obs}"
         
         logger.info(f"\n📝 Preenchendo planilha com {len(todos_dados)} CNPJs...")
-        
+
+        # Criar mapeamento protocolo → demanda_id
+        # Cada protocolo único terá um demanda_id diferente
+        mapa_protocolo_demanda = {}
+        for idx, protocolo in enumerate(sorted(protocolos_unicos), 1):
+            mapa_protocolo_demanda[protocolo] = idx
+            logger.info(f"  📋 Protocolo {protocolo} → Demanda ID {idx}")
+
+        # Se não houver protocolos, usar lógica padrão
+        if not mapa_protocolo_demanda:
+            logger.info("  ⚠️ Sem protocolos definidos, usando Demanda ID sequencial por CNPJ")
+
         # Rastrear linhas preenchidas
         linhas_preenchidas = set()
-        demanda_id = 1
+        demanda_id = 1  # Fallback se não houver protocolo
         
         # PASSO 1: Preencher dados de todos os CNPJs
         for cnpj, info in todos_dados.items():
             dados_cnpj = info['dados']
             data_agendamento = info['data_agendamento']
             filial_esperada = info['filial']
+            protocolo_cnpj = info.get('protocolo')
+
+            # Determinar demanda_id baseado no protocolo
+            if protocolo_cnpj and protocolo_cnpj in mapa_protocolo_demanda:
+                demanda_id_usar = mapa_protocolo_demanda[protocolo_cnpj]
+                logger.info(f"  📌 CNPJ {cnpj} - Usando Demanda ID {demanda_id_usar} (protocolo: {protocolo_cnpj})")
+            else:
+                demanda_id_usar = demanda_id
+                logger.info(f"  📌 CNPJ {cnpj} - Usando Demanda ID {demanda_id_usar} (sequencial)")
+                demanda_id += 1  # Incrementar para próximo CNPJ sem protocolo
             
             if not filial_esperada:
                 logger.warning(f"  ⚠️ CNPJ {cnpj} sem mapeamento de filial")
@@ -760,22 +764,27 @@ class PreencherPlanilhaSendas:
                         indice_dados[chave] = item
             
             # Processar linhas da planilha
+            # LÓGICA CRÍTICA: Sendas trabalha com 1 pedido para N filiais
+            # Por isso precisamos TANTO pedido_cliente QUANTO cnpj (→ filial)
+            # para identificar unicamente a linha correta na planilha
             for row in range(linha_inicial, ultima_linha_com_dados + 1):
-                unidade_destino = ws.cell(row=row, column=4).value
-                codigo_pedido_cliente = ws.cell(row=row, column=7).value
-                codigo_produto_sendas = ws.cell(row=row, column=8).value
+                unidade_destino = ws.cell(row=row, column=4).value  # Filial na planilha
+                codigo_pedido_cliente = ws.cell(row=row, column=7).value  # Pedido
+                codigo_produto_sendas = ws.cell(row=row, column=8).value  # Produto
                 saldo_disponivel = ws.cell(row=row, column=15).value
-                
+
                 if not codigo_pedido_cliente or not codigo_produto_sendas:
                     continue
-                
-                # Verificar se é a filial correta
+
+                # MATCHING CRÍTICO: Verificar se é a filial correta do CNPJ
+                # Um mesmo pedido_cliente pode aparecer para múltiplas filiais
+                # Só devemos preencher se a filial corresponder ao CNPJ que estamos processando
                 if unidade_destino:
                     unidade_str = str(unidade_destino).upper().strip()
-                    filial_str = filial_esperada.upper().strip()
-                    
+                    filial_str = filial_esperada.upper().strip()  # Filial obtida do CNPJ
+
                     if not (unidade_str == filial_str or unidade_str.startswith(filial_str[:20])):
-                        continue  # Filial diferente, pular
+                        continue  # Filial diferente, pular esta linha
                 
                 # Extrair pedido_cliente
                 pedido_cliente = str(codigo_pedido_cliente)
@@ -789,7 +798,7 @@ class PreencherPlanilhaSendas:
                 
                 if item_encontrado:
                     # PREENCHER CAMPOS
-                    ws.cell(row=row, column=1).value = demanda_id  # Coluna A - Demanda
+                    ws.cell(row=row, column=1).value = demanda_id_usar  # Coluna A - Demanda baseada no protocolo
                     
                     # Quantidade respeitando saldo
                     quantidade = item_encontrado['quantidade']
@@ -807,8 +816,8 @@ class PreencherPlanilhaSendas:
                     ws.cell(row=row, column=24).value = observacao_unica  # Coluna X
                     
                     linhas_preenchidas.add(row)
-            
-            demanda_id += 1  # Incrementar demanda_id para próximo CNPJ
+
+            # NÃO incrementar demanda_id aqui - agora é baseado em protocolo!
         
         logger.info(f"  ✅ {len(linhas_preenchidas)} linhas preenchidas no total")
         

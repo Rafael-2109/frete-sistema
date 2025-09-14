@@ -692,6 +692,10 @@ def create_app(config_name=None):
     app.register_blueprint(carteira_bp)
     app.register_blueprint(alertas_bp)
     
+    # 📊 Módulo BI (Business Intelligence)
+    from app.bi import bi_bp
+    app.register_blueprint(bi_bp)
+    
     # 🚨 Sistema de Alertas de Separações COTADAS
     from app.carteira.routes.alertas_separacao_api import alertas_separacao_api as alertas_separacao_bp
     app.register_blueprint(alertas_separacao_bp)
@@ -710,6 +714,11 @@ def create_app(config_name=None):
         from app.portal.sendas.routes import sendas_bp
         app.register_blueprint(sendas_bp)
         app.logger.info("✅ Portal Sendas (gerenciamento de sessão) registrado com sucesso")
+
+        # Registrar blueprint da fila Sendas
+        from app.portal.sendas.routes_fila import fila_sendas_bp
+        app.register_blueprint(fila_sendas_bp)
+        app.logger.info("✅ Portal Sendas (sistema de fila) registrado com sucesso")
         
     except ImportError as e:
         app.logger.error(f"❌ Portal de integração - ImportError: {e}")

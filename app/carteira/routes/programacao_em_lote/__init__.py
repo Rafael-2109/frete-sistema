@@ -18,7 +18,6 @@ from .routes import (
     analisar_estoques, 
     sugerir_datas,
     analisar_ruptura_lote,
-    processar_lote
 )
 
 # Importar rota de importação de agendamentos Assai
