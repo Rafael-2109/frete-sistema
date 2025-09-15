@@ -117,23 +117,50 @@
                                 Com Agendamento
                             </span>
                             
-                            <!-- NOVOS FILTROS DE SEPARAÇÃO COMPLETA -->
+                            <!-- FILTROS DE SEPARAÇÃO COM PROTOCOLO -->
                             <span class="badge bg-filtro badge-agendamento ms-3"
                                 style="background-color: transparent; color: #fd7e14; border: 2px solid #fd7e14;"
-                                data-tipo="agendamento" data-valor="completa-sem-confirmacao"
-                                title="Pedidos com separação completa que precisam de agendamento (não confirmado)">
+                                data-tipo="agendamento" data-valor="sep-aguardando"
+                                title="Pedidos com separação que têm protocolo mas não foram confirmados">
                                 <i class="fas fa-box-open me-1"></i>
-                                Sep. Completa (Aguardando)
+                                Sep. (Aguardando)
                             </span>
                             <span class="badge bg-filtro badge-agendamento"
                                 style="background-color: transparent; color: #0dcaf0; border: 2px solid #0dcaf0;"
-                                data-tipo="agendamento" data-valor="completa-confirmado"
-                                title="Pedidos com separação completa e agendamento confirmado">
+                                data-tipo="agendamento" data-valor="sep-confirmado"
+                                title="Pedidos com separação que têm protocolo e foram confirmados">
                                 <i class="fas fa-check-double me-1"></i>
-                                Sep. Completa (Confirmado)
+                                Sep. (Confirmado)
                             </span>
                         </div>
                         <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-agendamento"
+                            style="display:none;">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Nova Seção: Atendimento da Entrega -->
+                <div class="badges-atendimento-container mb-2">
+                    <div class="d-flex align-items-center">
+                        <span class="text-muted small me-2">Atendimento da Entrega:</span>
+                        <div class="badges-atendimento-wrapper">
+                            <span class="badge bg-filtro badge-atendimento"
+                                style="background-color: transparent; color: #6f42c1; border: 2px solid #6f42c1;"
+                                data-tipo="atendimento" data-valor="programar"
+                                title="Pedidos com data de entrega que precisam de agendamento">
+                                <i class="fas fa-calendar-plus me-1"></i>
+                                Programar
+                            </span>
+                            <span class="badge bg-filtro badge-atendimento ms-2"
+                                style="background-color: transparent; color: #e83e8c; border: 2px solid #e83e8c;"
+                                data-tipo="atendimento" data-valor="revisar-data"
+                                title="Pedidos com agendamento posterior à data de entrega">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                Revisar Data
+                            </span>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-atendimento"
                             style="display:none;">
                             <i class="fas fa-times"></i> Limpar
                         </button>
@@ -326,9 +353,11 @@
                                 data-subrota="{{ pedido.sub_rota or '' }}"
                                 data-incoterm="{{ pedido.incoterm or 'CIF' }}" data-uf="{{ pedido.cod_uf or '' }}"
                                 data-agendamento="{{ 'sem' if (not pedido.forma_agendamento or pedido.forma_agendamento == 'SEM AGENDAMENTO') else 'com' }}"
-                                data-separacao-completa="{{ 'true' if pedido.tem_separacao_completa else 'false' }}"
+                                data-tem-protocolo-separacao="{{ 'true' if pedido.tem_protocolo_separacao else 'false' }}"
                                 data-agendamento-confirmado="{{ 'true' if pedido.agendamento_confirmado else 'false' }}"
                                 data-protocolo="{{ pedido.protocolo or '' }}"
+                                data-data-entrega-pedido="{{ pedido.data_entrega_pedido.strftime('%Y-%m-%d') if pedido.data_entrega_pedido else '' }}"
+                                data-agendamento-data="{{ pedido.agendamento.strftime('%Y-%m-%d') if pedido.agendamento else '' }}"
                                 data-separacao-lote-id="{{ pedido.separacao_lote_id or '' }}"
                                 data-grupo-cliente="{{ pedido.grupo_cliente or 'outros' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">

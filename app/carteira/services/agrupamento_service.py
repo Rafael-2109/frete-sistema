@@ -145,21 +145,27 @@ class AgrupamentoService:
             from app.portal.utils.grupo_empresarial import GrupoEmpresarial
             
             # Calcular informações de separação
-            qtd_separacoes, valor_separacoes, dados_separacao_completa = self._calcular_separacoes(pedido.num_pedido)
-            
+            qtd_separacoes, valor_separacoes, dados_separacao = self._calcular_separacoes(pedido.num_pedido)
+
             # Calcular valor do saldo restante
             valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
             valor_saldo_restante = valor_pedido - float(valor_separacoes)
-            
+
             # Determinar se está totalmente em separação
             totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
-            
-            # SIMPLIFICADO: Não precisamos mais modificar datas baseado em separações
-            # Sempre usar os valores originais da CarteiraPrincipal
+
+            # Usar dados da Separacao se tiver protocolo lá, senão usar da CarteiraPrincipal
+            if dados_separacao.get('tem_protocolo'):
+                # Se tem protocolo na Separacao, usar dados de lá
+                protocolo_final = pedido.protocolo  # Manter protocolo original
+                agendamento_confirmado_final = dados_separacao.get('agendamento_confirmado', False)
+            else:
+                # Usar valores originais da CarteiraPrincipal
+                protocolo_final = pedido.protocolo
+                agendamento_confirmado_final = pedido.agendamento_confirmado
+
             expedicao_final = pedido.expedicao
             agendamento_final = pedido.agendamento
-            protocolo_final = pedido.protocolo
-            agendamento_confirmado_final = pedido.agendamento_confirmado
             
             # Buscar rota e sub-rota das localidades
             rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
@@ -205,8 +211,8 @@ class AgrupamentoService:
                 'valor_saldo_restante': valor_saldo_restante,
                 'qtd_separacoes': qtd_separacoes,
                 'totalmente_separado': totalmente_separado,
-                'tem_separacao_completa': dados_separacao_completa.get('tem_separacao_completa', False),
-                'separacao_lote_id': dados_separacao_completa.get('separacao_lote_id'),  # Passar lote_id
+                'tem_protocolo_separacao': dados_separacao.get('tem_protocolo', False),  # Se tem protocolo na Separacao
+                'separacao_lote_id': dados_separacao.get('separacao_lote_id'),  # Passar lote_id
                 'grupo_cliente': grupo_cliente  # Adicionar grupo do cliente
             }
             
@@ -215,10 +221,10 @@ class AgrupamentoService:
             return self._criar_pedido_basico(pedido)
     
     def _calcular_separacoes(self, num_pedido):
-        """Calcula quantidade e valor das separações ativas e retorna dados de separação completa"""
+        """Calcula quantidade e valor das separações ativas e retorna dados de separação"""
         try:
             # MIGRADO: Removido import de PreSeparacaoItem
-            
+
             # Contar separacao_lote_id únicos (quantidade de envios para separação)
             # MIGRADO: Usa sincronizado_nf=False em vez de JOIN com Pedido
             qtd_separacoes = db.session.query(
@@ -227,37 +233,41 @@ class AgrupamentoService:
                 Separacao.num_pedido == num_pedido,
                 Separacao.sincronizado_nf == False  # MIGRADO: Critério correto
             ).scalar() or 0
-            
-            # Buscar separações para calcular valor total e verificar tipo_envio
+
+            # Buscar separações para calcular valor total e verificar protocolo/agendamento
             # MIGRADO: Query simplificada sem JOIN com Pedido
             separacoes_ativas = db.session.query(Separacao).filter(
                 Separacao.num_pedido == num_pedido,
                 Separacao.sincronizado_nf == False  # MIGRADO: Critério correto
             ).all()
-            
-            # Calcular valor total das separações e buscar dados de separação completa
+
+            # Calcular valor total das separações e buscar dados de separação
             valor_separacoes = 0
-            dados_separacao_completa = {
-                'tem_separacao_completa': False,  # SIMPLIFICADO: Apenas flag
-                'separacao_lote_id': None  # Manter lote_id se houver separação completa
+            dados_separacao = {
+                'tem_protocolo': False,  # Se alguma separação tem protocolo
+                'agendamento_confirmado': False,  # Se alguma separação tem agendamento confirmado
+                'separacao_lote_id': None  # Último lote_id com protocolo
             }
-            
+
             for sep in separacoes_ativas:
                 if sep.qtd_saldo and sep.valor_saldo:
                     valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
                     valor_separacoes += sep.qtd_saldo * valor_unit
-                
-                # Se encontrar uma separação com tipo_envio 'total', marcar flag
-                if sep.tipo_envio == 'total':
-                    dados_separacao_completa['tem_separacao_completa'] = True
-                    dados_separacao_completa['separacao_lote_id'] = sep.separacao_lote_id
-            
-            
-            return qtd_separacoes, valor_separacoes, dados_separacao_completa
+
+                # Verificar se tem protocolo em alguma separação
+                if sep.protocolo:
+                    dados_separacao['tem_protocolo'] = True
+                    dados_separacao['separacao_lote_id'] = sep.separacao_lote_id
+
+                    # Se tem protocolo e está confirmado
+                    if sep.agendamento_confirmado:
+                        dados_separacao['agendamento_confirmado'] = True
+
+            return qtd_separacoes, valor_separacoes, dados_separacao
             
         except Exception as e:
             logger.warning(f"Erro ao calcular separações para {num_pedido}: {e}")
-            return 0, 0, {'tem_separacao_completa': False, 'separacao_lote_id': None}
+            return 0, 0, {'tem_protocolo': False, 'agendamento_confirmado': False, 'separacao_lote_id': None}
     
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""
@@ -307,7 +317,7 @@ class AgrupamentoService:
             'valor_saldo_restante': float(pedido.valor_total) if pedido.valor_total else 0,
             'qtd_separacoes': 0,
             'totalmente_separado': False,
-            'tem_separacao_completa': False,
+            'tem_protocolo_separacao': False,  # Se tem protocolo na Separacao
             'separacao_lote_id': None,
             'grupo_cliente': grupo_cliente
         }

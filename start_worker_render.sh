@@ -193,8 +193,9 @@ echo "🔄 WORKER INICIADO - Aguardando jobs..."
 echo "=========================================="
 echo ""
 
-# Executar worker com configurações do Render
-exec python worker_atacadao.py \
+# Executar worker otimizado com configurações do Render
+echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
+exec python worker_render.py \
     --workers $WORKER_COUNT \
     --queues atacadao,sendas,high,default \
     --verbose

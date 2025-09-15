@@ -85,8 +85,12 @@ class PortalAgendamento {
                 console.warn('Portal Tenda ainda não implementado, usando Atacadão');
                 return this.portaisCarregados.atacadao;
             case 'sendas':
-                // Futura implementação
-                console.warn('Portal Sendas ainda não implementado, usando Atacadão');
+                if (window.PortalSendas) {
+                    this.portaisCarregados.sendas = window.PortalSendas;
+                    return window.PortalSendas;
+                }
+                // Fallback para Atacadão se Sendas não estiver carregado
+                console.warn('Portal Sendas não carregado, usando Atacadão como fallback');
                 return this.portaisCarregados.atacadao;
         }
         

@@ -10,8 +10,9 @@ class CarteiraAgrupada {
             rotas: new Set(),
             incoterms: new Set(),
             subrotas: new Set(),
-            agendamento: null,  // null, 'com', 'sem', 'completa-sem-confirmacao', 'completa-confirmado'
-            cliente: null  // null, 'atacadao', 'sendas', 'outros'
+            agendamento: null,  // null, 'com', 'sem', 'sep-aguardando', 'sep-confirmado'
+            cliente: null,  // null, 'atacadao', 'sendas', 'outros'
+            atendimento: null  // null, 'programar', 'revisar-data'
         };
         this.maxFiltrosAtivos = 3; // Máximo de badges selecionados simultaneamente
         
@@ -142,7 +143,12 @@ class CarteiraAgrupada {
         if (limparCliente) {
             limparCliente.addEventListener('click', () => this.limparFiltrosCliente());
         }
-        
+
+        const limparAtendimento = document.getElementById('limpar-atendimento');
+        if (limparAtendimento) {
+            limparAtendimento.addEventListener('click', () => this.limparFiltrosAtendimento());
+        }
+
         console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.bg-filtro').length);
     }
 
@@ -155,10 +161,16 @@ class CarteiraAgrupada {
             this.toggleAgendamento(badge, valor);
             return;
         }
-        
+
         // Tratamento especial para cliente (exclusivo mútuo)
         if (tipo === 'cliente') {
             this.toggleCliente(badge, valor);
+            return;
+        }
+
+        // Tratamento especial para atendimento (exclusivo mútuo)
+        if (tipo === 'atendimento') {
+            this.toggleAtendimento(badge, valor);
             return;
         }
 
@@ -276,6 +288,7 @@ class CarteiraAgrupada {
         const limparRotas = document.getElementById('limpar-rotas');
         const limparSubrotas = document.getElementById('limpar-subrotas');
         const limparAgendamento = document.getElementById('limpar-agendamento');
+        const limparAtendimento = document.getElementById('limpar-atendimento');
 
         if (limparRotas) {
             const temFiltrosRotas = this.filtrosAtivos.rotas.size > 0 || this.filtrosAtivos.incoterms.size > 0;
@@ -285,9 +298,13 @@ class CarteiraAgrupada {
         if (limparSubrotas) {
             limparSubrotas.style.display = this.filtrosAtivos.subrotas.size > 0 ? 'inline-block' : 'none';
         }
-        
+
         if (limparAgendamento) {
             limparAgendamento.style.display = this.filtrosAtivos.agendamento ? 'inline-block' : 'none';
+        }
+
+        if (limparAtendimento) {
+            limparAtendimento.style.display = this.filtrosAtivos.atendimento ? 'inline-block' : 'none';
         }
     }
 
@@ -305,11 +322,11 @@ class CarteiraAgrupada {
                 b.style.backgroundColor = 'transparent';
                 b.style.color = '#198754';
                 b.style.borderColor = '#198754';
-            } else if (valorBadge === 'completa-sem-confirmacao') {
+            } else if (valorBadge === 'sep-aguardando') {
                 b.style.backgroundColor = 'transparent';
                 b.style.color = '#fd7e14';
                 b.style.borderColor = '#fd7e14';
-            } else if (valorBadge === 'completa-confirmado') {
+            } else if (valorBadge === 'sep-confirmado') {
                 b.style.backgroundColor = 'transparent';
                 b.style.color = '#0dcaf0';
                 b.style.borderColor = '#0dcaf0';
@@ -331,11 +348,11 @@ class CarteiraAgrupada {
                 badge.style.backgroundColor = '#198754';
                 badge.style.color = 'white';
                 badge.style.borderColor = '#198754';
-            } else if (valor === 'completa-sem-confirmacao') {
+            } else if (valor === 'sep-aguardando') {
                 badge.style.backgroundColor = '#fd7e14';
                 badge.style.color = 'white';
                 badge.style.borderColor = '#fd7e14';
-            } else if (valor === 'completa-confirmado') {
+            } else if (valor === 'sep-confirmado') {
                 badge.style.backgroundColor = '#0dcaf0';
                 badge.style.color = 'white';
                 badge.style.borderColor = '#0dcaf0';
@@ -402,10 +419,10 @@ class CarteiraAgrupada {
             } else if (valorBadge === 'com') {
                 badge.style.color = '#198754';
                 badge.style.borderColor = '#198754';
-            } else if (valorBadge === 'completa-sem-confirmacao') {
+            } else if (valorBadge === 'sep-aguardando') {
                 badge.style.color = '#fd7e14';
                 badge.style.borderColor = '#fd7e14';
-            } else if (valorBadge === 'completa-confirmado') {
+            } else if (valorBadge === 'sep-confirmado') {
                 badge.style.color = '#0dcaf0';
                 badge.style.borderColor = '#0dcaf0';
             }
@@ -462,7 +479,47 @@ class CarteiraAgrupada {
         
         this.aplicarFiltros();
     }
-    
+
+    toggleAtendimento(badge, valor) {
+        // Remover ativo de todos os badges de atendimento
+        document.querySelectorAll('.badge-atendimento').forEach(b => {
+            b.classList.remove('ativo');
+            // Restaurar estilo outline (não clicado) baseado no valor do badge
+            const valorBadge = b.dataset.valor;
+            if (valorBadge === 'programar') {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#6f42c1';
+                b.style.borderColor = '#6f42c1';
+            } else if (valorBadge === 'revisar-data') {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#e83e8c';
+                b.style.borderColor = '#e83e8c';
+            }
+        });
+
+        // Se clicou no mesmo que já estava ativo, desativar
+        if (this.filtrosAtivos.atendimento === valor) {
+            this.filtrosAtivos.atendimento = null;
+            document.getElementById('limpar-atendimento').style.display = 'none';
+        } else {
+            // Ativar o novo com estilo preenchido
+            badge.classList.add('ativo');
+            if (valor === 'programar') {
+                badge.style.backgroundColor = '#6f42c1';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#6f42c1';
+            } else if (valor === 'revisar-data') {
+                badge.style.backgroundColor = '#e83e8c';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#e83e8c';
+            }
+            this.filtrosAtivos.atendimento = valor;
+            document.getElementById('limpar-atendimento').style.display = 'inline-block';
+        }
+
+        this.aplicarFiltros();
+    }
+
     limparFiltrosCliente() {
         document.querySelectorAll('.badge-cliente').forEach(badge => {
             badge.classList.remove('ativo');
@@ -482,6 +539,24 @@ class CarteiraAgrupada {
         this.filtrosAtivos.cliente = null;
         this.aplicarFiltros();
         document.getElementById('limpar-cliente').style.display = 'none';
+    }
+
+    limparFiltrosAtendimento() {
+        document.querySelectorAll('.badge-atendimento').forEach(badge => {
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            const valorBadge = badge.dataset.valor;
+            if (valorBadge === 'programar') {
+                badge.style.color = '#6f42c1';
+                badge.style.borderColor = '#6f42c1';
+            } else if (valorBadge === 'revisar-data') {
+                badge.style.color = '#e83e8c';
+                badge.style.borderColor = '#e83e8c';
+            }
+        });
+        this.filtrosAtivos.atendimento = null;
+        this.aplicarFiltros();
+        document.getElementById('limpar-atendimento').style.display = 'none';
     }
 
     mostrarAlerta(mensagem) {
@@ -563,8 +638,11 @@ class CarteiraAgrupada {
             const subrota = linha.dataset.subrota || '';
             const incoterm = linha.dataset.incoterm || 'CIF';
             const agendamento = linha.dataset.agendamento || 'sem';
-            const separacaoCompleta = linha.dataset.separacaoCompleta === 'true';
+            const temProtocoloSeparacao = linha.dataset.temProtocoloSeparacao === 'true';
             const agendamentoConfirmado = linha.dataset.agendamentoConfirmado === 'true';
+            const protocolo = linha.dataset.protocolo || '';
+            const dataEntregaPedido = linha.dataset.dataEntregaPedido || '';
+            const agendamentoData = linha.dataset.agendamentoData || '';
             const grupoCliente = linha.dataset.grupoCliente || 'outros';
 
             // Aplicar filtros básicos
@@ -572,15 +650,15 @@ class CarteiraAgrupada {
             const matchStatus = !statusSelecionado || status === statusSelecionado;
             const matchEquipe = !equipeSelecionada || equipe === equipeSelecionada;
             
-            // Filtro de agendamento (incluindo novos filtros de separação completa)
+            // Filtro de agendamento (incluindo filtros de separação com protocolo)
             let matchAgendamento = true;
             if (this.filtrosAtivos.agendamento) {
-                if (this.filtrosAtivos.agendamento === 'completa-sem-confirmacao') {
-                    // Pedidos com separação completa que precisam de agendamento (não confirmado)
-                    matchAgendamento = separacaoCompleta && !agendamentoConfirmado && agendamento === 'com';
-                } else if (this.filtrosAtivos.agendamento === 'completa-confirmado') {
-                    // Pedidos com separação completa e agendamento confirmado
-                    matchAgendamento = separacaoCompleta && agendamentoConfirmado;
+                if (this.filtrosAtivos.agendamento === 'sep-aguardando') {
+                    // Pedidos com separação que têm protocolo mas não confirmados
+                    matchAgendamento = (temProtocoloSeparacao || protocolo) && !agendamentoConfirmado;
+                } else if (this.filtrosAtivos.agendamento === 'sep-confirmado') {
+                    // Pedidos com separação que têm protocolo e confirmados
+                    matchAgendamento = (temProtocoloSeparacao || protocolo) && agendamentoConfirmado;
                 } else {
                     // Filtros originais (sem/com agendamento)
                     matchAgendamento = agendamento === this.filtrosAtivos.agendamento;
@@ -591,6 +669,18 @@ class CarteiraAgrupada {
             let matchCliente = true;
             if (this.filtrosAtivos.cliente) {
                 matchCliente = grupoCliente === this.filtrosAtivos.cliente;
+            }
+
+            // Filtro de atendimento (Programar, Revisar Data)
+            let matchAtendimento = true;
+            if (this.filtrosAtivos.atendimento) {
+                if (this.filtrosAtivos.atendimento === 'programar') {
+                    // Pedidos com data_entrega_pedido sem agendamento
+                    matchAtendimento = dataEntregaPedido && !agendamentoData;
+                } else if (this.filtrosAtivos.atendimento === 'revisar-data') {
+                    // Pedidos com agendamento posterior à data de entrega
+                    matchAtendimento = dataEntregaPedido && agendamentoData && agendamentoData > dataEntregaPedido;
+                }
             }
 
             let matchBadges = true;
@@ -625,7 +715,7 @@ class CarteiraAgrupada {
                 }
             }
 
-            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchBadges && matchSubrotas;
+            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchAtendimento && matchBadges && matchSubrotas;
 
             linha.style.display = mostrar ? '' : 'none';
 
