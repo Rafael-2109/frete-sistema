@@ -165,7 +165,8 @@ def _processar_fluxo_listar_entregas(numero_nf: str, protocolo: str, data_agenda
             # Verificar se já existe agendamento
             agendamento_existente = AgendamentoEntrega.query.filter_by(
                 entrega_id=entrega.id,
-                protocolo_agendamento=protocolo
+                protocolo_agendamento=protocolo,
+                status='aguardando'
             ).first()
 
             if not agendamento_existente:

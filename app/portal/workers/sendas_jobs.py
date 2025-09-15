@@ -148,29 +148,74 @@ def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario
                 logger.info("[Worker Sendas] ✅ Processamento concluído com sucesso")
 
                 # Processar retorno e salvar protocolos nos locais corretos
-                protocolo = resultado.get('protocolo') or resultado.get('arquivo_upload', '').split('_')[-1].replace('.xlsx', '')
-                if protocolo and lista_cnpjs_agendamento:
-                    # Preparar dados para retorno universal
-                    dados_retorno = {
-                        'protocolo': protocolo,
-                        'cnpj': lista_cnpjs_agendamento[0].get('cnpj') if isinstance(lista_cnpjs_agendamento[0], dict) else lista_cnpjs_agendamento[0],
-                        'data_agendamento': lista_cnpjs_agendamento[0].get('data_agendamento') if isinstance(lista_cnpjs_agendamento[0], dict) else None,
-                        'data_expedicao': lista_cnpjs_agendamento[0].get('data_expedicao') if isinstance(lista_cnpjs_agendamento[0], dict) else None,
-                        'itens': lista_cnpjs_agendamento[0].get('itens', []) if isinstance(lista_cnpjs_agendamento[0], dict) else [],
-                        # Buscar tipo_fluxo e origem de dados_enviados (campo correto)
-                        'tipo_fluxo': integracao.dados_enviados.get('tipo_fluxo') if integracao.dados_enviados else 'programacao_lote',
-                        'documento_origem': integracao.dados_enviados.get('documento_origem') if integracao.dados_enviados else None
-                    }
+                # IMPORTANTE: Cada item da lista pode ter seu próprio protocolo!
+                if lista_cnpjs_agendamento:
+                    protocolos_processados = []
 
-                    # Processar retorno
-                    try:
-                        retorno_sucesso = processar_retorno_agendamento(dados_retorno)
-                        if retorno_sucesso:
-                            logger.info("[Worker Sendas] ✅ Protocolos salvos com sucesso")
+                    # Processar CADA item da lista com seu próprio protocolo
+                    for idx, item_agendamento in enumerate(lista_cnpjs_agendamento):
+                        if not isinstance(item_agendamento, dict):
+                            continue
+
+                        # Pegar protocolo deste item específico
+                        protocolo = item_agendamento.get('protocolo')
+
+                        # Fallback apenas se não tiver protocolo (não deveria acontecer)
+                        if not protocolo:
+                            protocolo_fallback = resultado.get('arquivo_upload', '').split('_')[-1].replace('.xlsx', '')
+                            logger.warning(f"⚠️ Item {idx+1}: Protocolo não encontrado, usando fallback: {protocolo_fallback}")
+                            protocolo = protocolo_fallback
                         else:
-                            logger.warning("[Worker Sendas] ⚠️ Falha ao salvar alguns protocolos")
-                    except Exception as e:
-                        logger.error(f"[Worker Sendas] ❌ Erro ao processar retorno: {e}")
+                            logger.info(f"✅ Item {idx+1}: Usando protocolo: {protocolo}")
+
+                        # Determinar documento_origem (pode vir dos itens no Fluxo 3)
+                        documento_origem = None
+                        if item_agendamento.get('itens'):
+                            # Se tem itens, verificar se algum tem documento_origem (Fluxos 2 e 3)
+                            for item in item_agendamento['itens']:
+                                if item.get('documento_origem'):
+                                    documento_origem = item['documento_origem']
+                                    break
+
+                        # Determinar tipo_fluxo baseado na estrutura dos dados
+                        tipo_fluxo = item_agendamento.get('tipo_fluxo')
+                        if not tipo_fluxo:
+                            tipo_fluxo = integracao.dados_enviados.get('tipo_fluxo') if integracao.dados_enviados else None
+                        if not tipo_fluxo:
+                            # Tentar identificar pela origem ou estrutura
+                            if integracao.dados_enviados and integracao.dados_enviados.get('origem') == 'fila_agendamento':
+                                # Veio da fila - pode ser Fluxo 2 ou 3
+                                if documento_origem and documento_origem.isdigit():
+                                    tipo_fluxo = 'listar_entregas'  # Fluxo 3 - NF
+                                else:
+                                    tipo_fluxo = 'carteira_agrupada'  # Fluxo 2 - Separação
+                            else:
+                                tipo_fluxo = 'programacao_lote'  # Fluxo 1
+
+                        # Preparar dados para retorno universal
+                        dados_retorno = {
+                            'protocolo': protocolo,
+                            'cnpj': item_agendamento.get('cnpj'),
+                            'data_agendamento': item_agendamento.get('data_agendamento'),
+                            'data_expedicao': item_agendamento.get('data_expedicao'),
+                            'itens': item_agendamento.get('itens', []),
+                            'tipo_fluxo': tipo_fluxo,
+                            'documento_origem': documento_origem
+                        }
+
+                        # Processar retorno para este item
+                        try:
+                            retorno_sucesso = processar_retorno_agendamento(dados_retorno)
+                            if retorno_sucesso:
+                                protocolos_processados.append(protocolo)
+                                logger.info(f"[Worker Sendas] ✅ Protocolo {protocolo} salvo com sucesso")
+                        except Exception as e:
+                            logger.error(f"[Worker Sendas] ❌ Erro ao processar protocolo {protocolo}: {e}")
+
+                    if protocolos_processados:
+                        logger.info(f"[Worker Sendas] ✅ Total de {len(protocolos_processados)} protocolos processados com sucesso")
+                    else:
+                        logger.warning("[Worker Sendas] ⚠️ Nenhum protocolo foi processado com sucesso")
 
                 # Atualizar status da integração
                 integracao.status = 'concluido'

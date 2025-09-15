@@ -236,6 +236,9 @@ def verificar_status_protocolo_atacadao(protocolo):
     Returns:
         dict: Status do protocolo
     """
+    from app import create_app, db
+    from app.portal.atacadao.playwright_client import AtacadaoPlaywrightClient
+
     app = create_app()
     
     with app.app_context():
