@@ -418,20 +418,20 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
             
             logger.info(f"Agrupados em {len(pedidos_dict)} pedidos distintos")
             
-            # Criar uma Separacao para cada pedido
+            # Criar Separacoes para cada pedido
             for num_pedido, itens in pedidos_dict.items():
                 # Usar o primeiro item para dados gerais
                 primeiro_item = itens[0]
-                
-                # Calcular totais do pedido
-                total_qtd = 0
-                total_valor = 0
-                total_peso = 0
-                total_pallet = 0
-                
+
+                # Gerar um único lote_id para todos os produtos deste pedido
+                lote_id = gerar_lote_id()
+
+                # Lista para armazenar produtos com saldo disponível
+                produtos_com_saldo = []
+
                 for item in itens:
                     qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
-                    
+
                     # IMPORTANTE: Abater o que já foi separado (sincronizado_nf=False)
                     qtd_ja_separada = db.session.query(
                         db.func.coalesce(db.func.sum(Separacao.qtd_saldo), 0)
@@ -440,65 +440,76 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                         Separacao.cod_produto == item.cod_produto,
                         Separacao.sincronizado_nf == False
                     ).scalar()
-                    
+
                     qtd = qtd_carteira - float(qtd_ja_separada)
-                    
+
                     # Se não há saldo disponível, pular este item
                     if qtd <= 0:
                         logger.info(f"Produto {item.cod_produto} do pedido {num_pedido} não tem saldo disponível")
                         continue
-                    
+
                     preco = float(item.preco_produto_pedido or 0)
-                    
-                    total_qtd += qtd
-                    total_valor += qtd * preco
-                    
+                    valor = qtd * preco
+
                     # Calcular peso e pallet
+                    peso_calculado = 0
+                    pallet_calculado = 0
                     try:
                         # calcular_peso_pallet_produto retorna tupla (peso, pallet)
                         peso_calculado, pallet_calculado = calcular_peso_pallet_produto(item.cod_produto, qtd)
-                        total_peso += peso_calculado
-                        total_pallet += pallet_calculado
                     except Exception as e:
                         logger.warning(f"Erro ao calcular peso/pallet para produto {item.cod_produto}: {e}")
-                
-                # Só criar Separacao se houver quantidade disponível
-                if total_qtd <= 0:
-                    logger.info(f"Pedido {num_pedido} não tem saldo disponível após abater separações existentes")
+
+                    produtos_com_saldo.append({
+                        'item': item,
+                        'qtd': qtd,
+                        'valor': valor,
+                        'peso': peso_calculado,
+                        'pallet': pallet_calculado
+                    })
+
+                # Só criar Separacoes se houver produtos com saldo
+                if not produtos_com_saldo:
+                    logger.info(f"Pedido {num_pedido} não tem produtos com saldo disponível")
                     continue
-                
-                # Criar nova Separacao com status ABERTO (vindo da CarteiraPrincipal)
-                nova_separacao = Separacao(
-                    separacao_lote_id=gerar_lote_id(),  # Gerar ID único do lote
-                    num_pedido=num_pedido,
-                    data_pedido=primeiro_item.data_pedido,
-                    cnpj_cpf=cnpj,
-                    raz_social_red=primeiro_item.raz_social_red,
-                    nome_cidade=primeiro_item.nome_cidade,
-                    cod_uf='SP',
-                    cod_produto='MULTIPRODUTO',  # Indicador de múltiplos produtos
-                    nome_produto=f'AGENDAMENTO ASSAI - {len(itens)} ITENS',
-                    qtd_saldo=total_qtd,
-                    valor_saldo=total_valor,
-                    peso=total_peso,
-                    pallet=total_pallet,
-                    pedido_cliente=primeiro_item.pedido_cliente,
-                    protocolo=protocolo,
-                    agendamento_confirmado=confirmado,
-                    agendamento=data_agendamento if confirmado else None,
-                    expedicao=data_expedicao if confirmado else None,
-                    tipo_envio='total',
-                    status='ABERTO',  # Status especial para agendamentos importados
-                    sincronizado_nf=False,
-                    nf_cd=False,
-                    observ_ped_1=f'Importado Assai {datetime.now().strftime("%d/%m/%Y %H:%M")} - Protocolo: {protocolo}'
-                )
-                
-                db.session.add(nova_separacao)
+
+                # Criar uma Separacao para cada produto com saldo
+                for produto_info in produtos_com_saldo:
+                    item = produto_info['item']
+
+                    nova_separacao = Separacao(
+                        separacao_lote_id=lote_id,  # Mesmo lote_id para todos os produtos do pedido
+                        num_pedido=num_pedido,
+                        data_pedido=item.data_pedido,
+                        cnpj_cpf=cnpj,
+                        raz_social_red=item.raz_social_red,
+                        nome_cidade=item.nome_cidade,
+                        cod_uf='SP',
+                        cod_produto=item.cod_produto,  # Código real do produto
+                        nome_produto=item.nome_produto,  # Nome real do produto
+                        qtd_saldo=produto_info['qtd'],
+                        valor_saldo=produto_info['valor'],
+                        peso=produto_info['peso'],
+                        pallet=produto_info['pallet'],
+                        pedido_cliente=item.pedido_cliente,
+                        protocolo=protocolo,
+                        agendamento_confirmado=confirmado,
+                        agendamento=data_agendamento if confirmado else None,
+                        expedicao=data_expedicao if confirmado else None,
+                        tipo_envio='total',
+                        status='ABERTO',  # Status para agendamentos importados
+                        sincronizado_nf=False,
+                        nf_cd=False,
+                        observ_ped_1=f'Importado Assai {datetime.now().strftime("%d/%m/%Y %H:%M")} - Protocolo: {protocolo}'
+                    )
+
+                    db.session.add(nova_separacao)
+                    logger.info(f"Criada Separacao para produto {item.cod_produto} do pedido {num_pedido}")
+
                 criado = True
                 encontrado = True
-                
-                logger.info(f"Criada nova Separacao para pedido {num_pedido} com protocolo {protocolo}")
+
+                logger.info(f"Criadas {len(produtos_com_saldo)} Separacoes para pedido {num_pedido} com lote {lote_id}")
     
     return {
         'encontrado': encontrado,
