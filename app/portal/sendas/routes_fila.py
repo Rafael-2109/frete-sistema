@@ -174,7 +174,7 @@ def adicionar_na_fila():
                 if uf_destino == 'SP' and not data_exp_final and data_agendamento:
                     data_exp_final = calcular_data_expedicao_sp(data_agendamento)
 
-                # Adicionar na fila
+                # Adicionar na fila COM O PROTOCOLO JÁ GERADO
                 fila_item = FilaAgendamentoSendas.adicionar(
                     tipo_origem='separacao',
                     documento_origem=documento_origem,
@@ -185,7 +185,8 @@ def adicionar_na_fila():
                     quantidade=float(item.qtd_saldo or 0),
                     data_expedicao=data_exp_final,
                     data_agendamento=data_agendamento,
-                    pedido_cliente=pedido_cliente  # Usar o pedido_cliente único
+                    pedido_cliente=pedido_cliente,  # Usar o pedido_cliente único
+                    protocolo=protocolo  # Passar o protocolo já gerado
                 )
                 itens_adicionados.append(fila_item.id)
 
@@ -221,6 +222,11 @@ def adicionar_na_fila():
                     num_pedido = produtos_faturados[0].origem
                     pedido_cliente = buscar_pedido_cliente_com_fallback(num_pedido)
 
+                # GERAR PROTOCOLO ÚNICO PARA A NF INTEIRA
+                cnpj_nf = produtos_faturados[0].cnpj_cliente or entrega.cnpj_cliente
+                protocolo_nf = gerar_protocolo_sendas(cnpj_nf, data_agendamento)
+                logger.info(f"📝 NF {documento_origem}: protocolo único {protocolo_nf}")
+
                 # Processar produtos do FaturamentoProduto
                 for produto in produtos_faturados:
                     # UF vem do FaturamentoProduto
@@ -231,7 +237,7 @@ def adicionar_na_fila():
                     if uf_destino == 'SP' and not data_exp_final and data_agendamento:
                         data_exp_final = calcular_data_expedicao_sp(data_agendamento)
 
-                    # Adicionar na fila
+                    # Adicionar na fila COM PROTOCOLO ÚNICO DA NF
                     fila_item = FilaAgendamentoSendas.adicionar(
                         tipo_origem='nf',
                         documento_origem=documento_origem,
@@ -242,7 +248,8 @@ def adicionar_na_fila():
                         quantidade=float(produto.qtd_produto_faturado or 0),
                         data_expedicao=data_exp_final,
                         data_agendamento=data_agendamento,
-                        pedido_cliente=pedido_cliente  # Usar o pedido_cliente único
+                        pedido_cliente=pedido_cliente,  # Usar o pedido_cliente único
+                        protocolo=protocolo_nf  # Protocolo único para toda a NF
                     )
                     itens_adicionados.append(fila_item.id)
 
@@ -271,6 +278,11 @@ def adicionar_na_fila():
                     elif primeiro_item.num_pedido:
                         pedido_cliente = buscar_pedido_cliente_com_fallback(primeiro_item.num_pedido)
 
+                # GERAR PROTOCOLO ÚNICO PARA A NF INTEIRA
+                cnpj_nf = entrega.cnpj_cliente
+                protocolo_nf = gerar_protocolo_sendas(cnpj_nf, data_agendamento)
+                logger.info(f"📝 NF {documento_origem} (fallback): protocolo único {protocolo_nf}")
+
                 # Processar itens da Separação
                 for item in itens_sep:
                     # Nome do produto
@@ -291,7 +303,7 @@ def adicionar_na_fila():
                     if uf_destino == 'SP' and not data_exp_final and data_agendamento:
                         data_exp_final = calcular_data_expedicao_sp(data_agendamento)
 
-                    # Adicionar na fila
+                    # Adicionar na fila COM PROTOCOLO ÚNICO DA NF
                     fila_item = FilaAgendamentoSendas.adicionar(
                         tipo_origem='nf',
                         documento_origem=documento_origem,
@@ -302,7 +314,8 @@ def adicionar_na_fila():
                         quantidade=float(item.qtd_saldo or 0),
                         data_expedicao=data_exp_final,
                         data_agendamento=data_agendamento,
-                        pedido_cliente=pedido_cliente  # Usar o pedido_cliente único
+                        pedido_cliente=pedido_cliente,  # Usar o pedido_cliente único
+                        protocolo=protocolo_nf  # Protocolo único para toda a NF
                     )
                     itens_adicionados.append(fila_item.id)
 

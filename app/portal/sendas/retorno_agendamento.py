@@ -183,10 +183,10 @@ def _processar_fluxo_listar_entregas(numero_nf: str, protocolo: str, data_agenda
                 db.session.add(agendamento)
                 logger.info(f"✅ Criado AgendamentoEntrega para NF {numero_nf}")
 
-            # Atualizar EntregaMonitorada
+            # Atualizar EntregaMonitorada - APENAS data_agenda
             entrega.data_agenda = data_agendamento
-            entrega.reagendar = False
-            entrega.status_entrega = 'agendada'
+            # NÃO ALTERAR: reagendar, status_entrega, status_finalização
+            # Esses campos devem ser controlados por outras partes do sistema
 
         else:
             logger.warning(f"⚠️ EntregaMonitorada não encontrada para NF {numero_nf}, tentando fallbacks...")

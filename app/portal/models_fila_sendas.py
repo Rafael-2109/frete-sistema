@@ -52,9 +52,12 @@ class FilaAgendamentoSendas(db.Model):
     @classmethod
     def adicionar(cls, tipo_origem, documento_origem, cnpj, num_pedido,
                   cod_produto, quantidade, data_expedicao, data_agendamento,
-                  pedido_cliente=None, nome_produto=None):
+                  pedido_cliente=None, nome_produto=None, protocolo=None):
         """
-        Adiciona item na fila com protocolo provisório
+        Adiciona item na fila com protocolo provisório ou fornecido
+
+        Args:
+            protocolo: Se fornecido, usa este protocolo. Senão, gera novo.
         """
         # Converter datas se vierem como string
         if isinstance(data_expedicao, str):
@@ -63,16 +66,18 @@ class FilaAgendamentoSendas(db.Model):
         if isinstance(data_agendamento, str):
             from datetime import datetime
             data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
-        
+
         # Garantir que data_expedicao não seja None (usar data_agendamento - 1 dia se necessário)
         if data_expedicao is None:
             from datetime import timedelta
             data_expedicao = data_agendamento - timedelta(days=1)
-        
-        # Gerar protocolo provisório com nova máscara
-        # AG_[CNPJ posições 7-4]_[data ddmmyyyy]_[hora HHMM]
-        protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
-        
+
+        # Usar protocolo fornecido ou gerar novo
+        if not protocolo:
+            # Gerar protocolo provisório com nova máscara
+            # AG_[CNPJ posições 7-4]_[data ddmmyyyy]_[hora HHMM]
+            protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
+
         # Verificar duplicata (mesmo documento + produto)
         existe = cls.query.filter_by(
             tipo_origem=tipo_origem,
@@ -80,7 +85,7 @@ class FilaAgendamentoSendas(db.Model):
             cod_produto=cod_produto,
             status='pendente'
         ).first()
-        
+
         if existe:
             # Atualizar quantidade e datas
             existe.quantidade = quantidade
@@ -89,7 +94,7 @@ class FilaAgendamentoSendas(db.Model):
             existe.protocolo = protocolo
             db.session.commit()
             return existe
-        
+
         # Criar novo
         novo = cls(
             tipo_origem=tipo_origem,
@@ -104,7 +109,7 @@ class FilaAgendamentoSendas(db.Model):
             data_agendamento=data_agendamento,
             protocolo=protocolo
         )
-        
+
         db.session.add(novo)
         db.session.commit()
         return novo
