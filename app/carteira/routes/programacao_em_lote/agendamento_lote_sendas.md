@@ -37,3 +37,4 @@ As 2 funções deveriam fazer a mesma coisa, não sei se há diferença mas acre
 Avalie profundamente, pense em uma forma de aproveitar tudo que a rota de agendar em lote já faz para implantar nesses 2 lugares respeitando as diferenças e conferindo as informações necessarias e pense profundamente em uma estratégia para otimizar a solicitação talvez cacheada.
 
 
+.
