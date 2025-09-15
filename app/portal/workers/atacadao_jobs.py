@@ -5,10 +5,6 @@ Executados em worker dedicado via Redis Queue
 
 import logging
 from datetime import datetime
-from app.portal.atacadao.playwright_client import AtacadaoPlaywrightClient
-from app.portal.models import PortalIntegracao, PortalLog
-from app.separacao.models import Separacao
-from app import create_app, db
 import json
 
 logger = logging.getLogger(__name__)
@@ -32,6 +28,12 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
     Returns:
         dict: Resultado do processamento
     """
+    # Importações lazy dentro da função para evitar circular imports
+    from app import create_app, db
+    from app.portal.atacadao.playwright_client import AtacadaoPlaywrightClient
+    from app.portal.models import PortalIntegracao, PortalLog
+    from app.separacao.models import Separacao
+
     # Criar contexto da aplicação Flask (necessário para worker)
     app = create_app()
     

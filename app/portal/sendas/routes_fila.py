@@ -380,7 +380,7 @@ def processar_fila():
     """
     try:
         from app.portal.workers import enqueue_job
-        from app.portal.workers.sendas_jobs_safe import processar_agendamento_sendas
+        from app.portal.workers.sendas_jobs import processar_agendamento_sendas
         from app.portal.models import PortalIntegracao
         from app.utils.lote_utils import gerar_lote_id
 

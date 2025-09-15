@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from app.portal import portal_bp
 from app.portal.models import PortalIntegracao, PortalLog
 from app.portal.workers import enqueue_job
-from app.portal.workers.atacadao_jobs_safe import processar_agendamento_atacadao
+from app.portal.workers.atacadao_jobs import processar_agendamento_atacadao
 from app import db
 from datetime import datetime
 import logging

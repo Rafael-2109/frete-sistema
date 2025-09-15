@@ -9,7 +9,7 @@ from app import create_app, db
 from app.portal.models_fila_sendas import FilaAgendamentoSendas
 from app.portal.models import PortalIntegracao
 from app.portal.workers import enqueue_job
-from app.portal.workers.sendas_jobs_safe import processar_agendamento_sendas
+from app.portal.workers.sendas_jobs import processar_agendamento_sendas
 from app.utils.lote_utils import gerar_lote_id
 
 logger = logging.getLogger(__name__)

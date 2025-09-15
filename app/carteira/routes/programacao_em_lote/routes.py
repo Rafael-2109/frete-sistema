@@ -1244,7 +1244,7 @@ def processar_agendamento_sendas_async():
     """
     try:
         from app.portal.workers import enqueue_job
-        from app.portal.workers.sendas_jobs_safe import processar_agendamento_sendas as processar_sendas_job
+        from app.portal.workers.sendas_jobs import processar_agendamento_sendas as processar_sendas_job
         from app.portal.models import PortalIntegracao, PortalLog
         
         # Obter dados da requisição

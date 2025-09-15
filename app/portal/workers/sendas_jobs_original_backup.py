@@ -5,6 +5,9 @@ Executados em worker dedicado via Redis Queue
 
 import logging
 from datetime import datetime
+from app import create_app, db
+from app.portal.models import PortalIntegracao, PortalLog
+from app.portal.sendas.retorno_agendamento import processar_retorno_agendamento
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -12,20 +15,15 @@ logger = logging.getLogger(__name__)
 def processar_agendamento_sendas(integracao_id, lista_cnpjs_agendamento, usuario_nome=None):
     """
     Job assíncrono para processar agendamento no portal Sendas
-
+    
     Args:
         integracao_id: ID da integração no banco
         lista_cnpjs_agendamento: Lista com dados dos CNPJs e agendamentos
         usuario_nome: Nome do usuário que iniciou o processo
-
+    
     Returns:
         dict: Resultado do processamento
     """
-    # Importações lazy dentro da função para evitar circular imports
-    from app import create_app, db
-    from app.portal.models import PortalIntegracao, PortalLog
-    from app.portal.sendas.retorno_agendamento import processar_retorno_agendamento
-
     # Criar contexto da aplicação Flask (necessário para worker)
     app = create_app()
     
