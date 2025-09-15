@@ -12,6 +12,7 @@ from app.producao.models import CadastroPalletizacao
 from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada
 from app.faturamento.models import FaturamentoProduto
+from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 from datetime import datetime, timedelta
 import logging
 
@@ -136,9 +137,9 @@ def adicionar_na_fila():
                 elif primeiro_item.num_pedido:
                     pedido_cliente = buscar_pedido_cliente_com_fallback(primeiro_item.num_pedido)
 
-            # GERAR PROTOCOLO ÚNICO PARA O LOTE (mesmo padrão do Fluxo 1)
+            # GERAR PROTOCOLO ÚNICO PARA O LOTE (novo padrão)
             if cnpj_lote and data_agendamento:
-                protocolo = f"AGEND_{cnpj_lote[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+                protocolo = gerar_protocolo_sendas(cnpj_lote, data_agendamento)
 
                 # ATUALIZAR TODAS AS SEPARAÇÕES DO LOTE COM O PROTOCOLO
                 # Importante: zerar datas para validação posterior

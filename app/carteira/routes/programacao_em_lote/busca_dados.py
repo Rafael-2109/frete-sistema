@@ -13,6 +13,7 @@ import logging
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
+from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 from app.producao.models import CadastroPalletizacao
 from app.odoo.utils.pedido_cliente_utils import buscar_pedido_cliente_odoo
 
@@ -37,8 +38,8 @@ def buscar_dados_completos_cnpj(cnpj: str, data_agendamento: date = None,
     """
     logger.info(f"📊 Buscando dados completos para CNPJ: {cnpj}")
 
-    # Gerar protocolo único
-    protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}" if data_agendamento else None
+    # Gerar protocolo único com nova máscara
+    protocolo = gerar_protocolo_sendas(cnpj, data_agendamento) if data_agendamento else None
 
     dados = {
         'cnpj': cnpj,
@@ -220,7 +221,6 @@ def buscar_dados_multiplos_cnpjs(lista_cnpjs_agendamento: List[Dict]) -> List[Di
 def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao: date = None,
                               protocolo: str = None) -> int:
     """
-    Cria Separações com status='PREVISAO' a partir do saldo LÍQUIDO da CarteiraPrincipal
     (descontando o que já está em Separacao.sincronizado_nf=False)
     e atualiza Separações existentes com o protocolo do agendamento.
 
@@ -240,7 +240,7 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
 
     # Gerar protocolo se não fornecido
     if not protocolo:
-        protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+        protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
 
     contador_criadas = 0
     contador_atualizadas = 0
@@ -320,10 +320,9 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
             # Determinar tipo_envio: 'parcial' se já existe separação, 'total' se não
             tipo_envio = 'parcial' if item.num_pedido in pedidos_com_separacao else 'total'
 
-            # Criar nova Separação com status='PREVISAO'
             nova_separacao = Separacao(
                 separacao_lote_id=separacao_lote_id,
-                status='PREVISAO',  # Status para separações criadas para agendamento
+                status='ABERTO',  # Status para separações criadas para agendamento
                 sincronizado_nf=False,  # Sempre False para aparecer na carteira
                 nf_cd=False,  # Não é NF no CD
 
@@ -371,7 +370,6 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
             and_(
                 Separacao.cnpj_cpf == cnpj,
                 Separacao.sincronizado_nf == False,
-                Separacao.status != 'PREVISAO'  # Não atualizar as que acabamos de criar
             )
         ).update({
             'protocolo': protocolo,  # Sobrescreve protocolo anterior se houver

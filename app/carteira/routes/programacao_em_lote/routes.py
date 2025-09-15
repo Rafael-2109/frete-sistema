@@ -20,6 +20,7 @@ from app.portal.utils.grupo_empresarial import GrupoEmpresarial
 from app.estoque.models import MovimentacaoEstoque
 from app.producao.models import ProgramacaoProducao
 from app.utils.lote_utils import gerar_lote_id
+from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 from .busca_dados import buscar_dados_completos_cnpj
 
 from . import programacao_em_lote_bp
@@ -1306,8 +1307,8 @@ def processar_agendamento_sendas_async():
                 # datetime já está importado no topo do arquivo
                 data_expedicao = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
 
-            # Gerar protocolo único para este CNPJ
-            protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+            # Gerar protocolo único para este CNPJ com nova máscara
+            protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
 
             # CRIAR SEPARAÇÕES DO SALDO ANTES DO AGENDAMENTO
             from app.carteira.routes.programacao_em_lote.busca_dados import criar_separacoes_do_saldo

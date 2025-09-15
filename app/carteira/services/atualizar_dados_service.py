@@ -2,7 +2,6 @@
 Serviço para atualizar dados de Separacao baseado nos dados da CarteiraPrincipal
 
 Atualiza todas as separações não sincronizadas (sincronizado_nf=False),
-incluindo status='PREVISAO' que substitui o antigo PreSeparacaoItem.
 """
 
 from sqlalchemy import and_, func

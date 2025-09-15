@@ -252,8 +252,6 @@ class AgrupamentoService:
                     dados_separacao_completa['tem_separacao_completa'] = True
                     dados_separacao_completa['separacao_lote_id'] = sep.separacao_lote_id
             
-            # MIGRADO: Não precisa buscar separadamente pois sincronizado_nf=False já inclui PREVISAO
-            # A query anterior já pegou todas as separações incluindo status='PREVISAO'
             
             return qtd_separacoes, valor_separacoes, dados_separacao_completa
             

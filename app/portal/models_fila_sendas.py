@@ -5,6 +5,7 @@ Simples e focado apenas no necessário para a planilha
 
 from app import db
 from datetime import datetime
+from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 
 class FilaAgendamentoSendas(db.Model):
     """
@@ -68,10 +69,9 @@ class FilaAgendamentoSendas(db.Model):
             from datetime import timedelta
             data_expedicao = data_agendamento - timedelta(days=1)
         
-        # Gerar protocolo provisório no mesmo padrão
-        # AGEND_[últimos 4 dígitos CNPJ]_[data YYYYMMDD]
-        cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '')
-        protocolo = f"AGEND_{cnpj_limpo[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+        # Gerar protocolo provisório com nova máscara
+        # AG_[CNPJ posições 7-4]_[data ddmmyyyy]_[hora HHMM]
+        protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
         
         # Verificar duplicata (mesmo documento + produto)
         existe = cls.query.filter_by(

@@ -106,7 +106,6 @@ def _buscar_produtos_cnpjs(cnpjs: List[str]) -> List[Dict[str, Any]]:
         and_(
             Separacao.cnpj_cpf.in_(cnpjs),
             Separacao.sincronizado_nf == False,
-            Separacao.status != 'PREVISAO'
         )
     ).group_by(
         Separacao.cod_produto

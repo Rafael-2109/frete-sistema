@@ -37,4 +37,23 @@ As 2 funções deveriam fazer a mesma coisa, não sei se há diferença mas acre
 Avalie profundamente, pense em uma forma de aproveitar tudo que a rota de agendar em lote já faz para implantar nesses 2 lugares respeitando as diferenças e conferindo as informações necessarias e pense profundamente em uma estratégia para otimizar a solicitação talvez cacheada.
 
 
-.
+Preciso de um ajuste, vamos verificar o caminho do protocolo do agendamento para cada um dos 3 fluxos.
+Vi que existe uma variavel chamada observacao_unica que é redundante e está causando problema pois sendo gravada na planilha de agendamento do Sendas em preencher_planilha, quando essa coluna deveria usar protocolo para manter a rastreabilidade entre Separacao X agenda do portal.
+
+Garanta que o protocolo seja gravado na Separacao / AgendamentoEntrega no momento da captura dos dados respeitando os 3 fluxos e esse mesmo protocolo seja gravado na coluna da planilha do Sendas para garantir rastreabilidade Sistema X Sendas.
+Apenas lembrando que no fluxo 1 é 1 protocolo por CNPJ.
+Alem disso preciso alterar a Mascara para "AG_(cnpj-7 ATÉ -4)_ddmmyyyy_HHMM"
+
+Evidencias:
+Sobrescrevendo e quebrando a rastreabilidade:
+- preencher_multiplos_cnpjs: observacao_unica = f"AG_MULTI_{timestamp_obs}"
+- preencher_planilha: observacao_unica = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+
+Geração do protocolo:
+- buscar_dados_completos_cnpj: protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+- criar_separacoes_do_saldo: protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+- processar_agendamento_sendas_async: protocolo = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+- adicionar_na_fila - protocolo = f"AGEND_{cnpj_lote[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+
+Pense profundamente!
+Qualquer duvida me pergunte!

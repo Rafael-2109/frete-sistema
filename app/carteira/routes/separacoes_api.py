@@ -19,17 +19,14 @@ logger = logging.getLogger(__name__)
 @login_required
 def obter_separacoes_completas(num_pedido):
     """
-    API UNIFICADA: Retorna TODAS as separações de um pedido (incluindo PREVISAO),
     com informações completas, cálculos de peso/pallet e dados de embarque.
     Substitui a necessidade de múltiplas APIs.
     """
     try:
-        # QUERY ÚNICA: Buscar TODAS as separações (incluindo PREVISAO)
         # Incluindo apenas não faturadas (sincronizado_nf=False)
         todas_separacoes = db.session.query(Separacao).filter(
             Separacao.num_pedido == num_pedido,
             Separacao.sincronizado_nf == False  # Apenas não faturadas
-            # REMOVIDO filtro de status != 'PREVISAO' - agora retorna TUDO
         ).order_by(
             Separacao.separacao_lote_id,
             Separacao.criado_em.desc()

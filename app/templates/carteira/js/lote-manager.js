@@ -282,8 +282,8 @@ class LoteManager {
                     <!-- Segunda linha: Botões do Portal -->
                     ${(loteData.agendamento || loteData.data_agendamento) ? `
                         <div class="btn-group mb-2" role="group">
-                            <button class="btn btn-outline-success btn-sm" 
-                                    onclick="window.PortalAgendamento.agendarNoPortal('${loteData.lote_id || loteData.separacao_lote_id}')"
+                            <button class="btn btn-outline-success btn-sm"
+                                    onclick="carteiraAgrupada.agendarNoPortal('${loteData.lote_id || loteData.separacao_lote_id}', '${loteData.agendamento || loteData.data_agendamento}')"
                                     title="Agendar no portal do cliente">
                                 <i class="fas fa-calendar-plus"></i> Agendar
                             </button>

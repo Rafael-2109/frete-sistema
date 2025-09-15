@@ -28,6 +28,7 @@ from app import create_app, db
 from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
+from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 from app.portal.sendas.models import FilialDeParaSendas, ProdutoDeParaSendas
 
 # Configurar logging
@@ -354,9 +355,9 @@ class PreencherPlanilhaSendas:
         
         return dados
     
-    def preencher_planilha(self, arquivo_origem: str, cnpj: str, 
+    def preencher_planilha(self, arquivo_origem: str, cnpj: str,
                           data_agendamento: date = None,
-                          arquivo_destino: str = None) -> str:
+                          arquivo_destino: str = None, protocolo: str = None) -> str:
         """
         Preenche a planilha de agendamento com dados do CNPJ
         MANTÉM os dados existentes e PREENCHE apenas campos específicos vazios
@@ -444,8 +445,9 @@ class PreencherPlanilhaSendas:
         
         logger.info(f"  📊 Última linha com dados: {ultima_linha_com_dados}")
         
-        # Observação única para identificar agendamento
-        observacao_unica = f"AGEND_{cnpj[-4:]}_{data_agendamento.strftime('%Y%m%d')}"
+        # Usar protocolo fornecido ou gerar novo com nova máscara
+        if not protocolo:
+            protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
         
         # Calcular tipo de caminhão baseado no peso total
         tipo_caminhao = self.determinar_tipo_caminhao(float(dados_cnpj['peso_total']))
@@ -542,9 +544,9 @@ class PreencherPlanilhaSendas:
                 if not ws.cell(row=row, column=22).value:
                     ws.cell(row=row, column=22).value = tipo_caminhao
                 
-                # Coluna X - Observação/Fornecedor (se vazio)
+                # Coluna X - Protocolo/Observação (se vazio)
                 if not ws.cell(row=row, column=24).value:
-                    ws.cell(row=row, column=24).value = observacao_unica
+                    ws.cell(row=row, column=24).value = protocolo
                 
                 linhas_preenchidas += 1
             else:
@@ -555,8 +557,8 @@ class PreencherPlanilhaSendas:
         fill_preenchido = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
         
         for row in range(linha_inicial, ultima_linha_com_dados + 1):
-            # Verificar se a linha foi preenchida (tem nossa observação)
-            if ws.cell(row=row, column=24).value == observacao_unica:
+            # Verificar se a linha foi preenchida (tem nosso protocolo)
+            if ws.cell(row=row, column=24).value == protocolo:
                 # Destacar apenas colunas que preenchemos
                 for col in [1, 17, 18, 21, 22, 24]:  # Colunas A, Q, R, U, V, X
                     cell = ws.cell(row=row, column=col)
@@ -599,7 +601,7 @@ class PreencherPlanilhaSendas:
         logger.info(f"  Linhas não encontradas: {linhas_nao_encontradas}")
         logger.info(f"  Peso Total: {dados_cnpj['peso_total']:.2f} kg")
         logger.info(f"  Tipo Caminhão: {tipo_caminhao}")
-        logger.info(f"  Observação: {observacao_unica}")
+        logger.info(f"  Protocolo: {protocolo}")
         
         if linhas_debug and logger.isEnabledFor(logging.DEBUG):
             logger.debug("\n📋 DETALHES DE DEBUG:")
@@ -648,7 +650,9 @@ class PreencherPlanilhaSendas:
         # Verificar se deve usar dados fornecidos ou buscar
         if usar_dados_fornecidos and lista_cnpjs_agendamento and isinstance(lista_cnpjs_agendamento[0], dict) and 'itens' in lista_cnpjs_agendamento[0]:
             # USAR DADOS FORNECIDOS
-            logger.info("✅ Usando dados PRÉ-PROCESSADOS fornecidos")
+            logger.info("✅ Usando dados PRÉ-PROCESSADOS fornecidos (NÃO buscará do banco)")
+            logger.info(f"   Total de grupos: {len(lista_cnpjs_agendamento)}")
+            logger.info(f"   Primeiro grupo tem {len(lista_cnpjs_agendamento[0].get('itens', []))} itens")
 
             for idx, grupo in enumerate(lista_cnpjs_agendamento, 1):
                 cnpj = grupo.get('cnpj')
@@ -663,8 +667,16 @@ class PreencherPlanilhaSendas:
                 if protocolo:
                     protocolos_unicos.add(protocolo)
 
+                # Converter data_agendamento se for string
+                data_agendamento = grupo.get('data_agendamento')
+                if isinstance(data_agendamento, str):
+                    try:
+                        data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+                    except:
+                        logger.warning(f"    ⚠️ Não foi possível converter data_agendamento: {data_agendamento}")
+
                 todos_dados[cnpj] = {
-                    'data_agendamento': grupo.get('data_agendamento'),
+                    'data_agendamento': data_agendamento,
                     'protocolo': protocolo,  # Adicionar protocolo
                     'dados': {
                         'cnpj': cnpj,
@@ -678,8 +690,12 @@ class PreencherPlanilhaSendas:
                 peso_total_geral += todos_dados[cnpj]['dados']['peso_total']
         else:
             # BUSCAR DO BANCO (compatibilidade - apenas quando NÃO temos dados fornecidos)
-            logger.info("📋 Buscando dados do banco (modo compatibilidade - SEM dados fornecidos)")
-            logger.info("⚠️ NOTA: Esta busca deveria ser evitada quando dados já foram fornecidos!")
+            logger.info("📋 Buscando dados do banco (modo compatibilidade)")
+            logger.info(f"   usar_dados_fornecidos={usar_dados_fornecidos}")
+            logger.info(f"   Tem lista? {bool(lista_cnpjs_agendamento)}")
+            logger.info(f"   Primeiro é dict? {isinstance(lista_cnpjs_agendamento[0], dict) if lista_cnpjs_agendamento else False}")
+            logger.info(f"   Tem 'itens'? {'itens' in lista_cnpjs_agendamento[0] if lista_cnpjs_agendamento and isinstance(lista_cnpjs_agendamento[0], dict) else False}")
+            logger.warning("⚠️ Esta busca só deveria ocorrer quando NÃO há dados fornecidos completos!")
 
             for idx, agendamento in enumerate(lista_cnpjs_agendamento, 1):
                 cnpj = agendamento['cnpj']
@@ -694,8 +710,13 @@ class PreencherPlanilhaSendas:
                     logger.warning(f"    ⚠️ Sem dados para CNPJ {cnpj}")
                     continue
 
+                # Gerar protocolo para este CNPJ
+                protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
+                protocolos_unicos.add(protocolo)
+
                 todos_dados[cnpj] = {
                     'data_agendamento': data_agendamento,
+                    'protocolo': protocolo,
                     'dados': dados_cnpj,
                     'filial': FilialDeParaSendas.cnpj_to_filial(cnpj)
                 }
@@ -708,9 +729,8 @@ class PreencherPlanilhaSendas:
         # Determinar tipo de caminhão baseado no peso total
         tipo_caminhao = self.determinar_tipo_caminhao(float(peso_total_geral))
         
-        # Criar observação única para identificar este agendamento
-        timestamp_obs = datetime.now().strftime('%Y%m%d_%H%M%S')
-        observacao_unica = f"AG_MULTI_{timestamp_obs}"
+        # Não usar mais observacao_unica - os protocolos virão dos dados fornecidos
+        # Cada CNPJ terá seu próprio protocolo
         
         logger.info(f"\n📝 Preenchendo planilha com {len(todos_dados)} CNPJs...")
 
@@ -813,7 +833,8 @@ class PreencherPlanilhaSendas:
                     
                     ws.cell(row=row, column=21).value = 'Paletizada'  # Coluna U
                     ws.cell(row=row, column=22).value = tipo_caminhao  # Coluna V
-                    ws.cell(row=row, column=24).value = observacao_unica  # Coluna X
+                    # Usar protocolo específico do CNPJ
+                    ws.cell(row=row, column=24).value = protocolo_cnpj  # Coluna X
                     
                     linhas_preenchidas.add(row)
 
@@ -902,7 +923,7 @@ class PreencherPlanilhaSendas:
         logger.info(f"  Linhas removidas: {linhas_removidas}")
         logger.info(f"  Peso total geral: {peso_total_geral:.2f} kg")
         logger.info(f"  Tipo caminhão: {tipo_caminhao}")
-        logger.info(f"  Observação: {observacao_unica}")
+        logger.info(f"  Protocolo: {protocolo}")
         logger.info("=" * 80)
         
         return arquivo_destino
