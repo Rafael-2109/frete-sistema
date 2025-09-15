@@ -29,21 +29,63 @@ python -c "
 import redis
 import os
 from rq import Worker
+from datetime import datetime, timedelta
 
 try:
     r = redis.from_url(os.environ.get('REDIS_URL', ''))
     r.ping()
     print('   ✅ Redis conectado com sucesso!')
-    
+
     # Limpar workers antigos/mortos
-    workers = Worker.all(connection=r)
-    dead_workers = [w for w in workers if not w.is_alive()]
-    if dead_workers:
-        print(f'   🧹 Limpando {len(dead_workers)} workers antigos...')
-        for w in dead_workers:
-            w.unregister_death()
-        print('   ✅ Workers antigos removidos')
-    
+    try:
+        workers = Worker.all(connection=r)
+        print(f'   📊 Total de workers registrados: {len(workers)}')
+
+        # Método alternativo para detectar workers mortos
+        # Workers são considerados mortos se não reportaram heartbeat há mais de 420 segundos
+        dead_workers = []
+        for w in workers:
+            try:
+                # Verificar heartbeat (última atividade)
+                last_heartbeat = w.last_heartbeat
+                if last_heartbeat:
+                    # Se o heartbeat é muito antigo, worker está morto
+                    time_since_heartbeat = datetime.now() - last_heartbeat
+                    if time_since_heartbeat > timedelta(seconds=420):
+                        dead_workers.append(w)
+                else:
+                    # Se não há heartbeat, verificar se o worker está registrado mas inativo
+                    # Usar birth_date como fallback
+                    if hasattr(w, 'birth_date') and w.birth_date:
+                        time_since_birth = datetime.now() - w.birth_date
+                        if time_since_birth > timedelta(minutes=10):
+                            dead_workers.append(w)
+            except:
+                # Se houver qualquer erro ao verificar o worker, assumir que está morto
+                dead_workers.append(w)
+
+        if dead_workers:
+            print(f'   🧹 Limpando {len(dead_workers)} workers antigos/inativos...')
+            for w in dead_workers:
+                try:
+                    # Tentar registrar como morto primeiro
+                    w.register_death()
+                except:
+                    pass
+                try:
+                    # Remover do registro de workers
+                    r.srem('rq:workers', w.key)
+                    r.delete(w.key)
+                    r.delete(f'{w.key}:heartbeat')
+                except:
+                    pass
+            print('   ✅ Workers antigos removidos')
+        else:
+            print('   ✅ Nenhum worker antigo para limpar')
+    except Exception as worker_error:
+        print(f'   ⚠️  Não foi possível limpar workers antigos: {worker_error}')
+        print('   ℹ️  Continuando mesmo assim...')
+
 except Exception as e:
     print(f'   ❌ Erro ao conectar ao Redis: {e}')
     exit(1)

@@ -180,16 +180,17 @@ window.standbyManager = (function () {
             const data = await response.json();
 
             if (data.success) {
-                showAlert('success', data.message);
+                // Fechar modal
                 modal.hide();
 
-                // Atualizar botão
-                atualizarBotaoStandby(pedidoAtual, 'ATIVO');
+                // Mostrar toast de sucesso
+                showToast('success', `Pedido ${pedidoAtual} enviado para standby com sucesso!`);
 
-                // Recarregar a página após 2 segundos
-                setTimeout(() => {
-                    location.reload();
-                }, 2000);
+                // Remover o pedido da interface visualmente
+                removerPedidoDaInterface(pedidoAtual);
+
+                // Atualizar contadores se existirem
+                atualizarContadores();
             } else {
                 showAlert('error', data.message || 'Erro ao enviar para standby');
             }
@@ -217,7 +218,132 @@ window.standbyManager = (function () {
     }
 
     /**
-     * Exibe alertas na tela
+     * Remove o pedido da interface visualmente
+     */
+    function removerPedidoDaInterface(numPedido) {
+        // Procurar o card/linha do pedido na interface
+        // Pode estar em um card (agrupados_balanceado.html) ou em uma linha de tabela
+
+        // Tentar remover card
+        const card = document.querySelector(`[data-pedido="${numPedido}"]`);
+        if (card) {
+            // Adicionar animação de fade out
+            card.style.transition = 'opacity 0.5s, transform 0.3s';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.95)';
+
+            setTimeout(() => {
+                card.remove();
+            }, 500);
+        }
+
+        // Tentar remover linha da tabela (se houver)
+        const linha = document.querySelector(`tr[data-pedido="${numPedido}"]`);
+        if (linha) {
+            linha.style.transition = 'opacity 0.5s';
+            linha.style.opacity = '0';
+
+            setTimeout(() => {
+                linha.remove();
+            }, 500);
+        }
+
+        // Procurar por elementos com ID específico do pedido
+        const elementos = document.querySelectorAll(`[id*="${numPedido}"]`);
+        elementos.forEach(el => {
+            // Verificar se é um elemento relacionado ao pedido
+            if (el.closest('.card') || el.closest('tr')) {
+                const container = el.closest('.card') || el.closest('tr');
+                if (!container.classList.contains('removing')) {
+                    container.classList.add('removing');
+                    container.style.transition = 'opacity 0.5s';
+                    container.style.opacity = '0';
+
+                    setTimeout(() => {
+                        container.remove();
+                    }, 500);
+                }
+            }
+        });
+    }
+
+    /**
+     * Atualiza contadores na interface
+     */
+    function atualizarContadores() {
+        // Atualizar contador de pedidos se existir
+        const contadorPedidos = document.querySelector('.contador-pedidos');
+        if (contadorPedidos) {
+            const valorAtual = parseInt(contadorPedidos.textContent) || 0;
+            if (valorAtual > 0) {
+                contadorPedidos.textContent = valorAtual - 1;
+            }
+        }
+
+        // Atualizar outros contadores relevantes
+        const totalCards = document.querySelectorAll('.card[data-pedido]').length;
+        const contadorGeral = document.querySelector('#total-pedidos');
+        if (contadorGeral) {
+            contadorGeral.textContent = totalCards;
+        }
+    }
+
+    /**
+     * Exibe toast de notificação (mais elegante que alert)
+     */
+    function showToast(type, message) {
+        const toastContainer = document.getElementById('toast-container') || createToastContainer();
+
+        const toastTypes = {
+            'success': 'bg-success',
+            'error': 'bg-danger',
+            'warning': 'bg-warning',
+            'info': 'bg-info'
+        };
+
+        const toastDiv = document.createElement('div');
+        toastDiv.className = `toast align-items-center text-white ${toastTypes[type]} border-0`;
+        toastDiv.setAttribute('role', 'alert');
+        toastDiv.setAttribute('aria-live', 'assertive');
+        toastDiv.setAttribute('aria-atomic', 'true');
+        toastDiv.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+
+        toastContainer.appendChild(toastDiv);
+
+        // Inicializar e mostrar o toast
+        const toast = new bootstrap.Toast(toastDiv, {
+            autohide: true,
+            delay: 5000
+        });
+        toast.show();
+
+        // Remover após ocultar
+        toastDiv.addEventListener('hidden.bs.toast', () => {
+            toastDiv.remove();
+        });
+    }
+
+    /**
+     * Cria container para toasts se não existir
+     */
+    function createToastContainer() {
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.style.zIndex = '9999';
+        document.body.appendChild(container);
+        return container;
+    }
+
+    /**
+     * Exibe alertas na tela (mantido para compatibilidade)
      */
     function showAlert(type, message) {
         const alertTypes = {

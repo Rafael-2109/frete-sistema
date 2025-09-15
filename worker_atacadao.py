@@ -152,7 +152,11 @@ def run_worker(workers, verbose, burst, queues):
     }
     
     # Iniciar scheduler Sendas em thread separada (se habilitado)
-    enable_scheduler = os.environ.get('ENABLE_SENDAS_SCHEDULER', 'true').lower() == 'true'
+    scheduler_env_value = os.environ.get('ENABLE_SENDAS_SCHEDULER', 'true')
+    logger.info(f"🔍 [Scheduler Sendas] Verificando configuração...")
+    logger.info(f"   ENABLE_SENDAS_SCHEDULER = '{scheduler_env_value}'")
+
+    enable_scheduler = scheduler_env_value.lower() == 'true'
     if enable_scheduler:
         scheduler_thread = threading.Thread(
             target=run_sendas_scheduler,
@@ -160,9 +164,13 @@ def run_worker(workers, verbose, burst, queues):
             name='SendasScheduler'
         )
         scheduler_thread.start()
-        logger.info("✅ [Scheduler Sendas] Habilitado - verificação a cada 20 minutos")
+        logger.info("✅ [Scheduler Sendas] HABILITADO - verificação a cada 20 minutos")
+        logger.info("   Thread iniciada com sucesso")
+        logger.info("   Primeira verificação em 2 minutos")
     else:
-        logger.info("⚠️ [Scheduler Sendas] Desabilitado (ENABLE_SENDAS_SCHEDULER=false)")
+        logger.warning("⚠️ [Scheduler Sendas] DESABILITADO")
+        logger.warning(f"   Para habilitar, configure: ENABLE_SENDAS_SCHEDULER=true")
+        logger.warning(f"   Valor atual: '{scheduler_env_value}'")
 
     try:
         with Connection(redis_conn):
