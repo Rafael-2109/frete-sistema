@@ -17,27 +17,51 @@ logger = logging.getLogger(__name__)
 
 def instalar_libreoffice_se_necessario():
     """Verifica e instala LibreOffice se necessário"""
-    try:
-        result = subprocess.run(['libreoffice', '--version'], capture_output=True, text=True)
-        if result.returncode == 0:
-            logger.info(f"✅ LibreOffice encontrado: {result.stdout.strip()}")
-            return True
-    except FileNotFoundError:
-        pass
-    
-    logger.info("📦 LibreOffice não encontrado. Instalando...")
-    try:
-        # Tentar instalar via apt (Ubuntu/Debian)
-        subprocess.run(['sudo', 'apt-get', 'update'], check=True)
-        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'libreoffice'], check=True)
-        logger.info("✅ LibreOffice instalado com sucesso!")
-        return True
-    except Exception:
-        logger.error("❌ Não foi possível instalar LibreOffice automaticamente")
-        logger.info("Por favor, instale manualmente:")
-        logger.info("  Ubuntu/Debian: sudo apt-get install libreoffice")
-        logger.info("  CentOS/RHEL: sudo yum install libreoffice")
-        return False
+    # Primeiro, verificar caminhos possíveis do LibreOffice
+    possible_paths = [
+        'libreoffice',  # Sistema
+        os.path.expanduser('~/.local/bin/libreoffice'),  # Instalação Render
+        '/opt/libreoffice/squashfs-root/AppRun',  # AppImage extraído
+        '/usr/bin/libreoffice',  # Sistema padrão
+        'soffice',  # Comando alternativo
+    ]
+
+    for libreoffice_path in possible_paths:
+        try:
+            result = subprocess.run([libreoffice_path, '--version'], capture_output=True, text=True)
+            if result.returncode == 0:
+                logger.info(f"✅ LibreOffice encontrado em: {libreoffice_path}")
+                logger.info(f"   Versão: {result.stdout.strip()}")
+                # Salvar o caminho encontrado globalmente
+                global LIBREOFFICE_COMMAND
+                LIBREOFFICE_COMMAND = libreoffice_path
+                return True
+        except (FileNotFoundError, PermissionError):
+            continue
+
+    # Se não encontrou, tentar instalar no Render
+    if os.environ.get('RENDER', ''):
+        logger.info("📦 Ambiente Render detectado. Tentando instalar LibreOffice portável...")
+        try:
+            # Executar script de instalação
+            install_script = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'install_libreoffice_render.sh')
+            if os.path.exists(install_script):
+                subprocess.run(['bash', install_script], check=True)
+                # Verificar novamente
+                libreoffice_path = os.path.expanduser('~/.local/bin/libreoffice')
+                if os.path.exists(libreoffice_path):
+                    LIBREOFFICE_COMMAND = libreoffice_path
+                    logger.info("✅ LibreOffice instalado com sucesso no Render!")
+                    return True
+        except Exception as e:
+            logger.error(f"❌ Erro ao instalar LibreOffice no Render: {e}")
+
+    logger.error("❌ LibreOffice não disponível")
+    logger.info("Use xlsxwriter como alternativa ou instale manualmente")
+    return False
+
+# Variável global para armazenar o comando do LibreOffice
+LIBREOFFICE_COMMAND = 'libreoffice'
 
 
 def normalizar_com_libreoffice(arquivo_entrada: str, arquivo_saida: str = None) -> Tuple[bool, str]:
@@ -81,7 +105,7 @@ def normalizar_com_libreoffice(arquivo_entrada: str, arquivo_saida: str = None) 
             # --convert-to xlsx: força formato XLSX
             # --outdir: diretório de saída
             cmd = [
-                'libreoffice',
+                LIBREOFFICE_COMMAND,  # Usar o comando descoberto
                 '--headless',
                 '--convert-to', 'xlsx',
                 '--outdir', temp_dir,

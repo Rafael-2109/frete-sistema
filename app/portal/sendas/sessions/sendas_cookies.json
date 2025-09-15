@@ -1,14 +1,5 @@
 [
   {
-    "name": "chatWidgetWindowStateB4A912C8E68E4FEB9885DF64988ACED5",
-    "value": "false",
-    "domain": ".trizy.com.br",
-    "path": "/",
-    "secure": true,
-    "httpOnly": false,
-    "sameSite": "None"
-  },
-  {
     "name": "trizy-theme-settings",
     "value": "eyJ0aGVtZU1vZGUiOiJkYXJrIiwidGhlbWVDb250cmFzdCI6ImRlZmF1bHQiLCJ0aGVtZUxheW91dCI6ZmFsc2UsInRoZW1lU3RyZXRjaCI6ZmFsc2UsImlzRnVsbFNjcmVlbiI6ZmFsc2UsImxhc3RNb2RpZmllZCI6MTc1NzQ1NDk3NjQzMX0=",
     "domain": ".trizy.com.br",
@@ -36,15 +27,6 @@
     "sameSite": "None"
   },
   {
-    "name": "_clck",
-    "value": "14qs44d%5E2%5Efz7%5E0%5E2079",
-    "domain": ".trizy.com.br",
-    "path": "/",
-    "secure": true,
-    "httpOnly": false,
-    "sameSite": "None"
-  },
-  {
     "name": "_ga",
     "value": "GA1.3.1294188530.1757509729",
     "domain": ".trizy.com.br",
@@ -54,8 +36,8 @@
     "sameSite": "None"
   },
   {
-    "name": "_gid",
-    "value": "GA1.3.350330952.1757509729",
+    "name": "_clck",
+    "value": "14qs44d%5E2%5Efzc%5E0%5E2079",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,
@@ -63,8 +45,26 @@
     "sameSite": "None"
   },
   {
-    "name": "_ga_F5L3X45X5E",
-    "value": "GS2.3.s1757513908$o2$g0$t1757513908$j60$l0$h0",
+    "name": "_gid",
+    "value": "GA1.3.1072175667.1757936726",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "trizy_nstech-register-product-access",
+    "value": "eyI2MTcyNDI0MTAwMDMzMCI6WyJncGVkIl19",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "chatWidgetWindowStateB4A912C8E68E4FEB9885DF64988ACED5",
+    "value": "false",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,
@@ -73,7 +73,25 @@
   },
   {
     "name": "_clsk",
-    "value": "7v15c2%5E1757514554276%5E6%5E1%5Eq.clarity.ms%2Fcollect",
+    "value": "pab0x%5E1757962217792%5E2%5E1%5Ez.clarity.ms%2Fcollect",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "_gat",
+    "value": "1",
+    "domain": ".trizy.com.br",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "sameSite": "None"
+  },
+  {
+    "name": "_ga_F5L3X45X5E",
+    "value": "GS2.3.s1757962219$o17$g1$t1757962219$j60$l0$h0",
     "domain": ".trizy.com.br",
     "path": "/",
     "secure": true,

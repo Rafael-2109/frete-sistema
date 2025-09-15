@@ -4,7 +4,6 @@ Executa a cada 20 minutos se houver itens na fila
 """
 
 import logging
-from datetime import datetime
 from app import create_app, db
 from app.portal.models_fila_sendas import FilaAgendamentoSendas
 from app.portal.models import PortalIntegracao
