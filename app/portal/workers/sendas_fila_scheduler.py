@@ -100,7 +100,7 @@ def processar_fila_sendas_scheduled():
             integracao = PortalIntegracao(
                 portal='sendas',
                 lote_id=lote_id,
-                tipo_lote='agendamento_fila_scheduled',  # Identificar como processamento scheduled
+                tipo_lote='fila_scheduled',  # Abreviado para caber no campo varchar(20)
                 status='aguardando',
                 dados_enviados={
                     'cnpjs': lista_cnpjs_json,

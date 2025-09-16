@@ -94,22 +94,35 @@ class SendasPortal:
     async def carregar_cookies_salvos(self) -> bool:
         """
         Carrega os cookies salvos da sessão capturada manualmente
-        Retorna True se conseguiu carregar e aplicar os cookies
+        NOTA: Este método agora é usado apenas como fallback se os cookies
+        não foram carregados durante iniciar_navegador()
         """
         try:
-            # Verifica se o arquivo de cookies existe
+            # Se já carregamos cookies na inicialização, não fazer nada
+            logger.info("🔍 Verificando se cookies já foram carregados...")
+
+            # Tentar obter cookies atuais do contexto
+            current_cookies = await self.context.cookies()
+
+            # Se já tem cookies válidos (especialmente o token), não recarregar
+            has_token = any(c.get('name') == 'trizy_access_token' for c in current_cookies)
+            if has_token and len(current_cookies) > 5:
+                logger.info(f"✅ Já existem {len(current_cookies)} cookies carregados (incluindo token)")
+                return True
+
+            # Se chegou aqui, precisa carregar cookies
             if not os.path.exists(self.session_cookies_file):
                 logger.warning(f"❌ Arquivo de cookies não encontrado: {self.session_cookies_file}")
                 return False
-            
-            logger.info(f"📦 Carregando cookies de: {self.session_cookies_file}")
-            
+
+            logger.info(f"📦 Carregando cookies adicionais de: {self.session_cookies_file}")
+
             # Ler cookies do arquivo
             with open(self.session_cookies_file, 'r') as f:
                 cookies_json = json.load(f)
-            
-            logger.info(f"✅ {len(cookies_json)} cookies carregados do arquivo")
-            
+
+            logger.info(f"✅ {len(cookies_json)} cookies para adicionar")
+
             # Converter cookies para formato Playwright
             playwright_cookies = []
             for cookie in cookies_json:
@@ -120,7 +133,7 @@ class SendasPortal:
                     'domain': cookie.get('domain', '.trizy.com.br'),
                     'path': cookie.get('path', '/'),
                 }
-                
+
                 # Adicionar campos opcionais se existirem
                 if 'secure' in cookie:
                     pw_cookie['secure'] = cookie.get('secure', True)
@@ -131,18 +144,18 @@ class SendasPortal:
                     same_site = cookie.get('sameSite', 'None')
                     if same_site and same_site != 'None':
                         pw_cookie['sameSite'] = same_site
-                    
+
                 playwright_cookies.append(pw_cookie)
-            
+
             # Adicionar cookies ao contexto
             await self.context.add_cookies(playwright_cookies)
             logger.info(f"✅ {len(playwright_cookies)} cookies adicionados ao navegador")
-            
-            # Salvar como storage_state para futuras sessões
-            await self.salvar_storage_state()
-            
+
+            # NÃO salvar storage_state aqui para evitar sobrescrever com dados obsoletos
+            # await self.salvar_storage_state()  # REMOVIDO
+
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Erro ao carregar cookies: {e}")
             return False
@@ -393,15 +406,29 @@ class SendasPortal:
             # Criar playwright
             self.playwright = await async_playwright().start()
             
-            # Configurações do navegador (removidas flags agressivas)
+            # Configurações do navegador com melhor disfarce para headless
+            browser_args = [
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials'
+            ]
+
+            # Adicionar flags extras para headless parecer menos detectável
+            if self.headless:
+                browser_args.extend([
+                    '--window-size=1920,1080',
+                    '--start-maximized',
+                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                ])
+            else:
+                browser_args.append('--start-maximized')
+
             self.browser = await self.playwright.chromium.launch(
                 headless=self.headless,
-                args=[
-                    '--start-maximized',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',
-                    '--no-sandbox'
-                ]
+                args=browser_args
             )
             
             # Configurações do contexto
@@ -413,11 +440,43 @@ class SendasPortal:
                 'accept_downloads': True  # Permite downloads (salvaremos manualmente no diretório desejado)
             }
             
-            # Carregar storage_state se existir (cookies + localStorage)
-            if os.path.exists(self.state_file):
+            # PRIORIZAR sessão completa (cookies + localStorage) se disponível
+            session_file_path = os.path.join(os.path.dirname(__file__), 'sessions', 'sendas_session.json')
+
+            if os.path.exists(session_file_path):
+                logger.info("📦 Carregando sessão COMPLETA (cookies + localStorage)...")
+                with open(session_file_path, 'r') as f:
+                    session_data = json.load(f)
+
+                    # Construir storage_state completo
+                    storage_state = {
+                        'cookies': session_data.get('cookies', []),
+                        'origins': []
+                    }
+
+                    # Adicionar localStorage se existir
+                    local_storage = session_data.get('localStorage', {})
+                    if local_storage:
+                        storage_state['origins'].append({
+                            'origin': 'https://plataforma.trizy.com.br',
+                            'localStorage': [{'name': k, 'value': v} for k, v in local_storage.items()]
+                        })
+                        logger.info(f"  ✅ LocalStorage: {len(local_storage)} items")
+
+                    logger.info(f"  ✅ Cookies: {len(storage_state['cookies'])} items")
+                    context_options['storage_state'] = storage_state
+
+            # Fallback para apenas cookies
+            elif os.path.exists(self.session_cookies_file):
+                logger.info("🍪 Carregando apenas cookies (sem localStorage)...")
+                with open(self.session_cookies_file, 'r') as f:
+                    cookies = json.load(f)
+                    context_options['storage_state'] = {'cookies': cookies}
+            # Fallback para storage_state se não houver cookies manuais
+            elif os.path.exists(self.state_file):
                 logger.info("📦 Carregando storage_state...")
                 context_options['storage_state'] = self.state_file
-            # Fallback para cookies antigos
+            # Último fallback para cookies antigos
             elif os.path.exists(self.cookies_file):
                 logger.info("🍪 Carregando cookies salvos (formato antigo)...")
                 with open(self.cookies_file, 'r') as f:
@@ -429,9 +488,29 @@ class SendasPortal:
             
             # Criar página
             self.page = await self.context.new_page()
-            
+
             # Configurar timeout padrão
             self.page.set_default_timeout(30000)  # 30 segundos
+
+            # Adicionar script stealth completo para mascarar automação
+            if self.headless:
+                # Importar script stealth
+                try:
+                    from app.portal.sendas.stealth_config import get_stealth_script
+                    stealth_script = get_stealth_script()
+                    await self.page.add_init_script(stealth_script)
+                    logger.info("🥷 Script stealth completo aplicado - navegador mascarado")
+                except ImportError:
+                    # Fallback para script mínimo se não encontrar o arquivo
+                    await self.page.add_init_script("""
+                        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                        window.chrome = { runtime: {} };
+                        Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3] });
+                        Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt'] });
+                        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+                        delete window.__puppeteer_evaluation_script__;
+                    """)
+                    logger.info("🥷 Script stealth mínimo aplicado")
             
             logger.info("✅ Navegador iniciado com sucesso")
             return True

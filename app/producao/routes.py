@@ -402,7 +402,7 @@ def processar_importacao_palletizacao():
                     produtos_importados += 1
                 
             except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
+                erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
         
         # Commit das alterações
@@ -552,7 +552,7 @@ def processar_importacao_programacao():
                     data_programacao = None
                 
                 if not data_programacao:
-                    erros.append(f"Linha {index + 1}: Data inválida")
+                    erros.append(f"Linha {index + 1}: Data inválida") # type: ignore
                     continue
                 
                 # 📝 DADOS BÁSICOS
@@ -576,7 +576,7 @@ def processar_importacao_programacao():
                 produtos_importados += 1
                 
             except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
+                erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
         
         # Commit das alterações
@@ -694,13 +694,13 @@ def exportar_dados_programacao():
         dados_export = []
         for p in programacoes:
             dados_export.append({
-                'cod_produto': p.cod_produto,
-                'nome_produto': p.nome_produto,
-                'linha_producao': p.linha_producao,
-                'data_programacao': p.data_programacao.strftime('%d/%m/%Y') if p.data_programacao else '',
-                'qtd_programada': p.qtd_programada,
-                'status': p.status,
-                'observacao': p.observacao or '',
+                'DATA': p.data_programacao.strftime('%d/%m/%Y') if p.data_programacao else '',
+                'SEÇÃO / MÁQUINA': p.linha_producao,
+                'CÓDIGO': p.cod_produto,
+                'OP': p.observacao_pcp or '',
+                'DESCRIÇÃO': p.nome_produto,
+                'CLIENTE': p.cliente_produto,
+                'QTDE': p.qtd_programada,
                 'created_at': p.created_at.strftime('%d/%m/%Y %H:%M') if p.created_at else '',
                 'created_by': p.created_by or ''
             })
