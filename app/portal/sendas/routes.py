@@ -169,16 +169,16 @@ def testar_sessao():
             'Sec-Fetch-Site': 'same-origin',
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://login.trizy.com.br/access/auth/login/'
+            'Referer': 'https://plataforma.trizy.com.br/#/terminal/painel'
         }
         
         # Se temos o token JWT, adicionar Authorization header
         if access_token:
             headers['Authorization'] = f'Bearer {access_token}'
         
-        # Tentar acessar a home do portal
+        # Tentar acessar o painel do terminal (URL específica onde usuário trabalha)
         response = session.get(
-            'https://login.trizy.com.br/access/home/',
+            'https://plataforma.trizy.com.br/#/terminal/painel',
             headers=headers,
             allow_redirects=True,  # Permitir redirecionamento para ver onde vai
             timeout=10
@@ -194,11 +194,11 @@ def testar_sessao():
         if response.status_code == 200:
             # Verificar se não foi redirecionado para login
             if 'login' not in final_url.lower() and 'auth' not in final_url.lower():
-                # Verificar se está na home ou em área autenticada
-                if 'home' in final_url.lower() or 'access' in final_url.lower():
+                # Verificar se está na plataforma ou área autenticada
+                if 'plataforma' in final_url.lower() or 'trizy' in final_url.lower():
                     return jsonify({
                         'success': True,
-                        'message': 'Sessão válida! Acesso autorizado.',
+                        'message': 'Sessão válida! Acesso autorizado à plataforma.',
                         'status_code': response.status_code,
                         'url': final_url
                     })

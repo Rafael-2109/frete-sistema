@@ -50,8 +50,8 @@ class SendasPortal:
         # credenciais / urls / arquivos
         self.usuario = os.getenv('SENDAS_USUARIO')
         self.senha = os.getenv('SENDAS_SENHA')
-        self.url_login = 'https://login.trizy.com.br/access/auth/login/'
-        self.url_home = 'https://plataforma.trizy.com.br/'
+        self.url_login = 'https://plataforma.trizy.com.br/#/terminal/painel'
+        self.url_home = 'https://plataforma.trizy.com.br/#/terminal/painel'
         self.state_file = os.path.join(os.path.dirname(__file__), 'sendas_state.json')
         self.cookies_file = os.path.join(os.path.dirname(__file__), 'sendas_cookies.json')
         # Arquivo de cookies da sessão capturada manualmente

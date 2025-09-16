@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Sessão - Portal Sendas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        .status-card {
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-valid {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .status-invalid {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .status-none {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        .token-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .loading-spinner {
+            display: none;
+        }
+        .loading-spinner.active {
+            display: inline-block;
+        }
+        .capture-progress {
+            display: none;
+            margin-top: 20px;
+        }
+        .capture-progress.active {
+            display: block;
+        }
+        .history-item {
+            padding: 10px;
+            border-left: 3px solid #dee2e6;
+            margin-bottom: 10px;
+        }
+        .history-item.success {
+            border-left-color: #28a745;
+        }
+        .history-item.error {
+            border-left-color: #dc3545;
+        }
+        .instructions-box {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-shield-lock"></i> Gerenciador de Sessão - Portal Sendas
+            </span>
+            <button class="btn btn-outline-light btn-sm" onclick="window.location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Status da Sessão -->
+        <div id="statusCard" class="status-card status-none">
+            <h4><i class="bi bi-info-circle"></i> Status da Sessão</h4>
+            <div id="statusMessage">Verificando...</div>
+            <div id="tokenInfo" class="token-info" style="display: none;"></div>
+        </div>
+
+        <!-- Instruções -->
+        <div class="instructions-box">
+            <h5><i class="bi bi-lightbulb"></i> Como Funciona:</h5>
+            <ol>
+                <li><strong>Verificar Status:</strong> Veja se sua sessão está válida</li>
+                <li><strong>Capturar Nova Sessão:</strong> Se expirada, faça login para capturar novos tokens</li>
+                <li><strong>Resolver Cloudflare:</strong> Se aparecer desafio, resolva manualmente no navegador que abrirá</li>
+                <li><strong>Sessão Salva:</strong> Tokens são salvos automaticamente para uso futuro</li>
+            </ol>
+        </div>
+
+        <!-- Ações -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-key"></i> Capturar Nova Sessão
+                    </div>
+                    <div class="card-body">
+                        <form id="captureForm">
+                            <div class="mb-3">
+                                <label for="usuario" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="usuario" required
+                                       placeholder="seu.email@empresa.com">
+                            </div>
+                            <div class="mb-3">
+                                <label for="senha" class="form-label">Senha</label>
+                                <input type="password" class="form-control" id="senha" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="loading-spinner spinner-border spinner-border-sm me-2"></span>
+                                <i class="bi bi-play-circle"></i> Iniciar Captura
+                            </button>
+                            <button type="button" class="btn btn-secondary ms-2" onclick="testarSessao()">
+                                <i class="bi bi-check-circle"></i> Testar Sessão
+                            </button>
+                        </form>
+
+                        <div class="capture-progress">
+                            <div class="alert alert-info">
+                                <i class="bi bi-hourglass-split"></i>
+                                <strong>Captura em andamento...</strong>
+                                <ul class="mt-2 mb-0">
+                                    <li>Um navegador será aberto</li>
+                                    <li>Se aparecer Cloudflare, resolva manualmente</li>
+                                    <li>Aguarde o processo completar</li>
+                                </ul>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-clock-history"></i> Histórico Recente
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div id="historyList">
+                            <div class="text-muted">Carregando histórico...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ações Adicionais -->
+        <div class="mt-4">
+            <button class="btn btn-warning" onclick="limparSessao()">
+                <i class="bi bi-trash"></i> Limpar Sessão
+            </button>
+            <button class="btn btn-info ms-2" onclick="verificarStatus()">
+                <i class="bi bi-arrow-repeat"></i> Verificar Status
+            </button>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Verificar status ao carregar
+        $(document).ready(function() {
+            verificarStatus();
+            carregarHistorico();
+        });
+
+        function verificarStatus() {
+            $.get('/portal/sendas/sessao/status')
+                .done(function(data) {
+                    atualizarStatusCard(data);
+                })
+                .fail(function(xhr) {
+                    console.error('Erro ao verificar status:', xhr);
+                    $('#statusMessage').html('<i class="bi bi-exclamation-triangle"></i> Erro ao verificar status');
+                });
+        }
+
+        function atualizarStatusCard(data) {
+            const card = $('#statusCard');
+            const message = $('#statusMessage');
+            const tokenInfo = $('#tokenInfo');
+
+            // Remove classes antigas
+            card.removeClass('status-valid status-invalid status-none');
+
+            if (data.sessao_valida) {
+                card.addClass('status-valid');
+                message.html(`
+                    <i class="bi bi-check-circle-fill"></i>
+                    <strong>Sessão Válida</strong><br>
+                    ${data.mensagem}
+                `);
+
+                // Mostra informações do token
+                if (data.tokens && data.tokens.access_token) {
+                    const token = data.tokens.access_token;
+                    tokenInfo.html(`
+                        <strong>Detalhes do Token:</strong><br>
+                        Expira em: ${token.expira_em || 'N/A'}<br>
+                        Tempo restante: ${token.tempo_restante || 'N/A'}<br>
+                        Precisa renovar: ${token.precisa_renovar ? 'Sim' : 'Não'}
+                    `).show();
+                }
+            } else if (data.tem_sessao) {
+                card.addClass('status-invalid');
+                message.html(`
+                    <i class="bi bi-x-circle-fill"></i>
+                    <strong>Sessão Expirada</strong><br>
+                    ${data.mensagem}
+                `);
+                tokenInfo.hide();
+            } else {
+                card.addClass('status-none');
+                message.html(`
+                    <i class="bi bi-dash-circle"></i>
+                    <strong>Sem Sessão</strong><br>
+                    ${data.mensagem}
+                `);
+                tokenInfo.hide();
+            }
+        }
+
+        $('#captureForm').on('submit', function(e) {
+            e.preventDefault();
+
+            const usuario = $('#usuario').val();
+            const senha = $('#senha').val();
+
+            // Mostra loading
+            $('.loading-spinner').addClass('active');
+            $('.capture-progress').addClass('active');
+            $('button[type="submit"]').prop('disabled', true);
+
+            // Faz a captura
+            $.ajax({
+                url: '/portal/sendas/sessao/capturar',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    usuario: usuario,
+                    senha: senha
+                })
+            })
+            .done(function(data) {
+                if (data.sucesso) {
+                    alert('✅ Sessão capturada com sucesso!');
+                    verificarStatus();
+                    carregarHistorico();
+                    $('#captureForm')[0].reset();
+                } else {
+                    alert('❌ Erro: ' + (data.erro || 'Erro desconhecido'));
+                }
+            })
+            .fail(function(xhr) {
+                alert('❌ Erro na requisição: ' + xhr.responseText);
+            })
+            .always(function() {
+                $('.loading-spinner').removeClass('active');
+                $('.capture-progress').removeClass('active');
+                $('button[type="submit"]').prop('disabled', false);
+            });
+        });
+
+        function testarSessao() {
+            $.post('/portal/sendas/sessao/testar')
+                .done(function(data) {
+                    if (data.funciona) {
+                        alert('✅ ' + data.mensagem);
+                    } else {
+                        alert('❌ ' + data.mensagem);
+                    }
+                    verificarStatus();
+                })
+                .fail(function(xhr) {
+                    alert('❌ Erro ao testar sessão');
+                });
+        }
+
+        function limparSessao() {
+            if (confirm('Tem certeza que deseja limpar a sessão atual?')) {
+                $.post('/portal/sendas/sessao/limpar')
+                    .done(function(data) {
+                        alert(data.mensagem);
+                        verificarStatus();
+                    })
+                    .fail(function(xhr) {
+                        alert('❌ Erro ao limpar sessão');
+                    });
+            }
+        }
+
+        function carregarHistorico() {
+            $.get('/portal/sendas/sessao/historico')
+                .done(function(data) {
+                    const historyList = $('#historyList');
+
+                    if (data.length === 0) {
+                        historyList.html('<div class="text-muted">Nenhum histórico disponível</div>');
+                        return;
+                    }
+
+                    let html = '';
+                    data.reverse().forEach(function(item) {
+                        const date = new Date(item.timestamp);
+                        const dateStr = date.toLocaleString('pt-BR');
+                        const statusClass = item.sucesso ? 'success' : 'error';
+                        const icon = item.sucesso ? 'check-circle-fill' : 'x-circle-fill';
+                        const color = item.sucesso ? 'text-success' : 'text-danger';
+
+                        html += `
+                            <div class="history-item ${statusClass}">
+                                <i class="bi bi-${icon} ${color}"></i>
+                                <strong>${item.usuario}</strong><br>
+                                <small class="text-muted">${dateStr}</small><br>
+                                <small>Método: ${item.metodo}</small>
+                                ${item.erro ? `<br><small class="text-danger">${item.erro}</small>` : ''}
+                            </div>
+                        `;
+                    });
+
+                    historyList.html(html);
+                })
+                .fail(function(xhr) {
+                    $('#historyList').html('<div class="text-danger">Erro ao carregar histórico</div>');
+                });
+        }
+
+        // Auto-refresh a cada 30 segundos
+        setInterval(function() {
+            verificarStatus();
+        }, 30000);
+    </script>
+</body>
+</html>

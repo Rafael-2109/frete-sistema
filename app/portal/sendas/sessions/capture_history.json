@@ -1,0 +1,9 @@
+[
+  {
+    "timestamp": "2025-09-15T21:23:54.105641",
+    "usuario": "danielle.vieria@nacomgoya.com.br",
+    "metodo": "erro",
+    "sucesso": false,
+    "erro": "Target page, context or browser has been closed"
+  }
+]

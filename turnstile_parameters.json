@@ -1,0 +1,17 @@
+{
+  "captured_data": {
+    "renders": [],
+    "callbacks": [],
+    "requests": [],
+    "scripts": [],
+    "events": [],
+    "parameters": {}
+  },
+  "current_state": {
+    "hasTurnstile": false,
+    "turnstileMethods": [],
+    "inputs": [],
+    "iframes": [],
+    "widgets": []
+  }
+}

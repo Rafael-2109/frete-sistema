@@ -672,8 +672,8 @@ class PreencherPlanilhaSendas:
                 if isinstance(data_agendamento, str):
                     try:
                         data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
-                    except:
-                        logger.warning(f"    ⚠️ Não foi possível converter data_agendamento: {data_agendamento}")
+                    except Exception as e:
+                        logger.warning(f"    ⚠️ Não foi possível converter data_agendamento: {data_agendamento} - {e}")
 
                 todos_dados[cnpj] = {
                     'data_agendamento': data_agendamento,
