@@ -189,9 +189,24 @@ def _buscar_estoque_atual(cod_produto: str) -> float:
 def _calcular_saidas_projetadas(cod_produto: str, data_inicio: date, data_fim: date) -> float:
     """
     Calcula saídas projetadas de estoque
+    INCLUI ITENS ATRASADOS (expedicao < hoje)
     """
     try:
-        # Buscar pedidos em carteira
+        hoje = date.today()
+
+        # Buscar pedidos em carteira (incluindo ATRASADOS)
+        # Pedidos atrasados
+        carteira_atrasada = db.session.query(
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
+        ).filter(
+            and_(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                CarteiraPrincipal.ativo == True,
+                CarteiraPrincipal.expedicao < hoje  # ATRASADOS
+            )
+        ).scalar()
+
+        # Pedidos no período
         carteira = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
         ).filter(
@@ -203,7 +218,19 @@ def _calcular_saidas_projetadas(cod_produto: str, data_inicio: date, data_fim: d
             )
         ).scalar()
 
-        # Buscar separações não faturadas
+        # Buscar separações não faturadas (incluindo ATRASADAS)
+        # Separações atrasadas
+        separacao_atrasada = db.session.query(
+            func.sum(Separacao.qtd_saldo)
+        ).filter(
+            and_(
+                Separacao.cod_produto == cod_produto,
+                Separacao.sincronizado_nf == False,
+                Separacao.expedicao < hoje  # ATRASADAS
+            )
+        ).scalar()
+
+        # Separações no período
         separacao = db.session.query(
             func.sum(Separacao.qtd_saldo)
         ).filter(
@@ -215,7 +242,19 @@ def _calcular_saidas_projetadas(cod_produto: str, data_inicio: date, data_fim: d
             )
         ).scalar()
 
-        total = (float(carteira or 0) + float(separacao or 0))
+        # Somar tudo: atrasados + período
+        total = (
+            float(carteira_atrasada or 0) +
+            float(carteira or 0) +
+            float(separacao_atrasada or 0) +
+            float(separacao or 0)
+        )
+
+        if float(carteira_atrasada or 0) > 0 or float(separacao_atrasada or 0) > 0:
+            logger.info(f"[RUPTURA] Produto {cod_produto}: Incluindo atrasados - "
+                       f"Carteira: {float(carteira_atrasada or 0):.2f}, "
+                       f"Separação: {float(separacao_atrasada or 0):.2f}")
+
         return total
 
     except Exception as e:

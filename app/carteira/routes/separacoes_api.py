@@ -165,6 +165,65 @@ def obter_separacoes_completas(num_pedido):
         }), 500
 
 
+@carteira_bp.route('/api/separacao/<string:lote_id>/detalhes', methods=['GET'])
+@login_required
+def obter_detalhes_separacao_lote(lote_id):
+    """
+    Retorna TODOS os itens de um lote de separação para o novo fluxo Sendas.
+    Um lote pode ter múltiplos produtos que serão comparados em conjunto.
+    """
+    try:
+        # Buscar TODAS as separações do lote (múltiplos produtos)
+        separacoes = Separacao.query.filter_by(
+            separacao_lote_id=lote_id
+        ).filter(
+            Separacao.sincronizado_nf == False  # Só itens não faturados
+        ).all()
+
+        if not separacoes:
+            return jsonify({
+                'success': False,
+                'error': f'Nenhuma separação encontrada para o lote {lote_id}'
+            }), 404
+
+        # Pegar dados comuns da primeira separação (cnpj, pedido são iguais para todo o lote)
+        primeira = separacoes[0]
+
+        # Montar lista de TODOS os itens do lote
+        itens = []
+        for sep in separacoes:
+            itens.append({
+                'cod_produto': sep.cod_produto,
+                'nome_produto': sep.nome_produto if hasattr(sep, 'nome_produto') else '',
+                'pedido_cliente': sep.pedido_cliente,
+                'qtd_saldo': float(sep.qtd_saldo) if sep.qtd_saldo else 0,
+                'valor_saldo': float(sep.valor_saldo) if sep.valor_saldo else 0,
+                'peso': float(sep.peso) if sep.peso else 0,
+                'pallet': float(sep.pallet) if sep.pallet else 0
+            })
+
+        # Retornar estrutura completa do lote
+        return jsonify({
+            'lote_id': lote_id,
+            'cnpj_cliente': primeira.cnpj_cpf,
+            'num_pedido': primeira.num_pedido,
+            'raz_social': primeira.raz_social_red if hasattr(primeira, 'raz_social_red') else '',
+            'expedicao': primeira.expedicao.strftime('%Y-%m-%d') if primeira.expedicao else None,
+            'agendamento': primeira.agendamento.strftime('%Y-%m-%d') if primeira.agendamento else None,
+            'protocolo': primeira.protocolo,
+            'status': primeira.status,
+            'total_itens': len(itens),
+            'itens': itens
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao obter detalhes do lote {lote_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @carteira_bp.route('/api/separacoes-compactas-lote', methods=['POST'])
 @login_required
 def obter_separacoes_compactas_lote():

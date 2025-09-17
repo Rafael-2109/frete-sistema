@@ -84,5 +84,3 @@ def listar_pre_separacoes(num_pedido):
     except Exception as e:
         logger.error(f"Erro ao listar pré-separações do pedido {num_pedido}: {e}")
         return jsonify({"success": False, "error": f"Erro interno: {str(e)}"}), 500
-
-

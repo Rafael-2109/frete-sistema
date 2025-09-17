@@ -56,22 +56,34 @@ class ServicoEstoqueSimples:
     
     @staticmethod
     def calcular_saidas_previstas(
-        cod_produto: str, 
-        data_inicio: date, 
+        cod_produto: str,
+        data_inicio: date,
         data_fim: date
     ) -> Dict[date, float]:
         """
         Calcula saídas previstas por dia baseado em Separacao.
         Considera apenas sincronizado_nf = False (não faturadas).
+        IMPORTANTE: Agora inclui itens ATRASADOS (expedicao < hoje).
         Retorna dicionário {data: quantidade}.
-        
+
         Performance esperada: < 20ms
         """
         try:
             # Obter códigos unificados
             codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
-            
-            # Query otimizada com GROUP BY
+            hoje = date.today()
+
+            # Query para itens ATRASADOS (expedicao < hoje)
+            # Estes serão agrupados como saída para HOJE
+            atrasados = db.session.query(
+                func.sum(Separacao.qtd_saldo).label('quantidade')
+            ).filter(
+                Separacao.cod_produto.in_(codigos),
+                Separacao.sincronizado_nf == False,  # Apenas não sincronizados
+                Separacao.expedicao < hoje  # ATRASADOS
+            ).scalar()
+
+            # Query otimizada com GROUP BY para itens futuros
             resultados = db.session.query(
                 Separacao.expedicao.label('data'),
                 func.sum(Separacao.qtd_saldo).label('quantidade')
@@ -86,10 +98,20 @@ class ServicoEstoqueSimples:
             
             # Converter para dicionário
             saidas = {}
+
+            # Adicionar itens ATRASADOS como saída para HOJE
+            if atrasados and float(atrasados) > 0:
+                # Acumular com saídas já existentes para hoje
+                if hoje in saidas:
+                    saidas[hoje] += float(atrasados)
+                else:
+                    saidas[hoje] = float(atrasados)
+                logger.info(f"[ESTOQUE] Produto {cod_produto}: {float(atrasados):.2f} unidades ATRASADAS adicionadas para hoje")
+
             for resultado in resultados:
                 if resultado.data and resultado.quantidade:
                     saidas[resultado.data] = float(resultado.quantidade)
-            
+
             return saidas
             
         except Exception as e:

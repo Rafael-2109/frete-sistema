@@ -9,6 +9,7 @@ import pandas as pd
 import io
 from app.estoque.models import UnificacaoCodigos
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from app.estoque.api_tempo_real import APIEstoqueTempoReal
 from app.producao.models import CadastroPalletizacao
 import logging
 
@@ -24,8 +25,10 @@ def exportar_relatorios_producao():
         # Preparar dados de estoque
         dados_estoque = []
         
-        # Obter estoque completo usando novo serviço
-        estoques_dict = ServicoEstoqueSimples.exportar_estoque_completo()
+        # Obter estoque completo usando API de tempo real
+        estoques_list = APIEstoqueTempoReal.exportar_estoque_completo()
+        # Converter lista para dicionário indexado por cod_produto
+        estoques_dict = {item['cod_produto']: item for item in estoques_list}
         
         # Buscar informações de palletização
         palletizacoes = {p.cod_produto: p for p in CadastroPalletizacao.query.all()}
