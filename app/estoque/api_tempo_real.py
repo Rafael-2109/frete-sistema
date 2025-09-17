@@ -207,9 +207,10 @@ class APIEstoqueTempoReal:
         """
         Exporta dados de estoque completo para todos os produtos.
         Otimizado para relatórios.
-        
+        IMPORTANTE: Agora inclui projeção completa de 30 dias para movimentações previstas.
+
         Returns:
-            Lista com todos os produtos e seus dados
+            Lista com todos os produtos e seus dados incluindo projeção diária
         """
         # Buscar todos os produtos com movimento
         produtos = db.session.query(
@@ -217,28 +218,32 @@ class APIEstoqueTempoReal:
         ).filter(
             MovimentacaoEstoque.ativo == True
         ).all()
-        
+
         resultado = []
         for (cod_produto,) in produtos:
-            # Calcular projeção para cada produto
-            projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, dias=7)
-            
-            if 'erro' not in projecao:
-                # Buscar informações do produto
-                prod_info = db.session.query(
-                    MovimentacaoEstoque.nome_produto
-                ).filter(
-                    MovimentacaoEstoque.cod_produto == cod_produto
-                ).first()
-                
+            # Usar get_projecao_completa para ter dados COMPLETOS incluindo projeção diária
+            projecao_completa = ServicoEstoqueSimples.get_projecao_completa(cod_produto, dias=30)  # 30 dias para relatório
+
+            if projecao_completa and 'erro' not in projecao_completa:
+                # Buscar informações do produto se não vier no resultado
+                nome_produto = projecao_completa.get('nome_produto')
+                if not nome_produto:
+                    prod_info = db.session.query(
+                        MovimentacaoEstoque.nome_produto
+                    ).filter(
+                        MovimentacaoEstoque.cod_produto == cod_produto
+                    ).first()
+                    nome_produto = prod_info.nome_produto if prod_info else cod_produto
+
                 resultado.append({
                     'cod_produto': cod_produto,
-                    'nome_produto': prod_info.nome_produto if prod_info else cod_produto,
-                    'estoque_atual': projecao.get('estoque_atual', 0),
-                    'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                    'dia_ruptura': projecao.get('dia_ruptura')
+                    'nome_produto': nome_produto,
+                    'estoque_atual': projecao_completa.get('estoque_atual', 0),
+                    'menor_estoque_d7': projecao_completa.get('menor_estoque_d7', 0),
+                    'dia_ruptura': projecao_completa.get('dia_ruptura'),
+                    'projecao': projecao_completa.get('projecao', [])  # INCLUIR PROJEÇÃO DIÁRIA!
                 })
-        
+
         return resultado
 
 

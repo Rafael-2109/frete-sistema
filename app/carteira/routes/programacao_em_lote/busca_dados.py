@@ -288,78 +288,90 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
 
         logger.info(f"    Encontrados {len(itens_carteira)} itens com saldo")
 
-        # Gerar UM ÚNICO separacao_lote_id para TODOS os produtos deste CNPJ
-        separacao_lote_id = gerar_lote_id() if itens_carteira else None
-
+        # Agrupar itens por num_pedido para gerar um separacao_lote_id único por pedido
+        pedidos_agrupados = {}
         for item in itens_carteira:
-            # Calcular saldo líquido
-            chave_item = f"{item.num_pedido}_{item.cod_produto}"
-            qtd_ja_separada = dict_ja_separado.get(chave_item, 0)
-            saldo_liquido = float(item.qtd_saldo_produto_pedido) - qtd_ja_separada
+            if item.num_pedido not in pedidos_agrupados:
+                pedidos_agrupados[item.num_pedido] = []
+            pedidos_agrupados[item.num_pedido].append(item)
 
-            if saldo_liquido <= 0:
-                logger.debug(f"      Item {chave_item} sem saldo líquido (tudo já está em separação)")
-                continue
+        logger.info(f"    Agrupados em {len(pedidos_agrupados)} pedidos diferentes")
 
-            # Buscar dados de palletização
-            pallet_info = db.session.query(
-                CadastroPalletizacao
-            ).filter(
-                CadastroPalletizacao.cod_produto == item.cod_produto
-            ).first()
+        # Processar cada pedido com seu próprio separacao_lote_id
+        for num_pedido, itens_do_pedido in pedidos_agrupados.items():
+            # Gerar um separacao_lote_id ÚNICO para CADA num_pedido
+            separacao_lote_id = gerar_lote_id()
+            logger.debug(f"      Pedido {num_pedido}: criando lote {separacao_lote_id}")
 
-            peso_item = Decimal('0')
-            pallets_item = Decimal('0')
+            for item in itens_do_pedido:
+                # Calcular saldo líquido
+                chave_item = f"{item.num_pedido}_{item.cod_produto}"
+                qtd_ja_separada = dict_ja_separado.get(chave_item, 0)
+                saldo_liquido = float(item.qtd_saldo_produto_pedido) - qtd_ja_separada
 
-            if pallet_info:
-                qtd_decimal = Decimal(str(saldo_liquido))  # Usar saldo líquido
-                peso_item = qtd_decimal * Decimal(str(pallet_info.peso_bruto or 0))
-                if pallet_info.palletizacao and pallet_info.palletizacao > 0:
-                    pallets_item = qtd_decimal / Decimal(str(pallet_info.palletizacao))
+                if saldo_liquido <= 0:
+                    logger.debug(f"      Item {chave_item} sem saldo líquido (tudo já está em separação)")
+                    continue
 
-            # Determinar tipo_envio: 'parcial' se já existe separação, 'total' se não
-            tipo_envio = 'parcial' if item.num_pedido in pedidos_com_separacao else 'total'
+                # Buscar dados de palletização
+                pallet_info = db.session.query(
+                    CadastroPalletizacao
+                ).filter(
+                    CadastroPalletizacao.cod_produto == item.cod_produto
+                ).first()
 
-            nova_separacao = Separacao(
-                separacao_lote_id=separacao_lote_id,
-                status='ABERTO',  # Status para separações criadas para agendamento
-                sincronizado_nf=False,  # Sempre False para aparecer na carteira
-                nf_cd=False,  # Não é NF no CD
+                peso_item = Decimal('0')
+                pallets_item = Decimal('0')
 
-                # Dados do pedido
-                num_pedido=item.num_pedido,
-                pedido_cliente=item.pedido_cliente,
-                cod_produto=item.cod_produto,
-                qtd_saldo=saldo_liquido,  # SALDO LÍQUIDO!
-                valor_saldo=float(Decimal(str(saldo_liquido)) * Decimal(str(item.preco_produto_pedido or 0))),
-                peso=float(peso_item),
-                pallet=float(pallets_item),
+                if pallet_info:
+                    qtd_decimal = Decimal(str(saldo_liquido))  # Usar saldo líquido
+                    peso_item = qtd_decimal * Decimal(str(pallet_info.peso_bruto or 0))
+                    if pallet_info.palletizacao and pallet_info.palletizacao > 0:
+                        pallets_item = qtd_decimal / Decimal(str(pallet_info.palletizacao))
 
-                # Dados do cliente
-                cnpj_cpf=cnpj,
-                raz_social_red=item.raz_social_red,
-                nome_cidade=item.municipio,
-                cod_uf=item.estado,
+                # Determinar tipo_envio: 'parcial' se já existe separação, 'total' se não
+                tipo_envio = 'parcial' if item.num_pedido in pedidos_com_separacao else 'total'
 
-                # Dados do agendamento
-                protocolo=protocolo,
-                agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
-                expedicao=None,    # ZERAR - para validar se foi realmente agendado
+                nova_separacao = Separacao(
+                    separacao_lote_id=separacao_lote_id,
+                    status='ABERTO',  # Status para separações criadas para agendamento
+                    sincronizado_nf=False,  # Sempre False para aparecer na carteira
+                    nf_cd=False,  # Não é NF no CD
 
-                # Manter observ_ped_1 original se houver
-                observ_ped_1=item.observ_ped_1,
+                    # Dados do pedido
+                    num_pedido=item.num_pedido,
+                    pedido_cliente=item.pedido_cliente,
+                    cod_produto=item.cod_produto,
+                    qtd_saldo=saldo_liquido,  # SALDO LÍQUIDO!
+                    valor_saldo=float(Decimal(str(saldo_liquido)) * Decimal(str(item.preco_produto_pedido or 0))),
+                    peso=float(peso_item),
+                    pallet=float(pallets_item),
 
-                # Tipo de envio baseado em se já existe separação
-                tipo_envio=tipo_envio
-            )
+                    # Dados do cliente
+                    cnpj_cpf=cnpj,
+                    raz_social_red=item.raz_social_red,
+                    nome_cidade=item.municipio,
+                    cod_uf=item.estado,
 
-            db.session.add(nova_separacao)
-            contador_criadas += 1
+                    # Dados do agendamento
+                    protocolo=protocolo,
+                    agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
+                    expedicao=None,    # ZERAR - para validar se foi realmente agendado
 
-            # Após criar, marcar o pedido como tendo separação
-            pedidos_com_separacao.add(item.num_pedido)
+                    # Manter observ_ped_1 original se houver
+                    observ_ped_1=item.observ_ped_1,
 
-            logger.debug(f"      Criada Separação para {chave_item}: {saldo_liquido} unidades (tipo: {tipo_envio})")
+                    # Tipo de envio baseado em se já existe separação
+                    tipo_envio=tipo_envio
+                )
+
+                db.session.add(nova_separacao)
+                contador_criadas += 1
+
+                # Após criar, marcar o pedido como tendo separação
+                pedidos_com_separacao.add(item.num_pedido)
+
+                logger.debug(f"      Criada Separação para {chave_item}: {saldo_liquido} unidades (tipo: {tipo_envio})")
 
         # 3. ATUALIZAR SEPARAÇÕES EXISTENTES COM O PROTOCOLO
         # IMPORTANTE: Zerar datas de agendamento/expedição primeiro para validação posterior

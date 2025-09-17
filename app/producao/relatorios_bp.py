@@ -85,52 +85,82 @@ def exportar_relatorios_producao():
         
         df_estoque = pd.DataFrame(dados_estoque)
         
-        # Preparar dados de movimentações previstas
+        # Preparar dados de movimentações previstas - FORMATO UNIFICADO
+        # Uma linha por dia/produto com 3 colunas: saídas, entradas, saldo
         dados_movimentacoes = []
-        
-        # Buscar movimentações previstas usando o novo serviço
-        data_limite = date.today() + timedelta(days=30)
-        
-        # Obter todas as movimentações para os próximos 30 dias
-        # Vamos iterar pelos produtos que temos no estoque
+        movimentacoes_por_dia_produto = {}  # Chave: (data, cod_produto)
+
+        # DEBUG: verificar estrutura dos dados
+        logger.info(f"Total de produtos com estoque: {len(estoques_dict)}")
+        produtos_com_projecao = 0
+        total_dias_com_movimento = 0
+
+        # Iterar pelos produtos que têm dados de estoque
         for cod_produto, estoque_info in estoques_dict.items():
             nome_produto = estoque_info.get('nome_produto', cod_produto)
-            
-            # Se houver projeção, usar os dados dela
+
+            # Verificar se há projeção
             if estoque_info.get('projecao'):
+                produtos_com_projecao += 1
+                logger.info(f"Produto {cod_produto} tem {len(estoque_info['projecao'])} dias de projeção")
+
                 for dia in estoque_info['projecao'][:30]:  # Limitar a 30 dias
+                    # Obter data - pode estar como string ou objeto
                     data_prevista = dia.get('data')
                     if not data_prevista:
                         continue
-                        
-                    # Adicionar entrada se houver
-                    entrada_val = float(dia.get('entrada', 0))
-                    if entrada_val > 0:
-                        dados_movimentacoes.append({
-                            'Data Prevista': data_prevista.strftime('%d/%m/%Y') if hasattr(data_prevista, 'strftime') else str(data_prevista),
-                            'Código Produto': cod_produto,
-                            'Nome Produto': nome_produto,
-                            'Tipo Movimento': 'Entrada',
-                            'Quantidade': entrada_val,
-                            'Observações': 'Produção/Entrada prevista'
-                        })
-                    
-                    # Adicionar saída se houver
-                    saida_val = float(dia.get('saida', 0))
-                    if saida_val > 0:
-                        dados_movimentacoes.append({
-                            'Data Prevista': data_prevista.strftime('%d/%m/%Y') if hasattr(data_prevista, 'strftime') else str(data_prevista),
-                            'Código Produto': cod_produto,
-                            'Nome Produto': nome_produto,
-                            'Tipo Movimento': 'Saída',
-                            'Quantidade': saida_val,
-                            'Observações': 'Separação/Expedição prevista'
-                        })
+
+                    # Converter data para string formatada consistente
+                    if hasattr(data_prevista, 'strftime'):
+                        data_str = data_prevista.strftime('%Y-%m-%d')
+                        data_formatada = data_prevista.strftime('%d/%m/%Y')
+                    else:
+                        data_str = str(data_prevista)[:10]  # YYYY-MM-DD
+                        data_formatada = data_str  # Formatar depois se necessário
+
+                    # Obter valores - usar múltiplos nomes possíveis para compatibilidade
+                    entrada_val = float(dia.get('entrada', 0) or dia.get('producao', 0))
+                    saida_val = float(dia.get('saida', 0) or dia.get('saidas', 0))
+                    saldo_val = float(dia.get('saldo_final', 0) or dia.get('estoque_final', 0))
+
+                    # Adicionar apenas se houver entrada OU saída
+                    if entrada_val > 0 or saida_val > 0:
+                        total_dias_com_movimento += 1
+                        chave = (data_str, cod_produto)
+                        movimentacoes_por_dia_produto[chave] = {
+                            'data_str': data_str,
+                            'data_formatada': data_formatada,
+                            'cod_produto': cod_produto,
+                            'nome_produto': nome_produto,
+                            'saida': saida_val,
+                            'entrada': entrada_val,
+                            'saldo': saldo_val
+                        }
+
+        logger.info(f"Produtos com projeção: {produtos_com_projecao}")
+        logger.info(f"Total de dias com movimentação: {total_dias_com_movimento}")
+
+        # Converter dicionário para lista ordenada por data e produto
+        for (data_str, cod_produto), mov in sorted(movimentacoes_por_dia_produto.items()):
+            dados_movimentacoes.append({
+                'Data': mov['data_formatada'],
+                'Código Produto': mov['cod_produto'],
+                'Nome Produto': mov['nome_produto'],
+                'Saídas Previstas': mov['saida'],
+                'Entradas Previstas': mov['entrada'],
+                'Saldo Projetado': mov['saldo']
+            })
         
-        # Debug: verificar se há entradas
-        logger.info(f"Total de movimentações encontradas: {len(dados_movimentacoes)}")
-        for m in dados_movimentacoes[:5]:  # Mostrar primeiras 5 para debug
-            logger.info(f"Produto {m['Código Produto']} em {m['Data Prevista']}: {m['Tipo Movimento']}={m['Quantidade']}")
+        # Debug: verificar movimentações
+        logger.info(f"Total de linhas de movimentações (dia/produto): {len(dados_movimentacoes)}")
+        if dados_movimentacoes:
+            logger.info(f"Primeiras 3 movimentações:")
+            for i, mov in enumerate(dados_movimentacoes[:3]):
+                logger.info(f"  {i+1}. Data={mov['Data']}, Produto={mov['Código Produto']}, "
+                           f"Saída={mov['Saídas Previstas']}, Entrada={mov['Entradas Previstas']}, "
+                           f"Saldo={mov['Saldo Projetado']}")
+        else:
+            logger.warning("Nenhuma movimentação prevista encontrada!")
         
         df_movimentacoes = pd.DataFrame(dados_movimentacoes)
         
@@ -167,28 +197,78 @@ def exportar_relatorios_producao():
                     column_width = max(df_estoque[col_name].astype(str).map(len).max() if len(df_estoque) > 0 else 10, len(col_name)) + 2
                     worksheet_estoque.set_column(col_num, col_num, min(column_width, 50))
             
-            # Aba de Movimentações Previstas
-            df_movimentacoes.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
-            
-            worksheet_mov = writer.sheets['Movimentações Previstas']
-            
-            # Aplicar formatos na aba de movimentações
-            for col_num, col_name in enumerate(df_movimentacoes.columns):
-                worksheet_mov.write(0, col_num, col_name, header_format)
-                column_width = max(df_movimentacoes[col_name].astype(str).map(len).max() if len(df_movimentacoes) > 0 else 10, len(col_name)) + 2
-                worksheet_mov.set_column(col_num, col_num, min(column_width, 50))
-            
-            # Adicionar formatação condicional para tipos de movimento
+            # Aba de Movimentações Previstas - NOVO FORMATO COM 3 COLUNAS
             if len(df_movimentacoes) > 0:
-                entrada_format = workbook.add_format({'bg_color': '#E8F5E9'})
-                saida_format = workbook.add_format({'bg_color': '#FFEBEE'})
-                
+                df_movimentacoes.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
+                worksheet_mov = writer.sheets['Movimentações Previstas']
+
+                # Aplicar formatos no cabeçalho
+                for col_num, col_name in enumerate(df_movimentacoes.columns):
+                    worksheet_mov.write(0, col_num, col_name, header_format)
+
+                    # Definir larguras específicas de coluna
+                    if col_name == 'Data':
+                        worksheet_mov.set_column(col_num, col_num, 12)
+                    elif col_name == 'Código Produto':
+                        worksheet_mov.set_column(col_num, col_num, 15)
+                    elif col_name == 'Nome Produto':
+                        worksheet_mov.set_column(col_num, col_num, 40)
+                    elif 'Previstas' in col_name or 'Saldo' in col_name:
+                        worksheet_mov.set_column(col_num, col_num, 18, number_format)
+
+                # Adicionar formatação condicional para as linhas
+                # Formato para linhas com entrada (verde claro)
+                entrada_format = workbook.add_format({'bg_color': '#E8F5E9', 'border': 1})
+                # Formato para linhas com saída (vermelho claro)
+                saida_format = workbook.add_format({'bg_color': '#FFEBEE', 'border': 1})
+                # Formato para saldo negativo (vermelho escuro)
+                saldo_negativo_format = workbook.add_format({
+                    'bg_color': '#FF5252',
+                    'font_color': 'white',
+                    'border': 1,
+                    'num_format': '#,##0.00'
+                })
+                # Formato neutro com borda
+                neutro_format = workbook.add_format({'border': 1})
+
+                # Aplicar formatação linha por linha
                 for row_num in range(1, len(df_movimentacoes) + 1):
-                    tipo_mov = df_movimentacoes.iloc[row_num - 1]['Tipo Movimento']
-                    if tipo_mov == 'Entrada':
-                        worksheet_mov.set_row(row_num, None, entrada_format)
-                    elif tipo_mov == 'Saída':
-                        worksheet_mov.set_row(row_num, None, saida_format)
+                    row_data = df_movimentacoes.iloc[row_num - 1]
+
+                    # Determinar cor de fundo baseado em entrada/saída
+                    has_entrada = row_data['Entradas Previstas'] > 0
+                    has_saida = row_data['Saídas Previstas'] > 0
+                    saldo_negativo = row_data['Saldo Projetado'] < 0
+
+                    if has_entrada and not has_saida:
+                        # Só entrada - verde
+                        row_format = entrada_format
+                    elif has_saida and not has_entrada:
+                        # Só saída - vermelho claro
+                        row_format = saida_format
+                    else:
+                        # Ambos ou nenhum - neutro
+                        row_format = neutro_format
+
+                    # Aplicar formato em cada célula da linha
+                    for col_num in range(len(df_movimentacoes.columns)):
+                        valor = row_data.iloc[col_num]
+                        # Se for saldo negativo, usar formato especial
+                        if col_num == 5 and saldo_negativo:  # Coluna do Saldo Projetado
+                            worksheet_mov.write(row_num, col_num, valor, saldo_negativo_format)
+                        else:
+                            worksheet_mov.write(row_num, col_num, valor, row_format)
+            else:
+                # Criar aba vazia se não houver movimentações
+                logger.warning("Criando aba vazia de Movimentações Previstas")
+                df_vazia = pd.DataFrame(columns=['Data', 'Código Produto', 'Nome Produto',
+                                                 'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado'])
+                df_vazia.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
+                worksheet_mov = writer.sheets['Movimentações Previstas']
+
+                # Adicionar cabeçalho mesmo vazio
+                for col_num, col_name in enumerate(df_vazia.columns):
+                    worksheet_mov.write(0, col_num, col_name, header_format)
         
         output.seek(0)
         
