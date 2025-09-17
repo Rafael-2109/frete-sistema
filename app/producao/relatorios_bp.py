@@ -4,7 +4,7 @@ Exportação de dados de estoque e movimentações
 """
 
 from flask import Blueprint, jsonify, send_file
-from datetime import datetime
+from datetime import datetime, date
 import pandas as pd
 import io
 from app.estoque.models import UnificacaoCodigos
@@ -91,31 +91,28 @@ def exportar_relatorios_producao():
                         else:
                             logger.warning(f"Elemento da projeção não é dicionário: {type(dia)}")
             
-            # Formatar data_ruptura corretamente
-            data_ruptura_formatada = ''
+            # Converter data_ruptura para datetime object para ordenação correta no Excel
+            data_ruptura_obj = None
             if data_ruptura:
                 if hasattr(data_ruptura, 'strftime'):
-                    # É um objeto datetime/date
-                    data_ruptura_formatada = data_ruptura.strftime('%d/%m/%Y')
+                    # Já é um objeto datetime/date
+                    data_ruptura_obj = data_ruptura
                 else:
-                    # É uma string - converter ou manter
+                    # É uma string - converter para datetime
                     try:
-                        # Tentar converter string YYYY-MM-DD para DD/MM/YYYY
-                        data_str = str(data_ruptura)[:10]  # Pegar apenas YYYY-MM-DD
+                        data_str = str(data_ruptura)[:10]  # YYYY-MM-DD
                         if '-' in data_str and len(data_str) == 10:
                             ano, mes, dia = data_str.split('-')
-                            data_ruptura_formatada = f'{dia}/{mes}/{ano}'
-                        else:
-                            data_ruptura_formatada = str(data_ruptura)
-                    except:
-                        data_ruptura_formatada = str(data_ruptura)
+                            data_ruptura_obj = datetime(int(ano), int(mes), int(dia))
+                    except Exception as e:
+                        logger.warning(f"Erro ao converter data_ruptura para datetime: {e}")
 
             dados_estoque.append({
                 'Código Produto': cod_produto,
                 'Nome Produto': estoque_info.get('nome_produto', ''),
-                'Saldo Atual': float(estoque_info.get('estoque_atual', 0)),
-                'Menor Estoque D+7': float(menor_estoque_d7),
-                'Data Ruptura': data_ruptura_formatada,
+                'Saldo Atual': int(estoque_info.get('estoque_atual', 0)),  # Sem casas decimais
+                'Menor Estoque D+7': int(menor_estoque_d7),  # Sem casas decimais
+                'Data Ruptura': data_ruptura_obj,  # Usar objeto datetime
                 'Códigos Unificados': ', '.join(codigos_unificados) if codigos_unificados else '',
                 'Peso Bruto (kg)': float(pallet_info.peso_bruto) if pallet_info else 0,
                 'Palletização': float(pallet_info.palletizacao) if pallet_info else 0,
@@ -157,22 +154,23 @@ def exportar_relatorios_producao():
                     if not data_prevista:
                         continue
 
-                    # Converter data para string formatada consistente
+                    # Converter data para datetime object para ordenação correta
+                    data_obj = None
+                    data_str = ''
                     if hasattr(data_prevista, 'strftime'):
+                        # Já é datetime/date
+                        data_obj = data_prevista
                         data_str = data_prevista.strftime('%Y-%m-%d')
-                        data_formatada = data_prevista.strftime('%d/%m/%Y')
                     else:
+                        # É string - converter para datetime
                         data_str = str(data_prevista)[:10]  # YYYY-MM-DD
-                        # Converter string YYYY-MM-DD para DD/MM/YYYY
                         try:
                             if '-' in data_str and len(data_str) == 10:
                                 ano, mes, dia_parte = data_str.split('-')
-                                data_formatada = f'{dia_parte}/{mes}/{ano}'
-                            else:
-                                data_formatada = data_str
+                                data_obj = datetime(int(ano), int(mes), int(dia_parte))
                         except Exception as e:
-                            logger.warning(f"Erro ao formatar data {data_str}: {e}")
-                            data_formatada = data_str
+                            logger.warning(f"Erro ao converter data {data_str} para datetime: {e}")
+                            continue  # Pular este dia se não conseguir converter
 
                     # Obter valores com tratamento de erro
                     try:
@@ -189,7 +187,7 @@ def exportar_relatorios_producao():
                         chave = (data_str, cod_produto)
                         movimentacoes_por_dia_produto[chave] = {
                             'data_str': data_str,
-                            'data_formatada': data_formatada,
+                            'data_obj': data_obj,  # Objeto datetime para ordenação correta
                             'cod_produto': cod_produto,
                             'nome_produto': nome_produto,
                             'saida': saida_val,
@@ -203,12 +201,12 @@ def exportar_relatorios_producao():
         # Converter dicionário para lista ordenada por data e produto
         for (data_str, cod_produto), mov in sorted(movimentacoes_por_dia_produto.items()):
             dados_movimentacoes.append({
-                'Data': mov['data_formatada'],
+                'Data': mov['data_obj'],  # Usar datetime object para ordenação correta
                 'Código Produto': mov['cod_produto'],
                 'Nome Produto': mov['nome_produto'],
-                'Saídas Previstas': mov['saida'],
-                'Entradas Previstas': mov['entrada'],
-                'Saldo Projetado': mov['saldo']
+                'Saídas Previstas': int(mov['saida']),  # Sem decimais
+                'Entradas Previstas': int(mov['entrada']),  # Sem decimais
+                'Saldo Projetado': int(mov['saldo'])  # Sem decimais
             })
         
         # Debug: verificar movimentações
@@ -241,18 +239,39 @@ def exportar_relatorios_producao():
                 'font_color': 'white',
                 'border': 1
             })
-            
-            # Formato para números
-            number_format = workbook.add_format({
-                'num_format': '#,##0.00',
+
+            # Formatos para números com padrão brasileiro (separador de milhar com ponto)
+            # Formato sem decimais com separador de milhar
+            formato_inteiro = workbook.add_format({
+                'num_format': '#.##0',  # Separador de milhar com ponto, sem decimais
+                'border': 1
+            })
+
+            # Formato com 2 decimais e separador de milhar
+            formato_decimal = workbook.add_format({
+                'num_format': '#.##0,00',  # Separador de milhar com ponto, decimal com vírgula
+                'border': 1
+            })
+
+            # Formato para datas
+            formato_data = workbook.add_format({
+                'num_format': 'dd/mm/yyyy',
                 'border': 1
             })
             
             # Aplicar formatos
             for col_num, col_name in enumerate(df_estoque.columns):
                 worksheet_estoque.write(0, col_num, col_name, header_format)
-                if 'Saldo' in col_name or 'Peso' in col_name or 'Palletização' in col_name:
-                    worksheet_estoque.set_column(col_num, col_num, 15, number_format)
+
+                if col_name == 'Saldo Atual' or col_name == 'Menor Estoque D+7':
+                    # Formato inteiro com separador de milhar
+                    worksheet_estoque.set_column(col_num, col_num, 15, formato_inteiro)
+                elif col_name == 'Data Ruptura':
+                    # Formato de data
+                    worksheet_estoque.set_column(col_num, col_num, 12, formato_data)
+                elif 'Peso' in col_name or 'Palletização' in col_name:
+                    # Formato com 2 decimais
+                    worksheet_estoque.set_column(col_num, col_num, 15, formato_decimal)
                 else:
                     column_width = max(df_estoque[col_name].astype(str).map(len).max() if len(df_estoque) > 0 else 10, len(col_name)) + 2
                     worksheet_estoque.set_column(col_num, col_num, min(column_width, 50))
@@ -266,30 +285,66 @@ def exportar_relatorios_producao():
                 for col_num, col_name in enumerate(df_movimentacoes.columns):
                     worksheet_mov.write(0, col_num, col_name, header_format)
 
-                    # Definir larguras específicas de coluna
+                    # Definir larguras específicas de coluna e formatos
                     if col_name == 'Data':
-                        worksheet_mov.set_column(col_num, col_num, 12)
+                        worksheet_mov.set_column(col_num, col_num, 12, formato_data)
                     elif col_name == 'Código Produto':
                         worksheet_mov.set_column(col_num, col_num, 15)
                     elif col_name == 'Nome Produto':
                         worksheet_mov.set_column(col_num, col_num, 40)
-                    elif 'Previstas' in col_name or 'Saldo' in col_name:
-                        worksheet_mov.set_column(col_num, col_num, 18, number_format)
+                    elif 'Saídas Previstas' in col_name or 'Entradas Previstas' in col_name:
+                        # Formato inteiro com separador de milhar para entradas e saídas
+                        worksheet_mov.set_column(col_num, col_num, 18, formato_inteiro)
+                    elif 'Saldo Projetado' in col_name:
+                        # Formato inteiro com separador de milhar para saldo
+                        worksheet_mov.set_column(col_num, col_num, 18, formato_inteiro)
 
-                # Adicionar formatação condicional para as linhas
-                # Formato para linhas com entrada (verde claro)
+                # Adicionar formatação condicional para as linhas com formato de número brasileiro
+                # Formato para células com números e cor de fundo
+                entrada_format_num = workbook.add_format({
+                    'bg_color': '#E8F5E9',
+                    'border': 1,
+                    'num_format': '#.##0'  # Separador de milhar com ponto
+                })
                 entrada_format = workbook.add_format({'bg_color': '#E8F5E9', 'border': 1})
-                # Formato para linhas com saída (vermelho claro)
+
+                saida_format_num = workbook.add_format({
+                    'bg_color': '#FFEBEE',
+                    'border': 1,
+                    'num_format': '#.##0'  # Separador de milhar com ponto
+                })
                 saida_format = workbook.add_format({'bg_color': '#FFEBEE', 'border': 1})
-                # Formato para saldo negativo (vermelho escuro)
+
+                # Formato para saldo negativo (vermelho escuro, sem decimais)
                 saldo_negativo_format = workbook.add_format({
                     'bg_color': '#FF5252',
                     'font_color': 'white',
                     'border': 1,
-                    'num_format': '#,##0.00'
+                    'num_format': '#.##0'  # Sem decimais, separador com ponto
                 })
-                # Formato neutro com borda
+
+                # Formato neutro
+                neutro_format_num = workbook.add_format({
+                    'border': 1,
+                    'num_format': '#.##0'  # Separador de milhar com ponto
+                })
                 neutro_format = workbook.add_format({'border': 1})
+
+                # Formato para datas com cor de fundo
+                data_format_verde = workbook.add_format({
+                    'bg_color': '#E8F5E9',
+                    'border': 1,
+                    'num_format': 'dd/mm/yyyy'
+                })
+                data_format_vermelho = workbook.add_format({
+                    'bg_color': '#FFEBEE',
+                    'border': 1,
+                    'num_format': 'dd/mm/yyyy'
+                })
+                data_format_neutro = workbook.add_format({
+                    'border': 1,
+                    'num_format': 'dd/mm/yyyy'
+                })
 
                 # Aplicar formatação linha por linha
                 for row_num in range(1, len(df_movimentacoes) + 1):
@@ -300,24 +355,40 @@ def exportar_relatorios_producao():
                     has_saida = row_data['Saídas Previstas'] > 0
                     saldo_negativo = row_data['Saldo Projetado'] < 0
 
+                    # Determinar formatos baseado no tipo de movimentação
                     if has_entrada and not has_saida:
                         # Só entrada - verde
-                        row_format = entrada_format
+                        formato_texto = entrada_format
+                        formato_numero = entrada_format_num
+                        formato_data_linha = data_format_verde
                     elif has_saida and not has_entrada:
                         # Só saída - vermelho claro
-                        row_format = saida_format
+                        formato_texto = saida_format
+                        formato_numero = saida_format_num
+                        formato_data_linha = data_format_vermelho
                     else:
                         # Ambos ou nenhum - neutro
-                        row_format = neutro_format
+                        formato_texto = neutro_format
+                        formato_numero = neutro_format_num
+                        formato_data_linha = data_format_neutro
 
                     # Aplicar formato em cada célula da linha
-                    for col_num in range(len(df_movimentacoes.columns)):
+                    for col_num, col_name in enumerate(df_movimentacoes.columns):
                         valor = row_data.iloc[col_num]
-                        # Se for saldo negativo, usar formato especial
-                        if col_num == 5 and saldo_negativo:  # Coluna do Saldo Projetado
+
+                        # Aplicar formato específico por tipo de coluna
+                        if col_name == 'Data':
+                            worksheet_mov.write(row_num, col_num, valor, formato_data_linha)
+                        elif col_name in ['Código Produto', 'Nome Produto']:
+                            worksheet_mov.write(row_num, col_num, valor, formato_texto)
+                        elif col_name == 'Saldo Projetado' and saldo_negativo:
+                            # Saldo negativo - formato especial vermelho escuro
                             worksheet_mov.write(row_num, col_num, valor, saldo_negativo_format)
+                        elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
+                            # Colunas numéricas
+                            worksheet_mov.write(row_num, col_num, valor, formato_numero)
                         else:
-                            worksheet_mov.write(row_num, col_num, valor, row_format)
+                            worksheet_mov.write(row_num, col_num, valor, formato_texto)
             else:
                 # Criar aba vazia se não houver movimentações
                 logger.warning("Criando aba vazia de Movimentações Previstas")
