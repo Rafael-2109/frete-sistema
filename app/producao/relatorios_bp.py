@@ -4,11 +4,10 @@ Exportação de dados de estoque e movimentações
 """
 
 from flask import Blueprint, jsonify, send_file
-from datetime import datetime, date, timedelta
+from datetime import datetime
 import pandas as pd
 import io
 from app.estoque.models import UnificacaoCodigos
-from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.estoque.api_tempo_real import APIEstoqueTempoReal
 from app.producao.models import CadastroPalletizacao
 import logging
@@ -57,17 +56,40 @@ def exportar_relatorios_producao():
             # Calcular menor estoque D+7 se houver projeção
             menor_estoque_d7 = 0
             data_ruptura = None
-            if estoque_info.get('projecao'):
+            projecao = estoque_info.get('projecao')
+
+            # Verificar se projecao existe e é uma lista
+            if projecao and isinstance(projecao, list):
                 # Pegar os primeiros 7 dias da projeção
-                projecao_7d = estoque_info['projecao'][:7]
+                projecao_7d = projecao[:7]
                 if projecao_7d:
-                    estoques_7d = [dia.get('saldo_final', 0) for dia in projecao_7d]
-                    menor_estoque_d7 = min(estoques_7d)
+                    estoques_7d = []
+                    for dia in projecao_7d:
+                        # Verificar se dia é um dicionário antes de usar .get()
+                        if isinstance(dia, dict):
+                            try:
+                                saldo = float(dia.get('saldo_final', 0) or 0)
+                                estoques_7d.append(saldo)
+                            except (TypeError, ValueError):
+                                estoques_7d.append(0)
+                        else:
+                            logger.warning(f"Elemento da projeção não é dicionário: {type(dia)}")
+
+                    if estoques_7d:
+                        menor_estoque_d7 = min(estoques_7d)
+
                     # Encontrar dia de ruptura (primeiro dia com estoque <= 0)
-                    for dia in estoque_info['projecao']:
-                        if dia.get('saldo_final', 0) <= 0:
-                            data_ruptura = dia.get('data')
-                            break
+                    for dia in projecao:
+                        if isinstance(dia, dict):
+                            try:
+                                saldo = float(dia.get('saldo_final', 0) or 0)
+                                if saldo <= 0:
+                                    data_ruptura = dia.get('data')
+                                    break
+                            except (TypeError, ValueError):
+                                continue
+                        else:
+                            logger.warning(f"Elemento da projeção não é dicionário: {type(dia)}")
             
             # Formatar data_ruptura corretamente
             data_ruptura_formatada = ''
@@ -118,12 +140,18 @@ def exportar_relatorios_producao():
         for cod_produto, estoque_info in estoques_dict.items():
             nome_produto = estoque_info.get('nome_produto', cod_produto)
 
-            # Verificar se há projeção
-            if estoque_info.get('projecao'):
+            # Verificar se há projeção e se é uma lista
+            projecao = estoque_info.get('projecao')
+            if projecao and isinstance(projecao, list):
                 produtos_com_projecao += 1
-                logger.info(f"Produto {cod_produto} tem {len(estoque_info['projecao'])} dias de projeção")
+                logger.info(f"Produto {cod_produto} tem {len(projecao)} dias de projeção")
 
-                for dia in estoque_info['projecao'][:30]:  # Limitar a 30 dias
+                for dia in projecao[:30]:  # Limitar a 30 dias
+                    # Verificar se o dia é um dicionário válido
+                    if not isinstance(dia, dict):
+                        logger.warning(f"Dia na projeção não é dict para produto {cod_produto}: {type(dia)}")
+                        continue
+
                     # Obter data - pode estar como string ou objeto
                     data_prevista = dia.get('data')
                     if not data_prevista:
@@ -138,17 +166,22 @@ def exportar_relatorios_producao():
                         # Converter string YYYY-MM-DD para DD/MM/YYYY
                         try:
                             if '-' in data_str and len(data_str) == 10:
-                                ano, mes, dia = data_str.split('-')
-                                data_formatada = f'{dia}/{mes}/{ano}'
+                                ano, mes, dia_parte = data_str.split('-')
+                                data_formatada = f'{dia_parte}/{mes}/{ano}'
                             else:
                                 data_formatada = data_str
-                        except:
+                        except Exception as e:
+                            logger.warning(f"Erro ao formatar data {data_str}: {e}")
                             data_formatada = data_str
 
-                    # Obter valores - usar múltiplos nomes possíveis para compatibilidade
-                    entrada_val = float(dia.get('entrada', 0) or dia.get('producao', 0))
-                    saida_val = float(dia.get('saida', 0) or dia.get('saidas', 0))
-                    saldo_val = float(dia.get('saldo_final', 0) or dia.get('estoque_final', 0))
+                    # Obter valores com tratamento de erro
+                    try:
+                        entrada_val = float(dia.get('entrada', 0) or dia.get('producao', 0) or 0)
+                        saida_val = float(dia.get('saida', 0) or dia.get('saidas', 0) or 0)
+                        saldo_val = float(dia.get('saldo_final', 0) or dia.get('estoque_final', 0) or 0)
+                    except (TypeError, ValueError) as e:
+                        logger.warning(f"Erro ao converter valores para produto {cod_produto}: {e}")
+                        entrada_val = saida_val = saldo_val = 0
 
                     # Adicionar apenas se houver entrada OU saída
                     if entrada_val > 0 or saida_val > 0:
