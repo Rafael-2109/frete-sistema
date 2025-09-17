@@ -342,6 +342,7 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                     num_pedido=item.num_pedido,
                     pedido_cliente=item.pedido_cliente,
                     cod_produto=item.cod_produto,
+                    nome_produto=item.nome_produto,
                     qtd_saldo=saldo_liquido,  # SALDO LÍQUIDO!
                     valor_saldo=float(Decimal(str(saldo_liquido)) * Decimal(str(item.preco_produto_pedido or 0))),
                     peso=float(peso_item),

@@ -69,12 +69,31 @@ def exportar_relatorios_producao():
                             data_ruptura = dia.get('data')
                             break
             
+            # Formatar data_ruptura corretamente
+            data_ruptura_formatada = ''
+            if data_ruptura:
+                if hasattr(data_ruptura, 'strftime'):
+                    # É um objeto datetime/date
+                    data_ruptura_formatada = data_ruptura.strftime('%d/%m/%Y')
+                else:
+                    # É uma string - converter ou manter
+                    try:
+                        # Tentar converter string YYYY-MM-DD para DD/MM/YYYY
+                        data_str = str(data_ruptura)[:10]  # Pegar apenas YYYY-MM-DD
+                        if '-' in data_str and len(data_str) == 10:
+                            ano, mes, dia = data_str.split('-')
+                            data_ruptura_formatada = f'{dia}/{mes}/{ano}'
+                        else:
+                            data_ruptura_formatada = str(data_ruptura)
+                    except:
+                        data_ruptura_formatada = str(data_ruptura)
+
             dados_estoque.append({
                 'Código Produto': cod_produto,
                 'Nome Produto': estoque_info.get('nome_produto', ''),
                 'Saldo Atual': float(estoque_info.get('estoque_atual', 0)),
                 'Menor Estoque D+7': float(menor_estoque_d7),
-                'Data Ruptura': data_ruptura.strftime('%d/%m/%Y') if data_ruptura else '',
+                'Data Ruptura': data_ruptura_formatada,
                 'Códigos Unificados': ', '.join(codigos_unificados) if codigos_unificados else '',
                 'Peso Bruto (kg)': float(pallet_info.peso_bruto) if pallet_info else 0,
                 'Palletização': float(pallet_info.palletizacao) if pallet_info else 0,
@@ -116,7 +135,15 @@ def exportar_relatorios_producao():
                         data_formatada = data_prevista.strftime('%d/%m/%Y')
                     else:
                         data_str = str(data_prevista)[:10]  # YYYY-MM-DD
-                        data_formatada = data_str  # Formatar depois se necessário
+                        # Converter string YYYY-MM-DD para DD/MM/YYYY
+                        try:
+                            if '-' in data_str and len(data_str) == 10:
+                                ano, mes, dia = data_str.split('-')
+                                data_formatada = f'{dia}/{mes}/{ano}'
+                            else:
+                                data_formatada = data_str
+                        except:
+                            data_formatada = data_str
 
                     # Obter valores - usar múltiplos nomes possíveis para compatibilidade
                     entrada_val = float(dia.get('entrada', 0) or dia.get('producao', 0))
