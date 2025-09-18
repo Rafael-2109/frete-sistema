@@ -247,27 +247,56 @@ class FilialDeParaSendas(db.Model):
     criado_por = db.Column(db.String(100))
     
     @classmethod
-    def cnpj_to_filial(cls, cnpj):
+    def cnpj_to_filial(cls, cnpj, filial_planilha=None):
         """
         Converte CNPJ para código de filial
-        
+
         Args:
             cnpj: CNPJ formatado ou não (aceita com ou sem pontuação)
-            
+            filial_planilha: Nome da filial vinda da planilha para tentar fallback por números
+
         Returns:
             Código da filial ou None se não encontrar
         """
+        import re
+
         # Remover formatação do CNPJ se houver
         cnpj_limpo = cls.limpar_cnpj(cnpj)
-        
+
         # Buscar por CNPJ (formatado ou limpo)
         filial_depara = cls.query.filter(
-            (cls.cnpj == cnpj) | 
+            (cls.cnpj == cnpj) |
             (cls.cnpj == cnpj_limpo),
             cls.ativo == True
         ).first()
-        
-        return filial_depara.filial if filial_depara else None
+
+        # Se encontrou, retornar
+        if filial_depara:
+            return filial_depara.filial
+
+        # FALLBACK: Se não encontrou e temos filial_planilha, tentar match por números
+        if filial_planilha:
+            # Extrair apenas números da filial da planilha
+            numeros_planilha = ''.join(re.findall(r'\d+', str(filial_planilha)))
+
+            if numeros_planilha:
+                # Buscar todas as filiais ativas do DE-PARA
+                filiais_depara = cls.query.filter_by(ativo=True).all()
+
+                for depara in filiais_depara:
+                    # Extrair números da filial do DE-PARA
+                    numeros_depara = ''.join(re.findall(r'\d+', str(depara.filial)))
+
+                    # Se os números batem, encontramos o match
+                    if numeros_depara and numeros_depara == numeros_planilha:
+                        # Log para debug
+                        print(f"[FALLBACK] Match por números: '{filial_planilha}' ({numeros_planilha}) -> '{depara.filial}' ({numeros_depara})")
+                        return depara.filial
+
+                # Se não encontrou match nem por números
+                print(f"[FALLBACK] Sem match para '{filial_planilha}' ({numeros_planilha})")
+
+        return None
     
     @classmethod
     def filial_to_cnpj(cls, filial):

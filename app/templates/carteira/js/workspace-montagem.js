@@ -1925,17 +1925,21 @@ class WorkspaceMontagem {
     atualizarViewCompactaDireto(loteId, expedicao, agendamento, protocolo, agendamentoConfirmado) {
         console.log(`🔄 Atualizando view compacta para lote ${loteId}`);
         console.log(`   Dados: exp=${expedicao}, age=${agendamento}, prot=${protocolo}, conf=${agendamentoConfirmado}`);
-        
-        // Buscar linha da separação compacta - tentar diferentes seletores
+
+        // Buscar linha da separação compacta usando múltiplos seletores
         let linhaCompacta = document.querySelector(`tr[data-lote-id="${loteId}"]`);
         if (!linhaCompacta) {
-            // Tentar com ID direto
+            // Tentar com ID direto usando novo padrão
+            linhaCompacta = document.getElementById(`separacao-compacta-${loteId}`);
+        }
+        if (!linhaCompacta) {
+            // Tentar variações antigas para compatibilidade
             const idVariacoes = [
                 `separacoes-compactas-${loteId.replace(/_/g, '')}`,
                 `separacoes-compactas-${loteId}`,
                 loteId
             ];
-            
+
             for (const id of idVariacoes) {
                 linhaCompacta = document.getElementById(id);
                 if (linhaCompacta) break;
@@ -1948,34 +1952,50 @@ class WorkspaceMontagem {
             // Buscar células da linha
             const celulas = linhaCompacta.querySelectorAll('td');
             
-            // IMPORTANTE: Usar índices FIXOS baseados na estrutura da tabela
-            // Estrutura das colunas (carteira-agrupada.js linha 1221-1231):
-            // 0: Tipo | 1: Status | 2: Valor | 3: Peso | 4: Pallet | 
-            // 5: Expedição | 6: Agendamento | 7: Protocolo | 8: Confirmação | 9: Embarque | 10: Botões
-            
-            // Atualizar coluna 5 - Expedição
-            if (celulas[5]) {
-                console.log(`📅 Atualizando expedição na coluna 5`);
+            // Usar seletores data-field para melhor confiabilidade
+            // Atualizar coluna Expedição
+            const celulaExpedicao = linhaCompacta.querySelector('td[data-field="expedicao"]');
+            if (celulaExpedicao) {
+                console.log(`📅 Atualizando expedição`);
+                celulaExpedicao.innerHTML = expedicao ? this.formatarData(expedicao) : '-';
+            } else if (celulas[5]) {
+                // Fallback para índice se não encontrar pelo atributo
                 celulas[5].innerHTML = expedicao ? this.formatarData(expedicao) : '-';
-                celulas[5].className = 'text-center';
             }
-            
-            // Atualizar coluna 6 - Agendamento
-            if (celulas[6]) {
-                console.log(`📅 Atualizando agendamento na coluna 6`);
+
+            // Atualizar coluna Agendamento
+            const celulaAgendamento = linhaCompacta.querySelector('td[data-field="agendamento"]');
+            if (celulaAgendamento) {
+                console.log(`📅 Atualizando agendamento`);
+                celulaAgendamento.innerHTML = agendamento ? this.formatarData(agendamento) : '-';
+            } else if (celulas[6]) {
+                // Fallback para índice
                 celulas[6].innerHTML = agendamento ? this.formatarData(agendamento) : '-';
-                celulas[6].className = 'text-center';
             }
-            
-            // Atualizar coluna 7 - Protocolo
-            if (celulas[7]) {
-                console.log(`🔢 Atualizando protocolo na coluna 7`);
+
+            // Atualizar coluna Protocolo
+            const celulaProtocolo = linhaCompacta.querySelector('td[data-field="protocolo"]');
+            if (celulaProtocolo) {
+                console.log(`🔢 Atualizando protocolo`);
+                celulaProtocolo.innerHTML = `<small>${protocolo || '-'}</small>`;
+            } else if (celulas[7]) {
+                // Fallback para índice
                 celulas[7].innerHTML = `<small>${protocolo || '-'}</small>`;
             }
-            
-            // Atualizar coluna 8 - Confirmação
-            if (celulas[8]) {
-                console.log(`✅ Atualizando confirmação na coluna 8`);
+
+            // Atualizar coluna Confirmação
+            const celulaConfirmacao = linhaCompacta.querySelector('td[data-field="confirmacao"]');
+            if (celulaConfirmacao) {
+                console.log(`✅ Atualizando confirmação`);
+                if (agendamentoConfirmado) {
+                    celulaConfirmacao.innerHTML = '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Confirmado</span>';
+                } else if (protocolo) {
+                    celulaConfirmacao.innerHTML = '<span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Aguardando</span>';
+                } else {
+                    celulaConfirmacao.innerHTML = '-';
+                }
+            } else if (celulas[8]) {
+                // Fallback para índice
                 if (agendamentoConfirmado) {
                     celulas[8].innerHTML = '<span class="badge bg-success">Confirmado</span>';
                 } else if (protocolo) {
@@ -1983,7 +2003,6 @@ class WorkspaceMontagem {
                 } else {
                     celulas[8].innerHTML = '<span class="badge bg-secondary">-</span>';
                 }
-                celulas[8].className = 'text-center';
             }
             
             // Atualizar também o botão de Datas se existir para passar os novos valores

@@ -16,25 +16,25 @@ class FilaAgendamentoSendas(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # Rastreabilidade da origem
-    tipo_origem = db.Column(db.String(20), nullable=False)  # 'separacao' ou 'nf'
-    documento_origem = db.Column(db.String(50), nullable=False)  # separacao_lote_id ou numero_nf
+    tipo_origem = db.Column(db.String(20), nullable=False)  # 'separacao', 'nf', 'lote'
+    documento_origem = db.Column(db.String(50), nullable=False)  # separacao_lote_id ou numero_nf ou CNPJ do cliente
     
     # Dados essenciais para a planilha Sendas
-    cnpj = db.Column(db.String(20), nullable=False, index=True)
-    num_pedido = db.Column(db.String(50), nullable=False)
+    cnpj = db.Column(db.String(20), nullable=False, index=True)  # CNPJ do cliente - Deverá ser convertido para o padrão do Sendas
+    num_pedido = db.Column(db.String(50), nullable=False)  # Numero do pedido do cliente
     pedido_cliente = db.Column(db.String(100))  # Campo essencial para Sendas
     
     # Produto e quantidade
-    cod_produto = db.Column(db.String(50), nullable=False)
-    nome_produto = db.Column(db.String(255))
-    quantidade = db.Column(db.Numeric(15, 3), nullable=False)
+    cod_produto = db.Column(db.String(50), nullable=False)  # Codigo do produto - Deverá ser convertido para o padrão do Sendas
+    nome_produto = db.Column(db.String(255))  # Nome do produto
+    quantidade = db.Column(db.Numeric(15, 3), nullable=False) 
     
     # Datas
     data_expedicao = db.Column(db.Date, nullable=False)
     data_agendamento = db.Column(db.Date, nullable=False, index=True)
     
     # Protocolo provisório (mesmo padrão da programacao_lote)
-    protocolo = db.Column(db.String(100))
+    protocolo = db.Column(db.String(100))  # Protocolo
     
     # Status simples
     status = db.Column(db.String(20), default='pendente', index=True)

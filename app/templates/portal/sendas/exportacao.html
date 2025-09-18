@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}Exportação de Planilhas - Portal Sendas{% endblock %}
+
+{% block styles %}
+<!-- ✅ CORREÇÃO: Adicionar SweetAlert2 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<style>
+    .export-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .export-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .export-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .protocol-badge {
+        background: #007bff;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        padding: 5px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: #666;
+    }
+
+    .info-value {
+        color: #333;
+    }
+
+    .btn-export {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn-export:hover {
+        background: #218838;
+    }
+
+    .btn-reprocess {
+        background: #ffc107;
+        color: #333;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 5px;
+    }
+
+    .btn-reprocess:hover {
+        background: #e0a800;
+    }
+
+    .status-badge {
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 0.85em;
+    }
+
+    .status-pendente {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+
+    .status-exportado {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-file-export"></i>
+                        Exportação de Planilhas - Portal Sendas (Etapa 3)
+                    </h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-sm btn-success" onclick="baixarTodasPlanilhas()">
+                            <i class="fas fa-download"></i> Exportar TODOS
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="carregarExportacoes()">
+                            <i class="fas fa-sync-alt"></i> Atualizar
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Informações do Sistema -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle"></i> Como funciona:</h5>
+                        <ol>
+                            <li>Após confirmar o agendamento na Etapa 2, os dados são enviados para a fila</li>
+                            <li>Aqui você pode exportar a planilha combinando dados da planilha modelo com as solicitações</li>
+                            <li>A planilha exportada está pronta para upload no Portal Sendas</li>
+                            <li>Cada protocolo representa um agendamento único (Lote, Separação ou NF)</li>
+                        </ol>
+                    </div>
+
+                    <!-- Lista de Exportações -->
+                    <div id="lista-exportacoes" class="mt-4">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <p>Carregando exportações disponíveis...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- ✅ CORREÇÃO: Adicionar SweetAlert2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+// Carregar exportações ao iniciar a página
+$(document).ready(function() {
+    carregarExportacoes();
+
+    // Debug - verificar se função existe
+    console.log('Função baixarTodasPlanilhas definida?', typeof baixarTodasPlanilhas);
+});
+
+function carregarExportacoes() {
+    $('#lista-exportacoes').html(`
+        <div class="loading">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p>Carregando exportações disponíveis...</p>
+        </div>
+    `);
+
+    $.ajax({
+        url: '/portal/sendas/api/exportacoes/listar',
+        type: 'GET',
+        success: function(response) {
+            if (response.sucesso) {
+                renderizarExportacoes(response.exportacoes);
+            } else {
+                mostrarErro('Erro ao carregar exportações: ' + response.erro);
+            }
+        },
+        error: function(xhr, status, error) {
+            mostrarErro('Erro ao carregar exportações: ' + error);
+        }
+    });
+}
+
+function renderizarExportacoes(exportacoes) {
+    if (exportacoes.length === 0) {
+        $('#lista-exportacoes').html(`
+            <div class="empty-state">
+                <i class="fas fa-inbox fa-3x"></i>
+                <p class="mt-3">Nenhuma exportação pendente</p>
+                <small>As exportações aparecerão aqui após confirmação na Etapa 2</small>
+            </div>
+        `);
+        return;
+    }
+
+    let html = '<div class="row">';
+
+    exportacoes.forEach(exp => {
+        html += `
+            <div class="col-md-6 col-lg-4">
+                <div class="export-card">
+                    <div class="export-header">
+                        <span class="protocol-badge">${exp.protocolo}</span>
+                        <span class="status-badge status-pendente">Pendente</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Tipo:</span>
+                        <span class="info-value">${exp.tipo_origem}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Filial:</span>
+                        <span class="info-value">${exp.filial}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">CNPJ:</span>
+                        <span class="info-value">${formatarCNPJ(exp.cnpj)}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Data Agendamento:</span>
+                        <span class="info-value">${exp.data_agendamento}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Total Itens:</span>
+                        <span class="info-value">${exp.total_itens}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Quantidade Total:</span>
+                        <span class="info-value">${exp.quantidade_total.toFixed(2)}</span>
+                    </div>
+
+                    <div class="mt-3">
+                        <button class="btn-export" onclick="baixarPlanilha('${exp.protocolo}')">
+                            <i class="fas fa-download"></i> Baixar Planilha
+                        </button>
+                        <button class="btn-reprocess" onclick="reprocessarExportacao('${exp.protocolo}')" title="Marcar como pendente novamente">
+                            <i class="fas fa-redo"></i> Reprocessar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    $('#lista-exportacoes').html(html);
+}
+
+function baixarPlanilha(protocolo) {
+    // Abrir em nova aba para download
+    window.open(`/portal/sendas/api/exportacao/baixar/${protocolo}`, '_blank');
+
+    // Mostrar mensagem de sucesso
+    Swal.fire({
+        icon: 'success',
+        title: 'Download iniciado',
+        text: 'A planilha está sendo baixada. Após o download, faça o upload no Portal Sendas.',
+        confirmButtonText: 'OK'
+    }).then(() => {
+        // Recarregar lista após download
+        carregarExportacoes();
+    });
+}
+
+function reprocessarExportacao(protocolo) {
+    Swal.fire({
+        title: 'Reprocessar exportação?',
+        text: 'Isso marcará a exportação como pendente novamente.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, reprocessar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '/portal/sendas/api/exportacao/reprocessar',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ protocolo: protocolo }),
+                success: function(response) {
+                    if (response.sucesso) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Reprocessado!',
+                            text: response.mensagem
+                        });
+                        carregarExportacoes();
+                    } else {
+                        mostrarErro('Erro ao reprocessar: ' + response.erro);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    mostrarErro('Erro ao reprocessar: ' + error);
+                }
+            });
+        }
+    });
+}
+
+// ✅ CORREÇÃO: Função para baixar TODOS os agendamentos em UMA planilha
+// Movida para cima para garantir que está no escopo global
+function baixarTodasPlanilhas() {
+    console.log('Função baixarTodasPlanilhas chamada!'); // Debug
+    Swal.fire({
+        title: 'Exportar TODOS os agendamentos?',
+        html: `
+            <p>Isso criará <strong>UMA ÚNICA planilha</strong> com todos os agendamentos pendentes.</p>
+            <p class="text-warning"><i class="fas fa-exclamation-triangle"></i> Após exportar, todos serão marcados como processados.</p>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, exportar todos',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#28a745'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Mostrar loading
+            Swal.fire({
+                title: 'Gerando planilha única...',
+                html: 'Aguarde enquanto todos os agendamentos são consolidados.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Baixar planilha com TODOS os protocolos
+            window.open('/portal/sendas/api/exportacao/baixar-todos', '_blank');
+
+            // Fechar loading e mostrar sucesso
+            setTimeout(() => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Planilha Única Gerada!',
+                    html: `
+                        <p>✅ Todos os agendamentos foram exportados em <strong>UMA ÚNICA PLANILHA</strong>.</p>
+                        <p>Faça o upload desta planilha no Portal Sendas.</p>
+                    `,
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    // Recarregar lista após download
+                    carregarExportacoes();
+                });
+            }, 2000);
+        }
+    });
+}
+
+function formatarCNPJ(cnpj) {
+    // Remove caracteres não numéricos
+    cnpj = cnpj.replace(/\D/g, '');
+
+    // Formata CNPJ
+    if (cnpj.length === 14) {
+        return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    }
+
+    return cnpj;
+}
+
+function mostrarErro(mensagem) {
+    $('#lista-exportacoes').html(`
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> ${mensagem}
+        </div>
+    `);
+}
+
+// Garantir que função está disponível globalmente
+window.baixarTodasPlanilhas = baixarTodasPlanilhas;
+console.log('Script carregado, função baixarTodasPlanilhas disponível:', typeof window.baixarTodasPlanilhas);
+</script>
+{% endblock %}

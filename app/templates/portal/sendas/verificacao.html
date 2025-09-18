@@ -1,0 +1,610 @@
+{% extends "base.html" %}
+
+{% block title %}Verificação de Agendamentos - Portal Sendas{% endblock %}
+
+{% block styles %}
+<style>
+    .upload-area {
+        border: 2px dashed #007bff;
+        border-radius: 8px;
+        padding: 40px;
+        text-align: center;
+        background: #f8f9fa;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .upload-area:hover {
+        background: #e9ecef;
+        border-color: #0056b3;
+    }
+
+    .upload-area.dragging {
+        background: #d1ecf1;
+        border-color: #0c5460;
+    }
+
+    .result-section {
+        margin-top: 20px;
+        display: none;
+    }
+
+    .result-table {
+        margin-top: 15px;
+    }
+
+    .table-container {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .status-badge {
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.875em;
+        font-weight: bold;
+    }
+
+    .status-confirmado {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-pendente {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-nao-encontrado {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .status-divergencia {
+        background: #cce5ff;
+        color: #004085;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+    }
+
+    .summary-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .summary-card h6 {
+        margin: 0 0 10px 0;
+        color: #666;
+    }
+
+    .summary-card .count {
+        font-size: 2em;
+        font-weight: bold;
+    }
+
+    .divergencia-info {
+        background: #e7f3ff;
+        border: 1px solid #b3d9ff;
+        padding: 10px;
+        border-radius: 4px;
+        margin: 10px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-check-circle"></i>
+                        Verificação de Agendamentos - Portal Sendas (Etapa 4)
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <!-- Informações -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle"></i> Como funciona a verificação:</h5>
+                        <ol>
+                            <li>Faça upload da planilha de retorno do Portal Sendas</li>
+                            <li>O sistema verificará cada agendamento através do protocolo</li>
+                            <li>Agendamentos confirmados serão atualizados automaticamente</li>
+                            <li>Agendamentos não encontrados podem ser reenviados</li>
+                        </ol>
+                        <hr>
+                        <strong>Colunas esperadas na planilha:</strong>
+                        <ul>
+                            <li><strong>ID</strong>: Protocolo real do Sendas</li>
+                            <li><strong>Status</strong>: Status do agendamento</li>
+                            <li><strong>Data Efetiva</strong>: Data confirmada (se aprovado)</li>
+                            <li><strong>Obs. Criação</strong>: Nosso protocolo (AG_XXXX_DDMMYY_HHMM)</li>
+                            <li><strong>Data/Hora Sugerida:</strong> Data solicitada</li>
+                        </ul>
+                    </div>
+
+                    <!-- Área de Upload -->
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                        <h4>Arraste o arquivo Excel aqui</h4>
+                        <p>ou clique para selecionar</p>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                    </div>
+
+                    <!-- Resultado do Processamento -->
+                    <div id="resultSection" class="result-section">
+                        <!-- Resumo -->
+                        <div class="summary-cards" id="summaryCards"></div>
+
+                        <!-- Tabs para diferentes resultados -->
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-toggle="tab" href="#confirmados">
+                                    Confirmados <span class="badge badge-success" id="countConfirmados">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#naoEncontrados">
+                                    Não Encontrados <span class="badge badge-danger" id="countNaoEncontrados">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#divergencias">
+                                    Divergências <span class="badge badge-warning" id="countDivergencias">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#erros">
+                                    Erros <span class="badge badge-secondary" id="countErros">0</span>
+                                </a>
+                            </li>
+                        </ul>
+
+                        <!-- Tab Content -->
+                        <div class="tab-content">
+                            <!-- Confirmados -->
+                            <div id="confirmados" class="tab-pane fade show active">
+                                <div class="table-container">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Linha</th>
+                                                <th>Protocolo</th>
+                                                <th>ID Sendas</th>
+                                                <th>Status</th>
+                                                <th>Data Confirmada</th>
+                                                <th>Mensagem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyConfirmados"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Não Encontrados -->
+                            <div id="naoEncontrados" class="tab-pane fade">
+                                <div class="action-buttons mt-3">
+                                    <button class="btn btn-warning" onclick="reenviarNaoEncontrados()">
+                                        <i class="fas fa-redo"></i> Reenviar Todos para Fila
+                                    </button>
+                                </div>
+                                <div class="table-container">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th><input type="checkbox" id="checkAllNaoEncontrados"></th>
+                                                <th>Linha</th>
+                                                <th>ID Sendas</th>
+                                                <th>Obs. Criação</th>
+                                                <th>Status</th>
+                                                <th>Ação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyNaoEncontrados"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Divergências -->
+                            <div id="divergencias" class="tab-pane fade">
+                                <div class="divergencia-info">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Estes agendamentos têm data sugerida diferente da solicitada.
+                                    Revise e atualize se necessário.
+                                </div>
+                                <div class="action-buttons mt-3">
+                                    <button class="btn btn-primary" onclick="atualizarDatasDivergentes()">
+                                        <i class="fas fa-save"></i> Atualizar Datas Selecionadas
+                                    </button>
+                                </div>
+                                <div class="table-container">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th><input type="checkbox" id="checkAllDivergencias"></th>
+                                                <th>Linha</th>
+                                                <th>Protocolo</th>
+                                                <th>Data Sugerida</th>
+                                                <th>Data Solicitada</th>
+                                                <th>Ação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyDivergencias"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Erros -->
+                            <div id="erros" class="tab-pane fade">
+                                <div class="table-container">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Linha</th>
+                                                <th>Erro</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyErros"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let resultadoProcessamento = null;
+
+// Configurar área de upload
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        processarArquivo(e.target.files[0]);
+    }
+});
+
+// Drag and drop
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragging');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragging');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragging');
+
+    if (e.dataTransfer.files.length > 0) {
+        processarArquivo(e.dataTransfer.files[0]);
+    }
+});
+
+function processarArquivo(file) {
+    // Validar extensão
+    if (!file.name.match(/\.(xlsx|xls)$/)) {
+        Swal.fire('Erro', 'Por favor, selecione um arquivo Excel (.xlsx ou .xls)', 'error');
+        return;
+    }
+
+    // Mostrar loading
+    Swal.fire({
+        title: 'Processando...',
+        text: 'Verificando agendamentos na planilha',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    // Enviar arquivo
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/portal/sendas/api/verificacao/processar', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Dados recebidos:', data);
+        Swal.close();
+
+        if (data.sucesso) {
+            console.log('Processamento bem-sucedido, exibindo resultados...');
+            resultadoProcessamento = data;
+            exibirResultados(data);
+        } else {
+            console.error('Erro no processamento:', data.erro);
+            Swal.fire('Erro', data.erro || 'Erro ao processar arquivo', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro na requisição:', error);
+        Swal.close();
+        Swal.fire('Erro', 'Erro ao processar arquivo: ' + error, 'error');
+    });
+}
+
+function exibirResultados(resultado) {
+    console.log('exibirResultados chamada com:', resultado);
+
+    // Mostrar seção de resultados
+    const resultSection = document.getElementById('resultSection');
+    if (!resultSection) {
+        console.error('Elemento resultSection não encontrado!');
+        return;
+    }
+    resultSection.style.display = 'block';
+
+    // Atualizar contadores
+    const confirmados = resultado.confirmados || [];
+    const naoEncontrados = resultado.nao_encontrados || [];
+    const comDivergencia = resultado.com_divergencia || [];
+    const erros = resultado.erros || [];
+
+    console.log('Contadores:', {
+        confirmados: confirmados.length,
+        naoEncontrados: naoEncontrados.length,
+        comDivergencia: comDivergencia.length,
+        erros: erros.length
+    });
+
+    document.getElementById('countConfirmados').textContent = confirmados.length;
+    document.getElementById('countNaoEncontrados').textContent = naoEncontrados.length;
+    document.getElementById('countDivergencias').textContent = comDivergencia.length;
+    document.getElementById('countErros').textContent = erros.length;
+
+    // Exibir resumo
+    exibirResumo(resultado);
+
+    // Preencher tabelas
+    preencherConfirmados(confirmados);
+    preencherNaoEncontrados(naoEncontrados);
+    preencherDivergencias(comDivergencia);
+    preencherErros(erros);
+}
+
+function exibirResumo(resultado) {
+    const summaryCards = document.getElementById('summaryCards');
+    summaryCards.innerHTML = `
+        <div class="summary-card">
+            <h6>Total Processado</h6>
+            <div class="count">${resultado.total_linhas}</div>
+        </div>
+        <div class="summary-card" style="background: #d4edda;">
+            <h6>Confirmados</h6>
+            <div class="count text-success">${resultado.confirmados.length}</div>
+        </div>
+        <div class="summary-card" style="background: #f8d7da;">
+            <h6>Não Encontrados</h6>
+            <div class="count text-danger">${resultado.nao_encontrados.length}</div>
+        </div>
+        <div class="summary-card" style="background: #fff3cd;">
+            <h6>Divergências</h6>
+            <div class="count text-warning">${resultado.com_divergencia.length}</div>
+        </div>
+        <div class="summary-card" style="background: #e2e3e5;">
+            <h6>Erros</h6>
+            <div class="count text-secondary">${resultado.erros.length}</div>
+        </div>
+    `;
+}
+
+function preencherConfirmados(confirmados) {
+    const tbody = document.getElementById('tbodyConfirmados');
+    tbody.innerHTML = '';
+
+    confirmados.forEach(item => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${item.linha}</td>
+                <td>${item.protocolo_nosso}</td>
+                <td>${item.id_sendas}</td>
+                <td><span class="status-badge status-confirmado">Confirmado</span></td>
+                <td>${item.data_confirmada || '-'}</td>
+                <td>${item.mensagem}</td>
+            </tr>
+        `;
+    });
+}
+
+function preencherNaoEncontrados(naoEncontrados) {
+    const tbody = document.getElementById('tbodyNaoEncontrados');
+    tbody.innerHTML = '';
+
+    naoEncontrados.forEach(item => {
+        tbody.innerHTML += `
+            <tr>
+                <td><input type="checkbox" class="check-nao-encontrado" data-protocolo="${item.id_sendas || item.obs_criacao}"></td>
+                <td>${item.linha}</td>
+                <td>${item.id_sendas || '-'}</td>
+                <td>${item.obs_criacao || '-'}</td>
+                <td><span class="status-badge status-nao-encontrado">Não Encontrado</span></td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="reenviarIndividual('${item.id_sendas || item.obs_criacao}')">
+                        <i class="fas fa-redo"></i> Reenviar
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function preencherDivergencias(divergencias) {
+    const tbody = document.getElementById('tbodyDivergencias');
+    tbody.innerHTML = '';
+
+    divergencias.forEach(item => {
+        tbody.innerHTML += `
+            <tr>
+                <td><input type="checkbox" class="check-divergencia"
+                    data-protocolo="${item.protocolo_nosso}"
+                    data-tipo="${item.tipo_origem}"
+                    data-data="${item.data_sugerida}"></td>
+                <td>${item.linha}</td>
+                <td>${item.protocolo_nosso}</td>
+                <td>${item.data_sugerida || '-'}</td>
+                <td>${item.data_solicitada || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary"
+                        onclick="atualizarDataIndividual('${item.protocolo_nosso}', '${item.data_sugerida}', '${item.tipo_origem}')">
+                        <i class="fas fa-save"></i> Atualizar
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function preencherErros(erros) {
+    const tbody = document.getElementById('tbodyErros');
+    tbody.innerHTML = '';
+
+    erros.forEach(item => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${item.linha}</td>
+                <td class="text-danger">${item.erro}</td>
+            </tr>
+        `;
+    });
+}
+
+// Checkboxes select all
+document.getElementById('checkAllNaoEncontrados').addEventListener('change', (e) => {
+    document.querySelectorAll('.check-nao-encontrado').forEach(cb => {
+        cb.checked = e.target.checked;
+    });
+});
+
+document.getElementById('checkAllDivergencias').addEventListener('change', (e) => {
+    document.querySelectorAll('.check-divergencia').forEach(cb => {
+        cb.checked = e.target.checked;
+    });
+});
+
+// Ações
+function reenviarNaoEncontrados() {
+    const protocolos = [];
+    document.querySelectorAll('.check-nao-encontrado:checked').forEach(cb => {
+        protocolos.push(cb.dataset.protocolo);
+    });
+
+    if (protocolos.length === 0) {
+        Swal.fire('Atenção', 'Selecione pelo menos um agendamento para reenviar', 'warning');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Confirmar reenvio?',
+        text: `${protocolos.length} agendamentos serão marcados para reprocessamento`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, reenviar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('/portal/sendas/api/verificacao/reenviar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ protocolos })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    Swal.fire('Sucesso', data.mensagem, 'success');
+                } else {
+                    Swal.fire('Erro', data.erro, 'error');
+                }
+            });
+        }
+    });
+}
+
+function reenviarIndividual(protocolo) {
+    reenviarNaoEncontrados([protocolo]);
+}
+
+function atualizarDatasDivergentes() {
+    const atualizacoes = [];
+    document.querySelectorAll('.check-divergencia:checked').forEach(cb => {
+        atualizacoes.push({
+            protocolo: cb.dataset.protocolo,
+            data_nova: cb.dataset.data,
+            tipo_origem: cb.dataset.tipo
+        });
+    });
+
+    if (atualizacoes.length === 0) {
+        Swal.fire('Atenção', 'Selecione pelo menos uma data para atualizar', 'warning');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Atualizar datas?',
+        text: `${atualizacoes.length} datas serão atualizadas`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, atualizar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('/portal/sendas/api/verificacao/atualizar-datas', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ atualizacoes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    Swal.fire('Sucesso', data.mensagem, 'success');
+                } else {
+                    Swal.fire('Erro', data.erro, 'error');
+                }
+            });
+        }
+    });
+}
+
+function atualizarDataIndividual(protocolo, dataNova, tipoOrigem) {
+    atualizarDatasDivergentes([{ protocolo, data_nova: dataNova, tipo_origem: tipoOrigem }]);
+}
+</script>
+{% endblock %}

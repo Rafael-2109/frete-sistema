@@ -1349,17 +1349,17 @@ class CarteiraAgrupada {
              </span>` : '-';
         
         return `
-            <tr>
+            <tr data-lote-id="${item.loteId}" id="separacao-compacta-${item.loteId}">
                 <td><strong class="${tipoClass}">${item.tipo}</strong></td>
                 <td>${statusBadge}</td>
                 <td class="text-end text-success">${this.formatarMoeda(item.valor)}</td>
                 <td class="text-end">${this.formatarPeso(item.peso)}</td>
                 <td class="text-end">${this.formatarPallet(item.pallet)}</td>
-                <td class="text-center">${item.expedicao ? this.formatarData(item.expedicao) : '-'}</td>
-                <td class="text-center">${item.agendamento ? this.formatarData(item.agendamento) : '-'}</td>
-                <td><small>${item.protocolo || '-'}</small></td>
-                <td class="text-center">${confirmacaoBadge}</td>
-                <td><small>${embarqueInfo}</small></td>
+                <td class="text-center" data-field="expedicao">${item.expedicao ? this.formatarData(item.expedicao) : '-'}</td>
+                <td class="text-center" data-field="agendamento">${item.agendamento ? this.formatarData(item.agendamento) : '-'}</td>
+                <td data-field="protocolo"><small>${item.protocolo || '-'}</small></td>
+                <td class="text-center" data-field="confirmacao">${confirmacaoBadge}</td>
+                <td data-field="embarque"><small>${embarqueInfo}</small></td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-primary btn-sm" 

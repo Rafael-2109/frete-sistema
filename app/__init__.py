@@ -623,7 +623,6 @@ def create_app(config_name=None):
     from app.integracoes.tagplus import tagplus_bp
     
     # MCP Logistica
-    from app.mcp_logistica.flask_integration import mcp_logistica_bp, init_mcp_logistica
 
 
     app.register_blueprint(auth_bp)
@@ -719,7 +718,17 @@ def create_app(config_name=None):
         from app.portal.sendas.routes_fila import fila_sendas_bp
         app.register_blueprint(fila_sendas_bp)
         app.logger.info("✅ Portal Sendas (sistema de fila) registrado com sucesso")
-        
+
+        # Registrar blueprint da planilha modelo Sendas
+        from app.portal.sendas.routes_planilha import bp_planilha_sendas
+        app.register_blueprint(bp_planilha_sendas)
+        app.logger.info("✅ Portal Sendas (importação planilha modelo) registrado com sucesso")
+
+        # Registrar blueprint da solicitação de agendamento (Etapa 2)
+        from app.portal.sendas.routes_solicitacao import bp_solicitacao_sendas
+        app.register_blueprint(bp_solicitacao_sendas)
+        app.logger.info("✅ Portal Sendas (solicitação de agendamento) registrado com sucesso")
+
     except ImportError as e:
         app.logger.error(f"❌ Portal de integração - ImportError: {e}")
         import traceback
@@ -737,8 +746,6 @@ def create_app(config_name=None):
     app.register_blueprint(permissions_bp)
 
     # 🚀 MCP Logistica
-    app.register_blueprint(mcp_logistica_bp)
-    init_mcp_logistica(app)
     
     # 🔗 Integração TagPlus
     from app.integracoes.tagplus.webhook_routes import tagplus_webhook

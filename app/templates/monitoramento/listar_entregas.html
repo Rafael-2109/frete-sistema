@@ -625,10 +625,28 @@ nav.navbar .navbar-brand .badge.bg-primary {
           <i class="fas fa-upload"></i> Upload Canhotos
         </a>
         {% endif %}
-        <a href="{{ url_for('monitoramento.exportar_entregas') }}" 
-           class="btn btn-success" 
+        <a href="{{ url_for('monitoramento.exportar_entregas') }}"
+           class="btn btn-success"
            title="Exportar dados do monitoramento para Excel">
           <i class="fas fa-file-excel"></i> Exportar Excel
+        </a>
+        <button type="button"
+                class="btn btn-warning"
+                onclick="abrirModalImportarPlanilhaSendas()"
+                title="Importar planilha modelo do portal Sendas">
+          <i class="fas fa-file-import"></i> Importar Agenda Disp. Sendas
+        </button>
+        <a href="/portal/sendas/exportacao"
+           class="btn btn-info"
+           target="_blank"
+           title="Exportar planilhas para upload no portal Sendas">
+          <i class="fas fa-file-export"></i> Exportar Planilhas Sendas
+        </a>
+        <a href="/portal/sendas/verificacao"
+           class="btn btn-success"
+           target="_blank"
+           title="Verificar agendamentos do portal Sendas">
+          <i class="fas fa-check-circle"></i> Verificar Agendamentos Sendas
         </a>
     </div>
   </form>
@@ -2619,41 +2637,31 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   }); // Fim do DOMContentLoaded para o formulário
 
-  // Funções para o Portal Sendas (Sistema de Fila)
+  // Funções para o Portal Sendas (Sistema de Comparação - Etapa 2)
   function agendarNoPortalSendasFila(entregaId, numeroNf) {
-    Swal.fire({
-      title: 'Agendar no Portal Sendas',
-      html: `
-        <div class="text-center">
-          <p>NF: <strong>${numeroNf}</strong></p>
-          <div class="form-group mt-3">
-            <label>Data de Agendamento:</label>
-            <input type="date" id="swal-data-agendamento" class="form-control" required>
-          </div>
-          <div class="alert alert-info mt-3">
-            <i class="fas fa-info-circle"></i> 
-            <strong>Sistema de Fila:</strong><br>
-            O agendamento será adicionado à fila e processado em lote com outros pedidos.
-          </div>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: 'Adicionar à Fila',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#28a745',
-      preConfirm: () => {
-        const dataAgendamento = document.getElementById('swal-data-agendamento').value;
-        if (!dataAgendamento) {
-          Swal.showValidationMessage('Por favor, selecione a data de agendamento');
-          return false;
+    // Novo fluxo com comparação (Fluxo 3 - NF)
+    console.log(`[Sendas] Iniciando fluxo de comparação para NF ${numeroNf}`);
+
+    // Verificar se temos função do novo fluxo disponível
+    if (window.abrirModalComparacaoNF) {
+      // Usar modal de comparação NF (Fluxo 3)
+      // Passar apenas o número da NF - o modal buscará os dados automaticamente
+      window.abrirModalComparacaoNF(numeroNf);
+    } else {
+      // Sistema de comparação não disponível
+      Swal.fire({
+        icon: 'error',
+        title: 'Sistema não disponível',
+        text: 'O novo sistema de comparação não está disponível. Por favor, recarregue a página.',
+        confirmButtonText: 'Recarregar',
+        showCancelButton: true,
+        cancelButtonText: 'Cancelar'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.reload();
         }
-        return dataAgendamento;
-      }
-    }).then((result) => {
-      if (result.isConfirmed) {
-        adicionarNaFilaSendas(numeroNf, result.value);
-      }
-    });
+      });
+    }
   }
   
   function adicionarNaFilaSendas(numeroNf, dataAgendamento) {
@@ -2852,6 +2860,96 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </div>
+
+<!-- Modal de Importação da Planilha Sendas -->
+<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalImportarPlanilhaLabel">
+          <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
+            <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx" required>
+            <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
+          <i class="fas fa-upload"></i> Importar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Função para abrir o modal de importação
+function abrirModalImportarPlanilhaSendas() {
+    const modal = new bootstrap.Modal(document.getElementById('modalImportarPlanilhaSendas'));
+    modal.show();
+}
+
+// Função para importar a planilha
+function importarPlanilhaSendas() {
+    const fileInput = document.getElementById('arquivoPlanilha');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('Por favor, selecione um arquivo');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+
+    // Mostrar loading
+    const btnImportar = event.target;
+    const textoOriginal = btnImportar.innerHTML;
+    btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    btnImportar.disabled = true;
+
+    fetch('/portal/sendas/importar-planilha-modelo', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrf_token]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            // Fechar modal
+            bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
+            // Limpar formulário
+            document.getElementById('formImportarPlanilhaSendas').reset();
+        } else {
+            alert('Erro: ' + data.mensagem);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao importar planilha: ' + error);
+    })
+    .finally(() => {
+        btnImportar.innerHTML = textoOriginal;
+        btnImportar.disabled = false;
+    });
+}
+</script>
+
+<!-- Incluir modais de comparação Sendas (Etapa 2) -->
+{% include 'portal/sendas/modals_comparacao.html' %}
+
+<!-- Scripts de comparação Sendas (Etapa 2) -->
+<script src="{{ url_for('static', filename='js/sendas_comparacao.js') }}"></script>
 
 {% endblock %}
 </div> <!-- fim pagination-container -->

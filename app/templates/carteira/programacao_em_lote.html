@@ -65,6 +65,18 @@
             <button class="btn btn-dark me-2" id="btnImportarAgendamentos">
                 <i class="fas fa-file-excel"></i> Importar Agendamentos Assai
             </button>
+            <button class="btn btn-warning me-2" onclick="abrirModalImportarPlanilhaSendas()">
+                <i class="fas fa-file-import"></i> Importar Agenda Disp. Sendas
+            </button>
+            <button class="btn btn-success me-2" onclick="solicitarAgendamentoSendasLote()">
+                <i class="fas fa-calendar-check"></i> Solicitar Agendamento Sendas
+            </button>
+            <a href="/portal/sendas/exportacao" class="btn btn-info me-2" target="_blank">
+                <i class="fas fa-file-export"></i> Exportar Planilhas Sendas
+            </a>
+            <a href="/portal/sendas/verificacao" class="btn btn-success me-2" target="_blank">
+                <i class="fas fa-check-circle"></i> Verificar Agendamentos Sendas
+            </a>
             {% endif %}
             <button class="btn btn-info me-2" id="btnAnalisarEstoques">
                 <i class="fas fa-chart-line"></i> Analisar Estoques
@@ -572,14 +584,190 @@
     </div>
 </div>
 
+<!-- Modal de Importação da Planilha Sendas -->
+<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalImportarPlanilhaLabel">
+          <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
+            <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx" required>
+            <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
+          <i class="fas fa-upload"></i> Importar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Incluir modais de comparação Sendas -->
+{% include 'portal/sendas/modals_comparacao.html' %}
+
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/sendas_comparacao.js') }}"></script>
 <script>
     // Dados do portal para o JavaScript
     window.PORTAL_CONFIG = {
         portal: '{{ portal }}',
         rede: '{{ rede }}'
     };
+
+    // Função para abrir o modal de importação
+    function abrirModalImportarPlanilhaSendas() {
+        const modal = new bootstrap.Modal(document.getElementById('modalImportarPlanilhaSendas'));
+        modal.show();
+    }
+
+    // Função para importar a planilha
+    function importarPlanilhaSendas() {
+        const fileInput = document.getElementById('arquivoPlanilha');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('Por favor, selecione um arquivo');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('arquivo', file);
+
+        // Mostrar loading
+        const btnImportar = event.target;
+        const textoOriginal = btnImportar.innerHTML;
+        btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        btnImportar.disabled = true;
+
+        fetch('/portal/sendas/importar-planilha-modelo', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                alert(data.mensagem);
+                // Fechar modal
+                bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
+                // Limpar formulário
+                document.getElementById('formImportarPlanilhaSendas').reset();
+            } else {
+                alert('Erro: ' + data.mensagem);
+            }
+        })
+        .catch(error => {
+            alert('Erro ao importar planilha: ' + error);
+        })
+        .finally(() => {
+            btnImportar.innerHTML = textoOriginal;
+            btnImportar.disabled = false;
+        });
+    }
+
+    // Função para solicitar agendamento Sendas em lote
+    function solicitarAgendamentoSendasLote() {
+        // Buscar CNPJs selecionados na tabela
+        const checkboxes = document.querySelectorAll('.check-cnpj:checked');
+
+        if (checkboxes.length === 0) {
+            alert('Por favor, selecione pelo menos um CNPJ para solicitar agendamento');
+            return;
+        }
+
+        // Coletar dados dos CNPJs selecionados
+        const cnpjsSelecionados = [];
+        checkboxes.forEach(checkbox => {
+            const row = checkbox.closest('tr');
+            const cnpj = checkbox.value;
+            const razSocial = row.querySelector('td:nth-child(3)').textContent.trim();
+
+            cnpjsSelecionados.push({
+                cnpj: cnpj,
+                cliente: razSocial
+            });
+        });
+
+        // Primeiro preparar dados (criar separações do saldo)
+        Swal.fire({
+            title: 'Preparando dados...',
+            html: `
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Preparando...</span>
+                    </div>
+                    <p>Criando separações e buscando dados...</p>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false
+        });
+
+        // Buscar dados dos CNPJs (cria separações e busca tudo)
+        fetch('/portal/sendas/solicitar/lote/preparar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                cnpjs: cnpjsSelecionados.map(c => c.cnpj)
+            })
+        })
+        .then(response => response.json())
+        .then(response => {
+            if (response.sucesso && response.solicitacoes && response.solicitacoes.length > 0) {
+                // Agrupar solicitações por CNPJ para passar ao modal
+                const dadosPorCnpj = {};
+                response.solicitacoes.forEach(sol => {
+                    if (!dadosPorCnpj[sol.cnpj]) {
+                        dadosPorCnpj[sol.cnpj] = {
+                            cnpj: sol.cnpj,
+                            cliente: cnpjsSelecionados.find(c => c.cnpj === sol.cnpj)?.cliente || '',
+                            pedidos: []
+                        };
+                    }
+                    dadosPorCnpj[sol.cnpj].pedidos.push(sol);
+                });
+
+                // Converter para array
+                const cnpjsComDados = Object.values(dadosPorCnpj);
+
+                Swal.close();
+
+                // Chamar função do sendas_comparacao.js com dados completos
+                abrirModalComparacaoLote(cnpjsComDados);
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sem dados para comparar',
+                    text: 'Não foram encontrados pedidos ou separações para os CNPJs selecionados'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Erro ao buscar dados dos CNPJs'
+            });
+        });
+    }
 </script>
 <script src="{{ url_for('static', filename='js/programacao-lote.js') }}"></script>
 

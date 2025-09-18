@@ -1,0 +1,275 @@
+<!-- Modais de Comparação e Confirmação de Agendamento Sendas - Etapa 2 -->
+
+<!-- ========================================= -->
+<!-- MODAL FLUXO 2 - SEPARAÇÃO (Individual) -->
+<!-- ========================================= -->
+<div class="modal fade" id="modalComparacaoSeparacao" tabindex="-1" aria-labelledby="modalComparacaoSeparacaoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalComparacaoSeparacaoLabel">
+          <i class="fas fa-calendar-check"></i> Solicitar Agendamento Sendas - Separação
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Seção de Solicitação -->
+        <div class="card mb-3">
+          <div class="card-header bg-info text-white">
+            <h6 class="mb-0"><i class="fas fa-paper-plane"></i> Sua Solicitação</h6>
+          </div>
+          <div class="card-body">
+            <div class="row" id="solicitacao-info">
+              <div class="col-md-3">
+                <strong>CNPJ:</strong> <span id="sep-cnpj"></span>
+              </div>
+              <div class="col-md-3">
+                <strong>Pedido:</strong> <span id="sep-pedido"></span>
+              </div>
+              <div class="col-md-3">
+                <strong>Produto:</strong> <span id="sep-produto"></span>
+              </div>
+              <div class="col-md-3">
+                <strong>Quantidade:</strong> <span id="sep-quantidade"></span>
+              </div>
+            </div>
+            <div class="row mt-2">
+              <div class="col-md-6">
+                <strong>Data Agendamento:</strong>
+                <input type="date" class="form-control form-control-sm d-inline w-auto" id="sep-data-agendamento">
+              </div>
+              <div class="col-md-6">
+                <strong>Separação:</strong> <span id="sep-lote-id" class="badge bg-secondary"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção de Resultado da Comparação -->
+        <div class="card">
+          <div class="card-header bg-success text-white">
+            <h6 class="mb-0"><i class="fas fa-check-circle"></i> Disponibilidade no Portal Sendas</h6>
+          </div>
+          <div class="card-body">
+            <div id="resultado-comparacao-sep">
+              <!-- Preenchido dinamicamente -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção de Escolha (quando houver alternativas) -->
+        <div class="card mt-3" id="card-alternativas-sep" style="display: none;">
+          <div class="card-header bg-warning">
+            <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Alternativas Disponíveis</h6>
+          </div>
+          <div class="card-body">
+            <p id="sugestao-sep"></p>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover" id="tabela-alternativas-sep">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="check-all-sep"></th>
+                    <th>Pedido</th>
+                    <th>Produto</th>
+                    <th>Descrição</th>
+                    <th>Disponível</th>
+                    <th>Unidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Preenchido dinamicamente -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" id="btn-comparar-sep" onclick="compararSeparacao()">
+          <i class="fas fa-search"></i> Comparar
+        </button>
+        <button type="button" class="btn btn-success" id="btn-confirmar-sep" onclick="confirmarSeparacao()" style="display: none;">
+          <i class="fas fa-check"></i> Confirmar Agendamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================= -->
+<!-- MODAL FLUXO 1 - LOTE (Múltiplos) -->
+<!-- ========================================= -->
+<div class="modal fade" id="modalComparacaoLote" tabindex="-1" aria-labelledby="modalComparacaoLoteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-fullscreen">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalComparacaoLoteLabel">
+          <i class="fas fa-calendar-alt"></i> Solicitar Agendamento Sendas em Lote
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row">
+          <!-- Painel de CNPJs -->
+          <div class="col-md-3">
+            <div class="card">
+              <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0">CNPJs Selecionados</h6>
+              </div>
+              <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
+                <div id="lista-cnpjs-lote">
+                  <!-- Lista de CNPJs preenchida dinamicamente -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Painel de Resultados -->
+          <div class="col-md-9">
+            <div class="card">
+              <div class="card-header bg-info text-white">
+                <h6 class="mb-0">Resultados da Comparação</h6>
+              </div>
+              <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
+                <div id="resultados-lote">
+                  <!-- Accordion com resultados por CNPJ -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resumo -->
+        <div class="row mt-3">
+          <div class="col-12">
+            <div class="alert alert-info">
+              <strong>Resumo:</strong>
+              <span id="resumo-lote">Nenhuma comparação realizada ainda</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" id="btn-comparar-lote" onclick="compararLote()">
+          <i class="fas fa-search"></i> Comparar Todos
+        </button>
+        <button type="button" class="btn btn-success" id="btn-confirmar-lote" onclick="confirmarLote()" style="display: none;">
+          <i class="fas fa-check"></i> Confirmar Agendamentos Selecionados
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================= -->
+<!-- MODAL FLUXO 3 - NF/MONITORAMENTO -->
+<!-- ========================================= -->
+<div class="modal fade" id="modalComparacaoNF" tabindex="-1" aria-labelledby="modalComparacaoNFLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalComparacaoNFLabel">
+          <i class="fas fa-file-invoice"></i> Solicitar Agendamento Sendas - NF
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Info da NF -->
+        <div class="card mb-3">
+          <div class="card-header bg-dark text-white">
+            <h6 class="mb-0"><i class="fas fa-file-alt"></i> Dados da Nota Fiscal</h6>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-4">
+                <strong>NF:</strong> <span id="nf-numero"></span>
+              </div>
+              <div class="col-md-4">
+                <strong>CNPJ Cliente:</strong> <span id="nf-cnpj"></span>
+              </div>
+              <div class="col-md-4">
+                <strong>Data Agenda:</strong>
+                <input type="date" class="form-control form-control-sm d-inline w-auto" id="nf-data-agendamento">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resultado da Comparação -->
+        <div class="card">
+          <div class="card-header bg-success text-white">
+            <h6 class="mb-0"><i class="fas fa-check-circle"></i> Disponibilidade no Portal</h6>
+          </div>
+          <div class="card-body">
+            <div id="resultado-comparacao-nf">
+              <!-- Preenchido dinamicamente -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" id="btn-comparar-nf" onclick="compararNF()">
+          <i class="fas fa-search"></i> Comparar
+        </button>
+        <button type="button" class="btn btn-success" id="btn-confirmar-nf" onclick="confirmarNF()" style="display: none;">
+          <i class="fas fa-check"></i> Confirmar Agendamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================= -->
+<!-- MODAL DE RESULTADO/PROTOCOLO -->
+<!-- ========================================= -->
+<div class="modal fade" id="modalProtocoloGerado" tabindex="-1" aria-labelledby="modalProtocoloGeradoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title" id="modalProtocoloGeradoLabel">
+          <i class="fas fa-check-circle"></i> Agendamento Confirmado
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+        <h4 class="mt-3">Agendamento Solicitado com Sucesso!</h4>
+        <p>Seu protocolo de agendamento é:</p>
+        <div class="alert alert-info">
+          <h3 id="protocolo-gerado" class="mb-0"></h3>
+        </div>
+        <p class="text-muted">
+          <small>Guarde este protocolo para acompanhamento</small>
+        </p>
+        <div id="detalhes-protocolo">
+          <!-- Detalhes adicionais -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="copiarProtocolo()">
+          <i class="fas fa-copy"></i> Copiar Protocolo
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="fas fa-check"></i> Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

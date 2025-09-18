@@ -218,53 +218,34 @@ window.standbyManager = (function () {
     }
 
     /**
-     * Remove o pedido da interface visualmente
+     * Marca o pedido como enviado para standby (apenas altera o botão)
      */
     function removerPedidoDaInterface(numPedido) {
-        // Procurar o card/linha do pedido na interface
-        // Pode estar em um card (agrupados_balanceado.html) ou em uma linha de tabela
+        console.log(`✅ Marcando pedido ${numPedido} como enviado para standby`);
 
-        // Tentar remover card
-        const card = document.querySelector(`[data-pedido="${numPedido}"]`);
-        if (card) {
-            // Adicionar animação de fade out
-            card.style.transition = 'opacity 0.5s, transform 0.3s';
-            card.style.opacity = '0';
-            card.style.transform = 'scale(0.95)';
+        // Alterar APENAS o botão de standby para mostrar "Enviado Standby"
+        const botaoStandby = document.getElementById(`btn-standby-${numPedido}`);
+        if (botaoStandby) {
+            // Alterar aparência do botão
+            botaoStandby.classList.remove('btn-standby');
+            botaoStandby.classList.add('btn-success', 'disabled');
 
-            setTimeout(() => {
-                card.remove();
-            }, 500);
+            // Alterar texto e ícone
+            botaoStandby.innerHTML = '<i class="fas fa-check-circle me-1"></i> Enviado Standby';
+
+            // Desabilitar o botão
+            botaoStandby.disabled = true;
+            botaoStandby.onclick = null;
+            botaoStandby.title = 'Pedido já foi enviado para standby';
+
+            // Adicionar feedback visual temporário
+            botaoStandby.style.animation = 'pulse 0.5s';
+        } else {
+            console.warn(`⚠️ Botão standby do pedido ${numPedido} não encontrado`);
         }
 
-        // Tentar remover linha da tabela (se houver)
-        const linha = document.querySelector(`tr[data-pedido="${numPedido}"]`);
-        if (linha) {
-            linha.style.transition = 'opacity 0.5s';
-            linha.style.opacity = '0';
-
-            setTimeout(() => {
-                linha.remove();
-            }, 500);
-        }
-
-        // Procurar por elementos com ID específico do pedido
-        const elementos = document.querySelectorAll(`[id*="${numPedido}"]`);
-        elementos.forEach(el => {
-            // Verificar se é um elemento relacionado ao pedido
-            if (el.closest('.card') || el.closest('tr')) {
-                const container = el.closest('.card') || el.closest('tr');
-                if (!container.classList.contains('removing')) {
-                    container.classList.add('removing');
-                    container.style.transition = 'opacity 0.5s';
-                    container.style.opacity = '0';
-
-                    setTimeout(() => {
-                        container.remove();
-                    }, 500);
-                }
-            }
-        });
+        // NÃO alterar a linha do pedido ou fazer ele desaparecer
+        // O pedido permanece visível com o botão mostrando "Enviado Standby"
     }
 
     /**

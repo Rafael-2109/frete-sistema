@@ -28,6 +28,15 @@
                     <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-success btn-sm">
                         <i class="fas fa-sync me-1"></i> Sincronizar
                     </a>
+                    <button type="button" class="btn btn-warning btn-sm" onclick="abrirModalImportarPlanilhaSendas()">
+                        <i class="fas fa-file-import me-1"></i> Importar Agenda Disp. Sendas
+                    </button>
+                    <a href="/portal/sendas/exportacao" class="btn btn-info btn-sm" target="_blank">
+                        <i class="fas fa-file-export me-1"></i> Exportar Planilhas Sendas
+                    </a>
+                    <a href="/portal/sendas/verificacao" class="btn btn-success btn-sm" target="_blank">
+                        <i class="fas fa-check-circle me-1"></i> Verificar Agendamentos Sendas
+                    </a>
                 </div>
                 <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
                     <i class="fas fa-arrow-left me-1"></i> Voltar
@@ -599,6 +608,9 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- SweetAlert2 para notificações elegantes (DEVE VIR PRIMEIRO) -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <!-- Módulos JavaScript incluídos -->
 
 <!-- Módulos Utilitários Centralizados (Carregar PRIMEIRO) -->
@@ -619,12 +631,54 @@
 
 <!-- Portal Sendas - Sistema de Fila -->
 <script>
-    {% include 'carteira/js/agendamento/sendas/portal-sendas.js' %}
+    // Definir classe PortalSendas inline para garantir que seja criada
+        {% include 'carteira/js/agendamento/sendas/portal-sendas.js' %}
 </script>
 
-<!-- Roteador de Portais - DEVE VIR DEPOIS das implementações específicas -->
+<!-- Scripts de Comparação Sendas (Etapa 2) -->
+<script src="{{ url_for('static', filename='js/sendas_comparacao.js') }}"></script>
+
+<!-- Verificação e Debug dos Portais -->
 <script>
-    {% include 'carteira/js/agendamento/destinacao-portais.js' %}
+    // Aguardar o carregamento completo dos portais com limite de tentativas
+    (function verificarPortais() {
+        // Adicionar contador de tentativas para evitar loop infinito
+        if (!window.verificacaoTentativas) {
+            window.verificacaoTentativas = 0;
+        }
+        window.verificacaoTentativas++;
+
+        console.log(`🔍 [DEBUG] Verificando estado dos portais (tentativa ${window.verificacaoTentativas}):`);
+        console.log('  - window.PortalAtacadao:', !!window.PortalAtacadao);
+        console.log('  - window.PortalSendas:', !!window.PortalSendas);
+
+        // Limite de 30 tentativas (3 segundos)
+        if (window.verificacaoTentativas > 30) {
+            console.error('❌ Timeout ao aguardar carregamento dos portais');
+
+            // Carregar roteador mesmo assim, mas apenas com os portais disponíveis
+            console.warn('⚠️ Carregando roteador com portais disponíveis...');
+            {% include 'carteira/js/agendamento/destinacao-portais.js' %}
+            console.log('✅ [DEBUG] Roteador carregado (com portais parciais)');
+            return;
+        }
+
+        // Se algum portal não estiver carregado, aguardar um pouco mais
+        if (!window.PortalAtacadao || !window.PortalSendas) {
+            console.warn('⚠️ Aguardando carregamento completo dos portais...');
+            setTimeout(verificarPortais, 100);
+            return;
+        }
+
+        // Todos os portais carregados
+        console.log('✅ Todos os portais carregados, iniciando roteador...');
+        window.verificacaoTentativas = 0; // Resetar contador
+
+        // Agora carrega o roteador com todos os portais disponíveis
+        {% include 'carteira/js/agendamento/destinacao-portais.js' %}
+
+        console.log('✅ [DEBUG] Roteador carregado com sucesso');
+    })();
 </script>
 
 <script>
@@ -837,26 +891,37 @@
     </div>
 </div>
 
-<!-- SweetAlert2 para notificações elegantes -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <!-- Sistema Assíncrono Redis Queue (DEVE VIR DEPOIS DO SWEETALERT) -->
 <script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
 
 <!-- CSS de animações fluidas -->
 <style>
+    /* Animação pulse para feedback visual do botão standby */
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
+        }
+        100% {
+            transform: scale(1);
+        }
+    }
+
     /* Estilos para badges de filtros clicáveis */
     .bg-filtro {
         cursor: pointer !important;
         transition: all 0.2s ease;
         user-select: none;
     }
-    
+
     .bg-filtro:hover {
         transform: scale(1.05);
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-    
+
     .bg-filtro:active {
         transform: scale(0.98);
     }
@@ -940,5 +1005,92 @@
         }
     }
 </style>
+
+<!-- Modal de Importação da Planilha Sendas -->
+<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalImportarPlanilhaLabel">
+          <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
+            <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx" required>
+            <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
+          <i class="fas fa-upload"></i> Importar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Função para abrir o modal de importação
+function abrirModalImportarPlanilhaSendas() {
+    const modal = new bootstrap.Modal(document.getElementById('modalImportarPlanilhaSendas'));
+    modal.show();
+}
+
+// Função para importar a planilha
+function importarPlanilhaSendas() {
+    const fileInput = document.getElementById('arquivoPlanilha');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('Por favor, selecione um arquivo');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+
+    // Mostrar loading
+    const btnImportar = event.target;
+    const textoOriginal = btnImportar.innerHTML;
+    btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    btnImportar.disabled = true;
+
+    fetch('/portal/sendas/importar-planilha-modelo', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            // Fechar modal
+            bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
+            // Limpar formulário
+            document.getElementById('formImportarPlanilhaSendas').reset();
+        } else {
+            alert('Erro: ' + data.mensagem);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao importar planilha: ' + error);
+    })
+    .finally(() => {
+        btnImportar.innerHTML = textoOriginal;
+        btnImportar.disabled = false;
+    });
+}
+</script>
+
+<!-- Incluir modais de comparação Sendas (Etapa 2) -->
+{% include 'portal/sendas/modals_comparacao.html' %}
 
 {% endblock %}

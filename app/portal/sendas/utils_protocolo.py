@@ -28,21 +28,24 @@ def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = No
         # Retorna: "AG_0001_15012025_1430"
     """
     try:
-        # Limpar CNPJ (remover caracteres não numéricos)
-        cnpj_limpo = ''.join(filter(str.isdigit, str(cnpj)))
+        # ✅ PEGAR DIRETO DO CNPJ SEM LIMPAR
+        # Exemplo: "12.345.678/9012-34" -> posições [-7:-3] = "9012"
+        cnpj_parte = str(cnpj)[-7:-3]
 
-        # Validar tamanho do CNPJ
-        if len(cnpj_limpo) < 8:
-            logger.warning(f"CNPJ muito curto: {cnpj_limpo}")
-            cnpj_parte = cnpj_limpo[-4:].zfill(4)
-        else:
-            # Pegar posições 7 até 4 (índices 6 até 10 em Python, contando do início)
-            # Exemplo: 06057223000195 -> posições 7-4 = "0001"
-            cnpj_parte = cnpj_limpo[6:10]
+        # Se não conseguiu pegar 4 dígitos, logar erro
+        if len(cnpj_parte) != 4:
+            logger.error(f"CNPJ parte inválida: '{cnpj_parte}' do CNPJ '{cnpj}'")
+            raise ValueError(f"Não foi possível extrair 4 dígitos do CNPJ")
 
         # Garantir que data_agendamento seja um objeto date
         if hasattr(data_agendamento, 'date'):
+            # É um datetime, converter para date
             data_agendamento = data_agendamento.date()
+        elif isinstance(data_agendamento, str):
+            # É uma string, fazer parse
+            from dateutil import parser
+            data_agendamento = parser.parse(data_agendamento).date()
+        # Se já é date, não precisa fazer nada
 
         # Formatar data como ddmmyyyy
         data_formatada = data_agendamento.strftime('%d%m%Y')
@@ -62,7 +65,9 @@ def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = No
         return protocolo
 
     except Exception as e:
-        logger.error(f"Erro ao gerar protocolo: {e}")
+        logger.error(f"ERRO CRÍTICO ao gerar protocolo para CNPJ '{cnpj}', data {data_agendamento}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         # Fallback para formato simplificado em caso de erro
         return f"AG_ERR_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 

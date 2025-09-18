@@ -617,9 +617,7 @@ class FaturamentoService:
                                     cod_produto=cod_produto,
                                     nome_produto=item_para_inserir.get('nome_produto', cod_produto),
                                     palletizacao=1.0,  # Valor padrão
-                                    peso_bruto=1.0,    # Valor padrão
-                                    created_by='ImportacaoFaturamentoOdoo',
-                                    updated_by='ImportacaoFaturamentoOdoo'
+                                    peso_bruto=1.0   # Valor padrão
                                 )
                                 db.session.add(produto_cadastro)
                                 logger.info(f"✅ Produto {cod_produto} criado automaticamente no CadastroPalletizacao (via Faturamento)")
