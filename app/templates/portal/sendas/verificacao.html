@@ -122,18 +122,20 @@
                         <h5><i class="fas fa-info-circle"></i> Como funciona a verificação:</h5>
                         <ol>
                             <li>Faça upload da planilha de retorno do Portal Sendas</li>
-                            <li>O sistema verificará cada agendamento através do protocolo</li>
-                            <li>Agendamentos confirmados serão atualizados automaticamente</li>
-                            <li>Agendamentos não encontrados podem ser reenviados</li>
+                            <li>O sistema buscará todos os protocolos <strong>não confirmados no sistema</strong></li>
+                            <li>Para cada protocolo do sistema, verificará se está na planilha do Sendas</li>
+                            <li><strong>Confirmados</strong>: Protocolos encontrados com "Data Efetiva" preenchida</li>
+                            <li><strong>Não Encontrados</strong>: Protocolos do sistema que NÃO estão na planilha (podem ser reenviados)</li>
+                            <li><strong>Divergências</strong>: Quando a data solicitada difere da registrada no sistema</li>
                         </ol>
                         <hr>
                         <strong>Colunas esperadas na planilha:</strong>
                         <ul>
                             <li><strong>ID</strong>: Protocolo real do Sendas</li>
-                            <li><strong>Status</strong>: Status do agendamento</li>
-                            <li><strong>Data Efetiva</strong>: Data confirmada (se aprovado)</li>
+                            <li><strong>Status</strong>: Status do agendamento (apenas para visualização)</li>
+                            <li><strong>Data Efetiva</strong>: Data confirmada pelo Sendas (quando aprovado)</li>
                             <li><strong>Obs. Criação</strong>: Nosso protocolo (AG_XXXX_DDMMYY_HHMM)</li>
-                            <li><strong>Data/Hora Sugerida:</strong> Data solicitada</li>
+                            <li><strong>Data/Hora Sugerida:</strong> Data que nós solicitamos ao Sendas</li>
                         </ul>
                     </div>
 
@@ -151,43 +153,45 @@
                         <div class="summary-cards" id="summaryCards"></div>
 
                         <!-- Tabs para diferentes resultados -->
-                        <ul class="nav nav-tabs" role="tablist">
-                            <li class="nav-item">
-                                <a class="nav-link active" data-toggle="tab" href="#confirmados">
-                                    Confirmados <span class="badge badge-success" id="countConfirmados">0</span>
-                                </a>
+                        <ul class="nav nav-tabs" id="resultadosTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="confirmados-tab" data-bs-toggle="tab" data-bs-target="#confirmados" type="button" role="tab" aria-controls="confirmados" aria-selected="true">
+                                    Confirmados <span class="badge bg-success" id="countConfirmados">0</span>
+                                </button>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-toggle="tab" href="#naoEncontrados">
-                                    Não Encontrados <span class="badge badge-danger" id="countNaoEncontrados">0</span>
-                                </a>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="naoEncontrados-tab" data-bs-toggle="tab" data-bs-target="#naoEncontrados" type="button" role="tab" aria-controls="naoEncontrados" aria-selected="false">
+                                    Não Encontrados <span class="badge bg-danger" id="countNaoEncontrados">0</span>
+                                </button>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-toggle="tab" href="#divergencias">
-                                    Divergências <span class="badge badge-warning" id="countDivergencias">0</span>
-                                </a>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="divergencias-tab" data-bs-toggle="tab" data-bs-target="#divergencias" type="button" role="tab" aria-controls="divergencias" aria-selected="false">
+                                    Divergências <span class="badge bg-warning" id="countDivergencias">0</span>
+                                </button>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-toggle="tab" href="#erros">
-                                    Erros <span class="badge badge-secondary" id="countErros">0</span>
-                                </a>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="erros-tab" data-bs-toggle="tab" data-bs-target="#erros" type="button" role="tab" aria-controls="erros" aria-selected="false">
+                                    Erros <span class="badge bg-secondary" id="countErros">0</span>
+                                </button>
                             </li>
                         </ul>
 
                         <!-- Tab Content -->
-                        <div class="tab-content">
+                        <div class="tab-content" id="resultadosTabContent">
                             <!-- Confirmados -->
-                            <div id="confirmados" class="tab-pane fade show active">
+                            <div class="tab-pane fade show active" id="confirmados" role="tabpanel" aria-labelledby="confirmados-tab">
                                 <div class="table-container">
                                     <table class="table table-striped">
                                         <thead>
                                             <tr>
-                                                <th>Linha</th>
                                                 <th>Protocolo</th>
                                                 <th>ID Sendas</th>
-                                                <th>Status</th>
+                                                <th>CNPJ</th>
+                                                <th>Cliente</th>
+                                                <th>Tipo</th>
+                                                <th>Documento</th>
                                                 <th>Data Confirmada</th>
-                                                <th>Mensagem</th>
+                                                <th>Status</th>
                                             </tr>
                                         </thead>
                                         <tbody id="tbodyConfirmados"></tbody>
@@ -196,7 +200,7 @@
                             </div>
 
                             <!-- Não Encontrados -->
-                            <div id="naoEncontrados" class="tab-pane fade">
+                            <div class="tab-pane fade" id="naoEncontrados" role="tabpanel" aria-labelledby="naoEncontrados-tab">
                                 <div class="action-buttons mt-3">
                                     <button class="btn btn-warning" onclick="reenviarNaoEncontrados()">
                                         <i class="fas fa-redo"></i> Reenviar Todos para Fila
@@ -207,9 +211,11 @@
                                         <thead>
                                             <tr>
                                                 <th><input type="checkbox" id="checkAllNaoEncontrados"></th>
-                                                <th>Linha</th>
-                                                <th>ID Sendas</th>
-                                                <th>Obs. Criação</th>
+                                                <th>Protocolo</th>
+                                                <th>CNPJ</th>
+                                                <th>Cliente</th>
+                                                <th>Tipo</th>
+                                                <th>Documento</th>
                                                 <th>Status</th>
                                                 <th>Ação</th>
                                             </tr>
@@ -220,11 +226,11 @@
                             </div>
 
                             <!-- Divergências -->
-                            <div id="divergencias" class="tab-pane fade">
+                            <div class="tab-pane fade" id="divergencias" role="tabpanel" aria-labelledby="divergencias-tab">
                                 <div class="divergencia-info">
                                     <i class="fas fa-exclamation-triangle"></i>
-                                    Estes agendamentos têm data sugerida diferente da solicitada.
-                                    Revise e atualize se necessário.
+                                    <strong>Divergência detectada:</strong> A data que solicitamos ao Portal Sendas é diferente da data registrada em nosso sistema.
+                                    Isso pode ocorrer se houve alteração manual. Revise e atualize se necessário.
                                 </div>
                                 <div class="action-buttons mt-3">
                                     <button class="btn btn-primary" onclick="atualizarDatasDivergentes()">
@@ -236,10 +242,11 @@
                                         <thead>
                                             <tr>
                                                 <th><input type="checkbox" id="checkAllDivergencias"></th>
-                                                <th>Linha</th>
                                                 <th>Protocolo</th>
-                                                <th>Data Sugerida</th>
-                                                <th>Data Solicitada</th>
+                                                <th>CNPJ</th>
+                                                <th>Cliente</th>
+                                                <th>Data que Solicitamos ao Sendas</th>
+                                                <th>Data Registrada no Sistema</th>
                                                 <th>Ação</th>
                                             </tr>
                                         </thead>
@@ -249,7 +256,7 @@
                             </div>
 
                             <!-- Erros -->
-                            <div id="erros" class="tab-pane fade">
+                            <div class="tab-pane fade" id="erros" role="tabpanel" aria-labelledby="erros-tab">
                                 <div class="table-container">
                                     <table class="table table-striped">
                                         <thead>
@@ -272,6 +279,10 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Adicionar SweetAlert2 para corrigir erro "Swal is not defined" -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
 let resultadoProcessamento = null;
 
@@ -401,8 +412,8 @@ function exibirResumo(resultado) {
     const summaryCards = document.getElementById('summaryCards');
     summaryCards.innerHTML = `
         <div class="summary-card">
-            <h6>Total Processado</h6>
-            <div class="count">${resultado.total_linhas}</div>
+            <h6>Protocolos no Sistema</h6>
+            <div class="count">${resultado.total_protocolos_sistema || 0}</div>
         </div>
         <div class="summary-card" style="background: #d4edda;">
             <h6>Confirmados</h6>
@@ -430,12 +441,14 @@ function preencherConfirmados(confirmados) {
     confirmados.forEach(item => {
         tbody.innerHTML += `
             <tr>
-                <td>${item.linha}</td>
                 <td>${item.protocolo_nosso}</td>
-                <td>${item.id_sendas}</td>
-                <td><span class="status-badge status-confirmado">Confirmado</span></td>
+                <td>${item.id_sendas || '-'}</td>
+                <td>${item.cnpj || '-'}</td>
+                <td title="${item.cliente || '-'}">${(item.cliente || '-').substring(0, 30)}${(item.cliente && item.cliente.length > 30) ? '...' : ''}</td>
+                <td>${item.tipo_origem || '-'}</td>
+                <td>${item.documento_origem || '-'}</td>
                 <td>${item.data_confirmada || '-'}</td>
-                <td>${item.mensagem}</td>
+                <td><span class="status-badge status-confirmado">Confirmado</span></td>
             </tr>
         `;
     });
@@ -448,13 +461,15 @@ function preencherNaoEncontrados(naoEncontrados) {
     naoEncontrados.forEach(item => {
         tbody.innerHTML += `
             <tr>
-                <td><input type="checkbox" class="check-nao-encontrado" data-protocolo="${item.id_sendas || item.obs_criacao}"></td>
-                <td>${item.linha}</td>
-                <td>${item.id_sendas || '-'}</td>
-                <td>${item.obs_criacao || '-'}</td>
-                <td><span class="status-badge status-nao-encontrado">Não Encontrado</span></td>
+                <td><input type="checkbox" class="check-nao-encontrado" data-protocolo="${item.protocolo_nosso}"></td>
+                <td>${item.protocolo_nosso}</td>
+                <td>${item.cnpj || '-'}</td>
+                <td title="${item.cliente || '-'}">${(item.cliente || '-').substring(0, 30)}${(item.cliente && item.cliente.length > 30) ? '...' : ''}</td>
+                <td>${item.tipo_origem || '-'}</td>
+                <td>${item.documento_origem || '-'}</td>
+                <td><span class="status-badge status-nao-encontrado">Não Encontrado na Planilha</span></td>
                 <td>
-                    <button class="btn btn-sm btn-warning" onclick="reenviarIndividual('${item.id_sendas || item.obs_criacao}')">
+                    <button class="btn btn-sm btn-warning" onclick="reenviarIndividual('${item.protocolo_nosso}')">
                         <i class="fas fa-redo"></i> Reenviar
                     </button>
                 </td>
@@ -474,8 +489,9 @@ function preencherDivergencias(divergencias) {
                     data-protocolo="${item.protocolo_nosso}"
                     data-tipo="${item.tipo_origem}"
                     data-data="${item.data_sugerida}"></td>
-                <td>${item.linha}</td>
                 <td>${item.protocolo_nosso}</td>
+                <td>${item.cnpj || '-'}</td>
+                <td title="${item.cliente || '-'}">${(item.cliente || '-').substring(0, 30)}${(item.cliente && item.cliente.length > 30) ? '...' : ''}</td>
                 <td>${item.data_sugerida || '-'}</td>
                 <td>${item.data_solicitada || '-'}</td>
                 <td>

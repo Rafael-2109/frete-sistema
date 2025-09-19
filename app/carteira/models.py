@@ -90,10 +90,10 @@ class CarteiraPrincipal(db.Model):
     
     # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
     separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # Vínculo separação
-    qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)  # Qtd no lote
-    valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)  # Valor no lote
-    pallet = db.Column(db.Numeric(15, 3), nullable=True)  # Pallets no lote
-    peso = db.Column(db.Numeric(15, 3), nullable=True)  # Peso no lote
+    qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)  # Qtd do produto
+    valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)  # Valor do produto
+    pallet = db.Column(db.Numeric(15, 3), nullable=True)  
+    peso = db.Column(db.Numeric(15, 3), nullable=True)  
     
     # 🛣️ DADOS DE ROTA E SUB-ROTA (ADICIONADOS)
     rota = db.Column(db.String(50), nullable=True)  # Rota principal baseada em cod_uf

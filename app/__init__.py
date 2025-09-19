@@ -739,11 +739,21 @@ def create_app(config_name=None):
         app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
     
     app.register_blueprint(estoque_bp)
-    
+
     app.register_blueprint(producao_bp)
     app.register_blueprint(relatorios_producao_bp)
     app.register_blueprint(manufatura_bp)
     app.register_blueprint(permissions_bp)
+
+    # 📊 Módulo Comercial - Acompanhamento de Vendas
+    try:
+        from app.comercial import comercial_bp
+        app.register_blueprint(comercial_bp)
+        app.logger.info("✅ Módulo Comercial registrado com sucesso")
+    except ImportError as e:
+        app.logger.error(f"❌ Módulo Comercial - ImportError: {e}")
+        import traceback
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
 
     # 🚀 MCP Logistica
     

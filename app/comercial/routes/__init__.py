@@ -1,0 +1,1 @@
+# Importar todas as rotas para registrar no blueprint

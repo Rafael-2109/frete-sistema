@@ -333,6 +333,29 @@
           </ul>
         </li>
 
+        <!-- COMERCIAL - Acompanhamento de vendas e clientes -->
+        {% if current_user.is_authenticated and (current_user.tem_permissao('comercial') or current_user.tem_permissao('vendas') or current_user.perfil in ['administrador', 'diretoria', 'gerente_comercial', 'vendedor']) %}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuComercial" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-chart-line text-warning"></i> Comercial
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">📊 Acompanhamento</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('comercial.dashboard_diretoria') }}">
+              <i class="fas fa-chart-bar text-primary"></i> Dashboard Comercial
+              <span class="badge bg-warning text-dark ms-2">NOVO</span>
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('comercial.lista_clientes', posicao='em_aberto') }}">
+              <i class="fas fa-building text-success"></i> Acompanhamento de Clientes
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📈 Análises</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('comercial.lista_clientes', posicao='todos') }}">
+              <i class="fas fa-list-alt"></i> Posição Total de Clientes
+            </a></li>
+          </ul>
+        </li>
+        {% endif %}
 
         <!-- USUÁRIOS - Gestão de usuários (baseado em permissões) -->
         {% if current_user.is_authenticated and (current_user.pode_aprovar_usuarios() or current_user.tem_permissao('usuarios') or current_user.tem_permissao('admin')) %}

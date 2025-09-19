@@ -6,8 +6,6 @@ Implementação rigorosa conforme especificação docs/NOVO_PROCESSO_SENDAS.md
 
 from app import db
 from app.portal.models_fila_sendas import FilaAgendamentoSendas
-from app.separacao.models import Separacao
-from app.monitoramento.models import AgendamentoEntrega
 from datetime import datetime, date, timedelta
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
@@ -32,6 +30,7 @@ class VerificacaoSendasService:
     def processar_planilha_verificacao(self, arquivo_excel: bytes) -> Dict:
         """
         Processa planilha de verificação do Portal Sendas
+        LÓGICA CORRETA: Busca protocolos do SISTEMA e verifica na PLANILHA
 
         Args:
             arquivo_excel: Bytes do arquivo Excel
@@ -40,7 +39,7 @@ class VerificacaoSendasService:
             Dict com resultados do processamento
         """
         try:
-            # Ler Excel
+            # 1. Ler Excel e criar índice por protocolo
             df = pd.read_excel(BytesIO(arquivo_excel))
             logger.info(f"Planilha lida com {len(df)} linhas")
 
@@ -54,40 +53,77 @@ class VerificacaoSendasService:
                     'erro': f'Colunas obrigatórias faltando: {", ".join(colunas_faltando)}'
                 }
 
+            # 2. Criar índice da planilha por protocolo (ID e Obs. Criação)
+            planilha_por_protocolo = {}
+            for idx, row in df.iterrows():
+                id_sendas = str(row['ID']).strip() if pd.notna(row['ID']) else ''
+                obs_criacao = str(row['Obs. Criação']).strip() if pd.notna(row['Obs. Criação']) else ''
+
+                # Indexar por ID
+                if id_sendas and id_sendas != 'nan':
+                    if id_sendas not in planilha_por_protocolo:
+                        planilha_por_protocolo[id_sendas] = row
+
+                # Indexar por Obs. Criação
+                if obs_criacao and obs_criacao != 'nan':
+                    if obs_criacao not in planilha_por_protocolo:
+                        planilha_por_protocolo[obs_criacao] = row
+
+            logger.info(f"Protocolos únicos na planilha: {len(planilha_por_protocolo)}")
+
+            # 3. Buscar todos os protocolos NÃO confirmados do SISTEMA
+            protocolos_sistema = self._buscar_protocolos_nao_confirmados()
+            logger.info(f"Protocolos não confirmados no sistema: {len(protocolos_sistema)}")
+
             resultados = {
                 'sucesso': True,
                 'total_linhas': len(df),
-                'encontrados': [],
-                'nao_encontrados': [],
-                'atualizados': [],
+                'total_protocolos_sistema': len(protocolos_sistema),
                 'confirmados': [],
+                'nao_encontrados': [],
                 'com_divergencia': [],
+                'atualizados': [],
                 'erros': []
             }
 
-            # Processar cada linha
-            for idx, row in df.iterrows():
+            # 4. Para cada protocolo do SISTEMA, verificar na PLANILHA
+            for protocolo_info in protocolos_sistema:
                 try:
-                    resultado_linha = self._processar_linha_verificacao(row, idx + 2)
+                    protocolo = protocolo_info['protocolo']
+                    tipo_origem = protocolo_info['tipo_origem']
+                    documento_origem = protocolo_info['documento_origem']
+
+                    # Buscar protocolo na planilha
+                    row_planilha = planilha_por_protocolo.get(protocolo)
+
+                    if row_planilha is None:
+                        # NÃO ENCONTRADO na planilha
+                        resultados['nao_encontrados'].append({
+                            'protocolo_nosso': protocolo,
+                            'tipo_origem': tipo_origem,
+                            'documento_origem': documento_origem,
+                            'mensagem': 'Protocolo não encontrado na planilha do Sendas'
+                        })
+                        continue
+
+                    # Processar o protocolo encontrado
+                    resultado = self._processar_protocolo_encontrado(
+                        protocolo_info,
+                        row_planilha
+                    )
 
                     # Categorizar resultado
-                    if resultado_linha['erro']:
-                        resultados['erros'].append(resultado_linha)
-                    elif not resultado_linha['encontrado']:
-                        resultados['nao_encontrados'].append(resultado_linha)
-                    elif resultado_linha['confirmado']:
-                        resultados['confirmados'].append(resultado_linha)
-                    elif resultado_linha['atualizado']:
-                        resultados['atualizados'].append(resultado_linha)
-                    elif resultado_linha['divergencia']:
-                        resultados['com_divergencia'].append(resultado_linha)
-                    else:
-                        resultados['encontrados'].append(resultado_linha)
+                    if resultado.get('confirmado'):
+                        resultados['confirmados'].append(resultado)
+                    elif resultado.get('divergencia'):
+                        resultados['com_divergencia'].append(resultado)
+                    elif resultado.get('atualizado'):
+                        resultados['atualizados'].append(resultado)
 
                 except Exception as e:
-                    logger.error(f"Erro ao processar linha {idx + 2}: {e}")
+                    logger.error(f"Erro ao processar protocolo {protocolo}: {e}")
                     resultados['erros'].append({
-                        'linha': idx + 2,
+                        'protocolo': protocolo,
                         'erro': str(e)
                     })
 
@@ -102,20 +138,217 @@ class VerificacaoSendasService:
                 'erro': str(e)
             }
 
-    def _processar_linha_verificacao(self, row: pd.Series, numero_linha: int) -> Dict:
+    def _buscar_protocolos_nao_confirmados(self) -> List[Dict]:
         """
-        Processa uma linha da planilha de verificação
-        Implementa rigorosamente o fluxo A da especificação
+        Busca todos os protocolos não confirmados do SISTEMA
+        Retorna lista com informações dos protocolos pendentes de confirmação
+        """
+        protocolos = []
+
+        # 1. Buscar em Separacao (protocolos não confirmados)
+        # Como um protocolo pode ter múltiplos produtos, pegar o primeiro de cada protocolo
+        from app.separacao.models import Separacao
+        from sqlalchemy import distinct
+
+        # Buscar protocolos distintos primeiro
+        # IMPORTANTE: Apenas sincronizado_nf=False (não faturados) devem ser verificados
+        protocolos_distintos = db.session.query(
+            distinct(Separacao.protocolo)
+        ).filter(
+            Separacao.protocolo.isnot(None),
+            Separacao.protocolo != '',
+            Separacao.agendamento_confirmado == False,
+            Separacao.sincronizado_nf == False  # ✅ CRÍTICO: Apenas não faturados
+        ).all()
+
+        # Para cada protocolo, buscar os dados do primeiro registro
+        for (protocolo_valor,) in protocolos_distintos:
+            sep = Separacao.query.filter_by(
+                protocolo=protocolo_valor,
+                agendamento_confirmado=False,
+                sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
+            ).first()
+
+            if sep:
+                protocolos.append({
+                    'protocolo': sep.protocolo,
+                    'tipo_origem': 'separacao',
+                    'documento_origem': sep.separacao_lote_id,
+                    'cnpj': sep.cnpj_cpf,
+                    'cliente': sep.raz_social_red or sep.cnpj_cpf,
+                    'data_agendamento': sep.agendamento,
+                    'cod_uf': sep.cod_uf
+                })
+
+        # 2. Buscar em AgendamentoEntrega (status != 'confirmado')
+        from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
+        agendamentos = db.session.query(
+            AgendamentoEntrega.protocolo_agendamento,
+            AgendamentoEntrega.entrega_id,
+            AgendamentoEntrega.data_agendada,
+            EntregaMonitorada.numero_nf,
+            EntregaMonitorada.cnpj_cliente,
+            EntregaMonitorada.cliente  # Campo correto é 'cliente'
+        ).join(
+            EntregaMonitorada,
+            EntregaMonitorada.id == AgendamentoEntrega.entrega_id
+        ).filter(
+            AgendamentoEntrega.protocolo_agendamento.isnot(None),
+            AgendamentoEntrega.protocolo_agendamento != '',
+            AgendamentoEntrega.status != 'confirmado'
+        ).all()
+
+        for agend in agendamentos:
+            protocolos.append({
+                'protocolo': agend.protocolo_agendamento,
+                'tipo_origem': 'nf',
+                'documento_origem': agend.numero_nf,
+                'entrega_id': agend.entrega_id,
+                'cnpj': agend.cnpj_cliente,
+                'cliente': agend.cliente or agend.cnpj_cliente,  # Campo correto
+                'data_agendamento': agend.data_agendada,
+                'cod_uf': None  # NF não tem cod_uf
+            })
+
+        # 3. Buscar em FilaAgendamentoSendas (status = 'exportado')
+        # Como garantia adicional, caso não esteja nas tabelas acima
+        fila_items = FilaAgendamentoSendas.query.filter(
+            FilaAgendamentoSendas.status == 'exportado'
+        ).all()
+
+        # Adicionar apenas se não estiver já na lista
+        protocolos_existentes = {p['protocolo'] for p in protocolos}
+        for fila in fila_items:
+            if fila.protocolo not in protocolos_existentes:
+                # Buscar cliente baseado no tipo_origem
+                cliente = None
+                if fila.tipo_origem in ['lote', 'separacao'] and fila.documento_origem:
+                    # Tentar buscar cliente da Separacao
+                    sep_cliente = db.session.query(Separacao.raz_social_red).filter(
+                        Separacao.separacao_lote_id == fila.documento_origem
+                    ).first()
+                    if sep_cliente:
+                        cliente = sep_cliente.raz_social_red
+
+                protocolos.append({
+                    'protocolo': fila.protocolo,
+                    'tipo_origem': fila.tipo_origem,
+                    'documento_origem': fila.documento_origem,
+                    'cnpj': fila.cnpj,
+                    'cliente': cliente or fila.cnpj,
+                    'data_agendamento': fila.data_agendamento,
+                    'cod_uf': None
+                })
+
+        logger.info(f"Total de protocolos não confirmados: {len(protocolos)}")
+        return protocolos
+
+    def _processar_protocolo_encontrado(self, protocolo_info: Dict, row_planilha: pd.Series) -> Dict:
+        """
+        Processa um protocolo encontrado na planilha
+
+        Args:
+            protocolo_info: Informações do protocolo do sistema
+            row_planilha: Linha da planilha com dados do Sendas
 
         Returns:
-            Dict com resultado do processamento da linha
+            Dict com resultado do processamento
+        """
+        # Extrair dados da planilha
+        id_sendas = str(row_planilha['ID']).strip() if pd.notna(row_planilha['ID']) else ''
+        status_sendas = str(row_planilha['Status']).strip() if pd.notna(row_planilha['Status']) else ''
+        obs_criacao = str(row_planilha['Obs. Criação']).strip() if pd.notna(row_planilha['Obs. Criação']) else ''
+        data_efetiva = row_planilha.get('Data Efetiva')
+        data_hora_sugerida = row_planilha.get('Data/Hora Sugerida:')
+
+        # Informações do protocolo do sistema
+        protocolo = protocolo_info['protocolo']
+        tipo_origem = protocolo_info['tipo_origem']
+        documento_origem = protocolo_info['documento_origem']
+
+        resultado = {
+            'protocolo_nosso': protocolo,
+            'id_sendas': id_sendas,
+            'status_sendas': status_sendas,
+            'tipo_origem': tipo_origem,
+            'documento_origem': documento_origem,
+            'cnpj': protocolo_info.get('cnpj'),
+            'cliente': protocolo_info.get('cliente'),
+            'confirmado': False,
+            'atualizado': False,
+            'divergencia': False,
+            'mensagem': ''
+        }
+
+        # A.1.1 - Se encontrou por Obs. Criação e tem ID diferente, atualizar protocolo
+        if id_sendas and id_sendas != protocolo and obs_criacao == protocolo:
+            self._atualizar_protocolo_real(protocolo, id_sendas, tipo_origem)
+            resultado['atualizado'] = True
+            resultado['mensagem'] = f'Protocolo atualizado: {protocolo} → {id_sendas}'
+            # Atualizar o protocolo para as próximas operações
+            protocolo = id_sendas
+
+        # A.2 - Verificar Data Efetiva
+        if pd.notna(data_efetiva):
+            # A.2.1 - Data Efetiva presente = agendamento confirmado
+            try:
+                data_agendamento = self._extrair_data(data_efetiva)
+
+                # Confirmar baseado no tipo
+                if tipo_origem in ['lote', 'separacao']:
+                    self._confirmar_agendamento_separacao(
+                        protocolo,
+                        data_agendamento,
+                        protocolo_info.get('cnpj'),
+                        protocolo_info.get('cod_uf')
+                    )
+                elif tipo_origem == 'nf':
+                    self._confirmar_agendamento_entrega(
+                        protocolo,
+                        data_agendamento,
+                        protocolo_info.get('entrega_id')
+                    )
+
+                resultado['confirmado'] = True
+                resultado['data_confirmada'] = data_agendamento.strftime('%d/%m/%Y')
+                resultado['mensagem'] = f'Agendamento confirmado para {data_agendamento}'
+
+            except Exception as e:
+                resultado['erro'] = f'Erro ao processar Data Efetiva: {e}'
+
+        else:
+            # A.2.2 - Sem Data Efetiva, verificar divergência na Data/Hora Sugerida
+            if pd.notna(data_hora_sugerida):
+                try:
+                    data_que_solicitamos = self._extrair_data(data_hora_sugerida)
+                    data_registrada = protocolo_info.get('data_agendamento')
+
+                    if data_registrada and data_que_solicitamos != data_registrada:
+                        resultado['divergencia'] = True
+                        resultado['data_sugerida'] = data_que_solicitamos.strftime('%d/%m/%Y')
+                        resultado['data_solicitada'] = data_registrada.strftime('%d/%m/%Y') if data_registrada else None
+                        resultado['mensagem'] = 'Data solicitada diverge da registrada no sistema'
+                    else:
+                        resultado['mensagem'] = 'Agendamento pendente, aguardando confirmação'
+
+                except Exception as e:
+                    resultado['erro'] = f'Erro ao processar Data/Hora Sugerida: {e}'
+            else:
+                resultado['mensagem'] = 'Agendamento sem data no retorno do Sendas'
+
+        return resultado
+
+    def _OLD_processar_linha_verificacao(self, row: pd.Series, numero_linha: int) -> Dict:
+        """
+        OBSOLETO - Mantido temporariamente para referência
+        Processa uma linha da planilha de verificação
         """
         # Extrair dados da linha
         id_sendas = str(row['ID']).strip() if pd.notna(row['ID']) else ''
         status_sendas = str(row['Status']).strip() if pd.notna(row['Status']) else ''
         obs_criacao = str(row['Obs. Criação']).strip() if pd.notna(row['Obs. Criação']) else ''
         data_efetiva = row.get('Data Efetiva')
-        data_hora_sugerida = row.get('Data/Hora Sugerida:')  # Com dois pontos conforme spec
+        data_hora_sugerida = row.get('Data/Hora Sugerida:')
 
         resultado = {
             'linha': numero_linha,
@@ -185,6 +418,7 @@ class VerificacaoSendasService:
                         fila_item.cnpj
                     )
                     resultado['confirmado'] = True
+                    resultado['data_confirmada'] = data_agendamento.strftime('%d/%m/%Y')
                     resultado['mensagem'] = f'Agendamento confirmado para {data_agendamento}'
 
                 elif fila_item.tipo_origem == 'nf':
@@ -194,6 +428,7 @@ class VerificacaoSendasService:
                         data_agendamento
                     )
                     resultado['confirmado'] = True
+                    resultado['data_confirmada'] = data_agendamento.strftime('%d/%m/%Y')
                     resultado['mensagem'] = f'Agendamento de NF confirmado para {data_agendamento}'
 
             except Exception as e:
@@ -203,20 +438,24 @@ class VerificacaoSendasService:
             # A.2.2 - Caso não encontre Data Efetiva, verificar Data/Hora Sugerida
             if pd.notna(data_hora_sugerida):
                 try:
-                    data_sugerida = self._extrair_data(data_hora_sugerida)
+                    # Data/Hora Sugerida = data que NÓS solicitamos ao Sendas
+                    data_que_solicitamos = self._extrair_data(data_hora_sugerida)
 
-                    # Comparar com data previamente registrada
-                    divergencia = self._verificar_divergencia_data(
+                    # Buscar data que está registrada em nosso sistema
+                    data_registrada_sistema = self._buscar_data_registrada(
                         protocolo_encontrado,
-                        data_sugerida,
                         fila_item.tipo_origem
                     )
 
-                    if divergencia:
+                    # Verificar se há divergência entre o que solicitamos e o que está registrado
+                    if data_registrada_sistema and data_que_solicitamos != data_registrada_sistema:
                         resultado['divergencia'] = True
-                        resultado['mensagem'] = f'Data sugerida ({data_sugerida}) diverge da solicitada'
+                        resultado['mensagem'] = f'Data solicitada ao Sendas ({data_que_solicitamos}) diverge da registrada no sistema ({data_registrada_sistema})'
+                        # Adicionar campos para exibição no frontend
+                        resultado['data_sugerida'] = data_que_solicitamos.strftime('%d/%m/%Y')  # Data que solicitamos ao Sendas
+                        resultado['data_solicitada'] = data_registrada_sistema.strftime('%d/%m/%Y')  # Data registrada em nosso sistema
                     else:
-                        resultado['mensagem'] = 'Agendamento pendente, aguardando confirmação'
+                        resultado['mensagem'] = 'Agendamento pendente, aguardando confirmação do Sendas'
 
                 except Exception as e:
                     resultado['erro'] = f'Erro ao processar Data/Hora Sugerida: {e}'
@@ -241,6 +480,9 @@ class VerificacaoSendasService:
         """
         Atualiza o protocolo para o ID real do Sendas em todos os lugares
         """
+        from app.separacao.models import Separacao
+        from app.monitoramento.models import AgendamentoEntrega
+
         # Atualizar em FilaAgendamentoSendas
         FilaAgendamentoSendas.query.filter_by(protocolo=protocolo_nosso).update({
             'protocolo': id_sendas
@@ -248,8 +490,11 @@ class VerificacaoSendasService:
 
         # Atualizar baseado no tipo de origem
         if tipo_origem in ['lote', 'separacao']:
-            # Atualizar Separacao
-            Separacao.query.filter_by(protocolo=protocolo_nosso).update({
+            # Atualizar Separacao (apenas não faturados)
+            Separacao.query.filter_by(
+                protocolo=protocolo_nosso,
+                sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
+            ).update({
                 'protocolo': id_sendas
             })
         elif tipo_origem == 'nf':
@@ -260,50 +505,93 @@ class VerificacaoSendasService:
 
         logger.info(f"Protocolo atualizado: {protocolo_nosso} → {id_sendas}")
 
-    def _confirmar_agendamento_separacao(self, protocolo: str, data_agendamento: date, cnpj: str):
+    def _confirmar_agendamento_separacao(self, protocolo: str, data_agendamento: date, cnpj: str, cod_uf: str):
         """
         Confirma agendamento em Separacao (Fluxos 1 e 2)
         Implementa A.2.1 e A.2.1.1 da especificação
         """
-        # Buscar todas as separações com este protocolo
-        separacoes = Separacao.query.filter_by(protocolo=protocolo).all()
+        from app.separacao.models import Separacao
+
+        # Buscar todas as separações NÃO FATURADAS com este protocolo
+        # IMPORTANTE: Apenas atualizar sincronizado_nf=False
+        separacoes = Separacao.query.filter_by(
+            protocolo=protocolo,
+            sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
+        ).all()
 
         for sep in separacoes:
             sep.agendamento = data_agendamento
             sep.agendamento_confirmado = True
 
             # A.2.1.1 - Para SP, calcular expedição = Data Efetiva - 1 dia útil
-            if sep.cod_uf == 'SP':
+            # Usar cod_uf do registro ou do parâmetro
+            uf = sep.cod_uf or cod_uf
+            if uf == 'SP':
                 sep.expedicao = self._subtrair_dia_util(data_agendamento)
             # A.2.1.2 - Se não é SP, ignorar campo expedição
 
         logger.info(f"Confirmadas {len(separacoes)} separações com protocolo {protocolo}")
 
-    def _confirmar_agendamento_entrega(self, protocolo: str, data_agendamento: date):
+    def _confirmar_agendamento_entrega(self, protocolo: str, data_agendamento: date, entrega_id: int = None):
         """
         Confirma agendamento em AgendamentoEntrega (Fluxo 3)
+        Atualiza também EntregaMonitorada.reagendar para False
         """
+        from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
+
+        # Buscar agendamentos com este protocolo
         agendamentos = AgendamentoEntrega.query.filter_by(
             protocolo_agendamento=protocolo
         ).all()
 
+        entregas_atualizadas = set()
+
         for agend in agendamentos:
             agend.data_agendada = data_agendamento
             agend.status = 'confirmado'
+            entregas_atualizadas.add(agend.entrega_id)
+
+        # Atualizar EntregaMonitorada.reagendar para False
+        if entregas_atualizadas:
+            for entrega_id in entregas_atualizadas:
+                entrega = EntregaMonitorada.query.get(entrega_id)
+                if entrega:
+                    entrega.reagendar = False
+                    # Também atualizar data_agenda se necessário
+                    entrega.data_agenda = data_agendamento
+                    logger.info(f"EntregaMonitorada {entrega_id} atualizada: reagendar=False, data_agenda={data_agendamento}")
 
         logger.info(f"Confirmados {len(agendamentos)} agendamentos de entrega com protocolo {protocolo}")
 
-    def _verificar_divergencia_data(self, protocolo: str, data_sugerida: date, tipo_origem: str) -> bool:
+    def _buscar_data_registrada(self, protocolo: str, tipo_origem: str) -> Optional[date]:
         """
-        Verifica se há divergência entre data sugerida e data solicitada
+        Busca a data de agendamento registrada em nosso sistema
+        Retorna a data que está gravada localmente para comparação
         """
-        # Buscar data originalmente solicitada
+        from app.separacao.models import Separacao
+        from app.monitoramento.models import AgendamentoEntrega
+
+        # Primeiro tentar buscar na FilaAgendamentoSendas
         fila_item = FilaAgendamentoSendas.query.filter_by(protocolo=protocolo).first()
-
         if fila_item and fila_item.data_agendamento:
-            return fila_item.data_agendamento != data_sugerida
+            return fila_item.data_agendamento
 
-        return False
+        # Se não encontrou na fila, buscar no local específico do tipo
+        if tipo_origem in ['lote', 'separacao']:
+            # Buscar em Separacao (apenas não faturados)
+            separacao = Separacao.query.filter_by(
+                protocolo=protocolo,
+                sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
+            ).first()
+            if separacao and separacao.agendamento:
+                return separacao.agendamento
+        elif tipo_origem == 'nf':
+            # Buscar em AgendamentoEntrega
+            agendamento = AgendamentoEntrega.query.filter_by(protocolo_agendamento=protocolo).first()
+            if agendamento and agendamento.data_agendada:
+                return agendamento.data_agendada
+
+        return None
 
     def _subtrair_dia_util(self, data: date) -> date:
         """
@@ -363,6 +651,9 @@ class VerificacaoSendasService:
         Atualiza datas quando há divergência e usuário confirma
         Implementa A.2.2.1 da especificação
         """
+        from app.separacao.models import Separacao
+        from app.monitoramento.models import AgendamentoEntrega
+
         try:
             contador = 0
 
@@ -373,7 +664,11 @@ class VerificacaoSendasService:
 
                 # Atualizar baseado no tipo
                 if tipo_origem in ['lote', 'separacao']:
-                    resultado = Separacao.query.filter_by(protocolo=protocolo).update({
+                    # Atualizar apenas não faturados
+                    resultado = Separacao.query.filter_by(
+                        protocolo=protocolo,
+                        sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
+                    ).update({
                         'agendamento': data_nova
                     })
                 elif tipo_origem == 'nf':

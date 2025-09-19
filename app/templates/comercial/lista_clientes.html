@@ -1,0 +1,633 @@
+{% extends "base.html" %}
+
+{% block title %}Acompanhamento de Clientes{% endblock %}
+
+{% block content %}
+<style>
+    /* ChatGPT Dark Theme */
+    .comercial-container {
+        background-color: #202123;
+        min-height: 100vh;
+        margin-top: -1.5rem;
+        padding-top: 2rem;
+        color: #ececf1;
+    }
+
+    /* Breadcrumb Dark */
+    .breadcrumb {
+        background-color: #343541;
+        border: 1px solid #444654;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+    }
+
+    .breadcrumb-item a {
+        color: #5865f2;
+        text-decoration: none;
+    }
+
+    .breadcrumb-item a:hover {
+        color: #7289da;
+    }
+
+    .breadcrumb-item.active {
+        color: #c5c5d2;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        color: #565869;
+    }
+
+    /* Botões */
+    .btn-dark-primary {
+        background-color: #5865f2 !important;
+        border: none;
+        color: white !important;
+        padding: 0.5rem 1.5rem;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .btn-dark-primary:hover {
+        background-color: #4752c4 !important;
+        transform: translateY(-1px);
+    }
+
+    .btn-dark-primary.active {
+        background-color: #4752c4 !important;
+        box-shadow: 0 2px 8px rgba(87, 101, 242, 0.3);
+    }
+
+    .btn-dark-secondary {
+        background-color: transparent !important;
+        border: 1px solid #444654;
+        color: #c5c5d2 !important;
+        padding: 0.5rem 1.5rem;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .btn-dark-secondary:hover {
+        background-color: #40414f !important;
+        border-color: #565869;
+        color: #ececf1 !important;
+    }
+
+    .btn-dark-secondary.active {
+        background-color: #40414f !important;
+        border-color: #565869;
+        color: #ececf1 !important;
+    }
+
+    /* Badges */
+    .badge {
+        padding: 0.35rem 0.65rem;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+
+    .badge-info {
+        background-color: #5865f2;
+        color: white;
+    }
+
+    .badge-success {
+        background-color: #43b581;
+        color: white;
+    }
+
+    .badge-secondary {
+        background-color: #4f545c;
+        color: #c5c5d2;
+    }
+
+    .badge-warning {
+        background-color: #faa61a;
+        color: #202123;
+    }
+
+    .badge-primary {
+        background-color: #5865f2;
+        color: white;
+    }
+
+    /* Tabela Dark */
+    .table-dark-custom {
+        background-color: #343541;
+        border: 1px solid #444654;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .table-dark-custom table {
+        margin-bottom: 0;
+        background-color: #343541 !important;
+    }
+
+    .table-dark-custom thead {
+        background-color: #40414f !important;
+        border-bottom: 2px solid #565869;
+    }
+
+    .table-dark-custom thead th {
+        background-color: #40414f !important;
+        color: #c5c5d2 !important;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+        border: none !important;
+    }
+
+    .table-dark-custom tbody {
+        background-color: #343541 !important;
+    }
+
+    .table-dark-custom tbody tr {
+        background-color: #343541 !important;
+        border-bottom: 1px solid #444654;
+        transition: all 0.2s ease;
+    }
+
+    .table-dark-custom tbody tr:hover {
+        background-color: #40414f !important;
+    }
+
+    .table-dark-custom tbody td {
+        background-color: transparent !important;
+        color: #ececf1 !important;
+        padding: 0.75rem 1rem;
+        border: none !important;
+        vertical-align: middle;
+    }
+
+    /* Force dark theme on table */
+    #tabelaClientes {
+        background-color: #343541 !important;
+        color: #ececf1 !important;
+    }
+
+    #tabelaClientes_wrapper {
+        background-color: transparent !important;
+    }
+
+    .table {
+        --bs-table-bg: transparent !important;
+        background-color: #343541 !important;
+        color: #ececf1 !important;
+    }
+
+    .table > :not(caption) > * > * {
+        background-color: transparent !important;
+        color: inherit !important;
+        border-bottom-width: 1px;
+        border-bottom-color: #444654 !important;
+    }
+
+    /* DataTable customization */
+    .dataTables_wrapper {
+        color: #ececf1;
+    }
+
+    .dataTables_length label,
+    .dataTables_filter label {
+        color: #c5c5d2;
+    }
+
+    .dataTables_length select,
+    .dataTables_filter input {
+        background-color: #40414f !important;
+        border: 1px solid #565869 !important;
+        color: #ececf1 !important;
+        border-radius: 6px;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .dataTables_paginate .paginate_button {
+        background-color: #40414f;
+        border: 1px solid #444654;
+        color: #c5c5d2 !important;
+        border-radius: 6px;
+        margin: 0 2px;
+    }
+
+    .dataTables_paginate .paginate_button:hover {
+        background-color: #565869 !important;
+        border-color: #565869 !important;
+        color: #ececf1 !important;
+    }
+
+    .dataTables_paginate .paginate_button.current {
+        background-color: #5865f2 !important;
+        border-color: #5865f2 !important;
+        color: white !important;
+    }
+
+    .dataTables_info {
+        color: #8e8ea0;
+    }
+
+    /* Modal Dark */
+    .modal-content {
+        background-color: #343541;
+        border: 1px solid #444654;
+        color: #ececf1;
+    }
+
+    .modal-header {
+        background-color: #40414f;
+        border-bottom: 1px solid #565869;
+    }
+
+    .modal-footer {
+        background-color: #40414f;
+        border-top: 1px solid #565869;
+    }
+
+    .modal-title {
+        color: #ececf1;
+    }
+
+    .btn-close {
+        filter: invert(1);
+    }
+
+    /* Títulos e textos */
+    h2, h4, h6 {
+        color: #ececf1;
+    }
+
+    .text-muted {
+        color: #8e8ea0 !important;
+    }
+
+    .text-monospace {
+        font-family: 'Monaco', 'Menlo', monospace;
+        color: #c5c5d2;
+    }
+
+    hr {
+        border-color: #444654;
+        opacity: 0.5;
+    }
+
+    /* Alertas */
+    .alert-dark-info {
+        background-color: #343541;
+        border: 1px solid #444654;
+        color: #c5c5d2;
+        border-radius: 8px;
+    }
+
+    /* Valores e status */
+    .text-success {
+        color: #43b581 !important;
+    }
+
+    /* Ícones */
+    .icon-primary { color: #7289da; }
+    .icon-success { color: #43b581; }
+    .icon-warning { color: #faa61a; }
+
+    /* Botão de ação */
+    .btn-action {
+        background-color: #40414f;
+        border: 1px solid #565869;
+        color: #c5c5d2;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .btn-action:hover {
+        background-color: #5865f2;
+        border-color: #5865f2;
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    /* Lista no modal */
+    .list-unstyled li {
+        padding: 0.25rem 0;
+        color: #ececf1;
+    }
+
+    .list-group {
+        background-color: #343541;
+        border-radius: 8px;
+    }
+
+    .list-group-item {
+        background-color: #40414f;
+        border: 1px solid #444654;
+        color: #ececf1;
+        margin-bottom: 0.25rem;
+    }
+
+    /* Override Bootstrap table styles completely */
+    .table-hover tbody tr:hover {
+        background-color: #40414f !important;
+        color: #ececf1 !important;
+    }
+
+    .table-hover tbody tr:hover td {
+        background-color: transparent !important;
+    }
+
+    .table-striped > tbody > tr:nth-of-type(odd) {
+        background-color: #343541 !important;
+    }
+
+    .table-striped > tbody > tr:nth-of-type(even) {
+        background-color: #2d2e3a !important;
+    }
+
+    /* Remove any white backgrounds from Bootstrap */
+    .bg-white,
+    .bg-light {
+        background-color: #343541 !important;
+    }
+
+    /* Fix DataTables specific backgrounds */
+    div.dataTables_scrollBody {
+        background-color: #343541 !important;
+    }
+
+    .dataTables_scrollHead,
+    .dataTables_scrollHead table,
+    .dataTables_scrollHead thead {
+        background-color: #40414f !important;
+    }
+
+    .dataTables_scrollFoot,
+    .dataTables_scrollFoot table,
+    .dataTables_scrollFoot tfoot {
+        background-color: #40414f !important;
+    }
+
+    /* Override any inline styles */
+    [style*="background-color: white"],
+    [style*="background-color:#fff"],
+    [style*="background-color: #fff"],
+    [style*="background-color:#ffffff"],
+    [style*="background-color: #ffffff"] {
+        background-color: #343541 !important;
+    }
+</style>
+
+<div class="comercial-container">
+    <div class="container-fluid">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('comercial.dashboard_diretoria') }}">
+                        <i class="fas fa-home"></i> Diretoria
+                    </a>
+                </li>
+                {% if equipe_filtro %}
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('comercial.vendedores_equipe', equipe_nome=equipe_filtro) }}">{{ equipe_filtro }}</a>
+                </li>
+                {% endif %}
+                {% if vendedor_filtro %}
+                <li class="breadcrumb-item active">{{ vendedor_filtro }}</li>
+                {% endif %}
+                <li class="breadcrumb-item active" aria-current="page">Clientes</li>
+            </ol>
+        </nav>
+
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2>
+                    <i class="fas fa-building icon-success"></i> Acompanhamento de Clientes
+                    {% if vendedor_filtro %}
+                        - {{ vendedor_filtro }}
+                    {% elif equipe_filtro %}
+                        - Equipe {{ equipe_filtro }}
+                    {% endif %}
+                </h2>
+                <hr>
+            </div>
+        </div>
+
+        <!-- Filtros de Posição -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="btn-group" role="group">
+                    <a href="?posicao=em_aberto{% if equipe_filtro %}&equipe={{ equipe_filtro }}{% endif %}{% if vendedor_filtro %}&vendedor={{ vendedor_filtro }}{% endif %}"
+                       class="btn {% if filtro_posicao == 'em_aberto' %}btn-dark-primary active{% else %}btn-dark-secondary{% endif %}">
+                        <i class="fas fa-clock"></i> Em Aberto
+                    </a>
+                    <a href="?posicao=todos{% if equipe_filtro %}&equipe={{ equipe_filtro }}{% endif %}{% if vendedor_filtro %}&vendedor={{ vendedor_filtro }}{% endif %}"
+                       class="btn {% if filtro_posicao == 'todos' %}btn-dark-primary active{% else %}btn-dark-secondary{% endif %}">
+                        <i class="fas fa-list"></i> Todos
+                    </a>
+                </div>
+
+                <span class="ms-3 badge badge-info">
+                    Total: {{ clientes|length }} cliente(s)
+                </span>
+                <span class="ms-2 badge badge-success">
+                    Valor Total: R$ {{ "{:,.2f}".format(clientes|sum(attribute='valor_em_aberto')).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Tabela de Clientes -->
+        <div class="row">
+            <div class="col-12">
+                <div class="table-responsive table-dark-custom">
+                    <table class="table table-hover" id="tabelaClientes">
+                        <thead>
+                            <tr>
+                                <th>CNPJ/CPF</th>
+                                <th>Razão Social</th>
+                                <th>Nome Fantasia</th>
+                                <th>UF</th>
+                                <th>Município</th>
+                                <th>Vendedor</th>
+                                <th>Equipe</th>
+                                <th>Agendamento</th>
+                                <th class="text-center">Pedidos</th>
+                                <th class="text-end">{% if filtro_posicao == 'em_aberto' %}Valor Em Aberto{% else %}Valor Total{% endif %}</th>
+                                <th class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cliente in clientes %}
+                            <tr>
+                                <td>
+                                    <small class="text-monospace">{{ cliente.cnpj_cpf }}</small>
+                                </td>
+                                <td>
+                                    {% if cliente.raz_social %}
+                                        <span title="{{ cliente.raz_social }}">
+                                            {{ cliente.raz_social[:30] }}{% if cliente.raz_social|length > 30 %}...{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cliente.raz_social_red %}
+                                        {{ cliente.raz_social_red }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if cliente.estado %}
+                                        <span class="badge badge-secondary">{{ cliente.estado }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cliente.municipio %}
+                                        {{ cliente.municipio }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cliente.vendedor %}
+                                        {{ cliente.vendedor }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cliente.equipe_vendas %}
+                                        <span class="badge badge-info">{{ cliente.equipe_vendas }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cliente.forma_agendamento %}
+                                        <span class="badge badge-warning">{{ cliente.forma_agendamento }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge badge-primary">{{ cliente.total_pedidos }}</span>
+                                </td>
+                                <td class="text-end">
+                                    <strong class="{% if cliente.valor_em_aberto > 0 %}text-success{% else %}text-muted{% endif %}">
+                                        R$ {{ "{:,.2f}".format(cliente.valor_em_aberto).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    </strong>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-action"
+                                            onclick="verDetalhes('{{ cliente.cnpj_cpf }}')"
+                                            title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% if not clientes %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-dark-info">
+                    <i class="fas fa-info-circle"></i> Nenhum cliente encontrado com os filtros selecionados.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes do Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detalhesContent">
+                <!-- Conteúdo será carregado via AJAX -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-dark-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Inicializar DataTable
+    $(document).ready(function() {
+        $('#tabelaClientes').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
+            },
+            pageLength: 25,
+            order: [[9, 'desc']], // Ordenar por valor
+            columnDefs: [
+                { orderable: false, targets: [10] } // Desabilitar ordenação na coluna de ações
+            ]
+        });
+    });
+
+    // Função para ver detalhes do cliente
+    function verDetalhes(cnpj) {
+        $('#detalhesContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>');
+        $('#modalDetalhes').modal('show');
+
+        // Carregar detalhes via AJAX
+        $.ajax({
+            url: '/comercial/api/cliente/' + cnpj + '/detalhes',
+            data: { posicao: '{{ filtro_posicao }}' },
+            success: function(data) {
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Informações Básicas</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>CNPJ/CPF:</strong> ${data.cnpj_cpf}</li>
+                                <li><strong>Razão Social:</strong> ${data.raz_social || '-'}</li>
+                                <li><strong>Nome Fantasia:</strong> ${data.raz_social_red || '-'}</li>
+                                <li><strong>Localização:</strong> ${data.municipio || '-'} / ${data.estado || '-'}</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Informações Comerciais</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>Vendedor:</strong> ${data.vendedor || '-'}</li>
+                                <li><strong>Equipe:</strong> ${data.equipe_vendas || '-'}</li>
+                                <li><strong>Forma Agendamento:</strong> ${data.forma_agendamento || '-'}</li>
+                                <li><strong>Valor em Aberto:</strong> R$ ${data.valor_em_aberto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6>Pedidos (${data.total_pedidos})</h6>
+                    <div class="list-group">
+                `;
+
+                data.pedidos.forEach(function(pedido) {
+                    html += `<div class="list-group-item">${pedido}</div>`;
+                });
+
+                html += '</div>';
+
+                $('#detalhesContent').html(html);
+            },
+            error: function() {
+                $('#detalhesContent').html('<div class="alert alert-danger">Erro ao carregar detalhes.</div>');
+            }
+        });
+    }
+</script>
+{% endblock %}

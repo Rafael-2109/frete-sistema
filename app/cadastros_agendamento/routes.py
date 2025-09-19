@@ -229,7 +229,7 @@ def importar_contatos():
                     contador_importados += 1
                     
                 except Exception as e:
-                    print(f"Erro ao processar linha {index + 1}: {e}")
+                    print(f"Erro ao processar linha {index + 1}: {e}") # type: ignore
                     contador_erros += 1
                     continue
 
@@ -310,7 +310,7 @@ def exportar_contatos():
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             worksheet.column_dimensions[column_letter].width = adjusted_width

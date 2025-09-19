@@ -1,0 +1,1 @@
+# Este arquivo pode ser usado futuramente para rotas específicas de gerentes de equipe
