@@ -1,18 +1,14 @@
 """
 Service para agregação e processamento de dados de clientes
 """
-from sqlalchemy import distinct, func, or_, and_
-from sqlalchemy.orm import aliased
+from sqlalchemy import distinct, func, or_
 from app import db
 from app.carteira.models import CarteiraPrincipal
-from app.separacao.models import Separacao
 from app.faturamento.models import FaturamentoProduto
 from app.monitoramento.models import EntregaMonitorada
 from app.cadastros_agendamento.models import ContatoAgendamento
-from app.odoo.utils.pedido_cliente_utils import buscar_pedido_cliente_odoo
 from decimal import Decimal
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import List, Dict, Any
 
 
 class ClienteService:

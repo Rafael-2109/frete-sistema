@@ -1200,13 +1200,26 @@ def fechar_frete():
                 
                 protocolo_formatado = formatar_protocolo(pedido.protocolo)
                 data_formatada = formatar_data_brasileira(pedido.agendamento)
-                
+
+                # ✅ BUSCAR numero_nf da Separacao correspondente
+                nota_fiscal = None
+                if pedido.separacao_lote_id and pedido.num_pedido:
+                    separacao_com_nf = Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        num_pedido=pedido.num_pedido
+                    ).filter(Separacao.numero_nf.isnot(None)).first()
+
+                    if separacao_com_nf:
+                        nota_fiscal = separacao_com_nf.numero_nf
+                        print(f"[DEBUG] 📄 NF encontrada para pedido {pedido.num_pedido}: {nota_fiscal}")
+
                 item = EmbarqueItem(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
                     cnpj_cliente=pedido.cnpj_cpf,  # ✅ CORREÇÃO: Usa CNPJ do banco, não do frontend
                     cliente=pedido.raz_social_red,
                     pedido=pedido.num_pedido,
+                    nota_fiscal=nota_fiscal,  # ✅ PREENCHE com numero_nf da Separacao se houver
                     peso=pedido.peso_total,
                     valor=pedido.valor_saldo_total,
                     pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
@@ -1464,17 +1477,30 @@ def fechar_frete_grupo():
             if not cidade_formatada:
                 # Fallback: normalização de nome
                 cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
-                    pedido.nome_cidade, 
+                    pedido.nome_cidade,
                     getattr(pedido, 'rota', None)
                 ) or pedido.nome_cidade
                 print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
-            
+
+            # ✅ BUSCAR numero_nf da Separacao correspondente
+            nota_fiscal = None
+            if pedido.separacao_lote_id and pedido.num_pedido:
+                separacao_com_nf = Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    num_pedido=pedido.num_pedido
+                ).filter(Separacao.numero_nf.isnot(None)).first()
+
+                if separacao_com_nf:
+                    nota_fiscal = separacao_com_nf.numero_nf
+                    print(f"[DEBUG] 📄 NF encontrada para pedido {pedido.num_pedido}: {nota_fiscal}")
+
             item = EmbarqueItem(
                 embarque_id=embarque.id,
                 separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
+                nota_fiscal=nota_fiscal,  # ✅ PREENCHE com numero_nf da Separacao se houver
                 peso=pedido.peso_total,
                 valor=pedido.valor_saldo_total,
                 pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
@@ -2913,7 +2939,19 @@ def incluir_em_embarque():
             # ✅ CORREÇÃO: Formatar protocolo e data corretamente
             protocolo_formatado = formatar_protocolo(getattr(pedido, 'protocolo', None))
             data_formatada = formatar_data_brasileira(getattr(pedido, 'agendamento', None))
-            
+
+            # ✅ BUSCAR numero_nf da Separacao correspondente
+            nota_fiscal = ''
+            if pedido.separacao_lote_id and pedido.num_pedido:
+                separacao_com_nf = Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    num_pedido=pedido.num_pedido
+                ).filter(Separacao.numero_nf.isnot(None)).first()
+
+                if separacao_com_nf:
+                    nota_fiscal = separacao_com_nf.numero_nf
+                    print(f"[DEBUG] 📄 NF encontrada para pedido {pedido.num_pedido}: {nota_fiscal}")
+
             # Criar novo item do embarque
             novo_item = EmbarqueItem(
                 embarque_id=embarque.id,
@@ -2923,7 +2961,7 @@ def incluir_em_embarque():
                 pedido=pedido.num_pedido,
                 protocolo_agendamento=protocolo_formatado,
                 data_agenda=data_formatada,
-                nota_fiscal='',  # Será preenchida posteriormente
+                nota_fiscal=nota_fiscal,  # ✅ PREENCHE com numero_nf da Separacao se houver
                 volumes=getattr(pedido, 'volumes', 0),
                 peso=pedido.peso_total,
                 valor=pedido.valor_saldo_total,

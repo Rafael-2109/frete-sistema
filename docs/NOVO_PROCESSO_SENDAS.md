@@ -158,3 +158,30 @@ Releia o documento docs/NOVO_PROCESSO_SENDAS.md para se recordar as informaçõe
 Outro caso é quando um pedido ainda não está disponivel para agendar mas agendamos através de outro pedido e "tentamos" casar as qtds e produtos mas o Sendas é tolerante.
 A regra é: tentamos fazer casado mas o Sendas aceita divergencias de pedido e qtd de produto, apenas obviamente não aceita de filial (agendei em uma filial e fui entregar em outra).
 Por esse motivo o agendamento possui esses "fallbacks" de qtd, produto e até pedido, mas por via de regra, se for certo é melhor.
+
+
+SELECT
+    'SEPARACAO' as origem,
+    s.id,
+    s.separacao_lote_id,
+    s.num_pedido,
+    s.cod_produto,
+    s.qtd_saldo as quantidade,
+    s.cnpj_cpf,
+    s.raz_social_red as cliente,
+    s.expedicao,
+    s.agendamento,
+    s.sincronizado_nf,
+    s.status,
+    s.numero_nf,
+    CASE
+        WHEN s.expedicao < CURRENT_DATE THEN 'ATRASADO'
+        WHEN s.expedicao = CURRENT_DATE THEN 'HOJE'
+        ELSE 'FUTURO'
+    END as situacao_data,
+    s.criado_em,
+    s.observ_ped_1 as observacoes
+FROM separacao s
+WHERE s.cod_produto = '4040163'
+    AND s.sincronizado_nf = FALSE  -- Apenas não faturadas (aparecem na projeção)
+ORDER BY s.expedicao, s.num_pedido;

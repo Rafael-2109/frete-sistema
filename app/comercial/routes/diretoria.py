@@ -5,10 +5,14 @@ from flask import render_template, jsonify, request
 from flask_login import login_required
 from app.comercial import comercial_bp
 from app.comercial.services.cliente_service import ClienteService
+from app.comercial.services.pedido_service import PedidoService
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
 from sqlalchemy import distinct
 from app import db
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @comercial_bp.route('/')
@@ -171,11 +175,12 @@ def lista_clientes():
                          vendedor_filtro=vendedor_filtro)
 
 
-@comercial_bp.route('/api/cliente/<string:cnpj>/detalhes')
+@comercial_bp.route('/api/cliente/<path:cnpj>/detalhes')
 @login_required
 def detalhes_cliente_api(cnpj):
     """
     API para obter detalhes de um cliente específico
+    Usa <path:cnpj> para aceitar CNPJs com barra
     """
     filtro_posicao = request.args.get('posicao', 'em_aberto')
 
@@ -185,3 +190,52 @@ def detalhes_cliente_api(cnpj):
     dados['valor_em_aberto'] = float(dados['valor_em_aberto'])
 
     return jsonify(dados)
+
+
+@comercial_bp.route('/api/cliente/<path:cnpj>/pedidos')
+@login_required
+def pedidos_cliente_api(cnpj):
+    """
+    API para obter lista detalhada de pedidos de um cliente com paginação
+    Usa <path:cnpj> para aceitar CNPJs com barra
+    """
+    try:
+        filtro_posicao = request.args.get('posicao', 'em_aberto')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+
+        # Limitar per_page para evitar sobrecarga
+        if per_page > 100:
+            per_page = 100
+
+        # Obter dados paginados dos pedidos
+        resultado = PedidoService.obter_detalhes_pedidos_cliente(
+            cnpj=cnpj,
+            filtro_posicao=filtro_posicao,
+            page=page,
+            per_page=per_page
+        )
+
+        # Converter Decimals para float para JSON
+        for pedido in resultado['pedidos']:
+            pedido['valor_total_pedido'] = float(pedido['valor_total_pedido'])
+            pedido['valor_total_faturado'] = float(pedido['valor_total_faturado'])
+            pedido['valor_entregue'] = float(pedido['valor_entregue'])
+            pedido['saldo_carteira'] = float(pedido['saldo_carteira'])
+
+            # Formatar data para string
+            if pedido['data_pedido']:
+                pedido['data_pedido'] = pedido['data_pedido'].strftime('%d/%m/%Y')
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro na API de pedidos do cliente {cnpj}: {e}")
+        return jsonify({
+            'error': 'Erro ao buscar pedidos',
+            'pedidos': [],
+            'total': 0,
+            'page': 1,
+            'per_page': 20,
+            'total_pages': 0
+        }), 500

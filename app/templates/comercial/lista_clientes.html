@@ -518,9 +518,9 @@
                                 </td>
                                 <td class="text-center">
                                     <button class="btn btn-sm btn-action"
-                                            onclick="verDetalhes('{{ cliente.cnpj_cpf }}')"
-                                            title="Ver detalhes">
-                                        <i class="fas fa-eye"></i>
+                                            onclick="verPedidos('{{ cliente.cnpj_cpf }}', '{{ cliente.raz_social or cliente.raz_social_red or cliente.cnpj_cpf }}')"
+                                            title="Ver pedidos">
+                                        <i class="fas fa-list-alt"></i> Pedidos
                                     </button>
                                 </td>
                             </tr>
@@ -543,18 +543,28 @@
     </div>
 </div>
 
-<!-- Modal de Detalhes -->
-<div class="modal fade" id="modalDetalhes" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<!-- Modal de Pedidos -->
+<div class="modal fade" id="modalPedidos" tabindex="-1">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Detalhes do Cliente</h5>
+                <h5 class="modal-title" id="modalPedidosTitle">Pedidos do Cliente</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="detalhesContent">
+            <div class="modal-body" id="pedidosContent" style="max-height: 70vh; overflow-y: auto;">
                 <!-- Conteúdo será carregado via AJAX -->
+                <div class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Carregando pedidos...</p>
+                </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer justify-content-between">
+                <div id="paginationInfo">
+                    <!-- Info de paginação será carregada aqui -->
+                </div>
+                <div id="paginationControls">
+                    <!-- Controles de paginação serão carregados aqui -->
+                </div>
                 <button type="button" class="btn btn-dark-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
@@ -562,6 +572,11 @@
 </div>
 
 <script>
+    // Variáveis globais para controle de paginação
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentCnpj = '';
+
     // Inicializar DataTable
     $(document).ready(function() {
         $('#tabelaClientes').DataTable({
@@ -569,60 +584,253 @@
                 url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
             },
             pageLength: 25,
-            order: [[9, 'desc']], // Ordenar por valor
+            order: [[7, 'desc']], // Ordenar por valor
             columnDefs: [
-                { orderable: false, targets: [10] } // Desabilitar ordenação na coluna de ações
+                { orderable: false, targets: [8] } // Desabilitar ordenação na coluna de ações
             ]
         });
     });
 
-    // Função para ver detalhes do cliente
-    function verDetalhes(cnpj) {
-        $('#detalhesContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>');
-        $('#modalDetalhes').modal('show');
+    // Função para ver pedidos do cliente
+    function verPedidos(cnpj, nomeCliente) {
+        // Encodar CNPJ para evitar problemas com barras
+        currentCnpj = encodeURIComponent(cnpj);
+        currentPage = 1;
 
-        // Carregar detalhes via AJAX
+        // Atualizar título do modal
+        $('#modalPedidosTitle').html(`Pedidos - ${nomeCliente}`);
+
+        // Mostrar loading
+        $('#pedidosContent').html(`
+            <div class="text-center p-4">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p class="mt-2">Carregando pedidos...</p>
+            </div>
+        `);
+
+        // Limpar controles de paginação
+        $('#paginationInfo').html('');
+        $('#paginationControls').html('');
+
+        // Abrir modal
+        $('#modalPedidos').modal('show');
+
+        // Carregar pedidos
+        carregarPedidos(currentCnpj, 1);
+    }
+
+    // Função para carregar pedidos com paginação
+    function carregarPedidos(cnpj, page) {
+        currentPage = page;
+
+        // cnpj já vem encodado da função verPedidos ou da paginação
+
         $.ajax({
-            url: '/comercial/api/cliente/' + cnpj + '/detalhes',
-            data: { posicao: '{{ filtro_posicao }}' },
+            url: '/comercial/api/cliente/' + cnpj + '/pedidos',
+            data: {
+                posicao: '{{ filtro_posicao }}',
+                page: page,
+                per_page: 20
+            },
             success: function(data) {
+                // Atualizar info de paginação
+                totalPages = data.total_pages;
+
+                if (data.total === 0) {
+                    $('#pedidosContent').html(`
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> Nenhum pedido encontrado para este cliente.
+                        </div>
+                    `);
+                    return;
+                }
+
+                // Criar tabela de pedidos
                 let html = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Informações Básicas</h6>
-                            <ul class="list-unstyled">
-                                <li><strong>CNPJ/CPF:</strong> ${data.cnpj_cpf}</li>
-                                <li><strong>Razão Social:</strong> ${data.raz_social || '-'}</li>
-                                <li><strong>Nome Fantasia:</strong> ${data.raz_social_red || '-'}</li>
-                                <li><strong>Localização:</strong> ${data.municipio || '-'} / ${data.estado || '-'}</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Informações Comerciais</h6>
-                            <ul class="list-unstyled">
-                                <li><strong>Vendedor:</strong> ${data.vendedor || '-'}</li>
-                                <li><strong>Equipe:</strong> ${data.equipe_vendas || '-'}</li>
-                                <li><strong>Forma Agendamento:</strong> ${data.forma_agendamento || '-'}</li>
-                                <li><strong>Valor em Aberto:</strong> R$ ${data.valor_em_aberto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <hr>
-                    <h6>Pedidos (${data.total_pedidos})</h6>
-                    <div class="list-group">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Pedido Cliente</th>
+                                    <th>Incoterm</th>
+                                    <th>Método Entrega</th>
+                                    <th>Data Pedido</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Valor Total</th>
+                                    <th class="text-end">Faturado</th>
+                                    <th class="text-end">Entregue</th>
+                                    <th class="text-end">Saldo Carteira</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                 `;
 
+                // Adicionar linhas de pedidos
                 data.pedidos.forEach(function(pedido) {
-                    html += `<div class="list-group-item">${pedido}</div>`;
+                    // Determinar cor do status
+                    let statusClass = '';
+                    let statusIcon = '';
+                    switch(pedido.status) {
+                        case 'Em Aberto':
+                            statusClass = 'badge-info';
+                            statusIcon = 'fa-clock';
+                            break;
+                        case 'Parcialmente Faturado':
+                            statusClass = 'badge-warning';
+                            statusIcon = 'fa-tasks';
+                            break;
+                        case 'Parcialmente Entregue':
+                            statusClass = 'badge-primary';
+                            statusIcon = 'fa-truck';
+                            break;
+                        case 'Entregue':
+                            statusClass = 'badge-success';
+                            statusIcon = 'fa-check-circle';
+                            break;
+                        default:
+                            statusClass = 'badge-secondary';
+                            statusIcon = 'fa-question-circle';
+                    }
+
+                    html += `
+                        <tr>
+                            <td>
+                                <span class="text-monospace">${pedido.num_pedido}</span>
+                            </td>
+                            <td>
+                                ${pedido.pedido_cliente || '-'}
+                            </td>
+                            <td>
+                                ${pedido.incoterm || '-'}
+                            </td>
+                            <td>
+                                ${pedido.metodo_entrega_pedido || '-'}
+                            </td>
+                            <td>
+                                ${pedido.data_pedido || '-'}
+                            </td>
+                            <td>
+                                <span class="badge ${statusClass}">
+                                    <i class="fas ${statusIcon}"></i> ${pedido.status}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <strong>R$ ${formatarMoeda(pedido.valor_total_pedido)}</strong>
+                            </td>
+                            <td class="text-end ${pedido.valor_total_faturado > 0 ? 'text-warning' : ''}">
+                                R$ ${formatarMoeda(pedido.valor_total_faturado)}
+                            </td>
+                            <td class="text-end ${pedido.valor_entregue > 0 ? 'text-success' : ''}">
+                                R$ ${formatarMoeda(pedido.valor_entregue)}
+                            </td>
+                            <td class="text-end ${pedido.saldo_carteira > 0 ? 'text-info' : ''}">
+                                R$ ${formatarMoeda(pedido.saldo_carteira)}
+                            </td>
+                        </tr>
+                    `;
                 });
 
-                html += '</div>';
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
 
-                $('#detalhesContent').html(html);
+                // Atualizar conteúdo
+                $('#pedidosContent').html(html);
+
+                // Atualizar info de paginação
+                $('#paginationInfo').html(`
+                    <span class="text-muted">
+                        Mostrando ${((page - 1) * 20) + 1} a ${Math.min(page * 20, data.total)} de ${data.total} pedidos
+                    </span>
+                `);
+
+                // Criar controles de paginação
+                atualizarPaginacao(data.page, data.total_pages);
             },
             error: function() {
-                $('#detalhesContent').html('<div class="alert alert-danger">Erro ao carregar detalhes.</div>');
+                $('#pedidosContent').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Erro ao carregar pedidos. Por favor, tente novamente.
+                    </div>
+                `);
             }
+        });
+    }
+
+    // Função para atualizar controles de paginação
+    function atualizarPaginacao(page, total_pages) {
+        if (total_pages <= 1) {
+            $('#paginationControls').html('');
+            return;
+        }
+
+        let html = '<nav><ul class="pagination pagination-sm mb-0">';
+
+        // Botão anterior
+        html += `
+            <li class="page-item ${page === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="javascript:void(0)" onclick="${page > 1 ? `carregarPedidos('${currentCnpj}', ${page - 1})` : 'return false;'}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+        `;
+
+        // Páginas
+        let startPage = Math.max(1, page - 2);
+        let endPage = Math.min(total_pages, page + 2);
+
+        if (startPage > 1) {
+            html += `
+                <li class="page-item">
+                    <a class="page-link" href="javascript:void(0)" onclick="carregarPedidos('${currentCnpj}', 1)">1</a>
+                </li>
+            `;
+            if (startPage > 2) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            html += `
+                <li class="page-item ${i === page ? 'active' : ''}">
+                    <a class="page-link" href="javascript:void(0)" onclick="carregarPedidos('${currentCnpj}', ${i})">${i}</a>
+                </li>
+            `;
+        }
+
+        if (endPage < total_pages) {
+            if (endPage < total_pages - 1) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            html += `
+                <li class="page-item">
+                    <a class="page-link" href="javascript:void(0)" onclick="carregarPedidos('${currentCnpj}', ${total_pages})">${total_pages}</a>
+                </li>
+            `;
+        }
+
+        // Botão próximo
+        html += `
+            <li class="page-item ${page === total_pages ? 'disabled' : ''}">
+                <a class="page-link" href="javascript:void(0)" onclick="${page < total_pages ? `carregarPedidos('${currentCnpj}', ${page + 1})` : 'return false;'}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        `;
+
+        html += '</ul></nav>';
+
+        $('#paginationControls').html(html);
+    }
+
+    // Função auxiliar para formatar moeda
+    function formatarMoeda(valor) {
+        return valor.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
     }
 </script>

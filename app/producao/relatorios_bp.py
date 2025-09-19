@@ -4,7 +4,7 @@ Exportação de dados de estoque e movimentações
 """
 
 from flask import Blueprint, jsonify, send_file
-from datetime import datetime, date
+from datetime import datetime
 import pandas as pd
 import io
 from app.estoque.models import UnificacaoCodigos
@@ -107,9 +107,12 @@ def exportar_relatorios_producao():
                     except Exception as e:
                         logger.warning(f"Erro ao converter data_ruptura para datetime: {e}")
 
+            # Buscar nome do produto de CadastroPalletizacao (fonte correta)
+            nome_produto_correto = pallet_info.nome_produto if pallet_info else f"Produto {cod_produto}"
+
             dados_estoque.append({
                 'Código Produto': cod_produto,
-                'Nome Produto': estoque_info.get('nome_produto', ''),
+                'Nome Produto': nome_produto_correto,  # Usar nome de CadastroPalletizacao
                 'Saldo Atual': int(estoque_info.get('estoque_atual', 0)),  # Sem casas decimais
                 'Menor Estoque D+7': int(menor_estoque_d7),  # Sem casas decimais
                 'Data Ruptura': data_ruptura_obj,  # Usar objeto datetime
@@ -118,7 +121,7 @@ def exportar_relatorios_producao():
                 'Palletização': float(pallet_info.palletizacao) if pallet_info else 0,
                 'Categoria': pallet_info.categoria_produto if pallet_info else '',
                 'Subcategoria': pallet_info.subcategoria if pallet_info else '',
-                'Última Atualização': datetime.now().strftime('%d/%m/%Y %H:%M')
+                'Última Atualização': datetime.now()  # Manter como datetime para formatação correta
             })
         
         df_estoque = pd.DataFrame(dados_estoque)
@@ -135,7 +138,11 @@ def exportar_relatorios_producao():
 
         # Iterar pelos produtos que têm dados de estoque
         for cod_produto, estoque_info in estoques_dict.items():
-            nome_produto = estoque_info.get('nome_produto', cod_produto)
+            # Buscar nome e categorias de CadastroPalletizacao
+            pallet_info_mov = palletizacoes.get(cod_produto, None)
+            nome_produto = pallet_info_mov.nome_produto if pallet_info_mov else f"Produto {cod_produto}"
+            categoria_produto = pallet_info_mov.categoria_produto if pallet_info_mov else ''
+            subcategoria_produto = pallet_info_mov.subcategoria if pallet_info_mov else ''
 
             # Verificar se há projeção e se é uma lista
             projecao = estoque_info.get('projecao')
@@ -190,6 +197,8 @@ def exportar_relatorios_producao():
                             'data_obj': data_obj,  # Objeto datetime para ordenação correta
                             'cod_produto': cod_produto,
                             'nome_produto': nome_produto,
+                            'categoria': categoria_produto,
+                            'subcategoria': subcategoria_produto,
                             'saida': saida_val,
                             'entrada': entrada_val,
                             'saldo': saldo_val
@@ -204,9 +213,11 @@ def exportar_relatorios_producao():
                 'Data': mov['data_obj'],  # Usar datetime object para ordenação correta
                 'Código Produto': mov['cod_produto'],
                 'Nome Produto': mov['nome_produto'],
-                'Saídas Previstas': int(mov['saida']),  # Sem decimais
-                'Entradas Previstas': int(mov['entrada']),  # Sem decimais
-                'Saldo Projetado': int(mov['saldo'])  # Sem decimais
+                'Categoria': mov['categoria'],
+                'Subcategoria': mov['subcategoria'],
+                'Saídas Previstas': int(round(mov['saida'])),  # Inteiro puro
+                'Entradas Previstas': int(round(mov['entrada'])),  # Inteiro puro
+                'Saldo Projetado': int(round(mov['saldo']))  # Inteiro puro
             })
         
         # Debug: verificar movimentações
@@ -240,10 +251,10 @@ def exportar_relatorios_producao():
                 'border': 1
             })
 
-            # Formatos para números com padrão brasileiro (separador de milhar com ponto)
-            # Formato sem decimais com separador de milhar
+            # Formatos para números
+            # Formato inteiro sem decimais
             formato_inteiro = workbook.add_format({
-                'num_format': '#.##0',  # Separador de milhar com ponto, sem decimais
+                'num_format': '0',  # Inteiro simples sem decimais
                 'border': 1
             })
 
@@ -253,25 +264,55 @@ def exportar_relatorios_producao():
                 'border': 1
             })
 
-            # Formato para datas
+            # Formato para datas DD/MM/YYYY
             formato_data = workbook.add_format({
                 'num_format': 'dd/mm/yyyy',
                 'border': 1
             })
-            
-            # Aplicar formatos
+
+            # Formato para data e hora
+            formato_data_hora = workbook.add_format({
+                'num_format': 'dd/mm/yyyy hh:mm',
+                'border': 1
+            })
+
+            # Reescrever cabeçalhos e aplicar formatos
             for col_num, col_name in enumerate(df_estoque.columns):
                 worksheet_estoque.write(0, col_num, col_name, header_format)
 
-                if col_name == 'Saldo Atual' or col_name == 'Menor Estoque D+7':
-                    # Formato inteiro com separador de milhar
-                    worksheet_estoque.set_column(col_num, col_num, 15, formato_inteiro)
-                elif col_name == 'Data Ruptura':
-                    # Formato de data
-                    worksheet_estoque.set_column(col_num, col_num, 12, formato_data)
-                elif 'Peso' in col_name or 'Palletização' in col_name:
-                    # Formato com 2 decimais
-                    worksheet_estoque.set_column(col_num, col_num, 15, formato_decimal)
+            # Reescrever dados com formatos corretos
+            for row_num in range(len(df_estoque)):
+                for col_num, col_name in enumerate(df_estoque.columns):
+                    valor = df_estoque.iloc[row_num, col_num]
+
+                    if col_name in ['Saldo Atual', 'Menor Estoque D+7']:
+                        # Escrever número inteiro com formato de milhar
+                        worksheet_estoque.write_number(row_num + 1, col_num, valor if valor else 0, formato_inteiro)
+                    elif col_name == 'Data Ruptura':
+                        # Escrever data com formato DD/MM/YYYY
+                        if pd.notna(valor):
+                            worksheet_estoque.write_datetime(row_num + 1, col_num, valor, formato_data)
+                        else:
+                            worksheet_estoque.write(row_num + 1, col_num, '', formato_data)
+                    elif col_name == 'Última Atualização':
+                        # Escrever data e hora com formato
+                        if pd.notna(valor):
+                            worksheet_estoque.write_datetime(row_num + 1, col_num, valor, formato_data_hora)
+                        else:
+                            worksheet_estoque.write(row_num + 1, col_num, '', formato_data_hora)
+                    elif col_name in ['Peso Bruto (kg)', 'Palletização']:
+                        # Escrever número decimal com formato
+                        worksheet_estoque.write_number(row_num + 1, col_num, valor if valor else 0, formato_decimal)
+                    else:
+                        # Escrever texto normal
+                        worksheet_estoque.write(row_num + 1, col_num, str(valor) if pd.notna(valor) else '')
+
+            # Ajustar larguras das colunas
+            for col_num, col_name in enumerate(df_estoque.columns):
+                if col_name in ['Saldo Atual', 'Menor Estoque D+7', 'Peso Bruto (kg)', 'Palletização']:
+                    worksheet_estoque.set_column(col_num, col_num, 15)
+                elif col_name in ['Data Ruptura', 'Última Atualização']:
+                    worksheet_estoque.set_column(col_num, col_num, 18)
                 else:
                     column_width = max(df_estoque[col_name].astype(str).map(len).max() if len(df_estoque) > 0 else 10, len(col_name)) + 2
                     worksheet_estoque.set_column(col_num, col_num, min(column_width, 50))
@@ -281,37 +322,38 @@ def exportar_relatorios_producao():
                 df_movimentacoes.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
                 worksheet_mov = writer.sheets['Movimentações Previstas']
 
-                # Aplicar formatos no cabeçalho
+                # Reescrever cabeçalhos
                 for col_num, col_name in enumerate(df_movimentacoes.columns):
                     worksheet_mov.write(0, col_num, col_name, header_format)
 
-                    # Definir larguras específicas de coluna e formatos
+                # Ajustar larguras das colunas
+                for col_num, col_name in enumerate(df_movimentacoes.columns):
                     if col_name == 'Data':
-                        worksheet_mov.set_column(col_num, col_num, 12, formato_data)
+                        worksheet_mov.set_column(col_num, col_num, 12)
                     elif col_name == 'Código Produto':
                         worksheet_mov.set_column(col_num, col_num, 15)
                     elif col_name == 'Nome Produto':
                         worksheet_mov.set_column(col_num, col_num, 40)
-                    elif 'Saídas Previstas' in col_name or 'Entradas Previstas' in col_name:
-                        # Formato inteiro com separador de milhar para entradas e saídas
-                        worksheet_mov.set_column(col_num, col_num, 18, formato_inteiro)
-                    elif 'Saldo Projetado' in col_name:
-                        # Formato inteiro com separador de milhar para saldo
-                        worksheet_mov.set_column(col_num, col_num, 18, formato_inteiro)
+                    elif col_name == 'Categoria':
+                        worksheet_mov.set_column(col_num, col_num, 20)
+                    elif col_name == 'Subcategoria':
+                        worksheet_mov.set_column(col_num, col_num, 20)
+                    elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
+                        worksheet_mov.set_column(col_num, col_num, 18)
 
                 # Adicionar formatação condicional para as linhas com formato de número brasileiro
                 # Formato para células com números e cor de fundo
                 entrada_format_num = workbook.add_format({
                     'bg_color': '#E8F5E9',
                     'border': 1,
-                    'num_format': '#.##0'  # Separador de milhar com ponto
+                    'num_format': '0'  # Inteiro simples
                 })
                 entrada_format = workbook.add_format({'bg_color': '#E8F5E9', 'border': 1})
 
                 saida_format_num = workbook.add_format({
                     'bg_color': '#FFEBEE',
                     'border': 1,
-                    'num_format': '#.##0'  # Separador de milhar com ponto
+                    'num_format': '0'  # Inteiro simples
                 })
                 saida_format = workbook.add_format({'bg_color': '#FFEBEE', 'border': 1})
 
@@ -320,17 +362,17 @@ def exportar_relatorios_producao():
                     'bg_color': '#FF5252',
                     'font_color': 'white',
                     'border': 1,
-                    'num_format': '#.##0'  # Sem decimais, separador com ponto
+                    'num_format': '0'  # Inteiro simples
                 })
 
                 # Formato neutro
                 neutro_format_num = workbook.add_format({
                     'border': 1,
-                    'num_format': '#.##0'  # Separador de milhar com ponto
+                    'num_format': '0'  # Inteiro simples
                 })
                 neutro_format = workbook.add_format({'border': 1})
 
-                # Formato para datas com cor de fundo
+                # Formato para datas com cor de fundo dd/mm/yyyy
                 data_format_verde = workbook.add_format({
                     'bg_color': '#E8F5E9',
                     'border': 1,
@@ -378,21 +420,22 @@ def exportar_relatorios_producao():
 
                         # Aplicar formato específico por tipo de coluna
                         if col_name == 'Data':
-                            worksheet_mov.write(row_num, col_num, valor, formato_data_linha)
-                        elif col_name in ['Código Produto', 'Nome Produto']:
-                            worksheet_mov.write(row_num, col_num, valor, formato_texto)
+                            worksheet_mov.write_datetime(row_num, col_num, valor, formato_data_linha)
+                        elif col_name in ['Código Produto', 'Nome Produto', 'Categoria', 'Subcategoria']:
+                            worksheet_mov.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto)
                         elif col_name == 'Saldo Projetado' and saldo_negativo:
                             # Saldo negativo - formato especial vermelho escuro
-                            worksheet_mov.write(row_num, col_num, valor, saldo_negativo_format)
+                            worksheet_mov.write_number(row_num, col_num, valor if valor else 0, saldo_negativo_format)
                         elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
-                            # Colunas numéricas
-                            worksheet_mov.write(row_num, col_num, valor, formato_numero)
+                            # Colunas numéricas com formato de milhar
+                            worksheet_mov.write_number(row_num, col_num, valor if valor else 0, formato_numero)
                         else:
-                            worksheet_mov.write(row_num, col_num, valor, formato_texto)
+                            worksheet_mov.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto)
             else:
                 # Criar aba vazia se não houver movimentações
                 logger.warning("Criando aba vazia de Movimentações Previstas")
                 df_vazia = pd.DataFrame(columns=['Data', 'Código Produto', 'Nome Produto',
+                                                 'Categoria', 'Subcategoria',
                                                  'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado'])
                 df_vazia.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
                 worksheet_mov = writer.sheets['Movimentações Previstas']

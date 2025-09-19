@@ -1,0 +1,37 @@
+{
+  "id": 66720,
+  "name": "VCD2563651",
+  "state": "sale",
+  "invoice_status": "no",
+  "create_date": "2025-09-18 18:48:34",
+  "create_uid": [
+    698,
+    "Thamires Machado Farago"
+  ],
+  "write_date": "2025-09-19 18:07:51",
+  "write_uid": [
+    42,
+    "Rafael de Carvalho Nascimento"
+  ],
+  "date_order": "2025-09-19 15:06:01",
+  "commitment_date": false,
+  "amount_total": 1580.45,
+  "amount_untaxed": 1335.98,
+  "amount_tax": 244.47,
+  "partner_id": [
+    86622,
+    "REDE MERCADAO LJ 11"
+  ],
+  "l10n_br_pedido_compra": "863147",
+  "carrier_id": false,
+  "incoterm": [
+    6,
+    "[CIF] COST, INSURANCE AND FREIGHT"
+  ],
+  "picking_policy": "one",
+  "warehouse_id": [
+    3,
+    "CD"
+  ],
+  "note": "<p>Termos e condições: <a href=\"https://odoo.nacomgoya.com.br/terms\" target=\"_blank\" rel=\"noreferrer noopener\">https://odoo.nacomgoya.com.br/terms</a></p>"
+}

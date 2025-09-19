@@ -23,15 +23,28 @@ Separacao.pedido_cliente
 CarteiraPrincipal.pedido_cliente
 ou através da função em app/odoo/utils/pedido_cliente_utils.py função: buscar_pedido_cliente_odoo através do num_pedido
 
+As equipes de vendas e vendedores são pesquisadas através de:
+CarteiraPrincipal.equipe_vendas
+ou
+FaturamentoProduto.equipe_vendas
+
+Os vendedores são pesquisados dentro do filtro de equipe de vendas:
+CarteiraPrincipal.vendedor
+ou
+FaturamentoProduto.vendedor
+
 ===========================================
 
 O valores serão obtidos através de: 
 
 Valor total do pedido:
+if CarteiraPrincipal.num_pedido:
 pedidos = CarteiraPrincipal.num_pedido
 for produto in pedidos
 produto = CarteiraPrincipal.cod_produto
 valor.produto = pedidos.preco_produto_pedido * pedidos.qtd_produto_pedido
+else
+'Valor total do pedido faturado'
 
 Saldo da pedido:
 Utilizar qtd_saldo_produto_pedido ao invés de qtd_produto_pedido
@@ -47,21 +60,10 @@ valor.p = pedidos_faturados.valor_produto_faturado
 Caso todo o pedido tenha sido faturado, o total será o 'Valor total do pedido faturado'
 Caso haja saldo em CarteiraPrincipal, o total será 'Valor total do pedido'  
 
-As equipes de vendas e vendedores são pesquisadas através de:
-CarteiraPrincipal.equipe_vendas
-ou
-FaturamentoProduto.equipe_vendas
-
-Os vendedores são pesquisados dentro do filtro de equipe de vendas:
-CarteiraPrincipal.vendedor
-ou
-FaturamentoProduto.vendedor
-
 
 =========================================
 
-
-(é uma tentativa de código mas quero que entenda a intenção, somar todos os produtos do pedido)
+Etapa 1:
 
 # A interface inicial deverá ser composta por "badges botões" com cada equipe de vendas e ao clicar deverá mostrar "badges botões" com os vendedores e com isso renderizar a tela de acompanhamento.
 
@@ -96,3 +98,41 @@ estado
 municipio
 ContatoAgendamento.forma (através de ContatoAgendamento.cnpj)
 Valor Em Aberto
+
+=================================================
+Etapa 1 Concluida
+=================================================
+
+# Etapa 2 - Enriquecimento dos clientes com pedidos
+
+## Objetivo: Enriquecer os clientes agrupados com informações dos pedidos
+
+## Formato de exibição
+
+Em cada cliente agrupado deverá contem um botão que deverá renderizar um modal com as informações dos pedidos do cliente respeitando o filtro selecionado [Em Aberto, Total].
+
+As informações deverão ser renderizadas 1 pedido por linha.
+
+## Informações da linha
+
+pedidos=
+
+num_pedido
+pedido_cliente (Buscar de Separacao.pedido_cliente, fallback para CarteiraPrincipal.pedido_cliente fallback para app.odoo.utils.pedido_cliente_utils.py)
+incoterm
+metodo_entrega_pedido
+data_pedido
+status (
+    If 'Valor total do pedido faturado'=0
+        status="Em Aberto"
+    Elif 'Valor total do pedido faturado'<'Valor total do pedido'
+        status="Parcialmente Faturado"
+    Elif ('pedidos_monitoramento'.status_finalizacao=="Entregue")<'Valor total do pedido'
+        status="Parcialmente Entregue"
+    Else status="Entregue"
+    )
+'Valor total do pedido'
+'Valor total do pedido faturado'
+Entregue = ('pedidos_monitoramento'.status_finalizacao=="Entregue")
+Saldo em Carteira = 'Valor total do pedido' - 'Valor total do pedido faturado'
+
