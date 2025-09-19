@@ -251,12 +251,6 @@ def lista_pedidos():
                     (Pedido.nf.isnot(None)) & (Pedido.nf != ""),
                     Pedido.nf_cd == False  # ✅ CORRIGIDO: Não deve estar no CD
                 )
-            elif status_filtro == 'EMBARCADO':
-                query = query.filter(
-                    Pedido.data_embarque.isnot(None),
-                    (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-                    Pedido.nf_cd == False  # ✅ CORRIGIDO: Não deve estar no CD
-                )
             elif status_filtro == 'COTADO':
                 query = query.filter(
                     Pedido.cotacao_id.isnot(None),
@@ -744,7 +738,6 @@ def excluir_pedido(lote_id):
         # 🔧 NOVA FUNCIONALIDADE: Limpa vínculos órfãos com embarques cancelados
         vinculos_limpos = False
         if primeira_separacao.cotacao_id or primeira_separacao.numero_nf or primeira_separacao.data_embarque:
-            from app.embarques.models import Embarque, EmbarqueItem
             
             # Busca se há embarque relacionado
             embarque_relacionado = None

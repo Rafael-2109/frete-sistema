@@ -85,8 +85,6 @@ class Pedido(db.Model):
             return 'NF no CD'
         elif self.nf and self.nf.strip():
             return 'FATURADO'
-        elif self.data_embarque:
-            return 'EMBARCADO'
         elif self.cotacao_id:
             return 'COTADO'
         else:

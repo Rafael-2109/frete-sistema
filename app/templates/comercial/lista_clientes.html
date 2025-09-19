@@ -327,7 +327,7 @@
 
     /* Override Bootstrap table styles completely */
     .table-hover tbody tr:hover {
-        background-color: #40414f !important;
+        background-color: #000000 !important;
         color: #ececf1 !important;
     }
 
@@ -443,12 +443,10 @@
                         <thead>
                             <tr>
                                 <th>CNPJ/CPF</th>
-                                <th>Razão Social</th>
-                                <th>Nome Fantasia</th>
+                                <th>Cliente</th>
                                 <th>UF</th>
                                 <th>Município</th>
                                 <th>Vendedor</th>
-                                <th>Equipe</th>
                                 <th>Agendamento</th>
                                 <th class="text-center">Pedidos</th>
                                 <th class="text-end">{% if filtro_posicao == 'em_aberto' %}Valor Em Aberto{% else %}Valor Total{% endif %}</th>
@@ -462,19 +460,18 @@
                                     <small class="text-monospace">{{ cliente.cnpj_cpf }}</small>
                                 </td>
                                 <td>
-                                    {% if cliente.raz_social %}
+                                    {% if cliente.raz_social and cliente.raz_social_red %}
                                         <span title="{{ cliente.raz_social }}">
-                                            {{ cliente.raz_social[:30] }}{% if cliente.raz_social|length > 30 %}...{% endif %}
+                                            <span class="badge badge-info"></span>{{ cliente.raz_social[:30] }}{% if cliente.raz_social|length > 30 %}...{% endif %}</span>
+                                            <br>
+                                            <span class="badge badge-info">{{ cliente.raz_social_red }}</span>
+                                        {% elif cliente.raz_social %}
+                                            {{ cliente.raz_social }}
+                                        {% elif cliente.raz_social_red %}
+                                            {{ cliente.raz_social_red }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
                                         </span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if cliente.raz_social_red %}
-                                        {{ cliente.raz_social_red }}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
@@ -492,15 +489,14 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if cliente.vendedor %}
+                                    {% if cliente.vendedor and cliente.equipe_vendas %}
                                         {{ cliente.vendedor }}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if cliente.equipe_vendas %}
+                                        <br>
                                         <span class="badge badge-info">{{ cliente.equipe_vendas }}</span>
+                                    {% elif cliente.equipe_vendas %}
+                                        <span class="badge badge-info">{{ cliente.equipe_vendas }}</span>
+                                    {% elif cliente.vendedor %}
+                                        {{ cliente.vendedor }}
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}

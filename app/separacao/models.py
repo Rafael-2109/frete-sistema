@@ -107,8 +107,6 @@ class Separacao(db.Model):
         # Verifica se foi sincronizado com NF (faturado)
         elif self.sincronizado_nf or (self.numero_nf and str(self.numero_nf).strip()):
             return 'FATURADO'
-        elif self.data_embarque:
-            return 'EMBARCADO'
         elif self.cotacao_id:
             return 'COTADO'
         else:
@@ -120,32 +118,20 @@ class Separacao(db.Model):
         Método helper para atualizar status de itens de separação
         Se num_pedido for fornecido, atualiza apenas esse pedido
         Caso contrário, atualiza todo o lote
+
+        IMPORTANTE: Usa ORM para garantir que event listeners sejam disparados
         """
+        # Buscar itens usando ORM para disparar event listeners
+        query = cls.query.filter_by(separacao_lote_id=separacao_lote_id)
+
         if num_pedido:
-            sql = text("""
-                UPDATE separacao 
-                SET status = :status
-                WHERE separacao_lote_id = :lote_id
-                AND num_pedido = :num_pedido
-            """)
-            
-            db.session.execute(sql, {
-                'status': novo_status,
-                'lote_id': separacao_lote_id,
-                'num_pedido': num_pedido
-            })
-        else:
-            sql = text("""
-                UPDATE separacao 
-                SET status = :status
-                WHERE separacao_lote_id = :lote_id
-            """)
-            
-            db.session.execute(sql, {
-                'status': novo_status,
-                'lote_id': separacao_lote_id
-            })
-        
+            query = query.filter_by(num_pedido=num_pedido)
+
+        # Atualizar cada item via ORM (dispara event listeners)
+        items = query.all()
+        for item in items:
+            item.status = novo_status
+
         db.session.commit()
     
     @classmethod
@@ -154,32 +140,20 @@ class Separacao(db.Model):
         Método helper para atualizar flag nf_cd de itens de separação
         Se num_pedido for fornecido, atualiza apenas esse pedido
         Caso contrário, atualiza todo o lote
+
+        IMPORTANTE: Usa ORM para garantir que event listeners sejam disparados
         """
+        # Buscar itens usando ORM para disparar event listeners
+        query = cls.query.filter_by(separacao_lote_id=separacao_lote_id)
+
         if num_pedido:
-            sql = text("""
-                UPDATE separacao 
-                SET nf_cd = :nf_cd
-                WHERE separacao_lote_id = :lote_id
-                AND num_pedido = :num_pedido
-            """)
-            
-            db.session.execute(sql, {
-                'nf_cd': nf_cd,
-                'lote_id': separacao_lote_id,
-                'num_pedido': num_pedido
-            })
-        else:
-            sql = text("""
-                UPDATE separacao 
-                SET nf_cd = :nf_cd
-                WHERE separacao_lote_id = :lote_id
-            """)
-            
-            db.session.execute(sql, {
-                'nf_cd': nf_cd,
-                'lote_id': separacao_lote_id
-            })
-        
+            query = query.filter_by(num_pedido=num_pedido)
+
+        # Atualizar cada item via ORM (dispara event listeners)
+        items = query.all()
+        for item in items:
+            item.nf_cd = nf_cd
+
         db.session.commit()
     
     def save(self):
@@ -208,7 +182,6 @@ def atualizar_status_automatico(mapper, connection, target):
     1. PREVISAO - Status manual, não sobrescrever
     2. NF no CD - Flag nf_cd é True
     3. FATURADO - Tem NF (sincronizado_nf=True ou numero_nf preenchido)
-    4. EMBARCADO - Tem data_embarque
     5. COTADO - Tem cotacao_id
     6. ABERTO - Estado padrão
     
@@ -232,11 +205,7 @@ def atualizar_status_automatico(mapper, connection, target):
     # REGRA 3: FATURADO - tem NF
     elif target.sincronizado_nf or (target.numero_nf and str(target.numero_nf).strip()):
         target.status = 'FATURADO'
-    
-    # REGRA 4: EMBARCADO - tem data de embarque
-    elif target.data_embarque:
-        target.status = 'EMBARCADO'
-    
+        
     # REGRA 5: COTADO - tem cotação
     elif target.cotacao_id:
         target.status = 'COTADO'
@@ -292,30 +261,20 @@ def remover_do_embarque(separacao_lote_id, num_pedido=None):
     """
     Remove separação do embarque, zerando data_embarque.
     O status será recalculado automaticamente pelo event listener.
+
+    IMPORTANTE: Usa ORM para garantir que event listeners sejam disparados
     """
-    from sqlalchemy import text
-    
+    # Buscar itens usando ORM para disparar event listeners
+    query = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id)
+
     if num_pedido:
-        sql = text("""
-            UPDATE separacao 
-            SET data_embarque = NULL
-            WHERE separacao_lote_id = :lote_id
-            AND num_pedido = :num_pedido
-        """)
-        db.session.execute(sql, {
-            'lote_id': separacao_lote_id,
-            'num_pedido': num_pedido
-        })
-    else:
-        sql = text("""
-            UPDATE separacao 
-            SET data_embarque = NULL
-            WHERE separacao_lote_id = :lote_id
-        """)
-        db.session.execute(sql, {
-            'lote_id': separacao_lote_id
-        })
-    
+        query = query.filter_by(num_pedido=num_pedido)
+
+    # Atualizar cada item via ORM (dispara event listeners)
+    items = query.all()
+    for item in items:
+        item.data_embarque = None
+
     db.session.commit()
 
 
@@ -323,30 +282,20 @@ def remover_cotacao(separacao_lote_id, num_pedido=None):
     """
     Remove cotação da separação, zerando cotacao_id.
     O status será recalculado automaticamente pelo event listener.
+
+    IMPORTANTE: Usa ORM para garantir que event listeners sejam disparados
     """
-    from sqlalchemy import text
-    
+    # Buscar itens usando ORM para disparar event listeners
+    query = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id)
+
     if num_pedido:
-        sql = text("""
-            UPDATE separacao 
-            SET cotacao_id = NULL
-            WHERE separacao_lote_id = :lote_id
-            AND num_pedido = :num_pedido
-        """)
-        db.session.execute(sql, {
-            'lote_id': separacao_lote_id,
-            'num_pedido': num_pedido
-        })
-    else:
-        sql = text("""
-            UPDATE separacao 
-            SET cotacao_id = NULL
-            WHERE separacao_lote_id = :lote_id
-        """)
-        db.session.execute(sql, {
-            'lote_id': separacao_lote_id
-        })
-    
+        query = query.filter_by(num_pedido=num_pedido)
+
+    # Atualizar cada item via ORM (dispara event listeners)
+    items = query.all()
+    for item in items:
+        item.cotacao_id = None
+
     db.session.commit()
 
 
@@ -354,32 +303,20 @@ def cancelar_faturamento(separacao_lote_id, num_pedido=None):
     """
     Cancela o faturamento da separação, limpando campos de NF.
     O status será recalculado automaticamente pelo event listener.
+
+    IMPORTANTE: Usa ORM para garantir que event listeners sejam disparados
     """
-    from sqlalchemy import text
-    
+    # Buscar itens usando ORM para disparar event listeners
+    query = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id)
+
     if num_pedido:
-        sql = text("""
-            UPDATE separacao 
-            SET sincronizado_nf = FALSE,
-                numero_nf = NULL,
-                data_sincronizacao = NULL
-            WHERE separacao_lote_id = :lote_id
-            AND num_pedido = :num_pedido
-        """)
-        db.session.execute(sql, {
-            'lote_id': separacao_lote_id,
-            'num_pedido': num_pedido
-        })
-    else:
-        sql = text("""
-            UPDATE separacao 
-            SET sincronizado_nf = FALSE,
-                numero_nf = NULL,
-                data_sincronizacao = NULL
-            WHERE separacao_lote_id = :lote_id
-        """)
-        db.session.execute(sql, {
-            'lote_id': separacao_lote_id
-        })
-    
+        query = query.filter_by(num_pedido=num_pedido)
+
+    # Atualizar cada item via ORM (dispara event listeners)
+    items = query.all()
+    for item in items:
+        item.sincronizado_nf = False
+        item.numero_nf = None
+        item.data_sincronizacao = None
+
     db.session.commit()

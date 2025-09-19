@@ -210,8 +210,6 @@ def listar():
                     status = 'NF no CD'
                 elif separacao.sincronizado_nf or (separacao.numero_nf and str(separacao.numero_nf).strip()):
                     status = 'FATURADO'
-                elif separacao.data_embarque:
-                    status = 'EMBARCADO'
                 elif separacao.cotacao_id:
                     status = 'COTADO'
                 else:
