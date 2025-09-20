@@ -1,11 +1,15 @@
 """
 Rotas para visão da diretoria - acesso completo
 """
-from flask import render_template, jsonify, request
-from flask_login import login_required
+from flask import render_template, jsonify, request, redirect, url_for, flash
+from flask_login import login_required, current_user
 from app.comercial import comercial_bp
 from app.comercial.services.cliente_service import ClienteService
 from app.comercial.services.pedido_service import PedidoService
+from app.comercial.services.documento_service import DocumentoService
+from app.comercial.services.produto_documento_service import ProdutoDocumentoService
+from app.comercial.services.permissao_service import PermissaoService
+from app.comercial.decorators import comercial_required, admin_comercial_required
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
 from sqlalchemy import distinct
@@ -18,10 +22,17 @@ logger = logging.getLogger(__name__)
 @comercial_bp.route('/')
 @comercial_bp.route('/dashboard')
 @login_required
+@comercial_required
 def dashboard_diretoria():
     """
     Dashboard principal da diretoria com badges de equipes
     """
+    # Se for vendedor e não tiver permissões, mostrar mensagem
+    if current_user.perfil == 'vendedor':
+        if not PermissaoService.usuario_tem_permissoes(current_user.id):
+            flash('Você ainda não possui permissões configuradas. Solicite ao administrador.', 'warning')
+            return render_template('comercial/dashboard_diretoria.html', equipes=[])
+
     # Buscar todas as equipes distintas
     equipes_carteira = db.session.query(
         distinct(CarteiraPrincipal.equipe_vendas)
@@ -49,6 +60,32 @@ def dashboard_diretoria():
 
     equipes = sorted(list(equipes_set))
 
+    # Se for vendedor, filtrar equipes permitidas
+    if current_user.perfil == 'vendedor':
+        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+
+        # Filtrar equipes baseado nas permissões
+        equipes_permitidas = []
+        for equipe in equipes:
+            # Verificar se tem permissão direta para a equipe
+            if equipe in permissoes['equipes']:
+                equipes_permitidas.append(equipe)
+            else:
+                # Verificar se tem permissão para algum vendedor da equipe
+                vendedores_equipe = db.session.query(
+                    distinct(CarteiraPrincipal.vendedor)
+                ).filter(
+                    CarteiraPrincipal.equipe_vendas == equipe,
+                    CarteiraPrincipal.vendedor.isnot(None)
+                ).all()
+
+                for v in vendedores_equipe:
+                    if v[0] in permissoes['vendedores']:
+                        equipes_permitidas.append(equipe)
+                        break
+
+        equipes = equipes_permitidas
+
     # Para cada equipe, contar clientes e calcular valores
     equipes_data = []
     for equipe in equipes:
@@ -72,10 +109,37 @@ def dashboard_diretoria():
 
 @comercial_bp.route('/equipe/<string:equipe_nome>')
 @login_required
+@comercial_required
 def vendedores_equipe(equipe_nome):
     """
     Visualização de vendedores de uma equipe específica
     """
+    # Se for vendedor, verificar se tem acesso à equipe
+    if current_user.perfil == 'vendedor':
+        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+
+        # Verificar se tem acesso direto à equipe
+        tem_acesso = equipe_nome in permissoes['equipes']
+
+        # Se não tem acesso direto, verificar se tem acesso a algum vendedor da equipe
+        if not tem_acesso:
+            # Buscar vendedores da equipe
+            vendedores_equipe = db.session.query(
+                distinct(CarteiraPrincipal.vendedor)
+            ).filter(
+                CarteiraPrincipal.equipe_vendas == equipe_nome,
+                CarteiraPrincipal.vendedor.isnot(None)
+            ).all()
+
+            for v in vendedores_equipe:
+                if v[0] in permissoes['vendedores']:
+                    tem_acesso = True
+                    break
+
+        if not tem_acesso:
+            flash('Você não tem permissão para acessar esta equipe.', 'danger')
+            return redirect(url_for('comercial.dashboard_diretoria'))
+
     # Buscar vendedores da equipe
     vendedores_carteira = db.session.query(
         distinct(CarteiraPrincipal.vendedor)
@@ -105,6 +169,13 @@ def vendedores_equipe(equipe_nome):
 
     vendedores = sorted(list(vendedores_set))
 
+    # Se for vendedor, filtrar apenas vendedores permitidos
+    if current_user.perfil == 'vendedor':
+        # Se tem acesso à equipe inteira, mostrar todos
+        if equipe_nome not in permissoes['equipes']:
+            # Filtrar apenas vendedores permitidos
+            vendedores = [v for v in vendedores if v in permissoes['vendedores']]
+
     # Para cada vendedor, contar clientes e calcular valores
     vendedores_data = []
     for vendedor in vendedores:
@@ -129,6 +200,7 @@ def vendedores_equipe(equipe_nome):
 
 @comercial_bp.route('/clientes')
 @login_required
+@comercial_required
 def lista_clientes():
     """
     Lista de clientes agrupados com filtros
@@ -138,13 +210,75 @@ def lista_clientes():
     equipe_filtro = request.args.get('equipe', None)
     vendedor_filtro = request.args.get('vendedor', None)
 
+    # Se for vendedor, aplicar restrições de permissões
+    if current_user.perfil == 'vendedor':
+        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+
+        # Se não tem permissões, mostrar página vazia
+        if not permissoes['equipes'] and not permissoes['vendedores']:
+            flash('Você não possui permissões configuradas.', 'warning')
+            return render_template('comercial/lista_clientes.html',
+                                 clientes=[],
+                                 filtro_posicao=filtro_posicao,
+                                 equipe_filtro=equipe_filtro,
+                                 vendedor_filtro=vendedor_filtro)
+
+        # Validar filtros contra permissões
+        if equipe_filtro and equipe_filtro not in permissoes['equipes']:
+            # Verificar se tem acesso a algum vendedor da equipe
+            tem_acesso = False
+            vendedores_equipe = db.session.query(
+                distinct(CarteiraPrincipal.vendedor)
+            ).filter(
+                CarteiraPrincipal.equipe_vendas == equipe_filtro,
+                CarteiraPrincipal.vendedor.isnot(None)
+            ).all()
+
+            for v in vendedores_equipe:
+                if v[0] in permissoes['vendedores']:
+                    tem_acesso = True
+                    break
+
+            if not tem_acesso:
+                flash('Você não tem permissão para acessar esta equipe.', 'danger')
+                return redirect(url_for('comercial.dashboard_diretoria'))
+
+        if vendedor_filtro and vendedor_filtro not in permissoes['vendedores']:
+            # Verificar se tem acesso à equipe do vendedor
+            vendedor_equipe = db.session.query(CarteiraPrincipal.equipe_vendas).filter(
+                CarteiraPrincipal.vendedor == vendedor_filtro
+            ).first()
+
+            if not vendedor_equipe or vendedor_equipe[0] not in permissoes['equipes']:
+                flash('Você não tem permissão para acessar este vendedor.', 'danger')
+                return redirect(url_for('comercial.dashboard_diretoria'))
+
     # Buscar clientes conforme filtros
     if vendedor_filtro:
         clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor_filtro)
     elif equipe_filtro:
         clientes_cnpj = ClienteService.obter_clientes_por_equipe(equipe_filtro)
     else:
-        clientes_cnpj = ClienteService.obter_todos_clientes_distintos()
+        # Se não tem filtro específico e é vendedor, aplicar todos os filtros de permissão
+        if current_user.perfil == 'vendedor':
+            permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+
+            # Buscar clientes de todas as equipes e vendedores permitidos
+            clientes_cnpj_set = set()
+
+            # Adicionar clientes das equipes permitidas
+            for equipe in permissoes['equipes']:
+                clientes_equipe = ClienteService.obter_clientes_por_equipe(equipe)
+                clientes_cnpj_set.update(clientes_equipe)
+
+            # Adicionar clientes dos vendedores permitidos
+            for vendedor in permissoes['vendedores']:
+                clientes_vendedor = ClienteService.obter_clientes_por_vendedor(vendedor)
+                clientes_cnpj_set.update(clientes_vendedor)
+
+            clientes_cnpj = list(clientes_cnpj_set)
+        else:
+            clientes_cnpj = ClienteService.obter_todos_clientes_distintos()
 
     # Buscar dados de cada cliente
     clientes_data = []
@@ -239,3 +373,255 @@ def pedidos_cliente_api(cnpj):
             'per_page': 20,
             'total_pages': 0
         }), 500
+
+
+@comercial_bp.route('/api/pedido/<string:num_pedido>/documentos')
+@login_required
+def documentos_pedido_api(num_pedido):
+    """
+    API para obter todos os documentos de um pedido (NFs, Separações e Saldo).
+
+    Args:
+        num_pedido: Número do pedido
+
+    Query params:
+        cnpj: CNPJ do cliente (obrigatório)
+    """
+    try:
+        cnpj = request.args.get('cnpj')
+        if not cnpj:
+            return jsonify({'error': 'CNPJ do cliente é obrigatório'}), 400
+
+        # Obter documentos do pedido
+        resultado = DocumentoService.obter_documentos_pedido(
+            num_pedido=num_pedido,
+            cnpj_cliente=cnpj
+        )
+
+        # Formatar datas para JSON
+        for doc in resultado['documentos']:
+            # Converter valores que possam ser Decimal para float
+            if 'valor' in doc and doc['valor'] != '-':
+                doc['valor'] = float(doc['valor'])
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro na API de documentos do pedido {num_pedido}: {e}")
+        return jsonify({
+            'error': 'Erro ao buscar documentos',
+            'cliente_precisa_agendamento': False,
+            'documentos': [],
+            'totais': {
+                'valor_total_pedido': 0,
+                'valor_total_faturado': 0,
+                'valor_total_separacoes': 0,
+                'saldo': 0
+            }
+        }), 500
+
+
+@comercial_bp.route('/api/documento/<string:tipo>/<path:identificador>/produtos')
+@login_required
+def produtos_documento_api(tipo, identificador):
+    """
+    API para obter produtos de um documento específico (NF, Separação ou Saldo).
+
+    Args:
+        tipo: Tipo do documento ('NF', 'Separacao', 'Saldo')
+        identificador: ID único do documento
+
+    Query params:
+        num_pedido: Número do pedido (opcional, usado principalmente para Saldo)
+    """
+    try:
+        num_pedido = request.args.get('num_pedido')
+
+        # Obter produtos do documento
+        resultado = ProdutoDocumentoService.obter_produtos_documento(
+            tipo_documento=tipo,
+            identificador=identificador,
+            num_pedido=num_pedido
+        )
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro na API de produtos do documento {tipo} {identificador}: {e}")
+        return jsonify({
+            'error': 'Erro ao buscar produtos',
+            'produtos': [],
+            'totais': {
+                'quantidade': 0,
+                'valor': 0,
+                'peso': 0,
+                'pallet': 0
+            }
+        }), 500
+
+
+# ============================================================================
+# ROTAS DE ADMINISTRAÇÃO DE PERMISSÕES
+# ============================================================================
+
+@comercial_bp.route('/admin/permissoes')
+@login_required
+@admin_comercial_required
+def admin_permissoes():
+    """
+    Página principal de administração de permissões.
+    Lista todos os usuários vendedores.
+    """
+    from app.auth.models import Usuario
+
+    # Buscar todos os usuários vendedores
+    vendedores = db.session.query(Usuario).filter_by(
+        perfil='vendedor',
+        status='ativo'
+    ).order_by(Usuario.nome).all()
+
+    # Para cada vendedor, contar permissões
+    vendedores_data = []
+    for vendedor in vendedores:
+        permissoes = PermissaoService.obter_permissoes_usuario(vendedor.id)
+        vendedores_data.append({
+            'id': vendedor.id,
+            'nome': vendedor.nome,
+            'email': vendedor.email,
+            'total_equipes': len(permissoes['equipes']),
+            'total_vendedores': len(permissoes['vendedores']),
+            'total_permissoes': len(permissoes['equipes']) + len(permissoes['vendedores'])
+        })
+
+    return render_template('comercial/admin/lista_vendedores.html',
+                         vendedores=vendedores_data)
+
+
+@comercial_bp.route('/admin/permissoes/<int:usuario_id>')
+@login_required
+@admin_comercial_required
+def admin_editar_permissoes(usuario_id):
+    """
+    Página de edição de permissões de um usuário específico.
+    Interface com dois painéis separados por tipo.
+    """
+    from app.auth.models import Usuario
+
+    # Buscar usuário
+    usuario = db.session.query(Usuario).get_or_404(usuario_id)
+
+    # Verificar se é vendedor
+    if usuario.perfil != 'vendedor':
+        flash('Apenas vendedores podem ter permissões configuradas.', 'warning')
+        return redirect(url_for('comercial.admin_permissoes'))
+
+    # Obter todas as equipes e vendedores disponíveis
+    todas_equipes = PermissaoService.obter_equipes_disponiveis()
+    todos_vendedores = PermissaoService.obter_vendedores_disponiveis()
+
+    # Obter permissões atuais do usuário
+    permissoes_atuais = PermissaoService.obter_permissoes_usuario(usuario_id)
+
+    # Separar em disponíveis e permitidos
+    equipes_disponiveis = [e for e in todas_equipes if e not in permissoes_atuais['equipes']]
+    equipes_permitidas = permissoes_atuais['equipes']
+
+    vendedores_disponiveis = [v for v in todos_vendedores if v not in permissoes_atuais['vendedores']]
+    vendedores_permitidos = permissoes_atuais['vendedores']
+
+    # Obter logs recentes
+    logs = PermissaoService.obter_logs_usuario(usuario_id, limite=20)
+
+    return render_template('comercial/admin/editar_permissoes.html',
+                         usuario=usuario,
+                         equipes_disponiveis=equipes_disponiveis,
+                         equipes_permitidas=equipes_permitidas,
+                         vendedores_disponiveis=vendedores_disponiveis,
+                         vendedores_permitidos=vendedores_permitidos,
+                         logs=logs)
+
+
+@comercial_bp.route('/admin/permissoes/<int:usuario_id>/adicionar', methods=['POST'])
+@login_required
+@admin_comercial_required
+def admin_adicionar_permissao(usuario_id):
+    """
+    API para adicionar permissão a um usuário.
+    """
+    try:
+        data = request.get_json()
+        tipo = data.get('tipo')
+        valor = data.get('valor')
+
+        if not tipo or not valor:
+            return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
+
+        # Adicionar permissão
+        sucesso = PermissaoService.adicionar_permissao(
+            usuario_id=usuario_id,
+            tipo=tipo,
+            valor=valor,
+            admin_email=current_user.email
+        )
+
+        if sucesso:
+            return jsonify({'success': True, 'message': 'Permissão adicionada com sucesso'})
+        else:
+            return jsonify({'success': False, 'message': 'Permissão já existe'}), 400
+
+    except Exception as e:
+        logger.error(f"Erro ao adicionar permissão: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@comercial_bp.route('/admin/permissoes/<int:usuario_id>/remover', methods=['POST'])
+@login_required
+@admin_comercial_required
+def admin_remover_permissao(usuario_id):
+    """
+    API para remover permissão de um usuário.
+    """
+    try:
+        data = request.get_json()
+        tipo = data.get('tipo')
+        valor = data.get('valor')
+
+        if not tipo or not valor:
+            return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
+
+        # Remover permissão
+        sucesso = PermissaoService.remover_permissao(
+            usuario_id=usuario_id,
+            tipo=tipo,
+            valor=valor
+        )
+
+        if sucesso:
+            return jsonify({'success': True, 'message': 'Permissão removida com sucesso'})
+        else:
+            return jsonify({'success': False, 'message': 'Permissão não encontrada'}), 400
+
+    except Exception as e:
+        logger.error(f"Erro ao remover permissão: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@comercial_bp.route('/admin/permissoes/<int:usuario_id>/limpar', methods=['POST'])
+@login_required
+@admin_comercial_required
+def admin_limpar_permissoes(usuario_id):
+    """
+    API para limpar todas as permissões de um usuário.
+    """
+    try:
+        # Limpar todas as permissões
+        quantidade = PermissaoService.limpar_permissoes_usuario(usuario_id)
+
+        return jsonify({
+            'success': True,
+            'message': f'{quantidade} permissões removidas com sucesso'
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao limpar permissões: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500

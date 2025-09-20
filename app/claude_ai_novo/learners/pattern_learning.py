@@ -329,7 +329,7 @@ class PatternLearner:
         return padrao
                 
     
-    def buscar_padroes_aplicaveis(self, consulta: str, threshold: float = 0.5) -> List[Dict]:
+    def buscar_padroes_aplicaveis(self, consulta: str, threshold: float = 0.5) -> Optional[List[Dict]]:
         """
         Busca padrões aplicáveis a uma consulta.
         
@@ -342,7 +342,6 @@ class PatternLearner:
         """
         try:
             with current_app.app_context():
-                from app.claude_ai_novo.utils.flask_fallback import get_db
         except Exception as e:
             logger.error(f'Erro: {e}')
             pass
@@ -353,40 +352,40 @@ class PatternLearner:
         text = None
         SQLALCHEMY_AVAILABLE = False
                 
-                padroes = self.db.session.execute(
-                    text("""
-                        SELECT pattern_type, pattern_text, interpretation, confidence, usage_count
-                        FROM ai_knowledge_patterns
-                        WHERE confidence > :threshold
-                        AND LOWER(:consulta) LIKE '%' || LOWER(pattern_text) || '%'
-                        ORDER BY confidence DESC, usage_count DESC
-                        LIMIT 10
-                    """),
-                    {"consulta": consulta, "threshold": threshold}
-                ).fetchall()
+            padroes = self.db.session.execute(
+                text("""
+                    SELECT pattern_type, pattern_text, interpretation, confidence, usage_count
+                    FROM ai_knowledge_patterns
+                    WHERE confidence > :threshold
+                    AND LOWER(:consulta) LIKE '%' || LOWER(pattern_text) || '%'
+                    ORDER BY confidence DESC, usage_count DESC
+                    LIMIT 10
+                """),
+                {"consulta": consulta, "threshold": threshold}
+            ).fetchall()
+            
+            padroes_aplicaveis = []
+            for padrao in padroes:
+                # Fazer parse seguro da interpretação
+                try:
+                    if isinstance(padrao.interpretation, str):
+                        interpretacao = json.loads(padrao.interpretation)
+                    else:
+                        # Já é um dict, usar diretamente
+                        interpretacao = padrao.interpretation
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"⚠️ Erro ao fazer parse da interpretação: {e}")
+                    interpretacao = {}
                 
-                padroes_aplicaveis = []
-                for padrao in padroes:
-                    # Fazer parse seguro da interpretação
-                    try:
-                        if isinstance(padrao.interpretation, str):
-                            interpretacao = json.loads(padrao.interpretation)
-                        else:
-                            # Já é um dict, usar diretamente
-                            interpretacao = padrao.interpretation
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"⚠️ Erro ao fazer parse da interpretação: {e}")
-                        interpretacao = {}
-                    
-                    padroes_aplicaveis.append({
-                        "tipo": padrao.pattern_type,
-                        "texto": padrao.pattern_text,
-                        "interpretacao": interpretacao,
-                        "confianca": padrao.confidence,
-                        "uso_count": padrao.usage_count
-                    })
-                
-                    return padroes_aplicaveis
+                padroes_aplicaveis.append({
+                    "tipo": padrao.pattern_type,
+                    "texto": padrao.pattern_text,
+                    "interpretacao": interpretacao,
+                    "confianca": padrao.confidence,
+                    "uso_count": padrao.usage_count
+                })
+            
+        return padroes_aplicaveis
                 
                 
     

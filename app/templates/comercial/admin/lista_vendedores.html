@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Permissões Comerciais{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-lg">
+                <div class="card-header bg-dark text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-user-shield"></i> Gerenciar Permissões Comerciais
+                        </h4>
+                        <a href="{{ url_for('comercial.dashboard_diretoria') }}" class="btn btn-outline-light btn-sm">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Informação -->
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Sobre Permissões:</strong>
+                        Configure quais equipes e vendedores cada usuário vendedor pode visualizar no sistema.
+                        Usuários sem permissões não verão nenhum dado.
+                    </div>
+
+                    <!-- Tabela de Vendedores -->
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th class="text-center">Equipes</th>
+                                    <th class="text-center">Vendedores</th>
+                                    <th class="text-center">Total Permissões</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if vendedores %}
+                                    {% for vendedor in vendedores %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ vendedor.nome }}</strong>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">{{ vendedor.email }}</small>
+                                        </td>
+                                        <td class="text-center">
+                                            {% if vendedor.total_equipes > 0 %}
+                                                <span class="badge bg-success">{{ vendedor.total_equipes }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">0</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if vendedor.total_vendedores > 0 %}
+                                                <span class="badge bg-info">{{ vendedor.total_vendedores }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">0</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if vendedor.total_permissoes > 0 %}
+                                                <span class="badge bg-primary">{{ vendedor.total_permissoes }}</span>
+                                            {% else %}
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="fas fa-exclamation-triangle"></i> Sem permissões
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <a href="{{ url_for('comercial.admin_editar_permissoes', usuario_id=vendedor.id) }}"
+                                               class="btn btn-sm btn-primary">
+                                                <i class="fas fa-edit"></i> Editar Permissões
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">
+                                            <i class="fas fa-user-slash"></i>
+                                            Nenhum usuário vendedor ativo encontrado
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

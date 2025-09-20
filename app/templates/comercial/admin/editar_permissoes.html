@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Permissões - {{ usuario.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-lg">
+                <div class="card-header bg-dark text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-user-cog"></i> Editar Permissões - {{ usuario.nome }}
+                        </h4>
+                        <div>
+                            <button class="btn btn-danger btn-sm me-2" onclick="limparTodasPermissoes()">
+                                <i class="fas fa-trash"></i> Limpar Todas
+                            </button>
+                            <a href="{{ url_for('comercial.admin_permissoes') }}" class="btn btn-outline-light btn-sm">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Informações do Usuário -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="alert alert-light">
+                                <strong><i class="fas fa-user"></i> Usuário:</strong> {{ usuario.nome }}<br>
+                                <strong><i class="fas fa-envelope"></i> Email:</strong> {{ usuario.email }}<br>
+                                <strong><i class="fas fa-id-badge"></i> Perfil:</strong> <span class="badge bg-secondary">Vendedor</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Como funciona:</strong><br>
+                                • Selecione itens na esquerda e clique na seta para adicionar<br>
+                                • Selecione itens na direita e clique na seta para remover<br>
+                                • As alterações são salvas automaticamente
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO DE EQUIPES -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="fas fa-users"></i> Permissões de Equipes</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <!-- Equipes Disponíveis -->
+                                <div class="col-md-5">
+                                    <h6>Equipes Disponíveis</h6>
+                                    <select id="equipes_disponiveis" class="form-control" multiple size="10">
+                                        {% for equipe in equipes_disponiveis %}
+                                        <option value="{{ equipe }}">{{ equipe }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">{{ equipes_disponiveis|length }} equipe(s) disponível(is)</small>
+                                </div>
+
+                                <!-- Botões de Ação -->
+                                <div class="col-md-2 d-flex flex-column justify-content-center align-items-center">
+                                    <button class="btn btn-success mb-2" onclick="adicionarEquipes()">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                    <button class="btn btn-danger" onclick="removerEquipes()">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Equipes Permitidas -->
+                                <div class="col-md-5">
+                                    <h6>Equipes Permitidas</h6>
+                                    <select id="equipes_permitidas" class="form-control" multiple size="10">
+                                        {% for equipe in equipes_permitidas %}
+                                        <option value="{{ equipe }}">{{ equipe }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">{{ equipes_permitidas|length }} equipe(s) permitida(s)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO DE VENDEDORES -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="fas fa-user-tie"></i> Permissões de Vendedores Específicos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <!-- Vendedores Disponíveis -->
+                                <div class="col-md-5">
+                                    <h6>Vendedores Disponíveis</h6>
+                                    <select id="vendedores_disponiveis" class="form-control" multiple size="10">
+                                        {% for vendedor in vendedores_disponiveis %}
+                                        <option value="{{ vendedor }}">{{ vendedor }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">{{ vendedores_disponiveis|length }} vendedor(es) disponível(is)</small>
+                                </div>
+
+                                <!-- Botões de Ação -->
+                                <div class="col-md-2 d-flex flex-column justify-content-center align-items-center">
+                                    <button class="btn btn-info mb-2" onclick="adicionarVendedores()">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                    <button class="btn btn-danger" onclick="removerVendedores()">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Vendedores Permitidos -->
+                                <div class="col-md-5">
+                                    <h6>Vendedores Permitidos</h6>
+                                    <select id="vendedores_permitidos" class="form-control" multiple size="10">
+                                        {% for vendedor in vendedores_permitidos %}
+                                        <option value="{{ vendedor }}">{{ vendedor }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">{{ vendedores_permitidos|length }} vendedor(es) permitido(s)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LOGS DE ALTERAÇÕES -->
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="fas fa-history"></i> Histórico de Alterações</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Data/Hora</th>
+                                            <th>Ação</th>
+                                            <th>Administrador</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% if logs %}
+                                            {% for log in logs %}
+                                            <tr>
+                                                <td><small>{{ log.data_hora.strftime('%d/%m/%Y %H:%M') }}</small></td>
+                                                <td><small>{{ log.descricao_acao }}</small></td>
+                                                <td><small>{{ log.admin.nome if log.admin else '-' }}</small></td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr>
+                                                <td colspan="3" class="text-center text-muted">
+                                                    Nenhuma alteração registrada
+                                                </td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const usuarioId = {{ usuario.id }};
+
+// Função para adicionar equipes
+function adicionarEquipes() {
+    const select = document.getElementById('equipes_disponiveis');
+    const selectedOptions = Array.from(select.selectedOptions);
+
+    if (selectedOptions.length === 0) {
+        alert('Selecione pelo menos uma equipe para adicionar');
+        return;
+    }
+
+    selectedOptions.forEach(option => {
+        adicionarPermissao('equipe', option.value, () => {
+            // Mover opção para o outro select
+            const permitidasSelect = document.getElementById('equipes_permitidas');
+            permitidasSelect.appendChild(option);
+            option.selected = false;
+        });
+    });
+}
+
+// Função para remover equipes
+function removerEquipes() {
+    const select = document.getElementById('equipes_permitidas');
+    const selectedOptions = Array.from(select.selectedOptions);
+
+    if (selectedOptions.length === 0) {
+        alert('Selecione pelo menos uma equipe para remover');
+        return;
+    }
+
+    selectedOptions.forEach(option => {
+        removerPermissao('equipe', option.value, () => {
+            // Mover opção para o outro select
+            const disponiveisSelect = document.getElementById('equipes_disponiveis');
+            disponiveisSelect.appendChild(option);
+            option.selected = false;
+        });
+    });
+}
+
+// Função para adicionar vendedores
+function adicionarVendedores() {
+    const select = document.getElementById('vendedores_disponiveis');
+    const selectedOptions = Array.from(select.selectedOptions);
+
+    if (selectedOptions.length === 0) {
+        alert('Selecione pelo menos um vendedor para adicionar');
+        return;
+    }
+
+    selectedOptions.forEach(option => {
+        adicionarPermissao('vendedor', option.value, () => {
+            // Mover opção para o outro select
+            const permitidosSelect = document.getElementById('vendedores_permitidos');
+            permitidosSelect.appendChild(option);
+            option.selected = false;
+        });
+    });
+}
+
+// Função para remover vendedores
+function removerVendedores() {
+    const select = document.getElementById('vendedores_permitidos');
+    const selectedOptions = Array.from(select.selectedOptions);
+
+    if (selectedOptions.length === 0) {
+        alert('Selecione pelo menos um vendedor para remover');
+        return;
+    }
+
+    selectedOptions.forEach(option => {
+        removerPermissao('vendedor', option.value, () => {
+            // Mover opção para o outro select
+            const disponiveisSelect = document.getElementById('vendedores_disponiveis');
+            disponiveisSelect.appendChild(option);
+            option.selected = false;
+        });
+    });
+}
+
+// Função para adicionar permissão via API
+function adicionarPermissao(tipo, valor, callback) {
+    fetch(`/comercial/admin/permissoes/${usuarioId}/adicionar`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            tipo: tipo,
+            valor: valor
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (callback) callback();
+        } else {
+            alert('Erro ao adicionar permissão: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao adicionar permissão');
+    });
+}
+
+// Função para remover permissão via API
+function removerPermissao(tipo, valor, callback) {
+    fetch(`/comercial/admin/permissoes/${usuarioId}/remover`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            tipo: tipo,
+            valor: valor
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (callback) callback();
+        } else {
+            alert('Erro ao remover permissão: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao remover permissão');
+    });
+}
+
+// Função para limpar todas as permissões
+function limparTodasPermissoes() {
+    if (!confirm('Tem certeza que deseja remover TODAS as permissões deste usuário?')) {
+        return;
+    }
+
+    fetch(`/comercial/admin/permissoes/${usuarioId}/limpar`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Recarregar a página
+            window.location.reload();
+        } else {
+            alert('Erro ao limpar permissões: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao limpar permissões');
+    });
+}
+
+// Ordenar options nos selects ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    const selects = ['equipes_disponiveis', 'equipes_permitidas', 'vendedores_disponiveis', 'vendedores_permitidos'];
+
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        const options = Array.from(select.options);
+        options.sort((a, b) => a.text.localeCompare(b.text));
+
+        // Limpar e reordenar
+        select.innerHTML = '';
+        options.forEach(option => select.appendChild(option));
+    });
+});
+</script>
+{% endblock %}

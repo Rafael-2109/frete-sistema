@@ -108,3 +108,4 @@ qtd_saldo = qtd_produto_pedido - qtd_cancelada_produto_pedido - qtd_faturada
 - Adicionar campo `odoo_write_date` em CarteiraPrincipal
 - Filtrar por `write_date >= (now - 40 minutos)`
 - Atualizar TODOS os campos exceto `qtd_saldo_produto_pedido` que é calculado
+

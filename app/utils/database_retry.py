@@ -130,7 +130,7 @@ def commit_with_retry(session, max_retries: int = 3) -> bool:
                         session.rollback()
                         session.close()
                         db.engine.dispose()
-                    except Exception:
+                    except Exception as e:
                         pass
                     time.sleep(delay)
                     delay *= 2
@@ -194,7 +194,7 @@ def execute_in_chunks(items: list, chunk_size: int, operation: Callable,
             # Tenta fazer rollback
             try:
                 db.session.rollback()
-            except Exception:
+            except Exception as e:
                 pass
     
     # Commit final se não estava commitando após cada chunk

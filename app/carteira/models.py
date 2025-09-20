@@ -144,7 +144,11 @@ class CarteiraPrincipal(db.Model):
     
     # 📞 AGENDAMENTO
     forma_agendamento = db.Column(db.String(50), nullable=True)  # Portal, Telefone, E-mail, WhatsApp, ODOO, SEM AGENDAMENTO
-    
+
+    # 🔄 SINCRONIZAÇÃO INCREMENTAL
+    odoo_write_date = db.Column(db.DateTime, nullable=True, index=True)  # write_date do Odoo
+    ultima_sync = db.Column(db.DateTime, nullable=True)  # momento da última sincronização
+
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)

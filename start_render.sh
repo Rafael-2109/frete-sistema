@@ -97,6 +97,22 @@ python -m flask db upgrade 2>/dev/null || echo " Migrações não executadas (po
 # Sistema de estoque em tempo real é inicializado automaticamente pelo pre_start.py
 # Para desabilitar, defina INIT_ESTOQUE_TEMPO_REAL=false
 
+# 🔄 INICIAR SINCRONIZAÇÃO INCREMENTAL EM BACKGROUND
+echo " Iniciando sincronização incremental em background..."
+if [ -f "app/scheduler/sincronizacao_incremental_simples.py" ]; then
+    # Criar diretório de logs se não existir
+    mkdir -p logs
+
+    python app/scheduler/sincronizacao_incremental_simples.py > logs/sincronizacao_incremental.log 2>&1 &
+    SYNC_PID=$!
+    echo " ✅ Sincronização incremental iniciada (PID: $SYNC_PID)"
+    echo "    - Execução imediata para recuperar dados do deploy"
+    echo "    - Próximas execuções a cada 30 minutos"
+    echo "    - Logs em: logs/sincronizacao_incremental.log"
+else
+    echo " ⚠️ Script de sincronização não encontrado"
+fi
+
 if [ "$MCP_ENABLED" = "true" ]; then
     echo "Iniciando MCP em background..."
     cd app/mcp_sistema && uvicorn main:app --host 0.0.0.0 --port 8000 &

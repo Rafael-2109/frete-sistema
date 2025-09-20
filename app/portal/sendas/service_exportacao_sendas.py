@@ -257,7 +257,6 @@ class ExportacaoSendasService:
 
                 # Formatar coluna de data como DD/MM/YYYY
                 worksheet = writer.sheets['Agendamento']
-                from openpyxl.styles import numbers
 
                 # Encontrar índice da coluna 'Data sugerida de entrega' (coluna 18 = R)
                 date_column_letter = 'R'  # Coluna 18

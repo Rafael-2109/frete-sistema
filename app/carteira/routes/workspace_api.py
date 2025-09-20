@@ -49,7 +49,11 @@ def workspace_pedido_real(num_pedido):
                     CadastroPalletizacao.ativo == True,
                 ),
             )
-            .filter(CarteiraPrincipal.num_pedido == num_pedido, CarteiraPrincipal.ativo == True)
+            .filter(
+                CarteiraPrincipal.num_pedido == num_pedido,
+                CarteiraPrincipal.ativo == True,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # Filtrar apenas itens com saldo
+            )
             .all()
         )
 

@@ -545,7 +545,7 @@
 
 <!-- Modal de Pedidos -->
 <div class="modal fade" id="modalPedidos" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl" style="max-width: 90%;">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalPedidosTitle">Pedidos do Cliente</h5>
@@ -647,10 +647,11 @@
 
                 // Criar tabela de pedidos
                 let html = `
-                    <div class="table-responsive">
+                    <div style="overflow-x: auto;">
                         <table class="table table-sm">
                             <thead>
                                 <tr>
+                                    <th width="5%"></th>
                                     <th>Pedido</th>
                                     <th>Pedido Cliente</th>
                                     <th>Incoterm</th>
@@ -693,8 +694,20 @@
                             statusIcon = 'fa-question-circle';
                     }
 
+                    // ID único para o accordion
+                    const pedidoId = pedido.num_pedido.replace(/[^a-zA-Z0-9]/g, '_');
+
                     html += `
-                        <tr>
+                        <tr data-pedido="${pedido.num_pedido}" class="pedido-row" style="background-color: #2d2d35;">
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-link p-0"
+                                        onclick="toggleDocumentos('${pedido.num_pedido}', '${currentCnpj}')"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#docs_${pedidoId}"
+                                        aria-expanded="false">
+                                    <i class="fas fa-chevron-right" id="icon_${pedidoId}"></i>
+                                </button>
+                            </td>
                             <td>
                                 <span class="text-monospace">${pedido.num_pedido}</span>
                             </td>
@@ -726,6 +739,18 @@
                             </td>
                             <td class="text-end ${pedido.saldo_carteira > 0 ? 'text-info' : ''}">
                                 R$ ${formatarMoeda(pedido.saldo_carteira)}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="11" class="p-0 border-0">
+                                <div class="collapse" id="docs_${pedidoId}">
+                                    <div class="card card-body bg-dark m-2 me-3" id="docsContent_${pedidoId}">
+                                        <div class="text-center p-3">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span class="ms-2">Carregando documentos...</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -832,6 +857,367 @@
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         });
+    }
+
+    // Variável para controlar documentos já carregados
+    let documentosCarregados = {};
+
+    // Função para expandir/colapsar e carregar documentos
+    function toggleDocumentos(numPedido, cnpj) {
+        const pedidoId = numPedido.replace(/[^a-zA-Z0-9]/g, '_');
+        const icon = document.getElementById(`icon_${pedidoId}`);
+        const contentDiv = document.getElementById(`docsContent_${pedidoId}`);
+        const pedidoRow = document.querySelector(`tr[data-pedido="${numPedido}"]`);
+
+        // Alternar ícone e destaque da linha
+        if (icon.classList.contains('fa-chevron-right')) {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+
+            // Destacar ainda mais a linha
+            if (pedidoRow) {
+                pedidoRow.style.backgroundColor = '#1a1a1f';
+                pedidoRow.style.borderLeft = '3px solid #7289da';
+            }
+
+            // Carregar documentos se ainda não foram carregados
+            if (!documentosCarregados[numPedido]) {
+                carregarDocumentosPedido(numPedido, cnpj, pedidoId);
+            }
+        } else {
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+
+            // Voltar cor original da linha
+            if (pedidoRow) {
+                pedidoRow.style.backgroundColor = '#2d2d35';
+                pedidoRow.style.borderLeft = 'none';
+            }
+        }
+    }
+
+    // Função para carregar documentos do pedido
+    function carregarDocumentosPedido(numPedido, cnpj, pedidoId) {
+        const contentDiv = document.getElementById(`docsContent_${pedidoId}`);
+
+        // Decodificar CNPJ se necessário
+        const cnpjDecoded = decodeURIComponent(cnpj);
+
+        $.ajax({
+            url: `/comercial/api/pedido/${encodeURIComponent(numPedido)}/documentos`,
+            data: { cnpj: cnpjDecoded },
+            success: function(data) {
+                documentosCarregados[numPedido] = true;
+                renderizarDocumentos(data, contentDiv);
+            },
+            error: function() {
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger m-0">
+                        <i class="fas fa-exclamation-circle"></i> Erro ao carregar documentos do pedido
+                    </div>
+                `;
+            }
+        });
+    }
+
+    // Função para renderizar documentos
+    function renderizarDocumentos(data, contentDiv) {
+        if (data.documentos.length === 0) {
+            contentDiv.innerHTML = `
+                <div class="alert alert-info m-0">
+                    <i class="fas fa-info-circle"></i> Nenhum documento encontrado para este pedido
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="table-responsive">';
+        html += '<table class="table table-sm table-hover mb-0">';
+
+        // Criar header da tabela baseado se cliente precisa agendamento
+        if (data.cliente_precisa_agendamento) {
+            // Com subseção de agendamento
+            html += `
+                <thead>
+                    <tr class="table-secondary" style="color: #c5c5d2;">
+                        <th rowspan="2" width="3%" style="color: #c5c5d2;"></th>
+                        <th rowspan="2" width="7%" style="color: #c5c5d2; border-right: 2px solid #444654;">Tipo</th>
+                        <th rowspan="2" class="text-end" width="12%" style="color: #c5c5d2; padding-right: 20px; border-right: 2px solid #444654;">Valor<br><small style="font-weight: normal; color: #8e8ea0;">(Documento)</small></th>
+                        <th colspan="2" class="text-center" style="color: #c5c5d2; border-right: 2px solid #444654;">Faturamento</th>
+                        <th colspan="2" class="text-center" style="color: #c5c5d2; border-right: 2px solid #444654;">Embarque</th>
+                        <th colspan="3" class="text-center" style="color: #c5c5d2; border-right: 2px solid #444654;">Agendamento</th>
+                        <th rowspan="2" class="text-center" style="color: #c5c5d2;">Entrega<br><small style="font-weight: normal; color: #8e8ea0;">(Realizada)</small></th>
+                    </tr>
+                    <tr class="table-secondary" style="color: #c5c5d2;">
+                        <th width="7%" style="color: #c5c5d2;">Nº NF</th>
+                        <th width="10%" style="color: #c5c5d2; border-right: 2px solid #444654;">Data Fat.</th>
+                        <th width="10%" style="color: #c5c5d2;">Data Emb.</th>
+                        <th width="15%" style="color: #c5c5d2; border-right: 2px solid #444654;">Transportadora</th>
+                        <th width="10%" style="color: #c5c5d2;">Data</th>
+                        <th width="10%" style="color: #c5c5d2;">Protocolo</th>
+                        <th width="8%" style="color: #c5c5d2; border-right: 2px solid #444654;">Status</th>
+                    </tr>
+                </thead>
+            `;
+        } else {
+            // Sem subseção de agendamento
+            html += `
+                <thead>
+                    <tr class="table-secondary" style="color: #c5c5d2;">
+                        <th rowspan="2" width="3%" style="color: #c5c5d2;"></th>
+                        <th rowspan="2" width="7%" style="color: #c5c5d2; border-right: 2px solid #444654;">Tipo</th>
+                        <th rowspan="2" class="text-end" width="12%" style="color: #c5c5d2; padding-right: 20px; border-right: 2px solid #444654;">Valor<br><small style="font-weight: normal; color: #8e8ea0;">(Documento)</small></th>
+                        <th colspan="2" class="text-center" style="color: #c5c5d2; border-right: 2px solid #444654;">Faturamento</th>
+                        <th colspan="2" class="text-center" style="color: #c5c5d2; border-right: 2px solid #444654;">Embarque</th>
+                        <th rowspan="2" class="text-center" style="color: #c5c5d2; border-right: 2px solid #444654;">Entrega<br><small style="font-weight: normal; color: #8e8ea0;">(Prevista)</small></th>
+                        <th rowspan="2" class="text-center" style="color: #c5c5d2;">Entrega<br><small style="font-weight: normal; color: #8e8ea0;">(Realizada)</small></th>
+                    </tr>
+                    <tr class="table-secondary" style="color: #c5c5d2;">
+                        <th width="7%" style="color: #c5c5d2;">Nº NF</th>
+                        <th width="10%" style="color: #c5c5d2; border-right: 2px solid #444654;">Data Fat.</th>
+                        <th width="10%" style="color: #c5c5d2;">Data Emb.</th>
+                        <th width="18%" style="color: #c5c5d2; border-right: 2px solid #444654;">Transportadora</th>
+                    </tr>
+                </thead>
+            `;
+        }
+
+        html += '<tbody>';
+
+        // Renderizar cada documento
+        data.documentos.forEach(function(doc, index) {
+            // Definir badge e cor por tipo
+            let badgeClass = '';
+            let badgeIcon = '';
+            let tipoApi = '';
+            let identificador = '';
+
+            switch(doc.tipo) {
+                case 'NF':
+                    badgeClass = 'badge-success';
+                    badgeIcon = 'fa-file-invoice';
+                    tipoApi = 'NF';
+                    identificador = doc.numero_nf;
+                    break;
+                case 'Separação':
+                    badgeClass = 'badge-warning';
+                    badgeIcon = 'fa-box-open';
+                    tipoApi = 'Separacao';
+                    identificador = doc.separacao_lote_id;
+                    break;
+                case 'Saldo':
+                    badgeClass = 'badge-info';
+                    badgeIcon = 'fa-calculator';
+                    tipoApi = 'Saldo';
+                    identificador = doc.num_pedido || data.num_pedido;
+                    break;
+            }
+
+            // Criar ID único para o documento
+            const docId = `${tipoApi}_${identificador}_${index}`.replace(/[^a-zA-Z0-9_]/g, '_');
+
+            html += `<tr id="docRow_${docId}">`;
+
+            // Coluna de expansão
+            html += `<td class="text-center" style="cursor: pointer;" onclick="toggleProdutos('${docId}', '${tipoApi}', '${identificador || ''}', '${doc.num_pedido || ''}')">
+                        <i class="fas fa-chevron-right" id="prodIcon_${docId}" style="color: #8e8ea0;"></i>
+                     </td>`;
+
+            html += `<td style="border-right: 2px solid #444654;"><span class="badge ${badgeClass}"><i class="fas ${badgeIcon}"></i> ${doc.tipo}</span></td>`;
+
+            // Valor (movido para o início)
+            if (doc.valor && doc.valor !== '-') {
+                html += `<td class="text-end" style="padding-right: 20px; border-right: 2px solid #444654;"><strong>R$ ${formatarMoeda(doc.valor)}</strong></td>`;
+            } else {
+                html += `<td class="text-end" style="padding-right: 20px; border-right: 2px solid #444654;">-</td>`;
+            }
+
+            // Faturamento
+            html += `<td>${doc.numero_nf || '-'}</td>`;
+            html += `<td style="border-right: 2px solid #444654;">${doc.data_faturamento || '-'}</td>`;
+
+            // Embarque
+            html += `<td>${doc.data_embarque || '-'}</td>`;
+            html += `<td style="border-right: 2px solid #444654;">${doc.transportadora || '-'}</td>`;
+
+            // Agendamento (se cliente precisar) ou Entrega Prevista
+            if (data.cliente_precisa_agendamento) {
+                html += `<td>${doc.data_agendamento || '-'}</td>`;
+                html += `<td>${doc.protocolo_agendamento || '-'}</td>`;
+                html += `<td style="border-right: 2px solid #444654;">${formatarStatusAgendamento(doc.status_agendamento)}</td>`;
+            } else {
+                html += `<td style="border-right: 2px solid #444654;">${doc.data_entrega_prevista || '-'}</td>`;
+            }
+
+            // Entrega Realizada
+            html += `<td>${doc.data_entrega_realizada || '-'}</td>`;
+
+            html += '</tr>';
+
+            // Linha para produtos (inicialmente oculta)
+            html += `<tr id="prodRow_${docId}" style="display: none;">`;
+            html += `<td colspan="100%" style="padding: 0;">`;
+            html += `<div id="prodContent_${docId}" style="padding-left: 40px; background-color: #1a1a1f;">`;
+            html += `<div class="text-center p-3" style="color: #8e8ea0;">`;
+            html += `<i class="fas fa-spinner fa-spin"></i> Carregando produtos...`;
+            html += `</div>`;
+            html += `</div>`;
+            html += `</td>`;
+            html += `</tr>`;
+        });
+
+        html += '</tbody></table></div>';
+
+        contentDiv.innerHTML = html;
+    }
+
+    // Função para formatar status de agendamento
+    function formatarStatusAgendamento(status) {
+        if (!status || status === '-') {
+            return '-';
+        }
+
+        let badgeClass = '';
+        let icon = '';
+
+        switch(status.toLowerCase()) {
+            case 'confirmado':
+                badgeClass = 'badge-success';
+                icon = 'fa-check';
+                break;
+            case 'aguardando':
+                badgeClass = 'badge-warning';
+                icon = 'fa-clock';
+                break;
+            default:
+                badgeClass = 'badge-secondary';
+                icon = 'fa-question';
+        }
+
+        return `<span class="badge ${badgeClass}"><i class="fas ${icon}"></i> ${status}</span>`;
+    }
+
+    // Cache para produtos carregados
+    var produtosCarregados = {};
+
+    // Função para alternar exibição de produtos
+    function toggleProdutos(docId, tipo, identificador, numPedido) {
+        const prodRow = document.getElementById(`prodRow_${docId}`);
+        const icon = document.getElementById(`prodIcon_${docId}`);
+        const docRow = document.getElementById(`docRow_${docId}`);
+
+        if (prodRow.style.display === 'none') {
+            // Expandir
+            prodRow.style.display = '';
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+
+            // Destacar linha do documento
+            docRow.style.backgroundColor = '#363640';
+            docRow.style.borderLeft = '3px solid #7289da';
+
+            // Verificar se já carregamos os produtos
+            const cacheKey = `${tipo}_${identificador}`;
+            if (!produtosCarregados[cacheKey]) {
+                carregarProdutosDocumento(docId, tipo, identificador, numPedido);
+            }
+        } else {
+            // Colapsar
+            prodRow.style.display = 'none';
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+
+            // Remover destaque
+            docRow.style.backgroundColor = '';
+            docRow.style.borderLeft = '';
+        }
+    }
+
+    // Função para carregar produtos de um documento
+    function carregarProdutosDocumento(docId, tipo, identificador, numPedido) {
+        const contentDiv = document.getElementById(`prodContent_${docId}`);
+
+        // URL da API
+        let url = `/comercial/api/documento/${tipo}/${encodeURIComponent(identificador)}/produtos`;
+        if (numPedido) {
+            url += `?num_pedido=${encodeURIComponent(numPedido)}`;
+        }
+
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(data) {
+                // Guardar no cache
+                const cacheKey = `${tipo}_${identificador}`;
+                produtosCarregados[cacheKey] = data;
+
+                // Renderizar produtos
+                renderizarProdutos(data, contentDiv);
+            },
+            error: function(xhr, status, error) {
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger m-3">
+                        <i class="fas fa-exclamation-triangle"></i> Erro ao carregar produtos: ${error}
+                    </div>
+                `;
+            }
+        });
+    }
+
+    // Função para renderizar produtos
+    function renderizarProdutos(data, contentDiv) {
+        if (!data.produtos || data.produtos.length === 0) {
+            contentDiv.innerHTML = `
+                <div class="alert alert-info m-3" style="background-color: #2d2d35; border-color: #444654; color: #c5c5d2;">
+                    <i class="fas fa-info-circle"></i> Nenhum produto encontrado para este documento
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="table-responsive" style="padding: 15px;">';
+        html += '<table class="table table-sm mb-3" style="background-color: #2d2d35;">';
+
+        // Header da tabela de produtos
+        html += `
+            <thead>
+                <tr style="color: #8e8ea0; font-size: 0.9rem;">
+                    <th style="color: #8e8ea0; border-bottom: 1px solid #444654;">Código</th>
+                    <th style="color: #8e8ea0; border-bottom: 1px solid #444654;">Produto</th>
+                    <th class="text-end" style="color: #8e8ea0; border-bottom: 1px solid #444654;">Quantidade</th>
+                    <th class="text-end" style="color: #8e8ea0; border-bottom: 1px solid #444654;">Preço</th>
+                    <th class="text-end" style="color: #8e8ea0; border-bottom: 1px solid #444654;">Valor</th>
+                    <th class="text-end" style="color: #8e8ea0; border-bottom: 1px solid #444654;">Peso</th>
+                    <th class="text-end" style="color: #8e8ea0; border-bottom: 1px solid #444654;">Pallet</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+
+        // Renderizar cada produto
+        data.produtos.forEach(function(prod) {
+            html += '<tr style="color: #c5c5d2; font-size: 0.85rem;">';
+            html += `<td style="color: #7289da;"><small>${prod.codigo}</small></td>`;
+            html += `<td><small>${prod.produto}</small></td>`;
+            html += `<td class="text-end">${formatarNumero(prod.quantidade, 0)}</td>`;
+            html += `<td class="text-end">R$ ${formatarMoeda(prod.preco)}</td>`;
+            html += `<td class="text-end"><strong>R$ ${formatarMoeda(prod.valor)}</strong></td>`;
+            html += `<td class="text-end">${prod.peso > 0 ? formatarNumero(prod.peso, 0) : '-'}</td>`;
+            html += `<td class="text-end">${prod.pallet > 0 ? formatarNumero(prod.pallet, 2) : '-'}</td>`;
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+
+        contentDiv.innerHTML = html;
+    }
+
+    // Função auxiliar para formatar números
+    function formatarNumero(num, casasDecimais = 0) {
+        if (num === 0 || num === null || num === undefined) {
+            return '-';
+        }
+        return num.toFixed(casasDecimais).replace('.', ',');
     }
 </script>
 {% endblock %}

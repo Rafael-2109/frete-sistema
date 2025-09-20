@@ -1,6 +1,5 @@
 from app import db
-from flask_login import current_user
-from datetime import datetime, date
+from datetime import datetime
 
 class EntregaMonitorada(db.Model):
     __tablename__ = 'entregas_monitoradas'

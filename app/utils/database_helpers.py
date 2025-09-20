@@ -45,7 +45,7 @@ def retry_on_ssl_error(max_retries=3, backoff_factor=1.0):
                                 # Forçar reconexão
                                 db.session.close()
                                 db.engine.dispose()
-                            except:
+                            except Exception as e:
                                 pass
                             
                             time.sleep(wait_time)

@@ -80,6 +80,7 @@
       <ul class="navbar-nav ms-auto">
 
         <!-- OPERACIONAL - Fluxo principal do dia a dia -->
+        {% if not is_comercial_only %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuOperacional" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-tasks"></i> Operacional
@@ -113,9 +114,10 @@
             </a></li>
           </ul>
         </li>
+        {% endif %}
 
         <!-- FINANCEIRO - Gestão financeira -->
-        {% if current_user.is_authenticated and (current_user.tem_permissao('fretes') or current_user.tem_permissao('financeiro') or current_user.tem_permissao('faturamento') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador') %}
+        {% if not is_comercial_only and current_user.is_authenticated and (current_user.tem_permissao('fretes') or current_user.tem_permissao('financeiro') or current_user.tem_permissao('faturamento') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador') %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuFinanceiro" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-dollar-sign"></i> Financeiro
@@ -182,7 +184,7 @@
         {% endif %}
 
         <!-- CADASTROS - Dados mestres -->
-        {% if current_user.is_authenticated and (current_user.tem_permissao('cadastros') or current_user.tem_permissao('transportadoras') or current_user.tem_permissao('tabelas') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador') %}
+        {% if not is_comercial_only and current_user.is_authenticated and (current_user.tem_permissao('cadastros') or current_user.tem_permissao('transportadoras') or current_user.tem_permissao('tabelas') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador') %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuCadastros" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-database"></i> Cadastros
@@ -273,6 +275,7 @@
         </li>
 
         <!-- CARTEIRA & PRODUÇÃO - Módulos de carteira de pedidos -->
+        {% if not is_comercial_only %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuCarteira" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-industry text-success"></i> Carteira & Estoque
@@ -332,6 +335,7 @@
             </a></li>
           </ul>
         </li>
+        {% endif %}
 
         <!-- COMERCIAL - Acompanhamento de vendas e clientes -->
         {% if current_user.is_authenticated and (current_user.tem_permissao('comercial') or current_user.tem_permissao('vendas') or current_user.perfil in ['administrador', 'diretoria', 'gerente_comercial', 'vendedor']) %}
@@ -353,6 +357,13 @@
             <li><a class="dropdown-item" href="{{ url_for('comercial.lista_clientes', posicao='todos') }}">
               <i class="fas fa-list-alt"></i> Posição Total de Clientes
             </a></li>
+            {% if is_admin_comercial %}
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">⚙️ Administração</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('comercial.admin_permissoes') }}">
+              <i class="fas fa-user-shield text-danger"></i> Gerenciar Permissões
+            </a></li>
+            {% endif %}
           </ul>
         </li>
         {% endif %}

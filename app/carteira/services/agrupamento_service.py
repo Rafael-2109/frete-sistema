@@ -56,7 +56,13 @@ class AgrupamentoService:
             return []
     
     def _query_agrupamento_base(self):
-        """Query principal de agrupamento conforme especificação"""
+        """
+        Query principal de agrupamento conforme especificação
+
+        IMPORTANTE: Esta query filtra apenas para EXIBIÇÃO no workspace.
+        Pedidos com qtd_saldo_produto_pedido = 0 NÃO são deletados do banco,
+        apenas não aparecem na listagem do workspace/carteira agrupada.
+        """
         return db.session.query(
             # Campos base do agrupamento
             CarteiraPrincipal.num_pedido,
@@ -102,6 +108,8 @@ class AgrupamentoService:
             )
         ).filter(
             CarteiraPrincipal.ativo == True,
+            # NOVO FILTRO: Mostrar apenas itens com saldo > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
             # Filtrar pedidos que NÃO estão em standby OU estão CONFIRMADOS
             ~exists().where(
                 and_(

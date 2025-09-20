@@ -672,19 +672,39 @@ def create_app(config_name=None):
     @app.context_processor
     def inject_permission_helpers():
         """Injeta helpers de permissão nos templates Jinja2"""
+        from flask_login import current_user
         try:
             # from app.permissions.decorators import user_can_access, user_is_admin, user_level  # Temporariamente comentado
+
+            # Adicionar flags do módulo comercial
+            is_vendedor = False
+            is_comercial_only = False
+            is_admin_comercial = False
+
+            if current_user.is_authenticated:
+                is_vendedor = current_user.perfil == 'vendedor'
+                is_comercial_only = current_user.perfil == 'vendedor'
+                is_admin_comercial = current_user.perfil in ['administrador', 'gerente_comercial']
+
             return {
                 # 'user_can_access': user_can_access,
                 # 'user_is_admin': user_is_admin,
-                # 'user_level': user_level
+                # 'user_level': user_level,
+                'is_vendedor': is_vendedor,
+                'is_comercial_only': is_comercial_only,
+                'is_admin_comercial': is_admin_comercial,
+                'user_perfil': current_user.perfil if current_user.is_authenticated else None
             }
         except Exception as e:
             app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
             return {
                 # 'user_can_access': can_access,  # Temporariamente desabilitado
                 'user_is_admin': lambda: False,
-                'user_level': lambda: 0
+                'user_level': lambda: 0,
+                'is_vendedor': False,
+                'is_comercial_only': False,
+                'is_admin_comercial': False,
+                'user_perfil': None
             }
     
     # 📦 Módulos de Carteira de Pedidos

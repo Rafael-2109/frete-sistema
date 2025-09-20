@@ -62,9 +62,17 @@ class CarteiraService:
         prefixos_odoo = ('VSC', 'VCD', 'VFB')
         return numero_pedido.startswith(prefixos_odoo)
     
-    def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None):
+    def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None,
+                               modo_incremental=False, minutos_janela=40):
         """
         Obter carteira pendente do Odoo com filtro combinado inteligente
+
+        Args:
+            data_inicio: Data início para filtro
+            data_fim: Data fim para filtro
+            pedidos_especificos: Lista de pedidos específicos
+            modo_incremental: Se True, busca por write_date sem filtrar qty_saldo
+            minutos_janela: Janela de tempo em minutos para modo incremental
         """
         logger.info("Buscando carteira pendente do Odoo com filtro inteligente...")
         
@@ -77,22 +85,43 @@ class CarteiraService:
                     'dados': []
                 }
             
-            # NOVO: Coletar pedidos existentes na CarteiraPrincipal para filtro
+            # OTIMIZAÇÃO: Em modo incremental, não precisa buscar pedidos existentes
             from app.carteira.models import CarteiraPrincipal
             from app import db
-            
+
             pedidos_na_carteira = set()
-            logger.info("📋 Coletando pedidos existentes na carteira para filtro...")
-            
-            for pedido in db.session.query(CarteiraPrincipal.num_pedido).distinct().all():
-                if pedido[0] and self.is_pedido_odoo(pedido[0]):
-                    pedidos_na_carteira.add(pedido[0])
-            
-            logger.info(f"✅ {len(pedidos_na_carteira)} pedidos Odoo existentes serão incluídos no filtro")
-            
-            # Montar domain com lógica OR inteligente
-            if pedidos_na_carteira:
-                # Se tem pedidos na carteira, usar filtro OR
+
+            # Em modo incremental, o write_date já garante que pegamos o que precisa
+            if not modo_incremental:
+                logger.info("📋 Coletando pedidos existentes na carteira para filtro...")
+
+                for pedido in db.session.query(CarteiraPrincipal.num_pedido).distinct().all():
+                    if pedido[0] and self.is_pedido_odoo(pedido[0]):
+                        pedidos_na_carteira.add(pedido[0])
+
+                logger.info(f"✅ {len(pedidos_na_carteira)} pedidos Odoo existentes serão incluídos no filtro")
+            else:
+                logger.info("🚀 Modo incremental: pulando busca de pedidos existentes (otimização)")
+
+            # Montar domain baseado no modo
+            if modo_incremental:
+                # MODO INCREMENTAL: busca por write_date
+                from app.utils.timezone import agora_utc
+                from datetime import timedelta
+
+                data_corte = agora_utc() - timedelta(minutes=minutos_janela)
+                momento_atual = agora_utc()
+
+                domain = [
+                    ('order_id.write_date', '>=', data_corte.isoformat()),
+                    ('order_id.write_date', '<=', momento_atual.isoformat()),
+                    ('order_id.state', 'in', ['draft', 'sent', 'sale'])
+                    # NÃO filtrar por qty_saldo > 0!
+                ]
+                logger.info(f"🔄 MODO INCREMENTAL: buscando alterações dos últimos {minutos_janela} minutos")
+                logger.info(f"📅 Data corte UTC: {data_corte.isoformat()}")
+            elif pedidos_na_carteira:
+                # MODO TRADICIONAL com pedidos existentes: usar filtro OR
                 domain = [
                     '&',  # AND entre status válido e condição OR
                     ('order_id.state', 'in', ['draft', 'sent', 'sale']),  # Status válido sempre
@@ -102,7 +131,7 @@ class CarteiraService:
                 ]
                 logger.info("🔍 Usando filtro combinado: (qty_saldo > 0) OU (pedidos existentes)")
             else:
-                # Se carteira vazia, apenas qty_saldo > 0
+                # MODO TRADICIONAL carteira vazia: apenas qty_saldo > 0
                 domain = [
                     ('qty_saldo', '>', 0),  # Carteira pendente
                     ('order_id.state', 'in', ['draft', 'sent', 'sale'])  # Status válido
@@ -198,14 +227,38 @@ class CarteiraService:
             # 3️⃣ COLETAR IDs DE PARTNERS E BUSCAR (1 query)
             partner_ids = set()
             shipping_ids = set()
-            
+            carrier_partner_ids = set()  # OTIMIZAÇÃO: IDs de transportadoras para REDESPACHO
+
+            # Primeiro, coletar IDs de transportadoras que podem ser usadas em REDESPACHO
+            carrier_ids_to_fetch = set()
             for pedido in pedidos:
                 if pedido.get('partner_id'):
                     partner_ids.add(pedido['partner_id'][0])
                 if pedido.get('partner_shipping_id'):
                     shipping_ids.add(pedido['partner_shipping_id'][0])
-            
-            all_partner_ids = list(partner_ids | shipping_ids)
+
+                # OTIMIZAÇÃO: Detectar pedidos com REDESPACHO e coletar carrier_id
+                if pedido.get('incoterm') and pedido.get('carrier_id'):
+                    incoterm_texto = str(pedido.get('incoterm', ''))
+                    if 'RED' in incoterm_texto.upper() or 'REDESPACHO' in incoterm_texto.upper():
+                        carrier_id = pedido['carrier_id'][0] if isinstance(pedido['carrier_id'], list) else pedido['carrier_id']
+                        carrier_ids_to_fetch.add(carrier_id)
+
+            # Se houver carriers para buscar, fazer query adicional para obter os partner_ids
+            if carrier_ids_to_fetch:
+                logger.info(f"🚚 Detectados {len(carrier_ids_to_fetch)} pedidos com REDESPACHO")
+                carrier_data = self.connection.search_read(
+                    'delivery.carrier',
+                    [('id', 'in', list(carrier_ids_to_fetch))],
+                    ['id', 'l10n_br_partner_id']
+                )
+                for carrier in carrier_data:
+                    if carrier.get('l10n_br_partner_id'):
+                        partner_id = carrier['l10n_br_partner_id'][0] if isinstance(carrier['l10n_br_partner_id'], list) else carrier['l10n_br_partner_id']
+                        carrier_partner_ids.add(partner_id)
+
+            # Combinar todos os partner IDs (incluindo transportadoras)
+            all_partner_ids = list(partner_ids | shipping_ids | carrier_partner_ids)
             
             campos_partner = [
                 'id', 'name', 'l10n_br_cnpj', 'l10n_br_razao_social',
@@ -402,29 +455,16 @@ class CarteiraService:
                             # Pegar o ID do parceiro da transportadora
                             transportadora_partner_id = carrier_data[0]['l10n_br_partner_id'][0] if isinstance(carrier_data[0]['l10n_br_partner_id'], list) else carrier_data[0]['l10n_br_partner_id']
                             
-                            # Buscar no cache ou fazer query
-                            if transportadora_partner_id in cache_partners:
-                                endereco = cache_partners.get(transportadora_partner_id, {})
+                            # OTIMIZAÇÃO: Usar apenas cache (já buscamos todos os partners no batch)
+                            endereco = cache_partners.get(transportadora_partner_id, {})
+
+                            if endereco:
+                                # Log detalhado do endereço substituído
+                                municipio = endereco.get('l10n_br_municipio_id', ['', ''])[1] if isinstance(endereco.get('l10n_br_municipio_id'), list) else ''
+                                logger.info(f"   📍 Endereço REDESPACHO (cache): {municipio} - {endereco.get('street', 'N/A')}")
                             else:
-                                # Query adicional se não estiver no cache
-                                # Definir campos necessários para buscar dados do partner
-                                campos_partner_transp = [
-                                    'id', 'name', 'l10n_br_cnpj', 'l10n_br_razao_social',
-                                    'l10n_br_municipio_id', 'state_id', 'zip',
-                                    'street', 'street2', 'city', 'country_id', 'phone'
-                                ]
-                                transp_partner = self.connection.search_read(
-                                    'res.partner',
-                                    [('id', '=', transportadora_partner_id)],
-                                    campos_partner_transp
-                                )
-                                if transp_partner:
-                                    endereco = transp_partner[0]
-                                    cache_partners[transportadora_partner_id] = endereco
-                                    
-                                    # Log detalhado do endereço substituído
-                                    municipio = endereco.get('l10n_br_municipio_id', ['', ''])[1] if isinstance(endereco.get('l10n_br_municipio_id'), list) else ''
-                                    logger.info(f"   📍 Endereço REDESPACHO: {municipio} - {endereco.get('street', 'N/A')}")
+                                # Se não estiver no cache, usar endereço padrão (evitar query adicional)
+                                logger.warning(f"⚠️ Partner da transportadora {transportadora_partner_id} não encontrado no cache")
                         else:
                             logger.warning(f"⚠️ Transportadora {carrier_id} não possui l10n_br_partner_id configurado")
                             
@@ -521,11 +561,13 @@ class CarteiraService:
                     'cliente_nec_agendamento': cliente.get('agendamento', ''),
                     'observ_ped_1': str(pedido.get('picking_note', '')) if pedido.get('picking_note') not in [None, False] else '',
                     
-                    # 🚚 ENDEREÇO DE ENTREGA  
+                    # 🚚 ENDEREÇO DE ENTREGA
                     'empresa_endereco_ent': endereco.get('name', ''),
                     'cnpj_endereco_ent': endereco.get('l10n_br_cnpj', ''),
-                    'nome_cidade': municipio_entrega_nome,
-                    'cod_uf': estado_entrega_uf,
+                    # FALLBACK para nome_cidade: usa municipio_entrega ou municipio do cliente
+                    'nome_cidade': municipio_entrega_nome or municipio_nome or '',
+                    # FALLBACK para cod_uf: usa estado_entrega ou estado do cliente
+                    'cod_uf': estado_entrega_uf or estado_uf or 'SP',  # Default SP se tudo falhar
                     'cep_endereco_ent': endereco.get('zip', ''),  # CEP usa campo 'zip'
                     'bairro_endereco_ent': endereco.get('l10n_br_endereco_bairro', ''),
                     'rua_endereco_ent': endereco.get('street', ''),
@@ -569,9 +611,13 @@ class CarteiraService:
                     # 🏳️ CAMPO ATIVO
                     'ativo': True,  # Todos os registros importados são ativos
                     
+                    # 🔄 SINCRONIZAÇÃO INCREMENTAL
+                    'odoo_write_date': pedido.get('write_date'),  # write_date do Odoo
+                    'ultima_sync': datetime.now(),  # momento da sincronização
+
                     # 🛡️ AUDITORIA (campos corretos do modelo)
                     'created_at': datetime.now(),
-                    'updated_at': datetime.now(), 
+                    'updated_at': datetime.now(),
                     'created_by': 'Sistema Odoo REALMENTE Otimizado',
                     'updated_by': 'Sistema Odoo REALMENTE Otimizado'
                 }
@@ -683,7 +729,25 @@ class CarteiraService:
             # Campo booleano - garantir tipo correto
             if 'ativo' in item_sanitizado:
                 item_sanitizado['ativo'] = bool(item_sanitizado.get('ativo', True))
-            
+
+            # 🔧 FALLBACK CRÍTICO: Garantir que cod_uf e nome_cidade NUNCA sejam NULL
+            if not item_sanitizado.get('cod_uf') or item_sanitizado.get('cod_uf') == '':
+                # Tentar pegar do estado
+                if item_sanitizado.get('estado'):
+                    item_sanitizado['cod_uf'] = item_sanitizado['estado'][:2]
+                else:
+                    # Default para SP se tudo falhar
+                    item_sanitizado['cod_uf'] = 'SP'
+                    logger.warning(f"⚠️ cod_uf vazio para {item_sanitizado.get('num_pedido')} - usando SP como default")
+
+            if not item_sanitizado.get('nome_cidade') or item_sanitizado.get('nome_cidade') == '':
+                # Tentar pegar do municipio
+                if item_sanitizado.get('municipio'):
+                    item_sanitizado['nome_cidade'] = item_sanitizado['municipio']
+                else:
+                    # Default vazio é aceitável para cidade
+                    item_sanitizado['nome_cidade'] = ''
+
             # Tratar municípios com formato "Cidade (UF)"
             campos_municipio = ['municipio', 'nome_cidade']
             for campo_mun in campos_municipio:
@@ -1033,7 +1097,78 @@ class CarteiraService:
     # - _verificar_ultima_sincronizacao_faturamento
     # Motivo: Eram usadas apenas pela função removida _verificar_riscos_pre_sincronizacao
     
-    def sincronizar_carteira_odoo_com_gestao_quantidades(self, usar_filtro_pendente=True):
+    def sincronizar_incremental(self, minutos_janela=40, primeira_execucao=False):
+        """
+        🔄 SINCRONIZAÇÃO INCREMENTAL BASEADA EM WRITE_DATE
+
+        Sincroniza APENAS pedidos alterados nos últimos X minutos.
+        Atualiza TODOS os campos (exceto qtd_saldo_produto_pedido que é calculado).
+
+        Args:
+            minutos_janela (int): Janela de tempo para buscar alterações (padrão: 40 min)
+            primeira_execucao (bool): Se True, limita a 24h para não sobrecarregar
+
+        Returns:
+            dict: Resultado da sincronização com estatísticas
+        """
+        import time
+
+        inicio = time.time()
+        logger.info("="*80)
+        logger.info(f"🔄 SINCRONIZAÇÃO INCREMENTAL - Janela: {minutos_janela} minutos")
+        logger.info("="*80)
+
+        try:
+            # Se for primeira execução, ajustar janela
+            if primeira_execucao:
+                minutos_janela = 24 * 60  # 24 horas
+                logger.info("🚀 PRIMEIRA EXECUÇÃO - Buscando últimas 24 horas")
+
+            # Chamar método existente com modo incremental
+            resultado = self.obter_carteira_pendente(
+                modo_incremental=True,
+                minutos_janela=minutos_janela
+            )
+
+            if not resultado['sucesso']:
+                return {
+                    'sucesso': False,
+                    'erro': resultado.get('erro', 'Erro ao buscar dados do Odoo'),
+                    'tempo_execucao': time.time() - inicio
+                }
+
+            dados_novos = resultado.get('dados', [])
+
+            if not dados_novos:
+                logger.info("✅ Nenhum pedido alterado no período")
+                return {
+                    'sucesso': True,
+                    'pedidos_processados': 0,
+                    'itens_atualizados': 0,
+                    'tempo_execucao': time.time() - inicio
+                }
+
+            logger.info(f"📊 {len(dados_novos)} itens encontrados para sincronização")
+
+            # Usar o método de sincronização completo existente
+            # Ele já faz UPSERT, calcula saldos, etc
+            return self.sincronizar_carteira_odoo_com_gestao_quantidades(
+                usar_filtro_pendente=False,  # Não filtrar por saldo, já veio filtrado
+                modo_incremental=True  # OTIMIZAÇÃO: Indica que é modo incremental
+            )
+
+        except Exception as e:
+            logger.error(f"❌ ERRO na sincronização incremental: {e}")
+            import traceback
+            traceback.print_exc()
+
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'tempo_execucao': time.time() - inicio
+            }
+
+    def sincronizar_carteira_odoo_com_gestao_quantidades(self, usar_filtro_pendente=True, modo_incremental=False):
         """
         🚀 SINCRONIZAÇÃO INTELIGENTE COM GESTÃO DE QUANTIDADES
         
@@ -1079,10 +1214,17 @@ class CarteiraService:
             
             # 🚀 OTIMIZAÇÃO: Buscar TODOS os dados em apenas 3 queries!
             
-            # Query 1: Carregar toda a carteira em memória
-            logger.info("   📦 Carregando carteira atual...")
-            todos_itens = CarteiraPrincipal.query.all()
-            logger.info(f"   ✅ {len(todos_itens)} itens carregados")
+            # OTIMIZAÇÃO: Em modo incremental, carregar apenas pedidos que serão afetados
+            if modo_incremental:
+                # Primeiro precisamos saber quais pedidos serão afetados
+                # Mas ainda não temos os dados do Odoo aqui, então faremos isso depois
+                logger.info("   ⚡ Modo incremental: otimização de carga será aplicada após buscar dados do Odoo")
+                todos_itens = []  # Será preenchido depois
+            else:
+                # Modo completo: carregar toda a carteira em memória
+                logger.info("   📦 Carregando carteira atual...")
+                todos_itens = CarteiraPrincipal.query.all()
+                logger.info(f"   ✅ {len(todos_itens)} itens carregados")
             
             # Query 2: Buscar TODOS os faturamentos de uma vez
             logger.info("   📦 Carregando todos os faturamentos...")
@@ -1142,7 +1284,8 @@ class CarteiraService:
                 
                 qtd_produto = float(item.qtd_produto_pedido or 0)
                 qtd_cancelada = float(item.qtd_cancelada_produto_pedido or 0)
-                qtd_saldo_calculado = qtd_produto - qtd_cancelada - qtd_faturada
+                # NÃO subtrair qtd_cancelada - Odoo já descontou de qtd_produto
+                qtd_saldo_calculado = qtd_produto - qtd_faturada
                 saldo_livre = qtd_saldo_calculado - qtd_em_separacao
                 
                 dados_item = {
@@ -1173,17 +1316,55 @@ class CarteiraService:
             
             # FASE 2: BUSCAR DADOS NOVOS DO ODOO
             logger.info("🔄 Fase 2: Buscando dados atualizados do Odoo...")
-            
+
             resultado_odoo = self.obter_carteira_pendente()
-            
+
             if not resultado_odoo['sucesso']:
                 return {
                     'sucesso': False,
                     'erro': resultado_odoo.get('erro', 'Erro ao buscar dados do Odoo'),
                     'estatisticas': {}
                 }
-            
+
             dados_novos = resultado_odoo.get('dados', [])
+
+            # OTIMIZAÇÃO: Em modo incremental, agora que temos os dados, carregar apenas pedidos afetados
+            if modo_incremental and not todos_itens:
+                pedidos_afetados = {item['num_pedido'] for item in dados_novos}
+
+                if pedidos_afetados:
+                    logger.info(f"   ⚡ Modo incremental: carregando apenas {len(pedidos_afetados)} pedidos afetados...")
+                    todos_itens = CarteiraPrincipal.query.filter(
+                        CarteiraPrincipal.num_pedido.in_(list(pedidos_afetados))
+                    ).all()
+                    logger.info(f"   ✅ {len(todos_itens)} itens carregados (apenas afetados)")
+
+                    # Reprocessar faturamentos e separações apenas para pedidos afetados
+                    faturamentos = db.session.query(
+                        FaturamentoProduto.origem,
+                        FaturamentoProduto.cod_produto,
+                        func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_faturada')
+                    ).filter(
+                        FaturamentoProduto.origem.in_(list(pedidos_afetados)),
+                        FaturamentoProduto.status_nf != 'Cancelado'
+                    ).group_by(
+                        FaturamentoProduto.origem,
+                        FaturamentoProduto.cod_produto
+                    ).all()
+                    faturamentos_dict = {(f.origem, f.cod_produto): float(f.qtd_faturada or 0) for f in faturamentos}
+
+                    separacoes = db.session.query(
+                        Separacao.num_pedido,
+                        Separacao.cod_produto,
+                        func.sum(Separacao.qtd_saldo).label('qtd_em_separacao')
+                    ).filter(
+                        Separacao.num_pedido.in_(list(pedidos_afetados)),
+                        Separacao.sincronizado_nf == False
+                    ).group_by(
+                        Separacao.num_pedido,
+                        Separacao.cod_produto
+                    ).all()
+                    separacoes_dict = {(s.num_pedido, s.cod_produto): float(s.qtd_em_separacao or 0) for s in separacoes}
             
             # Aplicar filtro de pendente e status válidos
             if usar_filtro_pendente:
@@ -1275,8 +1456,10 @@ class CarteiraService:
                 # Pegar do cache ou assumir 0 se não faturado
                 qtd_faturada = todas_qtds_faturadas.get(chave, 0)
                 
-                # CALCULAR SALDO: qtd_produto - qtd_cancelada - qtd_faturada
-                qtd_saldo_calculado = qtd_produto_nova - qtd_cancelada_nova - qtd_faturada
+                # CALCULAR SALDO: qtd_produto - qtd_faturada
+                # NÃO subtrair qtd_cancelada porque o Odoo já moveu/descontou de qtd_produto!
+                # Quando cancela, o Odoo faz: qtd_produto -= qtd_cancelada
+                qtd_saldo_calculado = qtd_produto_nova - qtd_faturada
                 saldos_calculados_depois[chave] = qtd_saldo_calculado
                 
                 # IMPORTANTE: Adicionar o saldo calculado ao item (substitui qty_saldo do Odoo)

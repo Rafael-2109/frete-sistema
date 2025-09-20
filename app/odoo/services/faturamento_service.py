@@ -478,27 +478,114 @@ class FaturamentoService:
     # 🚀 MÉTODOS PRINCIPAIS OTIMIZADOS
     # ============================================
     
-    def sincronizar_faturamento_incremental(self) -> Dict[str, Any]:
+    def sincronizar_faturamento_incremental_com_write_date(self, minutos_janela=40, primeira_execucao=False) -> Dict[str, Any]:
+        """
+        🔄 SINCRONIZAÇÃO INCREMENTAL COM WRITE_DATE - IGUAL CARTEIRA_SERVICE
+
+        Usa write_date do account.move para buscar apenas alterações recentes
+
+        Args:
+            minutos_janela: Janela de tempo em minutos para busca incremental
+            primeira_execucao: Se True, usa janela maior (120 minutos)
+
+        Returns:
+            Dict com estatísticas da sincronização
+        """
+        try:
+            import time
+            from app import db
+
+            start_time = time.time()
+
+            # Ajustar janela para primeira execução (recuperação pós-deploy)
+            if primeira_execucao:
+                minutos_janela = 120  # 2 horas na primeira execução
+                logger.info(f"🚀 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO - PRIMEIRA EXECUÇÃO (últimos {minutos_janela} minutos)")
+            else:
+                logger.info(f"🔄 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO - Últimos {minutos_janela} minutos")
+
+            # ⚡ Buscar dados do Odoo com MODO INCREMENTAL ATIVO
+            resultado = self.obter_faturamento_otimizado(
+                usar_filtro_postado=True,
+                limite=0,  # Sem limite para sincronização
+                modo_incremental=True,  # ✅ ATIVAR MODO INCREMENTAL
+                minutos_janela=minutos_janela  # ✅ PASSAR JANELA DE TEMPO
+            )
+
+            if not resultado['sucesso']:
+                return {
+                    'sucesso': False,
+                    'erro': resultado.get('erro', 'Erro na consulta do Odoo'),
+                    'faturas_processadas': 0,
+                    'itens_atualizados': 0,
+                    'tempo_execucao': time.time() - start_time
+                }
+
+            dados_faturamento = resultado.get('dados', [])
+
+            if not dados_faturamento:
+                logger.info("📊 Nenhuma alteração encontrada no período")
+                return {
+                    'sucesso': True,
+                    'faturas_processadas': 0,
+                    'itens_atualizados': 0,
+                    'tempo_execucao': time.time() - start_time,
+                    'mensagem': 'Nenhuma alteração no período'
+                }
+
+            logger.info(f"📊 Processando {len(dados_faturamento)} registros alterados...")
+
+            # Processar sincronização usando método compartilhado
+            resultado_processamento = self._processar_sincronizacao_faturamento(dados_faturamento)
+
+            # Adicionar tempo de execução
+            resultado_processamento['tempo_execucao'] = time.time() - start_time
+
+            return resultado_processamento
+
+        except Exception as e:
+            logger.error(f"❌ Erro na sincronização incremental: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'faturas_processadas': 0,
+                'itens_atualizados': 0,
+                'tempo_execucao': time.time() - start_time
+            }
+
+    def sincronizar_faturamento_incremental(self, minutos_janela=40, primeira_execucao=False) -> Dict[str, Any]:
         """
         🚀 SINCRONIZAÇÃO INCREMENTAL OTIMIZADA + INTEGRAÇÃO COMPLETA
-        
+
+        Agora usa write_date para busca incremental mantendo todas funcionalidades
+
         Estratégia do usuário:
         - NF não existe → INSERT
         - NF já existe → UPDATE apenas status
-        
+
         ✅ INCLUI: Sincronização completa de entregas, embarques e fretes
         """
         try:
             import time
             from app import db
-            
+
             start_time = time.time()
-            logger.info("🚀 SINCRONIZAÇÃO INCREMENTAL + INTEGRAÇÃO COMPLETA")
-            
-            # ⚡ Buscar dados do Odoo com filtro obrigatório e limite para performance
+
+            # Ajustar janela para primeira execução (recuperação pós-deploy)
+            if primeira_execucao:
+                minutos_janela = 120  # 2 horas na primeira execução
+                logger.info(f"🚀 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO COMPLETA - PRIMEIRA EXECUÇÃO (últimos {minutos_janela} minutos)")
+            else:
+                logger.info(f"🔄 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO COMPLETA - Últimos {minutos_janela} minutos")
+
+            # ⚡ Buscar dados do Odoo com MODO INCREMENTAL usando write_date
             resultado = self.obter_faturamento_otimizado(
                 usar_filtro_postado=True,
-                limite=0  # Usará limite interno de 2000 registros para evitar timeout
+                limite=0,  # Usará limite interno de 20000 registros para evitar timeout
+                modo_incremental=True,  # ✅ ATIVAR MODO INCREMENTAL COM WRITE_DATE
+                minutos_janela=minutos_janela  # ✅ PASSAR JANELA DE TEMPO
             )
             
             if not resultado['sucesso']:
@@ -528,25 +615,47 @@ class FaturamentoService:
             contador_atualizados = 0
             contador_erros = 0
             erros = []
-            
+
             # 📋 LISTAS PARA SINCRONIZAÇÃO POSTERIOR
             nfs_novas = []  # NFs que foram inseridas
             nfs_atualizadas = []  # NFs que foram atualizadas
             nfs_reprocessar = []  # NFs que precisam ser reprocessadas (novas ou status mudou para não-cancelado)
             cnpjs_processados = set()  # CNPJs únicos para lançamento de fretes
+
+            # 🚀 OTIMIZAÇÃO: Listas para bulk insert
+            produtos_para_verificar = set()  # Produtos que precisam ser verificados
+            registros_para_bulk_insert = []  # Lista para bulk insert
             
-            # 🔍 CRIAR ÍNDICE DE REGISTROS EXISTENTES
+            # 🔍 CRIAR ÍNDICE DE REGISTROS EXISTENTES (OTIMIZADO)
             logger.info("🔍 Carregando índice de registros existentes...")
             registros_existentes = {}
-            
-            for registro in db.session.query(FaturamentoProduto.numero_nf, FaturamentoProduto.cod_produto, FaturamentoProduto.id, FaturamentoProduto.status_nf).all():
+
+            # 🚀 OTIMIZAÇÃO: Em modo incremental, carregar apenas registros recentes
+            query = db.session.query(
+                FaturamentoProduto.numero_nf,
+                FaturamentoProduto.cod_produto,
+                FaturamentoProduto.id,
+                FaturamentoProduto.status_nf
+            )
+
+            # Em modo incremental (não primeira execução), limitar aos últimos 2 dias
+            if not primeira_execucao:
+                from datetime import datetime, timedelta
+                data_limite = datetime.now() - timedelta(days=2)
+                query = query.filter(FaturamentoProduto.created_at >= data_limite)
+                logger.info(f"🚀 Modo incremental: carregando apenas registros após {data_limite.strftime('%Y-%m-%d')}")
+
+            # Usar yield_per para economizar memória em queries grandes
+            contador_registros = 0
+            for registro in query.yield_per(1000):
                 chave = f"{registro.numero_nf}|{registro.cod_produto}"
                 registros_existentes[chave] = {
                     'id': registro.id,
                     'status_atual': registro.status_nf
                 }
-            
-            logger.info(f"📋 Índice criado com {len(registros_existentes)} registros existentes")
+                contador_registros += 1
+
+            logger.info(f"📋 Índice criado com {contador_registros} registros existentes")
             
             # 🔄 PROCESSAR CADA ITEM DO ODOO
             for item_mapeado in dados_faturamento:
@@ -606,31 +715,20 @@ class FaturamentoService:
                         if 'status_odoo_raw' in item_para_inserir:
                             del item_para_inserir['status_odoo_raw']
                         
-                        # Verificar e criar CadastroPalletizacao se não existir
-                        from app.producao.models import CadastroPalletizacao
+                        # 🚀 OTIMIZAÇÃO: Adicionar produto ao conjunto para verificação em batch
                         cod_produto = item_para_inserir.get('cod_produto')
                         if cod_produto:
-                            produto_cadastro = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
-                            if not produto_cadastro:
-                                # Criar produto com dados básicos
-                                produto_cadastro = CadastroPalletizacao(
-                                    cod_produto=cod_produto,
-                                    nome_produto=item_para_inserir.get('nome_produto', cod_produto),
-                                    palletizacao=1.0,  # Valor padrão
-                                    peso_bruto=1.0   # Valor padrão
-                                )
-                                db.session.add(produto_cadastro)
-                                logger.info(f"✅ Produto {cod_produto} criado automaticamente no CadastroPalletizacao (via Faturamento)")
+                            produtos_para_verificar.add(cod_produto)
                         
-                        novo_registro = FaturamentoProduto(**item_para_inserir)
-                        novo_registro.created_by = 'Sistema Odoo'
-                        novo_registro.status_nf = status_odoo
-                        
-                        db.session.add(novo_registro)
+                        # 🚀 OTIMIZAÇÃO: Preparar para bulk insert
+                        item_para_inserir['created_by'] = 'Sistema Odoo'
+                        item_para_inserir['status_nf'] = status_odoo
+                        registros_para_bulk_insert.append(item_para_inserir)
+
                         contador_novos += 1
                         nfs_novas.append(numero_nf)
                         nfs_reprocessar.append(numero_nf)  # NFs novas sempre precisam ser processadas
-                        logger.debug(f"➕ INSERT: NF {numero_nf} produto {cod_produto}")
+                        logger.debug(f"➕ Preparado para INSERT: NF {numero_nf} produto {cod_produto}")
                     
                 except Exception as e:
                     contador_erros += 1
@@ -639,6 +737,48 @@ class FaturamentoService:
                     erros.append(erro_msg)
                     continue
             
+            # 🚀 OTIMIZAÇÃO: Verificar e criar produtos em batch antes do bulk insert
+            if produtos_para_verificar:
+                from app.producao.models import CadastroPalletizacao
+
+                logger.info(f"🔍 Verificando {len(produtos_para_verificar)} produtos no CadastroPalletizacao...")
+
+                # Buscar produtos existentes em uma única query
+                produtos_existentes = {
+                    p.cod_produto
+                    for p in CadastroPalletizacao.query.filter(
+                        CadastroPalletizacao.cod_produto.in_(produtos_para_verificar)
+                    ).all()
+                }
+
+                # Criar produtos que não existem
+                produtos_novos = []
+                for cod_produto in produtos_para_verificar:
+                    if cod_produto not in produtos_existentes:
+                        # Buscar nome do produto nos registros para bulk insert
+                        nome_produto = cod_produto
+                        for registro in registros_para_bulk_insert:
+                            if registro.get('cod_produto') == cod_produto:
+                                nome_produto = registro.get('nome_produto', cod_produto)
+                                break
+
+                        produtos_novos.append({
+                            'cod_produto': cod_produto,
+                            'nome_produto': nome_produto,
+                            'palletizacao': 1.0,
+                            'peso_bruto': 1.0
+                        })
+
+                if produtos_novos:
+                    db.session.bulk_insert_mappings(CadastroPalletizacao, produtos_novos)
+                    logger.info(f"✅ {len(produtos_novos)} produtos criados em batch no CadastroPalletizacao")
+
+            # 🚀 OTIMIZAÇÃO: Bulk insert para novos registros
+            if registros_para_bulk_insert:
+                logger.info(f"🚀 Executando bulk insert de {len(registros_para_bulk_insert)} registros...")
+                db.session.bulk_insert_mappings(FaturamentoProduto, registros_para_bulk_insert)
+                logger.info(f"✅ Bulk insert concluído com sucesso")
+
             # 💾 COMMIT das alterações principais
             db.session.commit()
             logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
@@ -659,17 +799,33 @@ class FaturamentoService:
             # ============================================
             # IMPORTANTE: Consolidar ANTES de processar movimentações!
             # ProcessadorFaturamento busca NFs em RelatorioFaturamentoImportado
-            
-            # 📋 CONSOLIDAR dados para RelatorioFaturamentoImportado
-            logger.info("🔄 Iniciando consolidação para RelatorioFaturamentoImportado...")
+
+            # 🚀 OTIMIZAÇÃO: Pular consolidação completa em modo incremental regular
             relatorios_consolidados = 0
-            try:
-                resultado_consolidacao = self._consolidar_faturamento(dados_faturamento)
-                relatorios_consolidados = resultado_consolidacao.get('total_relatorio_importado', 0)
-                logger.info(f"✅ Consolidação concluída: {relatorios_consolidados} relatórios processados")
-            except Exception as e:
-                logger.error(f"❌ Erro na consolidação: {e}")
-                erros.append(f"Erro na consolidação RelatorioFaturamentoImportado: {e}")
+            if primeira_execucao or contador_novos > 100:  # Consolidar apenas se primeira execução ou muitas NFs novas
+                logger.info("🔄 Iniciando consolidação COMPLETA para RelatorioFaturamentoImportado...")
+                try:
+                    resultado_consolidacao = self._consolidar_faturamento(dados_faturamento)
+                    relatorios_consolidados = resultado_consolidacao.get('total_relatorio_importado', 0)
+                    logger.info(f"✅ Consolidação concluída: {relatorios_consolidados} relatórios processados")
+                except Exception as e:
+                    logger.error(f"❌ Erro na consolidação: {e}")
+                    erros.append(f"Erro na consolidação RelatorioFaturamentoImportado: {e}")
+            elif nfs_novas:
+                # Consolidar apenas NFs novas
+                logger.info(f"🚀 Modo incremental: consolidando apenas {len(set(nfs_novas))} NFs novas...")
+                try:
+                    # Filtrar apenas dados das NFs novas
+                    dados_nfs_novas = [d for d in dados_faturamento if d.get('numero_nf') in set(nfs_novas)]
+                    if dados_nfs_novas:
+                        resultado_consolidacao = self._consolidar_faturamento(dados_nfs_novas)
+                        relatorios_consolidados = resultado_consolidacao.get('total_relatorio_importado', 0)
+                        logger.info(f"✅ Consolidação incremental concluída: {relatorios_consolidados} relatórios")
+                except Exception as e:
+                    logger.error(f"❌ Erro na consolidação incremental: {e}")
+                    erros.append(f"Erro na consolidação incremental: {e}")
+            else:
+                logger.info("📊 Modo incremental: pulando consolidação (sem NFs novas)")
             
             # ============================================
             # 🚨 PROCESSAMENTO DE MOVIMENTAÇÕES DE ESTOQUE
@@ -885,14 +1041,151 @@ class FaturamentoService:
                 'estatisticas': {}
             }
 
-    def obter_faturamento_otimizado(self, usar_filtro_postado=True, limite=20):
+    def _processar_sincronizacao_faturamento(self, dados_faturamento: List[Dict]) -> Dict[str, Any]:
+        """
+        🔄 PROCESSA SINCRONIZAÇÃO DE DADOS DE FATURAMENTO
+
+        Método extraído para reutilização entre sincronização completa e incremental
+
+        Args:
+            dados_faturamento: Lista de dados já processados do Odoo
+
+        Returns:
+            Dict com estatísticas da sincronização
+        """
+        try:
+            import time
+            from app import db
+
+            start_time = time.time()
+
+            if not dados_faturamento:
+                return {
+                    'sucesso': True,
+                    'faturas_processadas': 0,
+                    'itens_atualizados': 0,
+                    'itens_novos': 0,
+                    'mensagem': 'Nenhum dado para processar'
+                }
+
+            logger.info(f"📊 Processando {len(dados_faturamento)} registros...")
+
+            # Sanitizar dados antes de processar
+            logger.info("🧹 Sanitizando dados de faturamento...")
+            dados_faturamento = self._sanitizar_dados_faturamento(dados_faturamento)
+
+            # 📊 ESTATÍSTICAS
+            contador_novos = 0
+            contador_atualizados = 0
+            contador_erros = 0
+            erros = []
+            nfs_processadas = set()
+
+            # 🔍 CRIAR ÍNDICE DE REGISTROS EXISTENTES
+            logger.info("🔍 Carregando índice de registros existentes...")
+            registros_existentes = {}
+
+            for registro in db.session.query(FaturamentoProduto.numero_nf, FaturamentoProduto.cod_produto, FaturamentoProduto.id, FaturamentoProduto.status_nf).all():
+                chave = f"{registro.numero_nf}|{registro.cod_produto}"
+                registros_existentes[chave] = {
+                    'id': registro.id,
+                    'status_atual': registro.status_nf
+                }
+
+            logger.info(f"📋 Índice criado com {len(registros_existentes)} registros existentes")
+
+            # 🔄 PROCESSAR CADA ITEM DO ODOO
+            for item_mapeado in dados_faturamento:
+                try:
+                    numero_nf = item_mapeado.get('numero_nf', '').strip()
+                    cod_produto = item_mapeado.get('cod_produto', '').strip()
+                    status_odoo = item_mapeado.get('status_nf', 'Lançado')
+
+                    # Validar dados essenciais
+                    if not numero_nf or not cod_produto:
+                        contador_erros += 1
+                        erros.append(f"Item sem NF/produto: NF={numero_nf}, Produto={cod_produto}")
+                        continue
+
+                    # Adicionar NF ao conjunto de processadas
+                    nfs_processadas.add(numero_nf)
+
+                    # Criar chave única
+                    chave = f"{numero_nf}|{cod_produto}"
+
+                    if chave in registros_existentes:
+                        # ✏️ REGISTRO EXISTE → UPDATE apenas status se diferente
+                        registro_info = registros_existentes[chave]
+
+                        if registro_info['status_atual'] != status_odoo:
+                            # Status mudou - atualizar
+                            db.session.query(FaturamentoProduto).filter_by(
+                                id=registro_info['id']
+                            ).update({
+                                'status_nf': status_odoo,
+                                'updated_by': 'Sistema Odoo'
+                            })
+
+                            contador_atualizados += 1
+                            logger.debug(f"✏️ Atualizado status: NF={numero_nf}, Produto={cod_produto}, Status={status_odoo}")
+                    else:
+                        # ✅ REGISTRO NÃO EXISTE → INSERT
+                        novo_registro = FaturamentoProduto(**item_mapeado)
+                        db.session.add(novo_registro)
+                        contador_novos += 1
+                        logger.debug(f"✅ Novo registro: NF={numero_nf}, Produto={cod_produto}")
+
+                except Exception as e:
+                    contador_erros += 1
+                    erros.append(f"Erro ao processar NF {numero_nf}: {e}")
+                    logger.error(f"❌ Erro ao processar item: {e}")
+                    continue
+
+            # 💾 COMMIT FINAL
+            if contador_novos > 0 or contador_atualizados > 0:
+                db.session.commit()
+                logger.info(f"💾 Commit realizado: {contador_novos} novos, {contador_atualizados} atualizados")
+
+            tempo_execucao = time.time() - start_time
+
+            # 📊 RETORNAR ESTATÍSTICAS
+            return {
+                'sucesso': True,
+                'faturas_processadas': len(nfs_processadas),
+                'itens_novos': contador_novos,
+                'itens_atualizados': contador_atualizados,
+                'total_processados': contador_novos + contador_atualizados,
+                'erros': contador_erros,
+                'tempo_execucao': tempo_execucao,
+                'detalhes_erros': erros[:10] if erros else []  # Limitar erros retornados
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'faturas_processadas': 0,
+                'itens_atualizados': 0,
+                'itens_novos': 0
+            }
+
+    def obter_faturamento_otimizado(self, usar_filtro_postado=True, limite=20, modo_incremental=False, minutos_janela=40):
         """
         🚀 MÉTODO REALMENTE OTIMIZADO - 5 queries + JOIN em memória
         Com filtro obrigatório implementado
+
+        Args:
+            usar_filtro_postado: Filtrar apenas faturas postadas
+            limite: Limite de registros
+            modo_incremental: Se True, busca apenas registros modificados recentemente
+            minutos_janela: Janela de tempo em minutos para busca incremental
         """
         try:
-            logger.info(f"🚀 Busca faturamento otimizada: filtro_postado={usar_filtro_postado}, limite={limite}")
-            
+            logger.info(f"🚀 Busca faturamento otimizada: filtro_postado={usar_filtro_postado}, limite={limite}, incremental={modo_incremental}")
+
             # Conectar ao Odoo
             if not self.connection:
                 return {
@@ -900,9 +1193,73 @@ class FaturamentoService:
                     'erro': 'Conexão com Odoo não disponível',
                     'dados': []
                 }
-            
-            # ⚠️ FILTRO OBRIGATÓRIO para faturamento
+
+            # 🔄 MODO INCREMENTAL - Estratégia simplificada
+            if modo_incremental:
+                from datetime import datetime, timedelta
+                import pytz
+
+                # Usar UTC para garantir compatibilidade com Odoo
+                tz_utc = pytz.UTC
+                agora_utc = datetime.now(tz_utc)
+
+                # 📊 ESTRATÉGIA SIMPLIFICADA
+                # Buscar APENAS NFs criadas nas últimas 26 horas
+                # (só essas podem ter status alterado para cancelado)
+
+                logger.info("🔄 MODO INCREMENTAL ATIVO - BUSCA POR CREATE_DATE")
+
+                # BUSCA ÚNICA: NFs das últimas 26 horas
+                data_corte = agora_utc - timedelta(hours=26)
+                data_corte_str = data_corte.strftime('%Y-%m-%d %H:%M:%S')
+
+                domain = []
+                # Buscar NFs criadas nas últimas 26 horas (podem ser novas ou canceladas)
+                domain.append(('move_id.create_date', '>=', data_corte_str))
+
+                # Não filtrar por estado para pegar canceladas também
+                domain.extend([
+                    '|',
+                    ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                ])
+
+                logger.info(f"   📌 Buscando NFs criadas desde: {data_corte_str} UTC (últimas 26 horas)")
+                logger.info(f"   📌 Hora atual UTC: {agora_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                campos_basicos = [
+                    'id', 'move_id', 'partner_id', 'product_id',
+                    'quantity', 'price_unit', 'price_total', 'date', 'l10n_br_total_nfe'
+                ]
+
+                # Executar busca única
+                logger.info("   🔍 Executando busca de NFs das últimas 26 horas...")
+                dados_odoo_brutos = self.connection.search_read(
+                    'account.move.line', domain, campos_basicos, limit=20000
+                )
+                logger.info(f"      ✅ {len(dados_odoo_brutos)} linhas encontradas")
+
+                # Processar dados usando método otimizado
+                if dados_odoo_brutos:
+                    dados_processados = self._processar_dados_faturamento_com_multiplas_queries(dados_odoo_brutos)
+                else:
+                    dados_processados = []
+
+                return {
+                    'sucesso': True,
+                    'dados': dados_processados,
+                    'total_registros': len(dados_processados),
+                    'estatisticas': {
+                        'total_linhas_odoo': len(dados_odoo_brutos),
+                        'janela_horas': 26,
+                        'queries_executadas': 7,  # 1 busca principal + 6 queries de JOIN
+                    },
+                    'mensagem': f'⚡ {len(dados_processados)} registros processados (NFs das últimas 26 horas)'
+                }
+
+            # ⚠️ MODO NÃO-INCREMENTAL (busca normal)
             domain = []
+
             if usar_filtro_postado:
                 domain.extend([
                     ('move_id.state', '=', 'posted'),  # Faturas postadas
@@ -1398,72 +1755,3 @@ class FaturamentoService:
                 'total_corrigidas': 0
             }
     
-    def estimar_performance_grandes_volumes(self, total_nfs: int = 5000) -> Dict[str, Any]:
-        """
-        🔍 CALCULADORA DE PERFORMANCE para grandes volumes
-        
-        Estima tempo e recursos necessários para sincronizar grandes quantidades
-        """
-        try:
-            import psutil
-            
-            logger.info(f"📊 Calculando performance para {total_nfs} NFs...")
-            
-            # Estimativas baseadas no método otimizado atual
-            estimativas = {
-                # 📊 VOLUMES ESTIMADOS
-                'total_nfs': total_nfs,
-                'linhas_faturamento_estimadas': total_nfs * 3,  # Média 3 produtos por NF
-                'faturas_unicas': total_nfs,
-                'clientes_estimados': total_nfs * 0.7,  # 70% clientes únicos
-                'produtos_estimados': total_nfs * 2,    # 2 produtos únicos por NF
-                
-                # ⚡ PERFORMANCE OTIMIZADA
-                'queries_executadas': 5,  # Sempre 5 queries com método otimizado
-                'queries_por_metodo_antigo': total_nfs * 17,  # Método antigo faria 17 queries/NF
-                'melhoria_performance': f"{(total_nfs * 17) // 5}x mais rápido",
-                
-                # 🕒 TEMPO ESTIMADO
-                'tempo_query_odoo': '15-30s',  # Busca inicial no Odoo
-                'tempo_multiplas_queries': '10-20s',  # 5 queries de relacionamentos
-                'tempo_join_memoria': '5-15s',  # JOIN em memória
-                'tempo_insert_postgresql': '20-40s',  # Inserção no PostgreSQL
-                'tempo_total_estimado': '50-105s (1-2 minutos)',
-                
-                # 💾 MEMÓRIA ESTIMADA
-                'memoria_dados_brutos': f"{(total_nfs * 3 * 0.5):.0f}MB",  # ~0.5KB por linha
-                'memoria_caches': f"{(total_nfs * 1.2):.0f}MB",  # Caches de relacionamentos
-                'memoria_total_estimada': f"{(total_nfs * 4.7):.0f}MB",  # Total em memória
-                'memoria_disponivel': f"{psutil.virtual_memory().available // (1024*1024)}MB",
-                
-                # 🚨 ALERTAS
-                'alertas': []
-            }
-            
-            # Verificar alertas baseados no volume
-            if total_nfs > 10000:
-                estimativas['alertas'].append("⚠️ Volume muito alto (>10k NFs) - considere sincronização por lotes")
-            
-            memoria_mb_str = estimativas['memoria_total_estimada'][:-2]
-            if memoria_mb_str and memoria_mb_str.isdigit() and \
-               int(memoria_mb_str) > (psutil.virtual_memory().available // (1024*1024)) * 0.7:
-                estimativas['alertas'].append("⚠️ Memória insuficiente - pode precisar otimização adicional")
-            
-            if total_nfs > 50000:
-                estimativas['alertas'].append("🚨 Volume crítico (>50k NFs) - implementar paginação obrigatória")
-            
-            # ✅ RECOMENDAÇÕES
-            estimativas['recomendacoes'] = []
-            
-            if total_nfs <= 10000:
-                estimativas['recomendacoes'].append("✅ Volume OK - sincronização direta recomendada")
-            elif total_nfs <= 30000:
-                estimativas['recomendacoes'].append("⚡ Volume médio - monitorar performance")
-            else:
-                estimativas['recomendacoes'].append("🔧 Volume alto - implementar sistema de lotes")
-            
-            return estimativas
-            
-        except Exception as e:
-            logger.error(f"Erro no cálculo de performance: {e}")
-            return {'erro': str(e)}
