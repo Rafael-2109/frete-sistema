@@ -224,6 +224,7 @@
                                     <th style="width: 200px;">Vendedor</th>
                                     <th style="width: 100px;">Incoterm</th>
                                     <th style="width: 100px;">Origem</th>
+                                    <th style="width: 80px;">Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -281,6 +282,22 @@
                                         <small>{{ produto.origem }}</small>
                                         {% else %}
                                         <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if current_user.perfil == 'administrador' %}
+                                            {% if produto.status_nf == 'Cancelado' %}
+                                                <button class="btn btn-sm btn-secondary" disabled title="NF já cancelada">
+                                                    <i class="fas fa-ban"></i> Cancelada
+                                                </button>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-danger cancelar-nf-btn"
+                                                        data-nf="{{ produto.numero_nf | string | replace('.0', '') }}"
+                                                        data-origem="{{ produto.origem }}"
+                                                        title="Cancelar NF devolvida">
+                                                    <i class="fas fa-times-circle"></i> Cancelar
+                                                </button>
+                                            {% endif %}
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -378,6 +395,68 @@
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Função para cancelar NF devolvida
+        $('.cancelar-nf-btn').click(function() {
+            const btn = $(this);
+            const numeroNf = btn.data('nf');
+            const origem = btn.data('origem');
+
+            if (confirm(`⚠️ ATENÇÃO: Deseja CANCELAR a NF ${numeroNf}?\n\nEsta ação irá:\n• Marcar TODA a NF como cancelada\n• Reverter as movimentações de estoque\n• Esta ação NÃO pode ser desfeita!`)) {
+                // Desabilitar o botão durante processamento
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processando...');
+
+                // Usar FormData (padrão do sistema)
+                const formData = new FormData();
+                formData.append('numero_nf', numeroNf);
+                formData.append('origem', origem || '');
+
+                // Buscar CSRF token do meta tag (padrão mais seguro)
+                const csrfToken = document.querySelector('meta[name="csrf-token"]');
+                if (csrfToken) {
+                    formData.append('csrf_token', csrfToken.content);
+                } else {
+                    // Fallback para input hidden se existir
+                    const csrfInput = document.querySelector('input[name="csrf_token"]');
+                    if (csrfInput) {
+                        formData.append('csrf_token', csrfInput.value);
+                    }
+                }
+
+                $.ajax({
+                    url: '{{ url_for("faturamento.cancelar_nf_devolvida") }}',
+                    method: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            // Atualizar botão para mostrar que foi cancelada
+                            btn.removeClass('btn-danger').addClass('btn-secondary');
+                            btn.html('<i class="fas fa-ban"></i> Cancelada');
+                            btn.prop('disabled', true);
+
+                            // Mostrar mensagem de sucesso
+                            alert(response.message || 'NF cancelada com sucesso!');
+
+                            // Opcionalmente recarregar a página
+                            if (response.recarregar) {
+                                window.location.reload();
+                            }
+                        } else {
+                            // Re-habilitar botão se houver erro
+                            btn.prop('disabled', false).html('<i class="fas fa-times-circle"></i> Cancelar');
+                            alert(response.message || 'Erro ao cancelar NF');
+                        }
+                    },
+                    error: function(xhr) {
+                        // Re-habilitar botão se houver erro
+                        btn.prop('disabled', false).html('<i class="fas fa-times-circle"></i> Cancelar');
+                        alert('Erro ao cancelar NF: ' + (xhr.responseJSON?.message || 'Erro desconhecido'));
+                    }
+                });
+            }
         });
     });
 </script>

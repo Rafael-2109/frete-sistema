@@ -349,3 +349,115 @@ WHERE carteira_principal.num_pedido IN (%(num_pedido_1_1)s, %(num_pedido_1_2)s, 
 (Background on this error at: https://sqlalche.me/e/20/e3q8)
 2025-09-22 12:20:20,045 - apscheduler.executors.default - INFO - Job "Sincronização Incremental Carteira (trigger: interval[0:30:00], next run at: 2025-09-22 09:46:56 -03)" executed successfully
 render@srv-d13m38vfte5s738t6p60-77b5cdcfb8-f447k:~/project/src$ 
+
+Diante de estar falando com voce misturando os contextos, resolvi limpar o contexto para fazer a solicitação abaixo.
+Para ajuda-lo no entendimento, eu copiei tambem as perguntas que voce me havia feito e as minhas respostas.
+Mesmo assim, caso tenha duvidas me pergunte.
+
+Preciso criar uma função para inativar NFs em
+FaturamentoProduto e em MovimentacaoEstoque em caso de
+NFs devolvidas.
+O sistema trata NFs canceladas mas devolvidas terei que
+fazer manualmente.
+Coloque um botão ao lado da coluna "Origem" em
+faturamento/produtos que deverá se comportar exatamente
+como se uma NF fosse cancelada (Se for o caso utilize a
+função em faturamento_service.py para processar as nfs
+canceladas que atualiza MovimentacaoEstoque e
+FaturamentoProduto), no caso, ao selecioanar uma nf e
+"cancelar" ela, considere a NF inteira, isto é, todos os
+produtos da NF e não apenas o produto da linha clicada.
+Alem disso, a função em carteira_service.py que utiliza
+o "write_date" trouxe pedidos muito antigos, diante
+disso preciso que ela se mantenha da forma que está
+porem limite para não verificar pedidos que tenham
+create_date antes de 15/07/2025.
+
+NÃO ASSUMA NADA.
+Qualquer duvida me pergunte.
+ultrathink
+
+### SUAS PERGUNTAS ###
+
+● 📋 PERGUNTAS ANTES DE IMPLEMENTAR:
+
+  1. Sobre a função de "Cancelar NF" para devoluções:
+
+  a) Status da NF após cancelamento:
+
+  - Quando marcar uma NF como "devolvida/cancelada",
+  devo usar status_nf = 'Cancelado' igual às canceladas
+  do Odoo?
+  - Ou devo criar um novo status como 'Devolvido' para
+  diferenciar?
+
+  b) Identificação visual:
+
+  - O botão "Cancelar NF" deve aparecer sempre ou só
+  para NFs com status_nf != 'Cancelado'?
+  - Deve ter alguma confirmação antes de cancelar
+  (modal/alert)?
+
+  c) Permissões:
+
+  - Qualquer usuário pode cancelar ou precisa de
+  permissão específica?
+
+  2. Sobre o filtro de data em carteira_service.py:
+
+  a) Data de corte:
+
+  - Você mencionou 15/07/2025 - seria 15/07/2024? (2025
+  é futuro)
+  - Esse filtro deve aplicar só no modo incremental ou
+  sempre?
+
+  b) Campo de data:
+
+  - Devo filtrar por create_date >= '2024-07-15' no
+  Odoo?
+  - Ou usar date_order >= '2024-07-15'?
+
+  3. Comportamento esperado:
+
+  Quando cancelar uma NF devolvida:
+  - ✅ Marcar todos os produtos da NF como cancelados em
+   FaturamentoProduto
+  - ✅ Marcar movimentações como inativas em
+  MovimentacaoEstoque
+  - ✅ Isso deve RETORNAR o estoque (como se não tivesse
+   saído)?
+  - ✅ Deve criar algum log/auditoria dessa operação?
+
+### MINHAS RESPOSTAS ###
+
+1-a- Marque como Cancelado.
+b- Mantenha ao lado das nfs != de canceladas, caso a NF
+já esteja cancelada, deixe o botão "disabled" e marque
+NF Cancelada.
+c- apenas admin (verificar como é "admin" corretamente
+em app/auth
+2-a- Voce tem um problema com data, É 15/07/2025 MESMO,
+hoje é 22/09/2025.
+b- create_date>= 2025-07-15 (2025 DOIS MIL E VINTE E
+CINCO)
+3- Marcar o estoque como se não tivesse saido, exato!
+log só o padrão no Render logs msm.
+
+ultrathink 
+
+WITH duplicatas AS (
+    SELECT
+        id,
+        ROW_NUMBER() OVER (
+            PARTITION BY numero_nf, cod_produto
+            ORDER BY created_at DESC, id DESC
+        ) as rn
+    FROM faturamento_produto
+    WHERE
+        numero_nf = '139635'
+)
+DELETE FROM faturamento_produto
+WHERE id IN (
+    SELECT id FROM duplicatas WHERE rn > 1
+);

@@ -167,8 +167,23 @@ class CarteiraService:
             
             # Adicionar filtros opcionais de data se fornecidos
             # IMPORTANTE: Usar create_date para buscar pedidos CRIADOS no período
+            # FILTRO ADICIONAL: Não buscar pedidos criados antes de 15/07/2025
+            data_corte_minima = '2025-07-15'
+
+            # Aplicar o filtro de data mínima SEMPRE
             if data_inicio:
-                domain.append(('order_id.create_date', '>=', data_inicio))
+                # Se data_inicio for posterior a 15/07/2025, usar data_inicio
+                # Senão, usar 15/07/2025
+                if data_inicio >= data_corte_minima:
+                    domain.append(('order_id.create_date', '>=', data_inicio))
+                else:
+                    logger.warning(f"Data início {data_inicio} anterior a {data_corte_minima}, usando data de corte mínima")
+                    domain.append(('order_id.create_date', '>=', data_corte_minima))
+            else:
+                # Sem data_inicio especificada, aplicar data de corte mínima
+                domain.append(('order_id.create_date', '>=', data_corte_minima))
+                logger.info(f"Aplicando filtro automático: create_date >= {data_corte_minima}")
+
             if data_fim:
                 domain.append(('order_id.create_date', '<=', data_fim))
             if pedidos_especificos:

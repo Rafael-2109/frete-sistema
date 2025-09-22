@@ -759,6 +759,105 @@ def dashboard_faturamento():
         flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
         return redirect(url_for('faturamento.listar_relatorios'))
 
+@faturamento_bp.route('/cancelar-nf-devolvida', methods=['POST'])
+@login_required
+def cancelar_nf_devolvida():
+    """
+    Cancela NF devolvida - marca como Cancelado e reverte estoque
+
+    Comporta-se exatamente como uma NF cancelada pelo Odoo, mas para devoluções manuais
+    """
+    try:
+        # Verificar se é admin
+        if current_user.perfil != 'administrador':
+            return jsonify({
+                'success': False,
+                'message': 'Apenas administradores podem cancelar NFs'
+            }), 403
+
+        numero_nf = request.form.get('numero_nf')
+        origem = request.form.get('origem')  # Número do pedido
+
+        if not numero_nf:
+            return jsonify({
+                'success': False,
+                'message': 'Número da NF é obrigatório'
+            }), 400
+
+        # Importar modelos necessários
+        from app.estoque.models import MovimentacaoEstoque
+
+        # Estatísticas para resposta
+        produtos_cancelados = 0
+        movimentacoes_revertidas = 0
+
+        # 1. Marcar todos os produtos da NF como Cancelado em FaturamentoProduto
+        produtos_nf = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).all()
+
+        if not produtos_nf:
+            return jsonify({
+                'success': False,
+                'message': f'Nenhum produto encontrado para a NF {numero_nf}'
+            }), 404
+
+        for produto in produtos_nf:
+            if produto.status_nf != 'Cancelado':
+                produto.status_nf = 'Cancelado'
+                produto.updated_at = datetime.now()
+                produto.updated_by = f'Cancelamento Manual - {current_user.nome}'
+                produtos_cancelados += 1
+
+        # 2. Marcar movimentações de estoque como inativas (reverte o estoque)
+        movimentacoes = MovimentacaoEstoque.query.filter_by(
+            numero_nf=numero_nf,
+            ativo=True  # Apenas movimentações ativas
+        ).all()
+
+        for mov in movimentacoes:
+            # Marcar como inativa para reverter o estoque
+            mov.ativo = False
+            mov.status_nf = 'CANCELADO'
+            mov.atualizado_em = datetime.now()
+            mov.atualizado_por = f'Cancelamento Manual - {current_user.nome}'
+            mov.observacao = f'{mov.observacao or ""} | NF Devolvida - Cancelada manualmente em {datetime.now().strftime("%d/%m/%Y %H:%M")}'
+            movimentacoes_revertidas += 1
+
+        # 3. Marcar RelatorioFaturamentoImportado como inativo também
+        relatorio_nf = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
+        if relatorio_nf and relatorio_nf.ativo:
+            relatorio_nf.ativo = False
+            relatorio_nf.inativado_em = datetime.now()
+            relatorio_nf.inativado_por = f'Cancelamento Manual - {current_user.nome}'
+
+        # Salvar todas as alterações
+        db.session.commit()
+
+        # Preparar mensagem de resposta
+        mensagem_detalhes = []
+        if produtos_cancelados > 0:
+            mensagem_detalhes.append(f'{produtos_cancelados} produtos marcados como cancelados')
+        if movimentacoes_revertidas > 0:
+            mensagem_detalhes.append(f'{movimentacoes_revertidas} movimentações revertidas')
+
+        mensagem = f'NF {numero_nf} cancelada com sucesso! ' + ', '.join(mensagem_detalhes)
+
+        return jsonify({
+            'success': True,
+            'message': mensagem,
+            'detalhes': {
+                'produtos_cancelados': produtos_cancelados,
+                'movimentacoes_revertidas': movimentacoes_revertidas
+            },
+            'recarregar': True  # Solicitar recarga da página para atualizar a lista
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao cancelar NF: {str(e)}'
+        }), 500
+
 @faturamento_bp.route('/dashboard-reconciliacao')
 @login_required
 def dashboard_reconciliacao():

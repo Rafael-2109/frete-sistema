@@ -203,3 +203,11 @@ with app.app_context():
     cart = db.session.execute(text('SELECT MAX(created_at) FROM carteira_principal')).scalar()
     print(f'CARTEIRA: {cart}')
 "
+
+python -c "from app import create_app,db;from sqlalchemy import text;app=create_app();app.app_context().push();c=db.session.execute(text('SELECT MAX(created_at) FROM carteira_principal')).scalar());print(f'ÚLTIMA CARTEIRA: {c}')"
+
+grep -E "ERROR|SSL|connection"
+logs/sincronizacao_incremental.log | tail -10
+
+grep -E "RETRY|tentativa"
+logs/sincronizacao_incremental.log | tail -5
