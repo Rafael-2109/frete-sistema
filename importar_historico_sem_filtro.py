@@ -166,7 +166,7 @@ class ImportadorSemFiltro:
 
             logger.info("🔄 Buscando TODOS os pedidos do período (sem filtros)...")
 
-            data_inicio = '2025-07-01'
+            data_inicio = '2025-07-10'
             data_fim = '2025-09-21'
 
             # Conectar direto ao Odoo para evitar filtros
