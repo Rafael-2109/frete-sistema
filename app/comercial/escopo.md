@@ -342,3 +342,35 @@ Se preferir pode perguntar mais.
 Pense profundamente.
 ultrathink
 
+
+> Gzip? pra que serve isso e qual impacto?
+  Paginação é interessante, isso vamos implantar.
+  Alem disso eu precisava criar filtros tambem na página dos clientes,
+  esses filtros devem pegar:
+  - cnpj_cpf
+  - raz_social
+  - raz_social_red
+  - UF
+  - num_pedido
+  - pedido_cliente
+
+  É possivel criar filtros para isso tudo na página de clientes?
+  No caso de num_pedido e pedido_cliente são filtros que se referem aos
+  pedidos de um cliente, onde deverá considerar os filtros já
+  considerados incluindo "Em Aberto".
+  Por exemplo: Cliente Assai emite 1 pedido_cliente para todas as
+  filiais de SP, ou seja, são 100 "clientes" com o mesmo pedido_cliente,
+  pode ser que todas essas 100 lojas do Assai possuam algum
+  pedido_cliente "Em Aberto" mas o vendedor pode pesquisar apenas
+  referente ao pedido_cliente mais antigo, porem supondo que desse
+  pedido_cliente mais antigo, apenas 10 lojas possuem esse pedido "Em
+  Aberto", o sistema deverá nesse caso filtrar apenas as 10 lojas caso o
+  vendedor filtre pelo pedido_cliente mais antigo, mas ao retirar o
+  filtro de pedido_cliente deverá trazer todas as 100 lojas.
+
+  Para voce pode ser um pouco complexo, mas faça perguntas que eu
+  esclareço para garantir que a implementação seja correta.
+
+  NÃO ASSUMA NADA.
+  PENSE PROFUNDAMENTE.
+  u 

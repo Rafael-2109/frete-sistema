@@ -427,11 +427,100 @@
                 </div>
 
                 <span class="ms-3 badge badge-info">
-                    Total: {{ clientes|length }} cliente(s)
+                    Total: {{ total_clientes }} cliente(s)
                 </span>
                 <span class="ms-2 badge badge-success">
-                    Valor Total: R$ {{ "{:,.2f}".format(clientes|sum(attribute='valor_em_aberto')).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                    Valor Total: R$ {{ "{:,.2f}".format(valor_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                 </span>
+            </div>
+        </div>
+
+        <!-- Card de Filtros Avançados -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card" style="background-color: #343541; border: 1px solid #444654;">
+                    <div class="card-header" style="background-color: #40414f; border-bottom: 1px solid #444654;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-light"><i class="fas fa-filter"></i> Filtros Avançados</span>
+                            <button class="btn btn-sm btn-link text-light" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#filtrosCollapse" aria-expanded="false">
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="collapse" id="filtrosCollapse">
+                        <div class="card-body">
+                            <form id="formFiltros" method="GET" action="{{ url_for('comercial.lista_clientes') }}">
+                                <!-- Manter filtros existentes como hidden -->
+                                <input type="hidden" name="posicao" value="{{ filtro_posicao }}">
+                                {% if equipe_filtro %}
+                                <input type="hidden" name="equipe" value="{{ equipe_filtro }}">
+                                {% endif %}
+                                {% if vendedor_filtro %}
+                                <input type="hidden" name="vendedor" value="{{ vendedor_filtro }}">
+                                {% endif %}
+
+                                <!-- Linha de Filtros Unificados -->
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <label for="cnpj_cpf" class="form-label text-light">CNPJ/CPF:</label>
+                                        <input type="text" class="form-control" id="cnpj_cpf" name="cnpj_cpf"
+                                               value="{{ request.args.get('cnpj_cpf', '') }}"
+                                               placeholder="Buscar CNPJ/CPF..."
+                                               style="background-color: #40414f; border-color: #565869; color: #ececf1;">
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label for="cliente" class="form-label text-light">
+                                            <i class="fas fa-building"></i> Cliente:
+                                        </label>
+                                        <input type="text" class="form-control" id="cliente" name="cliente"
+                                               value="{{ request.args.get('cliente', '') }}"
+                                               placeholder="Buscar por razão social ou nome fantasia..."
+                                               style="background-color: #40414f; border-color: #565869; color: #ececf1;">
+                                        <small class="text-muted">Busca em Razão Social e Nome Fantasia</small>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label for="pedido" class="form-label text-light">
+                                            <i class="fas fa-file-alt"></i> Pedido:
+                                        </label>
+                                        <input type="text" class="form-control" id="pedido" name="pedido"
+                                               value="{{ request.args.get('pedido', '') }}"
+                                               placeholder="Número ou pedido do cliente..."
+                                               style="background-color: #40414f; border-color: #565869; color: #ececf1;">
+                                        <small class="text-muted">Busca em Nº Pedido e Pedido Cliente</small>
+                                    </div>
+
+                                    <div class="col-md-2">
+                                        <label for="uf" class="form-label text-light">UF:</label>
+                                        <select class="form-select" id="uf" name="uf"
+                                                style="background-color: #40414f; border-color: #565869; color: #ececf1;">
+                                            <option value="">Todas</option>
+                                            {% for uf_item in ufs_disponiveis %}
+                                            <option value="{{ uf_item }}" {% if request.args.get('uf') == uf_item %}selected{% endif %}>
+                                                {{ uf_item }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Botões de Ação -->
+                                <div class="row">
+                                    <div class="col-12 text-end">
+                                        <button type="button" class="btn btn-dark-secondary" onclick="limparFiltros()">
+                                            <i class="fas fa-eraser"></i> Limpar Filtros
+                                        </button>
+                                        <button type="submit" class="btn btn-dark-primary">
+                                            <i class="fas fa-search"></i> Buscar
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -590,6 +679,19 @@
             ]
         });
     });
+
+    // Função para limpar filtros
+    function limparFiltros() {
+        // Criar URL apenas com filtros básicos mantidos
+        let url = '{{ url_for("comercial.lista_clientes") }}?posicao={{ filtro_posicao }}';
+        {% if equipe_filtro %}
+        url += '&equipe={{ equipe_filtro }}';
+        {% endif %}
+        {% if vendedor_filtro %}
+        url += '&vendedor={{ vendedor_filtro }}';
+        {% endif %}
+        window.location.href = url;
+    }
 
     // Função para ver pedidos do cliente
     function verPedidos(cnpj, nomeCliente) {

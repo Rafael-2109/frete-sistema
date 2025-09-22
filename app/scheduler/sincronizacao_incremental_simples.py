@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Configurações
 INTERVALO_MINUTOS = 30  # Executa a cada 30 minutos
 JANELA_MINUTOS = 40  # Busca últimos 40 minutos
+STATUS_MINUTOS = 1560  # Busca status das últimas 26 horas (26*60)
 
 
 def executar_sincronizacao():
@@ -42,7 +43,9 @@ def executar_sincronizacao():
             logger.info("💰 Sincronizando Faturamento...")
             faturamento_service = FaturamentoService()
             resultado_faturamento = faturamento_service.sincronizar_faturamento_incremental(
-                minutos_janela=JANELA_MINUTOS, primeira_execucao=False
+                minutos_janela=JANELA_MINUTOS,
+                primeira_execucao=False,
+                minutos_status=STATUS_MINUTOS
             )
 
             if resultado_faturamento.get("sucesso"):
@@ -98,7 +101,9 @@ def executar_sincronizacao_inicial():
             logger.info("💰 Sincronização inicial do Faturamento...")
             faturamento_service = FaturamentoService()
             resultado_faturamento = faturamento_service.sincronizar_faturamento_incremental(
-                minutos_janela=janela_inicial, primeira_execucao=True
+                minutos_janela=janela_inicial,
+                primeira_execucao=True,
+                minutos_status=STATUS_MINUTOS  # Usar o mesmo valor para status
             )
 
             if resultado_faturamento.get("sucesso"):

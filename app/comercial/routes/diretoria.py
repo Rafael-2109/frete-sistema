@@ -203,12 +203,25 @@ def vendedores_equipe(equipe_nome):
 @comercial_required
 def lista_clientes():
     """
-    Lista de clientes agrupados com filtros
+    Lista de clientes agrupados com filtros avançados
+    Suporta busca sem acento e filtros múltiplos
     """
     # Obter parâmetros de filtro
     filtro_posicao = request.args.get('posicao', 'em_aberto')  # em_aberto ou todos
     equipe_filtro = request.args.get('equipe', None)
     vendedor_filtro = request.args.get('vendedor', None)
+
+    # Novos filtros unificados
+    cnpj_cpf_filtro = request.args.get('cnpj_cpf', '').strip()
+    cliente_filtro = request.args.get('cliente', '').strip()  # Busca em razão social OU nome fantasia
+    pedido_filtro = request.args.get('pedido', '').strip()    # Busca em num_pedido OU pedido_cliente
+    uf_filtro = request.args.get('uf', '').strip()
+
+    # Manter compatibilidade com filtros antigos (caso venham de outros lugares)
+    raz_social_filtro = request.args.get('raz_social', '').strip()
+    raz_social_red_filtro = request.args.get('raz_social_red', '').strip()
+    num_pedido_filtro = request.args.get('num_pedido', '').strip()
+    pedido_cliente_filtro = request.args.get('pedido_cliente', '').strip()
 
     # Se for vendedor, aplicar restrições de permissões
     if current_user.perfil == 'vendedor':
@@ -253,60 +266,213 @@ def lista_clientes():
                 flash('Você não tem permissão para acessar este vendedor.', 'danger')
                 return redirect(url_for('comercial.dashboard_diretoria'))
 
-    # Buscar clientes conforme filtros
-    if vendedor_filtro:
-        clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor_filtro)
-    elif equipe_filtro:
-        clientes_cnpj = ClienteService.obter_clientes_por_equipe(equipe_filtro)
-    else:
-        # Se não tem filtro específico e é vendedor, aplicar todos os filtros de permissão
-        if current_user.perfil == 'vendedor':
+    # Se há filtros avançados, usar query otimizada
+    if any([cnpj_cpf_filtro, cliente_filtro, pedido_filtro, uf_filtro,
+            raz_social_filtro, raz_social_red_filtro, num_pedido_filtro, pedido_cliente_filtro]):
+        # Usar query SQL otimizada com busca sem acento
+        from sqlalchemy import text
+
+        sql = text("""
+            WITH pedidos_filtrados AS (
+                SELECT
+                    cnpj_cpf,
+                    num_pedido,
+                    pedido_cliente,
+                    raz_social,
+                    raz_social_red,
+                    estado,
+                    municipio,
+                    vendedor,
+                    equipe_vendas,
+                    qtd_saldo_produto_pedido,
+                    preco_produto_pedido,
+                    (qtd_saldo_produto_pedido * preco_produto_pedido) as valor_item
+                FROM carteira_principal
+                WHERE
+                    -- Filtro de posição
+                    (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0)
+
+                    -- Filtros de permissão (para vendedores)
+                    AND (:is_vendedor = false OR
+                         ((:equipe_filtro IS NOT NULL AND equipe_vendas = :equipe_filtro) OR
+                          (:vendedor_filtro IS NOT NULL AND vendedor = :vendedor_filtro) OR
+                          (:equipe_filtro IS NULL AND :vendedor_filtro IS NULL AND
+                           (equipe_vendas = ANY(:equipes_permitidas) OR
+                            vendedor = ANY(:vendedores_permitidos)))))
+
+                    -- Filtros de equipe/vendedor específicos
+                    AND (:equipe_filtro IS NULL OR equipe_vendas = :equipe_filtro)
+                    AND (:vendedor_filtro IS NULL OR vendedor = :vendedor_filtro)
+
+                    -- Filtro unificado de pedido (busca em num_pedido OU pedido_cliente)
+                    AND (:pedido = '' OR
+                         lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')) OR
+                         lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
+
+                    -- Filtros individuais de pedido (para compatibilidade)
+                    AND (:num_pedido = '' OR
+                         lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
+
+                    AND (:pedido_cliente = '' OR
+                         lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%')))
+            ),
+            clientes_agrupados AS (
+                SELECT
+                    cnpj_cpf,
+                    MAX(raz_social) as raz_social,
+                    MAX(raz_social_red) as raz_social_red,
+                    MAX(estado) as estado,
+                    MAX(municipio) as municipio,
+                    MAX(vendedor) as vendedor,
+                    MAX(equipe_vendas) as equipe_vendas,
+                    COUNT(DISTINCT num_pedido) as total_pedidos,
+                    SUM(valor_item) as valor_em_aberto
+                FROM pedidos_filtrados
+                WHERE
+                    -- Filtros de cliente
+                    (:cnpj_cpf = '' OR cnpj_cpf LIKE '%' || :cnpj_cpf || '%')
+
+                    -- Filtro unificado de cliente (busca em razão social OU nome fantasia)
+                    AND (:cliente = '' OR
+                         lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')) OR
+                         lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
+
+                    -- Filtros individuais de cliente (para compatibilidade)
+                    AND (:raz_social = '' OR
+                         lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
+
+                    AND (:raz_social_red = '' OR
+                         lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
+
+                    AND (:uf = '' OR estado = :uf)
+                GROUP BY cnpj_cpf
+                HAVING SUM(valor_item) > 0 OR :posicao = 'todos'
+            )
+            SELECT * FROM clientes_agrupados
+            ORDER BY valor_em_aberto DESC NULLS LAST
+        """)
+
+        # Preparar parâmetros
+        is_vendedor = current_user.perfil == 'vendedor'
+        equipes_permitidas = []
+        vendedores_permitidos = []
+
+        if is_vendedor:
             permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+            equipes_permitidas = permissoes.get('equipes', [])
+            vendedores_permitidos = permissoes.get('vendedores', [])
 
-            # Buscar clientes de todas as equipes e vendedores permitidos
-            clientes_cnpj_set = set()
+        params = {
+            'posicao': filtro_posicao,
+            'is_vendedor': is_vendedor,
+            'equipe_filtro': equipe_filtro,
+            'vendedor_filtro': vendedor_filtro,
+            'equipes_permitidas': equipes_permitidas or [''],
+            'vendedores_permitidos': vendedores_permitidos or [''],
+            'cnpj_cpf': cnpj_cpf_filtro,
+            'cliente': cliente_filtro,  # Campo unificado cliente
+            'pedido': pedido_filtro,    # Campo unificado pedido
+            'raz_social': raz_social_filtro,
+            'raz_social_red': raz_social_red_filtro,
+            'uf': uf_filtro,
+            'num_pedido': num_pedido_filtro,
+            'pedido_cliente': pedido_cliente_filtro
+        }
 
-            # Adicionar clientes das equipes permitidas
-            for equipe in permissoes['equipes']:
-                clientes_equipe = ClienteService.obter_clientes_por_equipe(equipe)
-                clientes_cnpj_set.update(clientes_equipe)
+        # Executar query
+        result = db.session.execute(sql, params).fetchall()
 
-            # Adicionar clientes dos vendedores permitidos
-            for vendedor in permissoes['vendedores']:
-                clientes_vendedor = ClienteService.obter_clientes_por_vendedor(vendedor)
-                clientes_cnpj_set.update(clientes_vendedor)
+        clientes_data = []
+        for row in result:
+            clientes_data.append({
+                'cnpj_cpf': row.cnpj_cpf,
+                'raz_social': row.raz_social,
+                'raz_social_red': row.raz_social_red,
+                'estado': row.estado,
+                'municipio': row.municipio,
+                'vendedor': row.vendedor,
+                'equipe_vendas': row.equipe_vendas,
+                'forma_agendamento': 'Portal',  # Default
+                'valor_em_aberto': float(row.valor_em_aberto) if row.valor_em_aberto else 0.0,
+                'total_pedidos': int(row.total_pedidos) if row.total_pedidos else 0
+            })
 
-            clientes_cnpj = list(clientes_cnpj_set)
+    else:
+        # Usar lógica original se não há filtros avançados
+        if vendedor_filtro:
+            clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor_filtro)
+        elif equipe_filtro:
+            clientes_cnpj = ClienteService.obter_clientes_por_equipe(equipe_filtro)
         else:
-            clientes_cnpj = ClienteService.obter_todos_clientes_distintos()
+            # Se não tem filtro específico e é vendedor, aplicar todos os filtros de permissão
+            if current_user.perfil == 'vendedor':
+                permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
 
-    # Buscar dados de cada cliente
-    clientes_data = []
-    for cnpj in clientes_cnpj:
-        dados_cliente = ClienteService.obter_dados_cliente(cnpj, filtro_posicao)
+                # Buscar clientes de todas as equipes e vendedores permitidos
+                clientes_cnpj_set = set()
 
-        # Adicionar ao resultado
-        clientes_data.append({
-            'cnpj_cpf': dados_cliente['cnpj_cpf'],
-            'raz_social': dados_cliente['raz_social'],
-            'raz_social_red': dados_cliente['raz_social_red'],
-            'estado': dados_cliente['estado'],
-            'municipio': dados_cliente['municipio'],
-            'vendedor': dados_cliente['vendedor'],
-            'equipe_vendas': dados_cliente['equipe_vendas'],
-            'forma_agendamento': dados_cliente['forma_agendamento'],
-            'valor_em_aberto': float(dados_cliente['valor_em_aberto']),
-            'total_pedidos': dados_cliente['total_pedidos']
-        })
+                # Adicionar clientes das equipes permitidas
+                for equipe in permissoes['equipes']:
+                    clientes_equipe = ClienteService.obter_clientes_por_equipe(equipe)
+                    clientes_cnpj_set.update(clientes_equipe)
 
-    # Ordenar por valor em aberto (maior para menor)
-    clientes_data.sort(key=lambda x: x['valor_em_aberto'], reverse=True)
+                # Adicionar clientes dos vendedores permitidos
+                for vendedor in permissoes['vendedores']:
+                    clientes_vendedor = ClienteService.obter_clientes_por_vendedor(vendedor)
+                    clientes_cnpj_set.update(clientes_vendedor)
+
+                clientes_cnpj = list(clientes_cnpj_set)
+            else:
+                clientes_cnpj = ClienteService.obter_todos_clientes_distintos()
+
+        # Buscar dados de cada cliente
+        clientes_data = []
+        for cnpj in clientes_cnpj:
+            dados_cliente = ClienteService.obter_dados_cliente(cnpj, filtro_posicao)
+
+            # Adicionar ao resultado
+            clientes_data.append({
+                'cnpj_cpf': dados_cliente['cnpj_cpf'],
+                'raz_social': dados_cliente['raz_social'],
+                'raz_social_red': dados_cliente['raz_social_red'],
+                'estado': dados_cliente['estado'],
+                'municipio': dados_cliente['municipio'],
+                'vendedor': dados_cliente['vendedor'],
+                'equipe_vendas': dados_cliente['equipe_vendas'],
+                'forma_agendamento': dados_cliente['forma_agendamento'],
+                'valor_em_aberto': float(dados_cliente['valor_em_aberto']),
+                'total_pedidos': dados_cliente['total_pedidos']
+            })
+
+        # Ordenar por valor em aberto (maior para menor)
+        clientes_data.sort(key=lambda x: x['valor_em_aberto'], reverse=True)
+
+    # Buscar UFs disponíveis para o dropdown
+    ufs_disponiveis = []
+    if clientes_data:
+        # Extrair UFs únicas dos clientes já filtrados
+        ufs_set = {c['estado'] for c in clientes_data if c['estado']}
+        ufs_disponiveis = sorted(list(ufs_set))
+    else:
+        # Se não há clientes, buscar UFs disponíveis no banco
+        ufs = db.session.query(distinct(CarteiraPrincipal.estado)).filter(
+            CarteiraPrincipal.estado.isnot(None),
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0 if filtro_posicao == 'em_aberto' else True
+        ).all()
+        ufs_disponiveis = sorted([uf[0] for uf in ufs if uf[0]])
+
+    # Calcular totais
+    total_clientes = len(clientes_data)
+    valor_total = sum(c['valor_em_aberto'] for c in clientes_data)
 
     return render_template('comercial/lista_clientes.html',
                          clientes=clientes_data,
                          filtro_posicao=filtro_posicao,
                          equipe_filtro=equipe_filtro,
-                         vendedor_filtro=vendedor_filtro)
+                         vendedor_filtro=vendedor_filtro,
+                         ufs_disponiveis=ufs_disponiveis,
+                         total_clientes=total_clientes,
+                         valor_total=valor_total)
 
 
 @comercial_bp.route('/api/cliente/<path:cnpj>/detalhes')

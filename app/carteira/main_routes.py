@@ -97,21 +97,39 @@ def index():
                                  sistema_inicializado=False)
         
         # 📊 ESTATÍSTICAS PRINCIPAIS
-        total_pedidos = db.session.query(CarteiraPrincipal.num_pedido).distinct().count()
-        total_produtos = db.session.query(CarteiraPrincipal.cod_produto).distinct().count()
-        total_itens = CarteiraPrincipal.query.filter_by(ativo=True).count()
+        # IMPORTANTE: Filtrar apenas itens com saldo > 0 para consistência com workspace
+        total_pedidos = db.session.query(CarteiraPrincipal.num_pedido).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).distinct().count()
+
+        total_produtos = db.session.query(CarteiraPrincipal.cod_produto).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).distinct().count()
+
+        total_itens = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).count()
         
         # 💰 VALORES TOTAIS
         valor_total_carteira = db.session.query(func.sum(
             CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido
-        )).scalar() or 0
+        )).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).scalar() or 0
         
         # 🎯 STATUS BREAKDOWN
         status_breakdown = db.session.query(
             CarteiraPrincipal.status_pedido,
             func.count(CarteiraPrincipal.id).label('count'),
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor')
-        ).filter_by(ativo=True).group_by(CarteiraPrincipal.status_pedido).all()
+        ).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).group_by(CarteiraPrincipal.status_pedido).all()
         
         # 🔄 CONTROLES CRUZADOS PENDENTES (com fallback)
         controles_pendentes = 0
@@ -126,7 +144,8 @@ def index():
         expedicoes_proximas = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.expedicao <= data_limite,
             CarteiraPrincipal.expedicao >= date.today(),
-            CarteiraPrincipal.ativo == True
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).count()
         
         # 👥 BREAKDOWN POR VENDEDOR (ordenado por valor total decrescente)
@@ -134,7 +153,10 @@ def index():
             CarteiraPrincipal.vendedor,
             func.count(CarteiraPrincipal.id).label('count'),
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor')
-        ).filter_by(ativo=True).group_by(CarteiraPrincipal.vendedor).order_by(
+        ).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).group_by(CarteiraPrincipal.vendedor).order_by(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).desc()
         ).limit(10).all()
         

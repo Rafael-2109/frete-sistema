@@ -105,38 +105,65 @@ class CarteiraService:
 
             # Montar domain baseado no modo
             if modo_incremental:
-                # MODO INCREMENTAL: busca por write_date
+                # MODO INCREMENTAL: busca por write_date OU date_order se fornecida
                 from app.utils.timezone import agora_utc
                 from datetime import timedelta
 
-                data_corte = agora_utc() - timedelta(minutes=minutos_janela)
-                momento_atual = agora_utc()
+                # Se tem data_inicio/fim, usar date_order para importação histórica
+                if data_inicio or data_fim:
+                    domain = [
+                        '&',  # AND entre os filtros
+                        ('order_id.state', 'in', ['draft', 'sent', 'sale', 'done']),
+                        '|',  # OR entre tipos de pedido
+                        ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
+                        ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                        # NÃO filtrar por qty_saldo > 0!
+                    ]
+                    logger.info("🔄 MODO INCREMENTAL COM DATAS: usando date_order para importação histórica")
+                    logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")
+                else:
+                    # Modo incremental normal: usar write_date
+                    data_corte = agora_utc() - timedelta(minutes=minutos_janela)
+                    momento_atual = agora_utc()
 
-                domain = [
-                    ('order_id.write_date', '>=', data_corte.isoformat()),
-                    ('order_id.write_date', '<=', momento_atual.isoformat()),
-                    ('order_id.state', 'in', ['draft', 'sent', 'sale'])
-                    # NÃO filtrar por qty_saldo > 0!
-                ]
-                logger.info(f"🔄 MODO INCREMENTAL: buscando alterações dos últimos {minutos_janela} minutos")
-                logger.info(f"📅 Data corte UTC: {data_corte.isoformat()}")
+                    domain = [
+                        '&',  # AND entre todos os filtros
+                        ('order_id.write_date', '>=', data_corte.isoformat()),
+                        ('order_id.write_date', '<=', momento_atual.isoformat()),
+                        ('order_id.state', 'in', ['draft', 'sent', 'sale']),
+                        '|',  # OR entre tipos de pedido
+                        ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
+                        ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                        # NÃO filtrar por qty_saldo > 0!
+                    ]
+                    logger.info(f"🔄 MODO INCREMENTAL: buscando alterações dos últimos {minutos_janela} minutos")
+                    logger.info(f"📅 Data corte UTC: {data_corte.isoformat()}")
             elif pedidos_na_carteira:
                 # MODO TRADICIONAL com pedidos existentes: usar filtro OR
                 domain = [
-                    '&',  # AND entre status válido e condição OR
-                    ('order_id.state', 'in', ['draft', 'sent', 'sale']),  # Status válido sempre
+                    '&',  # AND entre TODOS os filtros
+                    ('order_id.state', 'in', ['draft', 'sent', 'sale', 'invoiced']),  # Status válido sempre
+                    '|',  # OR entre tipos de pedido
+                    ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
+                    ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
                     '|',  # OR entre as duas condições abaixo
                     ('qty_saldo', '>', 0),  # Novos pedidos com saldo
                     ('order_id.name', 'in', list(pedidos_na_carteira))  # OU pedidos já existentes
                 ]
                 logger.info("🔍 Usando filtro combinado: (qty_saldo > 0) OU (pedidos existentes)")
+                logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")
             else:
                 # MODO TRADICIONAL carteira vazia: apenas qty_saldo > 0
                 domain = [
+                    '&',  # AND entre todos os filtros
                     ('qty_saldo', '>', 0),  # Carteira pendente
-                    ('order_id.state', 'in', ['draft', 'sent', 'sale'])  # Status válido
+                    ('order_id.state', 'in', ['draft', 'sent', 'sale']),  # Status válido
+                    '|',  # OR entre tipos de pedido
+                    ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
+                    ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
                 ]
                 logger.info("🔍 Carteira vazia - usando apenas filtro qty_saldo > 0")
+                logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")
             
             # Adicionar filtros opcionais de data se fornecidos
             if data_inicio:
@@ -1272,6 +1299,7 @@ class CarteiraService:
             saldos_calculados_antes = {}  # Guardar saldos calculados ANTES da importação
             registros_atuais = 0
             registros_nao_odoo = 0
+            pedidos_odoo_obsoletos = 0  # Contagem de registros obsoletos mantidos
             
             # Processar todos os itens usando dados em memória (ZERO queries!)
             logger.info("   🔄 Processando cálculos em memória...")
@@ -1726,15 +1754,19 @@ class CarteiraService:
                 if item.get('num_pedido') and item.get('cod_produto'):
                     chaves_novos_dados.add((item['num_pedido'], item['cod_produto']))
             
-            # Remover registros que não existem mais no Odoo
-            pedidos_odoo_deletados = 0
+            # ⚠️ NÃO REMOVER registros - apenas marcar obsoletos
+            # Registros com qtd_saldo = 0 precisam ser mantidos para histórico no módulo comercial
+            pedidos_odoo_obsoletos = 0
             for chave, registro in registros_odoo_existentes.items():
                 if chave not in chaves_novos_dados:
-                    db.session.delete(registro)
-                    pedidos_odoo_deletados += 1
-            
-            if pedidos_odoo_deletados > 0:
-                logger.info(f"🗑️ {pedidos_odoo_deletados} registros Odoo obsoletos removidos")
+                    # NÃO DELETAR - apenas contar para log
+                    # Manter registro para histórico mesmo com saldo zero
+                    pedidos_odoo_obsoletos += 1
+                    # COMENTADO PARA PRESERVAR HISTÓRICO:
+                    # db.session.delete(registro)
+
+            if pedidos_odoo_obsoletos > 0:
+                logger.info(f"📋 {pedidos_odoo_obsoletos} registros não vieram do Odoo (mantidos para histórico)")
             
             # UPSERT: Atualizar existentes ou inserir novos COM COMMITS INCREMENTAIS
             contador_inseridos = 0
@@ -1768,10 +1800,22 @@ class CarteiraService:
                             setattr(registro_existente, key, value)
                     contador_atualizados += 1
                 else:
-                    # INSERIR - Acumular para bulk insert
-                    novo_registro = CarteiraPrincipal(**item)
-                    db.session.add(novo_registro)
-                    contador_inseridos += 1
+                    # INSERIR - Aplicar fallback para campos vazios ANTES de criar
+                    # Garantir que cod_uf e nome_cidade tenham valores
+                    if not item.get('cod_uf') and item.get('estado'):
+                        item['cod_uf'] = item['estado']
+                    if not item.get('nome_cidade') and item.get('municipio'):
+                        item['nome_cidade'] = item['municipio']
+
+                    # INSERIR - Criar registro com tratamento de erro
+                    try:
+                        novo_registro = CarteiraPrincipal(**item)
+                        db.session.add(novo_registro)
+                        contador_inseridos += 1
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao criar registro para {item.get('num_pedido')}/{item.get('cod_produto')}: {e}")
+                        erros_insercao.append(f"{item.get('num_pedido')}/{item.get('cod_produto')}: {str(e)[:100]}")
+                        continue
             
             # UM ÚNICO COMMIT para TUDO!
             logger.info(f"   💾 Salvando {contador_inseridos} inserções e {contador_atualizados} atualizações...")
@@ -1793,6 +1837,12 @@ class CarteiraService:
             
             logger.info(f"✅ {contador_inseridos} novos registros inseridos")
             logger.info(f"🔄 {contador_atualizados} registros atualizados")
+
+            # Reportar erros se houver
+            if erros_insercao:
+                logger.warning(f"⚠️ {len(erros_insercao)} erros de inserção:")
+                for erro in erros_insercao[:10]:  # Mostrar apenas os 10 primeiros
+                    logger.error(f"   - {erro}")
             
             # FASE 8: COMMIT FINAL (já feito incrementalmente)
             logger.info("💾 Fase 8: Todas as alterações já salvas incrementalmente")
@@ -1956,7 +2006,7 @@ class CarteiraService:
             estatisticas_completas = {
                 'registros_inseridos': contador_inseridos,
                 'registros_atualizados': contador_atualizados,
-                'registros_removidos': pedidos_odoo_deletados,
+                'registros_removidos': 0,  # Não removemos mais para preservar histórico
                 'registros_nao_odoo_preservados': registros_nao_odoo,
                 'total_encontrados': len(resultado_odoo.get('dados', [])),
                 'registros_filtrados': len(dados_novos),
@@ -1983,7 +2033,7 @@ class CarteiraService:
             logger.info(f"✅ SINCRONIZAÇÃO OPERACIONAL COMPLETA CONCLUÍDA:")
             logger.info(f"   📊 {contador_inseridos} registros inseridos")
             logger.info(f"   🔄 {contador_atualizados} registros atualizados")
-            logger.info(f"   🗑️ {pedidos_odoo_deletados} registros Odoo removidos")
+            logger.info(f"   📋 {pedidos_odoo_obsoletos} registros obsoletos mantidos para histórico")
             logger.info(f"   🛡️ {registros_nao_odoo} registros não-Odoo preservados")
             # Linha removida - não fazemos mais backup de pré-separações
             logger.info(f"   📉 {estatisticas_completas['reducoes_aplicadas']} reduções aplicadas")
@@ -2003,7 +2053,7 @@ class CarteiraService:
                 'operacao_completa': True,
                 'estatisticas': estatisticas_completas,
                 'registros_importados': contador_inseridos,
-                'registros_removidos': pedidos_odoo_deletados,
+                'registros_removidos': 0,  # Não removemos mais para preservar histórico
                 'registros_nao_odoo_preservados': registros_nao_odoo,
                 'erros': erros_insercao,
                 

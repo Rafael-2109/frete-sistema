@@ -478,7 +478,7 @@ class FaturamentoService:
     # 🚀 MÉTODOS PRINCIPAIS OTIMIZADOS
     # ============================================
     
-    def sincronizar_faturamento_incremental_com_write_date(self, minutos_janela=40, primeira_execucao=False) -> Dict[str, Any]:
+    def sincronizar_faturamento_incremental_com_write_date(self, minutos_janela=120, primeira_execucao=False) -> Dict[str, Any]:
         """
         🔄 SINCRONIZAÇÃO INCREMENTAL COM WRITE_DATE - IGUAL CARTEIRA_SERVICE
 
@@ -555,7 +555,7 @@ class FaturamentoService:
                 'tempo_execucao': time.time() - start_time
             }
 
-    def sincronizar_faturamento_incremental(self, minutos_janela=40, primeira_execucao=False) -> Dict[str, Any]:
+    def sincronizar_faturamento_incremental(self, minutos_janela=40, primeira_execucao=False, minutos_status=1560) -> Dict[str, Any]:
         """
         🚀 SINCRONIZAÇÃO INCREMENTAL OTIMIZADA + INTEGRAÇÃO COMPLETA
 
@@ -585,7 +585,8 @@ class FaturamentoService:
                 usar_filtro_postado=True,
                 limite=0,  # Usará limite interno de 20000 registros para evitar timeout
                 modo_incremental=True,  # ✅ ATIVAR MODO INCREMENTAL COM WRITE_DATE
-                minutos_janela=minutos_janela  # ✅ PASSAR JANELA DE TEMPO
+                minutos_janela=minutos_janela,  # ✅ PASSAR JANELA DE TEMPO
+                minutos_status=minutos_status  # ✅ PASSAR JANELA PARA STATUS
             )
             
             if not resultado['sucesso']:
@@ -598,10 +599,16 @@ class FaturamentoService:
             dados_faturamento = resultado.get('dados', [])
             
             if not dados_faturamento:
+                logger.info("📊 Nenhuma alteração encontrada no período (normal em finais de semana)")
                 return {
-                    'sucesso': False,
-                    'erro': 'Nenhum dado encontrado no Odoo',
-                    'estatisticas': {}
+                    'sucesso': True,
+                    'registros_novos': 0,
+                    'registros_atualizados': 0,
+                    'estatisticas': {},
+                    'movimentacoes_estoque': {},
+                    'sincronizacoes': {},
+                    'tempo_execucao': time.time() - start_time,
+                    'mensagem': 'Nenhuma alteração no período'
                 }
             
             logger.info(f"📊 Processando {len(dados_faturamento)} registros do Odoo...")
@@ -638,12 +645,25 @@ class FaturamentoService:
                 FaturamentoProduto.status_nf
             )
 
-            # Em modo incremental (não primeira execução), limitar aos últimos 2 dias
+            # 🔴 CORREÇÃO: Verificar registros baseado na janela de tempo real
+            # Para janelas grandes (histórico), verificar tudo para evitar duplicatas
+            # Para janelas pequenas (scheduler), manter otimização
             if not primeira_execucao:
                 from datetime import datetime, timedelta
-                data_limite = datetime.now() - timedelta(days=2)
-                query = query.filter(FaturamentoProduto.created_at >= data_limite)
-                logger.info(f"🚀 Modo incremental: carregando apenas registros após {data_limite.strftime('%Y-%m-%d')}")
+
+                # Se janela é maior que 7 dias, é importação histórica
+                if minutos_janela > (7 * 24 * 60):  # 7 dias em minutos
+                    # Para importação histórica, verificar registros dos últimos minutos_janela
+                    # Adicionar margem de segurança de 10%
+                    minutos_verificacao = int(minutos_janela * 1.1)
+                    data_limite = datetime.now() - timedelta(minutes=minutos_verificacao)
+                    query = query.filter(FaturamentoProduto.created_at >= data_limite)
+                    logger.info(f"📚 Modo histórico: verificando registros dos últimos {minutos_verificacao} minutos (desde {data_limite.strftime('%Y-%m-%d %H:%M')})")
+                else:
+                    # Para execuções normais do scheduler (janelas pequenas), manter otimização de 2 dias
+                    data_limite = datetime.now() - timedelta(days=2)
+                    query = query.filter(FaturamentoProduto.created_at >= data_limite)
+                    logger.info(f"🚀 Modo incremental: carregando registros após {data_limite.strftime('%Y-%m-%d')}")
 
             # Usar yield_per para economizar memória em queries grandes
             contador_registros = 0
@@ -1172,7 +1192,7 @@ class FaturamentoService:
                 'itens_novos': 0
             }
 
-    def obter_faturamento_otimizado(self, usar_filtro_postado=True, limite=20, modo_incremental=False, minutos_janela=40):
+    def obter_faturamento_otimizado(self, usar_filtro_postado=True, limite=20, modo_incremental=False, minutos_janela=40, minutos_status=1560):
         """
         🚀 MÉTODO REALMENTE OTIMIZADO - 5 queries + JOIN em memória
         Com filtro obrigatório implementado
@@ -1204,17 +1224,17 @@ class FaturamentoService:
                 agora_utc = datetime.now(tz_utc)
 
                 # 📊 ESTRATÉGIA SIMPLIFICADA
-                # Buscar APENAS NFs criadas nas últimas 26 horas
-                # (só essas podem ter status alterado para cancelado)
+                # Buscar NFs criadas no período para verificar status
+                # (podem ter sido canceladas ou alteradas)
 
                 logger.info("🔄 MODO INCREMENTAL ATIVO - BUSCA POR CREATE_DATE")
 
-                # BUSCA ÚNICA: NFs das últimas 26 horas
-                data_corte = agora_utc - timedelta(hours=26)
+                # BUSCA ÚNICA: NFs criadas no período de minutos_status
+                data_corte = agora_utc - timedelta(minutes=minutos_status)
                 data_corte_str = data_corte.strftime('%Y-%m-%d %H:%M:%S')
 
                 domain = []
-                # Buscar NFs criadas nas últimas 26 horas (podem ser novas ou canceladas)
+                # Buscar NFs criadas no período definido (podem ser novas ou canceladas)
                 domain.append(('move_id.create_date', '>=', data_corte_str))
 
                 # Não filtrar por estado para pegar canceladas também
@@ -1224,7 +1244,8 @@ class FaturamentoService:
                     ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao')
                 ])
 
-                logger.info(f"   📌 Buscando NFs criadas desde: {data_corte_str} UTC (últimas 26 horas)")
+                horas_status = minutos_status / 60
+                logger.info(f"   📌 Buscando NFs criadas desde: {data_corte_str} UTC (últimas {horas_status:.1f} horas)")
                 logger.info(f"   📌 Hora atual UTC: {agora_utc.strftime('%Y-%m-%d %H:%M:%S')}")
 
                 campos_basicos = [
@@ -1233,9 +1254,9 @@ class FaturamentoService:
                 ]
 
                 # Executar busca única
-                logger.info("   🔍 Executando busca de NFs das últimas 26 horas...")
+                logger.info(f"   🔍 Executando busca de NFs das últimas {horas_status:.1f} horas...")
                 dados_odoo_brutos = self.connection.search_read(
-                    'account.move.line', domain, campos_basicos, limit=20000
+                    'account.move.line', domain, campos_basicos, limit=200000
                 )
                 logger.info(f"      ✅ {len(dados_odoo_brutos)} linhas encontradas")
 
@@ -1251,10 +1272,10 @@ class FaturamentoService:
                     'total_registros': len(dados_processados),
                     'estatisticas': {
                         'total_linhas_odoo': len(dados_odoo_brutos),
-                        'janela_horas': 26,
+                        'janela_horas': horas_status,
                         'queries_executadas': 7,  # 1 busca principal + 6 queries de JOIN
                     },
-                    'mensagem': f'⚡ {len(dados_processados)} registros processados (NFs das últimas 26 horas)'
+                    'mensagem': f'⚡ {len(dados_processados)} registros processados (NFs das últimas {horas_status:.1f} horas)'
                 }
 
             # ⚠️ MODO NÃO-INCREMENTAL (busca normal)
@@ -1290,7 +1311,7 @@ class FaturamentoService:
             else:
                 # ⚡ SINCRONIZAÇÃO LIMITADA para evitar timeouts
                 logger.info("🔄 Usando sincronização limitada...")
-                max_records = 20000  # Máximo 20000 registros para evitar timeout
+                max_records = 200000  # Máximo 200000 registros (aumentado para pegar todas as NFs)
                 
                 dados_odoo_brutos = self.connection.search_read(
                     'account.move.line',
