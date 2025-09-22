@@ -99,7 +99,7 @@ python -m flask db upgrade 2>/dev/null || echo " Migrações não executadas (po
 
 # 🔄 INICIAR SINCRONIZAÇÃO INCREMENTAL EM BACKGROUND
 echo " Iniciando sincronização incremental em background..."
-if [ -f "app/scheduler/sincronizacao_incremental_simples.py" ]; then
+if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
     # Criar diretório de logs se não existir
     mkdir -p logs
 

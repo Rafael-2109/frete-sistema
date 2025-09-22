@@ -182,6 +182,7 @@ class CarteiraService:
             else:
                 # Sem data_inicio especificada, aplicar data de corte mínima
                 domain.append(('order_id.create_date', '>=', data_corte_minima))
+
                 logger.info(f"Aplicando filtro automático: create_date >= {data_corte_minima}")
 
             if data_fim:
@@ -1135,83 +1136,14 @@ class CarteiraService:
                 'erro': str(e)
             }
     
-    # FUNÇÕES AUXILIARES REMOVIDAS:
-    # - _verificar_risco_faturamento_pendente  
-    # - _verificar_ultima_sincronizacao_faturamento
-    # Motivo: Eram usadas apenas pela função removida _verificar_riscos_pre_sincronizacao
     
-    def sincronizar_incremental(self, minutos_janela=40, primeira_execucao=False):
-        """
-        🔄 SINCRONIZAÇÃO INCREMENTAL BASEADA EM WRITE_DATE
-
-        Sincroniza APENAS pedidos alterados nos últimos X minutos.
-        Atualiza TODOS os campos (exceto qtd_saldo_produto_pedido que é calculado).
-
-        Args:
-            minutos_janela (int): Janela de tempo para buscar alterações (padrão: 40 min)
-            primeira_execucao (bool): Se True, limita a 24h para não sobrecarregar
-
-        Returns:
-            dict: Resultado da sincronização com estatísticas
-        """
-        import time
-
-        inicio = time.time()
-        logger.info("="*80)
-        logger.info(f"🔄 SINCRONIZAÇÃO INCREMENTAL - Janela: {minutos_janela} minutos")
-        logger.info("="*80)
-
-        try:
-            # Se for primeira execução, ajustar janela
-            if primeira_execucao:
-                minutos_janela = 24 * 60  # 24 horas
-                logger.info("🚀 PRIMEIRA EXECUÇÃO - Buscando últimas 24 horas")
-
-            # Chamar método existente com modo incremental
-            resultado = self.obter_carteira_pendente(
-                modo_incremental=True,
-                minutos_janela=minutos_janela
-            )
-
-            if not resultado['sucesso']:
-                return {
-                    'sucesso': False,
-                    'erro': resultado.get('erro', 'Erro ao buscar dados do Odoo'),
-                    'tempo_execucao': time.time() - inicio
-                }
-
-            dados_novos = resultado.get('dados', [])
-
-            if not dados_novos:
-                logger.info("✅ Nenhum pedido alterado no período")
-                return {
-                    'sucesso': True,
-                    'pedidos_processados': 0,
-                    'itens_atualizados': 0,
-                    'tempo_execucao': time.time() - inicio
-                }
-
-            logger.info(f"📊 {len(dados_novos)} itens encontrados para sincronização")
-
-            # Usar o método de sincronização completo existente
-            # Ele já faz UPSERT, calcula saldos, etc
-            return self.sincronizar_carteira_odoo_com_gestao_quantidades(
-                usar_filtro_pendente=False,  # Não filtrar por saldo, já veio filtrado
-                modo_incremental=True  # OTIMIZAÇÃO: Indica que é modo incremental
-            )
-
-        except Exception as e:
-            logger.error(f"❌ ERRO na sincronização incremental: {e}")
-            import traceback
-            traceback.print_exc()
-
-            return {
-                'sucesso': False,
-                'erro': str(e),
-                'tempo_execucao': time.time() - inicio
-            }
-
-    def sincronizar_carteira_odoo_com_gestao_quantidades(self, usar_filtro_pendente=True, modo_incremental=False):
+    def sincronizar_carteira_odoo_com_gestao_quantidades(
+        self,
+        usar_filtro_pendente=True,
+        modo_incremental=False,
+        minutos_janela=40,
+        primeira_execucao=False
+    ):
         """
         🚀 SINCRONIZAÇÃO INTELIGENTE COM GESTÃO DE QUANTIDADES
         
@@ -1228,6 +1160,8 @@ class CarteiraService:
         
         Args:
             usar_filtro_pendente (bool): Se True, filtra apenas itens com saldo > 0
+            modo_incremental (bool): Se True, busca apenas registros alterados no período
+            minutos_janela (int): Janela de tempo em minutos para modo incremental
             
         Returns:
             dict: Resultado completo compatível com sincronizar_carteira_odoo()
@@ -1361,7 +1295,12 @@ class CarteiraService:
             # FASE 2: BUSCAR DADOS NOVOS DO ODOO
             logger.info("🔄 Fase 2: Buscando dados atualizados do Odoo...")
 
-            resultado_odoo = self.obter_carteira_pendente()
+            janela = 24*60 if primeira_execucao else minutos_janela
+
+            resultado_odoo = self.obter_carteira_pendente(
+                modo_incremental=modo_incremental,
+                minutos_janela=janela,
+            )
 
             if not resultado_odoo['sucesso']:
                 return {

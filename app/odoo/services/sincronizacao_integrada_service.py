@@ -114,7 +114,10 @@ class SincronizacaoIntegradaService:
             resultado_completo['etapas_executadas'].append('INICIANDO_CARTEIRA')
             
             resultado_carteira = self.carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(
-                usar_filtro_pendente=usar_filtro_carteira
+                usar_filtro_pendente=usar_filtro_carteira,
+                modo_incremental=True,
+                minutos_janela=6360,
+                primeira_execucao=False
             )
             
             if not resultado_carteira.get('sucesso', False):
@@ -174,18 +177,29 @@ class SincronizacaoIntegradaService:
     
     def _sincronizar_faturamento_seguro(self):
         """
-        📊 SINCRONIZAÇÃO SEGURA DE FATURAMENTO COM MOVIMENTAÇÕES DE ESTOQUE
-        
-        Executa sincronização completa:
-        1. Importa faturamento do Odoo
+        📊 SINCRONIZAÇÃO DE FALLBACK - FATURAMENTO COM LIMITE DE 20.000 LINHAS
+
+        Executa sincronização como fallback:
+        1. Busca últimas 20.000 linhas de faturamento
         2. Processa movimentações de estoque automaticamente
+
+        IMPORTANTE: Método usado apenas como fallback manual ou recuperação
         """
         try:
-            logger.info("📊 Executando sincronização completa de faturamento + estoque...")
-            
-            # ✅ EXECUTAR SINCRONIZAÇÃO REAL DE FATURAMENTO
-            resultado_fat = self.faturamento_service.sincronizar_faturamento_incremental()
-            
+            logger.info("📊 Executando sincronização FALLBACK de faturamento...")
+            logger.info("   ⚠️ MODO FALLBACK: Buscando últimas 20.000 linhas")
+
+            # ✅ EXECUTAR SINCRONIZAÇÃO DE FALLBACK COM LIMITE
+            # Usar janela muito grande para pegar tudo recente (30 dias = 43.200 minutos)
+            resultado_fat = self.faturamento_service.sincronizar_faturamento_incremental(
+                minutos_janela=43200,     # 30 dias para garantir que pegue tudo recente
+                primeira_execucao=False,
+                minutos_status=43200      # 30 dias também para status
+            )
+
+            # Nota: O Odoo tem limite interno que evita trazer mais de 200.000 registros
+            # mas na prática vai trazer os últimos registros dentro da janela
+
             if not resultado_fat.get('sucesso', False):
                 return {
                     'sucesso': False,

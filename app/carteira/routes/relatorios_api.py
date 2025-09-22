@@ -125,7 +125,9 @@ def exportar_carteira_simples():
             )
         
         # Buscar dados
-        items = query.all()
+        items = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        )
         
         # Converter para DataFrame
         dados = []
@@ -194,7 +196,9 @@ def exportar_carteira_detalhada():
         data_fim = data.get('data_fim') if data else None
         
         # Query base para pedidos
-        query_pedidos = CarteiraPrincipal.query
+        query_pedidos = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        )
         
         # Aplicar filtro de datas se fornecido
         if data_inicio and data_fim:

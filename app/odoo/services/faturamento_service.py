@@ -478,83 +478,6 @@ class FaturamentoService:
     # 🚀 MÉTODOS PRINCIPAIS OTIMIZADOS
     # ============================================
     
-    def sincronizar_faturamento_incremental_com_write_date(self, minutos_janela=120, primeira_execucao=False) -> Dict[str, Any]:
-        """
-        🔄 SINCRONIZAÇÃO INCREMENTAL COM WRITE_DATE - IGUAL CARTEIRA_SERVICE
-
-        Usa write_date do account.move para buscar apenas alterações recentes
-
-        Args:
-            minutos_janela: Janela de tempo em minutos para busca incremental
-            primeira_execucao: Se True, usa janela maior (120 minutos)
-
-        Returns:
-            Dict com estatísticas da sincronização
-        """
-        try:
-            import time
-            from app import db
-
-            start_time = time.time()
-
-            # Ajustar janela para primeira execução (recuperação pós-deploy)
-            if primeira_execucao:
-                minutos_janela = 120  # 2 horas na primeira execução
-                logger.info(f"🚀 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO - PRIMEIRA EXECUÇÃO (últimos {minutos_janela} minutos)")
-            else:
-                logger.info(f"🔄 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO - Últimos {minutos_janela} minutos")
-
-            # ⚡ Buscar dados do Odoo com MODO INCREMENTAL ATIVO
-            resultado = self.obter_faturamento_otimizado(
-                usar_filtro_postado=True,
-                limite=0,  # Sem limite para sincronização
-                modo_incremental=True,  # ✅ ATIVAR MODO INCREMENTAL
-                minutos_janela=minutos_janela  # ✅ PASSAR JANELA DE TEMPO
-            )
-
-            if not resultado['sucesso']:
-                return {
-                    'sucesso': False,
-                    'erro': resultado.get('erro', 'Erro na consulta do Odoo'),
-                    'faturas_processadas': 0,
-                    'itens_atualizados': 0,
-                    'tempo_execucao': time.time() - start_time
-                }
-
-            dados_faturamento = resultado.get('dados', [])
-
-            if not dados_faturamento:
-                logger.info("📊 Nenhuma alteração encontrada no período")
-                return {
-                    'sucesso': True,
-                    'faturas_processadas': 0,
-                    'itens_atualizados': 0,
-                    'tempo_execucao': time.time() - start_time,
-                    'mensagem': 'Nenhuma alteração no período'
-                }
-
-            logger.info(f"📊 Processando {len(dados_faturamento)} registros alterados...")
-
-            # Processar sincronização usando método compartilhado
-            resultado_processamento = self._processar_sincronizacao_faturamento(dados_faturamento)
-
-            # Adicionar tempo de execução
-            resultado_processamento['tempo_execucao'] = time.time() - start_time
-
-            return resultado_processamento
-
-        except Exception as e:
-            logger.error(f"❌ Erro na sincronização incremental: {e}")
-            import traceback
-            traceback.print_exc()
-            return {
-                'sucesso': False,
-                'erro': str(e),
-                'faturas_processadas': 0,
-                'itens_atualizados': 0,
-                'tempo_execucao': time.time() - start_time
-            }
-
     def sincronizar_faturamento_incremental(self, minutos_janela=40, primeira_execucao=False, minutos_status=1560) -> Dict[str, Any]:
         """
         🚀 SINCRONIZAÇÃO INCREMENTAL OTIMIZADA + INTEGRAÇÃO COMPLETA
@@ -1256,7 +1179,7 @@ class FaturamentoService:
                 # Executar busca única
                 logger.info(f"   🔍 Executando busca de NFs das últimas {horas_status:.1f} horas...")
                 dados_odoo_brutos = self.connection.search_read(
-                    'account.move.line', domain, campos_basicos, limit=200000
+                    'account.move.line', domain, campos_basicos, limit=20000
                 )
                 logger.info(f"      ✅ {len(dados_odoo_brutos)} linhas encontradas")
 
@@ -1311,7 +1234,7 @@ class FaturamentoService:
             else:
                 # ⚡ SINCRONIZAÇÃO LIMITADA para evitar timeouts
                 logger.info("🔄 Usando sincronização limitada...")
-                max_records = 200000  # Máximo 200000 registros (aumentado para pegar todas as NFs)
+                max_records = 20000  # Máximo 20000 registros (aumentado para pegar todas as NFs)
                 
                 dados_odoo_brutos = self.connection.search_read(
                     'account.move.line',

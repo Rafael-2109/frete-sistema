@@ -102,7 +102,7 @@ def executar_sincronizacao():
             db.session.close()
             db.engine.dispose()
             logger.info("♻️ Conexões de banco limpas")
-        except:
+        except Exception as e:
             pass
 
         sucesso_faturamento = False
@@ -159,7 +159,7 @@ def executar_sincronizacao():
                         # Reinicializar service
                         from app.odoo.services.faturamento_service import FaturamentoService
                         faturamento_service = FaturamentoService()
-                    except:
+                    except Exception as e:
                         pass
                 else:
                     break
@@ -169,7 +169,7 @@ def executar_sincronizacao():
             db.session.remove()
             db.engine.dispose()
             logger.info("♻️ Reconexão antes da Carteira")
-        except:
+        except Exception as e:
             pass
 
         # 2️⃣ CARTEIRA - com retry
@@ -179,7 +179,9 @@ def executar_sincronizacao():
                 logger.info(f"   Janela: {JANELA_CARTEIRA} minutos")
 
                 # Usar service já instanciado (FORA do contexto)
-                resultado_carteira = carteira_service.sincronizar_incremental(
+                resultado_carteira = carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(
+                    usar_filtro_pendente=False,
+                    modo_incremental=True,
                     minutos_janela=JANELA_CARTEIRA,
                     primeira_execucao=False
                 )
@@ -223,7 +225,7 @@ def executar_sincronizacao():
                         # Reinicializar service
                         from app.odoo.services.carteira_service import CarteiraService
                         carteira_service = CarteiraService()
-                    except:
+                    except Exception as e:
                         pass
                 else:
                     break
@@ -232,7 +234,7 @@ def executar_sincronizacao():
         try:
             db.session.remove()
             db.engine.dispose()
-        except:
+        except Exception as e:
             pass
 
         # Resumo final
