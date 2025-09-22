@@ -455,9 +455,15 @@ WITH duplicatas AS (
         ) as rn
     FROM faturamento_produto
     WHERE
-        numero_nf = '139635'
+        numero_nf = '136671'
 )
 DELETE FROM faturamento_produto
 WHERE id IN (
     SELECT id FROM duplicatas WHERE rn > 1
 );
+
+DELETE FROM carteira_principal
+WHERE num_pedido = 'VCD2518588';
+
+136671
+136668

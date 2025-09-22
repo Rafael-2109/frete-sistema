@@ -103,8 +103,8 @@ if [ -f "app/scheduler/sincronizacao_incremental_simples.py" ]; then
     # Criar diretório de logs se não existir
     mkdir -p logs
 
-    # Usar versão com RETRY automático para evitar erros SSL
-    python -m app.scheduler.sincronizacao_incremental_com_retry > logs/sincronizacao_incremental.log 2>&1 &
+    # Usar versão DEFINITIVA: tempos corretos + services fora do contexto
+    python -m app.scheduler.sincronizacao_incremental_definitiva > logs/sincronizacao_incremental.log 2>&1 &
     SYNC_PID=$!
 
     # Aguardar um pouco para verificar se o processo sobreviveu
