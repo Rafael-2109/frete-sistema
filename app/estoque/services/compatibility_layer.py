@@ -157,17 +157,16 @@ class SaldoEstoqueCompativel:
         """
         try:
             from app.estoque.models import MovimentacaoEstoque
-            
-            # Query similar ao ServicoEstoqueSimples
+            from app.producao.models import CadastroPalletizacao
+
+            # Query agrupando APENAS por cod_produto para evitar duplicatas
             produtos = db.session.query(
                 MovimentacaoEstoque.cod_produto,
-                MovimentacaoEstoque.nome_produto,
                 db.func.sum(MovimentacaoEstoque.qtd_movimentacao).label('saldo')
             ).filter(
                 MovimentacaoEstoque.ativo == True  # Apenas registros ativos
             ).group_by(
-                MovimentacaoEstoque.cod_produto,
-                MovimentacaoEstoque.nome_produto
+                MovimentacaoEstoque.cod_produto
             ).having(
                 db.func.sum(MovimentacaoEstoque.qtd_movimentacao) != 0
             ).all()
@@ -175,12 +174,38 @@ class SaldoEstoqueCompativel:
             # Converter para lista de dicionários (compatibilidade com routes.py)
             produtos_dict = []
             for produto in produtos:
+                # Buscar nome prioritariamente do CadastroPalletizacao
+                nome_produto = None
+
+                # Primeiro tentar buscar no CadastroPalletizacao
+                cadastro = CadastroPalletizacao.query.filter_by(
+                    cod_produto=produto.cod_produto
+                ).first()
+
+                if cadastro and cadastro.nome_produto:
+                    nome_produto = cadastro.nome_produto
+                else:
+                    # Se não encontrar, buscar o nome mais recente da MovimentacaoEstoque
+                    mov_mais_recente = MovimentacaoEstoque.query.filter_by(
+                        cod_produto=produto.cod_produto,
+                        ativo=True
+                    ).filter(
+                        MovimentacaoEstoque.nome_produto.isnot(None)
+                    ).order_by(
+                        MovimentacaoEstoque.data_movimentacao.desc()
+                    ).first()
+
+                    if mov_mais_recente:
+                        nome_produto = mov_mais_recente.nome_produto
+                    else:
+                        nome_produto = f'Produto {produto.cod_produto}'
+
                 produtos_dict.append({
                     'cod_produto': produto.cod_produto,
-                    'nome_produto': produto.nome_produto,
+                    'nome_produto': nome_produto,
                     'saldo': float(produto.saldo) if produto.saldo else 0
                 })
-            
+
             return produtos_dict
         except Exception as e:
             logger.error(f"Erro ao obter produtos com estoque: {e}")

@@ -140,15 +140,15 @@ def converter_projecao_para_resumo(projecao):
 
 # Registrar filtro de formatação brasileira para o template
 @estoque_bp.app_template_filter('valor_br')
-def valor_br_filter(value, decimais=2):
+def valor_br_filter(value, decimais=0):
     """Filtro Jinja2 para formatar valores no padrão brasileiro"""
     if value is None or value == '':
-        return 'R$ 0,00'
+        return '0'
     
     try:
         valor_float = float(value)
         if decimais == 0:
-            return f"R$ {valor_float:,.0f}".replace(',', '.')
+            return f"{valor_float:,.0f}".replace(',', '.')
         else:
             valor_formatado = f"{valor_float:,.{decimais}f}"
             valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
@@ -1683,3 +1683,104 @@ def api_subcategorias():
     except Exception as e:
         logger.error(f"Erro ao buscar subcategorias: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@estoque_bp.route('/api/cardex/<cod_produto>/pedidos-previstos')
+@login_required
+def api_pedidos_previstos_cardex(cod_produto):
+    """API para buscar pedidos previstos para consumo do produto com detalhes por dia"""
+    try:
+        # Importar modelos necessários
+        from app.separacao.models import Separacao
+        from app.estoque.models import UnificacaoCodigos
+
+        # Obter códigos unificados
+        codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(str(cod_produto))
+
+        # Buscar pedidos dos próximos 28 dias
+        hoje = datetime.now().date()
+        data_limite = hoje + timedelta(days=28)
+
+        # Buscar pedidos da Separacao que não foram sincronizados (projeção de saída)
+        pedidos_query = db.session.query(
+            Separacao.expedicao,
+            Separacao.num_pedido,
+            Separacao.pedido_cliente,
+            Separacao.cnpj_cpf,
+            Separacao.raz_social_red,
+            Separacao.nome_cidade,
+            Separacao.cod_uf,
+            Separacao.qtd_saldo,
+            Separacao.status,
+            Separacao.agendamento,
+            Separacao.protocolo,
+            Separacao.observ_ped_1,
+            Separacao.rota,
+            Separacao.sub_rota
+        ).filter(
+            Separacao.cod_produto.in_(codigos_relacionados),
+            Separacao.sincronizado_nf == False,  # Apenas não sincronizados
+            Separacao.status != 'CANCELADO',  # Não cancelados
+            Separacao.expedicao >= hoje,
+            Separacao.expedicao <= data_limite
+        ).order_by(
+            Separacao.expedicao,
+            Separacao.num_pedido
+        ).all()
+
+        # Agrupar pedidos por data
+        pedidos_por_data = {}
+        total_geral = 0
+
+        for pedido in pedidos_query:
+            data_str = pedido.expedicao.strftime('%Y-%m-%d') if pedido.expedicao else 'Sem data'
+
+            if data_str not in pedidos_por_data:
+                pedidos_por_data[data_str] = {
+                    'data': data_str,
+                    'dia_semana': pedido.expedicao.strftime('%A').capitalize() if pedido.expedicao else '',
+                    'pedidos': [],
+                    'total_quantidade': 0,
+                    'total_pedidos': 0
+                }
+
+            # Adicionar pedido ao dia
+            pedidos_por_data[data_str]['pedidos'].append({
+                'num_pedido': pedido.num_pedido,
+                'pedido_cliente': pedido.pedido_cliente or '-',
+                'cliente': pedido.raz_social_red or 'Cliente não identificado',
+                'cnpj': pedido.cnpj_cpf,
+                'cidade': pedido.nome_cidade,
+                'uf': pedido.cod_uf,
+                'quantidade': float(pedido.qtd_saldo or 0),
+                'status': pedido.status,
+                'agendamento': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                'protocolo': pedido.protocolo or '',
+                'observacoes': pedido.observ_ped_1 or '',
+                'rota': f"{pedido.rota or ''}{' / ' + pedido.sub_rota if pedido.sub_rota else ''}"
+            })
+
+            pedidos_por_data[data_str]['total_quantidade'] += float(pedido.qtd_saldo or 0)
+            pedidos_por_data[data_str]['total_pedidos'] += 1
+            total_geral += float(pedido.qtd_saldo or 0)
+
+        # Converter para lista ordenada
+        resultado = list(pedidos_por_data.values())
+        resultado.sort(key=lambda x: x['data'])
+
+        # Adicionar numeração de dias (D+0, D+1, etc)
+        for idx, dia in enumerate(resultado):
+            dias_diff = (datetime.strptime(dia['data'], '%Y-%m-%d').date() - hoje).days if dia['data'] != 'Sem data' else -1
+            dia['dia_label'] = f"D+{dias_diff}" if dias_diff >= 0 else "Sem data"
+
+        return jsonify({
+            'success': True,
+            'cod_produto': cod_produto,
+            'total_geral': total_geral,
+            'total_dias_com_pedidos': len(resultado),
+            'total_pedidos': sum(d['total_pedidos'] for d in resultado),
+            'dados': resultado
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar pedidos previstos para {cod_produto}: {str(e)}")
+        return jsonify({'error': str(e), 'success': False}), 500

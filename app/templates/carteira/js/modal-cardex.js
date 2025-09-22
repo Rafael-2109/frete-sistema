@@ -212,7 +212,7 @@ class ModalCardex {
         console.log('   - Data com correção:', new Date(cardex[0]?.data + 'T12:00:00'));
         console.log('   - Data local:', new Date().toLocaleDateString('pt-BR'));
         console.log('   - Timezone offset:', new Date().getTimezoneOffset());
-        
+
         // Debug dos valores de estoque_final
         console.log('📊 DEBUG - Valores de estoque_final:');
         cardex.slice(0, 5).forEach((dia, idx) => {
@@ -222,14 +222,24 @@ class ModalCardex {
         return cardex.map((dia, index) => {
             const statusClass = this.getStatusClasseCardex(dia);
             const dataFormatada = this.formatarData(dia.data);
+            const hasOutput = dia.saidas !== undefined && dia.saidas !== null && dia.saidas > 0;
 
             return `
-                <tr class="${statusClass.rowClass}">
-                    <td><strong>D+${index}</strong></td>
+                <tr class="${statusClass.rowClass}" data-dia="${index}" data-data="${dia.data}">
+                    <td>
+                        <strong>D+${index}</strong>
+                        ${hasOutput ? `
+                            <button class="btn btn-link btn-sm p-0 ms-1"
+                                    onclick="modalCardex.togglePedidosDetalhes('${dia.data}', ${index})"
+                                    title="Ver pedidos previstos para este dia">
+                                <i class="fas fa-chevron-down" id="icon-expand-${index}"></i>
+                            </button>
+                        ` : ''}
+                    </td>
                     <td>${dataFormatada}</td>
                     <td class="text-end">${this.formatarQuantidade(dia.estoque_inicial)}</td>
                     <td class="text-end text-danger">
-                        ${dia.saidas !== undefined && dia.saidas !== null ? `-${this.formatarQuantidade(dia.saidas)}` : '-'}
+                        ${hasOutput ? `-${this.formatarQuantidade(dia.saidas)}` : '-'}
                     </td>
                     <td class="text-end">
                         <span class="badge ${dia.saldo <= 0 ? 'bg-danger' : 'bg-secondary'}">
@@ -248,6 +258,13 @@ class ModalCardex {
                         <span class="badge ${statusClass.badgeClass}">
                             ${statusClass.texto}
                         </span>
+                    </td>
+                </tr>
+                <tr id="pedidos-row-${index}" class="pedidos-detalhes-row d-none">
+                    <td colspan="8" class="p-0">
+                        <div id="pedidos-container-${index}" class="pedidos-container bg-light">
+                            <!-- Pedidos serão carregados aqui dinamicamente -->
+                        </div>
                     </td>
                 </tr>
             `;
@@ -382,18 +399,151 @@ class ModalCardex {
     formatarQuantidade(qtd) {
         // Tratar valores null, undefined ou string vazia
         if (qtd === null || qtd === undefined || qtd === '') return '0';
-        
+
         // Converter para número e formatar
         const numero = parseFloat(qtd);
-        
+
         // Se não for um número válido, retornar '0'
         if (isNaN(numero)) return '0';
-        
+
         // Formatar o número (incluindo negativos e zero)
         return numero.toLocaleString('pt-BR', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         });
+    }
+
+    async togglePedidosDetalhes(data, index) {
+        const pedidosRow = document.getElementById(`pedidos-row-${index}`);
+        const pedidosContainer = document.getElementById(`pedidos-container-${index}`);
+        const icon = document.getElementById(`icon-expand-${index}`);
+
+        if (!pedidosRow) return;
+
+        // Se já está visível, apenas ocultar
+        if (!pedidosRow.classList.contains('d-none')) {
+            pedidosRow.classList.add('d-none');
+            icon.classList.remove('fa-chevron-up');
+            icon.classList.add('fa-chevron-down');
+            return;
+        }
+
+        // Mostrar loading
+        pedidosRow.classList.remove('d-none');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        pedidosContainer.innerHTML = `
+            <div class="text-center p-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <span class="ms-2">Carregando pedidos...</span>
+            </div>
+        `;
+
+        try {
+            // Obter código do produto do modal atual
+            const modalTitle = document.querySelector('.modal-title');
+            const codProduto = modalTitle ? modalTitle.textContent.split(' - ')[1] : null;
+
+            if (!codProduto) {
+                throw new Error('Código do produto não encontrado');
+            }
+
+            // Buscar pedidos previstos
+            const response = await fetch(`/estoque/api/cardex/${codProduto}/pedidos-previstos`);
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Erro ao carregar pedidos');
+            }
+
+            // Filtrar apenas o dia específico
+            const pedidosDoDia = result.dados.find(d => d.data === data);
+
+            if (!pedidosDoDia || pedidosDoDia.pedidos.length === 0) {
+                pedidosContainer.innerHTML = `
+                    <div class="p-3 text-muted text-center">
+                        <i class="fas fa-info-circle"></i> Nenhum pedido previsto para este dia
+                    </div>
+                `;
+                return;
+            }
+
+            // Renderizar pedidos
+            pedidosContainer.innerHTML = `
+                <div class="p-3">
+                    <h6 class="mb-3 text-primary">
+                        <i class="fas fa-box-open me-2"></i>
+                        ${pedidosDoDia.total_pedidos} pedido(s) - Total: ${this.formatarQuantidade(pedidosDoDia.total_quantidade)} UN
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr class="table-secondary">
+                                    <th>Pedido</th>
+                                    <th>Pedido Cliente</th>
+                                    <th>Cliente</th>
+                                    <th>Cidade/UF</th>
+                                    <th class="text-end">Quantidade</th>
+                                    <th>Status</th>
+                                    <th>Agendamento</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${pedidosDoDia.pedidos.map(p => `
+                                    <tr>
+                                        <td><strong>${p.num_pedido}</strong></td>
+                                        <td>${p.pedido_cliente}</td>
+                                        <td title="${p.cnpj}">${p.cliente}</td>
+                                        <td>${p.cidade}/${p.uf}</td>
+                                        <td class="text-end"><strong>${this.formatarQuantidade(p.quantidade)}</strong></td>
+                                        <td><span class="badge bg-${this.getStatusColor(p.status)}">${p.status}</span></td>
+                                        <td>
+                                            ${p.agendamento ? `
+                                                <small>${p.agendamento}</small>
+                                                ${p.protocolo ? `<br><small class="text-muted">Prot: ${p.protocolo}</small>` : ''}
+                                            ` : '-'}
+                                        </td>
+                                    </tr>
+                                    ${p.observacoes ? `
+                                        <tr>
+                                            <td colspan="7" class="ps-4">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-comment me-1"></i> ${p.observacoes}
+                                                </small>
+                                            </td>
+                                        </tr>
+                                    ` : ''}
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Erro ao carregar pedidos:', error);
+            pedidosContainer.innerHTML = `
+                <div class="p-3 text-danger text-center">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Erro ao carregar pedidos: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    getStatusColor(status) {
+        const statusColors = {
+            'PREVISAO': 'secondary',
+            'ABERTO': 'info',
+            'COTADO': 'warning',
+            'EMBARCADO': 'success',
+            'FATURADO': 'primary',
+            'NF no CD': 'danger',
+            'CANCELADO': 'dark'
+        };
+        return statusColors[status] || 'secondary';
     }
 }
 

@@ -185,3 +185,21 @@ FROM separacao s
 WHERE s.cod_produto = '4040163'
     AND s.sincronizado_nf = FALSE  -- Apenas não faturadas (aparecem na projeção)
 ORDER BY s.expedicao, s.num_pedido;
+
+
+ls -la logs/
+cat logs/sincronizacao_incremental.log 2>/dev/null ||
+echo "SEM LOGS"
+
+python -c "
+from app import create_app, db
+from sqlalchemy import text
+app = create_app()
+with app.app_context():
+    # Faturamento
+    fat = db.session.execute(text('SELECT MAX(created_at) FROM faturamento_produto')).scalar()
+    print(f'FATURAMENTO: {fat}')
+    # Carteira  
+    cart = db.session.execute(text('SELECT MAX(created_at) FROM carteira_principal')).scalar()
+    print(f'CARTEIRA: {cart}')
+"
