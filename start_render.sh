@@ -103,12 +103,26 @@ if [ -f "app/scheduler/sincronizacao_incremental_simples.py" ]; then
     # Criar diretório de logs se não existir
     mkdir -p logs
 
-    python app/scheduler/sincronizacao_incremental_simples.py > logs/sincronizacao_incremental.log 2>&1 &
+    # Usar módulo Python para garantir imports corretos
+    python -m app.scheduler.sincronizacao_incremental_simples > logs/sincronizacao_incremental.log 2>&1 &
     SYNC_PID=$!
-    echo " ✅ Sincronização incremental iniciada (PID: $SYNC_PID)"
-    echo "    - Execução imediata para recuperar dados do deploy"
-    echo "    - Próximas execuções a cada 30 minutos"
-    echo "    - Logs em: logs/sincronizacao_incremental.log"
+
+    # Aguardar um pouco para verificar se o processo sobreviveu
+    sleep 3
+
+    if kill -0 $SYNC_PID 2>/dev/null; then
+        echo " ✅ Sincronização incremental iniciada e confirmada (PID: $SYNC_PID)"
+        echo "    - Execução imediata para recuperar dados do deploy"
+        echo "    - Próximas execuções a cada 30 minutos"
+        echo "    - Logs em: logs/sincronizacao_incremental.log"
+    else
+        echo " ❌ ERRO: Scheduler falhou ao iniciar! Verificando logs..."
+        if [ -f "logs/sincronizacao_incremental.log" ]; then
+            echo "    Últimas linhas do log:"
+            tail -10 logs/sincronizacao_incremental.log | sed 's/^/    /'
+        fi
+        echo " ⚠️ Sistema continuará sem sincronização automática"
+    fi
 else
     echo " ⚠️ Script de sincronização não encontrado"
 fi

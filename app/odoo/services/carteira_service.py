@@ -109,7 +109,7 @@ class CarteiraService:
                 from app.utils.timezone import agora_utc
                 from datetime import timedelta
 
-                # Se tem data_inicio/fim, usar date_order para importação histórica
+                # Se tem data_inicio/fim, usar create_date para importação histórica
                 if data_inicio or data_fim:
                     domain = [
                         '&',  # AND entre os filtros
@@ -119,7 +119,7 @@ class CarteiraService:
                         ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
                         # NÃO filtrar por qty_saldo > 0!
                     ]
-                    logger.info("🔄 MODO INCREMENTAL COM DATAS: usando date_order para importação histórica")
+                    logger.info("🔄 MODO INCREMENTAL COM DATAS: usando create_date para importação histórica")
                     logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")
                 else:
                     # Modo incremental normal: usar write_date
@@ -166,10 +166,11 @@ class CarteiraService:
                 logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")
             
             # Adicionar filtros opcionais de data se fornecidos
+            # IMPORTANTE: Usar create_date para buscar pedidos CRIADOS no período
             if data_inicio:
-                domain.append(('order_id.date_order', '>=', data_inicio))
+                domain.append(('order_id.create_date', '>=', data_inicio))
             if data_fim:
-                domain.append(('order_id.date_order', '<=', data_fim))
+                domain.append(('order_id.create_date', '<=', data_fim))
             if pedidos_especificos:
                 domain.append(('order_id.name', 'in', pedidos_especificos))
             

@@ -177,12 +177,13 @@ class ImportadorSemFiltro:
             # Pedidos específicos para IGNORAR (problemas conhecidos)
             pedidos_ignorar = ['VCD2518963', 'VCD2519460']
 
-            # Buscar TODOS os pedidos do período, sem filtrar por saldo
+            # Buscar TODOS os pedidos CRIADOS no período, sem filtrar por saldo
             # MAS filtrar apenas Venda e Bonificação
             # E excluir pedidos problemáticos
+            # IMPORTANTE: Usar create_date para buscar pedidos CRIADOS no período
             domain = [
-                ('order_id.date_order', '>=', data_inicio),
-                ('order_id.date_order', '<=', data_fim),
+                ('order_id.create_date', '>=', data_inicio),
+                ('order_id.create_date', '<=', data_fim),
                 ('order_id.state', 'in', ['draft', 'sent', 'sale', 'done']),
                 ('order_id.name', 'not in', pedidos_ignorar),  # Excluir pedidos problemáticos
                 '|',  # OR entre tipos de pedido
