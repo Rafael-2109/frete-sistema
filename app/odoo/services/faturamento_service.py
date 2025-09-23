@@ -295,17 +295,38 @@ class FaturamentoService:
             if separacoes_atualizadas > 0:
                 logger.info(f"   ✅ {separacoes_atualizadas} separações revertidas para não sincronizado")
             
-            # 5. Log de auditoria detalhado
+            # 5. Atualizar saldos na CarteiraPrincipal
+            pedidos_afetados = {}
+            if faturamentos_atualizados > 0:
+                # Buscar pedidos/produtos afetados pelo cancelamento
+                faturamentos_cancelados = db.session.query(FaturamentoProduto).filter(
+                    FaturamentoProduto.numero_nf == numero_nf
+                ).all()
+
+                for fat in faturamentos_cancelados:
+                    if fat.origem and fat.cod_produto:
+                        if fat.origem not in pedidos_afetados:
+                            pedidos_afetados[fat.origem] = set()
+                        pedidos_afetados[fat.origem].add(fat.cod_produto)
+
+                # Atualizar saldos na carteira
+                if pedidos_afetados:
+                    resultado_saldos = self._atualizar_saldos_carteira(pedidos_afetados)
+                    logger.info(f"   ✅ {resultado_saldos['atualizados']} saldos atualizados na carteira")
+
+            # 6. Log de auditoria detalhado
             logger.info(f"✅ CANCELAMENTO COMPLETO: NF {numero_nf}")
             logger.info(f"   - Faturamentos cancelados: {faturamentos_atualizados}")
             logger.info(f"   - Movimentações inativadas: {movs_atualizadas}")
-            logger.info(f"   - Embarques limpos: {embarques_limpos}") 
+            logger.info(f"   - Embarques limpos: {embarques_limpos}")
             logger.info(f"   - Separações revertidas: {separacoes_atualizadas}")
-            
+            if pedidos_afetados:
+                logger.info(f"   - Saldos da carteira atualizados: {len(pedidos_afetados)} pedidos")
+
             # Commit apenas se houve alterações
             if faturamentos_atualizados > 0 or movs_atualizadas > 0 or embarques_limpos > 0 or separacoes_atualizadas > 0:
                 db.session.commit()
-                
+
             return True
             
         except Exception as e:
@@ -313,6 +334,99 @@ class FaturamentoService:
             db.session.rollback()
             return False
     
+    def _atualizar_saldos_carteira(self, pedidos_produtos_afetados: Dict[str, set]) -> Dict[str, Any]:
+        """
+        Atualiza qtd_saldo_produto_pedido na CarteiraPrincipal após mudanças no faturamento
+
+        IMPORTANTE: Este método garante que o saldo na carteira sempre reflita a realidade
+        do faturamento, evitando inconsistências quando pedidos antigos são faturados.
+
+        Args:
+            pedidos_produtos_afetados: Dict com chave=num_pedido, valor=set(cod_produtos)
+
+        Returns:
+            Dict com estatísticas da atualização
+        """
+        try:
+            from sqlalchemy import func
+
+            contador_atualizados = 0
+            contador_erros = 0
+            erros = []
+
+            logger.info(f"📊 Atualizando saldos da carteira para {len(pedidos_produtos_afetados)} pedidos")
+
+            for num_pedido, produtos in pedidos_produtos_afetados.items():
+                for cod_produto in produtos:
+                    try:
+                        # Calcular quantidade total faturada para este pedido/produto
+                        qtd_faturada = db.session.query(
+                            func.sum(FaturamentoProduto.qtd_produto_faturado)
+                        ).filter(
+                            FaturamentoProduto.origem == num_pedido,
+                            FaturamentoProduto.cod_produto == cod_produto,
+                            FaturamentoProduto.status_nf != 'Cancelado'
+                        ).scalar() or 0
+
+                        qtd_faturada = float(qtd_faturada)
+
+                        # Atualizar todos os registros na CarteiraPrincipal para este pedido/produto
+                        # Usando SQL direto para melhor performance e evitar problemas de ORM
+                        from sqlalchemy import text
+
+                        sql_update = text("""
+                            UPDATE carteira_principal
+                            SET qtd_saldo_produto_pedido = qtd_produto_pedido - :qtd_faturada,
+                                updated_at = NOW(),
+                                updated_by = 'FaturamentoService'
+                            WHERE num_pedido = :num_pedido
+                              AND cod_produto = :cod_produto
+                        """)
+
+                        resultado = db.session.execute(
+                            sql_update,
+                            {
+                                'qtd_faturada': qtd_faturada,
+                                'num_pedido': num_pedido,
+                                'cod_produto': cod_produto
+                            }
+                        )
+
+                        registros_atualizados = resultado.rowcount
+                        contador_atualizados += registros_atualizados
+
+                        if registros_atualizados > 0:
+                            logger.debug(f"   ✅ Atualizado saldo: Pedido {num_pedido}, Produto {cod_produto}, Faturado: {qtd_faturada}")
+
+                    except Exception as e:
+                        contador_erros += 1
+                        erro_msg = f"Erro ao atualizar saldo do pedido {num_pedido}, produto {cod_produto}: {e}"
+                        logger.error(f"   ❌ {erro_msg}")
+                        erros.append(erro_msg)
+                        continue
+
+            if contador_atualizados > 0:
+                logger.info(f"✅ Saldos da carteira atualizados: {contador_atualizados} registros")
+
+            if contador_erros > 0:
+                logger.warning(f"⚠️ {contador_erros} erros ao atualizar saldos")
+
+            return {
+                'sucesso': True,
+                'atualizados': contador_atualizados,
+                'erros': contador_erros,
+                'detalhes_erros': erros[:10]  # Limitar detalhes de erros
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Erro crítico ao atualizar saldos da carteira: {e}")
+            return {
+                'sucesso': False,
+                'atualizados': 0,
+                'erros': 1,
+                'detalhes_erros': [str(e)]
+            }
+
     def _mapear_status(self, status_odoo: Optional[str]) -> str:
         """
         Mapeia status do Odoo para status do sistema
@@ -703,14 +817,43 @@ class FaturamentoService:
                     logger.info(f"✅ {len(produtos_novos)} produtos criados em batch no CadastroPalletizacao")
 
             # 🚀 OTIMIZAÇÃO: Bulk insert para novos registros
+            pedidos_produtos_para_atualizar = {}
             if registros_para_bulk_insert:
                 logger.info(f"🚀 Executando bulk insert de {len(registros_para_bulk_insert)} registros...")
                 db.session.bulk_insert_mappings(FaturamentoProduto, registros_para_bulk_insert)
                 logger.info(f"✅ Bulk insert concluído com sucesso")
 
+                # Coletar pedidos/produtos para atualização de saldo
+                for registro in registros_para_bulk_insert:
+                    num_pedido = registro.get('origem')
+                    cod_produto = registro.get('cod_produto')
+                    if num_pedido and cod_produto:
+                        if num_pedido not in pedidos_produtos_para_atualizar:
+                            pedidos_produtos_para_atualizar[num_pedido] = set()
+                        pedidos_produtos_para_atualizar[num_pedido].add(cod_produto)
+
+            # Coletar pedidos/produtos atualizados (mudança de status)
+            for numero_nf in nfs_atualizadas:
+                # Buscar produtos desta NF para atualizar saldos
+                produtos_nf = db.session.query(FaturamentoProduto).filter_by(numero_nf=numero_nf).all()
+                for produto in produtos_nf:
+                    if produto.origem and produto.cod_produto:
+                        if produto.origem not in pedidos_produtos_para_atualizar:
+                            pedidos_produtos_para_atualizar[produto.origem] = set()
+                        pedidos_produtos_para_atualizar[produto.origem].add(produto.cod_produto)
+
+            # 🔄 ATUALIZAR SALDOS NA CARTEIRA
+            saldos_atualizados = 0
+            if pedidos_produtos_para_atualizar:
+                logger.info(f"📊 Atualizando saldos da carteira para {len(pedidos_produtos_para_atualizar)} pedidos...")
+                resultado_saldos = self._atualizar_saldos_carteira(pedidos_produtos_para_atualizar)
+                saldos_atualizados = resultado_saldos.get('atualizados', 0)
+                if saldos_atualizados > 0:
+                    logger.info(f"✅ {saldos_atualizados} saldos atualizados na carteira")
+
             # 💾 COMMIT das alterações principais
             db.session.commit()
-            logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
+            logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados, {saldos_atualizados} saldos atualizados")
             
             # ============================================
             # 🚨 PROCESSAMENTO DE NFs CANCELADAS
@@ -926,6 +1069,7 @@ class FaturamentoService:
                 'taxa_novos': f"{(contador_novos / len(dados_faturamento) * 100):.1f}%" if dados_faturamento else "0%",
                 'taxa_atualizados': f"{(contador_atualizados / len(dados_faturamento) * 100):.1f}%" if dados_faturamento else "0%",
                 'economia_tempo': 'MUITO SIGNIFICATIVA vs método DELETE+INSERT',
+                'saldos_carteira_atualizados': saldos_atualizados,  # 🆕 SALDOS ATUALIZADOS
                 # 🆕 ESTATÍSTICAS DE CANCELAMENTOS
                 'cancelamentos': {
                     'nfs_canceladas': 0,  # Agora processadas em tempo real via _processar_cancelamento_nf
@@ -938,6 +1082,7 @@ class FaturamentoService:
             logger.info(f"   ✅ SINCRONIZAÇÃO INCREMENTAL COMPLETA CONCLUÍDA:")
             logger.info(f"   ➕ {contador_novos} novos registros inseridos")
             logger.info(f"   ✏️ {contador_atualizados} registros atualizados")
+            logger.info(f"   📊 {saldos_atualizados} saldos da carteira atualizados")
             logger.info(f"   📋 {stats_sincronizacao['relatorios_consolidados']} relatórios consolidados")
             logger.info(f"   🔄 {stats_sincronizacao['entregas_sincronizadas']} entregas sincronizadas")
             logger.info(f"   📦 {stats_sincronizacao['embarques_revalidados']} embarques re-validados")

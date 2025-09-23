@@ -32,7 +32,8 @@ class ClienteService:
             distinct(FaturamentoProduto.cnpj_cliente)
         ).filter(
             FaturamentoProduto.cnpj_cliente.isnot(None),
-            FaturamentoProduto.cnpj_cliente != ''
+            FaturamentoProduto.cnpj_cliente != '',
+            FaturamentoProduto.status_nf != 'Cancelado'
         )
 
         # União e distinct
@@ -67,7 +68,8 @@ class ClienteService:
             distinct(FaturamentoProduto.cnpj_cliente)
         ).filter(
             FaturamentoProduto.equipe_vendas == equipe_vendas,
-            FaturamentoProduto.cnpj_cliente.isnot(None)
+            FaturamentoProduto.cnpj_cliente.isnot(None),
+            FaturamentoProduto.status_nf != 'Cancelado'
         ).all()
 
         for c in carteira_clientes:
@@ -100,7 +102,8 @@ class ClienteService:
             distinct(FaturamentoProduto.cnpj_cliente)
         ).filter(
             FaturamentoProduto.vendedor == vendedor,
-            FaturamentoProduto.cnpj_cliente.isnot(None)
+            FaturamentoProduto.cnpj_cliente.isnot(None),
+            FaturamentoProduto.status_nf != 'Cancelado'
         ).all()
 
         for c in carteira_clientes:
@@ -168,7 +171,8 @@ class ClienteService:
                 FaturamentoProduto.vendedor,
                 FaturamentoProduto.equipe_vendas
             ).filter(
-                FaturamentoProduto.cnpj_cliente == cnpj
+                FaturamentoProduto.cnpj_cliente == cnpj,
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).first()
 
             if cliente_faturamento:
@@ -248,7 +252,8 @@ class ClienteService:
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
                 FaturamentoProduto.numero_nf.in_(nfs_nao_entregues),
-                FaturamentoProduto.origem.isnot(None)
+                FaturamentoProduto.origem.isnot(None),
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).all()
 
             for p in pedidos_nao_entregues:
@@ -273,7 +278,8 @@ class ClienteService:
                 distinct(FaturamentoProduto.origem)
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
-                FaturamentoProduto.origem.isnot(None)
+                FaturamentoProduto.origem.isnot(None),
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).all()
 
             for p in pedidos_faturados:
@@ -327,7 +333,8 @@ class ClienteService:
                 func.sum(FaturamentoProduto.valor_produto_faturado)
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
-                FaturamentoProduto.numero_nf.in_(nfs_nao_entregues)
+                FaturamentoProduto.numero_nf.in_(nfs_nao_entregues),
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).scalar()
 
             if valores_nao_entregues:
@@ -356,14 +363,16 @@ class ClienteService:
                 ~FaturamentoProduto.origem.in_(
                     db.session.query(distinct(CarteiraPrincipal.num_pedido))
                     .filter(CarteiraPrincipal.cnpj_cpf == cnpj)
-                )
+                ),
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).subquery()
 
             valores_faturados = db.session.query(
                 func.sum(FaturamentoProduto.valor_produto_faturado)
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
-                FaturamentoProduto.origem.in_(pedidos_so_faturamento)
+                FaturamentoProduto.origem.in_(pedidos_so_faturamento),
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).scalar()
 
             if valores_faturados:

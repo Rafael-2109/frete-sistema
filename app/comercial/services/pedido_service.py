@@ -9,7 +9,7 @@ Autor: Sistema de Fretes
 Data: 2025-01-19
 """
 
-from sqlalchemy import distinct, func, or_, and_, case
+from sqlalchemy import distinct, func, or_, case
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
@@ -19,7 +19,6 @@ from app.odoo.utils.pedido_cliente_utils import buscar_pedidos_cliente_lote
 from app.odoo.utils.metodo_entrega_utils import buscar_metodos_entrega_lote
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
-from datetime import date
 import logging
 
 logger = logging.getLogger(__name__)
@@ -303,7 +302,8 @@ class PedidoService:
                 func.sum(FaturamentoProduto.valor_produto_faturado).label('valor_faturado')
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
-                FaturamentoProduto.origem == num_pedido
+                FaturamentoProduto.origem == num_pedido,
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).scalar()
 
             # Buscar o primeiro incoterm do pedido (se precisar)
@@ -314,6 +314,7 @@ class PedidoService:
                 ).filter(
                     FaturamentoProduto.cnpj_cliente == cnpj,
                     FaturamentoProduto.origem == num_pedido,
+                    FaturamentoProduto.status_nf != 'Cancelado',
                     FaturamentoProduto.incoterm.isnot(None)
                 ).first()
 
@@ -336,7 +337,8 @@ class PedidoService:
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
                 FaturamentoProduto.origem == num_pedido,
-                FaturamentoProduto.numero_nf.isnot(None)
+                FaturamentoProduto.numero_nf.isnot(None),
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).subquery()
 
             # Depois, somar o valor das NFs entregues

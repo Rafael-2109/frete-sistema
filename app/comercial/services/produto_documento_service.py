@@ -11,13 +11,12 @@ Autor: Sistema de Fretes
 Data: 2025-01-21
 """
 
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func
 from app import db
 from app.faturamento.models import FaturamentoProduto
 from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
-from decimal import Decimal
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -103,7 +102,8 @@ class ProdutoDocumentoService:
                 FaturamentoProduto.preco_produto_faturado,
                 FaturamentoProduto.valor_produto_faturado
             ).filter(
-                FaturamentoProduto.numero_nf == numero_nf
+                FaturamentoProduto.numero_nf == numero_nf,
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).all()
 
             produtos = []

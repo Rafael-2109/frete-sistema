@@ -9,8 +9,8 @@ Autor: Sistema de Fretes
 Data: 2025-01-21
 """
 
-from typing import List, Dict, Any, Optional, Tuple
-from sqlalchemy import or_, and_, distinct
+from typing import List, Dict
+from sqlalchemy import or_, distinct
 from flask import request
 from flask_login import current_user
 from app import db

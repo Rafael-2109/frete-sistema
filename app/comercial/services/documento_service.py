@@ -175,7 +175,8 @@ class DocumentoService:
                 func.min(FaturamentoProduto.data_fatura).label('data_fatura'),
                 func.sum(FaturamentoProduto.valor_produto_faturado).label('valor_total')
             ).filter(
-                FaturamentoProduto.origem == num_pedido
+                FaturamentoProduto.origem == num_pedido,
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).group_by(
                 FaturamentoProduto.numero_nf
             ).all()
@@ -197,11 +198,12 @@ class DocumentoService:
 
                 # Buscar dados de embarque via EmbarqueItem
                 embarque_item = EmbarqueItem.query.filter_by(
-                    nota_fiscal=nf.numero_nf
+                    nota_fiscal=nf.numero_nf,
+                    status='ativo'
                 ).first()
 
                 embarque = None
-                if embarque_item:
+                if embarque_item and embarque_item.status == 'ativo':
                     embarque = Embarque.query.get(embarque_item.embarque_id)
 
                 # Montar dados da NF
@@ -307,7 +309,7 @@ class DocumentoService:
                 if embarque_item:
                     embarque = Embarque.query.get(embarque_item.embarque_id)
                     if embarque and embarque.transportadora_id:
-                        from app.cotacoes.models import Transportadora
+                        from app.transportadoras.models import Transportadora
                         transp = Transportadora.query.get(embarque.transportadora_id)
                         if transp:
                             transportadora = transp.nome
@@ -371,7 +373,8 @@ class DocumentoService:
             valor_faturado = db.session.query(
                 func.sum(FaturamentoProduto.valor_produto_faturado)
             ).filter(
-                FaturamentoProduto.origem == num_pedido
+                FaturamentoProduto.origem == num_pedido,
+                FaturamentoProduto.status_nf != 'Cancelado'
             ).scalar()
 
             return Decimal(str(valor_faturado)) if valor_faturado else Decimal('0')
