@@ -204,17 +204,14 @@ window.standbyManager = (function () {
      * Formata número para moeda brasileira
      */
     function formatarMoeda(valor) {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(valor);
+        return window.Formatters.moeda(valor);
     }
 
     /**
      * Formata número com casas decimais
      */
     function formatarNumero(valor, decimais = 2) {
-        return parseFloat(valor).toFixed(decimais);
+        return window.Formatters.numero(valor, decimais);
     }
 
     /**

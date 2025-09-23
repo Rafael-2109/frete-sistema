@@ -131,8 +131,8 @@ class PortalSendas {
                         Data de agendamento é obrigatória
                     </div>
                     ${!dataAgendamentoFormatada ?
-                        '<small class="text-warning">Data não definida na Separação. Por favor, informe a data desejada.</small>' :
-                        ''}
+                '<small class="text-warning">Data não definida na Separação. Por favor, informe a data desejada.</small>' :
+                ''}
                 </div>
 
                 <p><strong>Total de itens:</strong> ${dadosCnpj.total_itens || 0}</p>
@@ -284,8 +284,8 @@ class PortalSendas {
                             </td>
                             <td>
                                 ${ehMatch ?
-                                    `<span class="badge bg-success">MATCH</span>` :
-                                    `<span class="badge bg-secondary">Disponível</span>`}
+                            `<span class="badge bg-success">MATCH</span>` :
+                            `<span class="badge bg-secondary">Disponível</span>`}
                             </td>
                         </tr>
                     `;
@@ -309,8 +309,8 @@ class PortalSendas {
                 <strong>⚠️ Importante:</strong><br>
                 Sendas aceita divergências de quantidade e produto, mas NÃO aceita divergência de filial.
                 ${dadosCnpj.pode_agendar_todos ?
-                    'Todos os itens podem ser agendados.' :
-                    'Verifique os itens antes de confirmar.'}
+                'Todos os itens podem ser agendados.' :
+                'Verifique os itens antes de confirmar.'}
             </div>
         </div>`;
 
@@ -328,7 +328,7 @@ class PortalSendas {
                 // ========== VALIDAÇÃO DE QUANTIDADE PRINCIPAL ==========
                 // Adicionar validação em tempo real para quantidades principais
                 document.querySelectorAll('.qtd-principal').forEach(input => {
-                    input.addEventListener('input', function() {
+                    input.addEventListener('input', function () {
                         const disponivel = parseFloat(this.dataset.disponivel) || 0;
                         const valor = parseFloat(this.value) || 0;
                         const solicitada = parseFloat(this.dataset.solicitada) || 0;
@@ -369,7 +369,7 @@ class PortalSendas {
                 // ========== VALIDAÇÃO DE ALTERNATIVAS ==========
                 // Adicionar validação para quantidades alternativas
                 document.querySelectorAll('.qtd-alternativa').forEach(input => {
-                    input.addEventListener('input', function() {
+                    input.addEventListener('input', function () {
                         const disponivel = parseFloat(this.getAttribute('max')) || 0;
                         const valor = parseFloat(this.value) || 0;
 
@@ -393,7 +393,7 @@ class PortalSendas {
                 // ========== CHECKBOX DE ALTERNATIVAS ==========
                 // Adicionar eventos aos checkboxes de alternativas
                 document.querySelectorAll('.alternativa-produto').forEach(checkbox => {
-                    checkbox.addEventListener('change', function() {
+                    checkbox.addEventListener('change', function () {
                         const qtdInput = document.getElementById('qtd_' + this.id);
                         if (qtdInput) {
                             if (this.checked) {
@@ -603,7 +603,7 @@ class PortalSendas {
             });
         }
     }
-    
+
     /**
      * 📊 Mostra status da fila - COMPLETAMENTE DESABILITADA
      */
@@ -613,7 +613,7 @@ class PortalSendas {
         console.trace('Stack trace para debug:');
         return;
     }
-    
+
     /**
      * 🚀 Processa a fila em lote
      */
@@ -644,7 +644,7 @@ class PortalSendas {
                     'X-CSRFToken': this.getCSRFToken()
                 }
             });
-            
+
             const result = await response.json();
 
             if (result.success) {
@@ -670,7 +670,7 @@ class PortalSendas {
             } else {
                 throw new Error(result.error || 'Erro no processamento');
             }
-            
+
         } catch (error) {
             console.error('Erro ao processar fila:', error);
             Swal.fire({
@@ -681,7 +681,7 @@ class PortalSendas {
             });
         }
     }
-    
+
     /**
      * 🔍 Verifica status de agendamento
      */
@@ -689,22 +689,22 @@ class PortalSendas {
         // Por enquanto, apenas mostrar status da fila
         const response = await fetch('/portal/sendas/fila/status');
         const data = await response.json();
-        
+
         Swal.fire({
             icon: 'info',
             title: 'Status da Fila Sendas',
             html: `
                 <div class="text-center">
                     <p><strong>${data.pendentes_total}</strong> itens pendentes</p>
-                    ${Object.entries(data.pendentes_por_cnpj).map(([cnpj, total]) => 
-                        `<p><small>${cnpj}: ${total} itens</small></p>`
-                    ).join('')}
+                    ${Object.entries(data.pendentes_por_cnpj).map(([cnpj, total]) =>
+                `<p><small>${cnpj}: ${total} itens</small></p>`
+            ).join('')}
                 </div>
             `,
             confirmButtonText: 'OK'
         });
     }
-    
+
     /**
      * 🔄 Verifica fila periodicamente - COMPLETAMENTE DESABILITADA
      */
@@ -713,13 +713,12 @@ class PortalSendas {
         console.warn('⚠️ verificarFilaPeriodicamente está DESABILITADO');
         return;
     }
-    
+
     /**
      * Obtém CSRF Token
      */
     getCSRFToken() {
-        const token = document.querySelector('meta[name="csrf-token"]');
-        return token ? token.getAttribute('content') : '';
+        return window.Security.getCSRFToken();
     }
 
     /**

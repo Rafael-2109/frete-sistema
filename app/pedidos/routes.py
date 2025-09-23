@@ -661,29 +661,30 @@ def reset_status_pedido(lote_id):
                 if pedido.separacao_lote_id:
                     Separacao.query.filter_by(
                         separacao_lote_id=pedido.separacao_lote_id
-                    ).update({'status': 'FATURADO',
-                    'sincronizado_nf': True,
-                    'status_calculado': 'FATURADO'})
+                    ).update({
+                        'status': 'FATURADO',
+                        'sincronizado_nf': True
+                    })
             else:
                 # CASO 2-B: NF não existe no faturamento (mas existe no embarque)
                 if pedido.separacao_lote_id:
                     Separacao.query.filter_by(
                         separacao_lote_id=pedido.separacao_lote_id
-                    ).update({'status': 'FATURADO','status_calculado': 'FATURADO'})
+                    ).update({'status': 'FATURADO'})
                 
         elif embarque_item and embarque_ativo:
             # CASO 1-B: Encontrou EmbarqueItem ativo mas sem NF
             if pedido.separacao_lote_id:
                 Separacao.query.filter_by(
                     separacao_lote_id=pedido.separacao_lote_id
-                ).update({'status': 'COTADO','status_calculado': 'COTADO'})
+                ).update({'status': 'COTADO'})
             
         else:
             # CASO 1-C: Não encontrou EmbarqueItem ativo
             if pedido.separacao_lote_id:
                 Separacao.query.filter_by(
                     separacao_lote_id=pedido.separacao_lote_id
-                ).update({'status': 'ABERTO','status_calculado': 'ABERTO'})
+                ).update({'status': 'ABERTO'})
         
         # Salvar alterações
         db.session.commit()
@@ -708,6 +709,64 @@ def reset_status_pedido(lote_id):
         return jsonify({
             'success': False,
             'message': f'Erro ao resetar status: {str(e)}'
+        }), 500
+
+@pedidos_bp.route('/cancelar_separacao/<string:lote_id>', methods=['POST'])
+@login_required
+def cancelar_separacao(lote_id):
+    """
+    Cancela uma separação (Admin Only)
+    Remove todos os itens da separação independente do status
+    """
+    from flask_login import current_user
+
+    # Verificar se é admin
+    if current_user.perfil != 'administrador':
+        return jsonify({
+            'success': False,
+            'message': 'Acesso negado. Apenas administradores podem cancelar separações.'
+        }), 403
+
+    try:
+        # Buscar todos os itens da separação
+        itens_separacao = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+
+        if not itens_separacao:
+            return jsonify({
+                'success': False,
+                'message': f'Separação {lote_id} não encontrada.'
+            }), 404
+
+        # Guardar informações para log
+        num_pedido = itens_separacao[0].num_pedido if itens_separacao else 'N/A'
+        status_atual = itens_separacao[0].status if itens_separacao else 'N/A'
+        qtd_itens = len(itens_separacao)
+
+        # Deletar todos os itens da separação
+        for item in itens_separacao:
+            db.session.delete(item)
+
+        # Salvar alterações
+        db.session.commit()
+
+        # Log da operação
+        print(f"[CANCELAR SEPARAÇÃO] Admin {current_user.nome} cancelou:")
+        print(f"  - Lote: {lote_id}")
+        print(f"  - Pedido: {num_pedido}")
+        print(f"  - Status anterior: {status_atual}")
+        print(f"  - Itens removidos: {qtd_itens}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Separação {lote_id} cancelada com sucesso. {qtd_itens} itens removidos.'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO CANCELAR SEPARAÇÃO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao cancelar separação: {str(e)}'
         }), 500
 
 @pedidos_bp.route('/excluir/<string:lote_id>', methods=['POST'])

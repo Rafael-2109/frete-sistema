@@ -23,17 +23,17 @@ class ModalSeparacoes {
 
     async abrir(numPedido) {
         console.log(`📦 Abrindo modal de separações para pedido ${numPedido}`);
-        
+
         // Atualizar número do pedido no título
         document.getElementById('modal-pedido-numero').textContent = numPedido;
-        
+
         // Mostrar loading
         document.getElementById('modal-separacoes-loading').style.display = 'block';
         document.getElementById('modal-separacoes-content').style.display = 'none';
-        
+
         // Abrir modal
         this.modal.show();
-        
+
         try {
             // Carregar separações
             await this.carregarSeparacoes(numPedido);
@@ -47,21 +47,21 @@ class ModalSeparacoes {
         try {
             const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`);
             const data = await response.json();
-            
+
             if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Erro ao carregar separações');
             }
-            
+
             this.separacoes = data.separacoes || [];
             this.paginaAtual = 1;
-            
+
             // Ocultar loading e mostrar conteúdo
             document.getElementById('modal-separacoes-loading').style.display = 'none';
             document.getElementById('modal-separacoes-content').style.display = 'block';
-            
+
             // Renderizar separações
             this.renderizarSeparacoes();
-            
+
         } catch (error) {
             throw error;
         }
@@ -69,10 +69,10 @@ class ModalSeparacoes {
 
     renderizarSeparacoes() {
         const container = document.getElementById('modal-separacoes-content');
-        
+
         console.log(`🎨 Renderizando ${this.separacoes.length} separações`);
         console.log('📦 Dados das separações:', this.separacoes);
-        
+
         if (this.separacoes.length === 0) {
             container.innerHTML = `
                 <div class="alert alert-info text-center">
@@ -85,12 +85,12 @@ class ModalSeparacoes {
 
         // Calcular totais gerais
         const totaisGerais = this.calcularTotaisGerais();
-        
+
         // Calcular separações da página atual
         const inicio = (this.paginaAtual - 1) * this.separacoesPorPagina;
         const fim = inicio + this.separacoesPorPagina;
         const separacoesPagina = this.separacoes.slice(inicio, fim);
-        
+
         let html = `
             <!-- Totalizadores Gerais -->
             <div class="card mb-3 border-primary">
@@ -148,7 +148,7 @@ class ModalSeparacoes {
     renderizarSeparacao(separacao, numero) {
         const statusClass = this.getStatusClass(separacao.status);
         const statusBadge = this.getStatusBadge(separacao.status);
-        
+
         let html = `
             <div class="card mb-3 border-${statusClass}">
                 <div class="card-header bg-${statusClass} bg-opacity-10">
@@ -244,7 +244,7 @@ class ModalSeparacoes {
                                 </tr>
             `;
         });
-        
+
         // Renderizar produtos ocultos
         if (separacao.produtos.length > 5) {
             separacao.produtos.slice(5).forEach(produto => {
@@ -323,7 +323,7 @@ class ModalSeparacoes {
 
     renderizarPaginacao() {
         const totalPaginas = Math.ceil(this.separacoes.length / this.separacoesPorPagina);
-        
+
         if (totalPaginas <= 1) return '';
 
         let html = `
@@ -360,10 +360,10 @@ class ModalSeparacoes {
 
     irParaPagina(pagina) {
         const totalPaginas = Math.ceil(this.separacoes.length / this.separacoesPorPagina);
-        
+
         if (pagina < 1) pagina = 1;
         if (pagina > totalPaginas) pagina = totalPaginas;
-        
+
         this.paginaAtual = pagina;
         this.renderizarSeparacoes();
     }
@@ -407,68 +407,36 @@ class ModalSeparacoes {
 
     // Formatadores
     formatarMoeda(valor) {
-        if (!valor) return 'R$ 0,00';
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(valor);
+        return window.Formatters.moeda(valor);
     }
 
     formatarPeso(peso) {
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPeso(peso);
-        }
-        // Fallback
-        if (!peso) return '0 kg';
-        return `${parseFloat(peso).toFixed(1)} kg`;
+        return window.Formatters.peso(peso);
     }
 
     formatarPallet(pallet) {
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPallet(pallet);
-        }
-        // Fallback
-        if (!pallet) return '0 plt';
-        return `${parseFloat(pallet).toFixed(2)} plt`;
+        return window.Formatters.pallet(pallet);
     }
 
     formatarQuantidade(qtd) {
-        if (!qtd) return '0';
-        return parseFloat(qtd).toFixed(0);
+        return window.Formatters.quantidade(qtd);
     }
 
     formatarData(data) {
-        if (!data) return '-';
-        
-        // Se já está no formato dd/mm/yyyy, retornar como está
-        if (data.includes('/')) return data;
-        
-        // Converter de YYYY-MM-DD para dd/mm/yyyy
-        // CORREÇÃO TIMEZONE: Adicionar T12:00:00 para evitar D-1
-        const dataComHora = data.includes('T') ? data : data + 'T12:00:00';
-        const d = new Date(dataComHora);
-        
-        if (isNaN(d.getTime())) return '-';
-        
-        // Formatar manualmente para evitar problemas de timezone
-        const dia = String(d.getDate()).padStart(2, '0');
-        const mes = String(d.getMonth() + 1).padStart(2, '0');
-        const ano = d.getFullYear();
-        
-        return `${dia}/${mes}/${ano}`;
+        return window.Formatters.data(data) || '-';
     }
 
     toggleProdutosSeparacao(loteId) {
         const produtosOcultos = document.querySelectorAll(`.produto-oculto-${loteId}`);
         const btnToggle = document.getElementById(`btn-modal-toggle-${loteId}`);
-        
+
         if (produtosOcultos.length > 0 && btnToggle) {
             const isHidden = produtosOcultos[0].style.display === 'none';
-            
+
             produtosOcultos.forEach(tr => {
                 tr.style.display = isHidden ? '' : 'none';
             });
-            
+
             btnToggle.textContent = isHidden ? 'Ver menos' : 'Ver todos';
         }
     }
@@ -493,7 +461,7 @@ class ModalSeparacoes {
         }
 
         const produto = produtosSemDePara[0];
-        
+
         Swal.fire({
             title: 'Cadastrar De-Para',
             html: `
@@ -629,7 +597,7 @@ class ModalSeparacoes {
         `;
 
         document.body.appendChild(modal);
-        
+
         // Mostrar modal
         const modalElement = new bootstrap.Modal(modal);
         modalElement.show();
@@ -663,7 +631,7 @@ class ModalSeparacoes {
 
     renderizarComparacao(data) {
         const content = document.getElementById('comparacao-content');
-        
+
         let html = `
             <div class="row">
                 <!-- Lado Esquerdo: Separação -->
@@ -806,7 +774,7 @@ class ModalSeparacoes {
     // FUNÇÃO ORIGINAL REMOVIDA - implementação em portal-agendamento.js
     async verificarProtocoloNoPortal_OLD(loteId, protocolo) {
         console.log(`🔍 Verificando protocolo ${protocolo} no portal`);
-        
+
         // Mostrar loading
         Swal.fire({
             title: 'Verificando Protocolo...',
@@ -921,10 +889,10 @@ class ModalSeparacoes {
                                                                     `}
                                                                 </td>
                                                                 <td class="text-center">
-                                                                    ${p.tem_divergencia ? 
-                                                                        '<i class="fas fa-exclamation-triangle text-danger"></i>' : 
-                                                                        '<i class="fas fa-check-circle text-success"></i>'
-                                                                    }
+                                                                    ${p.tem_divergencia ?
+                        '<i class="fas fa-exclamation-triangle text-danger"></i>' :
+                        '<i class="fas fa-check-circle text-success"></i>'
+                    }
                                                                 </td>
                                                             </tr>
                                                         `).join('')}
@@ -1063,7 +1031,7 @@ class ModalSeparacoes {
 }
 
 // Função global para abrir o modal
-window.abrirModalSeparacoes = function(numPedido) {
+window.abrirModalSeparacoes = function (numPedido) {
     if (!window.modalSeparacoes) {
         window.modalSeparacoes = new ModalSeparacoes();
     }

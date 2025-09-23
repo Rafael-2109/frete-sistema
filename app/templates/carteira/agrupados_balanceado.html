@@ -88,7 +88,7 @@
                             <i class="fas fa-check-double"></i> Verificar Todos Pendentes
                             <span class="badge bg-dark ms-1" id="contador-pendentes-total">0</span>
                         </button>
-                        
+
                         <!-- Botão de Verificar Agendas -->
                         <button type="button" class="btn btn-outline-info btn-sm me-2" id="btn-verificar-agendas"
                             onclick="carteiraAgrupada.verificarAgendasEmLote()"
@@ -96,7 +96,7 @@
                             <i class="fas fa-sync-alt"></i> Verificar Agendas
                             <span class="badge bg-danger ms-1" id="contador-protocolos">0</span>
                         </button>
-                        
+
                         <div class="btn-group btn-group-sm" role="group">
                             <button type="button" class="btn btn-outline-primary" id="expandir-todos">
                                 <i class="fas fa-expand-arrows-alt me-1"></i> Expandir Todos
@@ -125,7 +125,7 @@
                                 <i class="fas fa-check-circle me-1"></i>
                                 Com Agendamento
                             </span>
-                            
+
                             <!-- FILTROS DE SEPARAÇÃO COM PROTOCOLO -->
                             <span class="badge bg-filtro badge-agendamento ms-3"
                                 style="background-color: transparent; color: #fd7e14; border: 2px solid #fd7e14;"
@@ -183,22 +183,19 @@
                         <div class="badges-clientes-wrapper">
                             <span class="badge bg-filtro badge-cliente"
                                 style="background-color: transparent; color: #0056b3; border: 2px solid #0056b3;"
-                                data-tipo="cliente" data-valor="atacadao"
-                                title="Clientes Atacadão">
+                                data-tipo="cliente" data-valor="atacadao" title="Clientes Atacadão">
                                 <i class="fas fa-store me-1"></i>
                                 Atacadão
                             </span>
                             <span class="badge bg-filtro badge-cliente ms-2"
                                 style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
-                                data-tipo="cliente" data-valor="sendas"
-                                title="Clientes Sendas/Assaí">
+                                data-tipo="cliente" data-valor="sendas" title="Clientes Sendas/Assaí">
                                 <i class="fas fa-shopping-cart me-1"></i>
                                 Sendas
                             </span>
                             <span class="badge bg-filtro badge-cliente ms-2"
                                 style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
-                                data-tipo="cliente" data-valor="outros"
-                                title="Outros clientes">
+                                data-tipo="cliente" data-valor="outros" title="Outros clientes">
                                 <i class="fas fa-users me-1"></i>
                                 Outros
                             </span>
@@ -485,7 +482,8 @@
                                 <!-- ✅ CORREÇÃO 2: Informações (sem texto branco) -->
                                 <td>
                                     <div class="valores-info text-end">
-                                        <strong class="text-success valor-pedido">{{ pedido.valor_total|moeda_carteira }}</strong>
+                                        <strong class="text-success valor-pedido">{{ pedido.valor_total|moeda_carteira
+                                            }}</strong>
                                         <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }}</small>
                                         <br><small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small>
                                         <br><span class="badge bg-primary text-white">{{ pedido.total_itens }}
@@ -554,9 +552,8 @@
                             </tr>
 
                             <!-- 🆕 LINHA DE SEPARAÇÕES COMPACTAS (sempre visível) -->
-                            <tr class="separacoes-compactas-row" id="separacoes-compactas-{{ pedido.num_pedido }}" 
-                                data-pedido="{{ pedido.num_pedido }}"
-                                style="display: none;">
+                            <tr class="separacoes-compactas-row" id="separacoes-compactas-{{ pedido.num_pedido }}"
+                                data-pedido="{{ pedido.num_pedido }}" style="display: none;">
                                 <td colspan="10">
                                     <div class="separacoes-compactas-container">
                                         <!-- Conteúdo será carregado via JavaScript -->
@@ -602,8 +599,13 @@
 
 {% block styles %}
 <style>
-    {% include 'carteira/css/agrupados.css' %}
-    {% include 'carteira/css/workspace-montagem.css' %}
+    {
+        % include 'carteira/css/agrupados.css' %
+    }
+
+        {
+        % include 'carteira/css/workspace-montagem.css' %
+    }
 </style>
 {% endblock %}
 
@@ -632,7 +634,7 @@
 <!-- Portal Sendas - Sistema de Fila -->
 <script>
     // Definir classe PortalSendas inline para garantir que seja criada
-        {% include 'carteira/js/agendamento/sendas/portal-sendas.js' %}
+    {% include 'carteira/js/agendamento/sendas/portal-sendas.js' %}
 </script>
 
 <!-- Scripts de Comparação Sendas (Etapa 2) -->
@@ -679,10 +681,6 @@
 
         console.log('✅ [DEBUG] Roteador carregado com sucesso');
     })();
-</script>
-
-<script>
-    {% include 'carteira/js/dropdown-separacoes.js' %}
 </script>
 
 <script>
@@ -762,7 +760,7 @@
         window.modalEndereco = new ModalEndereco();
         window.modalSeparacoes = new ModalSeparacoes();
         window.separacaoManager = new SeparacaoManager();
-        
+
         // Calcular valor total inicial
         window.carteiraAgrupada.atualizarValorTotal();
 
@@ -901,10 +899,12 @@
         0% {
             transform: scale(1);
         }
+
         50% {
             transform: scale(1.1);
             box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
         }
+
         100% {
             transform: scale(1);
         }
@@ -919,17 +919,17 @@
 
     .bg-filtro:hover {
         transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
 
     .bg-filtro:active {
         transform: scale(0.98);
     }
-    
+
     .bg-filtro.ativo {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
-    
+
     /* Animações fluidas para atualizações parciais */
     .update-animation {
         animation: highlightUpdate 1s ease-in-out;
@@ -1007,87 +1007,89 @@
 </style>
 
 <!-- Modal de Importação da Planilha Sendas -->
-<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalImportarPlanilhaLabel">
-          <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
-          <div class="mb-3">
-            <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
-            <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx" required>
-            <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
-          <i class="fas fa-upload"></i> Importar
-        </button>
-      </div>
+<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarPlanilhaLabel">
+                    <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
+                        <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx"
+                            required>
+                        <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
+                    <i class="fas fa-upload"></i> Importar
+                </button>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
 <script>
-// Função para abrir o modal de importação
-function abrirModalImportarPlanilhaSendas() {
-    const modal = new bootstrap.Modal(document.getElementById('modalImportarPlanilhaSendas'));
-    modal.show();
-}
-
-// Função para importar a planilha
-function importarPlanilhaSendas() {
-    const fileInput = document.getElementById('arquivoPlanilha');
-    const file = fileInput.files[0];
-
-    if (!file) {
-        alert('Por favor, selecione um arquivo');
-        return;
+    // Função para abrir o modal de importação
+    function abrirModalImportarPlanilhaSendas() {
+        const modal = new bootstrap.Modal(document.getElementById('modalImportarPlanilhaSendas'));
+        modal.show();
     }
 
-    const formData = new FormData();
-    formData.append('arquivo', file);
+    // Função para importar a planilha
+    function importarPlanilhaSendas() {
+        const fileInput = document.getElementById('arquivoPlanilha');
+        const file = fileInput.files[0];
 
-    // Mostrar loading
-    const btnImportar = event.target;
-    const textoOriginal = btnImportar.innerHTML;
-    btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
-    btnImportar.disabled = true;
+        if (!file) {
+            alert('Por favor, selecione um arquivo');
+            return;
+        }
 
-    fetch('/portal/sendas/importar-planilha-modelo', {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.sucesso) {
-            alert(data.mensagem);
-            // Fechar modal
-            bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
-            // Limpar formulário
-            document.getElementById('formImportarPlanilhaSendas').reset();
-        } else {
-            alert('Erro: ' + data.mensagem);
-        }
-    })
-    .catch(error => {
-        alert('Erro ao importar planilha: ' + error);
-    })
-    .finally(() => {
-        btnImportar.innerHTML = textoOriginal;
-        btnImportar.disabled = false;
-    });
-}
+        const formData = new FormData();
+        formData.append('arquivo', file);
+
+        // Mostrar loading
+        const btnImportar = event.target;
+        const textoOriginal = btnImportar.innerHTML;
+        btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        btnImportar.disabled = true;
+
+        fetch('/portal/sendas/importar-planilha-modelo', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    alert(data.mensagem);
+                    // Fechar modal
+                    bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
+                    // Limpar formulário
+                    document.getElementById('formImportarPlanilhaSendas').reset();
+                } else {
+                    alert('Erro: ' + data.mensagem);
+                }
+            })
+            .catch(error => {
+                alert('Erro ao importar planilha: ' + error);
+            })
+            .finally(() => {
+                btnImportar.innerHTML = textoOriginal;
+                btnImportar.disabled = false;
+            });
+    }
 </script>
 
 <!-- Incluir modais de comparação Sendas (Etapa 2) -->

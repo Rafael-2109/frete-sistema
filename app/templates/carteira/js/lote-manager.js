@@ -73,11 +73,11 @@ class LoteManager {
             protocolo: null,
             agendamento_confirmado: false
         };
-        
+
         // Garantir defaults
         loteData.status = loteData.status || 'ABERTO';
         loteData.lote_id = loteData.lote_id || loteId;
-        
+
         // USAR O CARD UNIVERSAL
         return this.renderizarCardUniversal(loteData);
     }
@@ -150,12 +150,12 @@ class LoteManager {
         // Compatibilidade com status antigo 'pre_separacao'
         const status = loteData.status === 'pre_separacao' ? 'PREVISAO' : loteData.status;
         const config = configStatus[status] || configStatus['PREVISAO'];
-        
+
         // Usar método centralizado de permissões
         const permissoes = this.obterPermissoes(status);
-        
+
         const temProdutos = loteData.produtos && loteData.produtos.length > 0;
-        
+
         console.log('🎨 Renderizando card universal:', {
             loteId: loteData.lote_id,
             status: status,
@@ -187,7 +187,7 @@ class LoteManager {
                     <!-- Lista de produtos -->
                     <div class="produtos-lote mb-3">
                         ${temProdutos ? this.renderizarProdutosUniversal(loteData.produtos, loteData.lote_id, permissoes.podeRemoverProdutos) :
-                            '<p class="text-muted text-center"><i class="fas fa-box-open me-2"></i>Nenhum produto neste lote</p>'}
+                '<p class="text-muted text-center"><i class="fas fa-box-open me-2"></i>Nenhum produto neste lote</p>'}
                     </div>
                     
                     <!-- Totais -->
@@ -302,7 +302,7 @@ class LoteManager {
         `;
     }
 
-    
+
 
 
     /**
@@ -314,21 +314,21 @@ class LoteManager {
         if (window.Formatters && window.Formatters.data) {
             return window.Formatters.data(data);
         }
-        
+
         // Fallback para implementação original
         if (!data) return null;
-        
+
         // Se já está no formato dd/mm/yyyy, retornar como está
         if (typeof data === 'string' && data.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
             return data;
         }
-        
+
         // Se está no formato yyyy-mm-dd
         if (typeof data === 'string' && data.match(/^\d{4}-\d{2}-\d{2}$/)) {
             const [ano, mes, dia] = data.split('-');
             return `${dia}/${mes}/${ano}`;
         }
-        
+
         // Se é um objeto Date ou string de data
         try {
             const dateObj = new Date(data);
@@ -341,7 +341,7 @@ class LoteManager {
         } catch (e) {
             console.warn('Erro ao formatar data:', e);
         }
-        
+
         return null;
     }
 
@@ -363,12 +363,12 @@ class LoteManager {
             const valor = parseFloat(produto.valor_saldo || produto.valor || 0);
             const peso = parseFloat(produto.peso || 0);
             const pallet = parseFloat(produto.pallet || 0);
-            
+
             // Formatar valores
             const qtdFormatada = Math.floor(quantidade).toLocaleString('pt-BR');
-            const valorFormatado = valor > 0 ? valor.toLocaleString('pt-BR', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 
+            const valorFormatado = valor > 0 ? valor.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
             }) : '0,00';
             const pesoFormatado = peso > 0 ? peso.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2,
@@ -451,22 +451,26 @@ class LoteManager {
             };
 
             // Verificar se produto já existe no lote
-            const produtoExistente = loteData.produtos.find(p => 
+            const produtoExistente = loteData.produtos.find(p =>
                 (p.cod_produto === dadosProduto.codProduto) || (p.codProduto === dadosProduto.codProduto)
             );
 
             if (produtoExistente) {
-                // Somar quantidade ao produto existente - USAR NOMES DO BACKEND
-                produtoExistente.qtd_saldo = resultado.dados.quantidade; // Já vem somado da API
-                produtoExistente.valor_saldo = resultado.dados.valor;
-                produtoExistente.peso = resultado.dados.peso;
-                produtoExistente.pallet = resultado.dados.pallet;
+                // 🔄 CORRIGIR: SOMAR quantidade ao produto existente (não substituir)
+                const qtdAnterior = parseFloat(produtoExistente.qtd_saldo || 0);
+                const qtdNova = qtdAnterior + parseFloat(dadosProduto.qtdPedido || 0);
+
+                // Atualizar valores SOMANDO
+                produtoExistente.qtd_saldo = qtdNova;
+                produtoExistente.valor_saldo = (produtoExistente.valor_saldo || 0) + (resultado.dados.valor || 0);
+                produtoExistente.peso = (produtoExistente.peso || 0) + (resultado.dados.peso || 0);
+                produtoExistente.pallet = (produtoExistente.pallet || 0) + (resultado.dados.pallet || 0);
                 produtoExistente.separacaoId = resultado.separacao_id;
                 produtoExistente.nome_produto = dadosProduto.nomeProduto || dadosProduto.nome_produto || '';
 
-                // Mostrar feedback específico
+                // Mostrar feedback com valores corretos
                 this.workspace.mostrarFeedback(
-                    `Quantidade do produto ${dadosProduto.codProduto} atualizada para ${resultado.dados.quantidade}`,
+                    `Produto ${dadosProduto.codProduto}: ${qtdAnterior} + ${dadosProduto.qtdPedido} = ${qtdNova} unidades`,
                     'success'
                 );
             } else {
@@ -558,7 +562,7 @@ class LoteManager {
 
     recalcularTotaisLote(loteId) {
         const loteData = this.workspace.preSeparacoes.get(loteId);
-        
+
         if (!loteData) return;
 
         let valor = 0;
@@ -579,14 +583,9 @@ class LoteManager {
         const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`);
         if (cardElement) {
             cardElement.outerHTML = this.renderizarCardLote(loteId);
-
-            // Reconfigurar eventos no novo elemento
-            const newCard = document.querySelector(`[data-lote-id="${loteId}"]`);
-            // Drag & drop removido - usando checkboxes
         }
     }
 
-    // Método removerLote removido - usar workspace.excluirLote() que é o método correto
 
     async removerProdutoDoLote(loteId, codProduto) {
         try {
@@ -594,7 +593,7 @@ class LoteManager {
             if (!loteData) return;
 
             // Encontrar produto para obter o ID da separação - compatível com ambas estruturas
-            const produto = loteData.produtos.find(p => 
+            const produto = loteData.produtos.find(p =>
                 p.codProduto === codProduto || p.cod_produto === codProduto
             );
             const separacaoId = produto?.separacaoId || produto?.preSeparacaoId;
@@ -626,7 +625,7 @@ class LoteManager {
             }
 
             // Remover do Map local - compatível com ambas estruturas
-            loteData.produtos = loteData.produtos.filter(p => 
+            loteData.produtos = loteData.produtos.filter(p =>
                 p.codProduto !== codProduto && p.cod_produto !== codProduto
             );
             this.recalcularTotaisLote(loteId);
@@ -678,44 +677,15 @@ class LoteManager {
 
     // Utilitários - Usando módulo centralizado com fallback
     formatarMoeda(valor) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.moeda) {
-            return window.Formatters.moeda(valor);
-        }
-        // Fallback para implementação original
-        if (!valor) return 'R$ 0,00';
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(valor);
+        return window.Formatters.moeda(valor);
     }
 
     formatarPeso(peso) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.peso) {
-            return window.Formatters.peso(peso);
-        }
-        // Fallback para workspaceQuantidades
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPeso(peso);
-        }
-        // Fallback final
-        if (!peso) return '0 kg';
-        return `${parseFloat(peso).toFixed(1)} kg`;
+        return window.Formatters.peso(peso);
     }
 
     formatarPallet(pallet) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.pallet) {
-            return window.Formatters.pallet(pallet);
-        }
-        // Fallback para workspaceQuantidades
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPallet(pallet);
-        }
-        // Fallback final
-        if (!pallet) return '0 plt';
-        return `${parseFloat(pallet).toFixed(2)} plt`;
+        return window.Formatters.pallet(pallet);
     }
 
     /**
@@ -741,7 +711,7 @@ class LoteManager {
             });
 
             const result = await response.json();
-            
+
             if (!result.success) {
                 throw new Error(result.error || 'Erro ao salvar separação');
             }
@@ -751,13 +721,13 @@ class LoteManager {
             let valorCalculado = 0;
             let pesoCalculado = 0;
             let palletCalculado = 0;
-            
+
             if (dadosProduto) {
                 // CORRIGIDO: Usar os campos corretos que existem em dadosProduto
                 const preco = parseFloat(dadosProduto.preco_produto_pedido) || parseFloat(dadosProduto.preco_unitario) || 0;
                 const peso = parseFloat(dadosProduto.peso_unitario) || 0;  // Campo correto: peso_unitario
                 const palletizacao = parseFloat(dadosProduto.palletizacao) || 1000;  // Default: 1000 (não 1)
-                
+
                 valorCalculado = quantidade * preco;
                 pesoCalculado = quantidade * peso;
                 palletCalculado = palletizacao > 0 ? quantidade / palletizacao : 0;
@@ -783,33 +753,12 @@ class LoteManager {
         }
     }
 
+
     /**
      * Obter CSRF Token de forma consistente
      */
     getCSRFToken() {
-        // Usar módulo centralizado se disponível
-        if (window.Security && window.Security.getCSRFToken) {
-            return window.Security.getCSRFToken();
-        }
-        
-        // Fallback para implementação original
-        const cookieValue = document.cookie
-            .split('; ')
-            .find(row => row.startsWith('csrftoken='))
-            ?.split('=')[1];
-
-        if (cookieValue) return cookieValue;
-
-        const metaToken = document.querySelector('meta[name="csrf-token"]')?.content;
-        if (metaToken) return metaToken;
-
-        const inputToken = document.querySelector('input[name="csrf_token"]')?.value;
-        if (inputToken) return inputToken;
-
-        if (window.csrfToken) return window.csrfToken;
-
-        console.warn('⚠️ CSRF Token não encontrado');
-        return '';
+        return window.Security.getCSRFToken();
     }
 }
 

@@ -13,11 +13,13 @@
         <div class="card-body">
             <div class="row">
                 <div class="col-md-6">
+                    <strong>Lote ID:</strong> <span class="badge bg-primary">{{ pedido.separacao_lote_id }}</span><br>
                     <strong>Número:</strong> {{ pedido.num_pedido }}<br>
                     <strong>Cliente:</strong> {{ pedido.raz_social_red or 'N/A' }}<br>
                     <strong>CNPJ:</strong> {{ pedido.cnpj_cpf or 'N/A' }}
                 </div>
                 <div class="col-md-6">
+                    <strong>Status:</strong> <span class="badge bg-{{ 'success' if pedido.status == 'FATURADO' else 'warning' if pedido.status == 'COTADO' else 'secondary' }}">{{ pedido.status or 'N/A' }}</span><br>
                     <strong>Cidade:</strong> {{ pedido.nome_cidade or 'N/A' }}<br>
                     <strong>UF:</strong> {{ pedido.cod_uf or 'N/A' }}<br>
                     <strong>Valor:</strong> {{ pedido.valor_saldo_total|valor_br if pedido.valor_saldo_total else 'N/A' }}
@@ -128,16 +130,25 @@
 
     <!-- Botões de ação -->
     <div class="d-flex justify-content-between mt-3">
-        <!-- Botão Reset Status (lado esquerdo) -->
-        <button type="button" class="btn btn-warning" onclick="resetStatusPedido('{{ pedido.separacao_lote_id }}')" 
-                title="Limpa NF e recalcula status baseado em EmbarqueItem e FaturamentoProduto">
-            <i class="fas fa-sync-alt"></i> Reset Status
-        </button>
-        
+        <!-- Botões lado esquerdo -->
+        <div>
+            <button type="button" class="btn btn-warning me-2" onclick="resetStatusPedido('{{ pedido.separacao_lote_id }}')"
+                    title="Limpa NF e recalcula status baseado em EmbarqueItem e FaturamentoProduto">
+                <i class="fas fa-sync-alt"></i> Reset Status
+            </button>
+
+            {% if current_user.perfil == 'administrador' %}
+            <button type="button" class="btn btn-danger" onclick="cancelarSeparacao('{{ pedido.separacao_lote_id }}')"
+                    title="Cancelar separação (Admin Only)">
+                <i class="fas fa-ban"></i> Cancelar Separação
+            </button>
+            {% endif %}
+        </div>
+
         <!-- Botões padrão (lado direito) -->
         <div>
             <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
-                <i class="fas fa-times"></i> Cancelar
+                <i class="fas fa-times"></i> Fechar
             </button>
             <button type="submit" class="btn btn-success">
                 <i class="fas fa-save"></i> Salvar Alterações

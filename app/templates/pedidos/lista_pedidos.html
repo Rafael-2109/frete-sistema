@@ -1415,6 +1415,58 @@ function resetStatusPedido(loteId) {
     });
 }
 
+// ✅ NOVA FUNÇÃO: Cancelar Separação (Admin Only)
+function cancelarSeparacao(loteId) {
+    if (!confirm('⚠️ ATENÇÃO ADMIN!\n\nTem certeza que deseja CANCELAR esta separação?\n\nIsso irá:\n- Deletar TODOS os itens da separação\n- Remover o pedido da VIEW\n- Esta ação é IRREVERSÍVEL!\n\nConfirmar cancelamento?')) {
+        return;
+    }
+
+    // Segunda confirmação para ação crítica
+    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nRealmente deseja CANCELAR a separação ' + loteId + '?\n\nTodos os dados serão PERMANENTEMENTE REMOVIDOS!')) {
+        return;
+    }
+
+    // Mostrar loading
+    const btnCancelar = event.target;
+    const textoOriginal = btnCancelar.innerHTML;
+    btnCancelar.disabled = true;
+    btnCancelar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
+
+    fetch(`/pedidos/cancelar_separacao/${loteId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+
+            // Fechar modal se existir
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarPedido'));
+            if (modal) {
+                modal.hide();
+            }
+
+            // Recarregar página
+            window.location.reload();
+        } else {
+            alert(`❌ Erro ao cancelar separação: ${data.message}`);
+            btnCancelar.disabled = false;
+            btnCancelar.innerHTML = textoOriginal;
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('❌ Erro ao processar requisição');
+        btnCancelar.disabled = false;
+        btnCancelar.innerHTML = textoOriginal;
+    });
+}
+
 // ✅ NOVAS FUNÇÕES: Geração de URLs com preservação de filtros
 window.sort_url = function(campo) {
     const urlParams = new URLSearchParams(window.location.search);

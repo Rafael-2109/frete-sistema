@@ -17,7 +17,7 @@ class SeparacaoManager {
         this.restoreExpandedState();
         this.setupEventDelegation();
     }
-    
+
     /**
      * 🎯 CONFIGURAR DELEGAÇÃO DE EVENTOS
      * Evita perder listeners quando o DOM é atualizado
@@ -28,55 +28,55 @@ class SeparacaoManager {
             const btn = e.target.closest('.btn-gerar-separacao');
             if (!btn) return;
             e.preventDefault();
-            
+
             const numPedido = btn.dataset.pedido || btn.closest('[data-pedido]')?.dataset.pedido;
             if (!numPedido) return;
-            
+
             // Prevenir duplo clique
             if (this.processingRequests.has(numPedido)) return;
-            
+
             this.criarSeparacaoCompleta(numPedido);
         });
-        
+
         // Delegação para transformar lote
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-transformar-lote');
             if (!btn) return;
             e.preventDefault();
-            
+
             const loteId = btn.dataset.loteId;
             if (!loteId) return;
-            
+
             if (this.processingRequests.has(loteId)) return;
-            
+
             this.alterarStatus(loteId, 'ABERTO');
         });
-        
+
         // Delegação para excluir separação
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-excluir-separacao');
             if (!btn) return;
             e.preventDefault();
-            
+
             const separacaoId = btn.dataset.separacaoId;
             const numPedido = btn.dataset.pedido;
-            
+
             if (!separacaoId) return;
-            
+
             this.excluirSeparacao(separacaoId, numPedido);
         });
-        
+
         // Delegação para excluir pré-separação
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-excluir-pre-separacao');
             if (!btn) return;
             e.preventDefault();
-            
+
             const loteId = btn.dataset.loteId;
             const numPedido = btn.dataset.pedido;
-            
+
             if (!loteId) return;
-            
+
             this.excluirSeparacao(loteId, numPedido);
         });
     }
@@ -87,16 +87,16 @@ class SeparacaoManager {
      */
     async applyTargets(data) {
         if (!data?.targets) return;
-        
+
         for (const [selector, html] of Object.entries(data.targets)) {
             const element = document.querySelector(selector);
             if (element) {
                 // Salvar estado de expansão se for um collapse
                 const wasExpanded = element.classList?.contains('show');
-                
+
                 // Substituir HTML
                 element.outerHTML = html;
-                
+
                 // Restaurar estado de expansão
                 if (wasExpanded) {
                     const newElement = document.querySelector(selector);
@@ -104,7 +104,7 @@ class SeparacaoManager {
                         newElement.classList.add('show');
                     }
                 }
-                
+
                 // Adicionar animação de atualização
                 const updatedElement = document.querySelector(selector);
                 if (updatedElement) {
@@ -122,29 +122,29 @@ class SeparacaoManager {
      */
     async criarSeparacaoCompleta(numPedido) {
         console.log(`📦 Criar separação completa para pedido ${numPedido}`);
-        
+
         // Prevenir duplo processamento
         if (this.processingRequests.has(numPedido)) {
             console.log('⚠️ Requisição já em andamento para', numPedido);
             return;
         }
-        
+
         const dataExpedicao = await this.solicitarDataExpedicao();
         if (!dataExpedicao) return;
-        
+
         // Adicionar à lista de processamento
         this.processingRequests.add(numPedido);
-        
+
         // DESABILITAR TODOS os botões deste pedido para evitar múltiplos cliques
         const todosBotoes = document.querySelectorAll(`[data-pedido="${numPedido}"] .btn-gerar-separacao, [onclick*="criarSeparacao('${numPedido}')"]`);
-        
+
         try {
             // Loading em TODOS os botões
             todosBotoes.forEach(btn => {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processando...';
             })
-            
+
             const response = await fetch(`/carteira/api/pedido/${numPedido}/gerar-separacao-completa`, {
                 method: 'POST',
                 headers: {
@@ -159,7 +159,7 @@ class SeparacaoManager {
                     agendamento_confirmado: dataExpedicao.agendamento_confirmado || false
                 })
             });
-            
+
             // Verificar se a resposta é OK antes de tentar parsear JSON
             if (!response.ok) {
                 // Tentar extrair mensagem de erro
@@ -180,9 +180,9 @@ class SeparacaoManager {
                 }
                 throw new Error(errorMessage);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.ok || data.success) {
                 // Como não temos mais targets HTML, atualizar a UI manualmente
                 if (data.targets) {
@@ -195,10 +195,10 @@ class SeparacaoManager {
                         if (window.separacoesCompactasCache) {
                             delete window.separacoesCompactasCache[numPedido];
                         }
-                        
+
                         // Recarregar separações compactas usando o método correto
                         await window.carteiraAgrupada.carregarSeparacoesEmLoteUnico([numPedido]);
-                        
+
                         // Atualizar contador de separações no botão
                         const btnSeparacoes = document.querySelector(`[data-pedido="${numPedido}"].btn-separacoes`);
                         if (btnSeparacoes) {
@@ -210,28 +210,28 @@ class SeparacaoManager {
                         }
                     }
                 }
-                
+
                 // Atualizar contadores globais
                 if (data.contadores) {
                     this.atualizarContadores(data.contadores);
                 }
-                
+
                 // Feedback de sucesso
                 this.mostrarSucesso(data.message || 'Separação criada com sucesso!');
-                
+
                 // Restaurar TODOS os botões após sucesso
                 todosBotoes.forEach(btn => {
                     btn.disabled = false;
                     // Manter o texto original do botão (pode ser "Separação" ou "Gerar Separação")
                     btn.innerHTML = '<i class="fas fa-plus me-1"></i> Separação';
                 })
-                
+
                 // 🆕 AGENDAMENTO AUTOMÁTICO: Verificar se há data de agendamento e pedir confirmação
                 if (dataExpedicao.agendamento && !dataExpedicao.protocolo && data.lote_id) {
                     // Aguardar um pouco para garantir que as atualizações foram aplicadas
                     setTimeout(async () => {
                         const confirmarAgendamento = await this.confirmarAgendamentoAutomatico();
-                        
+
                         if (confirmarAgendamento) {
                             console.log('✅ Usuário confirmou agendamento automático');
                             // Chamar função de agendamento do carteiraAgrupada se disponível
@@ -249,7 +249,7 @@ class SeparacaoManager {
                 }
             } else {
                 this.mostrarErro(data.error || 'Erro ao criar separação');
-                
+
                 // Restaurar TODOS os botões em caso de erro
                 todosBotoes.forEach(btn => {
                     btn.disabled = false;
@@ -261,7 +261,7 @@ class SeparacaoManager {
             // Mostrar mensagem de erro específica se disponível
             const mensagemErro = error.message || 'Erro de comunicação com o servidor';
             this.mostrarErro(mensagemErro);
-            
+
             // Restaurar TODOS os botões
             todosBotoes.forEach(btn => {
                 btn.disabled = false;
@@ -278,9 +278,9 @@ class SeparacaoManager {
      */
     async alterarStatus(loteId, novoStatus) {
         console.log(`🔄 Alterando status do lote ${loteId} para ${novoStatus}`);
-        
+
         const botao = document.querySelector(`[data-lote-id="${loteId}"] .btn-transformar, [data-lote-id="${loteId}"] .btn-reverter`);
-        
+
         try {
             // Loading local no botão
             if (botao) {
@@ -288,7 +288,7 @@ class SeparacaoManager {
                 const textoLoading = novoStatus === 'ABERTO' ? 'Confirmando...' : 'Revertendo...';
                 botao.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>${textoLoading}`;
             }
-            
+
             const response = await fetch(`/carteira/api/separacao/${loteId}/alterar-status`, {
                 method: 'POST',
                 headers: {
@@ -300,32 +300,32 @@ class SeparacaoManager {
                     status: novoStatus
                 })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.ok || data.success) {
                 // Aplicar parciais HTML
                 await this.applyTargets(data);
-                
+
                 // Atualizar contadores
                 if (data.contadores) {
                     this.atualizarContadores(data.contadores);
                 }
-                
-                const mensagem = novoStatus === 'ABERTO' ? 
-                    'Separação confirmada com sucesso!' : 
+
+                const mensagem = novoStatus === 'ABERTO' ?
+                    'Separação confirmada com sucesso!' :
                     'Separação voltou para previsão!';
                 this.mostrarSucesso(data.message || mensagem);
-                
+
                 return { success: true, message: mensagem };
             } else {
                 this.mostrarErro(data.error || 'Erro ao alterar status');
-                
+
                 // Restaurar botão
                 if (botao) {
                     botao.disabled = false;
-                    const textoOriginal = novoStatus === 'ABERTO' ? 
-                        '<i class="fas fa-check me-1"></i>Confirmar' : 
+                    const textoOriginal = novoStatus === 'ABERTO' ?
+                        '<i class="fas fa-check me-1"></i>Confirmar' :
                         '<i class="fas fa-undo me-1"></i>Previsão';
                     botao.innerHTML = textoOriginal;
                 }
@@ -333,7 +333,7 @@ class SeparacaoManager {
         } catch (error) {
             console.error('Erro:', error);
             this.mostrarErro('Erro de comunicação');
-            
+
             if (botao) {
                 botao.disabled = false;
                 botao.innerHTML = '<i class="fas fa-exchange-alt me-1"></i>Transformar';
@@ -348,17 +348,17 @@ class SeparacaoManager {
         if (!await this.confirmarAcao('Excluir Separação', 'Esta ação não pode ser desfeita.')) {
             return;
         }
-        
+
         console.log(`🗑️ Excluindo separação ${separacaoId} do pedido ${numPedido}`);
-        
+
         const card = document.querySelector(`[data-separacao-id="${separacaoId}"]`);
-        
+
         try {
             // Adicionar classe de exclusão
             if (card) {
                 card.classList.add('deleting');
             }
-            
+
             const response = await fetch(`/carteira/api/separacao/${separacaoId}/excluir`, {
                 method: 'DELETE',
                 headers: {
@@ -367,18 +367,18 @@ class SeparacaoManager {
                     'X-CSRFToken': this.getCSRFToken()
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.ok || data.success) {
                 // Aplicar parciais (servidor retorna HTML atualizado)
                 await this.applyTargets(data);
-                
+
                 // Atualizar contadores
                 if (data.contadores) {
                     this.atualizarContadores(data.contadores);
                 }
-                
+
                 this.mostrarSucesso('Separação excluída');
             } else {
                 // Remover classe de exclusão em caso de erro
@@ -404,16 +404,16 @@ class SeparacaoManager {
         if (!await this.confirmarAcao('Excluir Separação', 'Esta ação não pode ser desfeita.')) {
             return { success: false };
         }
-        
+
         console.log(`🗑️ Excluindo separação ${loteId} do pedido ${numPedido}`);
-        
+
         const card = document.querySelector(`[data-lote-id="${loteId}"]`);
-        
+
         try {
             if (card) {
                 card.classList.add('deleting');
             }
-            
+
             // UNIFICADO: usar sempre a rota genérica
             const response = await fetch(`/carteira/api/separacao/${loteId}/excluir`, {
                 method: 'DELETE',
@@ -423,27 +423,27 @@ class SeparacaoManager {
                     'X-CSRFToken': this.getCSRFToken()
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.ok || data.success) {
                 this.mostrarSucesso('Separação excluída com sucesso');
-                
+
                 // Se temos parciais HTML, aplicar
                 if (data.targets) {
                     await this.applyTargets(data);
                 }
-                
+
                 // Remover card ou recarregar página
                 if (card) {
                     card.remove();
                 }
-                
+
                 // Recarregar se necessário
                 if (this.needsReload) {
                     setTimeout(() => location.reload(), 1000);
                 }
-                
+
                 return { success: true };
             } else {
                 throw new Error(data.error || 'Erro ao excluir');
@@ -456,21 +456,21 @@ class SeparacaoManager {
             return { success: false, error: error.message };
         }
     }
-    
+
 
     /**
      * 📊 ATUALIZAR CONTADORES (valores do servidor)
      */
     atualizarContadores(contadores) {
         if (!contadores) return;
-        
+
         // Atualizar cada contador com o valor real do servidor
         for (const [id, valor] of Object.entries(contadores)) {
             const elemento = document.getElementById(id);
             if (elemento) {
                 const valorAnterior = elemento.textContent;
                 elemento.textContent = valor;
-                
+
                 // Animação apenas se o valor mudou
                 if (valorAnterior !== String(valor)) {
                     elemento.classList.add('pulse-animation');
@@ -489,7 +489,7 @@ class SeparacaoManager {
         try {
             const response = await fetch('/carteira/api/contadores');
             const data = await response.json();
-            
+
             if (data.ok && data.contadores) {
                 this.atualizarContadores(data.contadores);
             }
@@ -595,10 +595,9 @@ class SeparacaoManager {
      * 🔒 OBTER CSRF TOKEN
      */
     getCSRFToken() {
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute('content') : '';
+        return window.Security.getCSRFToken();
     }
-    
+
     /**
      * 🔔 MÉTODOS DE NOTIFICAÇÃO
      */
@@ -676,7 +675,7 @@ class SeparacaoManager {
         console.log(`📆 Preparando redirecionamento para portal de agendamento`);
         console.log(`   Lote: ${loteId}`);
         console.log(`   Data: ${dataAgendamento}`);
-        
+
         // Tentar chamar a função do workspace se disponível
         if (window.workspace && window.workspace.agendarNoPortal) {
             window.workspace.agendarNoPortal(loteId, dataAgendamento);
@@ -703,39 +702,39 @@ class SeparacaoManager {
     podeEditarDatas(status) {
         return ['PREVISAO', 'ABERTO'].includes(status);
     }
-    
+
     podeAdicionarProdutos(status) {
         return ['PREVISAO', 'ABERTO'].includes(status);
     }
-    
+
     podeRemoverProdutos(status) {
         return ['PREVISAO', 'ABERTO'].includes(status);
     }
-    
+
     podeCancelar(status) {
         return ['PREVISAO', 'ABERTO'].includes(status);
     }
-    
+
     podeConfirmar(status) {
         // Só pode confirmar se estiver em PREVISAO (transformar em ABERTO)
         return status === 'PREVISAO';
     }
-    
+
     podeCotar(status) {
         // Só pode cotar se estiver ABERTO
         return status === 'ABERTO';
     }
-    
+
     podeVerCotacao(status) {
         // Pode ver cotação se estiver COTADO ou status posteriores
         return ['COTADO', 'EMBARCADO', 'FATURADO'].includes(status);
     }
-    
+
     podeEmbarcar(status) {
         // Só pode embarcar se estiver COTADO
         return status === 'COTADO';
     }
-    
+
     /**
      * 🎨 OBTER COR DO STATUS
      * Retorna a classe Bootstrap apropriada para cada status
@@ -751,7 +750,7 @@ class SeparacaoManager {
         };
         return cores[status] || 'secondary';
     }
-    
+
     /**
      * 🏷️ OBTER LABEL DO STATUS
      * Retorna o texto amigável para cada status
@@ -787,9 +786,9 @@ class SeparacaoManager {
                     status: 'PREVISAO'  // Sempre criar como PREVISAO (substitui pré-separação)
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 console.log('✅ Separação PREVISAO criada com sucesso');
                 return result;
@@ -810,7 +809,7 @@ class SeparacaoManager {
         try {
             const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes?status=${status}`);
             const result = await response.json();
-            
+
             if (result.success) {
                 return result.separacoes;
             } else {
@@ -834,7 +833,7 @@ class SeparacaoManager {
                 'Esta separação voltará ao status de previsão. Deseja continuar?',
                 'warning'
             );
-            
+
             if (!confirmar) return { success: false };
 
             const response = await fetch(`/carteira/api/separacao/${loteId}/alterar-status`, {
@@ -847,9 +846,9 @@ class SeparacaoManager {
                     status: 'PREVISAO'  // CORRIGIDO: usar 'status' ao invés de 'novo_status'
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 this.mostrarSucesso('Separação voltou para previsão');
                 // Recarregar a página ou atualizar o card

@@ -118,7 +118,7 @@ class PortalAgendamento {
         await this.aguardarPortal(tipoPortal, 3000); // Aguardar até 3 segundos
 
         // Se não estiver carregado, tentar carregar dinamicamente
-        switch(tipoPortal) {
+        switch (tipoPortal) {
             case 'atacadao':
                 if (window.PortalAtacadao) {
                     console.log('✅ Usando Portal Atacadão');
@@ -163,7 +163,7 @@ class PortalAgendamento {
                 // Verificar se o portal foi carregado
                 let portalCarregado = false;
 
-                switch(tipoPortal) {
+                switch (tipoPortal) {
                     case 'sendas':
                         if (window.PortalSendas) {
                             this.portaisCarregados.sendas = window.PortalSendas;
@@ -237,10 +237,10 @@ class PortalAgendamento {
      */
     async verificarPortal(loteId) {
         console.log(`🔍 Roteando verificação para lote ${loteId}`);
-        
+
         try {
             const portal = await this.obterPortalEspecifico(loteId);
-            
+
             if (portal && portal.verificarPortal) {
                 return await portal.verificarPortal(loteId);
             } else {
@@ -263,10 +263,10 @@ class PortalAgendamento {
      */
     async verificarProtocoloNoPortal(loteId, protocolo) {
         console.log(`🔍 Roteando verificação de protocolo ${protocolo} para lote ${loteId}`);
-        
+
         try {
             const portal = await this.obterPortalEspecifico(loteId);
-            
+
             if (portal && portal.verificarProtocoloNoPortal) {
                 return await portal.verificarProtocoloNoPortal(loteId, protocolo);
             } else {
@@ -298,29 +298,14 @@ class PortalAgendamento {
      * Obtém token CSRF
      */
     getCSRFToken() {
-        return document.querySelector('[name=csrf_token]')?.value || '';
+        return window.Security.getCSRFToken();
     }
 
     /**
      * Formatar data para exibição
      */
     formatarData(data) {
-        if (!data) return 'N/A';
-        
-        // Se já for uma string formatada, retornar
-        if (typeof data === 'string' && data.includes('/')) {
-            return data;
-        }
-        
-        // Converter para objeto Date se necessário
-        const dateObj = new Date(data);
-        
-        // Formatar como DD/MM/YYYY
-        const dia = String(dateObj.getDate()).padStart(2, '0');
-        const mes = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const ano = dateObj.getFullYear();
-        
-        return `${dia}/${mes}/${ano}`;
+        return window.Formatters.data(data) || 'N/A';
     }
 
     /**
@@ -365,18 +350,5 @@ class PortalAgendamento {
 
 // Inicializar e exportar globalmente
 window.PortalAgendamento = new PortalAgendamento();
-
-// Manter compatibilidade com código legado
-window.agendarNoPortal = (loteId, dataAgendamento) => {
-    return window.PortalAgendamento.agendarNoPortal(loteId, dataAgendamento);
-};
-
-window.verificarPortal = (loteId) => {
-    return window.PortalAgendamento.verificarPortal(loteId);
-};
-
-window.verificarProtocoloNoPortal = (loteId, protocolo) => {
-    return window.PortalAgendamento.verificarProtocoloNoPortal(loteId, protocolo);
-};
 
 console.log('✅ Roteador de Portais carregado com sucesso');

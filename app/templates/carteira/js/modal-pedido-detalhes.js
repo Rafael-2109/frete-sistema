@@ -41,7 +41,7 @@ class ModalPedidoDetalhes {
 
         } catch (error) {
             console.error(`❌ Erro ao carregar detalhes do pedido:`, error);
-            
+
             // Mostrar erro ao usuário
             if (window.Swal) {
                 Swal.fire({
@@ -58,7 +58,7 @@ class ModalPedidoDetalhes {
     mostrarModalPedido(numPedido, data) {
         // Criar ID único para esta instância do modal
         const modalId = `modal-pedido-detalhes-${numPedido}-${Date.now()}`;
-        
+
         // Remover modal anterior do mesmo pedido se houver
         const modaisExistentes = document.querySelectorAll(`[id^="modal-pedido-detalhes-${numPedido}"]`);
         modaisExistentes.forEach(m => m.remove());
@@ -330,14 +330,14 @@ class ModalPedidoDetalhes {
                         <strong>R$ ${this.formatarMoeda(valorTotal)}</strong>
                     </td>
                     <td class="text-center">
-                        ${temRuptura ? 
-                            `<span class="badge bg-danger">
+                        ${temRuptura ?
+                    `<span class="badge bg-danger">
                                 <i class="fas fa-exclamation-triangle"></i> Ruptura
-                            </span>` : 
-                            `<span class="badge bg-success">
+                            </span>` :
+                    `<span class="badge bg-success">
                                 <i class="fas fa-check"></i> OK
                             </span>`
-                        }
+                }
                     </td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary" 
@@ -355,7 +355,7 @@ class ModalPedidoDetalhes {
         if (!separacoes || separacoes.length === 0) {
             return '<p class="text-muted p-3">Nenhuma separação realizada</p>';
         }
-        
+
         return separacoes.map(sep => `
             <div class="card mb-3">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -461,7 +461,7 @@ class ModalPedidoDetalhes {
                     bsModal.hide();
                 }
             }
-            
+
             // Abrir análise de ruptura
             const btn = document.querySelector(`[data-pedido="${numPedido}"]`);
             if (btn) {
@@ -480,7 +480,7 @@ class ModalPedidoDetalhes {
     abrirCardex(codProduto) {
         // Criar Map com dados dos produtos se disponível
         const dadosProdutos = new Map();
-        
+
         // Integração com navegação
         if (window.modalNav) {
             window.modalNav.pushModal('modalCardex', `Cardex - ${codProduto}`, {
@@ -488,7 +488,7 @@ class ModalPedidoDetalhes {
                 dadosProdutos: dadosProdutos
             });
         }
-        
+
         if (window.modalCardex) {
             window.modalCardex.abrirCardex(codProduto, dadosProdutos);
         } else {
@@ -520,7 +520,7 @@ class ModalPedidoDetalhes {
                     bsModal.hide();
                 }
             }
-            
+
             // Simular clique no botão de separação
             const btn = document.querySelector(`[data-pedido="${numPedido}"] .btn-separacao`);
             if (btn) {
@@ -561,14 +561,11 @@ class ModalPedidoDetalhes {
     }
 
     formatarMoeda(valor) {
-        return (valor || 0).toFixed(2).replace('.', ',');
+        return window.Formatters.moeda(valor);
     }
 
     formatarNumero(valor, decimais = 0) {
-        return (valor || 0).toLocaleString('pt-BR', {
-            minimumFractionDigits: decimais,
-            maximumFractionDigits: decimais
-        });
+        return window.Formatters.numero(valor, decimais);
     }
 }
 

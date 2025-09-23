@@ -200,7 +200,7 @@ class AgrupamentoService:
                 'sub_rota': sub_rota_calculada,
                 'expedicao': expedicao_final,  # SIMPLIFICADO: Sempre usa valor original
                 'data_entrega_pedido': pedido.data_entrega_pedido,
-                'observ_ped_1': pedido.observ_ped_1,  
+                'observ_ped_1': pedido.observ_ped_1,
                 'status_pedido': pedido.status_pedido,
                 'pedido_cliente': pedido.pedido_cliente,
                 'cod_uf': pedido.cod_uf,

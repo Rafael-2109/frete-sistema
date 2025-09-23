@@ -47,7 +47,7 @@ class WorkspaceTabela {
                 console.warn('⚠️ Produto inválido ou sem código:', produto);
                 return; // Pular este produto
             }
-            
+
             // Se não há estoque nem produção, mostrar INDISPONÍVEL em vez de CARREGANDO
             let statusDisponibilidade = this.calcularStatusDisponibilidade(produto);
             if (!statusDisponibilidade) {
@@ -55,7 +55,7 @@ class WorkspaceTabela {
                 const temEstoque = (produto.estoque_hoje ?? produto.estoque ?? 0) > 0;
                 const temProducao = (produto.producao_hoje ?? 0) > 0;
                 const temDisponibilidade = produto.data_disponibilidade && produto.data_disponibilidade !== 'Sem previsão';
-                
+
                 if (!temEstoque && !temProducao && !temDisponibilidade) {
                     statusDisponibilidade = {
                         class: 'bg-danger text-white',
@@ -72,16 +72,16 @@ class WorkspaceTabela {
                     };
                 }
             }
-            
+
             const saldoDisponivel = this.calcularSaldoDisponivel(produto) || {
                 qtdEditavel: produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0,
                 qtdSeparacoes: 0,
                 qtdPreSeparacoes: 0,
                 qtdIndisponivel: 0
             };
-            
+
             const producaoHoje = produto.producao_hoje || 0;
-            
+
             // Garantir que valores numéricos não sejam undefined
             const estoqueHoje = produto.estoque_hoje ?? 0;
             const menorEstoque7d = produto.menor_estoque_7d ?? produto.menor_estoque_produto_d7 ?? 0;
@@ -247,7 +247,7 @@ class WorkspaceTabela {
                 console.warn('⚠️ calcularStatusDisponibilidade chamado com produto undefined');
                 return null;
             }
-            
+
             // Debug: verificar dados do produto
             console.log('📊 DEBUG calcularStatusDisponibilidade:', {
                 cod_produto: produto.cod_produto,
@@ -257,14 +257,14 @@ class WorkspaceTabela {
                 qtd_disponivel: produto.qtd_disponivel,
                 workspaceQuantidades_existe: !!window.workspaceQuantidades
             });
-            
+
             // Delegar para workspace-quantidades se disponível
             if (window.workspaceQuantidades) {
                 const resultado = window.workspaceQuantidades.calcularStatusDisponibilidade(produto);
                 console.log('📊 Resultado de workspaceQuantidades:', resultado);
                 return resultado;
             }
-            
+
             // Fallback simplificado se workspace-quantidades não estiver disponível
             const qtdPedido = produto.qtd_pedido || produto.qtd_saldo_produto_pedido || 0;
             const estoqueHoje = produto.estoque_hoje ?? produto.estoque ?? 0;
@@ -311,7 +311,7 @@ class WorkspaceTabela {
                     qtdIndisponivel: 0
                 };
             }
-            
+
             // Já delega para o WorkspaceQuantidades se disponível
             if (window.workspaceQuantidades) {
                 const resultado = window.workspaceQuantidades.calcularSaldoDisponivel(produto);
@@ -346,15 +346,7 @@ class WorkspaceTabela {
      * Todas as formatações são delegadas para workspace-quantidades
      */
     formatarMoeda(valor) {
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarMoeda(valor);
-        }
-        // Fallback se workspace-quantidades não estiver disponível
-        if (!valor) return 'R$ 0,00';
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(valor);
+        return window.Formatters.moeda(valor);
     }
 
     formatarQuantidade(qtd) {
@@ -371,32 +363,17 @@ class WorkspaceTabela {
     }
 
     formatarPeso(peso) {
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPeso(peso);
-        }
-        // Fallback
-        if (!peso) return '0 kg';
-        return `${parseFloat(peso).toFixed(1)} kg`;
+        return window.Formatters.peso(peso);
     }
 
     formatarPallet(pallet) {
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPallet(pallet);
-        }
-        // Fallback
-        if (!pallet) return '0 plt';
-        return `${parseFloat(pallet).toFixed(2)} plt`;
+        return window.Formatters.pallet(pallet);
     }
-    
+
     formatarData(data) {
-        if (!data) return '';
-        // Se já está no formato dd/mm/yyyy, retornar como está
-        if (data.includes('/')) return data;
-        // Converter de yyyy-mm-dd para dd/mm/yyyy
-        const [ano, mes, dia] = data.split('-');
-        return `${dia}/${mes}/${ano}`;
+        return window.Formatters.data(data) || '';
     }
-    
+
     calcularDiasAteData(dataFutura) {
         try {
             // Garantir formato correto da data (yyyy-mm-dd)
@@ -405,15 +382,15 @@ class WorkspaceTabela {
             hoje.setMinutes(0);
             hoje.setSeconds(0);
             hoje.setMilliseconds(0);
-            
+
             // Criar data futura garantindo timezone correto
             const [ano, mes, dia] = dataFutura.split('-');
             const futuro = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
             futuro.setHours(0, 0, 0, 0);
-            
+
             const diffTime = futuro.getTime() - hoje.getTime();
             const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-            
+
             return Math.max(0, diffDays);
         } catch (error) {
             console.error('Erro ao calcular dias:', error, dataFutura);

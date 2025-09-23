@@ -28,7 +28,7 @@ class PortalAtacadao {
      */
     async agendarNoPortal(loteId, dataAgendamento) {
         console.log(`📅 Agendando lote ${loteId} no portal`);
-        
+
         // Primeiro verificar se todos os produtos têm De-Para cadastrado
         Swal.fire({
             title: 'Verificando De-Para...',
@@ -56,7 +56,7 @@ class PortalAtacadao {
 
             // Se tem produtos sem De-Para, avisar o usuário
             if (verificacao.sem_depara > 0) {
-                const produtosSemDePara = verificacao.produtos_sem_depara.map(p => 
+                const produtosSemDePara = verificacao.produtos_sem_depara.map(p =>
                     `<li><strong>${p.codigo}</strong> - ${p.descricao}</li>`
                 ).join('');
 
@@ -105,7 +105,7 @@ class PortalAtacadao {
             // Se não tem data de agendamento, usar a da preparação ou solicitar
             if (!dataAgendamento || dataAgendamento === '') {
                 dataAgendamento = preparacao.data_agendamento;
-                
+
                 if (!dataAgendamento) {
                     const { value: data } = await Swal.fire({
                         title: 'Data de Agendamento',
@@ -128,7 +128,7 @@ class PortalAtacadao {
             }
 
             // Mostrar resumo dos produtos convertidos
-            const produtosHtml = preparacao.produtos.map(p => 
+            const produtosHtml = preparacao.produtos.map(p =>
                 `<tr>
                     <td>${p.codigo_atacadao}</td>
                     <td>${p.descricao_atacadao}</td>
@@ -223,7 +223,7 @@ class PortalAtacadao {
 
                 // Disparar evento para atualizar outras interfaces
                 this.dispararEventoAtualizacao('agendamento-realizado', { loteId, protocolo: data.protocolo });
-                
+
                 return true;
             } else {
                 Swal.fire({
@@ -254,7 +254,7 @@ class PortalAtacadao {
      */
     async verificarPortal(loteId) {
         console.log(`🔍 Verificando lote ${loteId} no portal`);
-        
+
         // Mostrar loading
         Swal.fire({
             title: 'Verificando Status...',
@@ -290,7 +290,7 @@ class PortalAtacadao {
             if (window.modalSeparacoes && window.modalSeparacoes.separacoes) {
                 separacao = window.modalSeparacoes.separacoes.find(s => s.separacao_lote_id === loteId);
             }
-            
+
             if (!separacao) {
                 const separacaoResponse = await fetch(`/carteira/api/separacao/${loteId}`);
                 separacao = await separacaoResponse.json();
@@ -317,9 +317,9 @@ class PortalAtacadao {
                     <div class="alert alert-warning mt-3">
                         <strong>Produtos sem De-Para:</strong>
                         <ul class="mb-0">
-                            ${verificacao.produtos_sem_depara.map(p => 
-                                `<li>${p.codigo} - ${p.descricao}</li>`
-                            ).join('')}
+                            ${verificacao.produtos_sem_depara.map(p =>
+                    `<li>${p.codigo} - ${p.descricao}</li>`
+                ).join('')}
                         </ul>
                     </div>
                 `;
@@ -376,7 +376,7 @@ class PortalAtacadao {
      */
     async verificarProtocoloNoPortal(loteId, protocolo) {
         console.log(`🔍 Verificando protocolo ${protocolo} no portal`);
-        
+
         // Mostrar loading
         Swal.fire({
             title: 'Verificando Protocolo...',
@@ -491,10 +491,10 @@ class PortalAtacadao {
                                                                     `}
                                                                 </td>
                                                                 <td class="text-center">
-                                                                    ${p.tem_divergencia ? 
-                                                                        '<i class="fas fa-exclamation-triangle text-danger"></i>' : 
-                                                                        '<i class="fas fa-check-circle text-success"></i>'
-                                                                    }
+                                                                    ${p.tem_divergencia ?
+                        '<i class="fas fa-exclamation-triangle text-danger"></i>' :
+                        '<i class="fas fa-check-circle text-success"></i>'
+                    }
                                                                 </td>
                                                             </tr>
                                                         `).join('')}
@@ -648,7 +648,7 @@ class PortalAtacadao {
         }
 
         const produto = produtosSemDePara[0];
-        
+
         Swal.fire({
             title: 'Cadastrar De-Para',
             html: `
@@ -719,7 +719,7 @@ class PortalAtacadao {
             });
 
             const data = await response.json();
-            
+
             if (data.success) {
                 Swal.fire({
                     icon: 'success',
@@ -772,21 +772,7 @@ class PortalAtacadao {
      * Formata data para exibição BR
      */
     formatarData(data) {
-        if (!data) return '-';
-        
-        // Se já está no formato dd/mm/yyyy, retornar como está
-        if (data.includes('/')) return data;
-        
-        // Converter de YYYY-MM-DD para dd/mm/yyyy
-        // Adicionar T12:00:00 para evitar problemas de timezone
-        const dataComHora = data.includes('T') ? data : data + 'T12:00:00';
-        const d = new Date(dataComHora);
-        
-        const dia = String(d.getDate()).padStart(2, '0');
-        const mes = String(d.getMonth() + 1).padStart(2, '0');
-        const ano = d.getFullYear();
-        
-        return `${dia}/${mes}/${ano}`;
+        return window.Formatters.data(data) || '-';
     }
 
     /**
@@ -794,8 +780,7 @@ class PortalAtacadao {
      * Obtém o token CSRF para requisições
      */
     getCSRFToken() {
-        return document.querySelector('[name=csrf_token]')?.value || 
-               document.querySelector('meta[name="csrf-token"]')?.content || '';
+        return window.Security.getCSRFToken();
     }
 
     /**

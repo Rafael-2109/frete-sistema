@@ -269,30 +269,6 @@
     font-size: 0.875rem !important;
 }
 
-/* 🎯 DROPDOWN SEPARAÇÕES */
-.dropdown-separacoes-content {
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
-    border: none;
-    border-radius: 0.5rem;
-    z-index: 1070 !important;
-    /* Força o dropdown ficar acima de outros elementos */
-    position: absolute !important;
-    /* Mantém alinhamento relativo ao botão */
-}
-
-.separacoes-container .dropdown {
-    position: static;
-    /* Remove relative que pode causar problemas */
-}
-
-.separacoes-container .dropdown-menu.show {
-    z-index: 1070 !important;
-    position: absolute !important;
-    /* Alinhamento correto ao botão */
-    transform: none !important;
-    /* Remove transforms que podem causar problemas */
-}
-
 /* Fix para table-responsive que pode cortar dropdown */
 .table-responsive {
     overflow: visible !important;
@@ -378,9 +354,6 @@
         padding: 0.25rem 0.5rem;
     }
 
-    .dropdown-separacoes-content {
-        min-width: 300px !important;
-    }
 }
 
 /* 🎯 UTILITÁRIOS */

@@ -10,7 +10,7 @@ class WorkspaceMontagem {
         this.produtosSelecionados = new Set();
         this.dadosProdutos = new Map(); // codProduto -> dados completos
         this.pedidoAtual = null; // Armazenar pedido atual
-        
+
         // 🆕 Controle de requisições assíncronas de estoque
         this.abortControllerEstoque = null;
 
@@ -28,6 +28,7 @@ class WorkspaceMontagem {
     }
 
     setupEventListeners() {
+        // Removido código desnecessário de esconder/mostrar
     }
 
     /**
@@ -36,36 +37,37 @@ class WorkspaceMontagem {
      */
     limparDadosAnteriores() {
         console.log('🧹 Limpando dados do pedido anterior...');
-        
+
         // Limpar dados dos produtos
         this.dadosProdutos.clear();
-        
+
         // Limpar produtos selecionados
         this.produtosSelecionados.clear();
-        
+
         // Limpar pré-separações
         this.preSeparacoes.clear();
-        
+
         // Limpar separações confirmadas
         this.separacoesConfirmadas = [];
-        
+
         // Cancelar requisições assíncronas pendentes via API
         if (this.api) {
             this.api.cancelarTodasRequisicoes();
         }
-        
+
         // Limpar pedido atual
         this.pedidoAtual = null;
-        
+
         console.log('✅ Dados anteriores limpos');
     }
 
+
     async abrirWorkspace(numPedido) {
         console.log(`🔄 Carregando workspace para pedido ${numPedido}`);
-        
+
         // 🧹 LIMPAR DADOS DO PEDIDO ANTERIOR
         this.limparDadosAnteriores();
-        
+
         // IMPORTANTE: Armazenar novo pedido ANTES de qualquer operação
         // Isso garante que obterNumeroPedido() sempre retorne o pedido correto
         this.pedidoAtual = numPedido;
@@ -74,7 +76,7 @@ class WorkspaceMontagem {
         try {
             // Carregar dados do workspace usando WorkspaceAPI
             const workspaceData = await this.api.buscarWorkspace(numPedido);
-            
+
             // Verificar se há produtos
             if (!workspaceData.produtos || workspaceData.produtos.length === 0) {
                 throw new Error('Nenhum produto encontrado para este pedido');
@@ -107,7 +109,7 @@ class WorkspaceMontagem {
             if (separacoesData.success && separacoesData.separacoes) {
                 // Processar TODAS as separações de uma vez
                 this.todasSeparacoes = separacoesData.separacoes;
-                
+
                 // Atualizar Map local - MANTER ESTRUTURA ORIGINAL DO BACKEND
                 separacoesData.separacoes.forEach(sep => {
                     this.preSeparacoes.set(sep.separacao_lote_id, {
@@ -126,7 +128,7 @@ class WorkspaceMontagem {
                         embarque: sep.embarque
                     });
                 });
-                
+
                 console.log(`✅ Carregadas ${separacoesData.separacoes.length} separações totais`);
             }
 
@@ -151,7 +153,7 @@ class WorkspaceMontagem {
             requestAnimationFrame(() => {
                 console.log('🎯 Inicializando sistema de seleção...');
                 this.configurarCheckboxes(numPedido);
-                
+
                 // 🆕 CARREGAR DADOS DE ESTOQUE DE FORMA ASSÍNCRONA
                 // Aguardar um pouco para garantir que DOM esteja pronto
                 setTimeout(() => {
@@ -169,13 +171,16 @@ class WorkspaceMontagem {
     async renderizarTodasSeparacoes(numPedido) {
         const container = document.getElementById(`lotes-container-${numPedido}`);
         if (!container || !this.todasSeparacoes || this.todasSeparacoes.length === 0) return;
-        
+
         // Remover placeholder se ainda existir
         const placeholder = container.querySelector('.lote-placeholder');
         if (placeholder) {
             placeholder.remove();
         }
-        
+
+        // Limpar container antes de renderizar
+        container.innerHTML = '';
+
         // Renderizar TODAS as separações usando o card universal
         for (const separacao of this.todasSeparacoes) {
             // Preparar dados no formato do card universal
@@ -195,16 +200,16 @@ class WorkspaceMontagem {
                 agendamento_confirmado: separacao.agendamento_confirmado || false,
                 embarque: separacao.embarque
             };
-            
+
             const loteCard = document.createElement('div');
             loteCard.className = 'col-md-4 mb-3';
             loteCard.innerHTML = this.loteManager.renderizarCardUniversal(loteData);
             container.appendChild(loteCard);
         }
-        
+
         console.log(`✅ Renderizadas ${this.todasSeparacoes.length} separações no total`);
     }
-    
+
 
     renderizarWorkspace(numPedido, data) {
         return `
@@ -248,8 +253,8 @@ class WorkspaceMontagem {
                         <h6 class="mb-0">
                             <i class="fas fa-layer-group me-2"></i>
                             Separações
-                            ${this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0 ? 
-                                `<span class="badge bg-secondary ms-2">${this.separacoesConfirmadas.length}</span>` : ''}
+                            ${this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0 ?
+                `<span class="badge bg-secondary ms-2">${this.separacoesConfirmadas.length}</span>` : ''}
                         </h6>
                         <button class="btn btn-success btn-sm" onclick="workspace.criarNovoLote('${numPedido}')">
                             <i class="fas fa-plus me-1"></i> Novo Lote
@@ -277,169 +282,6 @@ class WorkspaceMontagem {
         return `<div class="alert alert-warning">Módulo de tabela não carregado</div>`;
     }
 
-    renderizarSeparacoesNaAreaUnificada() {
-        // Método principal para renderizar todas as separações
-        return this.separacoesConfirmadas.map(separacao => {
-            const statusClass = this.getStatusClass(separacao.status);
-
-            return `
-                <div class="col-md-4 mb-3">
-                    <div class="card h-100 border-${statusClass}" id="card-separacao-${separacao.separacao_lote_id}">
-                        <div class="card-header bg-${statusClass} bg-opacity-10">
-                            <h6 class="mb-0">
-                                <i class="fas fa-check me-2"></i>
-                                Separação Confirmada
-                            </h6>
-                            <small>${separacao.separacao_lote_id}</small>
-                            <span class="badge bg-${statusClass} float-end">${separacao.status}</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="info-separacao mb-2">
-                                <small><strong>Expedição:</strong> ${this.formatarData(separacao.expedicao)}</small><br>
-                                <small><strong>Agendamento:</strong> ${separacao.agendamento ? this.formatarData(separacao.agendamento) : '-'}
-                                    ${separacao.agendamento && separacao.agendamento_confirmado ? 
-                                        '<span class="badge bg-success ms-1"><i class="fas fa-check-circle"></i> Confirmado</span>' : 
-                                        separacao.agendamento && !separacao.agendamento_confirmado ? 
-                                        '<span class="badge bg-warning ms-1"><i class="fas fa-hourglass-half"></i> Aguardando</span>' : ''
-                                    }
-                                </small><br>
-                                <small><strong>Protocolo:</strong> ${separacao.protocolo || '-'}</small>
-                            </div>
-                            
-                            <div class="produtos-separacao">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <h6 class="small mb-0">Produtos (${separacao.produtos.length}):</h6>
-                                    ${separacao.produtos.length > 3 ? `
-                                        <button class="btn btn-link btn-sm p-0" onclick="workspace.toggleProdutosSeparacao('${separacao.separacao_lote_id}')">
-                                            <small id="btn-toggle-${separacao.separacao_lote_id}">Ver todos</small>
-                                        </button>
-                                    ` : ''}
-                                </div>
-                                <div id="produtos-resumo-${separacao.separacao_lote_id}">
-                                    ${separacao.produtos.slice(0, 3).map(p => `
-                                        <small class="d-block mb-1">
-                                            • ${p.cod_produto} - ${this.formatarQuantidade(p.qtd_saldo)}un
-                                            <span class="text-muted ms-2">
-                                                | ${this.formatarMoeda(p.valor_saldo || 0)} 
-                                                | ${this.formatarPeso(p.peso || 0)} 
-                                                | ${this.formatarPallet(p.pallet || 0)}
-                                            </span>
-                                        </small>
-                                    `).join('')}
-                                    ${separacao.produtos.length > 3 ? `<small class="text-muted">... e mais ${separacao.produtos.length - 3} produtos</small>` : ''}
-                                </div>
-                                <div id="produtos-completo-${separacao.separacao_lote_id}" style="display: none;">
-                                    <div class="table-responsive mt-2">
-                                        <table class="table table-sm table-hover">
-                                            <thead class="table-light">
-                                                <tr>
-                                                    <th>Código</th>
-                                                    <th>Produto</th>
-                                                    <th class="text-end">Qtd</th>
-                                                    <th class="text-end">Valor</th>
-                                                    <th class="text-end">Peso</th>
-                                                    <th class="text-end">Pallet</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                ${separacao.produtos.map(p => `
-                                                    <tr>
-                                                        <td><small>${p.cod_produto}</small></td>
-                                                        <td><small>${p.nome_produto || '-'}</small></td>
-                                                        <td class="text-end"><small>${this.formatarQuantidade(p.qtd_saldo)}</small></td>
-                                                        <td class="text-end"><small>${this.formatarMoeda(p.valor_saldo || 0)}</small></td>
-                                                        <td class="text-end"><small>${this.formatarPeso(p.peso || 0)}</small></td>
-                                                        <td class="text-end"><small>${this.formatarPallet(p.pallet || 0)}</small></td>
-                                                    </tr>
-                                                `).join('')}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="totais-separacao border-top pt-2 mt-2">
-                                <div class="row text-center">
-                                    <div class="col-4">
-                                        <small class="text-success">${this.formatarMoeda(separacao.valor_total)}</small>
-                                        <br><small class="text-muted">Valor</small>
-                                    </div>
-                                    <div class="col-4">
-                                        <small class="text-info">${this.formatarPeso(separacao.peso_total)}</small>
-                                        <br><small class="text-muted">Peso</small>
-                                    </div>
-                                    <div class="col-4">
-                                        <small class="text-warning">${this.formatarPallet(separacao.pallet_total)}</small>
-                                        <br><small class="text-muted">Pallet</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Botões do Portal -->
-                            <div class="portal-actions border-top pt-2 mt-2">
-                                <div class="d-flex gap-1 justify-content-center flex-wrap">
-                                    <button class="btn btn-success btn-sm" 
-                                            data-lote="${separacao.separacao_lote_id}"
-                                            data-agendamento="${separacao.agendamento || ''}"
-                                            onclick="window.PortalAgendamento.agendarNoPortal(this.dataset.lote, this.dataset.agendamento)"
-                                            title="Agendar no portal do cliente">
-                                        <i class="fas fa-calendar-plus"></i> Portal
-                                    </button>
-                                    <button class="btn btn-info btn-sm"
-                                            data-lote="${separacao.separacao_lote_id}"
-                                            onclick="window.PortalAgendamento.verificarPortal(this.dataset.lote)"
-                                            title="Verificar status no portal">
-                                        <i class="fas fa-search"></i> Status
-                                    </button>
-                                    ${separacao.protocolo ? `
-                                        <button class="btn btn-warning btn-sm"
-                                                data-lote="${separacao.separacao_lote_id}"
-                                                data-protocolo="${separacao.protocolo}"
-                                                onclick="window.PortalAgendamento.verificarProtocoloNoPortal(this.dataset.lote, this.dataset.protocolo)"
-                                                title="Verificar protocolo no portal">
-                                            <i class="fas fa-sync"></i> Verificar Protocolo
-                                        </button>
-                                        <span class="badge bg-success align-self-center">
-                                            <i class="fas fa-check-circle"></i> ${separacao.protocolo}
-                                        </span>
-                                    ` : ''}
-                                </div>
-                            </div>
-                            
-                            ${separacao.status === 'COTADO' && separacao.embarque ? `
-                                <div class="alert alert-info p-2 mt-2 mb-0">
-                                    <small>
-                                        <strong>Embarque #${separacao.embarque.numero || '-'}</strong><br>
-                                        ${separacao.embarque.transportadora || 'Sem transportadora'}<br>
-                                        Prev: ${separacao.embarque.data_prevista_embarque ? this.formatarData(separacao.embarque.data_prevista_embarque) : '-'}
-                                    </small>
-                                </div>
-                            ` : ''}
-                        </div>
-                        
-                        <!-- Botões de ação -->
-                        <div class="card-footer bg-light">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    ${separacao.status === 'ABERTO' ? `
-                                        <button class="btn btn-warning btn-sm" onclick="workspace.reverterSeparacao('${separacao.separacao_lote_id}')">
-                                            <i class="fas fa-undo me-1"></i> Reverter para Previsão
-                                        </button>
-                                        <button class="btn btn-info btn-sm ms-2" onclick="workspace.editarDatasSeparacao('${separacao.separacao_lote_id}')">
-                                            <i class="fas fa-edit me-1"></i> Editar Datas
-                                        </button>
-                                    ` : ''}
-                                </div>
-                                <button class="btn btn-primary btn-sm" onclick="workspace.imprimirSeparacao('${separacao.separacao_lote_id}')">
-                                    <i class="fas fa-print me-1"></i> Imprimir
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
 
     getStatusClass(status) {
         const statusMap = {
@@ -474,28 +316,7 @@ class WorkspaceMontagem {
     }
 
     formatarData(data) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.data) {
-            return window.Formatters.data(data);
-        }
-        
-        // Fallback completo
-        if (!data) return '-';
-        // Garantir formato dd/mm/yyyy
-        let d;
-        if (data.includes('T')) {
-            // Já está em formato ISO
-            d = new Date(data);
-        } else {
-            // Apenas data, criar no timezone local sem ajuste
-            const [ano, mes, dia] = data.split('-');
-            d = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
-        }
-        // Forçar formato dd/mm/yyyy
-        const dia = String(d.getDate()).padStart(2, '0');
-        const mes = String(d.getMonth() + 1).padStart(2, '0');
-        const ano = d.getFullYear();
-        return `${dia}/${mes}/${ano}`;
+        return window.Formatters.data(data) || '-';
     }
 
     /**
@@ -666,8 +487,8 @@ class WorkspaceMontagem {
             for (const produto of produtosParaAdicionar) {
                 const loteData = this.preSeparacoes.get(loteId);
                 // Verificar se produto existe, compatível com ambas estruturas
-                const produtoExistente = loteData?.produtos.find(p => 
-                    (p.codProduto === produto.codProduto) || 
+                const produtoExistente = loteData?.produtos.find(p =>
+                    (p.codProduto === produto.codProduto) ||
                     (p.cod_produto === produto.codProduto)
                 );
 
@@ -707,14 +528,14 @@ class WorkspaceMontagem {
     async coletarDadosProdutosDaTabela() {
         console.log('📊 Coletando dados dos produtos da tabela...');
         const rows = document.querySelectorAll('tr.produto-origem');
-        
+
         rows.forEach(row => {
             const codProduto = row.dataset.produto;
             if (codProduto) {
                 const nomeProduto = row.querySelector('.nome-produto')?.textContent || '';
                 const qtdSaldo = parseFloat(row.querySelector('.qtd-saldo')?.textContent || 0);
                 const valor = parseFloat(row.querySelector('.valor')?.textContent?.replace('R$', '').replace(',', '.') || 0);
-                
+
                 this.dadosProdutos.set(codProduto, {
                     cod_produto: codProduto,
                     nome_produto: nomeProduto,
@@ -723,7 +544,7 @@ class WorkspaceMontagem {
                 });
             }
         });
-        
+
         console.log(`✅ Coletados dados de ${this.dadosProdutos.size} produtos`);
     }
 
@@ -760,7 +581,7 @@ class WorkspaceMontagem {
         if (window.Notifications && window.Notifications.toast) {
             return window.Notifications.toast(mensagem, tipo);
         }
-        
+
         // Fallback completo
         // Criar toast notification
         const toast = document.createElement('div');
@@ -886,15 +707,15 @@ class WorkspaceMontagem {
     }
 
 
-    
+
     // Método unificado para excluir lote/separação (qualquer status)
     async excluirLote(loteId) {
         if (!confirm('Tem certeza que deseja excluir esta separação?')) {
             return;
         }
-        
+
         console.log(`🗑️ Excluindo lote ${loteId}`);
-        
+
         // Usar separacao-manager método unificado
         if (window.separacaoManager && typeof window.separacaoManager.excluirSeparacao === 'function') {
             const numPedido = this.numPedidoAtual || document.querySelector('.workspace-montagem')?.dataset.pedido;
@@ -935,10 +756,10 @@ class WorkspaceMontagem {
     async confirmarAgendamentoLote(loteId, tipo) {
         try {
             console.log(`🔄 Confirmando agendamento do lote ${loteId} (${tipo})`);
-            
+
             // Usar sempre o endpoint unificado por lote_id
             const endpoint = `/carteira/api/separacao/${loteId}/confirmar-agendamento`;
-            
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -946,24 +767,24 @@ class WorkspaceMontagem {
                     'X-CSRFToken': this.getCSRFToken()
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.mostrarFeedback('✅ Agendamento confirmado com sucesso', 'success');
-                
+
                 // Atualizar dados locais
                 const loteData = this.preSeparacoes.get(loteId);
                 if (loteData) {
                     loteData.agendamento_confirmado = true;
                     this.preSeparacoes.set(loteId, loteData);
-                    
+
                     // Re-renderizar o card
                     if (this.loteManager) {
                         this.loteManager.atualizarCardLote(loteId);
                     }
                 }
-                
+
                 // Recarregar dados se necessário
                 await this.carregarDadosPedido();
             } else {
@@ -974,18 +795,18 @@ class WorkspaceMontagem {
             alert('❌ Erro ao confirmar agendamento');
         }
     }
-    
+
     async reverterAgendamentoLote(loteId, tipo) {
         try {
             if (!confirm('Tem certeza que deseja reverter a confirmação do agendamento?')) {
                 return;
             }
-            
+
             console.log(`🔄 Revertendo confirmação do agendamento do lote ${loteId} (${tipo})`);
-            
+
             // Usar sempre o endpoint unificado por lote_id
             const endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
-            
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -993,24 +814,24 @@ class WorkspaceMontagem {
                     'X-CSRFToken': this.getCSRFToken()
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.mostrarFeedback('✅ Confirmação de agendamento revertida', 'success');
-                
+
                 // Atualizar dados locais
                 const loteData = this.preSeparacoes.get(loteId);
                 if (loteData) {
                     loteData.agendamento_confirmado = false;
                     this.preSeparacoes.set(loteId, loteData);
-                    
+
                     // Re-renderizar o card
                     if (this.loteManager) {
                         this.loteManager.atualizarCardLote(loteId);
                     }
                 }
-                
+
                 // Recarregar dados se necessário
                 await this.carregarDadosPedido();
             } else {
@@ -1073,51 +894,18 @@ class WorkspaceMontagem {
      * Delegam todas as formatações para workspace-quantidades
      */
     formatarMoeda(valor) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.moeda) {
-            return window.Formatters.moeda(valor);
-        }
-        // Fallback para workspaceQuantidades
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarMoeda(valor);
-        }
-        // Fallback final se nenhum módulo estiver disponível
-        if (!valor) return 'R$ 0,00';
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(valor);
+        return window.Formatters.moeda(valor);
     }
 
     // Segunda ocorrência de formatarQuantidade - remover duplicação
     // Já definida anteriormente na linha 479
 
     formatarPeso(peso) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.peso) {
-            return window.Formatters.peso(peso);
-        }
-        // Fallback para workspaceQuantidades
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPeso(peso);
-        }
-        // Fallback final
-        if (!peso) return '0 kg';
-        return `${parseFloat(peso).toFixed(1)} kg`;
+        return window.Formatters.peso(peso);
     }
 
     formatarPallet(pallet) {
-        // Usar módulo centralizado se disponível
-        if (window.Formatters && window.Formatters.pallet) {
-            return window.Formatters.pallet(pallet);
-        }
-        // Fallback para workspaceQuantidades
-        if (window.workspaceQuantidades) {
-            return window.workspaceQuantidades.formatarPallet(pallet);
-        }
-        // Fallback final
-        if (!pallet) return '0 plt';
-        return `${parseFloat(pallet).toFixed(2)} plt`;
+        return window.Formatters.pallet(pallet);
     }
 
     toggleProdutosSeparacao(loteId) {
@@ -1172,12 +960,12 @@ class WorkspaceMontagem {
     // Método unificado de alteração de status
     async alterarStatusSeparacao(loteId, novoStatus) {
         console.log(`🔄 Alterando status de ${loteId} para ${novoStatus}`);
-        
+
         // Usar separacao-manager se disponível
         if (window.separacaoManager && typeof window.separacaoManager.alterarStatus === 'function') {
             return await window.separacaoManager.alterarStatus(loteId, novoStatus);
         }
-        
+
         // Fallback direto para API
         try {
             const response = await fetch(`/carteira/api/separacao/${loteId}/alterar-status`, {
@@ -1215,12 +1003,12 @@ class WorkspaceMontagem {
                     // Atualizar a página sem reload completo
                     this.atualizarWorkspace(loteId);
                 });
-                
+
                 // Tentar aplicar parciais HTML se disponíveis
                 try {
                     if (data.targets && window.separacaoManager && window.separacaoManager.applyTargets) {
                         await window.separacaoManager.applyTargets(data);
-                        
+
                         // Atualizar contadores se disponíveis
                         if (data.contadores && window.separacaoManager.atualizarContadores) {
                             window.separacaoManager.atualizarContadores(data.contadores);
@@ -1230,7 +1018,7 @@ class WorkspaceMontagem {
                     console.warn('Aviso: Não foi possível aplicar atualizações parciais:', applyError);
                     // Continua mesmo se falhar aplicar parciais
                 }
-                
+
                 // Atualizar workspace localmente sem reload
                 try {
                     await this.carregarDadosPedido(); // Recarregar dados
@@ -1255,7 +1043,7 @@ class WorkspaceMontagem {
 
         } catch (error) {
             console.error('Erro ao reverter separação:', error);
-            
+
             // Mostrar erro com Swal
             Swal.fire({
                 icon: 'error',
@@ -1265,16 +1053,9 @@ class WorkspaceMontagem {
             });
         }
     }
-    
+
     getCSRFToken() {
-        // Usar módulo centralizado se disponível
-        if (window.Security && window.Security.getCSRFToken) {
-            return window.Security.getCSRFToken();
-        }
-        
-        // Fallback simples
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute('content') : '';
+        return window.Security.getCSRFToken();
     }
 
     /**
@@ -1285,18 +1066,18 @@ class WorkspaceMontagem {
         console.log(`📅 Editando datas da separação ${loteId}`);
         this.editarDatas(loteId);
     }
-    
+
     // Manter por compatibilidade mas redirecionar
     editarDatasPreSeparacao(loteId) {
         console.log(`📅 Editando datas (compatível) ${loteId}`);
         this.editarDatas(loteId);
     }
-    
+
     // Método principal simplificado - busca dados e abre modal diretamente
     async editarDatas(loteId) {
         // 1. Buscar dados de qualquer fonte disponível
         let dadosAtuais = {};
-        
+
         // Tentar separações confirmadas
         const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
         if (separacao) {
@@ -1306,7 +1087,7 @@ class WorkspaceMontagem {
                 protocolo: separacao.protocolo || '',
                 agendamento_confirmado: separacao.agendamento_confirmado || false
             };
-        } 
+        }
         // Tentar pré-separações
         else {
             const preSep = this.preSeparacoes.get(loteId);
@@ -1319,7 +1100,7 @@ class WorkspaceMontagem {
                     protocolo: preSep.protocolo || '',
                     agendamento_confirmado: preSep.agendamento_confirmado || false
                 };
-            } 
+            }
             // Tentar buscar da API se necessário
             else {
                 try {
@@ -1340,11 +1121,11 @@ class WorkspaceMontagem {
                 }
             }
         }
-        
+
         // 2. Abrir modal diretamente com os dados
         this.abrirModalDatas(loteId, dadosAtuais);
     }
-    
+
     /**
      * 📅 ABRIR MODAL DE DATAS - SIMPLIFICADO
      * Método único para abrir o modal com os dados fornecidos
@@ -1359,7 +1140,7 @@ class WorkspaceMontagem {
             }
             return data;
         };
-        
+
         // Criar modal
         const modalHtml = `
             <div class="modal fade" id="modalEdicaoDatas" tabindex="-1">
@@ -1488,7 +1269,7 @@ class WorkspaceMontagem {
 
                 // Atualizar dados localmente sem recarregar a página
                 // Atualizar em TODAS as estruturas de dados para garantir consistência
-                
+
                 // 1. Atualizar preSeparacoes (se existir)
                 const loteData = this.preSeparacoes.get(loteId);
                 if (loteData) {
@@ -1500,7 +1281,7 @@ class WorkspaceMontagem {
                     loteData.protocolo = protocolo;
                     loteData.agendamento_confirmado = agendamentoConfirmado;
                 }
-                
+
                 // 2. Atualizar separacoesConfirmadas
                 const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
                 if (separacao) {
@@ -1509,7 +1290,7 @@ class WorkspaceMontagem {
                     separacao.protocolo = protocolo;
                     separacao.agendamento_confirmado = agendamentoConfirmado;
                 }
-                
+
                 // 3. Atualizar na carteira agrupada (se existir) - CRÍTICO para view compacta
                 if (window.carteiraAgrupada && window.carteiraAgrupada.separacoesPorPedido) {
                     for (const [pedido, separacoes] of window.carteiraAgrupada.separacoesPorPedido) {
@@ -1523,7 +1304,7 @@ class WorkspaceMontagem {
                         }
                     }
                 }
-                
+
                 // 4. Atualizar card visual
                 const card = document.querySelector(`.card[data-lote-id="${loteId}"]`);
                 if (card && this.loteManager) {
@@ -1534,12 +1315,12 @@ class WorkspaceMontagem {
                         loteData.agendamento = agendamento;
                         loteData.protocolo = protocolo;
                         loteData.agendamento_confirmado = agendamentoConfirmado;
-                        
+
                         // Re-renderizar o card inteiro para garantir consistência
                         this.loteManager.atualizarCardLote(loteId);
                     }
                 }
-                
+
                 // 5. Atualizar a view compacta (CORREÇÃO DO PROBLEMA PRINCIPAL)
                 this.atualizarViewCompactaDireto(loteId, expedicao, agendamento, protocolo, agendamentoConfirmado);
 
@@ -1579,23 +1360,23 @@ class WorkspaceMontagem {
     }
 
     // Função duplicada removida - usar a primeira implementação acima
-    
+
     async reverterAgendamentoLote(loteId, tipo) {
         try {
             console.log(`🔄 Revertendo confirmação do lote ${loteId} (${tipo})`);
-            
+
             // Usar sempre o endpoint unificado por lote_id
             const endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
-            
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': this.getCSRFToken()
                 }
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 this.mostrarToast('Confirmação de agendamento revertida!', 'success');
                 // Recarregar dados
@@ -1612,15 +1393,15 @@ class WorkspaceMontagem {
     // Funções do Portal
     async agendarNoPortal(loteId, dataAgendamento) {
         console.log(`📅 Agendando lote ${loteId} no portal`);
-        
+
         // Redirecionar para o modalSeparacoes se existir
         if (window.modalSeparacoes && typeof window.modalSeparacoes.agendarNoPortal === 'function') {
             return window.modalSeparacoes.agendarNoPortal(loteId, dataAgendamento);
         }
-        
+
         // Caso contrário, mostrar mensagem
         this.mostrarToast('Abrindo portal de agendamento...', 'info');
-        
+
         // Fazer requisição direta
         try {
             const response = await fetch('/portal/api/solicitar-agendamento-async', {
@@ -1636,9 +1417,9 @@ class WorkspaceMontagem {
                     data_agendamento: dataAgendamento || new Date().toISOString().split('T')[0]
                 })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.mostrarToast(`Agendamento realizado! Protocolo: ${data.protocolo || 'Aguardando'}`, 'success');
                 // Recarregar para mostrar o protocolo
@@ -1651,15 +1432,15 @@ class WorkspaceMontagem {
             this.mostrarToast('Erro ao comunicar com o portal', 'error');
         }
     }
-    
+
     async verificarPortal(loteId) {
         console.log(`🔍 Verificando lote ${loteId} no portal`);
-        
+
         // Redirecionar para o modalSeparacoes se existir
         if (window.modalSeparacoes && typeof window.modalSeparacoes.verificarPortal === 'function') {
             return window.modalSeparacoes.verificarPortal(loteId);
         }
-        
+
         // Caso contrário, abrir em nova aba
         window.open(`/portal/api/comparar-portal/${loteId}`, '_blank');
     }
@@ -1667,14 +1448,14 @@ class WorkspaceMontagem {
     async verificarProtocoloNoPortal(loteId, protocolo) {
         return window.PortalAgendamento.verificarProtocoloNoPortal(loteId, protocolo);
     }
-    
+
 
     mostrarToast(mensagem, tipo = 'info') {
         // Usar módulo centralizado se disponível
         if (window.Notifications && window.Notifications.toast) {
             return window.Notifications.toast(mensagem, tipo);
         }
-        
+
         // Fallback para SweetAlert2
         if (typeof Swal !== 'undefined') {
             Swal.fire({
@@ -1703,19 +1484,19 @@ class WorkspaceMontagem {
             console.log(`🚫 Pedido ${numPedido} foi filtrado, cancelando carregamento de estoque`);
             return;
         }
-        
+
         try {
             console.log(`📊 Carregando dados de estoque assincronamente para pedido ${numPedido}`);
-            
+
             // Mostrar loading
             const loadingSpinner = document.getElementById(`loading-produtos-${numPedido}`);
             if (loadingSpinner) {
                 loadingSpinner.style.display = 'inline-block';
             }
-            
+
             // Fazer requisição usando WorkspaceAPI
             const data = await this.api.buscarEstoqueAssincrono(numPedido);
-            
+
             // Atualizar dados locais com informações de estoque
             console.log('🔄 Atualizando dados de estoque assíncronos para', data.produtos.length, 'produtos');
             data.produtos.forEach(produto => {
@@ -1727,7 +1508,7 @@ class WorkspaceMontagem {
                         data_disponibilidade: produto.data_disponibilidade,
                         qtd_disponivel: produto.qtd_disponivel
                     });
-                    
+
                     // Mesclar dados de estoque com dados existentes (garantir que não sejam undefined)
                     Object.assign(dadosExistentes, {
                         // Campos principais de estoque
@@ -1736,11 +1517,11 @@ class WorkspaceMontagem {
                         menor_estoque_7d: produto.menor_estoque_7d || produto.menor_estoque_produto_d7 || 0,
                         producao_hoje: produto.producao_hoje || 0,
                         estoque_data_expedicao: produto.estoque_data_expedicao || produto.saldo_estoque_pedido || 0,
-                        
+
                         // IMPORTANTE: Adicionar campos de disponibilidade
                         data_disponibilidade: produto.data_disponibilidade || null,
                         qtd_disponivel: produto.qtd_disponivel || 0,
-                        
+
                         // Adicionar projeções D0-D28 se disponíveis
                         ...Object.fromEntries(
                             Object.entries(produto)
@@ -1750,7 +1531,7 @@ class WorkspaceMontagem {
                     });
                 }
             });
-            
+
             // 🆕 OPÇÃO 1: Atualizar apenas os valores nas células existentes (sem re-renderizar)
             // Isso evita o flicker e mantém a estrutura da tabela estável
             const tabelaBody = document.querySelector(`#tabela-produtos-container-${numPedido} tbody`);
@@ -1760,7 +1541,7 @@ class WorkspaceMontagem {
                     const row = tabelaBody.querySelector(`tr[data-produto="${produto.cod_produto}"]`);
                     if (row) {
                         // CORREÇÃO: Usar índices de células em vez de seletores de classe
-                        
+
                         // Atualizar célula de Est.Hoje (6ª coluna - cells[6])
                         const estoqueCell = row.cells[6];
                         if (estoqueCell) {
@@ -1772,7 +1553,7 @@ class WorkspaceMontagem {
                                 </span>
                             `;
                         }
-                        
+
                         // Atualizar célula de Est.Min.D+7 (7ª coluna - cells[7])
                         const menor7dCell = row.cells[7];
                         if (menor7dCell) {
@@ -1784,7 +1565,7 @@ class WorkspaceMontagem {
                                 </span>
                             `;
                         }
-                        
+
                         // Atualizar célula de Prod.Hoje (8ª coluna - cells[8])
                         const prodHojeCell = row.cells[8];
                         if (prodHojeCell) {
@@ -1796,7 +1577,7 @@ class WorkspaceMontagem {
                                 </span>
                             `;
                         }
-                        
+
                         // Atualizar célula de Disponível (9ª coluna - td:nth-child(10))
                         const disponibilidadeCell = row.cells[9]; // 10ª célula (index 9)
                         if (disponibilidadeCell) {
@@ -1805,9 +1586,9 @@ class WorkspaceMontagem {
                             const estoqueHoje = produto.estoque || produto.estoque_d0 || 0;
                             const dataDisponivel = produto.data_disponibilidade;
                             const qtdDisponivel = produto.qtd_disponivel || 0;
-                            
+
                             let statusDisponibilidade;
-                            
+
                             // Se tem estoque hoje suficiente
                             if (estoqueHoje >= qtdPedido) {
                                 statusDisponibilidade = {
@@ -1827,7 +1608,7 @@ class WorkspaceMontagem {
                                     const dia = String(dataFutura.getDate()).padStart(2, '0');
                                     const mes = String(dataFutura.getMonth() + 1).padStart(2, '0');
                                     const dataFormatada = `${dia}/${mes}`;
-                                    
+
                                     statusDisponibilidade = {
                                         class: 'bg-info text-white',
                                         texto: `${Math.floor(qtdDisponivel).toLocaleString('pt-BR')}`,
@@ -1857,7 +1638,7 @@ class WorkspaceMontagem {
                                     detalhes: 'Sem estoque'
                                 };
                             }
-                            
+
                             // Atualizar HTML da célula
                             disponibilidadeCell.innerHTML = `
                                 <span class="badge ${statusDisponibilidade.class}">
@@ -1866,7 +1647,7 @@ class WorkspaceMontagem {
                                 ${statusDisponibilidade.detalhes ? `<br><small class="text-muted">${statusDisponibilidade.detalhes}</small>` : ''}
                             `;
                         }
-                        
+
                         // Atualizar ícone de ruptura se existir
                         const rupturaIcon = row.querySelector('.ruptura-icon');
                         if (rupturaIcon && produto.dia_ruptura) {
@@ -1874,18 +1655,18 @@ class WorkspaceMontagem {
                         }
                     }
                 });
-                
+
                 // Não precisa re-configurar checkboxes pois a estrutura não mudou
                 console.log('✅ Valores de estoque atualizados sem re-renderizar');
             }
-            
+
             // Esconder loading
             if (loadingSpinner) {
                 loadingSpinner.style.display = 'none';
             }
-            
+
             console.log(`✅ Dados de estoque carregados para ${data.produtos.length} produtos`);
-            
+
         } catch (error) {
             // 🆕 Ignorar erro de abort (cancelamento)
             if (error.name === 'AbortError') {
@@ -1897,15 +1678,15 @@ class WorkspaceMontagem {
                 console.log(`✔️ Carregamento de estoque cancelado para pedido ${numPedido}`);
                 return;
             }
-            
+
             console.error(`❌ Erro ao carregar dados de estoque:`, error);
-            
+
             // Esconder loading em caso de erro
             const loadingSpinner = document.getElementById(`loading-produtos-${numPedido}`);
             if (loadingSpinner) {
                 loadingSpinner.style.display = 'none';
             }
-            
+
             // Mostrar mensagem de erro inline (não bloquear a interface)
             const container = document.getElementById(`tabela-produtos-container-${numPedido}`);
             if (container) {
@@ -1920,7 +1701,7 @@ class WorkspaceMontagem {
             }
         }
     }
-    
+
     // Método para atualizar diretamente a view compacta sem re-renderizar
     atualizarViewCompactaDireto(loteId, expedicao, agendamento, protocolo, agendamentoConfirmado) {
         console.log(`🔄 Atualizando view compacta para lote ${loteId}`);
@@ -1945,13 +1726,13 @@ class WorkspaceMontagem {
                 if (linhaCompacta) break;
             }
         }
-        
+
         if (linhaCompacta) {
             console.log(`✅ Encontrou linha compacta:`, linhaCompacta);
-            
+
             // Buscar células da linha
             const celulas = linhaCompacta.querySelectorAll('td');
-            
+
             // Usar seletores data-field para melhor confiabilidade
             // Atualizar coluna Expedição
             const celulaExpedicao = linhaCompacta.querySelector('td[data-field="expedicao"]');
@@ -2004,7 +1785,7 @@ class WorkspaceMontagem {
                     celulas[8].innerHTML = '<span class="badge bg-secondary">-</span>';
                 }
             }
-            
+
             // Atualizar também o botão de Datas se existir para passar os novos valores
             const botaoDatas = linhaCompacta.querySelector('button[onclick*="abrirModalDatas"]');
             if (botaoDatas) {
@@ -2015,7 +1796,7 @@ class WorkspaceMontagem {
         } else {
             console.warn(`⚠️ Não encontrou linha compacta para lote ${loteId}`);
         }
-        
+
         // Atualizar também no carteiraAgrupada se existir
         if (window.carteiraAgrupada) {
             // Atualizar dadosAgrupados
