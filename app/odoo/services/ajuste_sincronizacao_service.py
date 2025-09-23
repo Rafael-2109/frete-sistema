@@ -200,66 +200,171 @@ class AjusteSincronizacaoService:
         cls, num_pedido: str, lote_id: str, status_lote: str, itens_odoo: List[Dict]
     ) -> Dict:
         """
-        Processa separação TOTAL - substituição completa.
+        Processa separação TOTAL - atualização completa SEM DELETAR.
+
+        REGRAS:
+        1. NUNCA deletar todas as separações
+        2. Atualizar quantidades dos produtos existentes
+        3. Adicionar produtos novos preservando dados do lote
+        4. Remover apenas produtos que zeraram (não vieram do Odoo)
         """
         resultado = {"alteracoes": [], "alertas": [], "erros": []}
 
         try:
-            # IMPORTANTE: Se COTADO, capturar dados ANTES de substituir
+            # Buscar todas as separações existentes do lote
+            separacoes_existentes = Separacao.query.filter_by(
+                separacao_lote_id=lote_id,
+                num_pedido=num_pedido,
+                sincronizado_nf=False
+            ).all()
+
+            # Criar índice por cod_produto para acesso rápido
+            separacoes_por_produto = {sep.cod_produto: sep for sep in separacoes_existentes}
+
+            # Dados para preservar de uma separação exemplo (para novos produtos)
+            dados_lote_preservar = None
+            if separacoes_existentes:
+                primeira_sep = separacoes_existentes[0]
+                dados_lote_preservar = {
+                    'cnpj_cpf': primeira_sep.cnpj_cpf,
+                    'raz_social_red': primeira_sep.raz_social_red,
+                    'nome_cidade': primeira_sep.nome_cidade,
+                    'cod_uf': primeira_sep.cod_uf,
+                    'data_pedido': primeira_sep.data_pedido,
+                    'expedicao': primeira_sep.expedicao,
+                    'agendamento': primeira_sep.agendamento,
+                    'protocolo': primeira_sep.protocolo,
+                    'observ_ped_1': primeira_sep.observ_ped_1,
+                    'rota': primeira_sep.rota,
+                    'sub_rota': primeira_sep.sub_rota,
+                    'roteirizacao': primeira_sep.roteirizacao
+                }
+
+            # IMPORTANTE: Se COTADO, capturar dados ANTES de atualizar
             itens_antigos = {}
             if status_lote == "COTADO":
-                separacoes_antigas = Separacao.query.filter_by(
-                    separacao_lote_id=lote_id, num_pedido=num_pedido, sincronizado_nf=False
-                ).all()
+                for sep in separacoes_existentes:
+                    itens_antigos[sep.cod_produto] = {
+                        "qtd": float(sep.qtd_saldo or 0),
+                        "nome": sep.nome_produto
+                    }
+                logger.info(f"📸 Capturados {len(itens_antigos)} itens ANTES da atualização TOTAL (COTADO)")
 
-                for sep in separacoes_antigas:
-                    itens_antigos[sep.cod_produto] = {"qtd": float(sep.qtd_saldo or 0), "nome": sep.nome_produto}
-                logger.info(f"📸 Capturados {len(itens_antigos)} itens ANTES da substituição TOTAL (COTADO)")
+            # Buscar dados de palletização uma vez só
+            from app.producao.models import CadastroPalletizacao
+            produtos_unicos = {item["cod_produto"] for item in itens_odoo}
+            palletizacoes = {p.cod_produto: p for p in CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.cod_produto.in_(list(produtos_unicos))
+            ).all()}
 
-            # Deletar todos os itens existentes (não sincronizados)
-            Separacao.query.filter_by(separacao_lote_id=lote_id, num_pedido=num_pedido, sincronizado_nf=False).delete(
-                synchronize_session=False
-            )
+            # Controlar produtos processados do Odoo
+            produtos_processados = set()
 
-            logger.info(f"🗑️ Removidos itens antigos do lote {lote_id}")
-
-            # Inserir novos itens com quantidades do Odoo
+            # Processar cada item do Odoo
             for item_odoo in itens_odoo:
-                # Fallback para campos obrigatórios
-                cod_uf = item_odoo.get("estado", "")
-                if not cod_uf:
-                    cod_uf = item_odoo.get("cod_uf", "")
-                if not cod_uf:
-                    cod_uf = "SP"  # Fallback padrão para São Paulo
-                    logger.warning(f"⚠️ Usando fallback cod_uf='SP' para pedido {num_pedido}")
+                cod_produto = item_odoo["cod_produto"]
+                produtos_processados.add(cod_produto)
+                qtd_saldo = float(item_odoo["qtd_saldo_produto_pedido"])
 
-                nome_cidade = item_odoo.get("municipio", "")
-                if not nome_cidade:
-                    nome_cidade = item_odoo.get("nome_cidade", "")
-                if not nome_cidade:
-                    nome_cidade = "São Paulo"  # Fallback padrão
-                    logger.warning(f"⚠️ Usando fallback nome_cidade='São Paulo' para pedido {num_pedido}")
+                # Calcular peso e pallet
+                palletizacao = palletizacoes.get(cod_produto)
+                peso_calculado = 0
+                pallet_calculado = 0
 
-                nova_sep = Separacao(
-                    separacao_lote_id=lote_id,
-                    num_pedido=num_pedido,
-                    cod_produto=item_odoo["cod_produto"],
-                    nome_produto=item_odoo.get("nome_produto", ""),
-                    qtd_saldo=item_odoo["qtd_saldo_produto_pedido"],  # Já calculado
-                    valor_saldo=item_odoo.get("preco_produto_pedido", 0) * item_odoo["qtd_saldo_produto_pedido"],
-                    cnpj_cpf=item_odoo.get("cnpj_cpf", ""),
-                    raz_social_red=item_odoo.get("raz_social_red", ""),
-                    nome_cidade=nome_cidade,  # Campo obrigatório com fallback
-                    cod_uf=cod_uf,  # Campo obrigatório com fallback
-                    expedicao=item_odoo.get("expedicao"),
-                    agendamento=item_odoo.get("agendamento"),
-                    protocolo=item_odoo.get("protocolo"),
-                    status=status_lote,  # Mantém o status original
-                    sincronizado_nf=False,
-                    tipo_envio="total",
-                )
-                db.session.add(nova_sep)
-                logger.info(f"➕ Adicionado {item_odoo['cod_produto']} com qtd {item_odoo['qtd_saldo_produto_pedido']}")
+                if palletizacao:
+                    peso_calculado = qtd_saldo * float(palletizacao.peso_bruto or 1.0)
+                    if palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                        pallet_calculado = qtd_saldo / float(palletizacao.palletizacao)
+                else:
+                    peso_calculado = qtd_saldo  # Assumir peso 1:1
+                    logger.debug(f"⚠️ Palletização não encontrada para {cod_produto}")
+
+                # Verificar se produto já existe na separação
+                if cod_produto in separacoes_por_produto:
+                    # ATUALIZAR separação existente
+                    sep_existente = separacoes_por_produto[cod_produto]
+
+                    # Atualizar apenas campos que mudam com a quantidade
+                    sep_existente.qtd_saldo = qtd_saldo
+                    sep_existente.valor_saldo = item_odoo.get("preco_produto_pedido", 0) * qtd_saldo
+                    sep_existente.peso = peso_calculado
+                    sep_existente.pallet = pallet_calculado
+
+                    # Atualizar datas se vieram do Odoo (mas preservar se não vieram)
+                    if item_odoo.get("expedicao"):
+                        sep_existente.expedicao = item_odoo["expedicao"]
+                    if item_odoo.get("agendamento"):
+                        sep_existente.agendamento = item_odoo["agendamento"]
+                    if item_odoo.get("protocolo"):
+                        sep_existente.protocolo = item_odoo["protocolo"]
+
+                    logger.info(f"✏️ Atualizado {cod_produto}: qtd {qtd_saldo:.2f}, peso {peso_calculado:.2f}, pallet {pallet_calculado:.2f}")
+
+                else:
+                    # ADICIONAR novo produto à separação
+                    # Usar dados preservados do lote ou do item_odoo
+                    if dados_lote_preservar:
+                        # Preferir dados do lote existente
+                        cnpj_cpf = dados_lote_preservar['cnpj_cpf']
+                        raz_social_red = dados_lote_preservar['raz_social_red']
+                        nome_cidade = dados_lote_preservar['nome_cidade']
+                        cod_uf = dados_lote_preservar['cod_uf']
+                        data_pedido = dados_lote_preservar['data_pedido']
+                        expedicao = item_odoo.get("expedicao") or dados_lote_preservar['expedicao']
+                        agendamento = item_odoo.get("agendamento") or dados_lote_preservar['agendamento']
+                        protocolo = item_odoo.get("protocolo") or dados_lote_preservar['protocolo']
+                        observ_ped_1 = item_odoo.get("observ_ped_1") or dados_lote_preservar['observ_ped_1']
+                        rota = dados_lote_preservar['rota']
+                        sub_rota = dados_lote_preservar['sub_rota']
+                        roteirizacao = dados_lote_preservar['roteirizacao']
+                    else:
+                        # Fallback se não há dados para preservar
+                        cnpj_cpf = item_odoo.get("cnpj_cpf", "")
+                        raz_social_red = item_odoo.get("raz_social_red", "")
+                        nome_cidade = item_odoo.get("municipio") or item_odoo.get("nome_cidade") or "São Paulo"
+                        cod_uf = item_odoo.get("estado") or item_odoo.get("cod_uf") or "SP"
+                        data_pedido = item_odoo.get("data_pedido")
+                        expedicao = item_odoo.get("expedicao")
+                        agendamento = item_odoo.get("agendamento")
+                        protocolo = item_odoo.get("protocolo")
+                        observ_ped_1 = item_odoo.get("observ_ped_1")
+                        rota = None
+                        sub_rota = None
+                        roteirizacao = None
+
+                    nova_sep = Separacao(
+                        separacao_lote_id=lote_id,
+                        num_pedido=num_pedido,
+                        cod_produto=cod_produto,
+                        nome_produto=item_odoo.get("nome_produto", ""),
+                        qtd_saldo=qtd_saldo,
+                        valor_saldo=item_odoo.get("preco_produto_pedido", 0) * qtd_saldo,
+                        peso=peso_calculado,
+                        pallet=pallet_calculado,
+                        cnpj_cpf=cnpj_cpf,
+                        raz_social_red=raz_social_red,
+                        nome_cidade=nome_cidade,
+                        cod_uf=cod_uf,
+                        data_pedido=data_pedido,
+                        expedicao=expedicao,
+                        agendamento=agendamento,
+                        protocolo=protocolo,
+                        observ_ped_1=observ_ped_1,
+                        rota=rota,
+                        sub_rota=sub_rota,
+                        roteirizacao=roteirizacao,
+                        status=status_lote,
+                        sincronizado_nf=False,
+                        tipo_envio="total",
+                    )
+                    db.session.add(nova_sep)
+                    logger.info(f"➕ Adicionado novo produto {cod_produto} com qtd {qtd_saldo:.2f}, peso {peso_calculado:.2f}, pallet {pallet_calculado:.2f}")
+
+            # REMOVER produtos que não vieram do Odoo (qtd zerou)
+            for cod_produto, sep_existente in separacoes_por_produto.items():
+                if cod_produto not in produtos_processados:
+                    db.session.delete(sep_existente)
+                    logger.info(f"🗑️ Removido produto {cod_produto} (não está mais no pedido)")
 
             resultado["alteracoes"].append({"tipo": "SUBSTITUICAO_TOTAL", "lote_id": lote_id, "itens": len(itens_odoo)})
 
@@ -492,13 +597,13 @@ class AjusteSincronizacaoService:
     @classmethod
     def _aplicar_aumento(cls, num_pedido: str, lote_id: str, aumento: Dict):
         """
-        Aplica aumento - sempre cria nova separação com status PREVISAO ou aumenta existente.
+        Aplica aumento preservando dados e recalculando peso/pallet.
         """
         cod_produto = aumento["cod_produto"]
         qtd_aumentar = aumento["qtd_aumentar"]
 
-        # Verificar se já existe separação PREVISAO para este produto
-        sep_previsao = Separacao.query.filter_by(
+        # Verificar se já existe separação ABERTO para este produto
+        sep_existente = Separacao.query.filter_by(
             separacao_lote_id=lote_id,
             num_pedido=num_pedido,
             cod_produto=cod_produto,
@@ -506,64 +611,185 @@ class AjusteSincronizacaoService:
             sincronizado_nf=False,
         ).first()
 
-        if sep_previsao:
-            # Aumentar quantidade existente
-            sep_previsao.qtd_saldo = float(sep_previsao.qtd_saldo or 0) + qtd_aumentar
-            logger.info(f"📈 Aumentado {qtd_aumentar} em PREVISAO existente para {cod_produto}")
-        else:
-            # Criar nova separação PREVISAO
-            # Buscar dados do produto nos itens do Odoo
-            item_odoo = next((i for i in aumento.get("itens_odoo", []) if i["cod_produto"] == cod_produto), {})
+        # Buscar palletização para recalcular
+        from app.producao.models import CadastroPalletizacao
+        palletizacao = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_produto
+        ).first()
 
-            # Buscar dados básicos do item_odoo se disponível
-            nome_cidade = item_odoo.get("municipio", "") or item_odoo.get("nome_cidade", "") or "São Paulo"
-            cod_uf = item_odoo.get("estado", "") or item_odoo.get("cod_uf", "") or "SP"
+        if sep_existente:
+            # Aumentar quantidade existente e recalcular peso/pallet
+            nova_qtd = float(sep_existente.qtd_saldo or 0) + qtd_aumentar
+            sep_existente.qtd_saldo = nova_qtd
+
+            # Recalcular peso e pallet com nova quantidade
+            if palletizacao:
+                sep_existente.peso = nova_qtd * float(palletizacao.peso_bruto or 1.0)
+                if palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                    sep_existente.pallet = nova_qtd / float(palletizacao.palletizacao)
+            else:
+                sep_existente.peso = nova_qtd
+
+            logger.info(f"📈 Aumentado {qtd_aumentar} em separação existente para {cod_produto} (nova qtd: {nova_qtd:.2f})")
+        else:
+            # Criar nova separação preservando dados do lote
+            sep_exemplo = Separacao.query.filter_by(
+                separacao_lote_id=lote_id,
+                num_pedido=num_pedido,
+                sincronizado_nf=False
+            ).first()
+
+            # Calcular peso e pallet
+            peso_calculado = 0
+            pallet_calculado = 0
+            if palletizacao:
+                peso_calculado = qtd_aumentar * float(palletizacao.peso_bruto or 1.0)
+                if palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                    pallet_calculado = qtd_aumentar / float(palletizacao.palletizacao)
+            else:
+                peso_calculado = qtd_aumentar
+
+            if sep_exemplo:
+                # Copiar dados do lote
+                nova_sep = Separacao(
+                    separacao_lote_id=lote_id,
+                    num_pedido=num_pedido,
+                    cod_produto=cod_produto,
+                    qtd_saldo=qtd_aumentar,
+                    peso=peso_calculado,
+                    pallet=pallet_calculado,
+                    # Copiar todos os dados do exemplo
+                    nome_produto=sep_exemplo.nome_produto,
+                    valor_saldo=(sep_exemplo.valor_saldo / sep_exemplo.qtd_saldo * qtd_aumentar) if sep_exemplo.qtd_saldo else 0,
+                    cnpj_cpf=sep_exemplo.cnpj_cpf,
+                    raz_social_red=sep_exemplo.raz_social_red,
+                    nome_cidade=sep_exemplo.nome_cidade,
+                    cod_uf=sep_exemplo.cod_uf,
+                    data_pedido=sep_exemplo.data_pedido,
+                    expedicao=sep_exemplo.expedicao,
+                    agendamento=sep_exemplo.agendamento,
+                    protocolo=sep_exemplo.protocolo,
+                    observ_ped_1=sep_exemplo.observ_ped_1,
+                    rota=sep_exemplo.rota,
+                    sub_rota=sep_exemplo.sub_rota,
+                    roteirizacao=sep_exemplo.roteirizacao,
+                    status="ABERTO",
+                    sincronizado_nf=False,
+                    tipo_envio="parcial",
+                )
+            else:
+                # Fallback mínimo se não há exemplo
+                item_odoo = next((i for i in aumento.get("itens_odoo", []) if i["cod_produto"] == cod_produto), {})
+                nome_cidade = item_odoo.get("municipio", "") or item_odoo.get("nome_cidade", "") or "São Paulo"
+                cod_uf = item_odoo.get("estado", "") or item_odoo.get("cod_uf", "") or "SP"
+
+                nova_sep = Separacao(
+                    separacao_lote_id=lote_id,
+                    num_pedido=num_pedido,
+                    cod_produto=cod_produto,
+                    qtd_saldo=qtd_aumentar,
+                    peso=peso_calculado,
+                    pallet=pallet_calculado,
+                    nome_cidade=nome_cidade,
+                    cod_uf=cod_uf,
+                    status="ABERTO",
+                    sincronizado_nf=False,
+                    tipo_envio="parcial",
+                )
+
+            db.session.add(nova_sep)
+            logger.info(f"📈 Criada nova separação com {qtd_aumentar:.2f} para {cod_produto} (peso: {peso_calculado:.2f}, pallet: {pallet_calculado:.2f})")
+
+    @classmethod
+    def _adicionar_novo_item(cls, num_pedido: str, lote_id: str, novo_item: Dict):
+        """
+        Adiciona novo item preservando dados do lote existente.
+        """
+        dados = novo_item.get("dados_completos", {})
+        cod_produto = novo_item["cod_produto"]
+        quantidade = novo_item["quantidade"]
+
+        # Buscar uma separação existente do mesmo lote para copiar dados
+        sep_exemplo = Separacao.query.filter_by(
+            separacao_lote_id=lote_id,
+            num_pedido=num_pedido,
+            sincronizado_nf=False
+        ).first()
+
+        # Buscar palletização para calcular peso e pallet
+        from app.producao.models import CadastroPalletizacao
+        palletizacao = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_produto
+        ).first()
+
+        peso_calculado = 0
+        pallet_calculado = 0
+
+        if palletizacao:
+            peso_calculado = float(quantidade) * float(palletizacao.peso_bruto or 1.0)
+            if palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                pallet_calculado = float(quantidade) / float(palletizacao.palletizacao)
+        else:
+            peso_calculado = float(quantidade)  # Assumir peso 1:1
+
+        # Preservar dados do lote se existir separação exemplo
+        if sep_exemplo:
+            nova_sep = Separacao(
+                separacao_lote_id=lote_id,
+                num_pedido=num_pedido,
+                cod_produto=cod_produto,
+                nome_produto=dados.get("nome_produto", ""),
+                qtd_saldo=quantidade,
+                valor_saldo=dados.get("preco_produto_pedido", 0) * quantidade,
+                peso=peso_calculado,
+                pallet=pallet_calculado,
+                # Copiar dados do lote
+                cnpj_cpf=sep_exemplo.cnpj_cpf,
+                raz_social_red=sep_exemplo.raz_social_red,
+                nome_cidade=sep_exemplo.nome_cidade,
+                cod_uf=sep_exemplo.cod_uf,
+                data_pedido=sep_exemplo.data_pedido,
+                expedicao=dados.get("expedicao") or sep_exemplo.expedicao,
+                agendamento=dados.get("agendamento") or sep_exemplo.agendamento,
+                protocolo=dados.get("protocolo") or sep_exemplo.protocolo,
+                observ_ped_1=sep_exemplo.observ_ped_1,
+                rota=sep_exemplo.rota,
+                sub_rota=sep_exemplo.sub_rota,
+                roteirizacao=sep_exemplo.roteirizacao,
+                status="ABERTO",
+                sincronizado_nf=False,
+                tipo_envio="parcial",
+            )
+        else:
+            # Fallback se não houver exemplo
+            cod_uf = dados.get("estado", "") or dados.get("cod_uf", "") or "SP"
+            nome_cidade = dados.get("municipio", "") or dados.get("nome_cidade", "") or "São Paulo"
 
             nova_sep = Separacao(
                 separacao_lote_id=lote_id,
                 num_pedido=num_pedido,
                 cod_produto=cod_produto,
-                qtd_saldo=qtd_aumentar,
-                nome_cidade=nome_cidade,  # Campo obrigatório com fallback
-                cod_uf=cod_uf,  # Campo obrigatório com fallback
+                nome_produto=dados.get("nome_produto", ""),
+                qtd_saldo=quantidade,
+                valor_saldo=dados.get("preco_produto_pedido", 0) * quantidade,
+                peso=peso_calculado,
+                pallet=pallet_calculado,
+                cnpj_cpf=dados.get("cnpj_cpf", ""),
+                raz_social_red=dados.get("raz_social_red", ""),
+                nome_cidade=nome_cidade,
+                cod_uf=cod_uf,
+                data_pedido=dados.get("data_pedido"),
+                expedicao=dados.get("expedicao"),
+                agendamento=dados.get("agendamento"),
+                protocolo=dados.get("protocolo"),
+                observ_ped_1=dados.get("observ_ped_1"),
                 status="ABERTO",
                 sincronizado_nf=False,
                 tipo_envio="parcial",
             )
-            db.session.add(nova_sep)
-            logger.info(f"📈 Criada nova PREVISAO com {qtd_aumentar} para {cod_produto}")
 
-    @classmethod
-    def _adicionar_novo_item(cls, num_pedido: str, lote_id: str, novo_item: Dict):
-        """
-        Adiciona novo item como PREVISAO.
-        """
-        dados = novo_item.get("dados_completos", {})
-
-        # Fallback para campos obrigatórios
-        cod_uf = dados.get("estado", "") or dados.get("cod_uf", "") or "SP"
-        nome_cidade = dados.get("municipio", "") or dados.get("nome_cidade", "") or "São Paulo"
-
-        nova_sep = Separacao(
-            separacao_lote_id=lote_id,
-            num_pedido=num_pedido,
-            cod_produto=novo_item["cod_produto"],
-            nome_produto=dados.get("nome_produto", ""),
-            qtd_saldo=novo_item["quantidade"],
-            valor_saldo=dados.get("preco_produto_pedido", 0) * novo_item["quantidade"],
-            cnpj_cpf=dados.get("cnpj_cpf", ""),
-            raz_social_red=dados.get("raz_social_red", ""),
-            nome_cidade=nome_cidade,  # Campo obrigatório com fallback
-            cod_uf=cod_uf,  # Campo obrigatório com fallback
-            expedicao=dados.get("expedicao"),
-            agendamento=dados.get("agendamento"),
-            protocolo=dados.get("protocolo"),
-            status="ABERTO",
-            sincronizado_nf=False,
-            tipo_envio="parcial",
-        )
         db.session.add(nova_sep)
-        logger.info(f"➕ Novo item {novo_item['cod_produto']} adicionado como PREVISAO")
+        logger.info(f"➕ Novo item {cod_produto} adicionado com peso {peso_calculado:.2f} e pallet {pallet_calculado:.2f}")
 
     @classmethod
     def _gerar_alerta_cotado(

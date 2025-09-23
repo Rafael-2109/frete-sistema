@@ -8,13 +8,13 @@ import os
 from .cors import cors_enabled
 from app import db
 from app.pedidos.models import Pedido
-from app.faturamento.models import RelatorioFaturamentoImportado
-from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
+from app.faturamento.models import FaturamentoProduto
+from app.monitoramento.models import EntregaMonitorada
 from app.embarques.models import Embarque
 from app.fretes.models import Frete
 from app.portaria.models import ControlePortaria
 from app.transportadoras.models import Transportadora
-from sqlalchemy import and_, desc, func
+from sqlalchemy import desc
 
 # Definir o blueprint seguindo o padrão do sistema
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -197,7 +197,8 @@ def api_consultar_cliente_detalhado(cliente_nome):
             
             # Buscar faturamento se tem NF
             if pedido.nf and pedido.nf.strip():
-                faturamento = RelatorioFaturamentoImportado.query.filter_by(
+                faturamento = FaturamentoProduto.query.filter_by(
+                    FaturamentoProduto.status_nf != 'Cancelado',
                     numero_nf=pedido.nf
                 ).first()
                 

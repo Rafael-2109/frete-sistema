@@ -11,7 +11,7 @@ from app.embarques.models import Embarque
 from app.pedidos.models import Pedido
 from app.fretes.models import Frete
 from app.monitoramento.models import EntregaMonitorada
-from app.faturamento.models import RelatorioFaturamentoImportado
+from app.faturamento.models import FaturamentoProduto
 from app.transportadoras.models import Transportadora
 from app.portaria.models import ControlePortaria
 
@@ -156,7 +156,8 @@ class APIDataHelper:
                 
                 # Buscar faturamento se tem NF
                 if pedido.nf and pedido.nf.strip():
-                    faturamento = RelatorioFaturamentoImportado.query.filter_by(
+                    faturamento = FaturamentoProduto.query.filter_by(
+                        FaturamentoProduto.status_nf != 'Cancelado',
                         numero_nf=pedido.nf
                     ).first()
                     
