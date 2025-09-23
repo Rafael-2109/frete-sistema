@@ -508,6 +508,9 @@
                                         <button type="submit" class="btn btn-dark-primary">
                                             <i class="fas fa-search"></i> Buscar
                                         </button>
+                                        <button type="button" class="btn btn-success" onclick="exportarExcel()">
+                                            <i class="fas fa-file-excel"></i> Exportar Excel
+                                        </button>
                                     </div>
                                 </div>
                             </form>
@@ -683,6 +686,18 @@
         url += '&vendedor={{ vendedor_filtro }}';
         {% endif %}
         window.location.href = url;
+    }
+
+    // Função para exportar para Excel
+    function exportarExcel() {
+        // Capturar todos os parâmetros do filtro atual
+        const params = new URLSearchParams(window.location.search);
+
+        // Criar URL para exportação com os mesmos filtros
+        const exportUrl = '{{ url_for("comercial.exportar_clientes_excel") }}?' + params.toString();
+
+        // Abrir em nova janela para iniciar download
+        window.open(exportUrl, '_blank');
     }
 
     // Função para ver pedidos do cliente

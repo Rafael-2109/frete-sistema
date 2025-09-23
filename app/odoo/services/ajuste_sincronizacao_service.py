@@ -225,6 +225,21 @@ class AjusteSincronizacaoService:
 
             # Inserir novos itens com quantidades do Odoo
             for item_odoo in itens_odoo:
+                # Fallback para campos obrigatórios
+                cod_uf = item_odoo.get("estado", "")
+                if not cod_uf:
+                    cod_uf = item_odoo.get("cod_uf", "")
+                if not cod_uf:
+                    cod_uf = "SP"  # Fallback padrão para São Paulo
+                    logger.warning(f"⚠️ Usando fallback cod_uf='SP' para pedido {num_pedido}")
+
+                nome_cidade = item_odoo.get("municipio", "")
+                if not nome_cidade:
+                    nome_cidade = item_odoo.get("nome_cidade", "")
+                if not nome_cidade:
+                    nome_cidade = "São Paulo"  # Fallback padrão
+                    logger.warning(f"⚠️ Usando fallback nome_cidade='São Paulo' para pedido {num_pedido}")
+
                 nova_sep = Separacao(
                     separacao_lote_id=lote_id,
                     num_pedido=num_pedido,
@@ -234,6 +249,8 @@ class AjusteSincronizacaoService:
                     valor_saldo=item_odoo.get("preco_produto_pedido", 0) * item_odoo["qtd_saldo_produto_pedido"],
                     cnpj_cpf=item_odoo.get("cnpj_cpf", ""),
                     raz_social_red=item_odoo.get("raz_social_red", ""),
+                    nome_cidade=nome_cidade,  # Campo obrigatório com fallback
+                    cod_uf=cod_uf,  # Campo obrigatório com fallback
                     expedicao=item_odoo.get("expedicao"),
                     agendamento=item_odoo.get("agendamento"),
                     protocolo=item_odoo.get("protocolo"),
@@ -485,7 +502,7 @@ class AjusteSincronizacaoService:
             separacao_lote_id=lote_id,
             num_pedido=num_pedido,
             cod_produto=cod_produto,
-            status="PREVISAO",
+            status="ABERTO",
             sincronizado_nf=False,
         ).first()
 
@@ -498,12 +515,18 @@ class AjusteSincronizacaoService:
             # Buscar dados do produto nos itens do Odoo
             item_odoo = next((i for i in aumento.get("itens_odoo", []) if i["cod_produto"] == cod_produto), {})
 
+            # Buscar dados básicos do item_odoo se disponível
+            nome_cidade = item_odoo.get("municipio", "") or item_odoo.get("nome_cidade", "") or "São Paulo"
+            cod_uf = item_odoo.get("estado", "") or item_odoo.get("cod_uf", "") or "SP"
+
             nova_sep = Separacao(
                 separacao_lote_id=lote_id,
                 num_pedido=num_pedido,
                 cod_produto=cod_produto,
                 qtd_saldo=qtd_aumentar,
-                status="PREVISAO",
+                nome_cidade=nome_cidade,  # Campo obrigatório com fallback
+                cod_uf=cod_uf,  # Campo obrigatório com fallback
+                status="ABERTO",
                 sincronizado_nf=False,
                 tipo_envio="parcial",
             )
@@ -517,6 +540,10 @@ class AjusteSincronizacaoService:
         """
         dados = novo_item.get("dados_completos", {})
 
+        # Fallback para campos obrigatórios
+        cod_uf = dados.get("estado", "") or dados.get("cod_uf", "") or "SP"
+        nome_cidade = dados.get("municipio", "") or dados.get("nome_cidade", "") or "São Paulo"
+
         nova_sep = Separacao(
             separacao_lote_id=lote_id,
             num_pedido=num_pedido,
@@ -526,10 +553,12 @@ class AjusteSincronizacaoService:
             valor_saldo=dados.get("preco_produto_pedido", 0) * novo_item["quantidade"],
             cnpj_cpf=dados.get("cnpj_cpf", ""),
             raz_social_red=dados.get("raz_social_red", ""),
+            nome_cidade=nome_cidade,  # Campo obrigatório com fallback
+            cod_uf=cod_uf,  # Campo obrigatório com fallback
             expedicao=dados.get("expedicao"),
             agendamento=dados.get("agendamento"),
             protocolo=dados.get("protocolo"),
-            status="PREVISAO",
+            status="ABERTO",
             sincronizado_nf=False,
             tipo_envio="parcial",
         )

@@ -22,6 +22,10 @@ main_bp = Blueprint('main', __name__)
 @login_required
 def dashboard():
     """Dashboard principal com dados da API"""
+    # Verifica se o usuário é vendedor e redireciona para o dashboard comercial
+    if current_user.perfil == 'vendedor':
+        return redirect(url_for('comercial.dashboard_diretoria'))
+
     try:
         # Usa o API Helper para obter estatísticas
         stats_data = get_dashboard_stats()

@@ -149,6 +149,13 @@ def api_justificar_faturamento_parcial(id):
         
         # Se classificação é RETORNA_CARTEIRA, criar nova separação
         if justificativa.classificacao_saldo == 'RETORNA_CARTEIRA':
+            # Buscar dados da carteira para preencher campos obrigatórios
+            from app.carteira.models import CarteiraPrincipal
+            item_carteira = CarteiraPrincipal.query.filter_by(
+                num_pedido=justificativa.num_pedido,
+                cod_produto=justificativa.cod_produto
+            ).first()
+
             # Criar nova separação com status PREVISAO
             nova_sep = Separacao()
             nova_sep.separacao_lote_id = f"RETORNO_{justificativa.separacao_lote_id}"
@@ -157,6 +164,18 @@ def api_justificar_faturamento_parcial(id):
             nova_sep.qtd_saldo = justificativa.qtd_saldo
             nova_sep.status = 'PREVISAO'
             nova_sep.observ_ped_1 = f"Retorno de faturamento parcial - NF {justificativa.numero_nf}"
+
+            # Campos obrigatórios com fallback
+            if item_carteira:
+                nova_sep.nome_cidade = item_carteira.municipio or item_carteira.nome_cidade or "São Paulo"
+                nova_sep.cod_uf = item_carteira.estado or item_carteira.cod_uf or "SP"
+                nova_sep.cnpj_cpf = item_carteira.cnpj_cpf
+                nova_sep.raz_social_red = item_carteira.raz_social_red
+            else:
+                # Fallback se não encontrar na carteira
+                nova_sep.nome_cidade = "São Paulo"
+                nova_sep.cod_uf = "SP"
+                logger.warning(f"⚠️ Usando fallback de localização para retorno de faturamento parcial: {justificativa.num_pedido}/{justificativa.cod_produto}")
             nova_sep.sincronizado_nf = False
             db.session.add(nova_sep)
             

@@ -25,8 +25,14 @@ def login():
                 # ✅ CORREÇÃO: Configura sessão permanente (4 horas)
                 session.permanent = True
                 login_user(usuario, remember=True)
-                
-                return redirect(url_for('main.dashboard'))
+
+                # Redirecionamento baseado no perfil do usuário
+                if usuario.perfil == 'vendedor':
+                    # Vendedores vão direto para o dashboard comercial
+                    return redirect(url_for('comercial.dashboard_diretoria'))
+                else:
+                    # Outros perfis vão para o dashboard principal
+                    return redirect(url_for('main.dashboard'))
             else:
                 flash('Sua conta ainda não foi aprovada ou está bloqueada.', 'warning')
         else:

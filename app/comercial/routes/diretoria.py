@@ -1,7 +1,7 @@
 """
 Rotas para visão da diretoria - acesso completo
 """
-from flask import render_template, jsonify, request, redirect, url_for, flash
+from flask import render_template, jsonify, request, redirect, url_for, flash, send_file
 from flask_login import login_required, current_user
 from app.comercial import comercial_bp
 from app.comercial.services.cliente_service import ClienteService
@@ -12,9 +12,12 @@ from app.comercial.services.permissao_service import PermissaoService
 from app.comercial.decorators import comercial_required, admin_comercial_required
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
-from sqlalchemy import distinct
+from sqlalchemy import distinct, text
 from app import db
 import logging
+import pandas as pd
+from io import BytesIO
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -473,6 +476,282 @@ def lista_clientes():
                          ufs_disponiveis=ufs_disponiveis,
                          total_clientes=total_clientes,
                          valor_total=valor_total)
+
+
+@comercial_bp.route('/clientes/exportar_excel')
+@login_required
+@comercial_required
+def exportar_clientes_excel():
+    """
+    Exporta dados detalhados dos clientes para Excel
+    Uma linha por produto, com todos os dados do cliente/pedido/documento repetidos
+    """
+    # Obter os mesmos parâmetros de filtro da listagem
+    filtro_posicao = request.args.get('posicao', 'em_aberto')
+    equipe_filtro = request.args.get('equipe', None)
+    vendedor_filtro = request.args.get('vendedor', None)
+    cnpj_cpf_filtro = request.args.get('cnpj_cpf', '').strip()
+    cliente_filtro = request.args.get('cliente', '').strip()
+    pedido_filtro = request.args.get('pedido', '').strip()
+    uf_filtro = request.args.get('uf', '').strip()
+
+    # Manter compatibilidade com filtros antigos
+    raz_social_filtro = request.args.get('raz_social', '').strip()
+    raz_social_red_filtro = request.args.get('raz_social_red', '').strip()
+    num_pedido_filtro = request.args.get('num_pedido', '').strip()
+    pedido_cliente_filtro = request.args.get('pedido_cliente', '').strip()
+
+    # Preparar permissões para vendedores
+    is_vendedor = current_user.perfil == 'vendedor'
+    equipes_permitidas = []
+    vendedores_permitidos = []
+
+    if is_vendedor:
+        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+        equipes_permitidas = permissoes.get('equipes', [])
+        vendedores_permitidos = permissoes.get('vendedores', [])
+
+        # Se não tem permissões, retornar erro
+        if not equipes_permitidas and not vendedores_permitidos:
+            flash('Você não possui permissões para exportar dados.', 'warning')
+            return redirect(url_for('comercial.lista_clientes'))
+
+    # Query SQL para dados detalhados (não agrupados)
+    sql = text("""
+        SELECT
+            -- Dados do Cliente
+            cp.cnpj_cpf,
+            cp.raz_social,
+            cp.raz_social_red,
+            cp.municipio,
+            cp.estado,
+
+            -- Dados do Pedido
+            cp.num_pedido,
+            cp.pedido_cliente,
+            cp.data_pedido,
+
+            -- Dados de Agendamento e Expedição
+            cp.expedicao,
+            cp.agendamento,
+            cp.protocolo,
+            cp.agendamento_confirmado,
+            -- Data de entrega: prioriza EntregaMonitorada se tiver NF, senão usa data_entrega_pedido
+            COALESCE(em.data_entrega_prevista, cp.data_entrega_pedido) as data_entrega_prevista,
+            cp.data_entrega,
+            -- Dados de entrega realizada (do monitoramento)
+            em.data_hora_entrega_realizada,
+            em.entregue,
+            em.status_finalizacao,
+
+            -- Dados do Produto
+            cp.cod_produto,
+            cp.nome_produto,
+            cp.qtd_produto_pedido,
+            cp.qtd_saldo_produto_pedido,
+            cp.qtd_cancelada_produto_pedido,
+            cp.preco_produto_pedido,
+            (cp.qtd_saldo_produto_pedido * cp.preco_produto_pedido) as valor_item,
+
+            -- Dados Comerciais
+            cp.vendedor,
+            cp.equipe_vendas,
+
+            -- Dados de Entrega
+            cp.cnpj_endereco_ent,
+            cp.empresa_endereco_ent,
+            cp.cep_endereco_ent,
+            cp.nome_cidade as cidade_entrega,
+            cp.cod_uf as uf_entrega,
+            cp.bairro_endereco_ent,
+            cp.rua_endereco_ent,
+            cp.endereco_ent as numero_endereco_ent,
+            cp.telefone_endereco_ent,
+
+            -- Dados de Documento (NF)
+            rf.numero_nf,
+            rf.data_fatura,
+            rf.cnpj_transportadora,
+            rf.nome_transportadora,
+            rf.incoterm,
+
+            -- Dados de Separação
+            cp.separacao_lote_id,
+
+            -- Observações
+            cp.observ_ped_1
+
+        FROM carteira_principal cp
+        LEFT JOIN (
+            SELECT DISTINCT
+                origem,
+                numero_nf,
+                data_fatura,
+                cnpj_transportadora,
+                nome_transportadora,
+                incoterm
+            FROM relatorio_faturamento_importado
+            WHERE ativo = true
+        ) rf ON cp.num_pedido = rf.origem
+        LEFT JOIN (
+            SELECT DISTINCT
+                numero_nf,
+                data_entrega_prevista,
+                data_hora_entrega_realizada,
+                entregue,
+                status_finalizacao
+            FROM entregas_monitoradas
+            WHERE numero_nf IS NOT NULL
+        ) em ON rf.numero_nf = em.numero_nf
+        WHERE
+            -- Filtro de posição
+            (:posicao = 'todos' OR cp.qtd_saldo_produto_pedido > 0)
+
+            -- Filtros de permissão (para vendedores)
+            AND (:is_vendedor = false OR
+                 ((:equipe_filtro IS NOT NULL AND cp.equipe_vendas = :equipe_filtro) OR
+                  (:vendedor_filtro IS NOT NULL AND cp.vendedor = :vendedor_filtro) OR
+                  (:equipe_filtro IS NULL AND :vendedor_filtro IS NULL AND
+                   (cp.equipe_vendas = ANY(:equipes_permitidas) OR
+                    cp.vendedor = ANY(:vendedores_permitidos)))))
+
+            -- Filtros de equipe/vendedor específicos
+            AND (:equipe_filtro IS NULL OR cp.equipe_vendas = :equipe_filtro)
+            AND (:vendedor_filtro IS NULL OR cp.vendedor = :vendedor_filtro)
+
+            -- Filtros de busca
+            AND (:cnpj_cpf = '' OR cp.cnpj_cpf LIKE '%' || :cnpj_cpf || '%')
+
+            -- Filtro unificado de cliente
+            AND (:cliente = '' OR
+                 lower(f_unaccent(COALESCE(cp.raz_social, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')) OR
+                 lower(f_unaccent(COALESCE(cp.raz_social_red, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
+
+            -- Filtro unificado de pedido
+            AND (:pedido = '' OR
+                 lower(f_unaccent(COALESCE(cp.num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')) OR
+                 lower(f_unaccent(COALESCE(cp.pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
+
+            -- Filtros individuais (compatibilidade)
+            AND (:raz_social = '' OR
+                 lower(f_unaccent(COALESCE(cp.raz_social, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
+
+            AND (:raz_social_red = '' OR
+                 lower(f_unaccent(COALESCE(cp.raz_social_red, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
+
+            AND (:num_pedido = '' OR
+                 lower(f_unaccent(COALESCE(cp.num_pedido, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
+
+            AND (:pedido_cliente = '' OR
+                 lower(f_unaccent(COALESCE(cp.pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%')))
+
+            AND (:uf = '' OR cp.estado = :uf)
+
+        ORDER BY
+            cp.raz_social,
+            cp.num_pedido,
+            cp.cod_produto
+    """)
+
+    # Preparar parâmetros
+    params = {
+        'posicao': filtro_posicao,
+        'is_vendedor': is_vendedor,
+        'equipe_filtro': equipe_filtro,
+        'vendedor_filtro': vendedor_filtro,
+        'equipes_permitidas': equipes_permitidas or [''],
+        'vendedores_permitidos': vendedores_permitidos or [''],
+        'cnpj_cpf': cnpj_cpf_filtro,
+        'cliente': cliente_filtro,
+        'pedido': pedido_filtro,
+        'raz_social': raz_social_filtro,
+        'raz_social_red': raz_social_red_filtro,
+        'uf': uf_filtro,
+        'num_pedido': num_pedido_filtro,
+        'pedido_cliente': pedido_cliente_filtro
+    }
+
+    # Executar query
+    result = db.session.execute(sql, params).fetchall()
+
+    # Converter para DataFrame
+    data = []
+    for row in result:
+        data.append({
+            'CNPJ/CPF': row.cnpj_cpf,
+            'Razão Social': row.raz_social,
+            'Nome Fantasia': row.raz_social_red,
+            'Município': row.municipio,
+            'UF': row.estado,
+            'Número Pedido': row.num_pedido,
+            'Pedido Cliente': row.pedido_cliente,
+            'Data Pedido': row.data_pedido.strftime('%d/%m/%Y') if row.data_pedido else '',
+            'Data Expedição': row.expedicao.strftime('%d/%m/%Y') if row.expedicao else '',
+            'Data Agendamento': row.agendamento.strftime('%d/%m/%Y') if row.agendamento else '',
+            'Protocolo': row.protocolo or '',
+            'Agendamento Confirmado': 'Sim' if row.agendamento_confirmado else 'Não',
+            'Data Entrega Prevista': row.data_entrega_prevista.strftime('%d/%m/%Y') if row.data_entrega_prevista else '',
+            'Data Entrega Realizada': row.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') if row.data_hora_entrega_realizada else '',
+            'Status Entrega': row.status_finalizacao or '',
+            'Número NF': row.numero_nf or '',
+            'Data Fatura': row.data_fatura.strftime('%d/%m/%Y') if row.data_fatura else '',
+            'CNPJ Transportadora': row.cnpj_transportadora or '',
+            'Nome Transportadora': row.nome_transportadora or '',
+            'Incoterm': row.incoterm or '',
+            'Código Produto': row.cod_produto,
+            'Nome Produto': row.nome_produto,
+            'Qtd Original': float(row.qtd_produto_pedido) if row.qtd_produto_pedido else 0,
+            'Qtd Saldo': float(row.qtd_saldo_produto_pedido) if row.qtd_saldo_produto_pedido else 0,
+            'Qtd Cancelada': float(row.qtd_cancelada_produto_pedido) if row.qtd_cancelada_produto_pedido else 0,
+            'Preço Unitário': float(row.preco_produto_pedido) if row.preco_produto_pedido else 0,
+            'Valor Item': float(row.valor_item) if row.valor_item else 0,
+            'Vendedor': row.vendedor or '',
+            'Equipe Vendas': row.equipe_vendas or '',
+            'CNPJ Entrega': row.cnpj_endereco_ent or '',
+            'Local Entrega': row.empresa_endereco_ent or '',
+            'CEP Entrega': row.cep_endereco_ent or '',
+            'Cidade Entrega': row.cidade_entrega or '',
+            'UF Entrega': row.uf_entrega or '',
+            'Bairro Entrega': row.bairro_endereco_ent or '',
+            'Rua Entrega': row.rua_endereco_ent or '',
+            'Número Entrega': row.numero_endereco_ent or '',
+            'Telefone Entrega': row.telefone_endereco_ent or '',
+            'Lote Separação': row.separacao_lote_id or '',
+            'Observações': row.observ_ped_1 or ''
+        })
+
+    df = pd.DataFrame(data)
+
+    # Criar arquivo Excel
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Clientes Detalhado', index=False)
+
+        # Ajustar largura das colunas
+        worksheet = writer.sheets['Clientes Detalhado']
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except Exception:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+
+    output.seek(0)
+
+    # Nome do arquivo com timestamp
+    filename = f"clientes_detalhado_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 
 @comercial_bp.route('/api/cliente/<path:cnpj>/detalhes')
