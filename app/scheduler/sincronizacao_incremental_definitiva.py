@@ -10,8 +10,7 @@ VERSÃO FINAL com TODAS as correções:
 
 Valores CORRETOS:
 - Execução: A cada 30 minutos
-- Faturamento: minutos_janela=180 (3 horas) para create_date
-- Faturamento: minutos_status=1560 (26 horas) para verificar status
+- Faturamento: minutos_status=5760 (96 horas) para verificar status
 - Carteira: minutos_janela=40 (40 minutos)
 
 Autor: Sistema de Fretes
@@ -35,8 +34,7 @@ logger = logging.getLogger(__name__)
 # 🔧 CONFIGURAÇÕES DEFINITIVAS E CORRETAS
 INTERVALO_MINUTOS = int(os.environ.get('SYNC_INTERVAL_MINUTES', 30))
 JANELA_CARTEIRA = int(os.environ.get('JANELA_CARTEIRA', 40))
-JANELA_FATURAMENTO = int(os.environ.get('JANELA_FATURAMENTO', 180))
-STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 1560))
+STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 5760))
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -82,7 +80,7 @@ def executar_sincronizacao():
     logger.info("=" * 60)
     logger.info(f"⚙️ Configurações:")
     logger.info(f"   - Intervalo: {INTERVALO_MINUTOS} minutos")
-    logger.info(f"   - Faturamento: janela={JANELA_FATURAMENTO}min (3h), status={STATUS_FATURAMENTO}min (26h)")
+    logger.info(f"   - Faturamento: status={STATUS_FATURAMENTO}min (96h)")
     logger.info(f"   - Carteira: janela={JANELA_CARTEIRA}min")
     logger.info("=" * 60)
 
@@ -112,12 +110,10 @@ def executar_sincronizacao():
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"💰 Sincronizando Faturamento (tentativa {tentativa}/{MAX_RETRIES})...")
-                logger.info(f"   Janela: {JANELA_FATURAMENTO} minutos (3 horas)")
                 logger.info(f"   Status: {STATUS_FATURAMENTO} minutos (26 horas)")
 
                 # Usar service já instanciado (FORA do contexto)
                 resultado_faturamento = faturamento_service.sincronizar_faturamento_incremental(
-                    minutos_janela=JANELA_FATURAMENTO,
                     primeira_execucao=False,
                     minutos_status=STATUS_FATURAMENTO
                 )
@@ -261,18 +257,15 @@ def executar_inicial():
 
     # Backup dos valores originais
     janela_carteira_original = JANELA_CARTEIRA
-    janela_faturamento_original = JANELA_FATURAMENTO
 
     # Janelas maiores para primeira execução
     JANELA_CARTEIRA = 120          # 2 horas
-    JANELA_FATURAMENTO = 720       # 12 horas
 
     try:
         executar_sincronizacao()
     finally:
         # Restaurar valores originais
         JANELA_CARTEIRA = janela_carteira_original
-        JANELA_FATURAMENTO = janela_faturamento_original
 
 
 def main():
@@ -284,8 +277,7 @@ def main():
     logger.info("=" * 60)
     logger.info("⚙️ CONFIGURAÇÕES FINAIS:")
     logger.info(f"   - Execução: a cada {INTERVALO_MINUTOS} minutos")
-    logger.info(f"   - Faturamento: janela de {JANELA_FATURAMENTO} minutos (3 horas)")
-    logger.info(f"   - Faturamento: status de {STATUS_FATURAMENTO} minutos (26 horas)")
+    logger.info(f"   - Faturamento: status de {STATUS_FATURAMENTO} minutos (96 horas)")
     logger.info(f"   - Carteira: janela de {JANELA_CARTEIRA} minutos")
     logger.info("=" * 60)
 

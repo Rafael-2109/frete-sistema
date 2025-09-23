@@ -192,12 +192,11 @@ class SincronizacaoIntegradaService:
             # ✅ EXECUTAR SINCRONIZAÇÃO DE FALLBACK COM LIMITE
             # Usar janela muito grande para pegar tudo recente (30 dias = 43.200 minutos)
             resultado_fat = self.faturamento_service.sincronizar_faturamento_incremental(
-                minutos_janela=43200,     # 30 dias para garantir que pegue tudo recente
                 primeira_execucao=False,
                 minutos_status=43200      # 30 dias também para status
             )
 
-            # Nota: O Odoo tem limite interno que evita trazer mais de 200.000 registros
+            # Nota: O Odoo tem limite interno que evita trazer mais de 20.000 registros
             # mas na prática vai trazer os últimos registros dentro da janela
 
             if not resultado_fat.get('sucesso', False):

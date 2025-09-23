@@ -69,7 +69,7 @@
                                     <option value="">Todos os pesos</option>
                                     {% for peso in pesos_brutos %}
                                     <option value="{{ peso }}" {% if peso_bruto_filtro == peso|string %}selected{% endif %}>
-                                        {{ peso | numero_br(2) }} kg
+                                        {{ peso | numero_br }} kg
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -162,32 +162,32 @@
                                             <span class="fw-bold text-primary">{{ item.palletizacao | numero_br }}</span>
                                         </td>
                                         <td>
-                                            <span class="fw-bold text-success">{{ item.peso_bruto | numero_br(2) }}</span>
+                                            <span class="fw-bold text-success">{{ item.peso_bruto | numero_br }}</span>
                                         </td>
                                         <td>
                                             {% if item.altura_cm and item.altura_cm > 0 %}
-                                                <span class="fw-bold text-info">{{ item.altura_cm | numero_br(1) }}</span>
+                                                <span class="fw-bold text-info">{{ item.altura_cm | numero_br }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if item.largura_cm and item.largura_cm > 0 %}
-                                                <span class="fw-bold text-info">{{ item.largura_cm | numero_br(1) }}</span>
+                                                <span class="fw-bold text-info">{{ item.largura_cm | numero_br }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if item.comprimento_cm and item.comprimento_cm > 0 %}
-                                                <span class="fw-bold text-info">{{ item.comprimento_cm | numero_br(1) }}</span>
+                                                <span class="fw-bold text-info">{{ item.comprimento_cm | numero_br }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if item.volume_m3 and item.volume_m3 > 0 %}
-                                                <span class="fw-bold text-warning">{{ item.volume_m3 | numero_br(5) }}</span>
+                                                <span class="fw-bold text-warning">{{ item.volume_m3 | numero_br }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}

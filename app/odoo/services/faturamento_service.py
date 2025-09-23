@@ -478,7 +478,7 @@ class FaturamentoService:
     # 🚀 MÉTODOS PRINCIPAIS OTIMIZADOS
     # ============================================
     
-    def sincronizar_faturamento_incremental(self, minutos_janela=40, primeira_execucao=False, minutos_status=1560) -> Dict[str, Any]:
+    def sincronizar_faturamento_incremental(self, primeira_execucao=False, minutos_status=1560) -> Dict[str, Any]:
         """
         🚀 SINCRONIZAÇÃO INCREMENTAL OTIMIZADA + INTEGRAÇÃO COMPLETA
 
@@ -496,19 +496,12 @@ class FaturamentoService:
 
             start_time = time.time()
 
-            # Ajustar janela para primeira execução (recuperação pós-deploy)
-            if primeira_execucao:
-                minutos_janela = 120  # 2 horas na primeira execução
-                logger.info(f"🚀 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO COMPLETA - PRIMEIRA EXECUÇÃO (últimos {minutos_janela} minutos)")
-            else:
-                logger.info(f"🔄 SINCRONIZAÇÃO INCREMENTAL FATURAMENTO COMPLETA - Últimos {minutos_janela} minutos")
 
             # ⚡ Buscar dados do Odoo com MODO INCREMENTAL usando write_date
             resultado = self.obter_faturamento_otimizado(
                 usar_filtro_postado=True,
                 limite=0,  # Usará limite interno de 20000 registros para evitar timeout
                 modo_incremental=True,  # ✅ ATIVAR MODO INCREMENTAL COM WRITE_DATE
-                minutos_janela=minutos_janela,  # ✅ PASSAR JANELA DE TEMPO
                 minutos_status=minutos_status  # ✅ PASSAR JANELA PARA STATUS
             )
             
@@ -573,20 +566,13 @@ class FaturamentoService:
             # Para janelas pequenas (scheduler), manter otimização
             if not primeira_execucao:
                 from datetime import datetime, timedelta
-
-                # Se janela é maior que 7 dias, é importação histórica
-                if minutos_janela > (7 * 24 * 60):  # 7 dias em minutos
-                    # Para importação histórica, verificar registros dos últimos minutos_janela
-                    # Adicionar margem de segurança de 10%
-                    minutos_verificacao = int(minutos_janela * 1.1)
-                    data_limite = datetime.now() - timedelta(minutes=minutos_verificacao)
-                    query = query.filter(FaturamentoProduto.created_at >= data_limite)
-                    logger.info(f"📚 Modo histórico: verificando registros dos últimos {minutos_verificacao} minutos (desde {data_limite.strftime('%Y-%m-%d %H:%M')})")
-                else:
-                    # Para execuções normais do scheduler (janelas pequenas), manter otimização de 2 dias
-                    data_limite = datetime.now() - timedelta(days=2)
-                    query = query.filter(FaturamentoProduto.created_at >= data_limite)
-                    logger.info(f"🚀 Modo incremental: carregando registros após {data_limite.strftime('%Y-%m-%d')}")
+                minutos_verificacao = int(minutos_status * 1.1)  # margem segurança
+                data_limite = datetime.now() - timedelta(minutes=minutos_verificacao)
+                query = query.filter(FaturamentoProduto.created_at >= data_limite)
+                logger.info(
+                    f"🔎 Verificando existentes desde {data_limite.strftime('%Y-%m-%d %H:%M')} "
+                    f"(janela={minutos_status}m +10%)"
+                )
 
             # Usar yield_per para economizar memória em queries grandes
             contador_registros = 0
@@ -1115,7 +1101,7 @@ class FaturamentoService:
                 'itens_novos': 0
             }
 
-    def obter_faturamento_otimizado(self, usar_filtro_postado=True, limite=20, modo_incremental=False, minutos_janela=40, minutos_status=1560):
+    def obter_faturamento_otimizado(self, usar_filtro_postado=True, limite=0, modo_incremental=False, minutos_status=1560):
         """
         🚀 MÉTODO REALMENTE OTIMIZADO - 5 queries + JOIN em memória
         Com filtro obrigatório implementado
@@ -1124,7 +1110,7 @@ class FaturamentoService:
             usar_filtro_postado: Filtrar apenas faturas postadas
             limite: Limite de registros
             modo_incremental: Se True, busca apenas registros modificados recentemente
-            minutos_janela: Janela de tempo em minutos para busca incremental
+            minutos_status: Janela de tempo em minutos para busca incremental
         """
         try:
             logger.info(f"🚀 Busca faturamento otimizada: filtro_postado={usar_filtro_postado}, limite={limite}, incremental={modo_incremental}")
