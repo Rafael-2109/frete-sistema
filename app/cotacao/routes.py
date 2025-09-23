@@ -1091,12 +1091,12 @@ def fechar_frete():
                 pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido and pedido.separacao_lote_id:
                     # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
-                    Separacao.query.filter_by(
-                        separacao_lote_id=pedido.separacao_lote_id
-                    ).update({
-                        'cotacao_id': cotacao.id,
-                        'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
-                    })
+                    # Usa método que dispara event listeners para atualizar status automaticamente
+                    Separacao.atualizar_cotacao(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        cotacao_id=cotacao.id,
+                        nf_cd=False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                    )
                     # O status será calculado automaticamente como COTADO pelo trigger
             
             # Remove cotação antiga se existir
@@ -1130,12 +1130,12 @@ def fechar_frete():
                 pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido and pedido.separacao_lote_id:
                     # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
-                    Separacao.query.filter_by(
-                        separacao_lote_id=pedido.separacao_lote_id
-                    ).update({
-                        'cotacao_id': cotacao.id,
-                        'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
-                    })
+                    # Usa método que dispara event listeners para atualizar status automaticamente
+                    Separacao.atualizar_cotacao(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        cotacao_id=cotacao.id,
+                        nf_cd=False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                    )
                     # O status será calculado automaticamente como COTADO pelo trigger
 
             # ✅ CRIA EMBARQUE
@@ -1252,12 +1252,12 @@ def fechar_frete():
         # Isso garante que TODOS os itens que foram adicionados ao embarque tenham cotacao_id
         for item in embarque.itens:
             if item.separacao_lote_id and item.status == 'ativo':
-                Separacao.query.filter_by(
-                    separacao_lote_id=item.separacao_lote_id
-                ).update({
-                    'cotacao_id': cotacao.id,
-                    'nf_cd': False
-                })
+                # Usa método que dispara event listeners para atualizar status automaticamente
+                Separacao.atualizar_cotacao(
+                    separacao_lote_id=item.separacao_lote_id,
+                    cotacao_id=cotacao.id,
+                    nf_cd=False
+                )
                 print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
         
         db.session.commit()
@@ -1531,12 +1531,12 @@ def fechar_frete_grupo():
         # Isso garante que TODOS os itens que foram adicionados ao embarque tenham cotacao_id
         for item in embarque.itens:
             if item.separacao_lote_id and item.status == 'ativo':
-                Separacao.query.filter_by(
-                    separacao_lote_id=item.separacao_lote_id
-                ).update({
-                    'cotacao_id': cotacao.id,
-                    'nf_cd': False
-                })
+                # Usa método que dispara event listeners para atualizar status automaticamente
+                Separacao.atualizar_cotacao(
+                    separacao_lote_id=item.separacao_lote_id,
+                    cotacao_id=cotacao.id,
+                    nf_cd=False
+                )
                 print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
         
         db.session.commit()
@@ -3027,15 +3027,19 @@ def incluir_em_embarque():
             
             # ✅ CORRIGIDO: Atualizar Separacao com cotação do embarque
             if pedido.separacao_lote_id:
-                update_data = {'nf_cd': False}  # Reseta flag NF no CD
-                
+                # Usa método que dispara event listeners para atualizar status automaticamente
                 if embarque.cotacao_id:
-                    update_data['cotacao_id'] = embarque.cotacao_id
-                
-                # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
-                Separacao.query.filter_by(
-                    separacao_lote_id=pedido.separacao_lote_id
-                ).update(update_data)
+                    Separacao.atualizar_cotacao(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        cotacao_id=embarque.cotacao_id,
+                        nf_cd=False  # Reseta flag NF no CD
+                    )
+                else:
+                    # Se não tem cotacao_id, apenas atualiza nf_cd
+                    Separacao.atualizar_nf_cd(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        nf_cd=False
+                    )
                 
                 # O status será calculado automaticamente como COTADO pelo trigger
             

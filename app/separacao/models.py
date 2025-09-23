@@ -155,6 +155,24 @@ class Separacao(db.Model):
             item.nf_cd = nf_cd
 
         db.session.commit()
+
+    @classmethod
+    def atualizar_cotacao(cls, separacao_lote_id, cotacao_id, nf_cd=False):
+        """
+        Método helper para atualizar cotacao_id de itens de separação
+        IMPORTANTE: Usa ORM para garantir que event listeners sejam disparados
+        e o status seja atualizado automaticamente para COTADO
+        """
+        # Buscar itens usando ORM para disparar event listeners
+        items = cls.query.filter_by(separacao_lote_id=separacao_lote_id).all()
+
+        for item in items:
+            item.cotacao_id = cotacao_id
+            item.nf_cd = nf_cd
+            # O event listener vai atualizar o status automaticamente
+
+        db.session.commit()
+        return len(items)  # Retorna quantidade de itens atualizados
     
     def save(self):
         """
