@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from app import db
 from flask_login import current_user
 from flask import current_app
+from sqlalchemy import func
 
 from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from app.faturamento.models import RelatorioFaturamentoImportado
@@ -11,6 +12,7 @@ from app.cadastros_agendamento.models import ContatoAgendamento
 from app.transportadoras.models import Transportadora
 from app.pedidos.models import Pedido
 from app.separacao.models import Separacao
+from app.localidades.models import Cidade
 
 def adicionar_dias_uteis(data_inicio, dias_uteis):
     """
@@ -200,13 +202,16 @@ def sincronizar_entrega_por_nf(numero_nf):
         cnpj_transp = embarque.transportadora.cnpj
         uf_dest = item_mais_recente.uf_destino
         nome_cid_dest = item_mais_recente.cidade_destino
+
+        # ✅ CORREÇÃO: Busca case-insensitive usando UPPER() em ambos os lados
         assoc = (
             CidadeAtendida.query
             .join(Transportadora)
+            .join(Cidade, CidadeAtendida.cidade_id == Cidade.id)
             .filter(
                 Transportadora.cnpj == cnpj_transp,
                 CidadeAtendida.uf == uf_dest,
-                CidadeAtendida.cidade.has(nome=nome_cid_dest)
+                func.upper(Cidade.nome) == func.upper(nome_cid_dest)
             )
             .first()
         )
@@ -288,13 +293,15 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
             uf_dest     = item_embarque.uf_destino
             cid_dest    = item_embarque.cidade_destino
 
+            # ✅ CORREÇÃO: Busca case-insensitive usando UPPER() em ambos os lados
             assoc = (
                 CidadeAtendida.query
                 .join(Transportadora)
+                .join(Cidade, CidadeAtendida.cidade_id == Cidade.id)
                 .filter(
                     Transportadora.cnpj == cnpj_transp,
                     CidadeAtendida.uf   == uf_dest,
-                    CidadeAtendida.cidade.has(nome=cid_dest)
+                    func.upper(Cidade.nome) == func.upper(cid_dest)
                 )
                 .first()
             )

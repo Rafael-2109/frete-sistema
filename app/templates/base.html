@@ -242,6 +242,7 @@
         </li>
         {% endif %}
 
+        {% if not is_comercial_only %}
         <!-- CONSULTAS - Informações e análises -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuConsultas" role="button" data-bs-toggle="dropdown">
@@ -279,7 +280,7 @@
         </li>
 
         <!-- CARTEIRA & PRODUÇÃO - Módulos de carteira de pedidos -->
-        {% if not is_comercial_only %}
+        
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuCarteira" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-industry text-success"></i> Carteira & Estoque
@@ -361,7 +362,7 @@
             <li><a class="dropdown-item" href="{{ url_for('comercial.lista_clientes', posicao='todos') }}">
               <i class="fas fa-list-alt"></i> Posição Total de Clientes
             </a></li>
-            {% if is_admin_comercial %}
+            {% if current_user.perfil in ['administrador', 'gerente_comercial'] %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">⚙️ Administração</h6></li>
             <li><a class="dropdown-item" href="{{ url_for('comercial.admin_permissoes') }}">
