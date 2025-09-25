@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 class TagPlusOAuth2V2:
     """Gerenciador OAuth2 para TagPlus API v2"""
     
-    # URLs do TagPlus (corrigidas)
-    AUTH_URL = "https://api.tagplus.com.br/oauth/authorize"
-    TOKEN_URL = "https://api.tagplus.com.br/oauth/token"
-    API_BASE = "https://api.tagplus.com.br/v2"
+    # URLs do TagPlus (CORRIGIDAS conforme documentação)
+    AUTH_URL = "https://developers.tagplus.com.br/authorize"
+    TOKEN_URL = "https://api.tagplus.com.br/oauth2/token"
+    API_BASE = "https://api.tagplus.com.br"
     
     def __init__(self, api_type='clientes'):
         """
@@ -37,7 +37,7 @@ class TagPlusOAuth2V2:
             self.client_id = os.environ.get('TAGPLUS_NOTAS_CLIENT_ID', '8YZNqaklKj3CfIkOtkoV9ILpCllAtalT')
             self.client_secret = os.environ.get('TAGPLUS_NOTAS_CLIENT_SECRET', 'MJHfk8hr3022Y1ETTwqSf0Qsb5Lj6HZe')
             self.redirect_uri = 'https://sistema-fretes.onrender.com/tagplus/oauth/callback/nfe'
-            self.scopes = 'read:nfes read:financeiros'
+            self.scopes = 'read:nfes read:clientes read:produtos'
         
         # Tokens (armazenados em sessão ou memória)
         self.access_token = None
@@ -71,10 +71,10 @@ class TagPlusOAuth2V2:
     def exchange_code_for_tokens(self, code):
         """
         Troca código de autorização por tokens
-        
+
         Args:
             code: Código recebido após autorização
-            
+
         Returns:
             dict com tokens ou None se falhar
         """
@@ -86,25 +86,40 @@ class TagPlusOAuth2V2:
                 'client_secret': self.client_secret,
                 'redirect_uri': self.redirect_uri
             }
-            
+
+            logger.info(f"[{self.api_type}] Enviando requisição para: {self.TOKEN_URL}")
+            logger.info(f"[{self.api_type}] Client ID: {self.client_id[:10]}...")
+            logger.info(f"[{self.api_type}] Redirect URI: {self.redirect_uri}")
+            logger.info(f"[{self.api_type}] Code: {code[:20]}...")
+
             response = requests.post(
                 self.TOKEN_URL,
                 data=data,
                 headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=30
             )
-            
+
+            logger.info(f"[{self.api_type}] Status Code: {response.status_code}")
+
             if response.status_code == 200:
                 tokens = response.json()
                 self._save_tokens(tokens)
                 logger.info(f"Tokens obtidos com sucesso para {self.api_type}")
+                logger.info(f"Access Token: {tokens.get('access_token', '')[:30]}...")
                 return tokens
             else:
-                logger.error(f"Erro ao trocar código: {response.status_code} - {response.text}")
+                logger.error(f"[{self.api_type}] Erro ao trocar código: {response.status_code}")
+                logger.error(f"[{self.api_type}] Resposta: {response.text}")
+                # Log detalhado do erro
+                try:
+                    error_json = response.json()
+                    logger.error(f"[{self.api_type}] Erro JSON: {error_json}")
+                except:
+                    pass
                 return None
-                
+
         except Exception as e:
-            logger.error(f"Erro ao trocar código por tokens: {e}")
+            logger.error(f"[{self.api_type}] Erro ao trocar código por tokens: {e}")
             return None
     
     def refresh_access_token(self):
