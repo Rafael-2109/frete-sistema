@@ -670,8 +670,46 @@ def editar_tabela_frete(tabela_id):
         # Setar o ID para validação customizada funcionar corretamente na edição
         form.id.data = str(tabela_id)
     else:
-        form = TabelaFreteForm(obj=tabela)
+        # Importar função de formatação
+        from app.utils.valores_brasileiros import formatar_valor_brasileiro
+
+        # Criar formulário sem preencher automaticamente
+        form = TabelaFreteForm()
         form.id.data = str(tabela_id)
+
+        # Preencher campos básicos
+        form.transportadora.data = tabela.transportadora_id
+        form.uf_origem.data = tabela.uf_origem
+        form.uf_destino.data = tabela.uf_destino
+        form.nome_tabela.data = tabela.nome_tabela
+        form.tipo_carga.data = tabela.tipo_carga
+        form.modalidade.data = tabela.modalidade
+        form.icms_incluso.data = tabela.icms_incluso
+
+        # Formatar e preencher campos numéricos no padrão brasileiro
+        # Campos de valor com 2 casas decimais
+        form.valor_kg.data = formatar_valor_brasileiro(tabela.valor_kg, 4) if tabela.valor_kg else ''
+        form.frete_minimo_peso.data = formatar_valor_brasileiro(tabela.frete_minimo_peso, 2) if tabela.frete_minimo_peso else ''
+        form.frete_minimo_valor.data = formatar_valor_brasileiro(tabela.frete_minimo_valor, 2) if tabela.frete_minimo_valor else ''
+
+        # Campos de percentual
+        form.percentual_valor.data = formatar_valor_brasileiro(tabela.percentual_valor, 2) if tabela.percentual_valor else ''
+        form.percentual_gris.data = formatar_valor_brasileiro(tabela.percentual_gris, 2) if tabela.percentual_gris else ''
+        form.percentual_adv.data = formatar_valor_brasileiro(tabela.percentual_adv, 2) if tabela.percentual_adv else ''
+        form.percentual_rca.data = formatar_valor_brasileiro(tabela.percentual_rca, 2) if tabela.percentual_rca else ''
+
+        # Campos de valor mínimo
+        form.gris_minimo.data = formatar_valor_brasileiro(tabela.gris_minimo, 2) if tabela.gris_minimo else ''
+        form.adv_minimo.data = formatar_valor_brasileiro(tabela.adv_minimo, 2) if tabela.adv_minimo else ''
+
+        # Campos de taxas
+        form.valor_despacho.data = formatar_valor_brasileiro(tabela.valor_despacho, 2) if tabela.valor_despacho else ''
+        form.valor_cte.data = formatar_valor_brasileiro(tabela.valor_cte, 2) if tabela.valor_cte else ''
+        form.valor_tas.data = formatar_valor_brasileiro(tabela.valor_tas, 2) if tabela.valor_tas else ''
+        form.pedagio_por_100kg.data = formatar_valor_brasileiro(tabela.pedagio_por_100kg, 2) if tabela.pedagio_por_100kg else ''
+
+        # ICMS próprio
+        form.icms_proprio.data = formatar_valor_brasileiro(tabela.icms_proprio, 2) if tabela.icms_proprio else ''
 
     # Sempre definir as choices ANTES da validação
     form.transportadora.choices = [(t.id, t.razao_social) for t in Transportadora.query.all()]

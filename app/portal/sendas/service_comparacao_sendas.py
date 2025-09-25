@@ -240,7 +240,11 @@ class ComparacaoSendasService:
         1. Filial + Pedido + Produto (match exato)
         2. Filial + Pedido (todos produtos do pedido)
         3. Filial (todos produtos da filial)
+
+        Inclui fallback para pedido_cliente com caracteres não numéricos (ex: /L)
         """
+        import re
+
         query = PlanilhaModeloSendas.query
 
         # Sempre filtrar por unidade destino
@@ -248,10 +252,57 @@ class ComparacaoSendasService:
 
         # Se tem pedido, filtrar por pedido (formato "pedido-filial")
         if pedido_cliente:
-            query = query.filter(
+            # Primeiro tentar com o valor completo
+            query_original = query.filter(
                 PlanilhaModeloSendas.codigo_pedido_cliente.like(f"{pedido_cliente}-%")
             )
 
+            # Se tem produto, filtrar por produto
+            if codigo_produto:
+                query_original = query_original.filter_by(codigo_produto_cliente=str(codigo_produto))
+
+            # Filtrar apenas com saldo disponível
+            query_original = query_original.filter(PlanilhaModeloSendas.saldo_disponivel > 0)
+
+            resultados = query_original.all()
+
+            # Se encontrou com o valor original, retornar
+            if resultados:
+                logger.debug(f"Encontrado com pedido_cliente original: {pedido_cliente}")
+                return resultados
+
+            # FALLBACK: Se não encontrou e o pedido tem caracteres não numéricos
+            # Extrair apenas os números e tentar novamente
+            numeros_apenas = re.sub(r'[^0-9]', '', pedido_cliente)
+
+            if numeros_apenas and numeros_apenas != pedido_cliente:
+                logger.info(f"Tentando fallback: pedido_cliente '{pedido_cliente}' → números apenas '{numeros_apenas}'")
+
+                query_fallback = PlanilhaModeloSendas.query
+                query_fallback = query_fallback.filter_by(unidade_destino=unidade_destino)
+                query_fallback = query_fallback.filter(
+                    PlanilhaModeloSendas.codigo_pedido_cliente.like(f"{numeros_apenas}-%")
+                )
+
+                # Se tem produto, filtrar por produto
+                if codigo_produto:
+                    query_fallback = query_fallback.filter_by(codigo_produto_cliente=str(codigo_produto))
+
+                # Filtrar apenas com saldo disponível
+                query_fallback = query_fallback.filter(PlanilhaModeloSendas.saldo_disponivel > 0)
+
+                resultados_fallback = query_fallback.all()
+
+                if resultados_fallback:
+                    logger.info(f"✅ Fallback bem-sucedido: encontrados {len(resultados_fallback)} itens com pedido '{numeros_apenas}'")
+                    return resultados_fallback
+                else:
+                    logger.info(f"⚠️ Fallback não encontrou resultados para pedido '{numeros_apenas}'")
+
+            # Se chegou aqui, não encontrou nem com original nem com fallback
+            return []
+
+        # Se não tem pedido_cliente, continuar com a lógica normal
         # Se tem produto, filtrar por produto
         if codigo_produto:
             query = query.filter_by(codigo_produto_cliente=str(codigo_produto))

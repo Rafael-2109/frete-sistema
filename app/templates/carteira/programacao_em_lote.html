@@ -680,6 +680,11 @@
     }
 
     // Função para solicitar agendamento Sendas em lote
+    // Variável global para controlar processamento sequencial
+    let filaAgendamentoSendas = [];
+    let indiceAtualFila = 0;
+    let protocolosGerados = {};
+
     function solicitarAgendamentoSendasLote() {
         // Buscar CNPJs selecionados na tabela
         const checkboxes = document.querySelectorAll('.check-cnpj:checked');
@@ -694,11 +699,17 @@
         checkboxes.forEach(checkbox => {
             const row = checkbox.closest('tr');
             const cnpj = checkbox.value;
-            const razSocial = row.querySelector('td:nth-child(3)').textContent.trim();
+            const razSocial = row.querySelector('td:nth-child(2)').textContent.trim();
+            const cidade = row.querySelector('td:nth-child(3) > div:first-child').textContent.trim();
+            const dataExpedicao = row.querySelector('.data-expedicao').value;
+            const dataAgendamento = row.querySelector('.data-agendamento').value;
 
             cnpjsSelecionados.push({
                 cnpj: cnpj,
-                cliente: razSocial
+                cliente: razSocial,
+                cidade: cidade,
+                data_expedicao: dataExpedicao,
+                data_agendamento: dataAgendamento || getProximoDiaUtil()
             });
         });
 
@@ -731,26 +742,33 @@
         .then(response => response.json())
         .then(response => {
             if (response.sucesso && response.solicitacoes && response.solicitacoes.length > 0) {
-                // Agrupar solicitações por CNPJ para passar ao modal
+                // Agrupar solicitações por CNPJ
                 const dadosPorCnpj = {};
                 response.solicitacoes.forEach(sol => {
                     if (!dadosPorCnpj[sol.cnpj]) {
+                        const cnpjInfo = cnpjsSelecionados.find(c => c.cnpj === sol.cnpj);
                         dadosPorCnpj[sol.cnpj] = {
                             cnpj: sol.cnpj,
-                            cliente: cnpjsSelecionados.find(c => c.cnpj === sol.cnpj)?.cliente || '',
+                            cliente: cnpjInfo?.cliente || '',
+                            cidade: cnpjInfo?.cidade || '',
+                            data_expedicao: cnpjInfo?.data_expedicao,
+                            data_agendamento: cnpjInfo?.data_agendamento || sol.data_agendamento,
                             pedidos: []
                         };
                     }
                     dadosPorCnpj[sol.cnpj].pedidos.push(sol);
                 });
 
-                // Converter para array
-                const cnpjsComDados = Object.values(dadosPorCnpj);
+                // Converter para array e iniciar processamento sequencial
+                filaAgendamentoSendas = Object.values(dadosPorCnpj);
+                indiceAtualFila = 0;
+                protocolosGerados = {};
 
                 Swal.close();
 
-                // Chamar função do sendas_comparacao.js com dados completos
-                abrirModalComparacaoLote(cnpjsComDados);
+                // Processar o primeiro CNPJ
+                processarProximoCNPJ();
+
             } else {
                 Swal.fire({
                     icon: 'warning',
@@ -768,7 +786,435 @@
             });
         });
     }
+
+    // Função para processar próximo CNPJ da fila
+    function processarProximoCNPJ() {
+        if (indiceAtualFila >= filaAgendamentoSendas.length) {
+            // Todos os CNPJs foram processados
+            exibirResumoFinal();
+            return;
+        }
+
+        const dadosCnpj = filaAgendamentoSendas[indiceAtualFila];
+
+        // Abrir modal individual para este CNPJ
+        abrirModalComparacaoCNPJIndividual(dadosCnpj, indiceAtualFila + 1, filaAgendamentoSendas.length);
+    }
+
+    // Função para abrir modal de comparação individual
+    function abrirModalComparacaoCNPJIndividual(dadosCnpj, numero, total) {
+        // Criar modal dinâmico para este CNPJ
+        const modalId = 'modalComparacaoCNPJIndividual';
+
+        // Remover modal anterior se existir
+        const modalExistente = document.getElementById(modalId);
+        if (modalExistente) {
+            modalExistente.remove();
+        }
+
+        // Criar HTML do modal
+        const modalHTML = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+          <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+              <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                  <i class="fas fa-calendar-check"></i> Agendamento Sendas - CNPJ ${numero}/${total}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <!-- Info do CNPJ -->
+                <div class="card mb-3">
+                  <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-building"></i> Dados do Cliente</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row">
+                      <div class="col-md-3">
+                        <strong>CNPJ:</strong><br> ${dadosCnpj.cnpj}
+                      </div>
+                      <div class="col-md-5">
+                        <strong>Cliente:</strong><br> ${dadosCnpj.cliente}
+                      </div>
+                      <div class="col-md-4">
+                        <strong>Cidade:</strong><br> ${dadosCnpj.cidade}
+                      </div>
+                    </div>
+                    <div class="row mt-2">
+                      <div class="col-md-6">
+                        <label><strong>Data Expedição:</strong></label>
+                        <input type="date" class="form-control form-control-sm w-auto d-inline"
+                               id="modal-data-expedicao" value="${dadosCnpj.data_expedicao || ''}">
+                      </div>
+                      <div class="col-md-6">
+                        <label><strong>Data Agendamento:</strong></label>
+                        <input type="date" class="form-control form-control-sm w-auto d-inline"
+                               id="modal-data-agendamento" value="${dadosCnpj.data_agendamento || ''}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Resumo dos pedidos/produtos -->
+                <div class="card mb-3">
+                  <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">
+                      <i class="fas fa-boxes"></i> Pedidos e Produtos
+                      <span class="badge bg-light text-dark ms-2">${dadosCnpj.pedidos.length} itens</span>
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                      <table class="table table-sm">
+                        <thead>
+                          <tr>
+                            <th>Pedido</th>
+                            <th>Pedido Cliente</th>
+                            <th>Produto</th>
+                            <th>Nome</th>
+                            <th>Quantidade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${dadosCnpj.pedidos.map(p => `
+                            <tr>
+                              <td>${p.num_pedido || '-'}</td>
+                              <td>${p.pedido_cliente || '-'}</td>
+                              <td>${p.cod_produto}</td>
+                              <td>${p.nome_produto || '-'}</td>
+                              <td>${p.quantidade}</td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Resultado da comparação -->
+                <div class="card">
+                  <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fas fa-check-circle"></i> Resultado da Comparação</h6>
+                  </div>
+                  <div class="card-body">
+                    <div id="resultado-comparacao-individual">
+                      <div class="text-center text-muted">
+                        Clique em "Comparar" para verificar disponibilidade
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="pularCNPJAtual()">
+                  <i class="fas fa-forward"></i> Pular este CNPJ
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-comparar-individual" onclick="compararCNPJIndividual()">
+                  <i class="fas fa-search"></i> Comparar
+                </button>
+                <button type="button" class="btn btn-success" id="btn-confirmar-individual" onclick="confirmarCNPJIndividual()" style="display: none;">
+                  <i class="fas fa-check"></i> Confirmar Agendamento
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        `;
+
+        // Adicionar modal ao body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Armazenar dados no modal
+        const modal = document.getElementById(modalId);
+        modal.dadosCnpj = dadosCnpj;
+
+        // Abrir modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    // Função para comparar CNPJ individual
+    function compararCNPJIndividual() {
+        const modal = document.getElementById('modalComparacaoCNPJIndividual');
+        const dadosCnpj = modal.dadosCnpj;
+        const dataAgendamento = document.getElementById('modal-data-agendamento').value;
+
+        if (!dataAgendamento) {
+            alert('Por favor, selecione uma data de agendamento');
+            return;
+        }
+
+        // Atualizar data de agendamento nos dados
+        dadosCnpj.pedidos.forEach(p => {
+            p.data_agendamento = dataAgendamento;
+        });
+
+        // Mostrar loading
+        const btnComparar = document.getElementById('btn-comparar-individual');
+        btnComparar.disabled = true;
+        btnComparar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Comparando...';
+
+        // Fazer comparação
+        fetch('/portal/sendas/solicitar/lote/comparar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                solicitacoes: dadosCnpj.pedidos
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                exibirResultadoComparacaoIndividual(data.resultados_por_cnpj[dadosCnpj.cnpj]);
+            } else {
+                document.getElementById('resultado-comparacao-individual').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Erro ao comparar: ${data.erro || 'Erro desconhecido'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            document.getElementById('resultado-comparacao-individual').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Erro ao comparar
+                </div>
+            `;
+        })
+        .finally(() => {
+            btnComparar.disabled = false;
+            btnComparar.innerHTML = '<i class="fas fa-search"></i> Comparar';
+        });
+    }
+
+    // Exibir resultado da comparação individual
+    function exibirResultadoComparacaoIndividual(resultado) {
+        let html = '';
+        const container = document.getElementById('resultado-comparacao-individual');
+
+        if (!resultado) {
+            container.innerHTML = '<div class="alert alert-warning">Sem resultados</div>';
+            return;
+        }
+
+        // Contar itens encontrados e não encontrados
+        const encontrados = resultado.itens.filter(i => i.tipo_match === 'exato').length;
+        const total = resultado.itens.length;
+
+        // Resumo
+        html += `
+        <div class="alert ${encontrados === total ? 'alert-success' : encontrados > 0 ? 'alert-warning' : 'alert-danger'}">
+            <strong>Resultado:</strong> ${encontrados}/${total} produtos encontrados na planilha Sendas
+        </div>
+        `;
+
+        // Listar itens
+        html += '<div class="accordion" id="accordionItens">';
+        resultado.itens.forEach((item, idx) => {
+            const sucesso = item.tipo_match === 'exato';
+            const suficiente = item.encontrado?.quantidade_suficiente;
+
+            html += `
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button ${idx > 0 ? 'collapsed' : ''}" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#collapse${idx}">
+                        <span class="badge bg-${sucesso ? suficiente ? 'success' : 'warning' : 'danger'} me-2">
+                            ${sucesso ? suficiente ? '✅' : '⚠️' : '❌'}
+                        </span>
+                        Pedido: ${item.solicitado.pedido_cliente || '-'} |
+                        Produto: ${item.solicitado.cod_produto}
+                    </button>
+                </h2>
+                <div id="collapse${idx}" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}"
+                     data-bs-parent="#accordionItens">
+                    <div class="accordion-body">
+            `;
+
+            if (sucesso && item.encontrado) {
+                html += `
+                    <strong>✅ Encontrado na planilha:</strong><br>
+                    Pedido Sendas: ${item.encontrado.codigo_pedido_sendas}<br>
+                    Produto: ${item.encontrado.descricao}<br>
+                    Disponível: ${item.encontrado.saldo_disponivel} ${item.encontrado.unidade_medida}<br>
+                    Solicitado: ${item.solicitado.quantidade}<br>
+                    ${!suficiente ? '<span class="text-warning">⚠️ Quantidade insuficiente</span>' : ''}
+                `;
+            } else {
+                html += `
+                    <strong>❌ Não encontrado na planilha</strong><br>
+                    ${item.observacao || 'Produto não disponível'}
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            </div>
+            `;
+        });
+        html += '</div>';
+
+        // Se tem alternativas, mostrar
+        if (resultado.alternativas_filial && resultado.alternativas_filial.mostrar_tudo) {
+            html += `
+            <div class="alert alert-info mt-3">
+                <strong>Alternativas:</strong> ${resultado.alternativas_filial.sugestao}
+                <button class="btn btn-sm btn-info ms-2" onclick="mostrarAlternativasFilial()">
+                    Ver todos produtos da filial
+                </button>
+            </div>
+            `;
+
+            // Armazenar alternativas para uso posterior
+            container.alternativas = resultado.alternativas_filial;
+        }
+
+        container.innerHTML = html;
+
+        // Armazenar resultado para confirmação
+        const modal = document.getElementById('modalComparacaoCNPJIndividual');
+        modal.resultadoComparacao = resultado;
+
+        // Mostrar botão de confirmar se tem pelo menos 1 item para agendar
+        if (resultado.pode_agendar_todos) {
+            document.getElementById('btn-confirmar-individual').style.display = 'inline-block';
+        }
+    }
+
+    // Confirmar agendamento individual
+    function confirmarCNPJIndividual() {
+        const modal = document.getElementById('modalComparacaoCNPJIndividual');
+        const resultado = modal.resultadoComparacao;
+        const dadosCnpj = modal.dadosCnpj;
+
+        if (!resultado) {
+            alert('Nenhum resultado para confirmar');
+            return;
+        }
+
+        // Preparar itens para confirmação
+        const itensConfirmados = resultado.itens.map(item => ({
+            cnpj: dadosCnpj.cnpj,
+            num_pedido: item.solicitado.num_pedido,
+            pedido_cliente: item.solicitado.pedido_cliente,
+            cod_produto: item.solicitado.cod_produto,
+            nome_produto: item.solicitado.nome_produto || '',
+            quantidade: item.solicitado.quantidade,
+            data_expedicao: document.getElementById('modal-data-expedicao').value,
+            data_agendamento: document.getElementById('modal-data-agendamento').value
+        }));
+
+        // Mostrar loading
+        const btnConfirmar = document.getElementById('btn-confirmar-individual');
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Confirmando...';
+
+        // Enviar confirmação
+        fetch('/portal/sendas/solicitar/lote/confirmar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                itens_confirmados: itensConfirmados
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                // Armazenar protocolo gerado
+                protocolosGerados[dadosCnpj.cnpj] = data.protocolos[dadosCnpj.cnpj];
+
+                // Fechar modal atual
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                bsModal.hide();
+
+                // Processar próximo CNPJ
+                indiceAtualFila++;
+                setTimeout(() => {
+                    modal.remove();
+                    processarProximoCNPJ();
+                }, 500);
+            } else {
+                alert('Erro ao confirmar: ' + (data.erro || 'Erro desconhecido'));
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar Agendamento';
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao confirmar agendamento');
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar Agendamento';
+        });
+    }
+
+    // Pular CNPJ atual
+    function pularCNPJAtual() {
+        const modal = document.getElementById('modalComparacaoCNPJIndividual');
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        bsModal.hide();
+
+        indiceAtualFila++;
+        setTimeout(() => {
+            modal.remove();
+            processarProximoCNPJ();
+        }, 500);
+    }
+
+    // Exibir resumo final
+    function exibirResumoFinal() {
+        const totalProcessados = Object.keys(protocolosGerados).length;
+        const totalCNPJs = filaAgendamentoSendas.length;
+
+        let mensagem = `<h5>Processo Concluído!</h5>`;
+        mensagem += `<p>${totalProcessados} de ${totalCNPJs} CNPJs agendados com sucesso.</p>`;
+
+        if (totalProcessados > 0) {
+            mensagem += '<h6>Protocolos Gerados:</h6><ul>';
+            for (const [cnpj, protocolo] of Object.entries(protocolosGerados)) {
+                mensagem += `<li><strong>${cnpj}:</strong> ${protocolo}</li>`;
+            }
+            mensagem += '</ul>';
+        }
+
+        Swal.fire({
+            icon: totalProcessados > 0 ? 'success' : 'info',
+            title: 'Agendamento Concluído',
+            html: mensagem,
+            confirmButtonText: 'OK'
+        });
+
+        // Limpar variáveis
+        filaAgendamentoSendas = [];
+        indiceAtualFila = 0;
+        protocolosGerados = {};
+    }
+
+    // Função auxiliar para obter próximo dia útil
+    function getProximoDiaUtil() {
+        const hoje = new Date();
+        let dia = new Date(hoje);
+        dia.setDate(dia.getDate() + 1);
+
+        // Se for sábado (6) ou domingo (0), avançar para segunda
+        while (dia.getDay() === 0 || dia.getDay() === 6) {
+            dia.setDate(dia.getDate() + 1);
+        }
+
+        return dia.toISOString().split('T')[0];
+    }
 </script>
 <script src="{{ url_for('static', filename='js/programacao-lote.js') }}"></script>
+
+<!-- Scripts adicionais Sendas (opcional - se precisar de funções auxiliares) -->
+<!-- <script src="{{ url_for('static', filename='js/sendas_comparacao.js') }}"></script> -->
 
 {% endblock %}

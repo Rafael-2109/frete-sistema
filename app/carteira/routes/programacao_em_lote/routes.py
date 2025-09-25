@@ -111,7 +111,7 @@ def _buscar_dados_por_rede(portal):
     """
     dados_por_cnpj = {}
     
-    # 1. Buscar CNPJs na CarteiraPrincipal (pedidos pendentes) com cod_uf='SP'
+    # 1. Buscar CNPJs na CarteiraPrincipal (pedidos pendentes) com cod_uf='SP' e qtd_saldo > 0
     pedidos_carteira = db.session.query(
         CarteiraPrincipal.cnpj_cpf,
         CarteiraPrincipal.raz_social_red,
@@ -123,7 +123,8 @@ def _buscar_dados_por_rede(portal):
     ).filter(
         and_(
             CarteiraPrincipal.cod_uf == 'SP',
-            CarteiraPrincipal.ativo == True  # Filtrar apenas pedidos ativos
+            CarteiraPrincipal.ativo == True,  # Filtrar apenas pedidos ativos
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ FILTRAR APENAS COM SALDO > 0
         )
     ).group_by(
         CarteiraPrincipal.cnpj_cpf,
@@ -198,11 +199,14 @@ def _buscar_dados_por_rede(portal):
         if nf.cnpj_cpf and GrupoEmpresarial.identificar_portal(nf.cnpj_cpf) == portal:
             cnpj_key = nf.cnpj_cpf
             
-            # Verificar se este CNPJ já tem pedidos na carteira
+            # Verificar se este CNPJ já tem pedidos na carteira COM SALDO > 0
             pedidos_na_carteira = db.session.query(
                 distinct(CarteiraPrincipal.num_pedido)
             ).filter(
-                CarteiraPrincipal.cnpj_cpf == cnpj_key
+                and_(
+                    CarteiraPrincipal.cnpj_cpf == cnpj_key,
+                    CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ APENAS PEDIDOS COM SALDO > 0
+                )
             ).all()
             
             pedidos_na_carteira_set = {p[0] for p in pedidos_na_carteira}
@@ -553,7 +557,7 @@ def _adicionar_pedidos_cnpj(dados_cnpj, cnpj):
     """
     Adiciona informações detalhadas dos pedidos de um CNPJ
     """
-    # Buscar pedidos na CarteiraPrincipal
+    # Buscar pedidos na CarteiraPrincipal - APENAS COM SALDO > 0
     pedidos = db.session.query(
         CarteiraPrincipal.num_pedido,
         CarteiraPrincipal.data_pedido,
@@ -564,13 +568,16 @@ def _adicionar_pedidos_cnpj(dados_cnpj, cnpj):
     ).filter(
         and_(
             CarteiraPrincipal.cnpj_cpf == cnpj,
-            CarteiraPrincipal.ativo == True  # Filtrar apenas pedidos ativos
+            CarteiraPrincipal.ativo == True,  # Filtrar apenas pedidos ativos
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ FILTRAR APENAS COM SALDO > 0
         )
     ).group_by(
         CarteiraPrincipal.num_pedido,
         CarteiraPrincipal.data_pedido,
         CarteiraPrincipal.pedido_cliente,
         CarteiraPrincipal.observ_ped_1
+    ).having(
+        func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido) > 0  # ✅ GARANTIR QUE A SOMA DO GRUPO TAMBÉM É > 0
     ).all()
     
     for pedido in pedidos:
@@ -612,7 +619,7 @@ def _calcular_pendencias_pedido(pedido_info, num_pedido):
     Calcula valores pendentes de um pedido (CarteiraPrincipal - Separacao não sincronizada)
     E também calcula os valores totais originais
     """
-    # Buscar itens da carteira
+    # Buscar itens da carteira - APENAS COM SALDO > 0
     itens_carteira = db.session.query(
         CarteiraPrincipal.cod_produto,
         CarteiraPrincipal.qtd_saldo_produto_pedido,
@@ -620,7 +627,8 @@ def _calcular_pendencias_pedido(pedido_info, num_pedido):
     ).filter(
         and_(
             CarteiraPrincipal.num_pedido == num_pedido,
-            CarteiraPrincipal.ativo == True  # Filtrar apenas itens ativos
+            CarteiraPrincipal.ativo == True,  # Filtrar apenas itens ativos
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ APENAS ITENS COM SALDO > 0
         )
     ).all()
     

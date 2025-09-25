@@ -36,24 +36,26 @@ def converter_valor_brasileiro(valor_str: Union[str, None]) -> float:
         raise ValueError(f'Valor inválido: {valor_str}. Use formato: 1.234,56') from e
 
 
-def formatar_valor_brasileiro(valor_float: Union[float, None]) -> str:
+def formatar_valor_brasileiro(valor_float: Union[float, None], decimais: int = 2) -> str:
     """
     Formata um float para o padrão brasileiro (1.234,56)
-    
+
     Args:
         valor_float (float): Valor a ser formatado
-        
+        decimais (int): Número de casas decimais (padrão: 2)
+
     Returns:
         str: Valor formatado em padrão brasileiro
     """
     if valor_float is None:
-        return "0,00"
-    
+        return f"0,{'0' * decimais}"
+
     try:
-        # Formata com 2 casas decimais e separadores brasileiros
-        return f"{valor_float:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        # Formata com N casas decimais e separadores brasileiros
+        formato = f",.{decimais}f"
+        return f"{valor_float:{formato}}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except (ValueError, TypeError):
-        return "0,00"
+        return f"0,{'0' * decimais}"
 
 
 def validar_valor_brasileiro(valor_str: Union[str, None]) -> Tuple[bool, str]:
