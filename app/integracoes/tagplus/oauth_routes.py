@@ -377,16 +377,32 @@ def listar_nfs():
         oauth = TagPlusOAuth2V2(api_type='notas')
 
         # Faz requisição para listar NFs
+        # Primeiro tenta com filtros de data
+        params = {
+            'since': data_inicio.strftime('%Y-%m-%d'),
+            'until': data_fim.strftime('%Y-%m-%d'),
+            'per_page': 100
+        }
+
+        # Log para debug
+        logger.info(f"Buscando NFs com params: {params}")
+
         response = oauth.make_request(
             'GET',
             '/nfes',
-            params={
-                'data_emissao_inicio': data_inicio.strftime('%Y-%m-%d'),
-                'data_emissao_fim': data_fim.strftime('%Y-%m-%d'),
-                'limite': 100,
-                'status': 'autorizada'
-            }
+            params=params
         )
+
+        # Se não retornar sucesso, tenta sem filtros
+        if response and response.status_code == 200:
+            data = response.json()
+            if isinstance(data, list) and len(data) == 0:
+                logger.info("Sem NFs com filtro de data, tentando sem filtros...")
+                response = oauth.make_request(
+                    'GET',
+                    '/nfes',
+                    params={'per_page': 20}
+                )
 
         if not response:
             return jsonify({'error': 'Erro ao buscar NFs'}), 500
@@ -399,23 +415,47 @@ def listar_nfs():
 
         data = response.json()
 
-        # Extrai NFs do response
-        if isinstance(data, dict):
-            nfes = data.get('data', data.get('nfes', []))
+        # Log para debug
+        logger.info(f"Tipo de resposta: {type(data)}")
+
+        # Extrai NFs do response - a API retorna uma lista direta
+        if isinstance(data, list):
+            nfes = data
+        elif isinstance(data, dict):
+            # Caso retorne em um envelope
+            nfes = data.get('data', data.get('nfes', data.get('items', [])))
         else:
-            nfes = data if isinstance(data, list) else []
+            nfes = []
+
+        logger.info(f"Total de NFs encontradas: {len(nfes)}")
 
         # Formata NFs para exibição
         nfes_formatadas = []
         for nfe in nfes:
+            # Extrai cliente - pode estar em 'cliente' ou 'destinatario'
+            cliente_obj = nfe.get('cliente') or nfe.get('destinatario', {})
+
+            # Extrai nome do cliente
+            if isinstance(cliente_obj, dict):
+                nome_cliente = cliente_obj.get('nome') or cliente_obj.get('razao_social') or 'N/A'
+                cnpj_cliente = cliente_obj.get('cnpj') or cliente_obj.get('cpf') or 'N/A'
+            else:
+                nome_cliente = 'N/A'
+                cnpj_cliente = 'N/A'
+
+            # Formata data
+            data_emissao = nfe.get('data_emissao', '')
+            if data_emissao and 'T' in data_emissao:
+                data_emissao = data_emissao.split('T')[0]
+
             nfes_formatadas.append({
                 'id': nfe.get('id'),
                 'numero': nfe.get('numero'),
                 'serie': nfe.get('serie', '1'),
-                'data_emissao': nfe.get('data_emissao'),
-                'cliente': nfe.get('cliente', {}).get('nome', 'N/A'),
-                'cnpj': nfe.get('cliente', {}).get('cnpj', nfe.get('cliente', {}).get('cpf', 'N/A')),
-                'valor_total': nfe.get('valor_total', 0),
+                'data_emissao': data_emissao,
+                'cliente': nome_cliente,
+                'cnpj': cnpj_cliente,
+                'valor_total': nfe.get('valor_nota') or nfe.get('valor_total', 0),
                 'status': nfe.get('status', 'N/A'),
                 'chave_acesso': nfe.get('chave_acesso', '')
             })
