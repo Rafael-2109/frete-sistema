@@ -336,13 +336,17 @@ def lista_pedidos():
             Pedido.expedicao.asc().nullslast(), # 4º Data de expedição
         )
 
-    pedidos = query.all()
-    
+    # Paginação com 50 itens por página
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+    pedidos = paginacao.items
+
     # ✅ NOVO: Busca o último embarque válido para cada pedido
-    
+
     # Cria um dicionário para mapear lote_id -> último embarque
     embarques_por_lote = {}
-    
+
     # Busca todos os lotes únicos dos pedidos
     lotes_ids = [p.separacao_lote_id for p in pedidos if p.separacao_lote_id]
     
@@ -463,8 +467,7 @@ def lista_pedidos():
                 params.pop(chave, None)  # Remove parâmetro
             else:
                 params[chave] = valor  # Define/atualiza parâmetro
-        
-        
+
         return url_for('pedidos.lista_pedidos') + '?' + urlencode(params)
        
     return render_template(
@@ -472,6 +475,7 @@ def lista_pedidos():
         filtro_form=filtro_form,
         cotar_form=cotar_form,
         pedidos=pedidos,
+        paginacao=paginacao,
         contadores_data=contadores_data,
         contadores_status=contadores_status,
         filtro_status_ativo=filtro_status,
