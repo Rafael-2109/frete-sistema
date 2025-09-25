@@ -61,17 +61,87 @@
     </div>
   </form>
 
+  <!-- Paginação completa no topo -->
+  {% if paginacao and paginacao.pages > 1 %}
+  <nav class="mt-3 mb-3 d-flex justify-content-center">
+    <ul class="pagination">
+      {% set args_no_page = request.args.copy() %}
+      {% if 'page' in args_no_page %}
+        {% set _ = args_no_page.pop('page') %}
+      {% endif %}
+
+      <!-- Primeira página -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('separacao.listar', page=1, **args_no_page) }}">«</a>
+      </li>
+
+      <!-- Anterior -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('separacao.listar', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+      </li>
+
+      <!-- Páginas ao redor -->
+      {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg>0 and pg<=paginacao.pages %}
+      <li class="page-item {% if pg == paginacao.page %}active{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('separacao.listar', page=pg, **args_no_page) }}">
+          {{ pg }}
+        </a>
+      </li>
+      {% endfor %}
+
+      <!-- Próxima -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('separacao.listar', page=paginacao.next_num, **args_no_page) }}">›</a>
+      </li>
+
+      <!-- Última -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('separacao.listar', page=paginacao.pages, **args_no_page) }}">»</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+
+  <!-- Informação de paginação antes da tabela -->
+  {% if paginacao %}
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div>
+      <span class="text-muted">
+        Exibindo
+        <strong>{{ (paginacao.page - 1) * paginacao.per_page + 1 }}</strong> -
+        <strong>{{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}</strong>
+        de <strong>{{ paginacao.total }}</strong> registros
+      </span>
+    </div>
+    <div>
+      <span class="badge bg-info">Página {{ paginacao.page }} de {{ paginacao.pages }}</span>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- TABELA responsiva -->
   <div class="table-responsive">
     <table class="table table-bordered table-hover align-middle">
       <thead class="table-light">
         <tr>
-          {# 
+          {#
             Captura da coluna e direção atuais para exibir as setinhas e
-            construir as URLs de ordenação. 
+            construir as URLs de ordenação.
           #}
           {% set current_sort = request.args.get('sort','') %}
           {% set current_dir = request.args.get('direction','asc') %}
+
+          {# Construir query string excluindo sort e direction #}
+          {% set other_params = [] %}
+          {% for key, value in request.args.items() if key not in ['sort', 'direction', 'page'] %}
+            {% set _ = other_params.append(key ~ '=' ~ value) %}
+          {% endfor %}
+          {% set query_suffix = ('&' ~ other_params|join('&')) if other_params else '' %}
 
           <!-- ID -->
           <th style="white-space:nowrap;">
@@ -80,7 +150,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=id&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=id&direction={{ next_dir }}{{ query_suffix }}">
               ID
               {% if current_sort == 'id' %}
                 <span class="ms-1">
@@ -101,7 +171,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=num_pedido&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=num_pedido&direction={{ next_dir }}{{ query_suffix }}">
               Pedido
               {% if current_sort == 'num_pedido' %}
                 <span class="ms-1">
@@ -118,7 +188,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=data_pedido&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=data_pedido&direction={{ next_dir }}{{ query_suffix }}">
               Data Pedido
               {% if current_sort == 'data_pedido' %}
                 <span class="ms-1">
@@ -135,7 +205,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=cnpj_cpf&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=cnpj_cpf&direction={{ next_dir }}{{ query_suffix }}">
               CNPJ/CPF
               {% if current_sort == 'cnpj_cpf' %}
                 <span class="ms-1">
@@ -152,7 +222,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=raz_social_red&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=raz_social_red&direction={{ next_dir }}{{ query_suffix }}">
               Razão Social
               {% if current_sort == 'raz_social_red' %}
                 <span class="ms-1">
@@ -168,7 +238,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=nome_cidade&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=nome_cidade&direction={{ next_dir }}{{ query_suffix }}">
               Cidade
               {% if current_sort == 'nome_cidade' %}
                 <span class="ms-1">
@@ -184,7 +254,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=cod_uf&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=cod_uf&direction={{ next_dir }}{{ query_suffix }}">
               UF
               {% if current_sort == 'cod_uf' %}
                 <span class="ms-1">
@@ -200,7 +270,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=cod_produto&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=cod_produto&direction={{ next_dir }}{{ query_suffix }}">
               Cod.
               {% if current_sort == 'cod_produto' %}
                 <span class="ms-1">
@@ -216,7 +286,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=nome_produto&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=nome_produto&direction={{ next_dir }}{{ query_suffix }}">
               Produto
               {% if current_sort == 'nome_produto' %}
                 <span class="ms-1">
@@ -232,7 +302,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=qtd_saldo&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=qtd_saldo&direction={{ next_dir }}{{ query_suffix }}">
               Qtd.
               {% if current_sort == 'qtd_saldo' %}
                 <span class="ms-1">
@@ -250,7 +320,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=valor_saldo&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=valor_saldo&direction={{ next_dir }}{{ query_suffix }}">
               Valor
               {% if current_sort == 'valor_saldo' %}
                 <span class="ms-1">
@@ -266,7 +336,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=pallet&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=pallet&direction={{ next_dir }}{{ query_suffix }}">
               Pallet
               {% if current_sort == 'pallet' %}
                 <span class="ms-1">
@@ -283,7 +353,7 @@
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=peso&direction={{ next_dir }}{% if request.args %}{{ '&' ~ request.args|toquerystring(exclude='sort,direction') }}{% endif %}">
+            <a href="?sort=peso&direction={{ next_dir }}{{ query_suffix }}">
               Peso
               {% if current_sort == 'peso' %}
                 <span class="ms-1">

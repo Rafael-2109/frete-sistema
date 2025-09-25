@@ -31,120 +31,187 @@
     {% endif %}
   </div>
 
-  <!-- Filtros Avançados -->
-  <div class="card mb-4">
-    <div class="card-header">
-      <h5 class="mb-0">
-        <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosAvancados" 
-                aria-expanded="false" aria-controls="filtrosAvancados">
-          <i class="fas fa-filter"></i> Filtros Avançados
-          {% if filtros_aplicados %}
-            <span class="badge bg-primary">Filtros Ativos</span>
-          {% endif %}
-        </button>
-      </h5>
-    </div>
-    <div class="collapse" id="filtrosAvancados">
-      <div class="card-body">
-        <form method="GET" action="{{ url_for('embarques.listar_embarques') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-          <!-- ✅ NOVO: Preserva o parâmetro mostrar_todos ao aplicar filtros -->
-          {% if mostrar_todos %}
-            <input type="hidden" name="mostrar_todos" value="true">
-          {% endif %}
-          <div class="row">
-            <!-- Filtros de Data -->
-            <div class="col-md-3">
-              <label for="data_inicio" class="form-label">Data Início</label>
-              {{ form_filtros.data_inicio(id="data_inicio") }}
-            </div>
-            <div class="col-md-3">
-              <label for="data_fim" class="form-label">Data Fim</label>
-              {{ form_filtros.data_fim(id="data_fim") }}
-            </div>
-            
-            <!-- Filtros de Data Prevista -->
-            <div class="col-md-3">
-              <label for="data_prevista_inicio" class="form-label">Data Prevista Início</label>
-              {{ form_filtros.data_prevista_inicio(id="data_prevista_inicio") }}
-            </div>
-            <div class="col-md-3">
-              <label for="data_prevista_fim" class="form-label">Data Prevista Fim</label>
-              {{ form_filtros.data_prevista_fim(id="data_prevista_fim") }}
-            </div>
-          </div>
-          
-          <div class="row mt-3">
-            <!-- Filtros de Documentos -->
-            <div class="col-md-3">
-              <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
-              {{ form_filtros.nota_fiscal(id="nota_fiscal") }}
-            </div>
-            <div class="col-md-3">
-              <label for="pedido" class="form-label">Pedido</label>
-              {{ form_filtros.pedido(id="pedido") }}
+    <!-- Filtros Avançados -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0">
+          <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosAvancados" 
+                  aria-expanded="false" aria-controls="filtrosAvancados">
+            <i class="fas fa-filter"></i> Filtros Avançados
+            {% if filtros_aplicados %}
+              <span class="badge bg-primary">Filtros Ativos</span>
+            {% endif %}
+          </button>
+        </h5>
+      </div>
+      <div class="collapse" id="filtrosAvancados">
+        <div class="card-body">
+          <form method="GET" action="{{ url_for('embarques.listar_embarques') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <!-- ✅ NOVO: Preserva o parâmetro mostrar_todos ao aplicar filtros -->
+            {% if mostrar_todos %}
+              <input type="hidden" name="mostrar_todos" value="true">
+            {% endif %}
+            <div class="row">
+              <!-- Filtros de Data -->
+              <div class="col-md-3">
+                <label for="data_inicio" class="form-label">Data Início</label>
+                {{ form_filtros.data_inicio(id="data_inicio") }}
+              </div>
+              <div class="col-md-3">
+                <label for="data_fim" class="form-label">Data Fim</label>
+                {{ form_filtros.data_fim(id="data_fim") }}
+              </div>
+              
+              <!-- Filtros de Data Prevista -->
+              <div class="col-md-3">
+                <label for="data_prevista_inicio" class="form-label">Data Prevista Início</label>
+                {{ form_filtros.data_prevista_inicio(id="data_prevista_inicio") }}
+              </div>
+              <div class="col-md-3">
+                <label for="data_prevista_fim" class="form-label">Data Prevista Fim</label>
+                {{ form_filtros.data_prevista_fim(id="data_prevista_fim") }}
+              </div>
             </div>
             
-            <!-- Transportadora -->
-            <div class="col-md-3">
-              <label for="transportadora_id" class="form-label">Transportadora</label>
-              {{ form_filtros.transportadora_id(id="transportadora_id") }}
+            <div class="row mt-3">
+              <!-- Filtros de Documentos -->
+              <div class="col-md-3">
+                <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
+                {{ form_filtros.nota_fiscal(id="nota_fiscal") }}
+              </div>
+              <div class="col-md-3">
+                <label for="pedido" class="form-label">Pedido</label>
+                {{ form_filtros.pedido(id="pedido") }}
+              </div>
+              
+              <!-- Transportadora -->
+              <div class="col-md-3">
+                <label for="transportadora_id" class="form-label">Transportadora</label>
+                {{ form_filtros.transportadora_id(id="transportadora_id") }}
+              </div>
+              
+              <!-- Status do Embarque -->
+              <div class="col-md-3">
+                <label for="status" class="form-label">Status do Embarque</label>
+                {{ form_filtros.status(id="status") }}
+              </div>
             </div>
             
-            <!-- Status do Embarque -->
-            <div class="col-md-3">
-              <label for="status" class="form-label">Status do Embarque</label>
-              {{ form_filtros.status(id="status") }}
-            </div>
-          </div>
-          
-          <div class="row mt-3">
-            <!-- Status da Portaria -->
-            <div class="col-md-3">
-              <label for="status_portaria" class="form-label">Status da Portaria</label>
-              {{ form_filtros.status_portaria(id="status_portaria") }}
+            <div class="row mt-3">
+              <!-- Status da Portaria -->
+              <div class="col-md-3">
+                <label for="status_portaria" class="form-label">Status da Portaria</label>
+                {{ form_filtros.status_portaria(id="status_portaria") }}
+              </div>
+              
+              <!-- Status das NFs -->
+              <div class="col-md-3">
+                <label for="status_nfs" class="form-label">Status das NFs</label>
+                {{ form_filtros.status_nfs(id="status_nfs") }}
+              </div>
+              
+              <!-- Status dos Fretes -->
+              <div class="col-md-3">
+                <label for="status_fretes" class="form-label">Status dos Fretes</label>
+                {{ form_filtros.status_fretes(id="status_fretes") }}
+              </div>
+              
+              <!-- Busca Geral -->
+              <div class="col-md-3">
+                <label for="buscar_texto" class="form-label">Busca Geral</label>
+                {{ form_filtros.buscar_texto(id="buscar_texto") }}
+              </div>
             </div>
             
-            <!-- Status das NFs -->
-            <div class="col-md-3">
-              <label for="status_nfs" class="form-label">Status das NFs</label>
-              {{ form_filtros.status_nfs(id="status_nfs") }}
+            <div class="row mt-3">
+              <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary me-2">
+                  <i class="fas fa-search"></i> Filtrar
+                </button>
+                <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-secondary">
+                  <i class="fas fa-times"></i> Limpar
+                </a>
+              </div>
             </div>
-            
-            <!-- Status dos Fretes -->
-            <div class="col-md-3">
-              <label for="status_fretes" class="form-label">Status dos Fretes</label>
-              {{ form_filtros.status_fretes(id="status_fretes") }}
-            </div>
-            
-            <!-- Busca Geral -->
-            <div class="col-md-3">
-              <label for="buscar_texto" class="form-label">Busca Geral</label>
-              {{ form_filtros.buscar_texto(id="buscar_texto") }}
-            </div>
-          </div>
-          
-          <div class="row mt-3">
-            <div class="col-12 d-flex justify-content-end">
-              <button type="submit" class="btn btn-primary me-2">
-                <i class="fas fa-search"></i> Filtrar
-              </button>
-              <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-secondary">
-                <i class="fas fa-times"></i> Limpar
-              </a>
-            </div>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
-  </div>
+  
 
   <!-- Resumo dos Resultados -->
   {% if filtros_aplicados %}
   <div class="alert alert-info">
-    <i class="fas fa-info-circle"></i> 
+    <i class="fas fa-info-circle"></i>
     Encontrados <strong>{{ embarques|length }}</strong> embarque(s) com os filtros aplicados.
     <a href="{{ url_for('embarques.listar_embarques') }}" class="alert-link">Limpar filtros</a>
+  </div>
+  {% endif %}
+
+  <!-- Paginação e informações na mesma linha -->
+  {% if paginacao %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <!-- Informação de registros à esquerda -->
+    <div>
+      <span class="text-muted">
+        Exibindo
+        <strong>{{ (paginacao.page - 1) * paginacao.per_page + 1 }}</strong> -
+        <strong>{{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}</strong>
+        de <strong>{{ paginacao.total }}</strong> registros
+      </span>
+    </div>
+
+    <!-- Paginação no centro -->
+    {% if paginacao.pages > 1 %}
+    <nav aria-label="Navegação de páginas">
+      {% set args_no_page = {} %}
+      {% for key, value in request.args.items() if key != 'page' %}
+        {% set _ = args_no_page.update({key: value}) %}
+      {% endfor %}
+
+      <ul class="pagination pagination-sm mb-0">
+        <!-- Primeira -->
+        <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('embarques.listar_embarques', page=1, **args_no_page) }}">«</a>
+        </li>
+
+        <!-- Anterior -->
+        <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('embarques.listar_embarques', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+        </li>
+
+        <!-- Páginas ao redor -->
+        {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg>0 and pg<=paginacao.pages %}
+        <li class="page-item {% if pg == paginacao.page %}active{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('embarques.listar_embarques', page=pg, **args_no_page) }}">
+            {{ pg }}
+          </a>
+        </li>
+        {% endfor %}
+
+        <!-- Próxima -->
+        <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('embarques.listar_embarques', page=paginacao.next_num, **args_no_page) }}">›</a>
+        </li>
+
+        <!-- Última -->
+        <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('embarques.listar_embarques', page=paginacao.pages, **args_no_page) }}">»</a>
+        </li>
+      </ul>
+    </nav>
+    {% endif %}
+
+    <!-- Informação de página à direita -->
+    <div>
+      <span class="badge bg-info">Página {{ paginacao.page }} de {{ paginacao.pages }}</span>
+    </div>
   </div>
   {% endif %}
 
@@ -237,6 +304,61 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Paginação completa após a tabela -->
+  {% if paginacao and paginacao.pages > 1 %}
+  <nav aria-label="Navegação de páginas">
+    {% set args_no_page = {} %}
+    {% for key, value in request.args.items() if key != 'page' %}
+      {% set _ = args_no_page.update({key: value}) %}
+    {% endfor %}
+
+    <ul class="pagination justify-content-center mt-3">
+      <!-- Primeira -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('embarques.listar_embarques', page=1, **args_no_page) }}">«</a>
+      </li>
+
+      <!-- Anterior -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('embarques.listar_embarques', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+      </li>
+
+      <!-- Páginas ao redor -->
+      {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg>0 and pg<=paginacao.pages %}
+      <li class="page-item {% if pg == paginacao.page %}active{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('embarques.listar_embarques', page=pg, **args_no_page) }}">
+          {{ pg }}
+        </a>
+      </li>
+      {% endfor %}
+
+      <!-- Próxima -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('embarques.listar_embarques', page=paginacao.next_num, **args_no_page) }}">›</a>
+      </li>
+
+      <!-- Última -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('embarques.listar_embarques', page=paginacao.pages, **args_no_page) }}">»</a>
+      </li>
+    </ul>
+  </nav>
+
+  <div class="text-center">
+    Registros
+    {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
+    –
+    {{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}
+    de
+    {{ paginacao.total }}
+  </div>
+  {% endif %}
 
   {% if embarques|length == 0 %}
   <div class="alert alert-warning text-center">

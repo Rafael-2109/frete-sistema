@@ -595,8 +595,11 @@ def listar_embarques():
     # Remover duplicados caso o embarque tenha vários itens que casam com a busca
     query = query.distinct()
 
-    # Executa a query
-    embarques = query.all()
+    # Paginação com 100 itens por página
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+    embarques = paginacao.items
     
     # Aplica filtros baseados nas propriedades calculadas (status_nfs e status_fretes)
     if status_nfs and status_nfs != '':
@@ -606,8 +609,9 @@ def listar_embarques():
         embarques = [e for e in embarques if e.status_fretes == status_fretes]
 
     return render_template(
-        'embarques/listar_embarques.html', 
-        embarques=embarques, 
+        'embarques/listar_embarques.html',
+        embarques=embarques,
+        paginacao=paginacao,
         form_filtros=form_filtros,
         filtros_aplicados=filtros_aplicados,
         mostrar_todos=mostrar_todos

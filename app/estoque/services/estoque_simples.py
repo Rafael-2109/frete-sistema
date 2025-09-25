@@ -73,14 +73,17 @@ class ServicoEstoqueSimples:
             codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
             hoje = date.today()
 
-            # Query para itens ATRASADOS (expedicao < hoje)
+            # Query para itens ATRASADOS (expedicao < hoje) ou SEM DATA (expedicao NULL)
             # Estes serão agrupados como saída para HOJE
             atrasados = db.session.query(
                 func.sum(Separacao.qtd_saldo).label('quantidade')
             ).filter(
                 Separacao.cod_produto.in_(codigos),
                 Separacao.sincronizado_nf == False,  # Apenas não sincronizados
-                Separacao.expedicao < hoje  # ATRASADOS
+                db.or_(
+                    Separacao.expedicao < hoje,  # ATRASADOS
+                    Separacao.expedicao == None   # SEM DATA
+                )
             ).scalar()
 
             # Query otimizada com GROUP BY para itens futuros
@@ -106,11 +109,16 @@ class ServicoEstoqueSimples:
                     saidas[hoje] += float(atrasados)
                 else:
                     saidas[hoje] = float(atrasados)
-                logger.info(f"[ESTOQUE] Produto {cod_produto}: {float(atrasados):.2f} unidades ATRASADAS adicionadas para hoje")
+                logger.info(f"[ESTOQUE] Produto {cod_produto}: {float(atrasados):.2f} unidades ATRASADAS/SEM DATA adicionadas para hoje")
 
+            # Processar resultados normais, ACUMULANDO valores para a mesma data
             for resultado in resultados:
                 if resultado.data and resultado.quantidade:
-                    saidas[resultado.data] = float(resultado.quantidade)
+                    # IMPORTANTE: Acumular valores em vez de sobrescrever
+                    if resultado.data in saidas:
+                        saidas[resultado.data] += float(resultado.quantidade)
+                    else:
+                        saidas[resultado.data] = float(resultado.quantidade)
 
             return saidas
             

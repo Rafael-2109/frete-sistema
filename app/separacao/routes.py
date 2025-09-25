@@ -2,6 +2,7 @@ import os
 import tempfile
 import numpy as np
 import pandas as pd
+from datetime import datetime
 from flask import Blueprint, render_template, redirect, flash, request, jsonify
 from flask_login import login_required
 from app.utils.lote_utils import gerar_lote_id
@@ -192,16 +193,74 @@ def importar():
 
 @separacao_bp.route('/listar')
 def listar():
-    separacoes = Separacao.query.order_by(Separacao.id.desc()).all()
-    
-    # Simplificado: usa apenas dados da Separação
+    # Construir query base com filtros
+    query = Separacao.query
+
+    # Aplicar filtros da requisição
+    if num_pedido := request.args.get('num_pedido'):
+        query = query.filter(Separacao.num_pedido.ilike(f'%{num_pedido}%'))
+
+    if cnpj_cpf := request.args.get('cnpj_cpf'):
+        query = query.filter(Separacao.cnpj_cpf.ilike(f'%{cnpj_cpf}%'))
+
+    if data_ini := request.args.get('data_ini'):
+        try:
+            data_ini_parsed = datetime.strptime(data_ini, '%Y-%m-%d').date()
+            query = query.filter(Separacao.data_pedido >= data_ini_parsed)
+        except ValueError:
+            pass
+
+    if data_fim := request.args.get('data_fim'):
+        try:
+            data_fim_parsed = datetime.strptime(data_fim, '%Y-%m-%d').date()
+            query = query.filter(Separacao.data_pedido <= data_fim_parsed)
+        except ValueError:
+            pass
+
+    # Aplicar ordenação
+    sort = request.args.get('sort', 'id')
+    direction = request.args.get('direction', 'desc')
+
+    # Mapa de colunas ordenáveis
+    sortable_columns = {
+        'id': Separacao.id,
+        'num_pedido': Separacao.num_pedido,
+        'cnpj_cpf': Separacao.cnpj_cpf,
+        'raz_social_red': Separacao.raz_social_red,
+        'nome_cidade': Separacao.nome_cidade,
+        'cod_uf': Separacao.cod_uf,
+        'data_pedido': Separacao.data_pedido,
+        'expedicao': Separacao.expedicao,
+        'agendamento': Separacao.agendamento,
+        'cod_produto': Separacao.cod_produto,
+        'nome_produto': Separacao.nome_produto,
+        'qtd_saldo': Separacao.qtd_saldo,
+        'valor_saldo': Separacao.valor_saldo,
+        'pallet': Separacao.pallet,
+        'peso': Separacao.peso
+    }
+
+    if sort in sortable_columns:
+        coluna = sortable_columns[sort]
+        if direction == 'desc':
+            coluna = coluna.desc()
+        query = query.order_by(coluna)
+    else:
+        query = query.order_by(Separacao.id.desc())
+
+    # Paginação com 200 itens por página
+    page = request.args.get('page', 1, type=int)
+    per_page = 200
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Processar status para cada item da página atual
     separacoes_com_status = []
-    for separacao in separacoes:
+    for separacao in paginacao.items:
         # Proteção: verifica se a property existe e funciona
         try:
             # Status vem direto da property status_calculado da Separação
             status = separacao.status_calculado if hasattr(separacao, 'status_calculado') else None
-            
+
             # Fallback caso a property não funcione
             if not status:
                 if separacao.status == 'PREVISAO':
@@ -214,18 +273,20 @@ def listar():
                     status = 'COTADO'
                 else:
                     status = 'ABERTO'
-            
+
             separacao.status_pedido = status
             separacao.pode_excluir = status == 'ABERTO'
-            
+
         except Exception as e:
             # Fallback final em caso de erro
             separacao.status_pedido = separacao.status or 'ABERTO'
             separacao.pode_excluir = True
-        
+
         separacoes_com_status.append(separacao)
-    
-    return render_template("separacao/listar.html", pedidos=separacoes_com_status)
+
+    return render_template("separacao/listar.html",
+                           pedidos=separacoes_com_status,
+                           paginacao=paginacao)
 
 
 @separacao_bp.route('/excluir/<int:separacao_id>', methods=['POST'])
