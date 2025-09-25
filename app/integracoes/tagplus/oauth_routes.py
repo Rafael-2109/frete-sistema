@@ -45,7 +45,7 @@ AUTH_PAGE_TEMPLATE = """
             <li>API Clientes:
                 {% if tokens_clientes %}
                     ✅ Autorizada
-                    <br><small style="color: #666;">Token: {{ tokens_clientes_display }}</small>
+                    <br><input type="text" value="{{ tokens_clientes_display }}" readonly style="width: 100%; padding: 5px; margin-top: 5px; font-size: 11px; background: #f0f0f0;" onclick="this.select();">
                 {% else %}
                     ⚠️ Não autorizada
                 {% endif %}
@@ -53,7 +53,7 @@ AUTH_PAGE_TEMPLATE = """
             <li>API Notas:
                 {% if tokens_notas %}
                     ✅ Autorizada
-                    <br><small style="color: #666;">Token: {{ tokens_notas_display }}</small>
+                    <br><input type="text" value="{{ tokens_notas_display }}" readonly style="width: 100%; padding: 5px; margin-top: 5px; font-size: 11px; background: #f0f0f0;" onclick="this.select();">
                 {% else %}
                     ⚠️ Não autorizada
                 {% endif %}
@@ -227,9 +227,9 @@ def index():
     tokens_clientes = session.get('tagplus_clientes_access_token')
     tokens_notas = session.get('tagplus_notas_access_token')
 
-    # Pega apenas os primeiros caracteres para exibir
-    tokens_clientes_display = tokens_clientes[:30] + '...' if tokens_clientes else None
-    tokens_notas_display = tokens_notas[:30] + '...' if tokens_notas else None
+    # Mostra o token completo (removido limite ridículo)
+    tokens_clientes_display = tokens_clientes if tokens_clientes else None
+    tokens_notas_display = tokens_notas if tokens_notas else None
 
     status = request.args.get('status')
     status_type = request.args.get('status_type', 'success')
