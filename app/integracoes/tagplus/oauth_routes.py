@@ -432,32 +432,37 @@ def listar_nfs():
         # Formata NFs para exibição
         nfes_formatadas = []
         for nfe in nfes:
-            # Extrai cliente - pode estar em 'cliente' ou 'destinatario'
-            cliente_obj = nfe.get('cliente') or nfe.get('destinatario', {})
+            # A API retorna estrutura simplificada com destinatário
+            destinatario = nfe.get('destinatario', {})
 
-            # Extrai nome do cliente
-            if isinstance(cliente_obj, dict):
-                nome_cliente = cliente_obj.get('nome') or cliente_obj.get('razao_social') or 'N/A'
-                cnpj_cliente = cliente_obj.get('cnpj') or cliente_obj.get('cpf') or 'N/A'
+            # Extrai dados do destinatário
+            if isinstance(destinatario, dict):
+                nome_cliente = destinatario.get('razao_social') or destinatario.get('nome') or 'N/A'
+                cnpj_cliente = destinatario.get('cnpj') or destinatario.get('cpf') or 'N/A'
             else:
                 nome_cliente = 'N/A'
                 cnpj_cliente = 'N/A'
 
-            # Formata data
-            data_emissao = nfe.get('data_emissao', '')
-            if data_emissao and 'T' in data_emissao:
-                data_emissao = data_emissao.split('T')[0]
+            # Data pode estar em data_entrada_saida ou data_emissao
+            data_nf = nfe.get('data_entrada_saida') or nfe.get('data_emissao') or ''
+            if data_nf and 'T' in str(data_nf):
+                data_nf = str(data_nf).split('T')[0]
+
+            # Se não tiver data, usa placeholder
+            if not data_nf:
+                data_nf = 'Sem data'
 
             nfes_formatadas.append({
                 'id': nfe.get('id'),
+                'id_nota': nfe.get('id_nota'),
                 'numero': nfe.get('numero'),
-                'serie': nfe.get('serie', '1'),
-                'data_emissao': data_emissao,
+                'serie': nfe.get('serie', 1),
+                'data_emissao': data_nf,
                 'cliente': nome_cliente,
                 'cnpj': cnpj_cliente,
-                'valor_total': nfe.get('valor_nota') or nfe.get('valor_total', 0),
-                'status': nfe.get('status', 'N/A'),
-                'chave_acesso': nfe.get('chave_acesso', '')
+                'valor_total': nfe.get('valor_nota', 0),
+                'cfop': nfe.get('cfop', ''),
+                'status': 'Autorizada'  # Lista simplificada só traz autorizadas
             })
 
         return jsonify({

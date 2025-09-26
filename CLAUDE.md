@@ -41,11 +41,12 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nível 
 
 ## SE NÃO TIVER CERTEZA, NÃO ALTERE E PERGUNTE
 
-## 🔴 LEIA TAMBÉM: 
+## 🔴 LEIA TAMBÉM:
 - **REGRAS_NEGOCIO.md** - Regras de negócio e comportamento do sistema
 - **ESPECIFICACAO_SINCRONIZACAO_ODOO.md** - Processo de sincronização com Odoo (futuro)
 - **FLUXO_SINCRONIZACAO_NF.md** - Fluxogramas do processo de NF (futuro)
 - **CARD_SEPARACAO.md** - Detalhamento da função do Card de Separação e Separação Compacta na Carteira Agrupada
+- **app/integracoes/tagplus/DOCUMENTACAO_API_TAGPLUS.md** - 🔴 DOCUMENTAÇÃO CRÍTICA da API TagPlus com endpoints testados e estruturas reais
 
 Este arquivo contém os nomes corretos dos campos de todos os modelos para evitar erros como `data_expedicao_pedido` (❌ INCORRETO) em vez de `expedicao` (✅ CORRETO).
 

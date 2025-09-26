@@ -1,0 +1,47 @@
+{
+  "id_nota": 2686,
+  "id": 2659,
+  "numero": 3706,
+  "serie": 1,
+  "destinatario": {
+    "id": 1375,
+    "tipo": "J",
+    "razao_social": "CESTA BASICA BRASIL COMERCIO DE ALIMENTOS LT",
+    "cpf": null,
+    "cnpj": "04.108.518/0001-02",
+    "enderecos": [
+      {
+        "id": 2668,
+        "id_endereco": 2014,
+        "principal": true,
+        "exterior": false,
+        "cep": "13502-546",
+        "logradouro": "AVENIDA CABO BASÍLIO ZECHIM JÚNIOR",
+        "numero": "106",
+        "complemento": "GALPAOD1 D2 E D3",
+        "bairro": "JARDIM NOVO II",
+        "cidade": {
+          "id": 9122,
+          "codigo": 3543907,
+          "nome": "RIO CLARO",
+          "estado": {
+            "id": 26,
+            "codigo": 35,
+            "sigla": "SP",
+            "nome": "SAO PAULO"
+          }
+        },
+        "pais": {
+          "id": 1,
+          "codigo": 1058,
+          "nome": "BRASIL"
+        },
+        "tipo_cadastro": null,
+        "informacoes_adicionais": ""
+      }
+    ]
+  },
+  "cfop": "5.403",
+  "data_entrada_saida": null,
+  "valor_nota": 28594.78
+}
