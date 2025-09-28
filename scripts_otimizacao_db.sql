@@ -139,8 +139,6 @@ ORDER BY pg_total_relation_size(relid) DESC;
 WITH index_info AS (
     SELECT
         schemaname,
-        tablename,
-        indexname,
         array_to_string(array_agg(attname ORDER BY attnum), ', ') AS columns
     FROM pg_index i
     JOIN pg_class c ON c.oid = i.indexrelid
@@ -148,22 +146,22 @@ WITH index_info AS (
     JOIN pg_stat_user_indexes ui ON ui.indexrelid = i.indexrelid
     JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
     WHERE n.nspname = 'public'
-    GROUP BY schemaname, tablename, indexname
+    GROUP BY schemaname, indexname
 )
 SELECT 
-    tablename,
+    relname,
     columns,
     array_agg(indexname) as indices_on_same_columns,
     count(*) as index_count
 FROM index_info
-GROUP BY tablename, columns
+GROUP BY relname, columns
 HAVING count(*) > 1
-ORDER BY tablename, columns;
+ORDER BY relname, columns;
 
 -- 3.6 Verificar estatísticas de cache hit ratio (ideal > 99%)
 SELECT 
     schemaname,
-    tablename,
+    relname,
     heap_blks_read,
     heap_blks_hit,
     CASE 
@@ -178,8 +176,8 @@ ORDER BY heap_blks_read + heap_blks_hit DESC;
 -- 3.7 Verificar bloat nas tabelas (espaço desperdiçado)
 SELECT
     schemaname,
-    tablename,
-    pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS table_size,
+    relname,
+    pg_size_pretty(pg_relation_size(schemaname||'.'||relname)) AS table_size,
     n_dead_tup AS dead_tuples,
     n_live_tup AS live_tuples,
     CASE 
@@ -229,13 +227,13 @@ VACUUM ANALYZE relatorio_faturamento_importado;
 -- Listar todos os índices criados
 SELECT 
     schemaname,
-    tablename,
+    relname,
     indexname,
     indexdef
 FROM pg_indexes
 WHERE schemaname = 'public'
-    AND tablename IN ('carteira_principal', 'faturamento_produto', 'separacao', 'relatorio_faturamento_importado')
-ORDER BY tablename, indexname;
+    AND relname IN ('carteira_principal', 'faturamento_produto', 'separacao', 'relatorio_faturamento_importado')
+ORDER BY relname, indexname;
 
 -- Verificar se todos os índices foram criados com sucesso
 SELECT 
@@ -244,7 +242,7 @@ SELECT
 FROM pg_indexes
 WHERE schemaname = 'public'
     AND indexname LIKE 'idx_%'
-    AND tablename IN ('carteira_principal', 'faturamento_produto', 'separacao', 'relatorio_faturamento_importado');
+    AND relname IN ('carteira_principal', 'faturamento_produto', 'separacao', 'relatorio_faturamento_importado');
 
 -- ========================================================
 -- FIM DO SCRIPT DE OTIMIZAÇÃO

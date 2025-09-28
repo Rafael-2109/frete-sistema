@@ -1,0 +1,259 @@
+{
+  "timestamp": "2025-09-27T08:59:54.503695",
+  "total_modules": 19,
+  "passed_modules": 0,
+  "failed_modules": 19,
+  "detailed_results": {
+    "commands.excel.fretes": {
+      "module_path": "commands.excel.fretes",
+      "class_name": "ExcelFretes",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.excel.pedidos": {
+      "module_path": "commands.excel.pedidos",
+      "class_name": "ExcelPedidos",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.excel.entregas": {
+      "module_path": "commands.excel.entregas",
+      "class_name": "ExcelEntregas",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.excel.faturamento": {
+      "module_path": "commands.excel.faturamento",
+      "class_name": "ExcelFaturamento",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.base_command": {
+      "module_path": "commands.base_command",
+      "class_name": "BaseCommand",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.auto_command_processor": {
+      "module_path": "commands.auto_command_processor",
+      "class_name": "AutoCommandProcessor",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.cursor_commands": {
+      "module_path": "commands.cursor_commands",
+      "class_name": "CursorCommands",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.dev_commands": {
+      "module_path": "commands.dev_commands",
+      "class_name": "DevCommands",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "commands.file_commands": {
+      "module_path": "commands.file_commands",
+      "class_name": "FileCommands",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "orchestrators.main_orchestrator": {
+      "module_path": "orchestrators.main_orchestrator",
+      "class_name": "MainOrchestrator",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "orchestrators.orchestrator_manager": {
+      "module_path": "orchestrators.orchestrator_manager",
+      "class_name": "OrchestratorManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "integration.integration_manager": {
+      "module_path": "integration.integration_manager",
+      "class_name": "IntegrationManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "processors.context_processor": {
+      "module_path": "processors.context_processor",
+      "class_name": "ContextProcessor",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "analyzers.analyzer_manager": {
+      "module_path": "analyzers.analyzer_manager",
+      "class_name": "AnalyzerManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "mappers.mapper_manager": {
+      "module_path": "mappers.mapper_manager",
+      "class_name": "MapperManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "validators.validator_manager": {
+      "module_path": "validators.validator_manager",
+      "class_name": "ValidatorManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "providers.provider_manager": {
+      "module_path": "providers.provider_manager",
+      "class_name": "ProviderManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "memorizers.memory_manager": {
+      "module_path": "memorizers.memory_manager",
+      "class_name": "MemoryManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    },
+    "utils.utils_manager": {
+      "module_path": "utils.utils_manager",
+      "class_name": "UtilsManager",
+      "status": "import_failed",
+      "tests_passed": 0,
+      "tests_failed": 0,
+      "errors": [
+        "Import failed: No module named 'app'"
+      ],
+      "warnings": [],
+      "details": {}
+    }
+  },
+  "critical_failures": [
+    "commands.excel.fretes: Import failed",
+    "commands.excel.pedidos: Import failed",
+    "commands.excel.entregas: Import failed",
+    "commands.excel.faturamento: Import failed",
+    "commands.base_command: Import failed",
+    "commands.auto_command_processor: Import failed",
+    "commands.cursor_commands: Import failed",
+    "commands.dev_commands: Import failed",
+    "commands.file_commands: Import failed",
+    "orchestrators.main_orchestrator: Import failed",
+    "orchestrators.orchestrator_manager: Import failed",
+    "integration.integration_manager: Import failed",
+    "processors.context_processor: Import failed",
+    "analyzers.analyzer_manager: Import failed",
+    "mappers.mapper_manager: Import failed",
+    "validators.validator_manager: Import failed",
+    "providers.provider_manager: Import failed",
+    "memorizers.memory_manager: Import failed",
+    "utils.utils_manager: Import failed"
+  ],
+  "warnings": [],
+  "summary": {}
+}

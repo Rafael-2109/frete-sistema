@@ -392,21 +392,26 @@ class ResponseProcessor(ProcessorBase):
                         prompt += f"{i+1}. Pedido {pedido.get('num_pedido')} - {pedido.get('cliente')} - R$ {pedido.get('valor_total', 0):,.2f}\n"
                         
         else:
-            prompt += "Nenhum dado específico encontrado para esta consulta.\n"
+            prompt += "⚠️ IMPORTANTE: Nenhum dado específico foi encontrado para esta consulta.\n"
             
         prompt += """
-**Instruções:**
-1. Use os dados reais fornecidos acima
-2. Seja específico e quantitativo
-3. Forneça análises baseadas nos dados
-4. Evite respostas genéricas
-5. Se não houver dados, informe claramente
+**INSTRUÇÕES CRÍTICAS:**
+1. Se dados reais foram fornecidos acima, use APENAS esses dados
+2. Se não há dados reais, informe claramente que não há dados disponíveis
+3. NUNCA invente dados, estatísticas ou informações
+4. NUNCA crie relatórios fictícios ou datas inventadas
+5. Se não há dados, sugira como obter os dados corretos
 
-**Formato da resposta:**
-- Comece com um resumo dos dados
-- Apresente estatísticas relevantes
-- Forneça insights baseados nos dados reais
-- Sugira ações se apropriado"""
+**FORMATO OBRIGATÓRIO quando não há dados:**
+"Não foram encontrados dados para esta consulta. Para obter informações reais, verifique:
+- Se os dados existem no sistema
+- Se há filtros aplicados
+- Se o período está correto"
+
+**FORMATO quando há dados reais:**
+- Resumo baseado nos dados fornecidos
+- Estatísticas dos dados reais
+- Insights baseados apenas nos dados reais"""
 
         # Adicionar contexto do usuário se disponível
         if user_context:

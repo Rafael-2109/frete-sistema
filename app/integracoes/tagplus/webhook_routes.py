@@ -281,7 +281,8 @@ def criar_item_faturamento_webhook(nfe_data, item_data, cliente):
     if data_emissao:
         try:
             data_fatura = datetime.strptime(data_emissao[:10], '%Y-%m-%d').date()
-        except:
+        except Exception as e:
+            print(f"Erro ao formatar data: {e}")
             data_fatura = datetime.now().date()
     else:
         data_fatura = datetime.now().date()

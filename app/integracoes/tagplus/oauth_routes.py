@@ -155,7 +155,17 @@ AUTH_PAGE_TEMPLATE = """
                     } else {
                         data.nfes.forEach(nfe => {
                             const tr = document.createElement('tr');
-                            const dataFormatada = nfe.data_emissao ? new Date(nfe.data_emissao).toLocaleDateString('pt-BR') : 'N/A';
+                            // Formatar data corretamente
+                            let dataFormatada = '-';
+                            if (nfe.data_emissao && nfe.data_emissao !== '-') {
+                                // data_emissao vem como "YYYY-MM-DD" ou "-"
+                                if (nfe.data_emissao.includes('-') && nfe.data_emissao.length >= 8) {
+                                    const [ano, mes, dia] = nfe.data_emissao.split('-');
+                                    dataFormatada = `${dia}/${mes}/${ano}`;
+                                } else {
+                                    dataFormatada = nfe.data_emissao;
+                                }
+                            }
                             tr.innerHTML = `
                                 <td style="padding: 8px; border: 1px solid #ddd;">${nfe.numero}</td>
                                 <td style="padding: 8px; border: 1px solid #ddd;">${dataFormatada}</td>
@@ -187,7 +197,54 @@ AUTH_PAGE_TEMPLATE = """
             return;
         }
 
-        alert('Função de importação será implementada');
+        // Mostrar loading
+        const loading = document.getElementById('loadingNFs');
+        if (loading) {
+            loading.innerHTML = '<div style="font-size: 24px;">⏳</div>Importando NFs...';
+            loading.style.display = 'block';
+        }
+
+        // Desabilitar botão para evitar cliques duplos
+        const botao = event.target;
+        botao.disabled = true;
+        botao.textContent = '⏳ Importando...';
+
+        // Fazer requisição para importar
+        fetch('/tagplus/oauth/importar-nfs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                nf_ids: window.nfsParaImportar,
+                dias: document.getElementById('diasBusca').value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (loading) loading.style.display = 'none';
+
+            if (data.success) {
+                alert(`✅ Importação concluída!\n\n` +
+                      `NFs importadas: ${data.nfs_importadas}\n` +
+                      `Itens criados: ${data.itens_criados}\n` +
+                      `NFs processadas: ${data.processamento?.nfs_processadas || 0}`);
+
+                // Recarregar página para mostrar status atualizado
+                window.location.reload();
+            } else {
+                alert('❌ Erro na importação: ' + (data.error || 'Erro desconhecido'));
+                botao.disabled = false;
+                botao.textContent = '📥 Importar Todas as NFs Listadas';
+            }
+        })
+        .catch(error => {
+            if (loading) loading.style.display = 'none';
+            alert('❌ Erro na requisição: ' + error);
+            botao.disabled = false;
+            botao.textContent = '📥 Importar Todas as NFs Listadas';
+        });
     }
     </script>
     {% endif %}
@@ -197,6 +254,7 @@ AUTH_PAGE_TEMPLATE = """
         <h2>📝 Tokens Manuais</h2>
         <p>Se você já tem tokens de acesso, pode configurá-los manualmente:</p>
         <form method="POST" action="{{ url_for('tagplus_oauth.set_tokens_manual') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="margin: 10px 0;">
                 <label>API:</label>
                 <select name="api_type" required>
@@ -338,30 +396,52 @@ def test_connection(api_type):
 @login_required
 def set_tokens_manual():
     """Define tokens manualmente"""
+    import time
+
     api_type = request.form.get('api_type')
-    access_token = request.form.get('access_token')
-    refresh_token = request.form.get('refresh_token')
-    
+    access_token = request.form.get('access_token', '').strip()
+    refresh_token = request.form.get('refresh_token', '').strip()
+
     if not api_type or not access_token:
         return redirect(url_for('tagplus_oauth.index',
                               status='API e Access Token são obrigatórios',
                               status_type='error'))
-    
-    # Salva tokens
+
+    # IMPORTANTE: Salva tokens DIRETAMENTE na sessão Flask
+    # Usa EXATAMENTE as mesmas chaves que são verificadas no index()
+    session[f'tagplus_{api_type}_access_token'] = access_token
+    if refresh_token:
+        session[f'tagplus_{api_type}_refresh_token'] = refresh_token
+    session[f'tagplus_{api_type}_expires_at'] = time.time() + 86400 - 300  # 24h menos 5 min
+
+    # CRÍTICO: Força o Flask a salvar a sessão
+    session.modified = True
+
+    logger.info(f"Token manual salvo para {api_type}: {access_token[:20]}...")
+
+    # Agora testa a conexão para validar o token
     oauth = TagPlusOAuth2V2(api_type=api_type)
-    oauth.set_tokens(access_token, refresh_token)
-    
+    # OAuth vai carregar o token da sessão que acabamos de salvar
+
     # Testa conexão
     success, info = oauth.test_connection()
-    
+
     if success:
+        logger.info(f"Token manual validado com sucesso para {api_type}")
         return redirect(url_for('tagplus_oauth.index',
-                              status=f'Tokens configurados e testados com sucesso para {api_type}!',
+                              status=f'✅ Token configurado e validado com sucesso para {api_type}!',
                               status_type='success'))
     else:
+        # Remove token inválido da sessão
+        session.pop(f'tagplus_{api_type}_access_token', None)
+        session.pop(f'tagplus_{api_type}_refresh_token', None)
+        session.pop(f'tagplus_{api_type}_expires_at', None)
+        session.modified = True
+
+        logger.error(f"Token manual inválido para {api_type}: {info}")
         return redirect(url_for('tagplus_oauth.index',
-                              status=f'Tokens salvos mas teste falhou: {info}',
-                              status_type='warning'))
+                              status=f'❌ Token inválido: {info}',
+                              status_type='error'))
 
 @oauth_bp.route('/listar-nfs')
 @login_required
@@ -385,7 +465,7 @@ def listar_nfs():
         }
 
         # Log para debug
-        logger.info(f"Buscando NFs com params: {params}")
+        logger.info(f"Buscando NFs do TagPlus com params: {params}")
 
         response = oauth.make_request(
             'GET',
@@ -393,16 +473,35 @@ def listar_nfs():
             params=params
         )
 
-        # Se não retornar sucesso, tenta sem filtros
+        # Log da resposta
+        if response:
+            logger.info(f"Resposta TagPlus - Status: {response.status_code}")
+            if response.status_code == 200:
+                try:
+                    resp_data = response.json()
+                    if isinstance(resp_data, list):
+                        logger.info(f"TagPlus retornou lista com {len(resp_data)} NFs")
+                        if resp_data and len(resp_data) > 0:
+                            logger.info(f"Primeira NF: {resp_data[0].get('numero', 'sem numero')}")
+                    else:
+                        logger.info(f"TagPlus retornou tipo: {type(resp_data)}")
+                except Exception as e:
+                    logger.error(f"Erro ao processar resposta TagPlus: {e}")
+                    pass
+
+        # Se não retornar sucesso ou retornar vazio, tenta sem filtros
         if response and response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) == 0:
-                logger.info("Sem NFs com filtro de data, tentando sem filtros...")
+                logger.warning("TagPlus retornou 0 NFs com filtro de data, tentando sem filtros...")
                 response = oauth.make_request(
                     'GET',
                     '/nfes',
                     params={'per_page': 20}
                 )
+                if response and response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"Sem filtros: {len(data) if isinstance(data, list) else 'não é lista'} NFs")
 
         if not response:
             return jsonify({'error': 'Erro ao buscar NFs'}), 500
@@ -427,11 +526,25 @@ def listar_nfs():
         else:
             nfes = []
 
-        logger.info(f"Total de NFs encontradas: {len(nfes)}")
+        logger.info(f"Total de NFs do TagPlus processadas: {len(nfes)}")
+
+        # Se não encontrou NFs no TagPlus, retornar erro claro
+        if len(nfes) == 0:
+            logger.warning("Nenhuma NF encontrada no TagPlus")
+            return jsonify({
+                'success': True,
+                'total': 0,
+                'periodo': {
+                    'inicio': data_inicio.strftime('%d/%m/%Y'),
+                    'fim': data_fim.strftime('%d/%m/%Y')
+                },
+                'nfes': [],
+                'mensagem': 'Nenhuma NF encontrada no TagPlus para o período'
+            })
 
         # Formata NFs para exibição
         nfes_formatadas = []
-        for nfe in nfes:
+        for nfe in nfes[:20]:  # Limitar a 20 para não demorar muito
             # A API retorna estrutura simplificada com destinatário
             destinatario = nfe.get('destinatario', {})
 
@@ -443,14 +556,24 @@ def listar_nfs():
                 nome_cliente = 'N/A'
                 cnpj_cliente = 'N/A'
 
-            # Data pode estar em data_entrada_saida ou data_emissao
-            data_nf = nfe.get('data_entrada_saida') or nfe.get('data_emissao') or ''
-            if data_nf and 'T' in str(data_nf):
-                data_nf = str(data_nf).split('T')[0]
+            # Buscar detalhes da NF para pegar data_emissao (como o importador faz)
+            data_nf = '-'
+            nf_id = nfe.get('id')
+            if nf_id:
+                try:
+                    # Mesma lógica do importador: busca detalhes para pegar data
+                    response_detail = oauth.make_request('GET', f'/nfes/{nf_id}')
+                    if response_detail and response_detail.status_code == 200:
+                        nf_detalhada = response_detail.json()
+                        data_emissao_raw = nf_detalhada.get('data_emissao', '')
 
-            # Se não tiver data, usa placeholder
-            if not data_nf:
-                data_nf = 'Sem data'
+                        # Processar data (formato: "2025-09-24 16:02:42")
+                        if data_emissao_raw:
+                            # Pegar apenas a parte da data
+                            data_parte = data_emissao_raw.split(' ')[0] if ' ' in data_emissao_raw else data_emissao_raw
+                            data_nf = data_parte  # Formato YYYY-MM-DD para o JavaScript processar
+                except Exception as e:
+                    logger.debug(f"Erro ao buscar detalhes da NF {nf_id}: {e}")
 
             nfes_formatadas.append({
                 'id': nfe.get('id'),
@@ -502,6 +625,61 @@ def visualizar_nfe(nfe_id):
     except Exception as e:
         logger.error(f"Erro ao visualizar NF {nfe_id}: {e}")
         return jsonify({'error': str(e)}), 500
+
+@oauth_bp.route('/importar-nfs', methods=['POST'])
+@login_required
+def importar_nfs():
+    """Importa NFs selecionadas para o sistema"""
+    try:
+        from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
+        from datetime import datetime, timedelta
+
+        data = request.get_json()
+        nf_ids = data.get('nf_ids', [])
+        dias = data.get('dias', 7)
+
+        if not nf_ids:
+            return jsonify({'error': 'Nenhuma NF selecionada'}), 400
+
+        logger.info(f"Iniciando importação de {len(nf_ids)} NFs")
+
+        # Criar importador
+        importador = ImportadorTagPlusV2()
+
+        # Definir período baseado nos dias
+        data_fim = datetime.now().date()
+        data_inicio = data_fim - timedelta(days=int(dias))
+
+        # Importar NFs específicas selecionadas pelo usuário
+        resultado = importador.importar_nfs(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            limite=None,  # Não usar limite quando temos IDs específicos
+            verificar_cancelamentos=False,  # Não verificar outros cancelamentos quando importando específicos
+            nf_ids=nf_ids  # PASSAR OS IDs ESPECÍFICOS DAS NFs SELECIONADAS
+        )
+
+        if resultado:
+            logger.info(f"Importação concluída: {resultado}")
+            return jsonify({
+                'success': True,
+                'nfs_importadas': resultado['nfs']['importadas'],
+                'itens_criados': resultado['nfs']['itens'],
+                'processamento': resultado.get('processamento', {}),
+                'erros': resultado['nfs'].get('erros', [])
+            })
+        else:
+            return jsonify({
+                'error': 'Erro ao importar NFs',
+                'success': False
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Erro ao importar NFs: {e}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
 
 @oauth_bp.route('/status')
 @login_required

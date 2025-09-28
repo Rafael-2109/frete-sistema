@@ -82,7 +82,7 @@
                                 <i class="fas fa-unlock"></i> Ativar Modo Livre
                             </button>
                             <p class="text-muted small">
-                                <i class="fas fa-info-circle"></i> 
+                                <i class="fas fa-info-circle"></i>
                                 Ativa autonomia total para Claude AI com acesso irrestrito
                             </p>
                         </div>
@@ -91,7 +91,7 @@
                                 <i class="fas fa-lock"></i> Desativar Modo Livre
                             </button>
                             <p class="text-muted small">
-                                <i class="fas fa-shield-alt"></i> 
+                                <i class="fas fa-shield-alt"></i>
                                 Restaura limitações padrão e validações completas
                             </p>
                         </div>
@@ -180,30 +180,38 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('sql_execution')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('sql_execution')">
                                 <i class="fas fa-database"></i> SQL Execution
                             </button>
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('multi_model_query')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('multi_model_query')">
                                 <i class="fas fa-layer-group"></i> Multi-Model Query
                             </button>
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('real_time_learning')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('real_time_learning')">
                                 <i class="fas fa-brain"></i> Real-Time Learning
                             </button>
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('advanced_analytics')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('advanced_analytics')">
                                 <i class="fas fa-chart-bar"></i> Advanced Analytics
                             </button>
                         </div>
                         <div class="col-md-6">
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('cross_system_integration')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('cross_system_integration')">
                                 <i class="fas fa-exchange-alt"></i> Cross-System Integration
                             </button>
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('auto_code_generation')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('auto_code_generation')">
                                 <i class="fas fa-code"></i> Auto Code Generation
                             </button>
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('predictive_queries')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('predictive_queries')">
                                 <i class="fas fa-crystal-ball"></i> Predictive Queries
                             </button>
-                            <button class="btn btn-outline-info btn-sm btn-block mb-2" onclick="enableExperimental('natural_language_sql')">
+                            <button class="btn btn-outline-info btn-sm btn-block mb-2"
+                                onclick="enableExperimental('natural_language_sql')">
                                 <i class="fas fa-language"></i> Natural Language SQL
                             </button>
                         </div>
@@ -241,7 +249,8 @@
                         <div class="col-md-8">
                             <div class="form-group">
                                 <label for="test-query">Consulta de Teste</label>
-                                <textarea id="test-query" class="form-control" rows="3" placeholder="Digite uma consulta para testar no modo livre..."></textarea>
+                                <textarea id="test-query" class="form-control" rows="3"
+                                    placeholder="Digite uma consulta para testar no modo livre..."></textarea>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -250,7 +259,7 @@
                                 <i class="fas fa-play"></i> Testar Consulta
                             </button>
                             <small class="text-muted">
-                                <i class="fas fa-info-circle"></i> 
+                                <i class="fas fa-info-circle"></i>
                                 Só funciona com modo livre ativo
                             </small>
                         </div>
@@ -268,212 +277,212 @@
 </div>
 
 <script>
-// Global variables
-let modeStatus = false;
-let dashboardData = null;
+    // Global variables
+    let modeStatus = false;
+    let dashboardData = null;
 
-// Initialize dashboard
-$(document).ready(function() {
-    loadDashboardData();
-    setInterval(loadDashboardData, 30000); // Refresh every 30 seconds
-    
-    // Event listeners
-    $('#btn-enable-mode').click(enableFreeMode);
-    $('#btn-disable-mode').click(disableFreeMode);
-    $('#btn-test-query').click(testQuery);
-});
+    // Initialize dashboard
+    $(document).ready(function () {
+        loadDashboardData();
+        setInterval(loadDashboardData, 30000); // Refresh every 30 seconds
 
-function loadDashboardData() {
-    $.ajax({
-        url: "{{ url_for('claude_ai.admin_free_mode_status') }}",
-        type: 'GET',
-        success: function(data) {
-            if (data.success) {
-                dashboardData = data.dashboard_data;
-                updateDashboard();
-            } else {
-                console.error('Erro ao carregar dados:', data.error);
+        // Event listeners
+        $('#btn-enable-mode').click(enableFreeMode);
+        $('#btn-disable-mode').click(disableFreeMode);
+        $('#btn-test-query').click(testQuery);
+    });
+
+    function loadDashboardData() {
+        $.ajax({
+            url: "{{ url_for('claude_ai.admin_free_mode_status') }}",
+            type: 'GET',
+            success: function (data) {
+                if (data.success) {
+                    dashboardData = data.dashboard_data;
+                    updateDashboard();
+                } else {
+                    console.error('Erro ao carregar dados:', data.error);
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error('Erro AJAX:', error);
             }
-        },
-        error: function(xhr, status, error) {
-            console.error('Erro AJAX:', error);
-        }
-    });
-}
-
-function updateDashboard() {
-    if (!dashboardData) return;
-    
-    const modeStatus = dashboardData.mode_status;
-    const currentConfig = dashboardData.current_config;
-    const capabilities = dashboardData.capabilities;
-    const usageStats = dashboardData.usage_stats;
-    const recommendations = dashboardData.recommendations;
-    
-    // Update status badges
-    $('#modo-status').removeClass('badge-secondary badge-success badge-danger')
-        .addClass(modeStatus.enabled ? 'badge-success' : 'badge-secondary')
-        .text(modeStatus.enabled ? '🚀 ATIVO' : '🔒 INATIVO');
-    
-    $('#acesso-status').removeClass('badge-secondary badge-success')
-        .addClass(modeStatus.unlimited_access ? 'badge-success' : 'badge-secondary')
-        .text(modeStatus.unlimited_access ? '✅ LIBERADO' : '❌ RESTRITO');
-    
-    $('#experimental-status').removeClass('badge-secondary badge-warning')
-        .addClass(modeStatus.experimental_features ? 'badge-warning' : 'badge-secondary')
-        .text(modeStatus.experimental_features ? '🧪 ATIVO' : '❌ INATIVO');
-    
-    $('#auto-config-status').removeClass('badge-secondary badge-info')
-        .addClass(capabilities.auto_configuration ? 'badge-info' : 'badge-secondary')
-        .text(capabilities.auto_configuration ? '🧠 ATIVO' : '❌ INATIVO');
-    
-    // Update buttons
-    $('#btn-enable-mode').prop('disabled', modeStatus.enabled);
-    $('#btn-disable-mode').prop('disabled', !modeStatus.enabled);
-    $('#btn-test-query').prop('disabled', !modeStatus.enabled);
-    
-    // Update configuration
-    $('#config-max-tokens').text(currentConfig.max_tokens?.toLocaleString() || '-');
-    $('#config-temperature').text(currentConfig.temperature || '-');
-    $('#config-data-limits').text(currentConfig.data_limits || 'Ilimitado');
-    $('#config-timeout').text(currentConfig.query_timeout ? currentConfig.query_timeout + 's' : '-');
-    $('#config-context').text(currentConfig.context_window || '-');
-    $('#config-validation').text(currentConfig.validation_level || '-');
-    
-    // Update usage stats
-    const maxStat = Math.max(usageStats.total_free_queries, usageStats.auto_configurations, usageStats.experimental_uses, 1);
-    
-    $('#progress-queries').css('width', (usageStats.total_free_queries / maxStat * 100) + '%');
-    $('#stats-queries').text(usageStats.total_free_queries + ' consultas');
-    
-    $('#progress-configs').css('width', (usageStats.auto_configurations / maxStat * 100) + '%');
-    $('#stats-configs').text(usageStats.auto_configurations + ' configurações');
-    
-    $('#progress-experimental').css('width', (usageStats.experimental_uses / maxStat * 100) + '%');
-    $('#stats-experimental').text(usageStats.experimental_uses + ' usos');
-    
-    // Update recommendations
-    const recList = $('#recommendations-list');
-    recList.empty();
-    recommendations.forEach(function(rec) {
-        recList.append(`<div class="alert alert-info"><i class="fas fa-lightbulb"></i> ${rec}</div>`);
-    });
-}
-
-function enableFreeMode() {
-    if (!confirm('🚀 Tem certeza que deseja ativar o Modo Administrador Livre?\n\nIsso dará ao Claude AI autonomia total e acesso irrestrito aos dados.')) {
-        return;
+        });
     }
-    
-    $('#btn-enable-mode').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Ativando...');
-    
-    $.ajax({
-        url: "{{ url_for('claude_ai.enable_admin_free_mode') }}",
-        type: 'POST',
-        headers: {
-            'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
-        },
-        success: function(data) {
-            if (data.success) {
-                toastr.success('🚀 Modo Administrador Livre ativado com sucesso!');
-                loadDashboardData();
-            } else {
-                toastr.error('❌ Erro: ' + data.error);
+
+    function updateDashboard() {
+        if (!dashboardData) return;
+
+        const modeStatus = dashboardData.mode_status;
+        const currentConfig = dashboardData.current_config;
+        const capabilities = dashboardData.capabilities;
+        const usageStats = dashboardData.usage_stats;
+        const recommendations = dashboardData.recommendations;
+
+        // Update status badges
+        $('#modo-status').removeClass('badge-secondary badge-success badge-danger')
+            .addClass(modeStatus.enabled ? 'badge-success' : 'badge-secondary')
+            .text(modeStatus.enabled ? '🚀 ATIVO' : '🔒 INATIVO');
+
+        $('#acesso-status').removeClass('badge-secondary badge-success')
+            .addClass(modeStatus.unlimited_access ? 'badge-success' : 'badge-secondary')
+            .text(modeStatus.unlimited_access ? '✅ LIBERADO' : '❌ RESTRITO');
+
+        $('#experimental-status').removeClass('badge-secondary badge-warning')
+            .addClass(modeStatus.experimental_features ? 'badge-warning' : 'badge-secondary')
+            .text(modeStatus.experimental_features ? '🧪 ATIVO' : '❌ INATIVO');
+
+        $('#auto-config-status').removeClass('badge-secondary badge-info')
+            .addClass(capabilities.auto_configuration ? 'badge-info' : 'badge-secondary')
+            .text(capabilities.auto_configuration ? '🧠 ATIVO' : '❌ INATIVO');
+
+        // Update buttons
+        $('#btn-enable-mode').prop('disabled', modeStatus.enabled);
+        $('#btn-disable-mode').prop('disabled', !modeStatus.enabled);
+        $('#btn-test-query').prop('disabled', !modeStatus.enabled);
+
+        // Update configuration
+        $('#config-max-tokens').text(currentConfig.max_tokens?.toLocaleString() || '-');
+        $('#config-temperature').text(currentConfig.temperature || '-');
+        $('#config-data-limits').text(currentConfig.data_limits || 'Ilimitado');
+        $('#config-timeout').text(currentConfig.query_timeout ? currentConfig.query_timeout + 's' : '-');
+        $('#config-context').text(currentConfig.context_window || '-');
+        $('#config-validation').text(currentConfig.validation_level || '-');
+
+        // Update usage stats
+        const maxStat = Math.max(usageStats.total_free_queries, usageStats.auto_configurations, usageStats.experimental_uses, 1);
+
+        $('#progress-queries').css('width', (usageStats.total_free_queries / maxStat * 100) + '%');
+        $('#stats-queries').text(usageStats.total_free_queries + ' consultas');
+
+        $('#progress-configs').css('width', (usageStats.auto_configurations / maxStat * 100) + '%');
+        $('#stats-configs').text(usageStats.auto_configurations + ' configurações');
+
+        $('#progress-experimental').css('width', (usageStats.experimental_uses / maxStat * 100) + '%');
+        $('#stats-experimental').text(usageStats.experimental_uses + ' usos');
+
+        // Update recommendations
+        const recList = $('#recommendations-list');
+        recList.empty();
+        recommendations.forEach(function (rec) {
+            recList.append(`<div class="alert alert-info"><i class="fas fa-lightbulb"></i> ${rec}</div>`);
+        });
+    }
+
+    function enableFreeMode() {
+        if (!confirm('🚀 Tem certeza que deseja ativar o Modo Administrador Livre?\n\nIsso dará ao Claude AI autonomia total e acesso irrestrito aos dados.')) {
+            return;
+        }
+
+        $('#btn-enable-mode').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Ativando...');
+
+        $.ajax({
+            url: "{{ url_for('claude_ai.enable_admin_free_mode') }}",
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
+            },
+            success: function (data) {
+                if (data.success) {
+                    toastr.success('🚀 Modo Administrador Livre ativado com sucesso!');
+                    loadDashboardData();
+                } else {
+                    toastr.error('❌ Erro: ' + data.error);
+                    $('#btn-enable-mode').prop('disabled', false).html('<i class="fas fa-unlock"></i> Ativar Modo Livre');
+                }
+            },
+            error: function (xhr, status, error) {
+                toastr.error('❌ Erro ao ativar modo livre: ' + error);
                 $('#btn-enable-mode').prop('disabled', false).html('<i class="fas fa-unlock"></i> Ativar Modo Livre');
             }
-        },
-        error: function(xhr, status, error) {
-            toastr.error('❌ Erro ao ativar modo livre: ' + error);
-            $('#btn-enable-mode').prop('disabled', false).html('<i class="fas fa-unlock"></i> Ativar Modo Livre');
-        }
-    });
-}
-
-function disableFreeMode() {
-    if (!confirm('🔒 Tem certeza que deseja desativar o Modo Administrador Livre?\n\nIsso restaurará todas as limitações padrão.')) {
-        return;
+        });
     }
-    
-    $('#btn-disable-mode').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Desativando...');
-    
-    $.ajax({
-        url: "{{ url_for('claude_ai.disable_admin_free_mode') }}",
-        type: 'POST',
-        headers: {
-            'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
-        },
-        success: function(data) {
-            if (data.success) {
-                toastr.success('🔒 Modo Administrador Livre desativado');
-                loadDashboardData();
-            } else {
-                toastr.error('❌ Erro: ' + data.error);
+
+    function disableFreeMode() {
+        if (!confirm('🔒 Tem certeza que deseja desativar o Modo Administrador Livre?\n\nIsso restaurará todas as limitações padrão.')) {
+            return;
+        }
+
+        $('#btn-disable-mode').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Desativando...');
+
+        $.ajax({
+            url: "{{ url_for('claude_ai.disable_admin_free_mode') }}",
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
+            },
+            success: function (data) {
+                if (data.success) {
+                    toastr.success('🔒 Modo Administrador Livre desativado');
+                    loadDashboardData();
+                } else {
+                    toastr.error('❌ Erro: ' + data.error);
+                    $('#btn-disable-mode').prop('disabled', false).html('<i class="fas fa-lock"></i> Desativar Modo Livre');
+                }
+            },
+            error: function (xhr, status, error) {
+                toastr.error('❌ Erro ao desativar modo livre: ' + error);
                 $('#btn-disable-mode').prop('disabled', false).html('<i class="fas fa-lock"></i> Desativar Modo Livre');
             }
-        },
-        error: function(xhr, status, error) {
-            toastr.error('❌ Erro ao desativar modo livre: ' + error);
-            $('#btn-disable-mode').prop('disabled', false).html('<i class="fas fa-lock"></i> Desativar Modo Livre');
-        }
-    });
-}
-
-function enableExperimental(featureName) {
-    $.ajax({
-        url: "{{ url_for('claude_ai.enable_experimental_feature', feature_name='') }}" + featureName,
-        type: 'POST',
-        headers: {
-            'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
-        },
-        success: function(data) {
-            if (data.success) {
-                toastr.success('🧪 Funcionalidade experimental "' + featureName + '" ativada!');
-                loadDashboardData();
-            } else {
-                toastr.error('❌ Erro: ' + data.error);
-            }
-        },
-        error: function(xhr, status, error) {
-            toastr.error('❌ Erro ao ativar funcionalidade experimental: ' + error);
-        }
-    });
-}
-
-function testQuery() {
-    const query = $('#test-query').val().trim();
-    if (!query) {
-        toastr.warning('⚠️ Digite uma consulta para testar');
-        return;
+        });
     }
-    
-    $('#btn-test-query').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testando...');
-    $('#test-results').hide();
-    
-    $.ajax({
-        url: "{{ url_for('claude_ai.claude_real_free_mode') }}",
-        type: 'POST',
-        headers: {
-            'X-CSRFToken': $('meta[name=csrf-token]').attr('content'),
-            'Content-Type': 'application/json'
-        },
-        data: JSON.stringify({
-            query: query
-        }),
-        success: function(data) {
-            if (data.status === 'success') {
-                $('#test-output').text(data.response);
-                $('#test-results').show();
-                toastr.success('✅ Consulta processada com sucesso!');
-            } else {
-                toastr.error('❌ Erro: ' + data.error);
+
+    function enableExperimental(featureName) {
+        $.ajax({
+            url: "{{ url_for('claude_ai.enable_experimental_feature', feature_name='') }}" + featureName,
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
+            },
+            success: function (data) {
+                if (data.success) {
+                    toastr.success('🧪 Funcionalidade experimental "' + featureName + '" ativada!');
+                    loadDashboardData();
+                } else {
+                    toastr.error('❌ Erro: ' + data.error);
+                }
+            },
+            error: function (xhr, status, error) {
+                toastr.error('❌ Erro ao ativar funcionalidade experimental: ' + error);
             }
-            $('#btn-test-query').prop('disabled', false).html('<i class="fas fa-play"></i> Testar Consulta');
-        },
-        error: function(xhr, status, error) {
-            toastr.error('❌ Erro ao processar consulta: ' + error);
-            $('#btn-test-query').prop('disabled', false).html('<i class="fas fa-play"></i> Testar Consulta');
+        });
+    }
+
+    function testQuery() {
+        const query = $('#test-query').val().trim();
+        if (!query) {
+            toastr.warning('⚠️ Digite uma consulta para testar');
+            return;
         }
-    });
-}
+
+        $('#btn-test-query').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testando...');
+        $('#test-results').hide();
+
+        $.ajax({
+            url: "{{ url_for('claude_ai.claude_real_free_mode') }}",
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': $('meta[name=csrf-token]').attr('content'),
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                query: query
+            }),
+            success: function (data) {
+                if (data.status === 'success') {
+                    $('#test-output').text(data.response);
+                    $('#test-results').show();
+                    toastr.success('✅ Consulta processada com sucesso!');
+                } else {
+                    toastr.error('❌ Erro: ' + data.error);
+                }
+                $('#btn-test-query').prop('disabled', false).html('<i class="fas fa-play"></i> Testar Consulta');
+            },
+            error: function (xhr, status, error) {
+                toastr.error('❌ Erro ao processar consulta: ' + error);
+                $('#btn-test-query').prop('disabled', false).html('<i class="fas fa-play"></i> Testar Consulta');
+            }
+        });
+    }
 </script>
-{% endblock %} 
+{% endblock %}
