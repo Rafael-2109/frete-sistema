@@ -706,7 +706,8 @@ def _adicionar_separacoes_pedido(pedido_info, num_pedido):
     ).filter(
         and_(
             Separacao.num_pedido == num_pedido,
-            Separacao.sincronizado_nf == False
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
         )
     ).group_by(
         Separacao.separacao_lote_id,
@@ -749,7 +750,8 @@ def _adicionar_nfs_cd_pedido(pedido_info, num_pedido):
         and_(
             Separacao.num_pedido == num_pedido,
             Separacao.sincronizado_nf == True,
-            Separacao.nf_cd == True
+            Separacao.nf_cd == True,
+            Separacao.qtd_saldo > 0
         )
     ).group_by(
         Separacao.numero_nf,

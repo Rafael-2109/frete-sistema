@@ -17,6 +17,11 @@ from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from datetime import datetime
 import logging
 from app.faturamento.models import FaturamentoProduto
+from app.utils.lote_utils import gerar_lote_id
+from app.producao.models import CadastroPalletizacao
+from app.carteira.models import CarteiraPrincipal
+from decimal import Decimal
+from sqlalchemy import func, and_
 
 
 logger = logging.getLogger(__name__)
@@ -221,24 +226,84 @@ def confirmar_lote():
                             separacao_lote_id=item['separacao_lote_id']
                         ).update({
                             'protocolo': protocolo,
-                            'agendamento': item['data_agendamento']
+                            'agendamento': None,  # ZERAR - será preenchido apenas no retorno após sucesso
+                            'expedicao': None     # ZERAR - para validar se foi realmente agendado
                         })
                     else:
-                        # Criar nova separação com status='PREVISAO'
-                        nova_sep = Separacao(
-                            separacao_lote_id=f"LOTE_{datetime.now().strftime('%Y%m%d%H%M%S')}_{cnpj[-4:]}",
+                        # Buscar dados adicionais do produto e cliente na CarteiraPrincipal
+                        item_carteira = CarteiraPrincipal.query.filter_by(
                             num_pedido=item.get('num_pedido'),
                             cod_produto=item['cod_produto'],
-                            qtd_saldo=item['quantidade'],
+                            cnpj_cpf=cnpj
+                        ).first()
+
+                        # Buscar dados de palletização
+                        pallet_info = CadastroPalletizacao.query.filter_by(
+                            cod_produto=item['cod_produto']
+                        ).first()
+
+                        # Calcular peso e pallets
+                        peso_item = Decimal('0')
+                        pallets_item = Decimal('0')
+                        qtd_decimal = Decimal(str(item['quantidade']))
+
+                        if pallet_info:
+                            peso_item = qtd_decimal * Decimal(str(pallet_info.peso_bruto or 0))
+                            if pallet_info.palletizacao and pallet_info.palletizacao > 0:
+                                pallets_item = qtd_decimal / Decimal(str(pallet_info.palletizacao))
+
+                        # Calcular valor_saldo
+                        preco_unitario = Decimal('0')
+                        if item_carteira and item_carteira.preco_produto_pedido:
+                            preco_unitario = Decimal(str(item_carteira.preco_produto_pedido))
+                        valor_saldo = float(qtd_decimal * preco_unitario)
+
+                        # Verificar se já existe separação para este pedido (para definir tipo_envio)
+                        existe_separacao = Separacao.query.filter_by(
+                            num_pedido=item.get('num_pedido'),
                             cnpj_cpf=cnpj,
-                            pedido_cliente=item.get('pedido_cliente'),
-                            expedicao=item.get('data_expedicao'),
-                            agendamento=item['data_agendamento'],
-                            protocolo=protocolo,
-                            status='PREVISAO',
                             sincronizado_nf=False
+                        ).first()
+
+                        tipo_envio = 'parcial' if existe_separacao else 'total'
+
+                        # Criar nova separação com status='ABERTO' e todos os campos necessários
+                        nova_sep = Separacao(
+                            separacao_lote_id=gerar_lote_id(),
+                            status='ABERTO',
+                            sincronizado_nf=False,
+                            nf_cd=False,  # Não é NF no CD
+
+                            # Dados do pedido
+                            num_pedido=item.get('num_pedido'),
+                            pedido_cliente=item.get('pedido_cliente'),
+                            cod_produto=item['cod_produto'],
+                            nome_produto=item_carteira.nome_produto if item_carteira else item.get('nome_produto', ''),
+                            qtd_saldo=item['quantidade'],
+                            valor_saldo=valor_saldo,
+                            peso=float(peso_item),
+                            pallet=float(pallets_item),
+
+                            # Dados do cliente
+                            cnpj_cpf=cnpj,
+                            raz_social_red=item_carteira.raz_social_red if item_carteira else item.get('raz_social_red', ''),
+                            nome_cidade=item_carteira.municipio if item_carteira else item.get('nome_cidade', ''),
+                            cod_uf=item_carteira.estado if item_carteira else item.get('cod_uf', ''),
+
+                            # Dados do agendamento - ZERAR para preencher apenas no retorno
+                            protocolo=protocolo,
+                            agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
+                            expedicao=None,    # ZERAR - para validar se foi realmente agendado
+
+                            # Manter observ_ped_1 original se houver
+                            observ_ped_1=item_carteira.observ_ped_1 if item_carteira else item.get('observacoes', ''),
+
+                            # Tipo de envio baseado em se já existe separação
+                            tipo_envio=tipo_envio
                         )
                         db.session.add(nova_sep)
+
+
 
         db.session.commit()
 
