@@ -4,6 +4,7 @@ Centraliza todas as funções de cálculo para eliminar divergências entre cota
 """
 
 import logging
+import math
 from app.utils.localizacao import LocalizacaoService
 
 logger = logging.getLogger(__name__)
@@ -333,7 +334,7 @@ class CalculadoraFrete:
         pedagio_por_100kg = tabela_dados.get('pedagio_por_100kg', 0) or 0
         if pedagio_por_100kg and peso_para_calculo > 0:
             # Calcula quantas vezes 100kg, arredondando para cima
-            multiplos_100kg = int((peso_para_calculo - 1) // 100) + 1  # Arredonda para cima
+            multiplos_100kg = float(math.ceil(peso_para_calculo / 100))
             return multiplos_100kg * pedagio_por_100kg
         
         return 0
@@ -350,7 +351,7 @@ class CalculadoraFrete:
         if pedagio_por_100kg and peso_para_calculo > 0:
             if por_fracao:
                 # Arredonda para cima (comportamento original)
-                multiplos_100kg = int((peso_para_calculo - 1) // 100) + 1
+                multiplos_100kg = float(math.ceil(peso_para_calculo / 100))
             else:
                 # Usa valor exato (sem arredondamento)
                 multiplos_100kg = peso_para_calculo / 100

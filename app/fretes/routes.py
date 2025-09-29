@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
 import os
 import logging
+import math
 from app.transportadoras.models import Transportadora
 from app.fretes.forms import LancamentoFreteirosForm
 from app import db
@@ -664,7 +665,7 @@ def analise_diferencas(frete_id):
     if frete.tabela_pedagio_por_100kg and peso_considerado > 0:
         if transportadora_config.get('pedagio_por_fracao', True):
             # Por fração (arredonda para cima)
-            fracoes_100kg = int((peso_considerado - 1) // 100) + 1
+            fracoes_100kg = float(math.ceil(peso_considerado / 100))
             tipo_pedagio = "por fração"
         else:
             # Direto (valor exato)
