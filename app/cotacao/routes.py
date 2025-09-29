@@ -1014,10 +1014,49 @@ def fechar_frete():
 
         print(f"[DEBUG] Dados da tabela finais: {dados_tabela}")
 
-        # Calcula totais das mercadorias
-        valor_mercadorias = sum(safe_float(p.get('valor')) for p in pedidos_data)
-        peso_total = sum(safe_float(p.get('peso')) for p in pedidos_data)
-        pallets_total = sum(safe_float(p.get('pallets')) for p in pedidos_data)
+        # ✅ CORREÇÃO: Buscar dados corretos do banco para calcular totais
+        # Em vez de usar pedidos_data do frontend, buscar do banco
+        pedidos_db = []
+        lote_ids_processados = set()  # Para evitar duplicação
+
+        for pedido_data in pedidos_data:
+            # Tenta pegar o separacao_lote_id de várias formas
+            lote_id = pedido_data.get('separacao_lote_id') or pedido_data.get('id')
+
+            if lote_id and lote_id not in lote_ids_processados:
+                pedido_db = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+                if pedido_db:
+                    pedidos_db.append(pedido_db)
+                    lote_ids_processados.add(lote_id)
+
+        # Calcula totais das mercadorias usando dados do banco
+        if pedidos_db:
+            valor_mercadorias = sum(p.valor_saldo_total or 0 for p in pedidos_db)
+            peso_total = sum(p.peso_total or 0 for p in pedidos_db)
+            pallets_total = sum(p.pallet_total or 0 for p in pedidos_db)
+
+            print(f"[DEBUG] ✅ Totais calculados do BANCO DE DADOS:")
+            print(f"[DEBUG]   - {len(pedidos_db)} pedidos encontrados")
+            print(f"[DEBUG]   - Valor total: R$ {valor_mercadorias:.2f}")
+            print(f"[DEBUG]   - Peso total: {peso_total:.2f} kg")
+            print(f"[DEBUG]   - Pallets total: {pallets_total:.2f}")
+
+            # Debug detalhado de pallets por pedido
+            for p in pedidos_db:
+                print(f"[DEBUG]     Pedido {p.num_pedido}: {p.pallet_total or 0:.2f} pallets")
+
+            # ✅ Validação adicional de sanidade
+            if pallets_total < 0:
+                print(f"[DEBUG] ⚠️ ERRO: Pallets negativos detectados! Ajustando para 0")
+                pallets_total = 0
+            elif peso_total > 0 and pallets_total > peso_total:
+                print(f"[DEBUG] ⚠️ AVISO: Pallets ({pallets_total}) maior que peso ({peso_total}), possível erro de cálculo")
+        else:
+            # Fallback para dados do frontend se não encontrar no banco
+            print(f"[DEBUG] ⚠️ AVISO: Usando dados do frontend (não encontrou no banco)")
+            valor_mercadorias = sum(safe_float(p.get('valor')) for p in pedidos_data)
+            peso_total = sum(safe_float(p.get('peso')) for p in pedidos_data)
+            pallets_total = sum(safe_float(p.get('pallets')) for p in pedidos_data)
 
         # ✅ USA VALORES CORRETOS DA SESSÃO
         valor_frete_bruto = safe_float(opcao_escolhida.get('valor_total', 0))
@@ -1358,6 +1397,23 @@ def fechar_frete_grupo():
         valor_total = sum(p.valor_saldo_total or 0 for p in todos_pedidos)
         peso_total = sum(p.peso_total or 0 for p in todos_pedidos)
         pallets_total = sum(p.pallet_total or 0 for p in todos_pedidos)
+
+        print(f"[DEBUG] ✅ FECHAR_FRETE_GRUPO - Totais calculados do BANCO:")
+        print(f"[DEBUG]   - {len(todos_pedidos)} pedidos processados")
+        print(f"[DEBUG]   - Valor total: R$ {valor_total:.2f}")
+        print(f"[DEBUG]   - Peso total: {peso_total:.2f} kg")
+        print(f"[DEBUG]   - Pallets total: {pallets_total:.2f}")
+
+        # Debug detalhado de pallets por pedido
+        for p in todos_pedidos:
+            print(f"[DEBUG]     Pedido {p.num_pedido}: {p.pallet_total or 0:.2f} pallets")
+
+        # ✅ Validação adicional de sanidade
+        if pallets_total < 0:
+            print(f"[DEBUG] ⚠️ ERRO: Pallets negativos detectados! Ajustando para 0")
+            pallets_total = 0
+        elif peso_total > 0 and pallets_total > peso_total:
+            print(f"[DEBUG] ⚠️ AVISO: Pallets ({pallets_total}) maior que peso ({peso_total}), possível erro de cálculo")
         # ✅ NOVO: Verifica se já existe embarque recente (últimos 10 segundos) com os mesmos pedidos
         from datetime import timedelta
         tempo_limite = datetime.now() - timedelta(seconds=10)
