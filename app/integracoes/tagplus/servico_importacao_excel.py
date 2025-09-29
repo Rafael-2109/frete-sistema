@@ -9,7 +9,7 @@ from app import db
 from app.carteira.models import CadastroCliente
 from app.producao.models import CadastroPalletizacao
 from app.faturamento.models import FaturamentoProduto
-from app.integracoes.tagplus.processador_faturamento_tagplus import ProcessadorFaturamentoTagPlus
+from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
 import logging
 import os
 
@@ -259,11 +259,18 @@ def processar_arquivo_tagplus_web(arquivo_excel, processar_completo=True):
         if wb:
             wb.close()
         
-        # Se processar_completo, usa o ProcessadorFaturamentoTagPlus
+        # Se processar_completo, usa o ProcessadorFaturamento padrão
         if processar_completo and todos_faturamento_produtos:
             try:
-                processador = ProcessadorFaturamentoTagPlus()
-                resultado_processamento = processador.processar_lote_completo(todos_faturamento_produtos)
+                # Coletar números únicos de NFs
+                nfs_unicas = list(set(item.numero_nf for item in todos_faturamento_produtos))
+
+                processador = ProcessadorFaturamento()
+                resultado_processamento = processador.processar_nfs_importadas(
+                    usuario='ImportExcelTagPlus',
+                    limpar_inconsistencias=False,
+                    nfs_especificas=nfs_unicas
+                )
                 
                 return {
                     'success': True,

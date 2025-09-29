@@ -551,9 +551,7 @@ class FaturamentoService:
                         relatorio.estado = dados_nf['estado']      # ✅ ADICIONAR ESTADO
                         relatorio.status_faturamento = dados_nf['status']
                         relatorio.peso_bruto = dados_nf['peso_total']
-                        relatorio.data_importacao = datetime.now()
-                        relatorio.origem_importacao = 'odoo_integracao'
-                        
+
                         db.session.add(relatorio)
                         total_relatorio_importado += 1
                     else:
@@ -562,8 +560,6 @@ class FaturamentoService:
                         existe.peso_bruto = dados_nf['peso_total']
                         existe.status_faturamento = dados_nf['status']
                         existe.equipe_vendas = dados_nf['equipe_vendas']  # ✅ NOVO CAMPO
-                        existe.data_importacao = datetime.now()
-                        existe.origem_importacao = 'odoo_integracao'
                 
                 except Exception as e:
                     self.logger.error(f"Erro ao consolidar NF {nf_key}: {e}")

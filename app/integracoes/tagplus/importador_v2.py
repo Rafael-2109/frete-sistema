@@ -8,6 +8,8 @@ from datetime import datetime
 from app import db
 from app.carteira.models import CadastroCliente
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
+from app.integracoes.tagplus.models import NFPendenteTagPlus
+from app.integracoes.tagplus.correcao_pedidos_service_v2 import CorrecaoPedidosServiceV2
 from app.integracoes.tagplus.oauth2_v2 import TagPlusOAuth2V2
 # Usa o ProcessadorFaturamento padrão que já tem score como fallback
 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
@@ -28,7 +30,7 @@ class ImportadorTagPlusV2:
         # Estatísticas
         self.stats = {
             'clientes': {'importados': 0, 'atualizados': 0, 'erros': []},
-            'nfs': {'importadas': 0, 'itens': 0, 'erros': []},
+            'nfs': {'importadas': 0, 'itens': 0, 'pendentes': 0, 'erros': []},
             'processamento': None
         }
     
@@ -319,9 +321,6 @@ class ImportadorTagPlusV2:
             # Atualiza campos vazios
             campos_atualizados = 0
             
-            if not cliente.email and dados.get('email'):
-                cliente.email = dados.get('email')
-                campos_atualizados += 1
             
             if not cliente.telefone_endereco_ent and dados.get('telefone'):
                 cliente.telefone_endereco_ent = self._formatar_telefone(dados.get('telefone'))
@@ -346,11 +345,10 @@ class ImportadorTagPlusV2:
                 municipio=dados.get('cidade', ''),
                 estado=dados.get('uf', ''),
                 cod_uf=dados.get('uf', ''),
-                
+
                 # Contato
                 telefone_endereco_ent=self._formatar_telefone(dados.get('telefone', '')),
-                email=dados.get('email', ''),
-                
+
                 # Endereço de entrega
                 cnpj_endereco_ent=cnpj,
                 empresa_endereco_ent=dados.get('razao_social', dados.get('nome', '')),
@@ -380,72 +378,119 @@ class ImportadorTagPlusV2:
             return None
     
     def _processar_nfe(self, nfe_data):
-        """Processa uma NF e seus itens"""
+        """Processa uma NF e seus itens com validação de pedido"""
         numero_nf = str(nfe_data.get('numero', ''))
-        
-        # Não verifica apenas se a NF existe, pois pode ter múltiplos itens
-        # Vamos verificar item por item mais abaixo
-        
+
+        # 1. Verificar se já existe em FaturamentoProduto (importação completa)
+        existe_completa = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).first()
+        if existe_completa:
+            logger.debug(f"NF {numero_nf} já importada completamente, pulando...")
+            return []
+
+        # 2. Extrair pedido do nível da NF
+        pedido_nf = str(nfe_data.get('numero_pedido', '') or '').strip()
+
+        pendentes_resolvidos = []
+
+        # 3. Se não tem pedido no nível da NF, verificar se está resolvida em pendências
+        if not pedido_nf:
+            # Verificar se está em NFPendenteTagPlus resolvida
+            pendentes_resolvidos = NFPendenteTagPlus.query.filter_by(
+                numero_nf=numero_nf,
+                resolvido=True,
+                importado=False
+            ).all()
+
+            pendente_com_pedido = next((p for p in pendentes_resolvidos if p.origem), None)
+
+            if pendente_com_pedido:
+                # Usar pedido já preenchido na tela
+                pedido_nf = pendente_com_pedido.origem
+                logger.info(f"✅ Usando pedido {pedido_nf} já preenchido para NF {numero_nf}")
+            else:
+                # Gravar em NFPendenteTagPlus e NÃO importar
+                return self._gravar_nf_pendente(nfe_data)
+
+        # 4. Continuar processamento normal (tem pedido)
         # Extrai cliente
         cliente_data = nfe_data.get('cliente', {})
         cnpj_cliente = re.sub(r'\D', '', str(cliente_data.get('cnpj', cliente_data.get('cpf', ''))))
-        
+        cidade_cliente = cliente_data.get('cidade', '') or cliente_data.get('municipio', '') or ''
+        uf_cliente = cliente_data.get('uf', '') or cliente_data.get('estado', '') or ''
+
         if not cnpj_cliente:
             raise ValueError(f"NF {numero_nf} sem CNPJ")
-        
+
         # Busca ou cria cliente
         cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
         if not cliente:
             self._processar_cliente(cliente_data)
             db.session.flush()
             cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
-        
+
         # Processa itens
         itens_criados = []
-        for idx, item in enumerate(nfe_data.get('itens', [])):
+        for item in nfe_data.get('itens', []):
             try:
+                # Extrair dados do produto (estrutura aninhada)
+                produto_info = item.get('produto', {}) or item.get('produto_servico', {})
+                cod_produto = str(produto_info.get('codigo', '') or item.get('item', ''))
+                nome_produto = produto_info.get('descricao', '') or ''
+
+                # Se ainda não tem código, pular este item
+                if not cod_produto:
+                    logger.warning(f"Item sem código na NF {numero_nf}, pulando...")
+                    continue
+
                 # Verifica se este item específico já existe
-                cod_produto = str(item.get('codigo', ''))
                 item_existe = FaturamentoProduto.query.filter_by(
                     numero_nf=numero_nf,
                     cod_produto=cod_produto
                 ).first()
-                
+
                 if item_existe:
                     logger.debug(f"Item {numero_nf}/{cod_produto} já existe, pulando...")
                     continue
-                
+
+                # Extrair quantidades e valores (campos corretos da API)
+                quantidade = float(item.get('qtd', 0) or 0)
+                valor_unitario = float(item.get('valor_unitario', 0) or 0)
+                valor_total = float(item.get('valor_subtotal', 0) or 0)
+
+                # Se valor_total estiver zerado, calcular
+                if valor_total == 0 and quantidade > 0 and valor_unitario > 0:
+                    valor_total = quantidade * valor_unitario
+
+                # Calcular peso (não vem da API TagPlus, precisa buscar do cadastro)
+                peso_unitario = 0
+                peso_total = 0
+                # TODO: Buscar peso de CadastroPalletizacao se existir
+
                 faturamento = FaturamentoProduto(
                     numero_nf=numero_nf,
                     data_fatura=self._parse_data(nfe_data.get('data_emissao')),
-                    
+
                     cnpj_cliente=cnpj_cliente,
                     nome_cliente=cliente.raz_social if cliente else '',
-                    municipio=cliente.municipio if cliente else '',
-                    estado=cliente.estado if cliente else '',
+                    municipio=(cliente.municipio if cliente and cliente.municipio else cidade_cliente),
+                    estado=(cliente.estado if cliente and cliente.estado else uf_cliente),
                     vendedor=cliente.vendedor if cliente else '',
                     equipe_vendas=cliente.equipe_vendas if cliente else '',
-                    
-                    cod_produto=str(item.get('codigo', '')),
-                    nome_produto=item.get('descricao', ''),
-                    qtd_produto_faturado=float(item.get('quantidade', 0)),
-                    preco_produto_faturado=float(item.get('valor_unitario', 0)),
-                    valor_produto_faturado=float(item.get('valor_total', 0)),
-                    
-                    peso_unitario_produto=float(item.get('peso_unitario', 0)),
-                    peso_total=float(item.get('peso_total', 0)) or (
-                        float(item.get('peso_unitario', 0)) * float(item.get('quantidade', 0))
-                    ),
-                    
-                    # Captura o pedido do campo correto
-                    # Prioridade: numero_pedido > numero_pedido_compra (item) > vazio
-                    origem=(
-                        nfe_data.get('numero_pedido') or
-                        item.get('numero_pedido_compra', '') or
-                        ''
-                    ),
+
+                    cod_produto=cod_produto,
+                    nome_produto=nome_produto,
+                    qtd_produto_faturado=quantidade,
+                    preco_produto_faturado=valor_unitario,
+                    valor_produto_faturado=valor_total,
+
+                    peso_unitario_produto=peso_unitario,
+                    peso_total=peso_total,
+
+                    # Usar o pedido já validado (pedido_nf já foi definido acima)
+                    # Se chegou aqui, é porque tem pedido (nível NF ou pendência resolvida)
+                    origem=pedido_nf or str(item.get('numero_pedido_compra', '') or ''),
                     status_nf='Lançado',
-                    
+
                     created_by='ImportTagPlus',
                     updated_by='ImportTagPlus'
                 )
@@ -461,9 +506,127 @@ class ImportadorTagPlusV2:
         if itens_criados:
             self.stats['nfs']['importadas'] += 1
             logger.debug(f"NF {numero_nf} importada com {len(itens_criados)} itens")
-        
+
+            if pendentes_resolvidos:
+                agora = datetime.utcnow()
+                for pendente in pendentes_resolvidos:
+                    if not pendente.importado:
+                        pendente.importado = True
+                        pendente.importado_em = agora
+
+                logger.info(
+                    f"🧹 Pendências da NF {numero_nf} marcadas como importadas ({len(pendentes_resolvidos)} itens)"
+                )
+
         return itens_criados
-    
+
+    def _gravar_nf_pendente(self, nfe_data):
+        """
+        Grava itens da NF em NFPendenteTagPlus quando não há pedido
+        Retorna lista vazia para não processar
+        """
+        numero_nf = str(nfe_data.get('numero', ''))
+        logger.info(f"⚠️ NF {numero_nf} sem pedido - gravando em pendências")
+
+        # Extrai cliente
+        cliente_data = nfe_data.get('cliente', {})
+        cnpj_cliente = re.sub(r'\D', '', str(cliente_data.get('cnpj', cliente_data.get('cpf', ''))))
+        cidade_cliente = cliente_data.get('cidade', '') or cliente_data.get('municipio', '') or ''
+        uf_cliente = cliente_data.get('uf', '') or cliente_data.get('estado', '') or ''
+
+        if not cnpj_cliente:
+            logger.error(f"NF {numero_nf} sem CNPJ")
+            return []
+
+        # Busca ou cria cliente
+        cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
+        if not cliente:
+            self._processar_cliente(cliente_data)
+            db.session.flush()
+            cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
+        else:
+            cidade_cliente = cidade_cliente or getattr(cliente, 'nome_cidade', '') or getattr(cliente, 'municipio', '') or ''
+            uf_cliente = uf_cliente or getattr(cliente, 'cod_uf', '') or getattr(cliente, 'estado', '') or ''
+
+        itens_pendentes = []
+
+        # Processa cada item
+        for idx, item in enumerate(nfe_data.get('itens', [])):
+            try:
+                # Extrair dados do produto
+                produto_info = item.get('produto', {}) or item.get('produto_servico', {})
+                cod_produto = str(produto_info.get('codigo', '') or item.get('item', ''))
+                nome_produto = produto_info.get('descricao', '') or ''
+
+                if not cod_produto:
+                    continue
+
+                # Verificar se já existe em pendências
+                existe_pendente = NFPendenteTagPlus.query.filter_by(
+                    numero_nf=numero_nf,
+                    cod_produto=cod_produto
+                ).first()
+
+                if existe_pendente:
+                    # Atualiza dados complementares se ausentes
+                    atualizou = False
+                    if not existe_pendente.nome_cidade and cidade_cliente:
+                        existe_pendente.nome_cidade = cidade_cliente
+                        atualizou = True
+                    if not existe_pendente.cod_uf and uf_cliente:
+                        existe_pendente.cod_uf = uf_cliente
+                        atualizou = True
+                    if atualizou:
+                        db.session.add(existe_pendente)
+                    continue
+
+                # Verificar pedido no nível do item
+                pedido_item = str(item.get('numero_pedido_compra', '') or '').strip()
+
+                # Se item tem pedido, usar ele
+                origem = pedido_item if pedido_item else None
+
+                # Extrair valores
+                quantidade = float(item.get('qtd', 0) or 0)
+                valor_unitario = float(item.get('valor_unitario', 0) or 0)
+                valor_total = float(item.get('valor_subtotal', 0) or 0)
+
+                if valor_total == 0 and quantidade > 0 and valor_unitario > 0:
+                    valor_total = quantidade * valor_unitario
+
+                # Criar registro pendente
+                pendente = NFPendenteTagPlus(
+                    numero_nf=numero_nf,
+                    cnpj_cliente=cnpj_cliente,
+                    nome_cliente=cliente.raz_social if cliente else '',
+                    data_fatura=self._parse_data(nfe_data.get('data_emissao')),
+                    nome_cidade=cidade_cliente,
+                    cod_uf=uf_cliente,
+                    cod_produto=cod_produto,
+                    nome_produto=nome_produto,
+                    qtd_produto_faturado=quantidade,
+                    preco_produto_faturado=valor_unitario,
+                    valor_produto_faturado=valor_total,
+                    origem=origem,  # Pode ser None ou ter pedido do item
+                    resolvido=bool(origem),  # Se tem origem, já está resolvido
+                    importado=False
+                )
+
+                db.session.add(pendente)
+                itens_pendentes.append(pendente)
+
+            except Exception as e:
+                logger.error(f"Erro ao gravar item pendente da NF {numero_nf}: {e}")
+
+        if itens_pendentes:
+            self.stats['nfs']['pendentes'] += 1
+            # Não adicionar como erro, pois é comportamento esperado
+            logger.info(f"⚠️ NF {numero_nf} sem pedido - {len(itens_pendentes)} itens gravados em pendências")
+            logger.info(f"   Use o botão 'Corrigir Pedidos' para adicionar o pedido e processar a NF")
+
+        # Retorna vazio para não processar
+        return []
+
     def _consolidar_relatorio_faturamento(self, itens_faturamento):
         """Consolida NFs no RelatorioFaturamentoImportado para ProcessadorFaturamento encontrar"""
         try:
@@ -512,7 +675,6 @@ class ImportadorTagPlusV2:
                         origem=dados_nf['origem'],
                         valor_total=dados_nf['valor_total'],
                         peso_bruto=dados_nf['peso_bruto'],
-                        origem_importacao='tagplus',
                         criado_em=datetime.now()
                     )
                     db.session.add(relatorio)
@@ -546,6 +708,16 @@ class ImportadorTagPlusV2:
             )
 
             if resultado:
+                try:
+                    service_pendencias = CorrecaoPedidosServiceV2()
+                    for nf_numero in nfs_unicas:
+                        try:
+                            service_pendencias.sincronizar_status_nf(nf_numero, usuario='ImportTagPlus')
+                        except Exception as err:
+                            logger.warning(f"⚠️ Falha ao sincronizar pendência da NF {nf_numero}: {err}")
+                except Exception as err:
+                    logger.warning(f"⚠️ Não foi possível atualizar pendências TagPlus: {err}")
+
                 return {
                     'success': True,
                     'nfs_processadas': resultado.get('processadas', 0),

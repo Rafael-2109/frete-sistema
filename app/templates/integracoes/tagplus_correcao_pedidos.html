@@ -1,0 +1,605 @@
+{% extends "base.html" %}
+
+{% block title %}Correção de Pedidos - TagPlus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-edit"></i> Correção de Pedidos em NFs - TagPlus
+                        </h4>
+                        <div>
+                            <a href="/integracoes/tagplus/importacao" class="btn btn-sm btn-light">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button onclick="atualizarLista()" class="btn btn-sm btn-success">
+                                <i class="fas fa-sync-alt"></i> Atualizar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Explicação do Fluxo -->
+                <div class="card-body bg-light border-bottom">
+                    <div class="alert alert-info mb-0">
+                        <h5><i class="fas fa-info-circle"></i> Como funciona:</h5>
+                        <ol class="mb-0">
+                            <li><strong>NFs nesta lista</strong> foram importadas do TagPlus mas estão <strong>sem número de pedido</strong></li>
+                            <li><strong>Digite o pedido</strong> no campo correspondente</li>
+                            <li><strong>Clique em "Importar"</strong> para mover a NF para o sistema principal (FaturamentoProduto)</li>
+                            <li>Após importar, a NF será processada para vincular com embarques existentes</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Estatísticas -->
+                <div class="card-body border-bottom">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="card bg-primary">
+                                <div class="card-body text-white">
+                                    <h3 id="total_pendencias">{{ estatisticas.total_nfs_pendentes }}</h3>
+                                    <p class="mb-0">Pendências Abertas</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-danger">
+                                <div class="card-body text-white">
+                                    <h3 id="total_nfs_sem_pedido">{{ estatisticas.total_nfs_sem_pedido }}</h3>
+                                    <p class="mb-0">Sem Pedido</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning">
+                                <div class="card-body text-white">
+                                    <h3 id="nfs_sem_mov">{{ estatisticas.nfs_sem_movimentacao }}</h3>
+                                    <p class="mb-0">Sem Movimentação</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success">
+                                <div class="card-body text-white">
+                                    <h3 id="nfs_com_mov">{{ estatisticas.nfs_com_movimentacao }}</h3>
+                                    <p class="mb-0">Com Movimentação</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mt-3">
+                            <div class="card bg-secondary">
+                                <div class="card-body text-white">
+                                    <h3 id="valor_total">R$ {{ "{:,.2f}".format(estatisticas.valor_total) }}</h3>
+                                    <p class="mb-0">Valor Total Pend.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ações em Lote -->
+                <div class="card-body border-bottom">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Ações em Lote</h5>
+                            <div class="btn-group" role="group">
+                                <button onclick="processarSelecionados()" class="btn btn-success" disabled id="btnProcessarLote">
+                                    <i class="fas fa-file-import"></i> Importar Selecionados (<span id="countSelecionados">0</span>)
+                                </button>
+                                <button onclick="marcarTodos(true)" class="btn btn-outline-primary">
+                                    <i class="fas fa-check-square"></i> Marcar Todos
+                                </button>
+                                <button onclick="marcarTodos(false)" class="btn btn-outline-secondary">
+                                    <i class="far fa-square"></i> Desmarcar Todos
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="reprocessarAuto" checked>
+                                <label class="form-check-label" for="reprocessarAuto">
+                                    <strong>Processar vinculação após importar</strong>
+                                    <small class="text-muted d-block">
+                                        Ao importar, a NF será movida para FaturamentoProduto e processada para vincular com embarques
+                                    </small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de NFs -->
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tabelaNFs">
+                            <thead>
+                                <tr>
+                                    <th width="40">
+                                        <input type="checkbox" id="checkAll" onchange="marcarTodos(this.checked)">
+                                    </th>
+                                    <th>NF</th>
+                                    <th>Data</th>
+                                    <th>Cliente</th>
+                                    <th>Produtos</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Pedido</th>
+                                    <th width="120">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaNFs">
+                                {% for nf in nfs_sem_pedido %}
+                                <tr data-nf="{{ nf.numero_nf }}"
+                                    data-importada="{{ 'true' if nf.importada else 'false' }}"
+                                    data-resolvido="{{ 'true' if nf.status_logistico.resolvido else 'false' }}">
+                                    <td>
+                                        <input type="checkbox" class="check-nf" value="{{ nf.numero_nf }}" onchange="atualizarContador()">
+                                    </td>
+                                    <td>
+                                        <strong>{{ nf.numero_nf }}</strong>
+                                    </td>
+                                    <td>{{ nf.data_fatura }}</td>
+                                    <td>
+                                        <small>
+                                            <strong>{{ nf.cnpj_cliente }}</strong><br>
+                                            {{ nf.nome_cliente | truncate(60, True, '...') }}<br>
+                                            {% if nf.nome_cidade or nf.cod_uf %}
+                                                <span class="text-muted">
+                                                    {{ nf.nome_cidade or '-' }}{% if nf.cod_uf %} - {{ nf.cod_uf }}{% endif %}
+                                                </span>
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ nf.qtd_produtos }} produtos</span>
+                                        {% if nf.produtos %}
+                                        <button class="btn btn-sm btn-link" onclick="verProdutos('{{ nf.numero_nf }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <div class="produtos-detail d-none" id="produtos-{{ nf.numero_nf }}">
+                                            {% for prod in nf.produtos %}
+                                            <small class="d-block">
+                                                {{ prod.cod_produto }} - {{ prod.nome_produto[:30] }} ({{ prod.quantidade }})
+                                            </small>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>R$ {{ "{:,.2f}".format(nf.valor_total) }}</td>
+                                    <td class="status-col">
+                                        {% set status = nf.status_logistico or {} %}
+                                        {% if status.resolvido %}
+                                            <span class="badge bg-success">Vinculada ao lote</span>
+                                        {% elif nf.importada %}
+                                            <span class="badge bg-warning text-dark">Importada (sem lote)</span>
+                                        {% elif nf.pedido_preenchido %}
+                                            <span class="badge bg-info text-dark">Pedido preenchido</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Aguardando pedido</span>
+                                        {% endif %}
+                                        <div class="small text-muted mt-1">
+                                            {% if status.tem_movimentacao %}
+                                                Movimentação gerada
+                                            {% else %}
+                                                Movimentação pendente
+                                            {% endif %}
+                                            ·
+                                            {% if status.tem_embarque %}
+                                                Embarque vinculado
+                                            {% else %}
+                                                Sem embarque
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text"
+                                                   class="form-control pedido-input"
+                                                   id="pedido-{{ nf.numero_nf }}"
+                                                   placeholder="Número do pedido"
+                                                   value="{{ nf.origem or '' }}">
+                                            <div class="input-group-append">
+                                                <button class="btn btn-outline-info"
+                                                        onclick="buscarSugestao('{{ nf.numero_nf }}')"
+                                                        title="Buscar sugestão">
+                                                    <i class="fas fa-lightbulb"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button onclick="importarNF('{{ nf.numero_nf }}')"
+                                                class="btn btn-sm btn-success"
+                                                title="Importar NF para o sistema principal">
+                                            <i class="fas fa-file-import"></i> Importar
+                                        </button>
+                                        <button onclick="verDetalhes('{{ nf.numero_nf }}')"
+                                                class="btn btn-sm btn-info"
+                                                title="Ver detalhes">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if not nfs_sem_pedido %}
+                    <div class="alert alert-success text-center">
+                        <i class="fas fa-check-circle fa-3x mb-3"></i>
+                        <h4>Nenhuma NF sem pedido encontrada!</h4>
+                        <p>Todas as NFs importadas possuem número de pedido associado.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Progresso -->
+<div class="modal fade" id="modalProgresso" tabindex="-1" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Processando...</h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         style="width: 100%">
+                    </div>
+                </div>
+                <p class="text-center mt-3 mb-0" id="progressoTexto">Aguarde...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+const API_SINGLE = '/integracoes/tagplus/api/v2/atualizar-pedido-pendente';
+const API_LOTE = '/integracoes/tagplus/api/v2/atualizar-pedidos-pendentes-lote';
+const API_STATS = '/integracoes/tagplus/api/v2/estatisticas-pendentes';
+
+let nfsSelecionadas = new Set();
+
+function atualizarContador() {
+    nfsSelecionadas.clear();
+    document.querySelectorAll('.check-nf:checked').forEach(cb => nfsSelecionadas.add(cb.value));
+    document.getElementById('countSelecionados').textContent = nfsSelecionadas.size;
+    document.getElementById('btnProcessarLote').disabled = nfsSelecionadas.size === 0;
+}
+
+function marcarTodos(marcar) {
+    document.querySelectorAll('.check-nf').forEach(cb => {
+        cb.checked = marcar;
+    });
+    atualizarContador();
+}
+
+function verProdutos(nf) {
+    const div = document.getElementById(`produtos-${nf}`);
+    if (div) {
+        div.classList.toggle('d-none');
+    }
+}
+
+async function buscarSugestao(nf) {
+    try {
+        const response = await fetch(`/integracoes/tagplus/api/v2/buscar-pedido-sugerido/${nf}`);
+        const data = await response.json();
+
+        if (data.success && data.sugestao) {
+            document.getElementById(`pedido-${nf}`).value = data.sugestao;
+            Swal.fire({
+                icon: 'success',
+                title: 'Sugestão encontrada!',
+                text: `Pedido sugerido: ${data.sugestao}`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            Swal.fire({
+                icon: 'info',
+                title: 'Sem sugestão',
+                text: 'Não foi possível encontrar um pedido sugerido',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao buscar sugestão:', error);
+        Swal.fire('Erro', 'Erro ao buscar sugestão', 'error');
+    }
+}
+
+function montarDescricaoLogistica(status) {
+    if (!status) return '';
+    const partes = [];
+    partes.push(status.tem_movimentacao ? 'Movimentação criada' : 'Movimentação pendente');
+    partes.push(status.tem_embarque ? 'Embarque vinculado' : 'Sem embarque');
+    partes.push(status.tem_movimentacao_com_lote ? 'Lote preenchido' : 'Sem lote');
+    partes.push(status.separacoes_sincronizadas ? 'Separações sincronizadas' : 'Separações pendentes');
+    return partes.join(' · ');
+}
+
+function gerarBadgeStatus(importada, status) {
+    let badgeHtml = '';
+    if (status?.resolvido) {
+        badgeHtml = '<span class="badge bg-success">Vinculada ao lote</span>';
+    } else if (importada) {
+        badgeHtml = '<span class="badge bg-warning text-dark">Importada (sem lote)</span>';
+    } else {
+        badgeHtml = '<span class="badge bg-danger">Aguardando pedido</span>';
+    }
+
+    const detalhes = montarDescricaoLogistica(status);
+    if (detalhes) {
+        badgeHtml += `<div class="small text-muted mt-1">${detalhes}</div>`;
+    }
+    return badgeHtml;
+}
+
+function atualizarStatusLinha(nf, status, pedido) {
+    const tr = document.querySelector(`tr[data-nf="${nf}"]`);
+    if (!tr) return;
+
+    if (status?.resolvido) {
+        tr.remove();
+        return;
+    }
+
+    tr.dataset.importada = 'true';
+    tr.dataset.resolvido = 'false';
+
+    const input = document.getElementById(`pedido-${nf}`);
+    if (input && pedido) {
+        input.value = pedido;
+    }
+
+    const checkbox = tr.querySelector('.check-nf');
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    atualizarContador();
+
+    const statusCol = tr.querySelector('.status-col');
+    if (statusCol) {
+        statusCol.innerHTML = gerarBadgeStatus(true, status);
+    }
+}
+
+function formatarValorBr(valor) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
+}
+
+async function atualizarEstatisticas() {
+    try {
+        const response = await fetch(API_STATS);
+        const data = await response.json();
+
+        if (data.success) {
+            const stats = data.estatisticas || {};
+            document.getElementById('total_pendencias').textContent = stats.total_nfs_pendentes ?? 0;
+            document.getElementById('total_nfs_sem_pedido').textContent = stats.total_nfs_sem_pedido ?? 0;
+            document.getElementById('nfs_sem_mov').textContent = stats.nfs_sem_movimentacao ?? 0;
+            document.getElementById('nfs_com_mov').textContent = stats.nfs_com_movimentacao ?? 0;
+            document.getElementById('valor_total').textContent = formatarValorBr(stats.valor_total ?? 0);
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar estatísticas:', error);
+    }
+}
+
+async function importarNF(nf) {
+    const pedidoInput = document.getElementById(`pedido-${nf}`);
+    const pedido = (pedidoInput?.value || '').trim();
+
+    if (!pedido) {
+        Swal.fire('Atenção', 'Digite o número do pedido antes de importar', 'warning');
+        return;
+    }
+
+    const confirma = await Swal.fire({
+        icon: 'question',
+        title: 'Confirmar Importação',
+        html: `
+            <p>A NF <strong>${nf}</strong> será importada para o sistema principal.</p>
+            <p>Pedido: <strong>${pedido}</strong></p>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Sim, importar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!confirma.isConfirmed) return;
+
+    const reprocessar = document.getElementById('reprocessarAuto').checked;
+
+    try {
+        $('#modalProgresso').modal('show');
+        document.getElementById('progressoTexto').textContent = `Atualizando NF ${nf}...`;
+
+        const response = await fetch(API_SINGLE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                numero_nf: nf,
+                numero_pedido: pedido,
+                importar: reprocessar
+            })
+        });
+
+        const data = await response.json();
+        $('#modalProgresso').modal('hide');
+
+        if (!data.success) {
+            Swal.fire('Erro', data.erro || 'Erro ao atualizar pedido', 'error');
+            return;
+        }
+
+        const importacao = data.importacao || {};
+        const status = importacao.status_logistico || {};
+        const itensCriados = importacao.itens_criados ?? 0;
+        const itensAtualizados = importacao.itens_atualizados ?? 0;
+        const detalhesLog = montarDescricaoLogistica(status);
+
+        const errosImport = importacao.erros || [];
+
+        const mensagem = [
+            `<p>NF <strong>${nf}</strong> processada com sucesso.</p>`,
+            `<p>Pedido: <strong>${pedido}</strong></p>`,
+            itensCriados ? `<p>${itensCriados} item(ns) criados em FaturamentoProduto</p>` : '',
+            itensAtualizados ? `<p>${itensAtualizados} item(ns) atualizados</p>` : '',
+            status.resolvido
+                ? '<p class="text-success">Vinculação ao lote concluída.</p>'
+                : '<p class="text-warning">NF importada. Vinculação ao lote ainda pendente.</p>'
+        ].filter(Boolean).join('');
+
+        Swal.fire({
+            icon: status.resolvido ? 'success' : 'info',
+            title: 'Resultado da Importação',
+            html: `${mensagem}${detalhesLog ? `<p class="small text-muted">${detalhesLog}</p>` : ''}${errosImport.length ? `<p class="text-danger mt-2">Erros: ${errosImport.join('<br>')}</p>` : ''}`
+        });
+
+        atualizarStatusLinha(nf, status, pedido);
+        atualizarEstatisticas();
+    } catch (error) {
+        $('#modalProgresso').modal('hide');
+        console.error('Erro ao salvar pedido:', error);
+        Swal.fire('Erro', 'Erro ao processar solicitação', 'error');
+    }
+}
+
+async function processarSelecionados() {
+    if (nfsSelecionadas.size === 0) {
+        Swal.fire('Atenção', 'Selecione pelo menos uma NF', 'warning');
+        return;
+    }
+
+    const atualizacoes = [];
+    let vazios = 0;
+
+    nfsSelecionadas.forEach(nf => {
+        const pedido = (document.getElementById(`pedido-${nf}`)?.value || '').trim();
+        if (pedido) {
+            atualizacoes.push({ numero_nf: nf, numero_pedido: pedido });
+        } else {
+            vazios += 1;
+        }
+    });
+
+    if (!atualizacoes.length) {
+        Swal.fire('Atenção', 'Digite o número do pedido para as NFs selecionadas', 'warning');
+        return;
+    }
+
+    if (vazios > 0) {
+        const confirma = await Swal.fire({
+            icon: 'question',
+            title: 'Confirmação',
+            text: `${vazios} NF(s) sem pedido serão ignoradas. Continuar?`,
+            showCancelButton: true,
+            confirmButtonText: 'Sim, continuar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!confirma.isConfirmed) return;
+    }
+
+    const reprocessar = document.getElementById('reprocessarAuto').checked;
+
+    try {
+        $('#modalProgresso').modal('show');
+        document.getElementById('progressoTexto').textContent = `Processando ${atualizacoes.length} NFs...`;
+
+        const response = await fetch(API_LOTE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ atualizacoes, importar: reprocessar })
+        });
+
+        const data = await response.json();
+        $('#modalProgresso').modal('hide');
+
+        if (!data.success) {
+            Swal.fire('Erro', data.erro || 'Erro ao processar lote', 'error');
+            return;
+        }
+
+        const detalhes = data.detalhes || {};
+        const sucesso = detalhes.sucesso || [];
+        const erros = detalhes.erros || [];
+
+        const html = `
+            <p><strong>Processamento concluído:</strong></p>
+            <ul>
+                <li>✅ ${sucesso.length} NF(s) atualizadas</li>
+                <li>❌ ${erros.length} erro(s)</li>
+            </ul>
+            ${erros.length ? '<p><strong>Erros:</strong></p><ul>' + erros.map(e => `<li>${e}</li>`).join('') + '</ul>' : ''}
+        `;
+
+        Swal.fire({
+            icon: sucesso.length ? 'success' : 'warning',
+            title: 'Resultado do Processamento',
+            html,
+            width: 600
+        }).then(() => atualizarLista());
+
+    } catch (error) {
+        $('#modalProgresso').modal('hide');
+        console.error('Erro ao processar lote:', error);
+        Swal.fire('Erro', 'Erro ao processar solicitação', 'error');
+    }
+}
+
+function verDetalhes(nf) {
+    Swal.fire({
+        title: `Detalhes da NF ${nf}`,
+        html: `
+            <p>Funcionalidade em desenvolvimento...</p>
+            <p>Aqui serão exibidos todos os produtos e detalhes da NF.</p>
+        `,
+        width: 800
+    });
+}
+
+function atualizarLista() {
+    location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    $('[title]').tooltip();
+});
+</script>
+
+<style>
+.produtos-detail {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.badge {
+    font-size: 0.85rem;
+}
+
+.input-group-sm .form-control {
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}

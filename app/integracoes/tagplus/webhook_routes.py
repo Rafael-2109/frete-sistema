@@ -151,7 +151,6 @@ def criar_cliente_webhook(dados, cnpj):
         
         # Contato
         telefone_endereco_ent=dados.get('telefone', ''),
-        email=dados.get('email', ''),
         
         # Endereço de entrega
         cnpj_endereco_ent=cnpj,
@@ -177,8 +176,6 @@ def atualizar_cliente_webhook(cliente, dados):
     cliente.raz_social = dados.get('razao_social', dados.get('nome', cliente.raz_social))
     cliente.raz_social_red = (dados.get('nome_fantasia', '') or cliente.raz_social_red)[:50]
     
-    if dados.get('email'):
-        cliente.email = dados.get('email')
     
     if dados.get('telefone'):
         cliente.telefone_endereco_ent = dados.get('telefone')
@@ -241,33 +238,34 @@ def processar_nfe_webhook(nfe_data):
 def processar_faturamento_tagplus(numero_nf):
     """Executa processamento completo da NF (score, movimentação, etc)"""
     try:
-        from app.integracoes.tagplus.processador_faturamento_tagplus import ProcessadorFaturamentoTagPlus
-        
+        from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+
         logger.info(f"Iniciando processamento completo da NF {numero_nf}")
-        
+
         # Busca todos os itens da NF
         itens_nf = FaturamentoProduto.query.filter_by(
             numero_nf=numero_nf,
             created_by='WebhookTagPlus'
         ).all()
-        
+
         if not itens_nf:
             logger.warning(f"Nenhum item encontrado para NF {numero_nf}")
             return
-        
-        # Processa cada item
-        processador = ProcessadorFaturamentoTagPlus()
-        for item in itens_nf:
-            processador.processar_nf_tagplus(item)
-        
-        # Commit final
-        db.session.commit()
-        
+
+        # Processa usando ProcessadorFaturamento padrão
+        processador = ProcessadorFaturamento()
+        resultado = processador.processar_nfs_importadas(
+            usuario='WebhookTagPlus',
+            limpar_inconsistencias=False,
+            nfs_especificas=[numero_nf]
+        )
+
         logger.info(f"Processamento completo da NF {numero_nf} finalizado")
-        logger.info(f"NFs processadas: {len(processador.nfs_processadas)}")
-        logger.info(f"Movimentações criadas: {len(processador.movimentacoes_criadas)}")
-        if processador.inconsistencias:
-            logger.warning(f"Inconsistências: {processador.inconsistencias}")
+        if resultado:
+            logger.info(f"NFs processadas: {resultado.get('processadas', 0)}")
+            logger.info(f"Movimentações criadas: {resultado.get('movimentacoes_criadas', 0)}")
+            if resultado.get('erros'):
+                logger.warning(f"Erros: {resultado['erros']}")
         
     except Exception as e:
         logger.error(f"Erro no processamento completo da NF {numero_nf}: {e}")

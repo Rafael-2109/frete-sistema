@@ -88,10 +88,14 @@ AUTH_PAGE_TEMPLATE = """
     {% if tokens_notas %}
     <div class="card">
         <h2>📋 Visualizar e Importar Notas Fiscais</h2>
-        <p>Buscar NFs dos últimos dias:</p>
+        <p>Buscar NFs por período:</p>
         <div style="margin: 10px 0;">
-            <label>Últimos quantos dias:</label>
-            <input type="number" id="diasBusca" value="7" min="1" max="365" style="width: 100px; padding: 5px;">
+            <label>Data Inicial:</label>
+            <input type="date" id="dataInicio" value="{{ (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d') }}" style="padding: 5px; margin-right: 10px;">
+
+            <label>Data Final:</label>
+            <input type="date" id="dataFim" value="{{ datetime.now().strftime('%Y-%m-%d') }}" style="padding: 5px; margin-right: 10px;">
+
             <button class="btn btn-primary" onclick="listarNFs()">
                 🔍 Buscar NFs
             </button>
@@ -128,7 +132,8 @@ AUTH_PAGE_TEMPLATE = """
 
     <script>
     function listarNFs() {
-        const dias = document.getElementById('diasBusca').value;
+        const dataInicio = document.getElementById('dataInicio').value;
+        const dataFim = document.getElementById('dataFim').value;
         const loading = document.getElementById('loadingNFs');
         const resultado = document.getElementById('resultadoNFs');
         const tabela = document.getElementById('tabelaNFs');
@@ -136,7 +141,7 @@ AUTH_PAGE_TEMPLATE = """
         loading.style.display = 'block';
         resultado.style.display = 'none';
 
-        fetch(`/tagplus/oauth/listar-nfs?dias=${dias}`)
+        fetch(`/tagplus/oauth/listar-nfs?data_inicio=${dataInicio}&data_fim=${dataFim}`)
             .then(response => response.json())
             .then(data => {
                 loading.style.display = 'none';
@@ -218,7 +223,8 @@ AUTH_PAGE_TEMPLATE = """
             },
             body: JSON.stringify({
                 nf_ids: window.nfsParaImportar,
-                dias: document.getElementById('diasBusca').value
+                data_inicio: document.getElementById('dataInicio').value,
+                data_fim: document.getElementById('dataFim').value
             })
         })
         .then(response => response.json())
@@ -247,9 +253,83 @@ AUTH_PAGE_TEMPLATE = """
         });
     }
     </script>
+
+    <div class="card">
+        <h2>🔧 Correção de Pedidos (NFs Pendentes)</h2>
+        <p>Visualizar e corrigir NFs que foram importadas sem número de pedido:</p>
+        <button class="btn btn-primary" onclick="carregarNFsPendentes()">
+            📋 Ver NFs Pendentes
+        </button>
+        <div id="nfsPendentesContainer" style="display: none; margin-top: 20px;">
+            <div id="loadingPendentes" style="display: none; text-align: center; padding: 20px;">
+                ⏳ Carregando NFs pendentes...
+            </div>
+            <div id="resultadoPendentes"></div>
+        </div>
+    </div>
+
+    <script>
+    function carregarNFsPendentes() {
+        const container = document.getElementById('nfsPendentesContainer');
+        const loading = document.getElementById('loadingPendentes');
+        const resultado = document.getElementById('resultadoPendentes');
+
+        container.style.display = 'block';
+        loading.style.display = 'block';
+        resultado.innerHTML = '';
+
+        // Buscar estatísticas e NFs pendentes
+        fetch('/integracoes/tagplus/api/v2/estatisticas-pendentes')
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+
+                if (data.success && data.estatisticas) {
+                    const stats = data.estatisticas;
+
+                    if (stats.total_pendentes === 0) {
+                        resultado.innerHTML = `
+                            <div class="status success">
+                                ✅ Nenhuma NF pendente! Todas as NFs importadas têm número de pedido.
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    resultado.innerHTML = `
+                        <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                            <strong>📊 Estatísticas:</strong><br>
+                            • Total pendentes: ${stats.total_pendentes}<br>
+                            • Resolvidas: ${stats.total_resolvido}<br>
+                            • Importadas: ${stats.total_importado}
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <a href="/integracoes/tagplus/pendencias" target="_blank" class="btn btn-success">
+                                📝 Abrir Tela de Correção
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    resultado.innerHTML = `
+                        <div class="status error">
+                            ❌ Erro ao carregar estatísticas
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                resultado.innerHTML = `
+                    <div class="status error">
+                        ❌ Erro: ${error}
+                    </div>
+                `;
+            });
+    }
+    </script>
     {% endif %}
     {% endif %}
-    
+
     <div class="card">
         <h2>📝 Tokens Manuais</h2>
         <p>Se você já tem tokens de acesso, pode configurá-los manualmente:</p>
@@ -299,7 +379,9 @@ def index():
         tokens_clientes_display=tokens_clientes_display,
         tokens_notas_display=tokens_notas_display,
         status=status,
-        status_type=status_type
+        status_type=status_type,
+        datetime=datetime,
+        timedelta=timedelta
     )
 
 @oauth_bp.route('/authorize/<api_type>')
@@ -449,9 +531,19 @@ def listar_nfs():
     """Lista NFs disponíveis para importação"""
     try:
         # Pega parâmetros da query string
-        dias = request.args.get('dias', 7, type=int)
-        data_fim = datetime.now().date()
-        data_inicio = data_fim - timedelta(days=dias)
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+
+        # Se não receber datas, usar últimos 7 dias como fallback
+        if data_inicio_str:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        else:
+            data_inicio = datetime.now().date() - timedelta(days=7)
+
+        if data_fim_str:
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+        else:
+            data_fim = datetime.now().date()
 
         # Usa OAuth2 para buscar NFs
         oauth = TagPlusOAuth2V2(api_type='notas')
@@ -636,7 +728,8 @@ def importar_nfs():
 
         data = request.get_json()
         nf_ids = data.get('nf_ids', [])
-        dias = data.get('dias', 7)
+        data_inicio_str = data.get('data_inicio')
+        data_fim_str = data.get('data_fim')
 
         if not nf_ids:
             return jsonify({'error': 'Nenhuma NF selecionada'}), 400
@@ -646,9 +739,16 @@ def importar_nfs():
         # Criar importador
         importador = ImportadorTagPlusV2()
 
-        # Definir período baseado nos dias
-        data_fim = datetime.now().date()
-        data_inicio = data_fim - timedelta(days=int(dias))
+        # Definir período baseado nas datas recebidas
+        if data_inicio_str:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        else:
+            data_inicio = datetime.now().date() - timedelta(days=7)
+
+        if data_fim_str:
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+        else:
+            data_fim = datetime.now().date()
 
         # Importar NFs específicas selecionadas pelo usuário
         resultado = importador.importar_nfs(

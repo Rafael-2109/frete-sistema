@@ -7,38 +7,50 @@
     <div class="row">
         <div class="col-md-12">
             <h2 class="mb-4">
-                <i class="fas fa-sync"></i> Integração TagPlus
+                <i class="fas fa-sync"></i> Integração TagPlus (Tela Antiga)
                 <div class="float-right">
-                    <!-- Removido: pagina_postman não existe mais -->
-                    <a href="{{ url_for('tagplus.importar') }}" class="btn btn-warning">
-                        <i class="fas fa-cloud-download-alt"></i> Autorizar OAuth2
+                    <a href="/tagplus/oauth/" class="btn btn-success btn-lg">
+                        <i class="fas fa-rocket"></i> Ir para Nova Tela de Importação
                     </a>
                 </div>
             </h2>
 
-            <!-- Abas -->
-            <ul class="nav nav-tabs" role="tablist">
-                <li class="nav-item">
-                    <a class="nav-link active" data-toggle="tab" href="#manual">
-                        <i class="fas fa-upload"></i> Importação Manual
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#webhooks">
-                        <i class="fas fa-link"></i> Configurar Webhooks
-                    </a>
-                </li>
-            </ul>
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <h4 class="alert-heading">⚠️ Esta tela está obsoleta!</h4>
+                <p>Por favor, use a <strong><a href="/tagplus/oauth/" class="alert-link">nova tela de importação</a></strong> que possui:</p>
+                <ul>
+                    <li>✅ Autenticação OAuth2 simplificada</li>
+                    <li>✅ Visualização de NFs antes da importação</li>
+                    <li>✅ Seleção por data inicial e final</li>
+                    <li>✅ Correção de pedidos integrada</li>
+                </ul>
+                <button type="button" class="close" data-dismiss="alert">
+                    <span>&times;</span>
+                </button>
+            </div>
 
-            <!-- Conteúdo das Abas -->
-            <div class="tab-content mt-3">
+            <!-- Conteúdo Removido - Apenas Link para Nova Tela -->
+            <div class="text-center mt-5">
+                <h3>Esta funcionalidade foi movida</h3>
+                <p class="lead">Toda a importação agora é feita pela nova interface unificada.</p>
+                <a href="/tagplus/oauth/" class="btn btn-primary btn-lg">
+                    <i class="fas fa-arrow-right"></i> Acessar Nova Tela de Importação
+                </a>
+            </div>
+
+            <!-- [CONTEÚDO REMOVIDO - USAR NOVA TELA] -->
+            <div style="display: none;">
                 <!-- Aba Importação Manual -->
                 <div class="tab-pane fade show active" id="manual" role="tabpanel">
                     <!-- Alert sobre vinculação manual -->
                     <div class="alert alert-info alert-dismissible fade show" role="alert">
-                        <i class="fas fa-info-circle"></i> 
-                        <strong>Nota:</strong> Após importar as NFs, caso alguma não seja vinculada automaticamente através do score, 
-                        você pode usar o botão <strong>"Vincular NFs sem Separação"</strong> acima para fazer a vinculação manual.
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Notas Importantes:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Após importar as NFs, caso alguma não seja vinculada automaticamente através do score,
+                            você pode usar o botão <strong>"Vincular NFs sem Separação"</strong> acima para fazer a vinculação manual.</li>
+                            <li>Se alguma NF for importada sem número de pedido, use o botão <strong>"Corrigir Pedidos"</strong> no topo da página para adicionar o pedido e reprocessar o faturamento.</li>
+                        </ul>
                         <button type="button" class="close" data-dismiss="alert">
                             <span>&times;</span>
                         </button>
@@ -447,13 +459,22 @@ function importarNFs() {
     .then(data => {
         if (data.success) {
             const res = data.resultado;
-            resultado.innerHTML = `
-                <div class="alert alert-success">
-                    <strong>Importação concluída!</strong><br>
-                    • NFs importadas: ${res.notas_fiscais.importadas}<br>
-                    • Itens importados: ${res.notas_fiscais.itens_importados}<br>
-                    • Erros: ${res.notas_fiscais.erros}
-                </div>`;
+            let alertClass = 'alert-success';
+            let alertMessage = '<strong>Importação concluída!</strong><br>';
+            alertMessage += `• NFs importadas: ${res.notas_fiscais.importadas}<br>`;
+            alertMessage += `• Itens importados: ${res.notas_fiscais.itens_importados}<br>`;
+
+            if (res.notas_fiscais.pendentes > 0) {
+                alertClass = 'alert-warning';
+                alertMessage += `<br><strong>⚠️ ${res.notas_fiscais.pendentes} NFs sem pedido!</strong><br>`;
+                alertMessage += `Use o botão <a href="/integracoes/tagplus/pendencias" class="btn btn-sm btn-info">Corrigir Pedidos</a> para adicionar os pedidos.<br>`;
+            }
+
+            if (res.notas_fiscais.erros > 0) {
+                alertMessage += `• Erros: ${res.notas_fiscais.erros}<br>`;
+            }
+
+            resultado.innerHTML = `<div class="alert ${alertClass}">${alertMessage}</div>`;
         } else {
             resultado.innerHTML = `
                 <div class="alert alert-danger">
