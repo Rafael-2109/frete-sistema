@@ -481,9 +481,13 @@ $(document).ready(function() {
   // Variáveis globais
   let pedidosSelecionados = [];
   let transportadoraSelecionada = null;
+  let tabelasPorCnpjSelecionadas = {};  // ✅ NOVO: Armazena dados da tabela de cada CNPJ selecionado
+
+  // ✅ NOVO: Carrega opcoes_por_cnpj em variável JavaScript
+  const opcoesPorCnpj = {{ opcoes_por_cnpj|tojson|safe }};
 
   // Debug: Verifica se as opções chegaram no template
-  console.log('[DEBUG] opcoes_por_cnpj no template:', {{ opcoes_por_cnpj|tojson|safe }});
+  console.log('[DEBUG] opcoes_por_cnpj no template:', opcoesPorCnpj);
   console.log('[DEBUG] pedidos_por_cnpj no template:', {{ pedidos_por_cnpj|tojson|safe }});
 
   // ✅ BOTÃO REDESPACHAR - Nova funcionalidade (SP/Guarulhos)
@@ -549,27 +553,69 @@ $(document).ready(function() {
     const $btn = $(this);
     const cnpj = $btn.data('cnpj');
     const transportadoraId = $btn.data('transportadora-id');
-    
+
     console.log('[DEBUG] Adicionando CNPJ:', cnpj, 'para transportadora:', transportadoraId);
-    
+
     // Verifica se é a transportadora selecionada
     if (transportadoraId != transportadoraSelecionada) {
       alert('Este CNPJ não pertence à transportadora selecionada!');
       return;
     }
-    
+
     const pedidosDesteCnpj = JSON.parse('{{ pedidos_por_cnpj|tojson|safe }}')[cnpj];
-    
+
     if (!pedidosDesteCnpj) {
       console.error('[DEBUG] Pedidos não encontrados para CNPJ:', cnpj);
       return;
     }
-    
+
+    // ✅ NOVO: Busca os dados da tabela para este CNPJ
+    if (opcoesPorCnpj && opcoesPorCnpj[cnpj]) {
+      // Busca a opção da transportadora selecionada
+      const opcaoTransportadora = opcoesPorCnpj[cnpj].find(function(opcao) {
+        return opcao.transportadora_id == transportadoraId;
+      });
+
+      if (opcaoTransportadora) {
+        // ✅ Armazena dados COMPLETOS da tabela para este CNPJ
+        tabelasPorCnpjSelecionadas[cnpj] = {
+          nome_tabela: opcaoTransportadora.nome_tabela,
+          modalidade: opcaoTransportadora.modalidade,
+          valor_kg: opcaoTransportadora.valor_kg,
+          percentual_valor: opcaoTransportadora.percentual_valor,
+          frete_minimo_valor: opcaoTransportadora.frete_minimo_valor,
+          frete_minimo_peso: opcaoTransportadora.frete_minimo_peso,
+          icms: opcaoTransportadora.icms,
+          percentual_gris: opcaoTransportadora.percentual_gris,
+          pedagio_por_100kg: opcaoTransportadora.pedagio_por_100kg,
+          valor_tas: opcaoTransportadora.valor_tas,
+          percentual_adv: opcaoTransportadora.percentual_adv,
+          percentual_rca: opcaoTransportadora.percentual_rca,
+          valor_despacho: opcaoTransportadora.valor_despacho,
+          valor_cte: opcaoTransportadora.valor_cte,
+          icms_incluso: opcaoTransportadora.icms_incluso,
+          gris_minimo: opcaoTransportadora.gris_minimo || 0,
+          adv_minimo: opcaoTransportadora.adv_minimo || 0,
+          icms_proprio: opcaoTransportadora.icms_proprio || null,
+          icms_destino: opcaoTransportadora.icms_destino || 0,
+          valor_total: opcaoTransportadora.valor_total,
+          valor_liquido: opcaoTransportadora.valor_liquido,
+          peso_grupo: opcaoTransportadora.peso_grupo
+        };
+
+        console.log('[DEBUG] ✅ Tabela armazenada para CNPJ', cnpj, ':', opcaoTransportadora.nome_tabela);
+      } else {
+        console.warn('[DEBUG] ⚠️ Opção da transportadora não encontrada para CNPJ:', cnpj);
+      }
+    } else {
+      console.warn('[DEBUG] ⚠️ Opções não encontradas para CNPJ:', cnpj);
+    }
+
     // Adiciona os pedidos à lista
     pedidosDesteCnpj.forEach(pedido => {
       if (!pedidosSelecionados.find(p => p.separacao_lote_id === pedido.separacao_lote_id)) {
         pedidosSelecionados.push(pedido);
-        
+
         // Adiciona a linha na tabela
         $('#listaPedidosSelecionados').append(`
           <tr data-pedido-id="${pedido.separacao_lote_id}" data-cnpj="${cnpj}">
@@ -590,8 +636,9 @@ $(document).ready(function() {
 
     // Desabilita o botão após adicionar
     $btn.prop('disabled', true).text('Adicionado');
-    
+
     console.log('[DEBUG] Pedidos selecionados:', pedidosSelecionados.length);
+    console.log('[DEBUG] ✅ Tabelas selecionadas:', Object.keys(tabelasPorCnpjSelecionadas).length, 'CNPJs');
   });
 
   // Quando clicar em "Remover" um pedido
@@ -599,14 +646,21 @@ $(document).ready(function() {
     const $row = $(this).closest('tr');
     const pedidoId = $row.data('pedido-id');
     const cnpj = $(this).data('cnpj');
-    
+
     console.log('[DEBUG] Removendo pedido ID:', pedidoId, 'CNPJ:', cnpj);
-    
+
     // Remove o pedido da lista
     pedidosSelecionados = pedidosSelecionados.filter(p => p.separacao_lote_id !== pedidoId);
-    
+
     // Remove a linha da tabela
     $row.remove();
+
+    // ✅ NOVO: Remove a tabela se não há mais pedidos deste CNPJ
+    const pedidosRestantesDoCnpj = pedidosSelecionados.filter(p => p.cnpj_cpf === cnpj);
+    if (pedidosRestantesDoCnpj.length === 0) {
+      delete tabelasPorCnpjSelecionadas[cnpj];
+      console.log('[DEBUG] ✅ Tabela removida para CNPJ:', cnpj);
+    }
 
     // Habilita novamente o botão "Adicionar" correspondente
     $(`.adicionar-cotacao[data-cnpj="${cnpj}"][data-transportadora-id="${transportadoraSelecionada}"]`)
@@ -623,10 +677,24 @@ $(document).ready(function() {
 
     console.log('[DEBUG] Fechando cotação com:', pedidosSelecionados.length, 'pedidos');
 
+    // ✅ VALIDAÇÃO: Verifica se há tabelas para todos os CNPJs selecionados
+    const cnpjsUnicos = [...new Set(pedidosSelecionados.map(p => p.cnpj_cpf))];
+    const cnpjsSemTabela = cnpjsUnicos.filter(cnpj => !tabelasPorCnpjSelecionadas[cnpj]);
+
+    if (cnpjsSemTabela.length > 0) {
+      alert('Erro: Dados de tabela não encontrados para os CNPJs: ' + cnpjsSemTabela.join(', ') +
+            '\n\nRecarregue a página e tente novamente.');
+      console.error('[DEBUG] ❌ CNPJs sem tabela:', cnpjsSemTabela);
+      return;
+    }
+
+    console.log('[DEBUG] ✅ Validação OK: Todos os', cnpjsUnicos.length, 'CNPJs têm dados de tabela');
+
     // Prepara os dados para envio
     const payload = {
       tipo: 'FRACIONADA',
       transportadora_id: transportadoraSelecionada,
+      tabelas_por_cnpj: tabelasPorCnpjSelecionadas,  // ✅ NOVO: Envia tabelas completas
       pedidos: pedidosSelecionados.map(function(pedido) {
         return {
           id: pedido.separacao_lote_id,
@@ -637,7 +705,8 @@ $(document).ready(function() {
       })
     };
 
-    console.log('[DEBUG] Payload enviado:', payload);
+    console.log('[DEBUG] ✅ Payload enviado COM TABELAS:', payload);
+    console.log('[DEBUG] ✅ Tabelas por CNPJ:', Object.keys(tabelasPorCnpjSelecionadas).length, 'CNPJs');
 
     // Envia a requisição
     $.ajax({
