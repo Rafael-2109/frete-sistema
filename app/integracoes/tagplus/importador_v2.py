@@ -30,7 +30,14 @@ class ImportadorTagPlusV2:
         # Estatísticas
         self.stats = {
             'clientes': {'importados': 0, 'atualizados': 0, 'erros': []},
-            'nfs': {'importadas': 0, 'itens': 0, 'pendentes': 0, 'erros': []},
+            'nfs': {
+                'importadas': 0,  # NFs importadas com pedido (FaturamentoProduto)
+                'itens': 0,  # Total de itens criados em FaturamentoProduto
+                'pendentes': 0,  # NFs NOVAS sem pedido (NFPendenteTagPlus)
+                'pendentes_existentes': 0,  # NFs que já estavam em pendências
+                'ja_importadas': 0,  # NFs que já foram importadas antes (puladas)
+                'erros': []
+            },
             'processamento': None
         }
     
@@ -385,6 +392,7 @@ class ImportadorTagPlusV2:
         existe_completa = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).first()
         if existe_completa:
             logger.debug(f"NF {numero_nf} já importada completamente, pulando...")
+            self.stats['nfs']['ja_importadas'] += 1
             return []
 
         # 2. Extrair pedido do nível da NF
@@ -549,6 +557,7 @@ class ImportadorTagPlusV2:
             uf_cliente = uf_cliente or getattr(cliente, 'cod_uf', '') or getattr(cliente, 'estado', '') or ''
 
         itens_pendentes = []
+        itens_ja_existentes = 0
 
         # Processa cada item
         for idx, item in enumerate(nfe_data.get('itens', [])):
@@ -578,6 +587,7 @@ class ImportadorTagPlusV2:
                         atualizou = True
                     if atualizou:
                         db.session.add(existe_pendente)
+                    itens_ja_existentes += 1
                     continue
 
                 # Verificar pedido no nível do item
@@ -620,9 +630,14 @@ class ImportadorTagPlusV2:
 
         if itens_pendentes:
             self.stats['nfs']['pendentes'] += 1
-            # Não adicionar como erro, pois é comportamento esperado
-            logger.info(f"⚠️ NF {numero_nf} sem pedido - {len(itens_pendentes)} itens gravados em pendências")
-            logger.info(f"   Use o botão 'Corrigir Pedidos' para adicionar o pedido e processar a NF")
+            logger.info(f"⚠️ NF {numero_nf} sem pedido - {len(itens_pendentes)} itens NOVOS gravados em pendências")
+
+        if itens_ja_existentes > 0:
+            self.stats['nfs']['pendentes_existentes'] += 1
+            logger.info(f"ℹ️ NF {numero_nf} - {itens_ja_existentes} itens já existiam em pendências")
+
+        if itens_pendentes or itens_ja_existentes:
+            logger.info(f"   Use a tela 'Correção de Pedidos' para adicionar o pedido e processar a NF")
 
         # Retorna vazio para não processar
         return []

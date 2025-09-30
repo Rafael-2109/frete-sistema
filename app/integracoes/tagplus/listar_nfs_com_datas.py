@@ -29,7 +29,7 @@ response = requests.get(
     params={
         'since': data_inicio.strftime('%Y-%m-%d'),
         'until': data_fim.strftime('%Y-%m-%d'),
-        'per_page': 10
+        'per_page': 100
     },
     timeout=30
 )

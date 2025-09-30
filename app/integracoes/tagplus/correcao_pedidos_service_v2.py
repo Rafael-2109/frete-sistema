@@ -332,7 +332,7 @@ class CorrecaoPedidosServiceV2:
                     vendedor=vendedor,
                     equipe_vendas=equipe_vendas,
                     origem=item_exemplo.origem,
-                    valor_total=float(totais[0] or 0),
+                    valor_total=float(totais[0] or 0), #type: ignore
                     peso_bruto=0,
                     ativo=True,
                     criado_em=datetime.now()
@@ -343,7 +343,7 @@ class CorrecaoPedidosServiceV2:
                 relatorio.cnpj_cliente = item_exemplo.cnpj_cliente or relatorio.cnpj_cliente
                 relatorio.nome_cliente = item_exemplo.nome_cliente or relatorio.nome_cliente
                 relatorio.data_fatura = item_exemplo.data_fatura or relatorio.data_fatura
-                relatorio.valor_total = float(totais[0] or 0)
+                relatorio.valor_total = float(totais[0] or 0) #type: ignore
                 relatorio.peso_bruto = 0
                 if municipio:
                     relatorio.municipio = municipio

@@ -215,36 +215,36 @@ class TagPlusOAuth2V2:
     def make_request(self, method, endpoint, **kwargs):
         """
         Faz requisição autenticada para API v2
-        
+
         Args:
             method: GET, POST, PUT, DELETE
             endpoint: Caminho da API (ex: '/clientes')
             **kwargs: Parâmetros adicionais para requests
-            
+
         Returns:
             Response object ou None se falhar
         """
         try:
             headers = self.get_headers()
-            
+
             # Remove Content-Type para requisições GET
             if method.upper() == 'GET':
                 headers.pop('Content-Type', None)
-            
+
             url = f"{self.API_BASE}{endpoint}"
-            
+
             response = requests.request(
-                method, 
+                method,
                 url,
                 headers=headers,
-                timeout=kwargs.pop('timeout', 60),
+                timeout=kwargs.pop('timeout', 300),  # 5 minutos de timeout padrão
                 **kwargs
             )
-            
+
             logger.debug(f"{method} {url} - Status: {response.status_code}")
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Erro na requisição {method} {endpoint}: {e}")
             return None

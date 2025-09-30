@@ -126,7 +126,10 @@ AUTH_PAGE_TEMPLATE = """
 
         <div id="loadingNFs" style="display: none; text-align: center; padding: 20px;">
             <div style="font-size: 24px;">⏳</div>
-            Carregando notas fiscais...
+            <div style="margin-top: 10px;">
+                <strong>Carregando notas fiscais...</strong><br>
+                <small style="color: #666;">Buscando detalhes de cada NF. Isso pode demorar alguns minutos dependendo da quantidade.</small>
+            </div>
         </div>
     </div>
 
@@ -232,10 +235,44 @@ AUTH_PAGE_TEMPLATE = """
             if (loading) loading.style.display = 'none';
 
             if (data.success) {
-                alert(`✅ Importação concluída!\n\n` +
-                      `NFs importadas: ${data.nfs_importadas}\n` +
-                      `Itens criados: ${data.itens_criados}\n` +
-                      `NFs processadas: ${data.processamento?.nfs_processadas || 0}`);
+                let mensagem = `✅ Importação concluída!\n\n`;
+
+                // NFs com pedido (importadas completamente)
+                if (data.nfs_importadas > 0) {
+                    mensagem += `✅ ${data.nfs_importadas} NF(s) importada(s) com sucesso\n`;
+                    mensagem += `   └─ ${data.itens_criados} itens criados\n`;
+                }
+
+                // NFs sem pedido (pendentes NOVAS)
+                if (data.nfs_pendentes > 0) {
+                    mensagem += `⚠️ ${data.nfs_pendentes} NF(s) sem pedido (gravadas em pendências)\n`;
+                }
+
+                // NFs que já estavam em pendências
+                if (data.nfs_pendentes_existentes > 0) {
+                    mensagem += `ℹ️ ${data.nfs_pendentes_existentes} NF(s) já estavam em pendências\n`;
+                }
+
+                // NFs já importadas antes
+                if (data.nfs_ja_importadas > 0) {
+                    mensagem += `✓ ${data.nfs_ja_importadas} NF(s) já importadas anteriormente (puladas)\n`;
+                }
+
+                // Processamento
+                if (data.processamento && data.processamento.nfs_processadas > 0) {
+                    mensagem += `\n📊 Processamento:\n`;
+                    mensagem += `   └─ ${data.processamento.nfs_processadas} NF(s) processadas\n`;
+                    if (data.processamento.movimentacoes_criadas) {
+                        mensagem += `   └─ ${data.processamento.movimentacoes_criadas} movimentação(ões) de estoque\n`;
+                    }
+                }
+
+                // Link para pendências se houver
+                if (data.nfs_pendentes > 0 || data.nfs_pendentes_existentes > 0) {
+                    mensagem += `\n💡 Use a tela "Correção de Pedidos" para preencher os pedidos das NFs pendentes.`;
+                }
+
+                alert(mensagem);
 
                 // Recarregar página para mostrar status atualizado
                 window.location.reload();
@@ -553,7 +590,7 @@ def listar_nfs():
         params = {
             'since': data_inicio.strftime('%Y-%m-%d'),
             'until': data_fim.strftime('%Y-%m-%d'),
-            'per_page': 100
+            'per_page': 500  # Aumentado para 500 (timeout de 5min protege)
         }
 
         # Log para debug
@@ -589,7 +626,7 @@ def listar_nfs():
                 response = oauth.make_request(
                     'GET',
                     '/nfes',
-                    params={'per_page': 20}
+                    params={'per_page': 500}  # Aumentado para 500
                 )
                 if response and response.status_code == 200:
                     data = response.json()
@@ -636,7 +673,8 @@ def listar_nfs():
 
         # Formata NFs para exibição
         nfes_formatadas = []
-        for nfe in nfes[:20]:  # Limitar a 20 para não demorar muito
+        # Processando TODAS as NFs (removido limite de 20)
+        for nfe in nfes:
             # A API retorna estrutura simplificada com destinatário
             destinatario = nfe.get('destinatario', {})
 
@@ -764,6 +802,9 @@ def importar_nfs():
             return jsonify({
                 'success': True,
                 'nfs_importadas': resultado['nfs']['importadas'],
+                'nfs_pendentes': resultado['nfs']['pendentes'],
+                'nfs_pendentes_existentes': resultado['nfs']['pendentes_existentes'],
+                'nfs_ja_importadas': resultado['nfs']['ja_importadas'],
                 'itens_criados': resultado['nfs']['itens'],
                 'processamento': resultado.get('processamento', {}),
                 'erros': resultado['nfs'].get('erros', [])
