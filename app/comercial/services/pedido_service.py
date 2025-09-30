@@ -368,12 +368,10 @@ class PedidoService:
                 resultado['status'] = 'Em Aberto'
             elif valor_faturado < valor_total:
                 resultado['status'] = 'Parcialmente Faturado'
-            elif valor_faturado == valor_total and valor_entregue < valor_total:
+            elif valor_entregue < valor_total:
                 resultado['status'] = 'Parcialmente Entregue'
-            elif valor_entregue >= valor_total:
+            else: #valor_entregue >= valor_total
                 resultado['status'] = 'Entregue'
-            else:
-                resultado['status'] = 'Em Aberto'
 
             # 7. Calcular saldo em carteira
             # Se tem saldo da CarteiraPrincipal, usa ele

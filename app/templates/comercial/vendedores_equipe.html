@@ -231,7 +231,7 @@
         <div class="row">
             {% for vendedor in vendedores %}
             <div class="col-md-4 col-lg-3 mb-4">
-                <a href="{{ url_for('comercial.lista_clientes', vendedor=vendedor.nome, posicao='em_aberto') }}"
+                <a href="{{ url_for('comercial.lista_clientes', vendedor=vendedor.nome, equipe=equipe_nome, posicao='em_aberto') }}"
                    class="text-decoration-none">
                     <div class="card h-100 vendedor-badge">
                         <div class="card-body text-center">

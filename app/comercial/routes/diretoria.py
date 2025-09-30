@@ -12,7 +12,9 @@ from app.comercial.services.permissao_service import PermissaoService
 from app.comercial.decorators import comercial_required, admin_comercial_required
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
-from sqlalchemy import distinct, text
+from sqlalchemy import distinct, text, func
+import typing as t
+from typing import Optional
 from app import db
 import logging
 import pandas as pd
@@ -20,6 +22,177 @@ from io import BytesIO
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _coletar_clientes_data(
+    filtro_posicao: str,
+    equipe_filtro: Optional[str],
+    vendedor_filtro: Optional[str],
+    filtros_avancados: t.Dict[str, str]
+) -> t.List[t.Dict[str, object]]:
+    """Monta a lista de clientes respeitando filtros e permissões."""
+
+    filtros_avancados_ativos = any(value.strip() for value in filtros_avancados.values())
+
+    is_vendedor = current_user.is_authenticated and current_user.perfil == 'vendedor'
+    permissoes = PermissaoService.obter_permissoes_usuario(current_user.id) if is_vendedor else {
+        'equipes': [],
+        'vendedores': []
+    }
+
+    clientes_cnpjs: t.List[str] = []
+
+    if filtros_avancados_ativos:
+        sql = text("""
+            WITH pedidos_filtrados AS (
+                SELECT
+                    cnpj_cpf,
+                    num_pedido,
+                    pedido_cliente,
+                    raz_social,
+                    raz_social_red,
+                    estado,
+                    municipio,
+                    vendedor,
+                    equipe_vendas,
+                    qtd_saldo_produto_pedido,
+                    preco_produto_pedido,
+                    (qtd_saldo_produto_pedido * preco_produto_pedido) as valor_item
+                FROM carteira_principal
+                WHERE
+                    (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0)
+
+                    AND (:is_vendedor = false OR
+                         ((:equipe_filtro IS NOT NULL AND equipe_vendas = :equipe_filtro) OR
+                          (:vendedor_filtro IS NOT NULL AND vendedor = :vendedor_filtro) OR
+                          (:equipe_filtro IS NULL AND :vendedor_filtro IS NULL AND
+                           (equipe_vendas = ANY(:equipes_permitidas) OR
+                            vendedor = ANY(:vendedores_permitidos)))))
+
+                    AND (:equipe_filtro IS NULL OR equipe_vendas = :equipe_filtro)
+                    AND (:vendedor_filtro IS NULL OR vendedor = :vendedor_filtro)
+
+                    AND (:pedido = '' OR
+                         lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')) OR
+                         lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
+
+                    AND (:num_pedido = '' OR
+                         lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
+
+                    AND (:pedido_cliente = '' OR
+                         lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%')))
+            ),
+            clientes_agrupados AS (
+                SELECT
+                    cnpj_cpf,
+                    SUM(valor_item) as valor_em_aberto
+                FROM pedidos_filtrados
+                WHERE
+                    (:cnpj_cpf = '' OR cnpj_cpf LIKE '%' || :cnpj_cpf || '%')
+
+                    AND (:cliente = '' OR
+                         lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')) OR
+                         lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
+
+                    AND (:raz_social = '' OR
+                         lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
+
+                    AND (:raz_social_red = '' OR
+                         lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
+
+                    AND (:uf = '' OR estado = :uf)
+                GROUP BY cnpj_cpf
+                HAVING SUM(valor_item) > 0 OR :posicao = 'todos'
+            )
+            SELECT cnpj_cpf
+            FROM clientes_agrupados
+        """)
+
+        is_vendedor_param = is_vendedor
+        equipes_permitidas = permissoes.get('equipes', []) if is_vendedor else []
+        vendedores_permitidos = permissoes.get('vendedores', []) if is_vendedor else []
+
+        params = {
+            'posicao': filtro_posicao,
+            'is_vendedor': is_vendedor_param,
+            'equipe_filtro': equipe_filtro,
+            'vendedor_filtro': vendedor_filtro,
+            'equipes_permitidas': equipes_permitidas or [''],
+            'vendedores_permitidos': vendedores_permitidos or [''],
+            'cnpj_cpf': filtros_avancados['cnpj_cpf'],
+            'cliente': filtros_avancados['cliente'],
+            'pedido': filtros_avancados['pedido'],
+            'raz_social': filtros_avancados['raz_social'],
+            'raz_social_red': filtros_avancados['raz_social_red'],
+            'uf': filtros_avancados['uf'],
+            'num_pedido': filtros_avancados['num_pedido'],
+            'pedido_cliente': filtros_avancados['pedido_cliente']
+        }
+
+        resultado = db.session.execute(sql, params).fetchall()
+        clientes_cnpjs = [row.cnpj_cpf for row in resultado if row.cnpj_cpf]
+
+    else:
+        if vendedor_filtro:
+            clientes_cnpjs = ClienteService.obter_clientes_por_vendedor(
+                vendedor_filtro
+            )
+        elif equipe_filtro:
+            clientes_cnpjs = ClienteService.obter_clientes_por_equipe(equipe_filtro)
+        else:
+            if is_vendedor:
+                clientes_cnpj_set: set[str] = set()
+
+                for equipe in permissoes['equipes']:
+                    clientes_cnpj_set.update(ClienteService.obter_clientes_por_equipe(equipe))
+
+                for vendedor in permissoes['vendedores']:
+                    clientes_cnpj_set.update(ClienteService.obter_clientes_por_vendedor(vendedor))
+
+                clientes_cnpjs = sorted(clientes_cnpj_set)
+            else:
+                clientes_cnpjs = ClienteService.obter_todos_clientes_distintos()
+
+    # Remover duplicados preservando ordem
+    clientes_cnpjs = list(dict.fromkeys(clientes_cnpjs))
+
+    vendedor_filtro_norm = vendedor_filtro.strip() if isinstance(vendedor_filtro, str) else None
+    equipe_filtro_norm = equipe_filtro.strip() if isinstance(equipe_filtro, str) else None
+
+    clientes_data: t.List[t.Dict[str, object]] = []
+    for cnpj in clientes_cnpjs:
+        dados_cliente = ClienteService.obter_dados_cliente(cnpj, filtro_posicao)
+
+        vendedor_cliente = (dados_cliente['vendedor'] or '').strip() if dados_cliente['vendedor'] else ''
+        equipe_cliente = (dados_cliente['equipe_vendas'] or '').strip() if dados_cliente['equipe_vendas'] else ''
+
+        if vendedor_filtro_norm and vendedor_cliente != vendedor_filtro_norm:
+            continue
+        if equipe_filtro_norm and equipe_cliente != equipe_filtro_norm:
+            continue
+
+        valor_em_aberto = float(dados_cliente['valor_em_aberto']) if dados_cliente['valor_em_aberto'] else 0.0
+        valor_total = float(dados_cliente['valor_total']) if dados_cliente['valor_total'] else 0.0
+        valor_principal = valor_em_aberto if filtro_posicao == 'em_aberto' else valor_total
+
+        clientes_data.append({
+            'cnpj_cpf': dados_cliente['cnpj_cpf'],
+            'raz_social': dados_cliente['raz_social'],
+            'raz_social_red': dados_cliente['raz_social_red'],
+            'estado': dados_cliente['estado'],
+            'municipio': dados_cliente['municipio'],
+            'vendedor': dados_cliente['vendedor'],
+            'equipe_vendas': dados_cliente['equipe_vendas'],
+            'forma_agendamento': dados_cliente['forma_agendamento'],
+            'total_pedidos': dados_cliente['total_pedidos'],
+            'valor_em_aberto': valor_em_aberto,
+            'valor_total': valor_total,
+            'valor_principal': valor_principal,
+            'pedidos': dados_cliente['pedidos']
+        })
+
+    clientes_data.sort(key=lambda x: x['valor_principal'], reverse=True)
+    return clientes_data
 
 
 @comercial_bp.route('/')
@@ -181,19 +354,30 @@ def vendedores_equipe(equipe_nome):
 
     # Para cada vendedor, contar clientes e calcular valores
     vendedores_data = []
+    equipe_nome_norm = equipe_nome.strip() if isinstance(equipe_nome, str) else None
     for vendedor in vendedores:
+        vendedor_norm = vendedor.strip() if isinstance(vendedor, str) else ''
         clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor)
+        clientes_validos: t.List[str] = []
+        valor_total_vendedor = 0.0
 
-        # Calcular valor total em aberto do vendedor
-        valor_total_vendedor = 0
         for cnpj in clientes_cnpj:
-            valor_cliente = ClienteService.calcular_valor_em_aberto(cnpj, 'em_aberto')
-            valor_total_vendedor += valor_cliente
+            dados_cliente = ClienteService.obter_dados_cliente(cnpj, 'em_aberto')
+            vendedor_cliente = (dados_cliente['vendedor'] or '').strip() if dados_cliente['vendedor'] else ''
+            equipe_cliente = (dados_cliente['equipe_vendas'] or '').strip() if dados_cliente['equipe_vendas'] else ''
+
+            if vendedor_cliente != vendedor_norm:
+                continue
+            if equipe_nome_norm and equipe_cliente != equipe_nome_norm:
+                continue
+
+            valor_total_vendedor += float(dados_cliente['valor_em_aberto']) if dados_cliente['valor_em_aberto'] else 0.0
+            clientes_validos.append(cnpj)
 
         vendedores_data.append({
             'nome': vendedor,
-            'total_clientes': len(clientes_cnpj),
-            'valor_em_aberto': float(valor_total_vendedor)
+            'total_clientes': len(clientes_validos),
+            'valor_em_aberto': valor_total_vendedor
         })
 
     return render_template('comercial/vendedores_equipe.html',
@@ -269,186 +453,23 @@ def lista_clientes():
                 flash('Você não tem permissão para acessar este vendedor.', 'danger')
                 return redirect(url_for('comercial.dashboard_diretoria'))
 
-    # Se há filtros avançados, usar query otimizada
-    if any([cnpj_cpf_filtro, cliente_filtro, pedido_filtro, uf_filtro,
-            raz_social_filtro, raz_social_red_filtro, num_pedido_filtro, pedido_cliente_filtro]):
-        # Usar query SQL otimizada com busca sem acento
-        from sqlalchemy import text
+    filtros_avancados = {
+        'cnpj_cpf': cnpj_cpf_filtro,
+        'cliente': cliente_filtro,
+        'pedido': pedido_filtro,
+        'uf': uf_filtro,
+        'raz_social': raz_social_filtro,
+        'raz_social_red': raz_social_red_filtro,
+        'num_pedido': num_pedido_filtro,
+        'pedido_cliente': pedido_cliente_filtro
+    }
 
-        sql = text("""
-            WITH pedidos_filtrados AS (
-                SELECT
-                    cnpj_cpf,
-                    num_pedido,
-                    pedido_cliente,
-                    raz_social,
-                    raz_social_red,
-                    estado,
-                    municipio,
-                    vendedor,
-                    equipe_vendas,
-                    qtd_saldo_produto_pedido,
-                    preco_produto_pedido,
-                    (qtd_saldo_produto_pedido * preco_produto_pedido) as valor_item
-                FROM carteira_principal
-                WHERE
-                    -- Filtro de posição
-                    (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0)
-
-                    -- Filtros de permissão (para vendedores)
-                    AND (:is_vendedor = false OR
-                         ((:equipe_filtro IS NOT NULL AND equipe_vendas = :equipe_filtro) OR
-                          (:vendedor_filtro IS NOT NULL AND vendedor = :vendedor_filtro) OR
-                          (:equipe_filtro IS NULL AND :vendedor_filtro IS NULL AND
-                           (equipe_vendas = ANY(:equipes_permitidas) OR
-                            vendedor = ANY(:vendedores_permitidos)))))
-
-                    -- Filtros de equipe/vendedor específicos
-                    AND (:equipe_filtro IS NULL OR equipe_vendas = :equipe_filtro)
-                    AND (:vendedor_filtro IS NULL OR vendedor = :vendedor_filtro)
-
-                    -- Filtro unificado de pedido (busca em num_pedido OU pedido_cliente)
-                    AND (:pedido = '' OR
-                         lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')) OR
-                         lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
-
-                    -- Filtros individuais de pedido (para compatibilidade)
-                    AND (:num_pedido = '' OR
-                         lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
-
-                    AND (:pedido_cliente = '' OR
-                         lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%')))
-            ),
-            clientes_agrupados AS (
-                SELECT
-                    cnpj_cpf,
-                    MAX(raz_social) as raz_social,
-                    MAX(raz_social_red) as raz_social_red,
-                    MAX(estado) as estado,
-                    MAX(municipio) as municipio,
-                    MAX(vendedor) as vendedor,
-                    MAX(equipe_vendas) as equipe_vendas,
-                    COUNT(DISTINCT num_pedido) as total_pedidos,
-                    SUM(valor_item) as valor_em_aberto
-                FROM pedidos_filtrados
-                WHERE
-                    -- Filtros de cliente
-                    (:cnpj_cpf = '' OR cnpj_cpf LIKE '%' || :cnpj_cpf || '%')
-
-                    -- Filtro unificado de cliente (busca em razão social OU nome fantasia)
-                    AND (:cliente = '' OR
-                         lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')) OR
-                         lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
-
-                    -- Filtros individuais de cliente (para compatibilidade)
-                    AND (:raz_social = '' OR
-                         lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
-
-                    AND (:raz_social_red = '' OR
-                         lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
-
-                    AND (:uf = '' OR estado = :uf)
-                GROUP BY cnpj_cpf
-                HAVING SUM(valor_item) > 0 OR :posicao = 'todos'
-            )
-            SELECT * FROM clientes_agrupados
-            ORDER BY valor_em_aberto DESC NULLS LAST
-        """)
-
-        # Preparar parâmetros
-        is_vendedor = current_user.perfil == 'vendedor'
-        equipes_permitidas = []
-        vendedores_permitidos = []
-
-        if is_vendedor:
-            permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
-            equipes_permitidas = permissoes.get('equipes', [])
-            vendedores_permitidos = permissoes.get('vendedores', [])
-
-        params = {
-            'posicao': filtro_posicao,
-            'is_vendedor': is_vendedor,
-            'equipe_filtro': equipe_filtro,
-            'vendedor_filtro': vendedor_filtro,
-            'equipes_permitidas': equipes_permitidas or [''],
-            'vendedores_permitidos': vendedores_permitidos or [''],
-            'cnpj_cpf': cnpj_cpf_filtro,
-            'cliente': cliente_filtro,  # Campo unificado cliente
-            'pedido': pedido_filtro,    # Campo unificado pedido
-            'raz_social': raz_social_filtro,
-            'raz_social_red': raz_social_red_filtro,
-            'uf': uf_filtro,
-            'num_pedido': num_pedido_filtro,
-            'pedido_cliente': pedido_cliente_filtro
-        }
-
-        # Executar query
-        result = db.session.execute(sql, params).fetchall()
-
-        clientes_data = []
-        for row in result:
-            clientes_data.append({
-                'cnpj_cpf': row.cnpj_cpf,
-                'raz_social': row.raz_social,
-                'raz_social_red': row.raz_social_red,
-                'estado': row.estado,
-                'municipio': row.municipio,
-                'vendedor': row.vendedor,
-                'equipe_vendas': row.equipe_vendas,
-                'forma_agendamento': 'Portal',  # Default
-                'valor_em_aberto': float(row.valor_em_aberto) if row.valor_em_aberto else 0.0,
-                'total_pedidos': int(row.total_pedidos) if row.total_pedidos else 0
-            })
-
-    else:
-        # Usar lógica original se não há filtros avançados
-        if vendedor_filtro:
-            clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor_filtro)
-        elif equipe_filtro:
-            clientes_cnpj = ClienteService.obter_clientes_por_equipe(equipe_filtro)
-        else:
-            # Se não tem filtro específico e é vendedor, aplicar todos os filtros de permissão
-            if current_user.perfil == 'vendedor':
-                permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
-
-                # Buscar clientes de todas as equipes e vendedores permitidos
-                clientes_cnpj_set = set()
-
-                # Adicionar clientes das equipes permitidas
-                for equipe in permissoes['equipes']:
-                    clientes_equipe = ClienteService.obter_clientes_por_equipe(equipe)
-                    clientes_cnpj_set.update(clientes_equipe)
-
-                # Adicionar clientes dos vendedores permitidos
-                for vendedor in permissoes['vendedores']:
-                    clientes_vendedor = ClienteService.obter_clientes_por_vendedor(vendedor)
-                    clientes_cnpj_set.update(clientes_vendedor)
-
-                clientes_cnpj = list(clientes_cnpj_set)
-            else:
-                clientes_cnpj = ClienteService.obter_todos_clientes_distintos()
-
-        # Buscar dados de cada cliente
-        clientes_data = []
-        for cnpj in clientes_cnpj:
-            dados_cliente = ClienteService.obter_dados_cliente(cnpj, filtro_posicao)
-
-            # Adicionar ao resultado
-            clientes_data.append({
-                'cnpj_cpf': dados_cliente['cnpj_cpf'],
-                'raz_social': dados_cliente['raz_social'],
-                'raz_social_red': dados_cliente['raz_social_red'],
-                'estado': dados_cliente['estado'],
-                'municipio': dados_cliente['municipio'],
-                'vendedor': dados_cliente['vendedor'],
-                'equipe_vendas': dados_cliente['equipe_vendas'],
-                'forma_agendamento': dados_cliente['forma_agendamento'],
-                'valor_em_aberto': float(dados_cliente['valor_em_aberto']),
-                'total_pedidos': dados_cliente['total_pedidos']
-            })
-
-        # Ordenar por valor em aberto (maior para menor)
-        clientes_data.sort(key=lambda x: x['valor_em_aberto'], reverse=True)
+    clientes_data = _coletar_clientes_data(
+        filtro_posicao=filtro_posicao,
+        equipe_filtro=equipe_filtro,
+        vendedor_filtro=vendedor_filtro,
+        filtros_avancados=filtros_avancados
+    )
 
     # Buscar UFs disponíveis para o dropdown
     ufs_disponiveis = []
@@ -466,7 +487,7 @@ def lista_clientes():
 
     # Calcular totais
     total_clientes = len(clientes_data)
-    valor_total = sum(c['valor_em_aberto'] for c in clientes_data)
+    valor_total = sum(c['valor_principal'] for c in clientes_data)
 
     return render_template('comercial/lista_clientes.html',
                          clientes=clientes_data,
@@ -486,7 +507,6 @@ def exportar_clientes_excel():
     Exporta dados detalhados dos clientes para Excel
     Uma linha por produto, com todos os dados do cliente/pedido/documento repetidos
     """
-    # Obter os mesmos parâmetros de filtro da listagem
     filtro_posicao = request.args.get('posicao', 'em_aberto')
     equipe_filtro = request.args.get('equipe', None)
     vendedor_filtro = request.args.get('vendedor', None)
@@ -494,240 +514,218 @@ def exportar_clientes_excel():
     cliente_filtro = request.args.get('cliente', '').strip()
     pedido_filtro = request.args.get('pedido', '').strip()
     uf_filtro = request.args.get('uf', '').strip()
-
-    # Manter compatibilidade com filtros antigos
     raz_social_filtro = request.args.get('raz_social', '').strip()
     raz_social_red_filtro = request.args.get('raz_social_red', '').strip()
     num_pedido_filtro = request.args.get('num_pedido', '').strip()
     pedido_cliente_filtro = request.args.get('pedido_cliente', '').strip()
 
-    # Preparar permissões para vendedores
-    is_vendedor = current_user.perfil == 'vendedor'
-    equipes_permitidas = []
-    vendedores_permitidos = []
-
-    if is_vendedor:
+    if current_user.perfil == 'vendedor':
         permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
-        equipes_permitidas = permissoes.get('equipes', [])
-        vendedores_permitidos = permissoes.get('vendedores', [])
 
-        # Se não tem permissões, retornar erro
-        if not equipes_permitidas and not vendedores_permitidos:
+        if not permissoes['equipes'] and not permissoes['vendedores']:
             flash('Você não possui permissões para exportar dados.', 'warning')
-            return redirect(url_for('comercial.lista_clientes'))
+            return redirect(url_for('comercial.lista_clientes', posicao=filtro_posicao))
 
-    # Query SQL para dados detalhados (não agrupados)
-    sql = text("""
-        SELECT
-            -- Dados do Cliente
-            cp.cnpj_cpf,
-            cp.raz_social,
-            cp.raz_social_red,
-            cp.municipio,
-            cp.estado,
+        if equipe_filtro and equipe_filtro not in permissoes['equipes']:
+            flash('Você não tem permissão para acessar esta equipe.', 'danger')
+            return redirect(url_for('comercial.lista_clientes', posicao=filtro_posicao))
 
-            -- Dados do Pedido
-            cp.num_pedido,
-            cp.pedido_cliente,
-            cp.data_pedido,
+        if vendedor_filtro and vendedor_filtro not in permissoes['vendedores']:
+            flash('Você não tem permissão para acessar este vendedor.', 'danger')
+            return redirect(url_for('comercial.lista_clientes', posicao=filtro_posicao))
 
-            -- Dados de Agendamento e Expedição
-            cp.expedicao,
-            cp.agendamento,
-            cp.protocolo,
-            cp.agendamento_confirmado,
-            -- Data de entrega: prioriza EntregaMonitorada se tiver NF, senão usa data_entrega_pedido
-            COALESCE(em.data_entrega_prevista, cp.data_entrega_pedido) as data_entrega_prevista,
-            cp.data_entrega,
-            -- Dados de entrega realizada (do monitoramento)
-            em.data_hora_entrega_realizada,
-            em.entregue,
-            em.status_finalizacao,
-
-            -- Dados do Produto
-            cp.cod_produto,
-            cp.nome_produto,
-            cp.qtd_produto_pedido,
-            cp.qtd_saldo_produto_pedido,
-            cp.qtd_cancelada_produto_pedido,
-            cp.preco_produto_pedido,
-            (cp.qtd_saldo_produto_pedido * cp.preco_produto_pedido) as valor_item,
-
-            -- Dados Comerciais
-            cp.vendedor,
-            cp.equipe_vendas,
-
-            -- Dados de Entrega
-            cp.cnpj_endereco_ent,
-            cp.empresa_endereco_ent,
-            cp.cep_endereco_ent,
-            cp.nome_cidade as cidade_entrega,
-            cp.cod_uf as uf_entrega,
-            cp.bairro_endereco_ent,
-            cp.rua_endereco_ent,
-            cp.endereco_ent as numero_endereco_ent,
-            cp.telefone_endereco_ent,
-
-            -- Dados de Documento (NF)
-            rf.numero_nf,
-            rf.data_fatura,
-            rf.cnpj_transportadora,
-            rf.nome_transportadora,
-            rf.incoterm,
-
-            -- Dados de Separação
-            cp.separacao_lote_id,
-
-            -- Observações
-            cp.observ_ped_1
-
-        FROM carteira_principal cp
-        LEFT JOIN (
-            SELECT DISTINCT
-                origem,
-                numero_nf,
-                data_fatura,
-                cnpj_transportadora,
-                nome_transportadora,
-                incoterm
-            FROM relatorio_faturamento_importado
-            WHERE ativo = true
-        ) rf ON cp.num_pedido = rf.origem
-        LEFT JOIN (
-            SELECT DISTINCT
-                numero_nf,
-                data_entrega_prevista,
-                data_hora_entrega_realizada,
-                entregue,
-                status_finalizacao
-            FROM entregas_monitoradas
-            WHERE numero_nf IS NOT NULL
-        ) em ON rf.numero_nf = em.numero_nf
-        WHERE
-            -- Filtro de posição
-            (:posicao = 'todos' OR cp.qtd_saldo_produto_pedido > 0)
-
-            -- Filtros de permissão (para vendedores)
-            AND (:is_vendedor = false OR
-                 ((:equipe_filtro IS NOT NULL AND cp.equipe_vendas = :equipe_filtro) OR
-                  (:vendedor_filtro IS NOT NULL AND cp.vendedor = :vendedor_filtro) OR
-                  (:equipe_filtro IS NULL AND :vendedor_filtro IS NULL AND
-                   (cp.equipe_vendas = ANY(:equipes_permitidas) OR
-                    cp.vendedor = ANY(:vendedores_permitidos)))))
-
-            -- Filtros de equipe/vendedor específicos
-            AND (:equipe_filtro IS NULL OR cp.equipe_vendas = :equipe_filtro)
-            AND (:vendedor_filtro IS NULL OR cp.vendedor = :vendedor_filtro)
-
-            -- Filtros de busca
-            AND (:cnpj_cpf = '' OR cp.cnpj_cpf LIKE '%' || :cnpj_cpf || '%')
-
-            -- Filtro unificado de cliente
-            AND (:cliente = '' OR
-                 lower(f_unaccent(COALESCE(cp.raz_social, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')) OR
-                 lower(f_unaccent(COALESCE(cp.raz_social_red, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
-
-            -- Filtro unificado de pedido
-            AND (:pedido = '' OR
-                 lower(f_unaccent(COALESCE(cp.num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')) OR
-                 lower(f_unaccent(COALESCE(cp.pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
-
-            -- Filtros individuais (compatibilidade)
-            AND (:raz_social = '' OR
-                 lower(f_unaccent(COALESCE(cp.raz_social, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
-
-            AND (:raz_social_red = '' OR
-                 lower(f_unaccent(COALESCE(cp.raz_social_red, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
-
-            AND (:num_pedido = '' OR
-                 lower(f_unaccent(COALESCE(cp.num_pedido, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
-
-            AND (:pedido_cliente = '' OR
-                 lower(f_unaccent(COALESCE(cp.pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%')))
-
-            AND (:uf = '' OR cp.estado = :uf)
-
-        ORDER BY
-            cp.raz_social,
-            cp.num_pedido,
-            cp.cod_produto
-    """)
-
-    # Preparar parâmetros
-    params = {
-        'posicao': filtro_posicao,
-        'is_vendedor': is_vendedor,
-        'equipe_filtro': equipe_filtro,
-        'vendedor_filtro': vendedor_filtro,
-        'equipes_permitidas': equipes_permitidas or [''],
-        'vendedores_permitidos': vendedores_permitidos or [''],
+    filtros_avancados = {
         'cnpj_cpf': cnpj_cpf_filtro,
         'cliente': cliente_filtro,
         'pedido': pedido_filtro,
+        'uf': uf_filtro,
         'raz_social': raz_social_filtro,
         'raz_social_red': raz_social_red_filtro,
-        'uf': uf_filtro,
         'num_pedido': num_pedido_filtro,
         'pedido_cliente': pedido_cliente_filtro
     }
 
-    # Executar query
-    result = db.session.execute(sql, params).fetchall()
+    clientes_data = _coletar_clientes_data(
+        filtro_posicao=filtro_posicao,
+        equipe_filtro=equipe_filtro,
+        vendedor_filtro=vendedor_filtro,
+        filtros_avancados=filtros_avancados
+    )
 
-    # Converter para DataFrame
-    data = []
-    for row in result:
-        data.append({
-            'CNPJ/CPF': row.cnpj_cpf,
-            'Razão Social': row.raz_social,
-            'Nome Fantasia': row.raz_social_red,
-            'Município': row.municipio,
-            'UF': row.estado,
-            'Número Pedido': row.num_pedido,
-            'Pedido Cliente': row.pedido_cliente,
-            'Data Pedido': row.data_pedido.strftime('%d/%m/%Y') if row.data_pedido else '',
-            'Data Expedição': row.expedicao.strftime('%d/%m/%Y') if row.expedicao else '',
-            'Data Agendamento': row.agendamento.strftime('%d/%m/%Y') if row.agendamento else '',
-            'Protocolo': row.protocolo or '',
-            'Agendamento Confirmado': 'Sim' if row.agendamento_confirmado else 'Não',
-            'Data Entrega Prevista': row.data_entrega_prevista.strftime('%d/%m/%Y') if row.data_entrega_prevista else '',
-            'Data Entrega Realizada': row.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') if row.data_hora_entrega_realizada else '',
-            'Status Entrega': row.status_finalizacao or '',
-            'Número NF': row.numero_nf or '',
-            'Data Fatura': row.data_fatura.strftime('%d/%m/%Y') if row.data_fatura else '',
-            'CNPJ Transportadora': row.cnpj_transportadora or '',
-            'Nome Transportadora': row.nome_transportadora or '',
-            'Incoterm': row.incoterm or '',
-            'Código Produto': row.cod_produto,
-            'Nome Produto': row.nome_produto,
-            'Qtd Original': float(row.qtd_produto_pedido) if row.qtd_produto_pedido else 0,
-            'Qtd Saldo': float(row.qtd_saldo_produto_pedido) if row.qtd_saldo_produto_pedido else 0,
-            'Qtd Cancelada': float(row.qtd_cancelada_produto_pedido) if row.qtd_cancelada_produto_pedido else 0,
-            'Preço Unitário': float(row.preco_produto_pedido) if row.preco_produto_pedido else 0,
-            'Valor Item': float(row.valor_item) if row.valor_item else 0,
-            'Vendedor': row.vendedor or '',
-            'Equipe Vendas': row.equipe_vendas or '',
-            'CNPJ Entrega': row.cnpj_endereco_ent or '',
-            'Local Entrega': row.empresa_endereco_ent or '',
-            'CEP Entrega': row.cep_endereco_ent or '',
-            'Cidade Entrega': row.cidade_entrega or '',
-            'UF Entrega': row.uf_entrega or '',
-            'Bairro Entrega': row.bairro_endereco_ent or '',
-            'Rua Entrega': row.rua_endereco_ent or '',
-            'Número Entrega': row.numero_endereco_ent or '',
-            'Telefone Entrega': row.telefone_endereco_ent or '',
-            'Lote Separação': row.separacao_lote_id or '',
-            'Observações': row.observ_ped_1 or ''
-        })
+    if not clientes_data:
+        flash('Nenhum cliente encontrado para exportação.', 'warning')
+        return redirect(url_for('comercial.lista_clientes', posicao=filtro_posicao))
 
-    df = pd.DataFrame(data)
+    def formatar_data(valor, allow_time: bool = False) -> str:
+        if not valor or valor in ('-', ''):
+            return ''
+        if isinstance(valor, str):
+            return valor.replace('Previsão:', '').strip()
+        if allow_time and hasattr(valor, 'strftime'):
+            return valor.strftime('%d/%m/%Y %H:%M')
+        if hasattr(valor, 'strftime'):
+            return valor.strftime('%d/%m/%Y')
+        return str(valor)
 
-    # Criar arquivo Excel
+    linhas: t.List[t.Dict[str, object]] = []
+
+    for cliente in clientes_data:
+        cnpj = cliente['cnpj_cpf']
+        pedidos_cliente = cliente.get('pedidos') or ClienteService.obter_pedidos_cliente(cnpj, filtro_posicao)
+
+        for num_pedido in pedidos_cliente:
+            pedido_info = PedidoService._processar_pedido(num_pedido, cnpj, None, None)
+
+            carteira_info = db.session.query(
+                func.min(CarteiraPrincipal.data_pedido).label('data_pedido'),
+                func.min(CarteiraPrincipal.expedicao).label('expedicao'),
+                func.min(CarteiraPrincipal.agendamento).label('agendamento'),
+                func.max(CarteiraPrincipal.protocolo).label('protocolo')
+            ).filter(
+                CarteiraPrincipal.cnpj_cpf == cnpj,
+                CarteiraPrincipal.num_pedido == num_pedido
+            ).first()
+
+            agendamento_confirmado_carteira = db.session.query(CarteiraPrincipal.id).filter(
+                CarteiraPrincipal.cnpj_cpf == cnpj,
+                CarteiraPrincipal.num_pedido == num_pedido,
+                CarteiraPrincipal.agendamento_confirmado.is_(True)
+            ).first() is not None
+
+            documentos = DocumentoService.obter_documentos_pedido(num_pedido=num_pedido, cnpj_cliente=cnpj)
+            docs = documentos.get('documentos', [])
+
+            saldo_carteira_float = float(pedido_info.get('saldo_carteira') or 0)
+            if not docs and saldo_carteira_float > 0:
+                docs = [{
+                    'tipo': 'Saldo',
+                    'valor': saldo_carteira_float,
+                    'numero_nf': '-',
+                    'data_faturamento': '',
+                    'data_embarque': formatar_data(carteira_info.expedicao) if carteira_info else '',
+                    'data_agendamento': formatar_data(carteira_info.agendamento) if carteira_info else '',
+                    'protocolo_agendamento': carteira_info.protocolo if carteira_info and carteira_info.protocolo else '',
+                    'status_agendamento': 'aguardando',
+                    'data_entrega_prevista': '',
+                    'data_entrega_realizada': '',
+                    'cnpj_transportadora': '',
+                    'nome_transportadora': '',
+                    'status_finalizacao': ''
+                }]
+
+            for doc in docs:
+                if filtro_posicao == 'em_aberto' and doc.get('tipo') == 'NF':
+                    status_finalizacao = (doc.get('status_finalizacao') or '').lower()
+                    entrega_realizada = doc.get('data_entrega_realizada')
+                    if status_finalizacao == 'entregue':
+                        continue
+                    if entrega_realizada and entrega_realizada not in ('', '-', None):
+                        continue
+
+                tipo_documento = 'NF' if doc.get('tipo') == 'NF' else ('Separacao' if doc.get('tipo') == 'Separação' else 'Saldo')
+                if tipo_documento == 'NF':
+                    identificador = doc.get('numero_nf')
+                elif tipo_documento == 'Separacao':
+                    identificador = doc.get('separacao_lote_id')
+                else:
+                    identificador = num_pedido
+
+                if not identificador:
+                    identificador = num_pedido
+
+                produtos_result = ProdutoDocumentoService.obter_produtos_documento(
+                    tipo_documento=tipo_documento,
+                    identificador=identificador,
+                    num_pedido=num_pedido if tipo_documento == 'Saldo' else None
+                )
+
+                produtos_lista = produtos_result.get('produtos') or [{
+                    'codigo': '-',
+                    'produto': '-',
+                    'quantidade': 0,
+                    'preco': 0,
+                    'valor': float(doc.get('valor') or 0),
+                    'peso': 0,
+                    'pallet': 0
+                }]
+
+                data_pedido = pedido_info.get('data_pedido') or (carteira_info.data_pedido if carteira_info else None)
+                data_expedicao = formatar_data(doc.get('data_embarque')) or (formatar_data(carteira_info.expedicao) if carteira_info else '')
+                data_agendamento = formatar_data(doc.get('data_agendamento')) or (formatar_data(carteira_info.agendamento) if carteira_info else '')
+                protocolo_agendamento = doc.get('protocolo_agendamento') or (carteira_info.protocolo if carteira_info and carteira_info.protocolo else '')
+
+                agendamento_confirmado_doc = (doc.get('status_agendamento') or '').lower() == 'confirmado'
+                agendamento_confirmado = agendamento_confirmado_doc or agendamento_confirmado_carteira
+
+                status_entrega = doc.get('status_finalizacao') or doc.get('status_agendamento')
+                if not status_entrega:
+                    status_entrega = 'Em Aberto' if doc.get('tipo') != 'NF' else ''
+
+                valor_documento = float(doc.get('valor', 0) or 0)
+
+                for produto in produtos_lista:
+                    linhas.append({
+                        'Equipe Vendas': cliente.get('equipe_vendas') or '',
+                        'Vendedor': cliente.get('vendedor') or '',
+                        'CNPJ Cliente': cliente['cnpj_cpf'],
+                        'Razão Social': cliente.get('raz_social') or '',
+                        'Nome Fantasia': cliente.get('raz_social_red') or '',
+                        'Município': cliente.get('municipio') or '',
+                        'UF': cliente.get('estado') or '',
+                        'Número Pedido': num_pedido,
+                        'Pedido Cliente': pedido_info.get('pedido_cliente') if pedido_info.get('pedido_cliente') != '-' else '',
+                        'Tipo Registro': 'Faturamento' if doc.get('tipo') == 'NF' else doc.get('tipo'),
+                        'Identificador Documento': identificador or '',
+                        'Data Pedido': formatar_data(data_pedido) if data_pedido else '',
+                        'Data Faturamento': formatar_data(doc.get('data_faturamento')),
+                        'Data Expedição': data_expedicao,
+                        'Data Agendamento': data_agendamento,
+                        'Protocolo Agendamento': protocolo_agendamento,
+                        'Agendamento Confirmado': 'Sim' if agendamento_confirmado else 'Não',
+                        'Status Entrega': status_entrega,
+                        'Data Entrega Prevista': formatar_data(doc.get('data_entrega_prevista')),
+                        'Data Entrega Realizada': formatar_data(doc.get('data_entrega_realizada'), allow_time=True),
+                        'CNPJ Transportadora': doc.get('cnpj_transportadora') or '',
+                        'Nome Transportadora': doc.get('nome_transportadora') or doc.get('transportadora') or '',
+                        'Incoterm': pedido_info.get('incoterm') if pedido_info.get('incoterm') != '-' else '',
+                        'Método Entrega': pedido_info.get('metodo_entrega_pedido') if pedido_info.get('metodo_entrega_pedido') != '-' else '',
+                        'Status Pedido': pedido_info.get('status'),
+                        'Valor Pedido': float(pedido_info.get('valor_total_pedido') or 0),
+                        'Valor Faturado Pedido': float(pedido_info.get('valor_total_faturado') or 0),
+                        'Saldo Carteira Pedido': float(pedido_info.get('saldo_carteira') or 0),
+                        'Valor Documento': valor_documento,
+                        'Código Produto': produto.get('codigo', ''),
+                        'Produto': produto.get('produto', ''),
+                        'Quantidade': float(produto.get('quantidade', 0) or 0),
+                        'Preço Unitário': float(produto.get('preco', 0) or 0),
+                        'Valor Produto': float(produto.get('valor', 0) or 0),
+                        'Peso Total': float(produto.get('peso', 0) or 0),
+                        'Pallets': float(produto.get('pallet', 0) or 0),
+                        'Forma Agendamento Cliente': cliente.get('forma_agendamento') or ''
+                    })
+
+    df = pd.DataFrame(linhas)
+
+    colunas_ordenadas = [
+        'Equipe Vendas', 'Vendedor', 'CNPJ Cliente', 'Razão Social', 'Nome Fantasia', 'Município', 'UF',
+        'Número Pedido', 'Pedido Cliente', 'Tipo Registro', 'Identificador Documento', 'Data Pedido',
+        'Data Faturamento', 'Data Expedição', 'Data Agendamento', 'Protocolo Agendamento',
+        'Agendamento Confirmado', 'Status Entrega', 'Data Entrega Prevista', 'Data Entrega Realizada',
+        'CNPJ Transportadora', 'Nome Transportadora', 'Incoterm', 'Método Entrega', 'Status Pedido',
+        'Valor Pedido', 'Valor Faturado Pedido', 'Saldo Carteira Pedido', 'Valor Documento',
+        'Código Produto', 'Produto', 'Quantidade', 'Preço Unitário', 'Valor Produto', 'Peso Total',
+        'Pallets', 'Forma Agendamento Cliente'
+    ]
+
+    if not df.empty:
+        df = df[colunas_ordenadas]
+    else:
+        df = pd.DataFrame(columns=colunas_ordenadas)
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='Clientes Detalhado', index=False)
 
-        # Ajustar largura das colunas
         worksheet = writer.sheets['Clientes Detalhado']
         for column in worksheet.columns:
             max_length = 0
@@ -742,8 +740,6 @@ def exportar_clientes_excel():
             worksheet.column_dimensions[column_letter].width = adjusted_width
 
     output.seek(0)
-
-    # Nome do arquivo com timestamp
     filename = f"clientes_detalhado_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     return send_file(
@@ -767,6 +763,7 @@ def detalhes_cliente_api(cnpj):
 
     # Converter Decimal para float para JSON
     dados['valor_em_aberto'] = float(dados['valor_em_aberto'])
+    dados['valor_total'] = float(dados['valor_total'])
 
     return jsonify(dados)
 

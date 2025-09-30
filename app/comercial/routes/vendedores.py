@@ -1,1 +1,0 @@
-# Este arquivo pode ser usado futuramente para rotas específicas de vendedores individuais

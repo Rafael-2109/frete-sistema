@@ -6,14 +6,11 @@ Autor: Sistema de Fretes
 Data: 21/01/2025
 """
 
-from sqlalchemy import func, distinct, text, and_, or_
+from sqlalchemy import func, distinct, text
 from decimal import Decimal
 from typing import List, Dict, Any
 from app import db
 from app.carteira.models import CarteiraPrincipal
-from app.faturamento.models import FaturamentoProduto
-from app.monitoramento.models import EntregaMonitorada
-from app.separacao.models import Separacao
 import logging
 
 logger = logging.getLogger(__name__)

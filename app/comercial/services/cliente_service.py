@@ -8,7 +8,7 @@ from app.faturamento.models import FaturamentoProduto
 from app.monitoramento.models import EntregaMonitorada
 from app.cadastros_agendamento.models import ContatoAgendamento
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 class ClienteService:
@@ -83,7 +83,7 @@ class ClienteService:
         return sorted(list(clientes))
 
     @staticmethod
-    def obter_clientes_por_vendedor(vendedor: str) -> List[str]:
+    def obter_clientes_por_vendedor(vendedor: str, equipe_vendas: Optional[str] = None) -> List[str]:
         """
         Retorna CNPJs de clientes de um vendedor específico
         """
@@ -95,7 +95,14 @@ class ClienteService:
         ).filter(
             CarteiraPrincipal.vendedor == vendedor,
             CarteiraPrincipal.cnpj_cpf.isnot(None)
-        ).all()
+        )
+
+        if equipe_vendas:
+            carteira_clientes = carteira_clientes.filter(
+                CarteiraPrincipal.equipe_vendas == equipe_vendas
+            )
+
+        carteira_clientes = carteira_clientes.all()
 
         # Do faturamento
         faturamento_clientes = db.session.query(
@@ -104,7 +111,14 @@ class ClienteService:
             FaturamentoProduto.vendedor == vendedor,
             FaturamentoProduto.cnpj_cliente.isnot(None),
             FaturamentoProduto.status_nf != 'Cancelado'
-        ).all()
+        )
+
+        if equipe_vendas:
+            faturamento_clientes = faturamento_clientes.filter(
+                FaturamentoProduto.equipe_vendas == equipe_vendas
+            )
+
+        faturamento_clientes = faturamento_clientes.all()
 
         for c in carteira_clientes:
             if c[0]:
@@ -153,6 +167,9 @@ class ClienteService:
             CarteiraPrincipal.equipe_vendas
         ).filter(
             CarteiraPrincipal.cnpj_cpf == cnpj
+        ).order_by(
+            CarteiraPrincipal.updated_at.desc(),
+            CarteiraPrincipal.id.desc()
         ).first()
 
         if cliente_carteira:
@@ -173,6 +190,9 @@ class ClienteService:
             ).filter(
                 FaturamentoProduto.cnpj_cliente == cnpj,
                 FaturamentoProduto.status_nf != 'Cancelado'
+            ).order_by(
+                FaturamentoProduto.data_fatura.desc(),
+                FaturamentoProduto.id.desc()
             ).first()
 
             if cliente_faturamento:
@@ -202,9 +222,14 @@ class ClienteService:
         dados['pedidos'] = pedidos
         dados['total_pedidos'] = len(pedidos)
 
-        # Calcular valor em aberto
-        valor_em_aberto = ClienteService.calcular_valor_em_aberto(cnpj, filtro_posicao)
+        # Calcular valores financeiros
+        componentes_valor = ClienteService._calcular_componentes_valor(cnpj)
+
+        valor_em_aberto = componentes_valor['saldo'] + componentes_valor['faturado_nao_entregue']
+        valor_total = componentes_valor['saldo'] + componentes_valor['faturado_total']
+
         dados['valor_em_aberto'] = valor_em_aberto
+        dados['valor_total'] = valor_total
 
         return dados
 
@@ -300,82 +325,70 @@ class ClienteService:
         Returns:
             Valor total em aberto
         """
-        valor_total = Decimal('0.00')
+        componentes_valor = ClienteService._calcular_componentes_valor(cnpj)
 
-        if filtro_posicao == 'em_aberto':
-            # 1. Saldo da carteira (qtd_saldo_produto_pedido × preco_produto_pedido)
-            saldos_carteira = db.session.query(
-                func.sum(
-                    CarteiraPrincipal.qtd_saldo_produto_pedido *
-                    CarteiraPrincipal.preco_produto_pedido
-                )
-            ).filter(
-                CarteiraPrincipal.cnpj_cpf == cnpj,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
-            ).scalar()
+        if filtro_posicao == 'todos':
+            return componentes_valor['saldo'] + componentes_valor['faturado_total']
 
-            if saldos_carteira:
-                valor_total += Decimal(str(saldos_carteira))
+        return componentes_valor['saldo'] + componentes_valor['faturado_nao_entregue']
 
-            # 2. Pedidos faturados mas não entregues
-            # Primeiro buscar NFs não entregues
-            nfs_nao_entregues = db.session.query(
-                distinct(EntregaMonitorada.numero_nf)
-            ).filter(
-                or_(
-                    EntregaMonitorada.status_finalizacao != 'Entregue',
-                    EntregaMonitorada.status_finalizacao.is_(None)
-                )
-            ).subquery()
+    @staticmethod
+    def _calcular_componentes_valor(cnpj: str) -> Dict[str, Decimal]:
+        """
+        Calcula componentes financeiros utilizados nas visões de cliente.
 
-            # Somar valores dessas NFs para o cliente
-            valores_nao_entregues = db.session.query(
-                func.sum(FaturamentoProduto.valor_produto_faturado)
-            ).filter(
-                FaturamentoProduto.cnpj_cliente == cnpj,
-                FaturamentoProduto.numero_nf.in_(nfs_nao_entregues),
-                FaturamentoProduto.status_nf != 'Cancelado'
-            ).scalar()
+        Retorna um dicionário contendo:
+            - saldo: valor ainda em carteira
+            - faturado_total: total já faturado (independente da entrega)
+            - faturado_nao_entregue: total faturado ainda não entregue
+        """
+        componentes = {
+            'saldo': Decimal('0.00'),
+            'faturado_total': Decimal('0.00'),
+            'faturado_nao_entregue': Decimal('0.00')
+        }
 
-            if valores_nao_entregues:
-                valor_total += Decimal(str(valores_nao_entregues))
+        # Saldo em carteira
+        saldos_carteira = db.session.query(
+            func.sum(
+                CarteiraPrincipal.qtd_saldo_produto_pedido *
+                CarteiraPrincipal.preco_produto_pedido
+            )
+        ).filter(
+            CarteiraPrincipal.cnpj_cpf == cnpj,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).scalar()
 
-        else:  # todos
-            # 1. Total da carteira (qtd_produto_pedido × preco_produto_pedido)
-            totais_carteira = db.session.query(
-                func.sum(
-                    CarteiraPrincipal.qtd_produto_pedido *
-                    CarteiraPrincipal.preco_produto_pedido
-                )
-            ).filter(
-                CarteiraPrincipal.cnpj_cpf == cnpj
-            ).scalar()
+        if saldos_carteira:
+            componentes['saldo'] = Decimal(str(saldos_carteira))
 
-            if totais_carteira:
-                valor_total += Decimal(str(totais_carteira))
+        # Total faturado (todas as NFs não canceladas)
+        valores_faturados = db.session.query(
+            func.sum(FaturamentoProduto.valor_produto_faturado)
+        ).filter(
+            FaturamentoProduto.cnpj_cliente == cnpj,
+            FaturamentoProduto.status_nf != 'Cancelado'
+        ).scalar()
 
-            # 2. Total faturado (se não tiver saldo na carteira)
-            # Verificar pedidos que estão apenas no faturamento
-            pedidos_so_faturamento = db.session.query(
-                distinct(FaturamentoProduto.origem)
-            ).filter(
-                FaturamentoProduto.cnpj_cliente == cnpj,
-                ~FaturamentoProduto.origem.in_(
-                    db.session.query(distinct(CarteiraPrincipal.num_pedido))
-                    .filter(CarteiraPrincipal.cnpj_cpf == cnpj)
-                ),
-                FaturamentoProduto.status_nf != 'Cancelado'
-            ).subquery()
+        if valores_faturados:
+            componentes['faturado_total'] = Decimal(str(valores_faturados))
 
-            valores_faturados = db.session.query(
-                func.sum(FaturamentoProduto.valor_produto_faturado)
-            ).filter(
-                FaturamentoProduto.cnpj_cliente == cnpj,
-                FaturamentoProduto.origem.in_(pedidos_so_faturamento),
-                FaturamentoProduto.status_nf != 'Cancelado'
-            ).scalar()
+        # Total faturado ainda não entregue
+        valores_nao_entregues = db.session.query(
+            func.sum(FaturamentoProduto.valor_produto_faturado)
+        ).outerjoin(
+            EntregaMonitorada,
+            FaturamentoProduto.numero_nf == EntregaMonitorada.numero_nf
+        ).filter(
+            FaturamentoProduto.cnpj_cliente == cnpj,
+            FaturamentoProduto.status_nf != 'Cancelado',
+            or_(
+                EntregaMonitorada.status_finalizacao != 'Entregue',
+                EntregaMonitorada.status_finalizacao.is_(None)
+            )
+        ).scalar()
 
-            if valores_faturados:
-                valor_total += Decimal(str(valores_faturados))
+        if valores_nao_entregues:
+            componentes['faturado_nao_entregue'] = Decimal(str(valores_nao_entregues))
 
-        return valor_total
+        return componentes

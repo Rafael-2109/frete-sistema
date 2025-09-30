@@ -596,8 +596,8 @@
                                     <span class="badge badge-primary">{{ cliente.total_pedidos }}</span>
                                 </td>
                                 <td class="text-end">
-                                    <strong class="{% if cliente.valor_em_aberto > 0 %}text-success{% else %}text-muted{% endif %}">
-                                        R$ {{ "{:,.2f}".format(cliente.valor_em_aberto).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    <strong class="{% if cliente.valor_principal > 0 %}text-success{% else %}text-muted{% endif %}">
+                                        R$ {{ "{:,.2f}".format(cliente.valor_principal).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                                     </strong>
                                 </td>
                                 <td class="text-center">

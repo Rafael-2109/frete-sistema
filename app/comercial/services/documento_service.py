@@ -9,17 +9,17 @@ Autor: Sistema de Fretes
 Data: 2025-01-20
 """
 
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func
 from app import db
 from app.faturamento.models import FaturamentoProduto
 from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from app.embarques.models import EmbarqueItem, Embarque
+from app.transportadoras.models import Transportadora
 from app.carteira.models import CarteiraPrincipal
 from app.cadastros_agendamento.models import ContatoAgendamento
 from decimal import Decimal
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import List, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -216,6 +216,8 @@ class DocumentoService:
                     # Data de embarque (com fallback)
                     'data_embarque': '-',
                     'transportadora': '-',
+                    'nome_transportadora': '-',
+                    'cnpj_transportadora': '',
 
                     # Dados de agendamento
                     'data_agendamento': '-',
@@ -224,7 +226,8 @@ class DocumentoService:
 
                     # Entrega prevista e realizada
                     'data_entrega_prevista': '-',
-                    'data_entrega_realizada': '-'
+                    'data_entrega_realizada': '-',
+                    'status_finalizacao': entrega.status_finalizacao if entrega else '-'
                 }
 
                 # Preencher data de embarque
@@ -234,13 +237,23 @@ class DocumentoService:
                     nf_data['data_embarque'] = embarque.data_embarque.strftime('%d/%m/%Y')
 
                 # Preencher transportadora
-                if entrega and entrega.transportadora:
-                    nf_data['transportadora'] = entrega.transportadora
-                elif embarque and embarque.transportadora:
-                    from app.cotacoes.models import Transportadora
+                nome_transportadora = '-'
+                cnpj_transportadora = ''
+
+                if embarque and getattr(embarque, 'transportadora', None):
+                    nome_transportadora = embarque.transportadora.razao_social or '-'
+                    cnpj_transportadora = embarque.transportadora.cnpj or ''
+                elif embarque and embarque.transportadora_id:
                     transp = Transportadora.query.get(embarque.transportadora_id)
                     if transp:
-                        nf_data['transportadora'] = transp.nome
+                        nome_transportadora = transp.razao_social or '-'
+                        cnpj_transportadora = transp.cnpj or ''
+                elif entrega and entrega.transportadora:
+                    nome_transportadora = entrega.transportadora
+
+                nf_data['transportadora'] = nome_transportadora
+                nf_data['nome_transportadora'] = nome_transportadora
+                nf_data['cnpj_transportadora'] = cnpj_transportadora
 
                 # Preencher dados de agendamento
                 if entrega:
@@ -301,18 +314,22 @@ class DocumentoService:
 
             for sep in seps_query:
                 # Tentar buscar transportadora via EmbarqueItem
-                transportadora = '-'
+                transportadora_nome = '-'
+                transportadora_cnpj = ''
                 embarque_item = EmbarqueItem.query.filter_by(
                     separacao_lote_id=sep.separacao_lote_id
                 ).first()
 
                 if embarque_item:
                     embarque = Embarque.query.get(embarque_item.embarque_id)
-                    if embarque and embarque.transportadora_id:
-                        from app.transportadoras.models import Transportadora
+                    if embarque and getattr(embarque, 'transportadora', None):
+                        transportadora_nome = embarque.transportadora.razao_social or '-'
+                        transportadora_cnpj = embarque.transportadora.cnpj or ''
+                    elif embarque and embarque.transportadora_id:
                         transp = Transportadora.query.get(embarque.transportadora_id)
                         if transp:
-                            transportadora = transp.nome
+                            transportadora_nome = transp.razao_social or '-'
+                            transportadora_cnpj = transp.cnpj or ''
 
                 # Montar dados da separação
                 sep_data = {
@@ -322,7 +339,9 @@ class DocumentoService:
 
                     # Data de embarque (usar expedição com prefixo)
                     'data_embarque': f"Previsão: {sep.expedicao.strftime('%d/%m/%Y')}" if sep.expedicao else '-',
-                    'transportadora': transportadora,
+                    'transportadora': transportadora_nome,
+                    'nome_transportadora': transportadora_nome,
+                    'cnpj_transportadora': transportadora_cnpj,
 
                     # Dados de agendamento
                     'data_agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '-',
