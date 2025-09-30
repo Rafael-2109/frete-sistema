@@ -893,24 +893,49 @@ def fechar_frete():
         if not transportadora:
             return jsonify({'success': False, 'message': 'Transportadora não encontrada'}), 404
 
-        # Recupera dados da tabela dos resultados da sessão
+        # ✅ NOVA LÓGICA: Recebe dados COMPLETOS da tabela do frontend (payload)
+        tabela_selecionada = data.get('tabela_selecionada')
+
+        print(f"[DEBUG] === RECEBENDO DADOS DA TABELA DO PAYLOAD ===")
+
+        # ✅ VALIDAÇÃO CRÍTICA: Garante que tabela foi enviada
+        if not tabela_selecionada:
+            print(f"[DEBUG] ❌ ERRO: tabela_selecionada não foi enviada no payload!")
+            return jsonify({
+                'success': False,
+                'message': 'Dados da tabela não foram enviados. Recarregue a página e tente novamente.'
+            }), 400
+
+        # ✅ VALIDAÇÃO: Verifica campos obrigatórios
+        if not tabela_selecionada.get('nome_tabela'):
+            print(f"[DEBUG] ❌ ERRO: nome_tabela está vazio!")
+            return jsonify({
+                'success': False,
+                'message': 'Nome da tabela é obrigatório.'
+            }), 400
+
+        # ✅ USA DADOS DO PAYLOAD em vez da session
+        opcao_escolhida = tabela_selecionada.copy()
+
+        print(f"[DEBUG] ✅ Tabela recebida do PAYLOAD: {opcao_escolhida.get('nome_tabela')} - Modalidade: {opcao_escolhida.get('modalidade')}")
+        print(f"[DEBUG] ✅ Valores do payload - Frete total: R${opcao_escolhida.get('valor_total', 0):.2f}, Líquido: R${opcao_escolhida.get('valor_liquido', 0):.2f}")
+
+        # ✅ DEBUG: Compara com session para detectar divergências (opcional)
         resultados = session.get('resultados')
-        dados_tabela = None
-        opcao_escolhida = None
-        
-        print(f"[DEBUG] === BUSCANDO OPÇÃO PELOS DADOS DA SESSÃO ===")
-        
         if resultados and 'diretas' in resultados:
-            # Busca pelo indice_original
+            opcao_session = None
             for opcao in resultados['diretas']:
                 if isinstance(opcao, dict) and opcao.get('indice_original') == int(indice_original):
-                    opcao_escolhida = opcao
+                    opcao_session = opcao
                     break
-        
-        if not opcao_escolhida:
-            return jsonify({'success': False, 'message': f'Opção com índice {indice_original} não encontrada'}), 400
 
-        print(f"[DEBUG] ✅ Opção encontrada: {opcao_escolhida.get('transportadora')} - {opcao_escolhida.get('nome_tabela')}")
+            if opcao_session:
+                if opcao_session.get('nome_tabela') != opcao_escolhida.get('nome_tabela'):
+                    print(f"[DEBUG] ⚠️ ALERTA: Tabela DIFERENTE entre payload e session!")
+                    print(f"[DEBUG]   - Payload: {opcao_escolhida.get('nome_tabela')}")
+                    print(f"[DEBUG]   - Session: {opcao_session.get('nome_tabela')}")
+                else:
+                    print(f"[DEBUG] ✅ Validação OK: Tabela no payload = tabela na session")
 
         # ✅ CORREÇÃO REDESPACHO: Determina UF de destino corretamente
         redespacho_ativo = data.get('redespacho', False)
@@ -1467,33 +1492,61 @@ def fechar_frete_grupo():
                 })
                 # O status será calculado automaticamente como COTADO pelo trigger
 
-        # ✅ BUSCA DADOS DA TABELA PARA GRUPO
-        resultados = session.get('resultados', {})
+        # ✅ NOVA LÓGICA: Recebe dados COMPLETOS das tabelas do frontend (payload)
+        tabelas_por_cnpj = data.get('tabelas_por_cnpj', {})
+
+        print(f"[DEBUG] === RECEBENDO DADOS DAS TABELAS POR CNPJ DO PAYLOAD ===")
+
+        # ✅ VALIDAÇÃO CRÍTICA: Garante que tabelas foram enviadas
+        if not tabelas_por_cnpj:
+            print(f"[DEBUG] ❌ ERRO: tabelas_por_cnpj não foi enviado no payload!")
+            return jsonify({
+                'success': False,
+                'message': 'Dados das tabelas por CNPJ não foram enviados. Recarregue a página e tente novamente.'
+            }), 400
+
+        # ✅ VALIDAÇÃO: Verifica se TODOS os CNPJs têm tabela
+        cnpjs_sem_tabela = []
+        for cnpj in cnpjs:
+            if cnpj not in tabelas_por_cnpj:
+                cnpjs_sem_tabela.append(cnpj)
+
+        if cnpjs_sem_tabela:
+            print(f"[DEBUG] ❌ ERRO: CNPJs sem tabela: {cnpjs_sem_tabela}")
+            return jsonify({
+                'success': False,
+                'message': f'Dados da tabela não encontrados para os CNPJs: {", ".join(cnpjs_sem_tabela)}'
+            }), 400
+
+        # ✅ USA DADOS DO PAYLOAD em vez da session
         dados_tabela_por_cnpj = {}
-        
-        # Para cada CNPJ, busca os dados da melhor opção
+        for cnpj in cnpjs:
+            dados_tabela_por_cnpj[cnpj] = tabelas_por_cnpj[cnpj].copy()
+            print(f"[DEBUG] ✅ Tabela recebida do PAYLOAD para CNPJ {cnpj}: {dados_tabela_por_cnpj[cnpj].get('nome_tabela')}")
+
+        # ✅ DEBUG: Compara com session para detectar divergências (opcional)
+        resultados = session.get('resultados', {})
         if 'fracionadas' in resultados:
             for cnpj in cnpjs:
                 if cnpj in resultados['fracionadas']:
                     opcoes_cnpj = resultados['fracionadas'][cnpj]
                     if opcoes_cnpj and len(opcoes_cnpj) > 0:
-                        # Busca a opção da transportadora escolhida
-                        melhor_opcao = None
+                        melhor_opcao_session = None
                         for opcao in opcoes_cnpj:
                             if opcao.get('transportadora_id') == transportadora_id:
-                                melhor_opcao = opcao
+                                melhor_opcao_session = opcao
                                 break
-                        
-                        # Se não encontrou, usa a primeira opção
-                        if not melhor_opcao and opcoes_cnpj:
-                            melhor_opcao = opcoes_cnpj[0]
-                        
-                        if melhor_opcao:
-                            # ✅ REFATORADO: Usa TabelaFreteManager para campos da TABELA
-                            dados_tabela_por_cnpj[cnpj] = TabelaFreteManager.preparar_dados_tabela(melhor_opcao)
-                            # icms_destino vem do cálculo anterior (não é campo da tabela de frete)
-                            dados_tabela_por_cnpj[cnpj]['icms_destino'] = melhor_opcao.get('icms_destino', 0)
-                            print(f"[DEBUG] Dados da tabela para CNPJ {cnpj}: {dados_tabela_por_cnpj[cnpj]}")
+
+                        if melhor_opcao_session:
+                            nome_tabela_session = melhor_opcao_session.get('nome_tabela')
+                            nome_tabela_payload = dados_tabela_por_cnpj[cnpj].get('nome_tabela')
+
+                            if nome_tabela_session != nome_tabela_payload:
+                                print(f"[DEBUG] ⚠️ ALERTA: Tabela DIFERENTE para CNPJ {cnpj}")
+                                print(f"[DEBUG]   - Payload: {nome_tabela_payload}")
+                                print(f"[DEBUG]   - Session: {nome_tabela_session}")
+                            else:
+                                print(f"[DEBUG] ✅ Validação OK para CNPJ {cnpj}: Tabela no payload = session")
         
         # Cria embarque
         embarque = Embarque(

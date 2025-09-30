@@ -126,13 +126,14 @@
                   <td class="text-end">R$ {{ "%.2f"|format(opcao.valor_liquido / peso_total) }}</td>
                   <td>
                     <div class="btn-group">
-                      <button class="btn btn-success btn-sm fechar-frete" 
+                      <button class="btn btn-success btn-sm fechar-frete"
                               data-opcao-id="{{ loop.index0 }}"
                               data-tipo="direta"
                               data-indice="{{ opcao.indice_original }}"
                               data-transportadora-id="{{ opcao.transportadora_id }}"
                               data-modalidade="{{ opcao.modalidade }}"
-                              data-nome-tabela="{{ opcao.nome_tabela }}">
+                              data-nome-tabela="{{ opcao.nome_tabela }}"
+                              data-opcao-completa='{{ opcao|tojson|safe }}'>
                         <i class="fas fa-check"></i> Fechar
                       </button>
                       <a href="{{ url_for('cotacao.otimizar', opcao_id=loop.index0, tipo='direta', indice=opcao.indice_original) }}" 
@@ -233,9 +234,10 @@
             <div class="card-header bg-light">
               <div class="d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">{{ transportadora.razao_social }}</h5>
-                <button class="btn btn-success btn-sm fechar-frete-grupo" 
+                <button class="btn btn-success btn-sm fechar-frete-grupo"
                         data-transportadora-id="{{ transportadora_id }}"
-                        data-cnpjs='{{ transportadora.cnpjs|map(attribute="cnpj")|list|tojson|safe }}'>
+                        data-cnpjs='{{ transportadora.cnpjs|map(attribute="cnpj")|list|tojson|safe }}'
+                        data-opcoes-cnpjs='{{ transportadora.cnpjs|tojson|safe }}'>
                   <i class="fas fa-check me-1"></i>
                   Fechar Frete ({{ transportadora.cnpjs|length }} CNPJs)
                 </button>
@@ -663,31 +665,66 @@ $(document).ready(function() {
     const transportadoraId = $btn.data('transportadora-id');
     const tipo = $btn.data('tipo');
     const indiceOriginal = $btn.data('indice');
-    
+    const opcaoCompleta = $btn.data('opcao-completa');  // ✅ NOVO: Lê opção completa
+
+    // ✅ VALIDAÇÃO: Verifica se opcaoCompleta foi carregada
+    if (!opcaoCompleta) {
+      alert('Erro: Dados da tabela não foram carregados. Recarregue a página e tente novamente.');
+      return false;
+    }
+
     // ✅ PROTEÇÃO: Desabilita TODOS os botões de fechar frete
     const $todosBotoes = $('.fechar-frete, .fechar-frete-grupo');
     $todosBotoes.prop('disabled', true);
-    
+
     // ✅ PROTEÇÃO: Adiciona indicador visual de processamento
     const textoOriginal = $btn.html();
     $btn.html('<i class="fas fa-spinner fa-spin me-1"></i>Processando...');
-    
+
     // ✅ PROTEÇÃO: Flag para evitar múltiplas chamadas
     if ($btn.data('processando')) {
       return false;
     }
     $btn.data('processando', true);
-    
+
     console.log('[DEBUG] Botão clicado:');
-    console.log('[DEBUG] - data-indice (indice_original):', indiceOriginal);
-    console.log('[DEBUG] - data-opcao-id (indice atual):', $btn.data('opcao-id'));
+    console.log('[DEBUG] - data-indice (apenas referência):', indiceOriginal);
     console.log('[DEBUG] - transportadora_id:', transportadoraId);
-    
+    console.log('[DEBUG] - ✅ OPÇÃO COMPLETA:', opcaoCompleta);
+    console.log('[DEBUG] - ✅ Nome tabela selecionada:', opcaoCompleta.nome_tabela);
+
+    // ✅ NOVO: Prepara dados da tabela selecionada para enviar
+    const tabelaSelecionada = {
+      nome_tabela: opcaoCompleta.nome_tabela,
+      modalidade: opcaoCompleta.modalidade,
+      valor_kg: opcaoCompleta.valor_kg,
+      percentual_valor: opcaoCompleta.percentual_valor,
+      frete_minimo_valor: opcaoCompleta.frete_minimo_valor,
+      frete_minimo_peso: opcaoCompleta.frete_minimo_peso,
+      icms: opcaoCompleta.icms,
+      percentual_gris: opcaoCompleta.percentual_gris,
+      pedagio_por_100kg: opcaoCompleta.pedagio_por_100kg,
+      valor_tas: opcaoCompleta.valor_tas,
+      percentual_adv: opcaoCompleta.percentual_adv,
+      percentual_rca: opcaoCompleta.percentual_rca,
+      valor_despacho: opcaoCompleta.valor_despacho,
+      valor_cte: opcaoCompleta.valor_cte,
+      icms_incluso: opcaoCompleta.icms_incluso,
+      gris_minimo: opcaoCompleta.gris_minimo || 0,
+      adv_minimo: opcaoCompleta.adv_minimo || 0,
+      icms_proprio: opcaoCompleta.icms_proprio || null,
+      icms_destino: opcaoCompleta.icms_destino || 0,
+      // ✅ Inclui também os valores calculados para validação
+      valor_total: opcaoCompleta.valor_total,
+      valor_liquido: opcaoCompleta.valor_liquido
+    };
+
     // Prepara os dados para envio
     const payload = {
       tipo: tipo.toUpperCase(),
       transportadora_id: transportadoraId,
-      indice_original: indiceOriginal,
+      tabela_selecionada: tabelaSelecionada,  // ✅ NOVO: Envia tabela completa
+      indice_original: indiceOriginal,  // Mantém para compatibilidade/debug
       pedidos: {{ pedidos_selecionados|tojson|safe }}.map(function(pedido) {
         return {
           id: pedido.separacao_lote_id,
@@ -698,7 +735,7 @@ $(document).ready(function() {
       })
     };
 
-    console.log('[DEBUG] Payload enviado:', payload);
+    console.log('[DEBUG] ✅ Payload enviado COM TABELA COMPLETA:', payload);
 
     // Envia a requisição
     // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
@@ -744,25 +781,74 @@ $(document).ready(function() {
     const $btn = $(this);
     const transportadora_id = $btn.data('transportadora-id');
     const cnpjs = $btn.data('cnpjs');
-    
+    const opcoesCnpjs = $btn.data('opcoes-cnpjs');  // ✅ NOVO: Lê opções completas de todos os CNPJs
+
+    // ✅ VALIDAÇÃO: Verifica se opcoesCnpjs foi carregado
+    if (!opcoesCnpjs || !Array.isArray(opcoesCnpjs)) {
+      alert('Erro: Dados das tabelas não foram carregados. Recarregue a página e tente novamente.');
+      return false;
+    }
+
     // ✅ PROTEÇÃO: Desabilita TODOS os botões de fechar frete para evitar múltiplos cliques
     const $todosBotoes = $('.fechar-frete-grupo, .btn-fechar-frete');
     $todosBotoes.prop('disabled', true);
-    
+
     // ✅ PROTEÇÃO: Adiciona indicador visual de processamento no botão clicado
     const textoOriginal = $btn.html();
     $btn.html('<i class="fas fa-spinner fa-spin me-1"></i>Processando...');
-    
+
     // ✅ PROTEÇÃO: Flag para evitar múltiplas chamadas
     if ($btn.data('processando')) {
       return false;
     }
     $btn.data('processando', true);
-    
+
+    console.log('[DEBUG] ✅ Botão FRACIONADA clicado:');
+    console.log('[DEBUG] - transportadora_id:', transportadora_id);
+    console.log('[DEBUG] - ✅ OPÇÕES COMPLETAS de', opcoesCnpjs.length, 'CNPJs:', opcoesCnpjs);
+
+    // ✅ NOVO: Prepara dados das tabelas por CNPJ para enviar
+    const tabelasPorCnpj = {};
+    opcoesCnpjs.forEach(function(opcao) {
+      tabelasPorCnpj[opcao.cnpj] = {
+        nome_tabela: opcao.nome_tabela,
+        modalidade: opcao.modalidade,
+        valor_kg: opcao.valor_kg,
+        percentual_valor: opcao.percentual_valor,
+        frete_minimo_valor: opcao.frete_minimo_valor,
+        frete_minimo_peso: opcao.frete_minimo_peso,
+        icms: opcao.icms,
+        percentual_gris: opcao.percentual_gris,
+        pedagio_por_100kg: opcao.pedagio_por_100kg,
+        valor_tas: opcao.valor_tas,
+        percentual_adv: opcao.percentual_adv,
+        percentual_rca: opcao.percentual_rca,
+        valor_despacho: opcao.valor_despacho,
+        valor_cte: opcao.valor_cte,
+        icms_incluso: opcao.icms_incluso,
+        gris_minimo: opcao.gris_minimo || 0,
+        adv_minimo: opcao.adv_minimo || 0,
+        icms_proprio: opcao.icms_proprio || null,
+        icms_destino: opcao.icms_destino || 0,
+        // ✅ Inclui também os valores calculados e dados do CNPJ
+        cnpj: opcao.cnpj,
+        razao_social: opcao.razao_social,
+        cidade: opcao.cidade,
+        uf: opcao.uf,
+        valor_total: opcao.valor_total,
+        valor_liquido: opcao.valor_liquido,
+        peso_grupo: opcao.peso_grupo,
+        valor_grupo: opcao.valor_grupo
+      };
+    });
+
+    console.log('[DEBUG] ✅ Tabelas por CNPJ preparadas:', tabelasPorCnpj);
+
     // Prepara os dados para envio
     const payload = {
       transportadora_id: transportadora_id,
-      cnpjs: cnpjs
+      cnpjs: cnpjs,
+      tabelas_por_cnpj: tabelasPorCnpj  // ✅ NOVO: Envia tabelas completas de todos os CNPJs
     };
 
     // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
