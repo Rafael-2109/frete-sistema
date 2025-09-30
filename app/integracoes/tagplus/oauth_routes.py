@@ -108,7 +108,6 @@ AUTH_PAGE_TEMPLATE = """
                     <thead style="background: #f0f0f0; position: sticky; top: 0;">
                         <tr>
                             <th style="padding: 8px; border: 1px solid #ddd;">NF</th>
-                            <th style="padding: 8px; border: 1px solid #ddd;">Data</th>
                             <th style="padding: 8px; border: 1px solid #ddd;">Cliente</th>
                             <th style="padding: 8px; border: 1px solid #ddd;">CNPJ</th>
                             <th style="padding: 8px; border: 1px solid #ddd;">Valor</th>
@@ -150,33 +149,31 @@ AUTH_PAGE_TEMPLATE = """
                 loading.style.display = 'none';
 
                 if (data.error) {
-                    alert('Erro: ' + data.error);
+                    alert('❌ Erro: ' + data.error);
                     return;
                 }
 
-                if (data.success && data.nfes) {
+                if (data.success && data.nfes !== undefined) {
                     tabela.innerHTML = '';
                     document.getElementById('totalNFs').textContent = data.total;
 
                     if (data.nfes.length === 0) {
-                        tabela.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Nenhuma NF encontrada no período</td></tr>';
+                        tabela.innerHTML = `
+                            <tr>
+                                <td colspan="4" style="text-align: center; padding: 30px;">
+                                    <div style="font-size: 48px; margin-bottom: 10px;">📋</div>
+                                    <strong>Nenhuma NF encontrada no período</strong><br>
+                                    <small style="color: #666;">Período buscado: ${dataInicio} a ${dataFim}</small><br>
+                                    <small style="color: #999;">Tente ampliar o período de busca ou verifique se há NFs emitidas nesses dias.</small>
+                                </td>
+                            </tr>
+                        `;
                     } else {
                         data.nfes.forEach(nfe => {
                             const tr = document.createElement('tr');
-                            // Formatar data corretamente
-                            let dataFormatada = '-';
-                            if (nfe.data_emissao && nfe.data_emissao !== '-') {
-                                // data_emissao vem como "YYYY-MM-DD" ou "-"
-                                if (nfe.data_emissao.includes('-') && nfe.data_emissao.length >= 8) {
-                                    const [ano, mes, dia] = nfe.data_emissao.split('-');
-                                    dataFormatada = `${dia}/${mes}/${ano}`;
-                                } else {
-                                    dataFormatada = nfe.data_emissao;
-                                }
-                            }
+                            // OTIMIZADO: Removida coluna de data (acelera listagem)
                             tr.innerHTML = `
                                 <td style="padding: 8px; border: 1px solid #ddd;">${nfe.numero}</td>
-                                <td style="padding: 8px; border: 1px solid #ddd;">${dataFormatada}</td>
                                 <td style="padding: 8px; border: 1px solid #ddd; font-size: 0.9em;">${nfe.cliente}</td>
                                 <td style="padding: 8px; border: 1px solid #ddd;">${nfe.cnpj}</td>
                                 <td style="padding: 8px; border: 1px solid #ddd;">R$ ${parseFloat(nfe.valor_total).toFixed(2)}</td>
@@ -205,17 +202,30 @@ AUTH_PAGE_TEMPLATE = """
             return;
         }
 
-        // Mostrar loading
+        // Mostrar loading com informação de quantidade
         const loading = document.getElementById('loadingNFs');
+        const totalNFs = window.nfsParaImportar.length;
         if (loading) {
-            loading.innerHTML = '<div style="font-size: 24px;">⏳</div>Importando NFs...';
+            loading.innerHTML = `
+                <div style="font-size: 24px;">⏳</div>
+                <div style="margin-top: 10px;">
+                    <strong>Importando ${totalNFs} NF(s)...</strong><br>
+                    <small style="color: #666;">Isso pode levar alguns minutos. Aguarde...</small><br>
+                    <div style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                        <div style="font-size: 12px; color: #555;">
+                            ⚙️ Processando: buscando detalhes, validando pedidos e criando registros...<br>
+                            ⏱️ Tempo estimado: ~${Math.ceil(totalNFs * 0.5)} segundos
+                        </div>
+                    </div>
+                </div>
+            `;
             loading.style.display = 'block';
         }
 
         // Desabilitar botão para evitar cliques duplos
         const botao = event.target;
         botao.disabled = true;
-        botao.textContent = '⏳ Importando...';
+        botao.textContent = `⏳ Importando ${totalNFs} NF(s)...`;
 
         // Fazer requisição para importar
         fetch('/tagplus/oauth/importar-nfs', {
@@ -609,7 +619,7 @@ def listar_nfs():
                 try:
                     resp_data = response.json()
                     if isinstance(resp_data, list):
-                        logger.info(f"TagPlus retornou lista com {len(resp_data)} NFs")
+                        logger.info(f"TagPlus retornou lista com {len(resp_data)} NFs no período {data_inicio} a {data_fim}")
                         if resp_data and len(resp_data) > 0:
                             logger.info(f"Primeira NF: {resp_data[0].get('numero', 'sem numero')}")
                     else:
@@ -617,20 +627,6 @@ def listar_nfs():
                 except Exception as e:
                     logger.error(f"Erro ao processar resposta TagPlus: {e}")
                     pass
-
-        # Se não retornar sucesso ou retornar vazio, tenta sem filtros
-        if response and response.status_code == 200:
-            data = response.json()
-            if isinstance(data, list) and len(data) == 0:
-                logger.warning("TagPlus retornou 0 NFs com filtro de data, tentando sem filtros...")
-                response = oauth.make_request(
-                    'GET',
-                    '/nfes',
-                    params={'per_page': 500}  # Aumentado para 500
-                )
-                if response and response.status_code == 200:
-                    data = response.json()
-                    logger.info(f"Sem filtros: {len(data) if isinstance(data, list) else 'não é lista'} NFs")
 
         if not response:
             return jsonify({'error': 'Erro ao buscar NFs'}), 500
@@ -671,9 +667,8 @@ def listar_nfs():
                 'mensagem': 'Nenhuma NF encontrada no TagPlus para o período'
             })
 
-        # Formata NFs para exibição
+        # Formata NFs para exibição (OTIMIZADO - sem buscar detalhes)
         nfes_formatadas = []
-        # Processando TODAS as NFs (removido limite de 20)
         for nfe in nfes:
             # A API retorna estrutura simplificada com destinatário
             destinatario = nfe.get('destinatario', {})
@@ -686,31 +681,13 @@ def listar_nfs():
                 nome_cliente = 'N/A'
                 cnpj_cliente = 'N/A'
 
-            # Buscar detalhes da NF para pegar data_emissao (como o importador faz)
-            data_nf = '-'
-            nf_id = nfe.get('id')
-            if nf_id:
-                try:
-                    # Mesma lógica do importador: busca detalhes para pegar data
-                    response_detail = oauth.make_request('GET', f'/nfes/{nf_id}')
-                    if response_detail and response_detail.status_code == 200:
-                        nf_detalhada = response_detail.json()
-                        data_emissao_raw = nf_detalhada.get('data_emissao', '')
-
-                        # Processar data (formato: "2025-09-24 16:02:42")
-                        if data_emissao_raw:
-                            # Pegar apenas a parte da data
-                            data_parte = data_emissao_raw.split(' ')[0] if ' ' in data_emissao_raw else data_emissao_raw
-                            data_nf = data_parte  # Formato YYYY-MM-DD para o JavaScript processar
-                except Exception as e:
-                    logger.debug(f"Erro ao buscar detalhes da NF {nf_id}: {e}")
-
+            # OTIMIZAÇÃO: Não busca detalhes aqui (reduz de N+1 para 1 requisição)
+            # Data será capturada apenas durante importação
             nfes_formatadas.append({
                 'id': nfe.get('id'),
                 'id_nota': nfe.get('id_nota'),
                 'numero': nfe.get('numero'),
                 'serie': nfe.get('serie', 1),
-                'data_emissao': data_nf,
                 'cliente': nome_cliente,
                 'cnpj': cnpj_cliente,
                 'valor_total': nfe.get('valor_nota', 0),
