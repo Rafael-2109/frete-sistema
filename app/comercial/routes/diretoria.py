@@ -19,7 +19,7 @@ from app import db
 import logging
 import pandas as pd
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, date
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,88 @@ def _coletar_clientes_data(
         resultado = db.session.execute(sql, params).fetchall()
         clientes_cnpjs = [row.cnpj_cpf for row in resultado if row.cnpj_cpf]
 
+        # Se há filtro de pedido_cliente, buscar também via FaturamentoProduto
+        # Estratégia: CarteiraPrincipal.pedido_cliente → num_pedido → FaturamentoProduto.cnpj_cliente
+        if filtros_avancados['pedido_cliente'].strip():
+            # Passo 1: Buscar num_pedidos que têm o pedido_cliente filtrado
+            # Usar text() para evitar problemas com f_unaccent em literais
+            sql_pedido_cliente = text("""
+                SELECT DISTINCT num_pedido
+                FROM carteira_principal
+                WHERE pedido_cliente IS NOT NULL
+                  AND lower(f_unaccent(pedido_cliente)) LIKE lower(f_unaccent(:pattern))
+            """)
+
+            num_pedidos_com_filtro = db.session.execute(
+                sql_pedido_cliente,
+                {'pattern': f"%{filtros_avancados['pedido_cliente']}%"}
+            ).fetchall()
+
+            num_pedidos_lista = [row[0] for row in num_pedidos_com_filtro if row[0]]
+
+            # Passo 2: Buscar CNPJs que faturaram esses num_pedidos
+            if num_pedidos_lista:
+                cnpjs_via_faturamento = db.session.query(
+                    distinct(FaturamentoProduto.cnpj_cliente)
+                ).filter(
+                    FaturamentoProduto.origem.in_(num_pedidos_lista),
+                    FaturamentoProduto.status_nf != 'Cancelado',
+                    FaturamentoProduto.cnpj_cliente.isnot(None)
+                ).all()
+
+                for cnpj_row in cnpjs_via_faturamento:
+                    if cnpj_row[0] and cnpj_row[0] not in clientes_cnpjs:
+                        clientes_cnpjs.append(cnpj_row[0])
+
+        # Se há filtro de pedido (via campo "Pedido:"), buscar também CNPJs via FaturamentoProduto
+        if filtros_avancados['pedido'].strip():
+            # Passo 1: Buscar num_pedidos que batem com o filtro (via pedido_cliente também)
+            sql_busca_pedidos = text("""
+                SELECT DISTINCT num_pedido
+                FROM carteira_principal
+                WHERE (lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent(:pattern))
+                   OR lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent(:pattern)))
+            """)
+
+            num_pedidos_encontrados = db.session.execute(
+                sql_busca_pedidos,
+                {'pattern': f"%{filtros_avancados['pedido']}%"}
+            ).fetchall()
+
+            num_pedidos_lista = [row[0] for row in num_pedidos_encontrados if row[0]]
+
+            # Passo 2: Buscar CNPJs que faturaram esses pedidos
+            if num_pedidos_lista:
+                if filtro_posicao == 'em_aberto':
+                    # Para "Em Aberto": apenas faturamento não entregue
+                    sql_cnpjs_faturados = text("""
+                        SELECT DISTINCT fp.cnpj_cliente
+                        FROM faturamento_produto fp
+                        LEFT JOIN entregas_monitoradas em ON fp.numero_nf = em.numero_nf
+                        WHERE fp.status_nf != 'Cancelado'
+                          AND fp.cnpj_cliente IS NOT NULL
+                          AND fp.origem = ANY(:pedidos_lista)
+                          AND (em.status_finalizacao != 'Entregue' OR em.status_finalizacao IS NULL)
+                    """)
+                else:
+                    # Para "Todos": qualquer faturamento
+                    sql_cnpjs_faturados = text("""
+                        SELECT DISTINCT fp.cnpj_cliente
+                        FROM faturamento_produto fp
+                        WHERE fp.status_nf != 'Cancelado'
+                          AND fp.cnpj_cliente IS NOT NULL
+                          AND fp.origem = ANY(:pedidos_lista)
+                    """)
+
+                cnpjs_faturados = db.session.execute(
+                    sql_cnpjs_faturados,
+                    {'pedidos_lista': num_pedidos_lista}
+                ).fetchall()
+
+                for cnpj_row in cnpjs_faturados:
+                    if cnpj_row[0] and cnpj_row[0] not in clientes_cnpjs:
+                        clientes_cnpjs.append(cnpj_row[0])
+
     else:
         if vendedor_filtro:
             clientes_cnpjs = ClienteService.obter_clientes_por_vendedor(
@@ -161,7 +243,92 @@ def _coletar_clientes_data(
 
     clientes_data: t.List[t.Dict[str, object]] = []
     for cnpj in clientes_cnpjs:
-        dados_cliente = ClienteService.obter_dados_cliente(cnpj, filtro_posicao)
+        pedidos_posicao = ClienteService.obter_pedidos_cliente(cnpj, filtro_posicao)
+        pedidos_todos = ClienteService.obter_pedidos_cliente(cnpj, 'todos')
+
+        pedido_filtro_norm = (filtros_avancados['pedido'] or '').strip().lower()
+        num_pedido_filtro_norm = (filtros_avancados['num_pedido'] or '').strip().lower()
+        pedido_cliente_filtro_norm = (filtros_avancados['pedido_cliente'] or '').strip().lower()
+        filtros_pedido_ativos = any([pedido_filtro_norm, num_pedido_filtro_norm, pedido_cliente_filtro_norm])
+
+        pedido_cliente_map: dict[str, str] = {}
+        base_para_map = pedidos_todos or pedidos_posicao
+        if base_para_map:
+            pedidos_para_busca = [str(p) for p in base_para_map if str(p).strip()]
+            if pedidos_para_busca:
+                # Buscar pedido_cliente na CarteiraPrincipal
+                rows_carteira = db.session.query(
+                    CarteiraPrincipal.num_pedido,
+                    func.max(CarteiraPrincipal.pedido_cliente)
+                ).filter(
+                    CarteiraPrincipal.cnpj_cpf == cnpj,
+                    CarteiraPrincipal.num_pedido.in_(pedidos_para_busca)
+                ).group_by(
+                    CarteiraPrincipal.num_pedido
+                ).all()
+                pedido_cliente_map = {row[0]: (row[1] or '') for row in rows_carteira}
+
+                # Buscar pedido_cliente via FaturamentoProduto (JOIN com CarteiraPrincipal)
+                # Para pedidos que foram faturados mas podem não estar mais na carteira
+                rows_faturados = db.session.query(
+                    FaturamentoProduto.origem.label('num_pedido'),
+                    func.max(CarteiraPrincipal.pedido_cliente).label('pedido_cliente')
+                ).join(
+                    CarteiraPrincipal,
+                    FaturamentoProduto.origem == CarteiraPrincipal.num_pedido
+                ).filter(
+                    FaturamentoProduto.cnpj_cliente == cnpj,
+                    FaturamentoProduto.origem.in_(pedidos_para_busca),
+                    FaturamentoProduto.status_nf != 'Cancelado',
+                    CarteiraPrincipal.pedido_cliente.isnot(None)
+                ).group_by(
+                    FaturamentoProduto.origem
+                ).all()
+
+                # Mesclar resultados (prioridade para carteira, depois faturamento)
+                for row in rows_faturados:
+                    if row.num_pedido and row.pedido_cliente:
+                        if row.num_pedido not in pedido_cliente_map or not pedido_cliente_map[row.num_pedido]:
+                            pedido_cliente_map[row.num_pedido] = row.pedido_cliente
+
+        if filtros_pedido_ativos:
+            # Usar a lista correta baseado no filtro de posição
+            # Se filtro é "Em Aberto", usar apenas pedidos em aberto
+            # Se filtro é "Todos", usar todos os pedidos
+            if filtro_posicao == 'em_aberto':
+                base_lista = pedidos_posicao
+            else:
+                base_lista = pedidos_todos
+
+            def _match_pedido(numero: str) -> bool:
+                alvo = str(numero or '').lower()
+                pedido_cli = (pedido_cliente_map.get(str(numero), '') or '').lower()
+                # Campo "Pedido:" busca em num_pedido OU pedido_cliente
+                return ((pedido_filtro_norm and (pedido_filtro_norm in alvo or pedido_filtro_norm in pedido_cli)) or
+                        (num_pedido_filtro_norm and num_pedido_filtro_norm in alvo) or
+                        (pedido_cliente_filtro_norm and pedido_cliente_filtro_norm in pedido_cli)) # type: ignore
+
+            pedidos_considerados = [p for p in base_lista if _match_pedido(p)]
+            if not pedidos_considerados:
+                continue
+        else:
+            pedidos_considerados = pedidos_posicao
+
+        pedidos_considerados = [p for p in pedidos_considerados if str(p).strip()]
+        pedidos_set = {str(p) for p in pedidos_considerados}
+
+        dados_cliente = ClienteService.obter_dados_cliente(
+            cnpj,
+            filtro_posicao,
+            pedidos_set if filtros_pedido_ativos else None
+        )
+
+        valor_em_aberto = float(dados_cliente['valor_em_aberto']) if dados_cliente['valor_em_aberto'] else 0.0
+        valor_total = float(dados_cliente['valor_total']) if dados_cliente['valor_total'] else 0.0
+        valor_principal = valor_em_aberto if filtro_posicao == 'em_aberto' else valor_total
+
+        if filtro_posicao == 'em_aberto' and valor_principal <= 0:
+            continue
 
         vendedor_cliente = (dados_cliente['vendedor'] or '').strip() if dados_cliente['vendedor'] else ''
         equipe_cliente = (dados_cliente['equipe_vendas'] or '').strip() if dados_cliente['equipe_vendas'] else ''
@@ -170,10 +337,6 @@ def _coletar_clientes_data(
             continue
         if equipe_filtro_norm and equipe_cliente != equipe_filtro_norm:
             continue
-
-        valor_em_aberto = float(dados_cliente['valor_em_aberto']) if dados_cliente['valor_em_aberto'] else 0.0
-        valor_total = float(dados_cliente['valor_total']) if dados_cliente['valor_total'] else 0.0
-        valor_principal = valor_em_aberto if filtro_posicao == 'em_aberto' else valor_total
 
         clientes_data.append({
             'cnpj_cpf': dados_cliente['cnpj_cpf'],
@@ -358,7 +521,7 @@ def vendedores_equipe(equipe_nome):
     for vendedor in vendedores:
         vendedor_norm = vendedor.strip() if isinstance(vendedor, str) else ''
         clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor)
-        clientes_validos: t.List[str] = []
+        clientes_validos: set[str] = set()
         valor_total_vendedor = 0.0
 
         for cnpj in clientes_cnpj:
@@ -372,7 +535,7 @@ def vendedores_equipe(equipe_nome):
                 continue
 
             valor_total_vendedor += float(dados_cliente['valor_em_aberto']) if dados_cliente['valor_em_aberto'] else 0.0
-            clientes_validos.append(cnpj)
+            clientes_validos.add(cnpj)
 
         vendedores_data.append({
             'nome': vendedor,
@@ -556,16 +719,29 @@ def exportar_clientes_excel():
         flash('Nenhum cliente encontrado para exportação.', 'warning')
         return redirect(url_for('comercial.lista_clientes', posicao=filtro_posicao))
 
-    def formatar_data(valor, allow_time: bool = False) -> str:
+    def preparar_data_excel(valor):
+        """
+        Prepara valor de data para Excel preservando tipo datetime/date.
+        Retorna None para vazios, datetime/date objects para datas válidas, string caso contrário.
+        """
         if not valor or valor in ('-', ''):
-            return ''
+            return None
         if isinstance(valor, str):
-            return valor.replace('Previsão:', '').strip()
-        if allow_time and hasattr(valor, 'strftime'):
-            return valor.strftime('%d/%m/%Y %H:%M')
-        if hasattr(valor, 'strftime'):
-            return valor.strftime('%d/%m/%Y')
-        return str(valor)
+            valor_limpo = valor.replace('Previsão:', '').replace('previsão:', '').strip()
+            if not valor_limpo:
+                return None
+            # Tentar converter string para datetime
+            formatos = ['%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M', '%d/%m/%Y', '%Y-%m-%d']
+            for fmt in formatos:
+                try:
+                    return datetime.strptime(valor_limpo, fmt)
+                except ValueError:
+                    continue
+            return valor_limpo
+        # Já é datetime/date - preservar
+        if isinstance(valor, (datetime, date)):
+            return valor
+        return valor
 
     linhas: t.List[t.Dict[str, object]] = []
 
@@ -601,13 +777,13 @@ def exportar_clientes_excel():
                     'tipo': 'Saldo',
                     'valor': saldo_carteira_float,
                     'numero_nf': '-',
-                    'data_faturamento': '',
-                    'data_embarque': formatar_data(carteira_info.expedicao) if carteira_info else '',
-                    'data_agendamento': formatar_data(carteira_info.agendamento) if carteira_info else '',
+                    'data_faturamento': None,
+                    'data_embarque': carteira_info.expedicao if carteira_info else None,
+                    'data_agendamento': carteira_info.agendamento if carteira_info else None,
                     'protocolo_agendamento': carteira_info.protocolo if carteira_info and carteira_info.protocolo else '',
                     'status_agendamento': 'aguardando',
-                    'data_entrega_prevista': '',
-                    'data_entrega_realizada': '',
+                    'data_entrega_prevista': None,
+                    'data_entrega_realizada': None,
                     'cnpj_transportadora': '',
                     'nome_transportadora': '',
                     'status_finalizacao': ''
@@ -650,8 +826,8 @@ def exportar_clientes_excel():
                 }]
 
                 data_pedido = pedido_info.get('data_pedido') or (carteira_info.data_pedido if carteira_info else None)
-                data_expedicao = formatar_data(doc.get('data_embarque')) or (formatar_data(carteira_info.expedicao) if carteira_info else '')
-                data_agendamento = formatar_data(doc.get('data_agendamento')) or (formatar_data(carteira_info.agendamento) if carteira_info else '')
+                data_expedicao = doc.get('data_embarque') or (carteira_info.expedicao if carteira_info else None)
+                data_agendamento = doc.get('data_agendamento') or (carteira_info.agendamento if carteira_info else None)
                 protocolo_agendamento = doc.get('protocolo_agendamento') or (carteira_info.protocolo if carteira_info and carteira_info.protocolo else '')
 
                 agendamento_confirmado_doc = (doc.get('status_agendamento') or '').lower() == 'confirmado'
@@ -664,6 +840,9 @@ def exportar_clientes_excel():
                 valor_documento = float(doc.get('valor', 0) or 0)
 
                 for produto in produtos_lista:
+                    quantidade_produto = float(produto.get('quantidade', 0) or 0)
+                    if abs(quantidade_produto) < 0.01:
+                        continue
                     linhas.append({
                         'Equipe Vendas': cliente.get('equipe_vendas') or '',
                         'Vendedor': cliente.get('vendedor') or '',
@@ -676,15 +855,15 @@ def exportar_clientes_excel():
                         'Pedido Cliente': pedido_info.get('pedido_cliente') if pedido_info.get('pedido_cliente') != '-' else '',
                         'Tipo Registro': 'Faturamento' if doc.get('tipo') == 'NF' else doc.get('tipo'),
                         'Identificador Documento': identificador or '',
-                        'Data Pedido': formatar_data(data_pedido) if data_pedido else '',
-                        'Data Faturamento': formatar_data(doc.get('data_faturamento')),
-                        'Data Expedição': data_expedicao,
-                        'Data Agendamento': data_agendamento,
+                        'Data Pedido': preparar_data_excel(data_pedido),
+                        'Data Faturamento': preparar_data_excel(doc.get('data_faturamento')),
+                        'Data Expedição': preparar_data_excel(data_expedicao),
+                        'Data Agendamento': preparar_data_excel(data_agendamento),
                         'Protocolo Agendamento': protocolo_agendamento,
                         'Agendamento Confirmado': 'Sim' if agendamento_confirmado else 'Não',
                         'Status Entrega': status_entrega,
-                        'Data Entrega Prevista': formatar_data(doc.get('data_entrega_prevista')),
-                        'Data Entrega Realizada': formatar_data(doc.get('data_entrega_realizada'), allow_time=True),
+                        'Data Entrega Prevista': preparar_data_excel(doc.get('data_entrega_prevista')),
+                        'Data Entrega Realizada': preparar_data_excel(doc.get('data_entrega_realizada')),
                         'CNPJ Transportadora': doc.get('cnpj_transportadora') or '',
                         'Nome Transportadora': doc.get('nome_transportadora') or doc.get('transportadora') or '',
                         'Incoterm': pedido_info.get('incoterm') if pedido_info.get('incoterm') != '-' else '',
@@ -696,7 +875,7 @@ def exportar_clientes_excel():
                         'Valor Documento': valor_documento,
                         'Código Produto': produto.get('codigo', ''),
                         'Produto': produto.get('produto', ''),
-                        'Quantidade': float(produto.get('quantidade', 0) or 0),
+                        'Quantidade': quantidade_produto,
                         'Preço Unitário': float(produto.get('preco', 0) or 0),
                         'Valor Produto': float(produto.get('valor', 0) or 0),
                         'Peso Total': float(produto.get('peso', 0) or 0),
@@ -727,13 +906,35 @@ def exportar_clientes_excel():
         df.to_excel(writer, sheet_name='Clientes Detalhado', index=False)
 
         worksheet = writer.sheets['Clientes Detalhado']
-        for column in worksheet.columns:
+
+        # Aplicar formatação de data para colunas específicas
+        from openpyxl.styles import numbers
+        colunas_data = ['Data Pedido', 'Data Faturamento', 'Data Expedição', 'Data Agendamento',
+                        'Data Entrega Prevista', 'Data Entrega Realizada']
+
+        for col_idx, col_name in enumerate(df.columns, start=1):
+            column_letter = worksheet.cell(row=1, column=col_idx).column_letter
+
+            # Aplicar formato de data brasileiro
+            if col_name in colunas_data:
+                for row in range(2, len(df) + 2):  # Começar da linha 2 (pula header)
+                    cell = worksheet.cell(row=row, column=col_idx)
+                    if cell.value and isinstance(cell.value, (datetime, date)):
+                        # Formato brasileiro: dd/mm/yyyy ou dd/mm/yyyy hh:mm
+                        if isinstance(cell.value, datetime) and cell.value.hour + cell.value.minute + cell.value.second > 0:
+                            cell.number_format = 'DD/MM/YYYY HH:MM'
+                        else:
+                            cell.number_format = 'DD/MM/YYYY'
+
+            # Ajustar largura da coluna
             max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
+            for cell in worksheet[column_letter]:
                 try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
+                    if cell.value:
+                        if isinstance(cell.value, (datetime, date)):
+                            max_length = max(max_length, 10)  # Tamanho padrão para datas
+                        else:
+                            max_length = max(max_length, len(str(cell.value)))
                 except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
@@ -768,6 +969,7 @@ def detalhes_cliente_api(cnpj):
     return jsonify(dados)
 
 
+
 @comercial_bp.route('/api/cliente/<path:cnpj>/pedidos')
 @login_required
 def pedidos_cliente_api(cnpj):
@@ -780,11 +982,112 @@ def pedidos_cliente_api(cnpj):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
 
-        # Limitar per_page para evitar sobrecarga
         if per_page > 100:
             per_page = 100
 
-        # Obter dados paginados dos pedidos
+        pedido_param = (request.args.get('pedido') or '').strip().lower()
+        num_pedido_param = (request.args.get('num_pedido') or '').strip().lower()
+        pedido_cliente_param = (request.args.get('pedido_cliente') or '').strip().lower()
+        filtros_pedido_ativos = any([pedido_param, num_pedido_param, pedido_cliente_param])
+
+        pedidos_posicao = ClienteService.obter_pedidos_cliente(cnpj, filtro_posicao)
+        pedidos_todos = ClienteService.obter_pedidos_cliente(cnpj, 'todos')
+
+        if filtros_pedido_ativos:
+            # Respeitar filtro de posição
+            if filtro_posicao == 'em_aberto':
+                base_lista = pedidos_posicao
+            else:
+                base_lista = pedidos_todos
+
+            pedido_cliente_map: dict[str, str] = {}
+            if base_lista:
+                pedidos_para_busca = [str(p) for p in base_lista if str(p).strip()]
+                if pedidos_para_busca:
+                    # Buscar pedido_cliente na CarteiraPrincipal
+                    rows_carteira = db.session.query(
+                        CarteiraPrincipal.num_pedido,
+                        func.max(CarteiraPrincipal.pedido_cliente)
+                    ).filter(
+                        CarteiraPrincipal.cnpj_cpf == cnpj,
+                        CarteiraPrincipal.num_pedido.in_(pedidos_para_busca)
+                    ).group_by(
+                        CarteiraPrincipal.num_pedido
+                    ).all()
+                    pedido_cliente_map = {row[0]: (row[1] or '') for row in rows_carteira}
+
+                    # Buscar pedido_cliente via FaturamentoProduto (JOIN com CarteiraPrincipal)
+                    rows_faturados = db.session.query(
+                        FaturamentoProduto.origem.label('num_pedido'),
+                        func.max(CarteiraPrincipal.pedido_cliente).label('pedido_cliente')
+                    ).join(
+                        CarteiraPrincipal,
+                        FaturamentoProduto.origem == CarteiraPrincipal.num_pedido
+                    ).filter(
+                        FaturamentoProduto.cnpj_cliente == cnpj,
+                        FaturamentoProduto.origem.in_(pedidos_para_busca),
+                        FaturamentoProduto.status_nf != 'Cancelado',
+                        CarteiraPrincipal.pedido_cliente.isnot(None)
+                    ).group_by(
+                        FaturamentoProduto.origem
+                    ).all()
+
+                    # Mesclar resultados (prioridade para carteira, depois faturamento)
+                    for row in rows_faturados:
+                        if row.num_pedido and row.pedido_cliente:
+                            if row.num_pedido not in pedido_cliente_map or not pedido_cliente_map[row.num_pedido]:
+                                pedido_cliente_map[row.num_pedido] = row.pedido_cliente
+
+            def _match_pedido(numero: str) -> bool:
+                alvo = str(numero or '').lower()
+                pedido_cli = (pedido_cliente_map.get(str(numero), '') or '').lower()
+                # Campo "pedido" busca em num_pedido OU pedido_cliente
+                return ((pedido_param and (pedido_param in alvo or pedido_param in pedido_cli)) or
+                        (num_pedido_param and num_pedido_param in alvo) or
+                        (pedido_cliente_param and pedido_cliente_param in pedido_cli)) # type: ignore
+
+            pedidos_filtrados = [p for p in (pedidos_todos or pedidos_posicao) if _match_pedido(p)]
+
+            total = len(pedidos_filtrados)
+            if total == 0:
+                return jsonify({
+                    'pedidos': [],
+                    'total': 0,
+                    'page': page,
+                    'per_page': per_page,
+                    'total_pages': 0
+                })
+
+            total_pages = (total + per_page - 1) // per_page
+            if page > total_pages:
+                page = total_pages or 1
+
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            pedidos_pagina = pedidos_filtrados[start_idx:end_idx]
+
+            pedidos_detalhados = []
+            for num_pedido in pedidos_pagina:
+                detalhe = PedidoService._processar_pedido(str(num_pedido), cnpj, None, None)
+                if detalhe:
+                    pedidos_detalhados.append(detalhe)
+
+            for pedido in pedidos_detalhados:
+                pedido['valor_total_pedido'] = float(pedido['valor_total_pedido'])
+                pedido['valor_total_faturado'] = float(pedido['valor_total_faturado'])
+                pedido['valor_entregue'] = float(pedido['valor_entregue'])
+                pedido['saldo_carteira'] = float(pedido['saldo_carteira'])
+                if pedido['data_pedido']:
+                    pedido['data_pedido'] = pedido['data_pedido'].strftime('%d/%m/%Y')
+
+            return jsonify({
+                'pedidos': pedidos_detalhados,
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': total_pages
+            })
+
         resultado = PedidoService.obter_detalhes_pedidos_cliente(
             cnpj=cnpj,
             filtro_posicao=filtro_posicao,
@@ -792,14 +1095,11 @@ def pedidos_cliente_api(cnpj):
             per_page=per_page
         )
 
-        # Converter Decimals para float para JSON
         for pedido in resultado['pedidos']:
             pedido['valor_total_pedido'] = float(pedido['valor_total_pedido'])
             pedido['valor_total_faturado'] = float(pedido['valor_total_faturado'])
             pedido['valor_entregue'] = float(pedido['valor_entregue'])
             pedido['saldo_carteira'] = float(pedido['saldo_carteira'])
-
-            # Formatar data para string
             if pedido['data_pedido']:
                 pedido['data_pedido'] = pedido['data_pedido'].strftime('%d/%m/%Y')
 

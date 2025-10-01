@@ -8,7 +8,7 @@ from app.faturamento.models import FaturamentoProduto
 from app.monitoramento.models import EntregaMonitorada
 from app.cadastros_agendamento.models import ContatoAgendamento
 from decimal import Decimal
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 
 
 class ClienteService:
@@ -130,18 +130,14 @@ class ClienteService:
 
         return sorted(list(clientes))
 
+
     @staticmethod
-    def obter_dados_cliente(cnpj: str, filtro_posicao: str = 'em_aberto') -> Dict[str, Any]:
-        """
-        Agrega todos os dados de um cliente específico
-
-        Args:
-            cnpj: CNPJ do cliente
-            filtro_posicao: 'em_aberto' ou 'todos'
-
-        Returns:
-            Dicionário com dados agregados do cliente
-        """
+    def obter_dados_cliente(
+        cnpj: str,
+        filtro_posicao: str = 'em_aberto',
+        pedidos_filtrados: Optional[Set[str]] = None
+    ) -> Dict[str, Any]:
+        """Agrega dados de um cliente, permitindo limitar pedidos considerados."""
         dados = {
             'cnpj_cpf': cnpj,
             'raz_social': None,
@@ -157,7 +153,6 @@ class ClienteService:
             'total_pedidos': 0
         }
 
-        # Buscar dados básicos do cliente primeiro na CarteiraPrincipal
         cliente_carteira = db.session.query(
             CarteiraPrincipal.raz_social,
             CarteiraPrincipal.raz_social_red,
@@ -180,7 +175,6 @@ class ClienteService:
             dados['vendedor'] = cliente_carteira.vendedor
             dados['equipe_vendas'] = cliente_carteira.equipe_vendas
         else:
-            # Se não encontrou na carteira, buscar no faturamento
             cliente_faturamento = db.session.query(
                 FaturamentoProduto.nome_cliente,
                 FaturamentoProduto.estado,
@@ -202,12 +196,6 @@ class ClienteService:
                 dados['vendedor'] = cliente_faturamento.vendedor
                 dados['equipe_vendas'] = cliente_faturamento.equipe_vendas
 
-        # Se não tem razão social, poderia buscar do Odoo futuramente
-        # TODO: Implementar busca de cliente no Odoo quando a função estiver disponível
-        # if not dados['raz_social']:
-        #     # Futuramente implementar busca no Odoo via res.partner
-
-        # Buscar forma de agendamento
         contato = db.session.query(
             ContatoAgendamento.forma
         ).filter(
@@ -217,21 +205,34 @@ class ClienteService:
         if contato:
             dados['forma_agendamento'] = contato.forma
 
-        # Buscar pedidos e calcular valores
-        pedidos = ClienteService.obter_pedidos_cliente(cnpj, filtro_posicao)
-        dados['pedidos'] = pedidos
-        dados['total_pedidos'] = len(pedidos)
+        pedidos_completos = ClienteService.obter_pedidos_cliente(cnpj, filtro_posicao)
+        if pedidos_filtrados is not None:
+            pedidos_validos = [p for p in pedidos_completos if str(p) in pedidos_filtrados]
+        else:
+            pedidos_validos = pedidos_completos
 
-        # Calcular valores financeiros
-        componentes_valor = ClienteService._calcular_componentes_valor(cnpj)
+        dados['pedidos'] = pedidos_validos
+        dados['total_pedidos'] = len(pedidos_validos)
 
-        valor_em_aberto = componentes_valor['saldo'] + componentes_valor['faturado_nao_entregue']
-        valor_total = componentes_valor['saldo'] + componentes_valor['faturado_total']
-
-        dados['valor_em_aberto'] = valor_em_aberto
-        dados['valor_total'] = valor_total
+        if pedidos_filtrados is not None:
+            pedidos_set = pedidos_filtrados or {str(p) for p in pedidos_validos}
+            valores = ClienteService.calcular_valores_por_pedidos(
+                cnpj,
+                pedidos_set,
+                filtro_posicao
+            )
+            dados['valor_em_aberto'] = valores['valor_em_aberto']
+            dados['valor_total'] = valores['valor_total']
+        else:
+            componentes_valor = ClienteService._calcular_componentes_valor(cnpj)
+            dados['valor_em_aberto'] = componentes_valor['saldo'] + (
+                componentes_valor['faturado_total'] if filtro_posicao == 'todos' else componentes_valor['faturado_nao_entregue']
+            )
+            dados['valor_total'] = componentes_valor['saldo'] + componentes_valor['faturado_total']
 
         return dados
+
+
 
     @staticmethod
     def obter_pedidos_cliente(cnpj: str, filtro_posicao: str = 'em_aberto') -> List[str]:
@@ -313,18 +314,97 @@ class ClienteService:
 
         return sorted(list(pedidos))
 
+
     @staticmethod
-    def calcular_valor_em_aberto(cnpj: str, filtro_posicao: str = 'em_aberto') -> Decimal:
-        """
-        Calcula o valor em aberto do cliente
+    def calcular_valores_por_pedidos(
+        cnpj: str,
+        pedidos: Set[str],
+        filtro_posicao: str = 'em_aberto'
+    ) -> Dict[str, Decimal]:
+        """Calcula valores financeiros limitados a um conjunto específico de pedidos."""
+        pedidos_norm = {str(p) for p in pedidos if str(p).strip()}
 
-        Args:
-            cnpj: CNPJ do cliente
-            filtro_posicao: 'em_aberto' ou 'todos'
+        if not pedidos_norm:
+            componentes = ClienteService._calcular_componentes_valor(cnpj)
+            valor_em_aberto = componentes['saldo'] + (
+                componentes['faturado_total'] if filtro_posicao == 'todos' else componentes['faturado_nao_entregue']
+            )
+            valor_total = componentes['saldo'] + componentes['faturado_total']
+            return {
+                'valor_em_aberto': valor_em_aberto,
+                'valor_total': valor_total
+            }
 
-        Returns:
-            Valor total em aberto
+        pedidos_lista = list(pedidos_norm)
+
+        saldo_query = db.session.query(
+            func.sum(
+                CarteiraPrincipal.qtd_saldo_produto_pedido *
+                CarteiraPrincipal.preco_produto_pedido
+            )
+        ).filter(
+            CarteiraPrincipal.cnpj_cpf == cnpj,
+            CarteiraPrincipal.num_pedido.in_(pedidos_lista),
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        )
+        saldo = saldo_query.scalar() or 0
+
+        faturado_total_query = db.session.query(
+            func.sum(FaturamentoProduto.valor_produto_faturado)
+        ).filter(
+            FaturamentoProduto.cnpj_cliente == cnpj,
+            FaturamentoProduto.origem.in_(pedidos_lista),
+            FaturamentoProduto.status_nf != 'Cancelado'
+        )
+        faturado_total = faturado_total_query.scalar() or 0
+
+        faturado_nao_entregue_query = db.session.query(
+            func.sum(FaturamentoProduto.valor_produto_faturado)
+        ).outerjoin(
+            EntregaMonitorada,
+            FaturamentoProduto.numero_nf == EntregaMonitorada.numero_nf
+        ).filter(
+            FaturamentoProduto.cnpj_cliente == cnpj,
+            FaturamentoProduto.origem.in_(pedidos_lista),
+            FaturamentoProduto.status_nf != 'Cancelado',
+            or_(
+                EntregaMonitorada.status_finalizacao != 'Entregue',
+                EntregaMonitorada.status_finalizacao.is_(None)
+            )
+        )
+        faturado_nao_entregue = faturado_nao_entregue_query.scalar() or 0
+
+        saldo_decimal = Decimal(str(saldo))
+        faturado_total_decimal = Decimal(str(faturado_total))
+        faturado_nao_entregue_decimal = Decimal(str(faturado_nao_entregue))
+
+        if filtro_posicao == 'todos':
+            valor_em_aberto = saldo_decimal + faturado_total_decimal
+        else:
+            valor_em_aberto = saldo_decimal + faturado_nao_entregue_decimal
+
+        valor_total = saldo_decimal + faturado_total_decimal
+
+        return {
+            'valor_em_aberto': valor_em_aberto,
+            'valor_total': valor_total
+        }
+
+
+
+    @staticmethod
+    def calcular_valor_em_aberto(
+        cnpj: str,
+        filtro_posicao: str = 'em_aberto',
+        pedidos_filtrados: Optional[Set[str]] = None
+    ) -> Decimal:
         """
+        Calcula o valor em aberto do cliente, permitindo limitar a pedidos específicos.
+        """
+        if pedidos_filtrados:
+            valores = ClienteService.calcular_valores_por_pedidos(cnpj, pedidos_filtrados, filtro_posicao)
+            return valores['valor_em_aberto']
+
         componentes_valor = ClienteService._calcular_componentes_valor(cnpj)
 
         if filtro_posicao == 'todos':
