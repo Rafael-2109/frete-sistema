@@ -28,14 +28,17 @@ def webhook_cliente():
         
         # Pega dados do webhook
         dados = request.get_json()
-        evento = dados.get('evento', '')  # criado, atualizado, excluido
+        evento = dados.get('evento', '')  # cliente_criado, cliente_atualizado, etc
         cliente_data = dados.get('cliente', {})
-        
+
         logger.info(f"Webhook cliente recebido: {evento}")
-        
-        if evento in ['criado', 'atualizado']:
+
+        # Aceita vários formatos de evento (compatibilidade)
+        if evento in ['criado', 'atualizado', 'cliente_criado', 'cliente_atualizado']:
             processar_cliente_webhook(cliente_data)
-            
+        else:
+            logger.info(f"Evento de cliente ignorado: {evento}")
+
         return jsonify({'status': 'ok'}), 200
         
     except Exception as e:
@@ -52,16 +55,23 @@ def webhook_nfe():
         
         # Pega dados do webhook
         dados = request.get_json()
-        evento = dados.get('evento', '')  # autorizada, cancelada, inutilizada
+        evento = dados.get('evento', '')  # nfe_aprovada, nfe_cancelada, nfe_alterada, nfe_apagada
         nfe_data = dados.get('nfe', {})
-        
+
         logger.info(f"Webhook NFE recebido: {evento} - NF {nfe_data.get('numero')}")
-        
-        if evento == 'autorizada':
+
+        # TagPlus usa 'nfe_aprovada' para NFe autorizada
+        if evento in ['autorizada', 'nfe_aprovada']:
             processar_nfe_webhook(nfe_data)
-        elif evento == 'cancelada':
+        # TagPlus usa 'nfe_cancelada' para NFe cancelada
+        elif evento in ['cancelada', 'nfe_cancelada']:
             cancelar_nfe_webhook(nfe_data)
-            
+        # Eventos ignorados (retorna ok mas não processa)
+        elif evento in ['nfe_alterada', 'nfe_apagada']:
+            logger.info(f"Evento {evento} ignorado (não processado)")
+        else:
+            logger.warning(f"Evento desconhecido: {evento}")
+
         return jsonify({'status': 'ok'}), 200
         
     except Exception as e:
@@ -285,11 +295,25 @@ def criar_item_faturamento_webhook(nfe_data, item_data, cliente):
     else:
         data_fatura = datetime.now().date()
     
+    # Extrai dados do produto (estrutura aninhada conforme API TagPlus)
+    produto_info = item_data.get('produto', {}) or item_data.get('produto_servico', {})
+    cod_produto = str(produto_info.get('codigo', '') or item_data.get('item', ''))
+    nome_produto = produto_info.get('descricao', '') or ''
+
+    # Extrai quantidades e valores (campos corretos da API TagPlus)
+    quantidade = float(item_data.get('qtd', 0) or 0)
+    valor_unitario = float(item_data.get('valor_unitario', 0) or 0)
+    valor_total = float(item_data.get('valor_subtotal', 0) or 0)
+
+    # Se valor_total estiver zerado, calcular
+    if valor_total == 0 and quantidade > 0 and valor_unitario > 0:
+        valor_total = quantidade * valor_unitario
+
     faturamento = FaturamentoProduto(
         # Dados da NF
         numero_nf=str(nfe_data.get('numero', '')),
         data_fatura=data_fatura,
-        
+
         # Dados do cliente
         cnpj_cliente=cliente.cnpj_cpf,
         nome_cliente=cliente.raz_social,
@@ -297,30 +321,31 @@ def criar_item_faturamento_webhook(nfe_data, item_data, cliente):
         estado=cliente.estado,
         vendedor=cliente.vendedor,
         equipe_vendas=cliente.equipe_vendas,
-        
-        # Dados do produto
-        cod_produto=str(item_data.get('codigo', '')),
-        nome_produto=item_data.get('descricao', ''),
-        qtd_produto_faturado=float(item_data.get('quantidade', 0)),
-        preco_produto_faturado=float(item_data.get('valor_unitario', 0)),
-        valor_produto_faturado=float(item_data.get('valor_total', 0)),
-        
-        # Peso
-        peso_unitario_produto=float(item_data.get('peso_unitario', 0)),
-        peso_total=float(item_data.get('quantidade', 0)) * float(item_data.get('peso_unitario', 0)),
-        
-        # Origem
-        origem=nfe_data.get('pedido', ''),
-        
+
+        # Dados do produto (CORRIGIDO conforme estrutura real da API)
+        cod_produto=cod_produto,
+        nome_produto=nome_produto,
+        qtd_produto_faturado=quantidade,
+        preco_produto_faturado=valor_unitario,
+        valor_produto_faturado=valor_total,
+
+        # Peso (não vem da API TagPlus, precisa buscar do cadastro)
+        peso_unitario_produto=0,
+        peso_total=0,
+
+        # Origem (número do pedido se vier na NF)
+        origem=nfe_data.get('numero_pedido', '') or '',
+
         # Status
         status_nf='Lançado',
-        
+
         # Controle
         created_by='WebhookTagPlus',
         updated_by='WebhookTagPlus'
     )
-    
+
     db.session.add(faturamento)
+    logger.debug(f"Item criado: {cod_produto} - {nome_produto} - Qtd: {quantidade}")
     return faturamento
 
 def cancelar_nfe_webhook(nfe_data):

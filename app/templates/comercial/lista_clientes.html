@@ -734,13 +734,22 @@
 
         // cnpj já vem encodado da função verPedidos ou da paginação
 
+        const queryParams = new URLSearchParams(window.location.search);
+        const requestData = {
+            posicao: '{{ filtro_posicao }}',
+            page: page,
+            per_page: 20
+        };
+        ['pedido', 'num_pedido', 'pedido_cliente'].forEach(key => {
+            const value = queryParams.get(key);
+            if (value) {
+                requestData[key] = value;
+            }
+        });
+
         $.ajax({
             url: '/comercial/api/cliente/' + cnpj + '/pedidos',
-            data: {
-                posicao: '{{ filtro_posicao }}',
-                page: page,
-                per_page: 20
-            },
+            data: requestData,
             success: function(data) {
                 // Atualizar info de paginação
                 totalPages = data.total_pages;

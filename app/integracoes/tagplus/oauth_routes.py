@@ -3,8 +3,9 @@ Rotas OAuth2 para TagPlus - Callbacks e Autorização
 """
 
 from flask import Blueprint, request, redirect, url_for, jsonify, session, render_template_string
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.integracoes.tagplus.oauth2_v2 import TagPlusOAuth2V2
+from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
 from datetime import datetime, timedelta
 import logging
 
@@ -302,6 +303,22 @@ AUTH_PAGE_TEMPLATE = """
     </script>
 
     <div class="card">
+        <h2>🎯 Importar NF Individual</h2>
+        <p>Buscar e importar uma NF específica com validações completas:</p>
+        <div style="margin: 10px 0;">
+            <label>Número da NF:</label>
+            <input type="text" id="numeroNFIndividual" placeholder="Ex: 3706" style="padding: 5px; margin-right: 10px; width: 150px;">
+
+            <button class="btn btn-primary" onclick="buscarNFIndividual()">
+                🔍 Buscar e Validar
+            </button>
+        </div>
+        <div id="loadingNFIndividual" style="display: none; text-align: center; padding: 20px;">
+            ⏳ Buscando NF...
+        </div>
+    </div>
+
+    <div class="card">
         <h2>🔧 Correção de Pedidos (NFs Pendentes)</h2>
         <p>Visualizar e corrigir NFs que foram importadas sem número de pedido:</p>
         <button class="btn btn-primary" onclick="carregarNFsPendentes()">
@@ -316,6 +333,104 @@ AUTH_PAGE_TEMPLATE = """
     </div>
 
     <script>
+    // ========== IMPORTAÇÃO INDIVIDUAL DE NF ==========
+    function buscarNFIndividual() {
+        const numeroNF = document.getElementById('numeroNFIndividual').value.trim();
+        if (!numeroNF) {
+            alert('❌ Por favor, informe o número da NF');
+            return;
+        }
+        const loading = document.getElementById('loadingNFIndividual');
+        loading.style.display = 'block';
+        fetch(`/tagplus/oauth/buscar-nf-individual/${numeroNF}`)
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                if (data.error) {
+                    alert('❌ ' + data.error);
+                    return;
+                }
+                if (data.success) {
+                    mostrarModalNFIndividual(data);
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                alert('❌ Erro ao buscar NF: ' + error);
+            });
+    }
+
+    function mostrarModalNFIndividual(data) {
+        const nf = data.nf;
+        const validacoes = data.validacoes;
+        const modalHTML = `
+            <div id="modalNFIndividual" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 30px; border-radius: 10px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <h2 style="margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 10px;">📋 NF ${nf.numero}</h2>
+                    <div style="margin: 20px 0;"><h3 style="margin-bottom: 10px;">📦 Dados da NF</h3>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr style="background: #f8f9fa;"><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Cliente:</td><td style="padding: 8px; border: 1px solid #ddd;">${nf.cliente}</td></tr>
+                            <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">CNPJ:</td><td style="padding: 8px; border: 1px solid #ddd;">${nf.cnpj}</td></tr>
+                            <tr style="background: #f8f9fa;"><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Valor Total:</td><td style="padding: 8px; border: 1px solid #ddd;">R$ ${parseFloat(nf.valor_total).toFixed(2)}</td></tr>
+                            <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Pedido TagPlus:</td><td style="padding: 8px; border: 1px solid #ddd;">${nf.numero_pedido ? '<strong style="color: green;">✅ ' + nf.numero_pedido + '</strong>' : '<span style="color: orange;">⚠️ Sem pedido</span>'}</td></tr>
+                            <tr style="background: #f8f9fa;"><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Itens:</td><td style="padding: 8px; border: 1px solid #ddd;">${nf.qtd_itens} produto(s)</td></tr>
+                        </table>
+                    </div>
+                    <div style="margin: 20px 0;"><h3 style="margin-bottom: 10px;">🔍 Status de Validações</h3>
+                        <div style="padding: 10px; margin: 5px 0; border-radius: 5px; background: ${validacoes.faturamento_produto ? '#d4edda' : '#fff3cd'}; border-left: 4px solid ${validacoes.faturamento_produto ? '#28a745' : '#ffc107'};">
+                            <strong>FaturamentoProduto:</strong> ${validacoes.faturamento_produto ? '✅ Já importada (' + validacoes.faturamento_produto_count + ' item/ns)' : '⚠️ Não importada'}
+                        </div>
+                        <div style="padding: 10px; margin: 5px 0; border-radius: 5px; background: ${validacoes.embarque_item ? '#d4edda' : '#f8f9fa'}; border-left: 4px solid ${validacoes.embarque_item ? '#28a745' : '#6c757d'};">
+                            <strong>EmbarqueItem:</strong> ${validacoes.embarque_item ? '✅ Vinculada (Embarque #' + validacoes.embarque_numero + ')' : 'ℹ️ Não vinculada a embarque'}
+                        </div>
+                        <div style="padding: 10px; margin: 5px 0; border-radius: 5px; background: ${validacoes.movimentacao_estoque_com_lote ? '#d4edda' : '#f8f9fa'}; border-left: 4px solid ${validacoes.movimentacao_estoque_com_lote ? '#28a745' : '#6c757d'};">
+                            <strong>MovimentacaoEstoque:</strong> ${validacoes.movimentacao_estoque_com_lote ? '✅ Com lote preenchido (' + validacoes.movimentacao_count + ' movimentação/ões)' : 'ℹ️ Sem movimentações com lote'}
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button onclick="fecharModalNFIndividual()" class="btn" style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Fechar</button>
+                        ${validacoes.faturamento_produto ? '<button disabled class="btn" style="background: #ccc; color: #666; padding: 10px 20px; border: none; border-radius: 5px; cursor: not-allowed;">✅ Já Importada</button>' : '<button onclick="importarNFIndividual(\'' + nf.id + '\')" class="btn btn-success" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">📥 Importar NF</button>'}
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    function fecharModalNFIndividual() {
+        const modal = document.getElementById('modalNFIndividual');
+        if (modal) modal.remove();
+    }
+
+    function importarNFIndividual(nfId) {
+        if (!confirm('Confirma a importação desta NF?\\n\\nSerão executadas todas as validações do processo normal de importação.')) return;
+        event.target.disabled = true;
+        event.target.textContent = '⏳ Importando...';
+        fetch('/tagplus/oauth/importar-nf-individual', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+            body: JSON.stringify({ nf_id: nfId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ Importação concluída!\\n\\nNFs importadas: ' + data.nfs_importadas + '\\nItens criados: ' + data.itens_criados + '\\n' + (data.nfs_pendentes > 0 ? '⚠️ NF sem pedido (em pendências): ' + data.nfs_pendentes + '\\n' : '') + (data.processamento ? 'Processadas: ' + data.processamento.nfs_processadas : ''));
+                fecharModalNFIndividual();
+                document.getElementById('numeroNFIndividual').value = '';
+            } else {
+                alert('❌ Erro na importação: ' + (data.error || 'Erro desconhecido'));
+                event.target.disabled = false;
+                event.target.textContent = '📥 Importar NF';
+            }
+        })
+        .catch(error => {
+            alert('❌ Erro na requisição: ' + error);
+            event.target.disabled = false;
+            event.target.textContent = '📥 Importar NF';
+        });
+    }
+    // ========== FIM IMPORTAÇÃO INDIVIDUAL ==========
+
     function carregarNFsPendentes() {
         const container = document.getElementById('nfsPendentesContainer');
         const loading = document.getElementById('loadingPendentes');
@@ -798,6 +913,97 @@ def importar_nfs():
             'error': str(e),
             'success': False
         }), 500
+
+@oauth_bp.route('/buscar-nf-individual/<numero_nf>')
+@login_required
+def buscar_nf_individual(numero_nf):
+    """Busca uma NF individual e retorna seus dados com validações"""
+    try:
+        from app.faturamento.models import FaturamentoProduto
+        from app.embarques.models import EmbarqueItem
+        from app.estoque.models import MovimentacaoEstoque
+        oauth = TagPlusOAuth2V2(api_type='notas')
+        logger.info(f"Buscando NF individual: {numero_nf}")
+        response = oauth.make_request('GET', '/nfes', params={'per_page': 500})
+        if not response or response.status_code != 200:
+            return jsonify({'error': 'Erro ao buscar NFs do TagPlus'}), 500
+        nfes = response.json()
+        nf_encontrada = None
+        for nf in nfes:
+            if str(nf.get('numero')) == str(numero_nf):
+                nf_encontrada = nf
+                break
+        if not nf_encontrada:
+            return jsonify({'error': f'NF {numero_nf} não encontrada no TagPlus'}), 404
+        nf_id = nf_encontrada.get('id')
+        response_detail = oauth.make_request('GET', f'/nfes/{nf_id}')
+        if not response_detail or response_detail.status_code != 200:
+            return jsonify({'error': 'Erro ao buscar detalhes da NF'}), 500
+        nf_completa = response_detail.json()
+        destinatario = nf_completa.get('destinatario', {})
+        cliente_nome = destinatario.get('razao_social') or destinatario.get('nome') or 'N/A'
+        cnpj_cliente = destinatario.get('cnpj') or destinatario.get('cpf') or 'N/A'
+        numero_pedido = nf_completa.get('numero_pedido') or ''
+        qtd_itens = len(nf_completa.get('itens', []))
+        itens_faturamento = FaturamentoProduto.query.filter_by(numero_nf=str(numero_nf)).all()
+        tem_faturamento = len(itens_faturamento) > 0
+        embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=str(numero_nf)).first()
+        tem_embarque = embarque_item is not None
+        embarque_numero = embarque_item.embarque_id if embarque_item else None
+        movimentacoes = MovimentacaoEstoque.query.filter_by(numero_nf=str(numero_nf)).all()
+        movimentacoes_com_lote = [m for m in movimentacoes if m.separacao_lote_id and m.separacao_lote_id.strip()]
+        tem_movimentacao_com_lote = len(movimentacoes_com_lote) > 0
+        return jsonify({
+            'success': True,
+            'nf': {
+                'id': nf_id, 'numero': numero_nf, 'cliente': cliente_nome, 'cnpj': cnpj_cliente,
+                'valor_total': nf_completa.get('valor_nota', 0), 'numero_pedido': numero_pedido, 'qtd_itens': qtd_itens
+            },
+            'validacoes': {
+                'faturamento_produto': tem_faturamento, 'faturamento_produto_count': len(itens_faturamento),
+                'embarque_item': tem_embarque, 'embarque_numero': embarque_numero,
+                'movimentacao_estoque_com_lote': tem_movimentacao_com_lote, 'movimentacao_count': len(movimentacoes_com_lote)
+            }
+        })
+    except Exception as e:
+        logger.error(f"Erro ao buscar NF individual {numero_nf}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Erro ao buscar NF: {str(e)}', 'success': False}), 500
+
+@oauth_bp.route('/importar-nf-individual', methods=['POST'])
+@login_required
+def importar_nf_individual():
+    """Importa uma NF individual usando o ImportadorTagPlusV2"""
+    try:
+        dados = request.get_json()
+        nf_id = dados.get('nf_id')
+        if not nf_id:
+            return jsonify({'error': 'ID da NF não informado'}), 400
+        logger.info(f"Importando NF individual: {nf_id}")
+        importador = ImportadorTagPlusV2()
+        resultado = importador.importar_nfs(
+            usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema',
+            limpar_inconsistencias=False, verificar_cancelamentos=False, nf_ids=[nf_id]
+        )
+        if resultado:
+            logger.info(f"Importação individual concluída: {resultado}")
+            return jsonify({
+                'success': True, 'nfs_importadas': resultado['nfs']['importadas'],
+                'nfs_pendentes': resultado['nfs']['pendentes'],
+                'nfs_pendentes_existentes': resultado['nfs']['pendentes_existentes'],
+                'nfs_ja_importadas': resultado['nfs']['ja_importadas'],
+                'itens_criados': resultado['nfs']['itens'],
+                'processamento': resultado.get('processamento', {}),
+                'erros': resultado['nfs'].get('erros', [])
+            })
+        else:
+            return jsonify({'error': 'Erro ao importar NF', 'success': False}), 500
+    except Exception as e:
+        logger.error(f"Erro ao importar NF individual: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'success': False}), 500
 
 @oauth_bp.route('/status')
 @login_required
