@@ -4,7 +4,7 @@ Exportação de dados para Excel com filtros de data
 """
 
 from flask import jsonify, request, send_file
-from datetime import datetime
+from datetime import datetime, date
 import pandas as pd
 import io
 from sqlalchemy import func
@@ -63,9 +63,9 @@ def exportar_separacoes():
                 'Valor': float(sep.valor_saldo) if sep.valor_saldo else 0,
                 'Peso': float(sep.peso) if sep.peso else 0,
                 'Pallet': float(sep.pallet) if sep.pallet else 0,
-                'Data Pedido': sep.data_pedido.strftime('%d/%m/%Y') if sep.data_pedido else '',
-                'Data Expedição': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
-                'Data Agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
+                'Data Pedido': sep.data_pedido if sep.data_pedido else None,
+                'Data Expedição': sep.expedicao if sep.expedicao else None,
+                'Data Agendamento': sep.agendamento if sep.agendamento else None,
                 'Protocolo': sep.protocolo or '',
                 'Status': sep.status or '',  # Status da própria Separacao
                 'Nota Fiscal': sep.numero_nf or '',  # Campo correto: numero_nf
@@ -74,7 +74,7 @@ def exportar_separacoes():
                 'Rota': sep.rota or '',
                 'Sub-Rota': sep.sub_rota or '',
                 'Observações': sep.observ_ped_1 or '',
-                'Criado Em': sep.criado_em.strftime('%d/%m/%Y %H:%M') if sep.criado_em else ''
+                'Criado Em': sep.criado_em if sep.criado_em else None
             })
         
         df = pd.DataFrame(dados)
@@ -83,12 +83,30 @@ def exportar_separacoes():
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, sheet_name='Separações', index=False)
-            
-            # Ajustar largura das colunas
+
+            workbook = writer.book
             worksheet = writer.sheets['Separações']
+
+            # Formatos de data brasileiros
+            formato_data = workbook.add_format({'num_format': 'dd/mm/yyyy'})
+            formato_datetime = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm'})
+
+            # Colunas de data
+            colunas_data = {
+                'Data Pedido': formato_data,
+                'Data Expedição': formato_data,
+                'Data Agendamento': formato_data,
+                'Criado Em': formato_datetime
+            }
+
+            # Aplicar formato e ajustar largura
             for i, col in enumerate(df.columns):
-                column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
-                worksheet.set_column(i, i, min(column_width, 50))
+                # Aplicar formato de data se for coluna de data
+                if col in colunas_data:
+                    worksheet.set_column(i, i, 12, colunas_data[col])
+                else:
+                    column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                    worksheet.set_column(i, i, min(column_width, 50))
         
         output.seek(0)
         
@@ -147,12 +165,12 @@ def exportar_carteira_simples():
                 'Qtd Saldo': float(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,
                 'Qtd Cancelada': float(item.qtd_cancelada_produto_pedido) if item.qtd_cancelada_produto_pedido else 0,
                 'Preço': float(item.preco_produto_pedido) if item.preco_produto_pedido else 0,
-                'Data Expedição': item.expedicao.strftime('%d/%m/%Y') if item.expedicao else '',
-                'Data Agendamento': item.agendamento.strftime('%d/%m/%Y') if item.agendamento else '',
+                'Data Expedição': item.expedicao if item.expedicao else None,
+                'Data Agendamento': item.agendamento if item.agendamento else None,
                 'Hora Agendamento': item.hora_agendamento.strftime('%H:%M') if item.hora_agendamento else '',
                 'Protocolo': item.protocolo or '',
                 'Agendamento Confirmado': 'Sim' if item.agendamento_confirmado else 'Não',
-                'Data Entrega': item.data_entrega.strftime('%d/%m/%Y') if item.data_entrega else '',
+                'Data Entrega': item.data_entrega if item.data_entrega else None,
                 'Observações': item.observ_ped_1 or '',
                 'Pedido Cliente': item.pedido_cliente or '',
                 'Estoque Atual': float(item.estoque) if item.estoque else 0,
@@ -165,12 +183,28 @@ def exportar_carteira_simples():
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, sheet_name='Carteira de Pedidos', index=False)
-            
-            # Ajustar largura das colunas
+
+            workbook = writer.book
             worksheet = writer.sheets['Carteira de Pedidos']
+
+            # Formatos de data brasileiros
+            formato_data = workbook.add_format({'num_format': 'dd/mm/yyyy'})
+
+            # Colunas de data
+            colunas_data = {
+                'Data Expedição': formato_data,
+                'Data Agendamento': formato_data,
+                'Data Entrega': formato_data
+            }
+
+            # Aplicar formato e ajustar largura
             for i, col in enumerate(df.columns):
-                column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
-                worksheet.set_column(i, i, min(column_width, 50))
+                # Aplicar formato de data se for coluna de data
+                if col in colunas_data:
+                    worksheet.set_column(i, i, 12, colunas_data[col])
+                else:
+                    column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                    worksheet.set_column(i, i, min(column_width, 50))
         
         output.seek(0)
         
@@ -317,10 +351,10 @@ def exportar_carteira_detalhada():
             # Linha do pedido
             # Determinar valor da coluna "Data Agendada"
             if pedido.agendamento_confirmado:
-                data_agendada = pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else ''
+                data_agendada = pedido.agendamento if pedido.agendamento else None
             else:
                 data_agendada = 'Aguardando Aprovação' if pedido.agendamento else ''
-            
+
             linha_pedido = {
                 'Tipo': 'PEDIDO',
                 'Lote': '',
@@ -340,14 +374,14 @@ def exportar_carteira_detalhada():
                 'Cond. Pagamento': pedido.cond_pgto_pedido or '',
                 'Forma Pagamento': pedido.forma_pgto_pedido or '',
                 'Incoterm': pedido.incoterm or '',
-                'Data Expedição': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else '',
-                'Entrega Prevista': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                'Data Expedição': pedido.expedicao if pedido.expedicao else None,
+                'Entrega Prevista': pedido.agendamento if pedido.agendamento else None,
                 'Data Agendada': data_agendada,
                 'Protocolo': pedido.protocolo or '',
                 'Observações': pedido.observ_ped_1 or '',
                 'Pedido Cliente': pedido.pedido_cliente or '',
                 'Status': 'ABERTO',
-                'Criado Em': '',
+                'Criado Em': None,
                 'Criado Por': ''
             }
             dados.append(linha_pedido)
@@ -368,10 +402,10 @@ def exportar_carteira_detalhada():
                 
                 # Determinar valor da coluna "Data Agendada" para separação
                 if sep.agendamento_confirmado:
-                    data_agendada_sep = sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else ''
+                    data_agendada_sep = sep.agendamento if sep.agendamento else None
                 else:
                     data_agendada_sep = 'Aguardando Aprovação' if sep.agendamento else ''
-                
+
                 tipo_label = 'PRÉ-SEPARAÇÃO' if sep.status == 'PREVISAO' else 'SEPARAÇÃO'
                 linha_sep = {
                     'Tipo': tipo_label,
@@ -392,14 +426,14 @@ def exportar_carteira_detalhada():
                     'Cond. Pagamento': cond_pgto_sep or pedido.cond_pgto_pedido or '',
                     'Forma Pagamento': forma_pgto_sep or pedido.forma_pgto_pedido or '',
                     'Incoterm': incoterm_sep or pedido.incoterm or '',
-                    'Data Expedição': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
-                    'Entrega Prevista': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
+                    'Data Expedição': sep.expedicao if sep.expedicao else None,
+                    'Entrega Prevista': sep.agendamento if sep.agendamento else None,
                     'Data Agendada': data_agendada_sep,
                     'Protocolo': sep.protocolo or '',
                     'Observações': sep.observ_ped_1 or '',
                     'Pedido Cliente': pedido_cliente_sep or pedido.pedido_cliente or '',
                     'Status': sep.status or '',  # Status da própria Separação
-                    'Criado Em': sep.criado_em.strftime('%d/%m/%Y %H:%M') if sep.criado_em else '',
+                    'Criado Em': sep.criado_em if sep.criado_em else None,
                     'Criado Por': ''
                 }
                 dados.append(linha_sep)
@@ -415,27 +449,31 @@ def exportar_carteira_detalhada():
             workbook = writer.book
             worksheet = writer.sheets['Carteira Detalhada']
             
-            # Formatos
+            # Formatos de linha
             header_format = workbook.add_format({
                 'bold': True,
                 'bg_color': '#D7E4BD',
                 'border': 1
             })
-            
+
             pedido_format = workbook.add_format({
                 'bg_color': '#FFFFFF',
                 'border': 1
             })
-            
+
             pre_sep_format = workbook.add_format({
                 'bg_color': '#FFF2CC',
                 'border': 1
             })
-            
+
             sep_format = workbook.add_format({
                 'bg_color': '#E1F5FE',
                 'border': 1
             })
+
+            # Formatos de data brasileiros
+            formato_data = workbook.add_format({'num_format': 'dd/mm/yyyy'})
+            formato_datetime = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm'})
             
             # Aplicar formatos por tipo de linha
             for row_num in range(1, len(df) + 1):
@@ -447,10 +485,19 @@ def exportar_carteira_detalhada():
                 elif tipo == 'SEPARAÇÃO':
                     worksheet.set_row(row_num, None, sep_format)
             
-            # Ajustar largura das colunas
+            # Aplicar formato de data e ajustar largura das colunas
+            colunas_data_simples = ['Data Expedição', 'Entrega Prevista', 'Data Agendada']
+            colunas_datetime = ['Criado Em']
+
             for i, col in enumerate(df.columns):
-                column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
-                worksheet.set_column(i, i, min(column_width, 50))
+                # Aplicar formato de data
+                if col in colunas_data_simples:
+                    worksheet.set_column(i, i, 12, formato_data)
+                elif col in colunas_datetime:
+                    worksheet.set_column(i, i, 16, formato_datetime)
+                else:
+                    column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                    worksheet.set_column(i, i, min(column_width, 50))
         
         output.seek(0)
         

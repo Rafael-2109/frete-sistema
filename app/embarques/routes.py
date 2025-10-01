@@ -595,18 +595,62 @@ def listar_embarques():
     # Remover duplicados caso o embarque tenha vários itens que casam com a busca
     query = query.distinct()
 
-    # Paginação com 100 itens por página
-    page = request.args.get('page', 1, type=int)
-    per_page = 100
-    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
-    embarques = paginacao.items
-    
-    # Aplica filtros baseados nas propriedades calculadas (status_nfs e status_fretes)
-    if status_nfs and status_nfs != '':
-        embarques = [e for e in embarques if e.status_nfs == status_nfs]
-    
-    if status_fretes and status_fretes != '':
-        embarques = [e for e in embarques if e.status_fretes == status_fretes]
+    # ✅ CORREÇÃO: Se há filtros de propriedades calculadas, buscar TODOS antes de paginar
+    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != ''):
+        # Buscar todos os embarques (sem paginação)
+        embarques_todos = query.all()
+
+        # Aplicar filtros de propriedades calculadas
+        if status_nfs and status_nfs != '':
+            embarques_todos = [e for e in embarques_todos if e.status_nfs == status_nfs]
+
+        if status_fretes and status_fretes != '':
+            embarques_todos = [e for e in embarques_todos if e.status_fretes == status_fretes]
+
+        # Criar paginação MANUAL após filtros
+        page = request.args.get('page', 1, type=int)
+        per_page = 100
+        total_filtrado = len(embarques_todos)
+        total_pages = (total_filtrado + per_page - 1) // per_page  # Ceiling division
+
+        # Calcular índices de slice para paginação
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        embarques = embarques_todos[start_idx:end_idx]
+
+        # Criar objeto paginacao manual compatível com template
+        from werkzeug.datastructures import ImmutableMultiDict
+        class PaginacaoManual:
+            def __init__(self, items, page, per_page, total):
+                self.items = items
+                self.page = page
+                self.per_page = per_page
+                self.total = total
+                self.pages = (total + per_page - 1) // per_page
+                self.has_prev = page > 1
+                self.has_next = page < self.pages
+                self.prev_num = page - 1 if self.has_prev else None
+                self.next_num = page + 1 if self.has_next else None
+
+            def iter_pages(self, left_edge=2, left_current=2, right_current=3, right_edge=2):
+                """Gera números de página para navegação (compatível com Flask-SQLAlchemy)"""
+                last = 0
+                for num in range(1, self.pages + 1):
+                    if (num <= left_edge or
+                        (num > self.page - left_current - 1 and num < self.page + right_current) or
+                        num > self.pages - right_edge):
+                        if last + 1 != num:
+                            yield None
+                        yield num
+                        last = num
+
+        paginacao = PaginacaoManual(embarques, page, per_page, total_filtrado)
+    else:
+        # Paginação normal (sem filtros de propriedades calculadas)
+        page = request.args.get('page', 1, type=int)
+        per_page = 100
+        paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+        embarques = paginacao.items
 
     return render_template(
         'embarques/listar_embarques.html',

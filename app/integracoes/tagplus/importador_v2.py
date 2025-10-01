@@ -11,6 +11,7 @@ from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImpor
 from app.integracoes.tagplus.models import NFPendenteTagPlus
 from app.integracoes.tagplus.correcao_pedidos_service_v2 import CorrecaoPedidosServiceV2
 from app.integracoes.tagplus.oauth2_v2 import TagPlusOAuth2V2
+from app.producao.models import CadastroPalletizacao
 # Usa o ProcessadorFaturamento padrão que já tem score como fallback
 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
 
@@ -469,10 +470,20 @@ class ImportadorTagPlusV2:
                 if valor_total == 0 and quantidade > 0 and valor_unitario > 0:
                     valor_total = quantidade * valor_unitario
 
-                # Calcular peso (não vem da API TagPlus, precisa buscar do cadastro)
+                # Calcular peso (buscar de CadastroPalletizacao)
                 peso_unitario = 0
                 peso_total = 0
-                # TODO: Buscar peso de CadastroPalletizacao se existir
+                cadastro_peso = CadastroPalletizacao.query.filter_by(
+                    cod_produto=cod_produto,
+                    ativo=True
+                ).first()
+
+                if cadastro_peso:
+                    peso_unitario = float(cadastro_peso.peso_bruto)
+                    peso_total = quantidade * peso_unitario
+                    logger.debug(f"Peso calculado para {cod_produto}: {peso_total}kg (qtd={quantidade} * peso_unit={peso_unitario})")
+                else:
+                    logger.warning(f"⚠️ Produto {cod_produto} não encontrado em CadastroPalletizacao - peso será zerado")
 
                 faturamento = FaturamentoProduto(
                     numero_nf=numero_nf,
