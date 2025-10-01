@@ -908,7 +908,6 @@ def exportar_clientes_excel():
         worksheet = writer.sheets['Clientes Detalhado']
 
         # Aplicar formatação de data para colunas específicas
-        from openpyxl.styles import numbers
         colunas_data = ['Data Pedido', 'Data Faturamento', 'Data Expedição', 'Data Agendamento',
                         'Data Entrega Prevista', 'Data Entrega Realizada']
 

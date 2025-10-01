@@ -1,9 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, session, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime
 import logging
 
-from app import db, login_manager
+from app import db
 from app.auth.forms import LoginForm, RegistroForm, AprovarUsuarioForm, RejeitarUsuarioForm, EditarUsuarioForm
 from app.auth.models import Usuario
 
@@ -74,45 +74,6 @@ def registro():
         return redirect(url_for('auth.login'))
     
     return render_template('auth/registro.html', form=form)
-
-@auth_bp.route('/usuarios/toggle-status/<int:user_id>', methods=['POST'])
-@login_required
-def toggle_user_status(user_id):
-    """Alterna o status do usuário entre ativo e inativo"""
-    # Verificar permissão
-    if not current_user.tem_permissao('usuarios', 'permissoes'):
-        flash('Sem permissão para alterar status de usuários', 'danger')
-        return jsonify({'error': 'Sem permissão'}), 403
-    
-    try:
-        usuario = Usuario.query.get_or_404(user_id)
-        
-        # Alternar status
-        if usuario.status == 'ativo':
-            usuario.status = 'inativo'
-        else:
-            usuario.status = 'ativo'
-            
-            # Se está ativando o usuário, aplicar permissões do perfil
-            from app.permissions.utils_profile import apply_profile_permissions_to_user
-            permissions_count = apply_profile_permissions_to_user(
-                user_id=usuario.id,
-                profile=usuario.perfil,
-                granted_by=current_user.id
-            )
-            
-            if permissions_count > 0:
-                flash(f'{permissions_count} permissões do perfil {usuario.perfil} aplicadas ao usuário', 'info')
-        
-        db.session.commit()
-        
-        flash(f'Usuário {usuario.nome} {"ativado" if usuario.status == "ativo" else "desativado"} com sucesso!', 'success')
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao alterar status do usuário: {e}")
-        return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/usuarios/pendentes')
 @login_required

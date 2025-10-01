@@ -4,7 +4,7 @@ Exportação de dados para Excel com filtros de data
 """
 
 from flask import jsonify, request, send_file
-from datetime import datetime, date
+from datetime import datetime
 import pandas as pd
 import io
 from sqlalchemy import func

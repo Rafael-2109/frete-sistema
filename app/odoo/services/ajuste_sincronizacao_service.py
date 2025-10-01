@@ -454,11 +454,27 @@ class AjusteSincronizacaoService:
                     )
 
             # Processar novos itens
+            # 🔧 CORREÇÃO: Apenas adicionar novos produtos em separações TOTAL, não PARCIAL
+            primeira_sep = Separacao.query.filter_by(separacao_lote_id=lote_id, sincronizado_nf=False).first()
+            tipo_envio = primeira_sep.tipo_envio if primeira_sep else "parcial"
+
             for novo in diferencas["novos"]:
-                cls._adicionar_novo_item(num_pedido, lote_id, novo)
-                resultado["alteracoes"].append(
-                    {"tipo": "NOVO_ITEM", "cod_produto": novo["cod_produto"], "quantidade": novo["quantidade"]}
-                )
+                if tipo_envio == "total":
+                    # Separação TOTAL: adicionar produto novo do Odoo
+                    cls._adicionar_novo_item(num_pedido, lote_id, novo)
+                    resultado["alteracoes"].append(
+                        {"tipo": "NOVO_ITEM", "cod_produto": novo["cod_produto"], "quantidade": novo["quantidade"]}
+                    )
+                else:
+                    # Separação PARCIAL: NÃO adicionar, apenas alertar
+                    resultado["alertas"].append(
+                        {
+                            "tipo": "PRODUTO_NOVO_ODOO_IGNORADO",
+                            "cod_produto": novo["cod_produto"],
+                            "quantidade": novo["quantidade"],
+                            "mensagem": f"Produto {novo['cod_produto']} novo no Odoo não foi adicionado (separação parcial)"
+                        }
+                    )
 
             # Se COTADO, gerar alertas para alterações
             if status_lote == "COTADO" and resultado["alteracoes"]:

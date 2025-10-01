@@ -619,7 +619,6 @@ def listar_embarques():
         embarques = embarques_todos[start_idx:end_idx]
 
         # Criar objeto paginacao manual compatível com template
-        from werkzeug.datastructures import ImmutableMultiDict
         class PaginacaoManual:
             def __init__(self, items, page, per_page, total):
                 self.items = items
@@ -637,8 +636,7 @@ def listar_embarques():
                 last = 0
                 for num in range(1, self.pages + 1):
                     if (num <= left_edge or
-                        (num > self.page - left_current - 1 and num < self.page + right_current) or
-                        num > self.pages - right_edge):
+                    (num > self.page - left_current - 1 and num < self.page + right_current) or num > self.pages - right_edge): 
                         if last + 1 != num:
                             yield None
                         yield num
