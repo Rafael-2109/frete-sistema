@@ -11,7 +11,7 @@ from app.rastreamento.services.gps_service import GPSService
 from app.rastreamento.services.qrcode_service import QRCodeService
 from app.embarques.models import Embarque
 from app.monitoramento.models import EntregaMonitorada
-from app import db
+from app import db, csrf
 from datetime import datetime, timedelta
 import json
 
@@ -56,9 +56,12 @@ def aceite_lgpd(token):
 
 
 @rastreamento_bp.route('/aceite/<token>', methods=['POST'])
+@csrf.exempt
 def processar_aceite_lgpd(token):
     """
     Processa o aceite do termo LGPD
+    ⚠️ CSRF desabilitado: Rota pública para transportadores externos via QR Code
+    Segurança garantida pelo token único de acesso
     """
     rastreamento = RastreamentoEmbarque.query.filter_by(token_acesso=token).first()
 
@@ -142,10 +145,12 @@ def rastrear(token):
 
 
 @rastreamento_bp.route('/api/ping/<token>', methods=['POST'])
+@csrf.exempt
 def receber_ping_gps(token):
     """
     API para receber pings GPS do dispositivo
     Chamada a cada 2 minutos pelo JavaScript
+    ⚠️ CSRF desabilitado: API pública para transportadores externos
     """
     rastreamento = RastreamentoEmbarque.query.filter_by(token_acesso=token).first()
 
@@ -274,9 +279,11 @@ def tela_upload_canhoto(token):
 
 
 @rastreamento_bp.route('/api/upload_canhoto/<token>', methods=['POST'])
+@csrf.exempt
 def processar_upload_canhoto(token):
     """
     API para processar upload do canhoto de entrega
+    ⚠️ CSRF desabilitado: API pública para transportadores externos
     Salva no mesmo local que o sistema de monitoramento
     """
     rastreamento = RastreamentoEmbarque.query.filter_by(token_acesso=token).first()
