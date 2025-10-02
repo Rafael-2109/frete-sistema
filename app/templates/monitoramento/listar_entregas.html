@@ -618,6 +618,15 @@ nav.navbar .navbar-brand .badge.bg-primary {
         <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-secondary">
           Limpar
         </a>
+
+        <!-- 🚚 BOTÃO DE RASTREAMENTO GPS -->
+        <a href="{{ url_for('rastreamento.dashboard_rastreamento') }}"
+           class="btn btn-info"
+           target="_blank"
+           title="Ver todas as cargas rastreadas em tempo real no mapa">
+          <i class="fas fa-map-marked-alt"></i> Rastreamento GPS
+        </a>
+
         {% if current_user.perfil != 'vendedor' %}
         <a href="{{ url_for('monitoramento.upload_canhotos_lote') }}" 
            class="btn btn-primary" 
@@ -1055,7 +1064,23 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   <td>{{ e.uf }}</td>
                   <td>{{ e.municipio }}</td>
                   <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
-                  <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
+                  <td>
+                    {{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}
+                    {% if e.rastreamento_id %}
+                      <br>
+                      <a href="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=e.embarque_numero) }}"
+                         class="btn btn-sm btn-success mt-1 w-100"
+                         target="_blank"
+                         title="Ver rastreamento GPS - Embarque #{{ e.embarque_numero }}">
+                        <i class="fas fa-map-marker-alt"></i> Rastreada
+                        {% if e.rastreamento_status == 'CHEGOU_DESTINO' %}
+                          <span class="badge bg-warning text-dark">🎯</span>
+                        {% elif e.rastreamento_status == 'ENTREGUE' %}
+                          <span class="badge bg-info">✅</span>
+                        {% endif %}
+                      </a>
+                    {% endif %}
+                  </td>
                                      <td>
                      {% if e.data_agenda %}
                        {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}
@@ -1298,7 +1323,23 @@ nav.navbar .navbar-brand .badge.bg-primary {
             <small class="text-muted">{{ e.uf }} - {{ e.municipio }}</small>
           </td>
           <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
-          <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
+          <td>
+            {{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}
+            {% if e.rastreamento_id %}
+              <br>
+              <a href="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=e.embarque_numero) }}"
+                 class="btn btn-sm btn-success mt-1 w-100"
+                 target="_blank"
+                 title="Ver rastreamento GPS - Embarque #{{ e.embarque_numero }}">
+                <i class="fas fa-map-marker-alt"></i> Rastreada
+                {% if e.rastreamento_status == 'CHEGOU_DESTINO' %}
+                  <span class="badge bg-warning text-dark">🎯 Próximo</span>
+                {% elif e.rastreamento_status == 'ENTREGUE' %}
+                  <span class="badge bg-info">✅ Entregue</span>
+                {% endif %}
+              </a>
+            {% endif %}
+          </td>
           <td>
             {% if e.data_agenda %}
               {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}

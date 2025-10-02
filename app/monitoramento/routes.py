@@ -795,17 +795,17 @@ def listar_entregas():
         # Remove grupos vazios
         entregas_agrupadas = {k: v for k, v in entregas_agrupadas.items() if v}
         
-        # ✅ ENRIQUECER DADOS DAS ENTREGAS AGRUPADAS com origem e valor_nf
+        # ✅ ENRIQUECER DADOS DAS ENTREGAS AGRUPADAS com origem, valor_nf E RASTREAMENTO
         for grupo_entregas in entregas_agrupadas.values():
             for entrega in grupo_entregas:
                 faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
                 entrega.num_pedido = faturamento.origem if faturamento else None
                 if not entrega.valor_nf and faturamento:
                     entrega.valor_nf = faturamento.valor_total
-                
+
                 # ✅ ADICIONAR INCOTERM E MODALIDADE
                 entrega.incoterm = faturamento.incoterm if faturamento else None
-                
+
                 # Buscar modalidade do embarque/item do embarque
                 embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
                 if embarque_item:
@@ -817,8 +817,22 @@ def listar_entregas():
                         entrega.modalidade = embarque_item.embarque.modalidade
                     else:
                         entrega.modalidade = None
+
+                    # 🚚 ADICIONAR RASTREAMENTO (se embarque tem rastreamento com aceite)
+                    if embarque_item.embarque and hasattr(embarque_item.embarque, 'rastreamento'):
+                        rastreamento = embarque_item.embarque.rastreamento
+                        # Só mostrar se motorista aceitou LGPD
+                        if rastreamento and rastreamento.aceite_lgpd:
+                            entrega.rastreamento_id = rastreamento.id
+                            entrega.rastreamento_status = rastreamento.status
+                            entrega.embarque_numero = embarque_item.embarque.numero
+                        else:
+                            entrega.rastreamento_id = None
+                    else:
+                        entrega.rastreamento_id = None
                 else:
                     entrega.modalidade = None
+                    entrega.rastreamento_id = None
 
     # ✅ CALCULANDO CONTADORES DOS FILTROS
     contadores = {}
@@ -911,17 +925,17 @@ def listar_entregas():
         .distinct().order_by(RelatorioFaturamentoImportado.vendedor).all()
     vendedores_unicos = [v[0] for v in vendedores_unicos]
 
-    # ✅ ENRIQUECER DADOS DAS ENTREGAS com origem (número do pedido) e valor_nf
+    # ✅ ENRIQUECER DADOS DAS ENTREGAS com origem (número do pedido), valor_nf E RASTREAMENTO
     for entrega in paginacao.items:
         faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
         entrega.num_pedido = faturamento.origem if faturamento else None
         # Priorizar valor_nf da EntregaMonitorada, senão usar valor_total do faturamento
         if not entrega.valor_nf and faturamento:
             entrega.valor_nf = faturamento.valor_total
-        
+
         # ✅ ADICIONAR INCOTERM E MODALIDADE
         entrega.incoterm = faturamento.incoterm if faturamento else None
-        
+
         # Buscar modalidade do embarque/item do embarque
         embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
         if embarque_item:
@@ -933,8 +947,22 @@ def listar_entregas():
                 entrega.modalidade = embarque_item.embarque.modalidade
             else:
                 entrega.modalidade = None
+
+            # 🚚 ADICIONAR RASTREAMENTO (se embarque tem rastreamento com aceite)
+            if embarque_item.embarque and hasattr(embarque_item.embarque, 'rastreamento'):
+                rastreamento = embarque_item.embarque.rastreamento
+                # Só mostrar se motorista aceitou LGPD
+                if rastreamento and rastreamento.aceite_lgpd:
+                    entrega.rastreamento_id = rastreamento.id
+                    entrega.rastreamento_status = rastreamento.status
+                    entrega.embarque_numero = embarque_item.embarque.numero
+                else:
+                    entrega.rastreamento_id = None
+            else:
+                entrega.rastreamento_id = None
         else:
             entrega.modalidade = None
+            entrega.rastreamento_id = None
 
     return render_template(
         'monitoramento/listar_entregas.html',

@@ -113,7 +113,7 @@
                             <tbody>
                                 {% for rastr in rastreamentos %}
                                 {% set ultimo_ping = rastr.pings.first() %}
-                                <tr class="card-rastreamento" onclick="window.location.href='{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}'">
+                                <tr class="card-rastreamento clicavel" style="cursor: pointer;" data-url="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}">
                                     <td><strong>#{{ rastr.embarque.numero if rastr.embarque else rastr.embarque_id }}</strong></td>
                                     <td>
                                         <span class="status-badge {% if rastr.status == 'ATIVO' %}status-ativo{% elif rastr.status == 'CHEGOU_DESTINO' %}status-proximo{% else %}status-entregue{% endif %}">
@@ -170,9 +170,9 @@
     }).addTo(mapa);
 
     // Adicionar marcadores
-    const marcadores = {{ marcadores|tojson }};
+    const dadosMarcadores = {{ marcadores|tojson|safe }};
 
-    marcadores.forEach(function(m) {
+    dadosMarcadores.forEach(function(m) {
         const icone = m.status === 'CHEGOU_DESTINO' ? '🎯' : '🚚';
         const cor = m.status === 'CHEGOU_DESTINO' ? 'orange' : 'green';
 
@@ -195,12 +195,19 @@
     });
 
     // Ajustar zoom para mostrar todos os marcadores
-    if (marcadores.length > 0) {
+    if (dadosMarcadores.length > 0) {
         const grupo = L.featureGroup(
-            marcadores.map(m => L.marker([m.latitude, m.longitude]))
+            dadosMarcadores.map(m => L.marker([m.latitude, m.longitude]))
         );
         mapa.fitBounds(grupo.getBounds().pad(0.1));
     }
+
+    // Tornar linhas da tabela clicáveis
+    document.querySelectorAll('.clicavel').forEach(function(elemento) {
+        elemento.addEventListener('click', function() {
+            window.location.href = this.getAttribute('data-url');
+        });
+    });
 
     // Auto-refresh a cada 60 segundos
     setTimeout(function() {

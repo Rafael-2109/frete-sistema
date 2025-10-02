@@ -131,6 +131,7 @@ class GPSService:
     def obter_coordenadas_embarque(embarque):
         """
         Obtém coordenadas GPS do destino de um embarque
+        USANDO ENDEREÇO COMPLETO da CarteiraPrincipal (mesma fonte do mapa_service.py)
 
         Args:
             embarque: Objeto Embarque
@@ -143,17 +144,55 @@ class GPSService:
             if not embarque.itens or len(embarque.itens) == 0:
                 return None
 
-            # Pega o primeiro item para obter cidade/UF de destino
             item = embarque.itens[0]
-            endereco_busca = f"{item.cidade_destino}, {item.uf_destino}, Brasil"
+
+            # 🔄 BUSCAR DADOS COMPLETOS DA CARTEIRA (mesma fonte do mapa_service.py)
+            from app.carteira.models import CarteiraPrincipal
+
+            # Buscar pedido original na CarteiraPrincipal
+            pedido_carteira = CarteiraPrincipal.query.filter_by(
+                num_pedido=item.pedido
+            ).first()
+
+            if pedido_carteira:
+                # ✅ MONTAR ENDEREÇO COMPLETO (igual ao mapa_service.py)
+                partes = []
+
+                if pedido_carteira.rua_endereco_ent:
+                    partes.append(pedido_carteira.rua_endereco_ent)
+                if pedido_carteira.endereco_ent:
+                    partes.append(f"nº {pedido_carteira.endereco_ent}")
+                if pedido_carteira.bairro_endereco_ent:
+                    partes.append(pedido_carteira.bairro_endereco_ent)
+
+                cidade = pedido_carteira.nome_cidade or item.cidade_destino
+                if cidade:
+                    partes.append(cidade)
+
+                uf = pedido_carteira.cod_uf or item.uf_destino
+                if uf:
+                    partes.append(uf)
+
+                if pedido_carteira.cep_endereco_ent:
+                    partes.append(f"CEP {pedido_carteira.cep_endereco_ent}")
+
+                partes.append("Brasil")
+
+                endereco_busca = ", ".join(filter(None, partes))
+
+                current_app.logger.info(f"📍 Geocoding endereço completo: {endereco_busca}")
+            else:
+                # Fallback: usar apenas cidade + UF (método antigo)
+                endereco_busca = f"{item.cidade_destino}, {item.uf_destino}, Brasil"
+                current_app.logger.warning(f"⚠️ Pedido não encontrado na carteira, usando fallback: {endereco_busca}")
 
             # Faz geocoding
             coordenadas = GPSService.geocode_endereco(endereco_busca)
 
             if coordenadas:
-                current_app.logger.info(f"Geocoding sucesso para embarque #{embarque.numero}: {coordenadas}")
+                current_app.logger.info(f"✅ Geocoding sucesso para embarque #{embarque.numero}: {coordenadas}")
             else:
-                current_app.logger.warning(f"Não foi possível geocodificar: {endereco_busca}")
+                current_app.logger.warning(f"❌ Não foi possível geocodificar: {endereco_busca}")
 
             return coordenadas
 
