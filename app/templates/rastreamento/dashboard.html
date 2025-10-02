@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard de Rastreamento GPS{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #mapa {
+        height: 600px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    .card-rastreamento {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .card-rastreamento:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .status-badge {
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .status-ativo { background: #d4edda; color: #155724; }
+    .status-proximo { background: #fff3cd; color: #856404; }
+    .status-entregue { background: #d1ecf1; color: #0c5460; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-3">
+                <i class="fas fa-map-marked-alt"></i> Dashboard de Rastreamento GPS
+            </h2>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-success">{{ rastreamentos|length }}</h3>
+                    <p class="mb-0">Rastreamentos Ativos</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-warning">{{ rastreamentos|selectattr('status', 'equalto', 'CHEGOU_DESTINO')|list|length }}</h3>
+                    <p class="mb-0">Próximos ao Destino</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-info">{{ config.intervalo_ping_segundos // 60 }}min</h3>
+                    <p class="mb-0">Intervalo de Ping</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-primary">{{ config.distancia_chegada_metros|int }}m</h3>
+                    <p class="mb-0">Raio de Proximidade</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mapa -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-globe"></i> Mapa de Rastreamentos</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="mapa"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Rastreamentos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Rastreamentos Ativos</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Embarque</th>
+                                    <th>Status</th>
+                                    <th>Distância</th>
+                                    <th>Último Ping</th>
+                                    <th>Bateria</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rastr in rastreamentos %}
+                                {% set ultimo_ping = rastr.pings.first() %}
+                                <tr class="card-rastreamento" onclick="window.location.href='{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}'">
+                                    <td><strong>#{{ rastr.embarque.numero if rastr.embarque else rastr.embarque_id }}</strong></td>
+                                    <td>
+                                        <span class="status-badge {% if rastr.status == 'ATIVO' %}status-ativo{% elif rastr.status == 'CHEGOU_DESTINO' %}status-proximo{% else %}status-entregue{% endif %}">
+                                            {{ rastr.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if ultimo_ping and ultimo_ping.distancia_destino %}
+                                            {{ (ultimo_ping.distancia_destino / 1000)|round(1) }} km
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if rastr.ultimo_ping_em %}
+                                            {{ rastr.ultimo_ping_em.strftime('%d/%m %H:%M') }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if ultimo_ping and ultimo_ping.bateria_nivel %}
+                                            {{ ultimo_ping.bateria_nivel }}%
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i> Detalhes
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // Inicializar mapa (centro no Brasil)
+    const mapa = L.map('mapa').setView([-15.7801, -47.9292], 4);
+
+    // Adicionar camada do OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(mapa);
+
+    // Adicionar marcadores
+    const marcadores = {{ marcadores|tojson }};
+
+    marcadores.forEach(function(m) {
+        const icone = m.status === 'CHEGOU_DESTINO' ? '🎯' : '🚚';
+        const cor = m.status === 'CHEGOU_DESTINO' ? 'orange' : 'green';
+
+        const marker = L.marker([m.latitude, m.longitude], {
+            icon: L.divIcon({
+                html: `<div style="font-size: 30px;">${icone}</div>`,
+                className: 'custom-marker',
+                iconSize: [30, 30]
+            })
+        }).addTo(mapa);
+
+        marker.bindPopup(`
+            <strong>Embarque #${m.embarque_numero}</strong><br>
+            Status: ${m.status}<br>
+            Distância: ${m.distancia_destino ? (m.distancia_destino / 1000).toFixed(1) + ' km' : 'N/A'}<br>
+            Último ping: ${m.ultimo_ping}<br>
+            Bateria: ${m.bateria || '-'}%<br>
+            <a href="/rastreamento/detalhes/${m.embarque_id}" class="btn btn-sm btn-primary mt-2">Ver Detalhes</a>
+        `);
+    });
+
+    // Ajustar zoom para mostrar todos os marcadores
+    if (marcadores.length > 0) {
+        const grupo = L.featureGroup(
+            marcadores.map(m => L.marker([m.latitude, m.longitude]))
+        );
+        mapa.fitBounds(grupo.getBounds().pad(0.1));
+    }
+
+    // Auto-refresh a cada 60 segundos
+    setTimeout(function() {
+        location.reload();
+    }, 60000);
+</script>
+{% endblock %}

@@ -1,0 +1,147 @@
+================================================================================
+📊 QUERIES PARA COPIAR E COLAR - COMPARAÇÃO DE PESOS
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ QUERY 1: Comparar Peso Unitário (Faturamento vs Cadastro)                 │
+└────────────────────────────────────────────────────────────────────────────┘
+
+SELECT
+    fp.cod_produto,
+    fp.nome_produto,
+    fp.peso_unitario_produto as peso_faturamento,
+    cp.peso_bruto as peso_cadastro,
+    ROUND((fp.peso_unitario_produto - cp.peso_bruto)::numeric, 3) as diferenca,
+    ROUND((((fp.peso_unitario_produto - cp.peso_bruto) / NULLIF(cp.peso_bruto, 0)) * 100)::numeric, 2) as dif_percentual,
+    COUNT(fp.id) as qtd_nfs
+FROM faturamento_produto fp
+INNER JOIN cadastro_palletizacao cp ON fp.cod_produto = cp.cod_produto
+WHERE fp.peso_unitario_produto != cp.peso_bruto
+GROUP BY fp.cod_produto, fp.nome_produto, fp.peso_unitario_produto, cp.peso_bruto
+ORDER BY ABS(fp.peso_unitario_produto - cp.peso_bruto) DESC
+LIMIT 100;
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ QUERY 2: Validar Cálculo de Peso Total                                    │
+└────────────────────────────────────────────────────────────────────────────┘
+
+SELECT
+    cod_produto,
+    nome_produto,
+    numero_nf,
+    qtd_produto_faturado as qtd,
+    peso_unitario_produto as peso_unit,
+    peso_total as peso_registrado,
+    ROUND((qtd_produto_faturado * peso_unitario_produto)::numeric, 3) as peso_calculado,
+    ROUND((peso_total - (qtd_produto_faturado * peso_unitario_produto))::numeric, 3) as diferenca,
+    ROUND((((peso_total - (qtd_produto_faturado * peso_unitario_produto)) / NULLIF(peso_total, 0)) * 100)::numeric, 2) as dif_percentual
+FROM faturamento_produto
+WHERE peso_total != (qtd_produto_faturado * peso_unitario_produto)
+  AND peso_total > 0
+  AND qtd_produto_faturado > 0
+ORDER BY ABS(peso_total - (qtd_produto_faturado * peso_unitario_produto)) DESC
+LIMIT 100;
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ QUERY 3: Resumo Estatístico                                               │
+└────────────────────────────────────────────────────────────────────────────┘
+
+SELECT
+    '1. Peso Unitário' as analise,
+    COUNT(DISTINCT fp.cod_produto) as produtos_diferentes,
+    ROUND(AVG(fp.peso_unitario_produto - cp.peso_bruto)::numeric, 3) as dif_media,
+    ROUND(MIN(fp.peso_unitario_produto - cp.peso_bruto)::numeric, 3) as dif_minima,
+    ROUND(MAX(fp.peso_unitario_produto - cp.peso_bruto)::numeric, 3) as dif_maxima
+FROM faturamento_produto fp
+INNER JOIN cadastro_palletizacao cp ON fp.cod_produto = cp.cod_produto
+WHERE fp.peso_unitario_produto != cp.peso_bruto
+UNION ALL
+SELECT
+    '2. Peso Total' as analise,
+    COUNT(DISTINCT cod_produto),
+    ROUND(AVG(peso_total - (qtd_produto_faturado * peso_unitario_produto))::numeric, 3),
+    ROUND(MIN(peso_total - (qtd_produto_faturado * peso_unitario_produto))::numeric, 3),
+    ROUND(MAX(peso_total - (qtd_produto_faturado * peso_unitario_produto))::numeric, 3)
+FROM faturamento_produto
+WHERE peso_total != (qtd_produto_faturado * peso_unitario_produto)
+  AND peso_total > 0
+  AND qtd_produto_faturado > 0;
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ QUERY 4: TOP 10 Produtos com Maior Divergência                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+SELECT
+    fp.cod_produto,
+    fp.nome_produto,
+    COUNT(DISTINCT fp.numero_nf) as nfs_afetadas,
+    ROUND(AVG(fp.peso_unitario_produto)::numeric, 3) as peso_medio_faturamento,
+    cp.peso_bruto as peso_cadastro,
+    ROUND((AVG(fp.peso_unitario_produto) - cp.peso_bruto)::numeric, 3) as diferenca,
+    ROUND((((AVG(fp.peso_unitario_produto) - cp.peso_bruto) / NULLIF(cp.peso_bruto, 0)) * 100)::numeric, 2) as dif_percentual
+FROM faturamento_produto fp
+INNER JOIN cadastro_palletizacao cp ON fp.cod_produto = cp.cod_produto
+WHERE fp.peso_unitario_produto != cp.peso_bruto
+GROUP BY fp.cod_produto, fp.nome_produto, cp.peso_bruto
+ORDER BY ABS(AVG(fp.peso_unitario_produto) - cp.peso_bruto) DESC
+LIMIT 10;
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ QUERY 5: Verificar NF Específica (mude 139906 pela sua NF)                │
+└────────────────────────────────────────────────────────────────────────────┘
+
+SELECT
+    numero_nf,
+    cod_produto,
+    nome_produto,
+    qtd_produto_faturado as qtd,
+    peso_unitario_produto as peso_unit,
+    peso_total as registrado,
+    ROUND((qtd_produto_faturado * peso_unitario_produto)::numeric, 3) as calculado,
+    ROUND((peso_total - (qtd_produto_faturado * peso_unitario_produto))::numeric, 3) as diferenca,
+    CASE
+        WHEN peso_total = (qtd_produto_faturado * peso_unitario_produto) THEN 'OK'
+        WHEN ABS(peso_total - (qtd_produto_faturado * peso_unitario_produto)) < 0.1 THEN 'PEQUENO'
+        ELSE 'ERRO'
+    END as status
+FROM faturamento_produto
+WHERE numero_nf = '139906'
+ORDER BY cod_produto;
+
+
+================================================================================
+📋 COMO USAR NO RENDER
+================================================================================
+
+1. Acesse: https://dashboard.render.com
+2. Selecione: seu PostgreSQL
+3. Clique: "Connect" → "PSQL Command"
+4. Cole o comando PSQL no terminal
+5. Copie UMA das queries acima (Ctrl+C)
+6. Cole no shell PSQL (Ctrl+V)
+7. Pressione Enter
+8. Veja os resultados!
+
+
+================================================================================
+🧪 TESTE SE TABELAS EXISTEM (execute primeiro)
+================================================================================
+
+\dt faturamento_produto
+\dt cadastro_palletizacao
+
+
+================================================================================
+📊 EXPORTAR PARA CSV (opcional)
+================================================================================
+
+\copy (COLE_QUERY_AQUI) TO '/tmp/resultado.csv' WITH CSV HEADER;
+
+
+================================================================================
+✅ FIM
+================================================================================

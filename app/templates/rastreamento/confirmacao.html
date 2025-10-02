@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrega Confirmada</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .success-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            animation: slideUp 0.5s ease;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .success-icon {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            animation: checkmark 0.8s ease;
+        }
+        @keyframes checkmark {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .success-icon i {
+            font-size: 60px;
+            color: white;
+        }
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-card">
+        <div class="success-icon">
+            <i class="fas fa-check"></i>
+        </div>
+        <h2 class="fw-bold mb-3">✅ Entrega Confirmada!</h2>
+        <p class="lead">O comprovante foi enviado com sucesso.</p>
+
+        <div class="info-box">
+            <p class="mb-2"><strong>Embarque:</strong> #{{ embarque.numero or embarque.id }}</p>
+            <p class="mb-2"><strong>Data/Hora:</strong> {{ rastreamento.canhoto_enviado_em.strftime('%d/%m/%Y %H:%M') if rastreamento.canhoto_enviado_em else 'Agora' }}</p>
+            {% if rastreamento.distancia_minima_atingida %}
+            <p class="mb-0"><strong>Distância final:</strong> {{ (rastreamento.distancia_minima_atingida)|round(0)|int }}m do destino</p>
+            {% endif %}
+        </div>
+
+        <p class="text-muted mt-4 small">
+            Obrigado por utilizar nosso sistema de rastreamento!
+        </p>
+    </div>
+</body>
+</html>

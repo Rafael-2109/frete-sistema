@@ -900,6 +900,43 @@ class CarteiraService:
         logger.debug(f"Status mapeado: {status_odoo} → {status_traduzido}")
         return status_traduzido
 
+    def _verificar_produto_no_odoo(self, num_pedido: str, cod_produto: str) -> bool:
+        """
+        🔍 VERIFICAR SE PRODUTO EXISTE NO PEDIDO DO ODOO
+
+        Confirma se um produto ainda existe em um pedido no Odoo.
+        Usado para evitar falsos positivos ao deletar produtos.
+
+        Args:
+            num_pedido: Número do pedido (ex: VCD2563863)
+            cod_produto: Código do produto (ex: 4210176)
+
+        Returns:
+            True se produto existe no Odoo, False se foi excluído
+        """
+        try:
+            if not self.connection:
+                logger.error("Conexão com Odoo não disponível para verificação")
+                return True  # Em caso de erro, assumir que existe (segurança)
+
+            # Buscar linhas do pedido no Odoo que tenham este produto
+            linhas = self.connection.search_read(
+                'sale.order.line',
+                [
+                    ('order_id.name', '=', num_pedido),
+                    ('product_id.default_code', '=', cod_produto)
+                ],
+                ['id', 'product_id', 'product_uom_qty']
+            )
+
+            existe = len(linhas) > 0
+            logger.debug(f"Produto {num_pedido}/{cod_produto} existe no Odoo: {existe}")
+            return existe
+
+        except Exception as e:
+            logger.error(f"Erro ao verificar produto no Odoo: {num_pedido}/{cod_produto} - {e}")
+            return True  # Em caso de erro, assumir que existe (segurança)
+
     # 🔧 MÉTODOS AUXILIARES CRÍTICOS PARA OPERAÇÃO COMPLETA
     
     # FUNÇÕES REMOVIDAS: 
@@ -1689,39 +1726,67 @@ class CarteiraService:
             logger.info(f"🛡️ Preservando {registros_nao_odoo} registros não-Odoo...")
             logger.info("🔄 Usando estratégia UPSERT para evitar erros de chave duplicada...")
             
-            # Primeiro, obter todos os registros Odoo existentes
+            # 🎯 CORREÇÃO: Buscar registros APENAS dos pedidos que vieram na sincronização
+            # Evita falsos positivos ao comparar com pedidos que não foram sincronizados
+            pedidos_na_sincronizacao = set(item['num_pedido'] for item in dados_novos if item.get('num_pedido'))
+
             registros_odoo_existentes = {}
-            for item in db.session.query(CarteiraPrincipal).filter(
-                or_(
-                    CarteiraPrincipal.num_pedido.like('VSC%'),
-                    CarteiraPrincipal.num_pedido.like('VCD%'),
-                    CarteiraPrincipal.num_pedido.like('VFB%')
-                )
-            ).all():
-                chave = (item.num_pedido, item.cod_produto)
-                registros_odoo_existentes[chave] = item
-            
-            logger.info(f"📊 {len(registros_odoo_existentes)} registros Odoo existentes encontrados")
-            
+            if pedidos_na_sincronizacao:
+                # Buscar APENAS produtos dos pedidos que vieram na sincronização atual
+                for item in db.session.query(CarteiraPrincipal).filter(
+                    CarteiraPrincipal.num_pedido.in_(list(pedidos_na_sincronizacao))
+                ).all():
+                    chave = (item.num_pedido, item.cod_produto)
+                    registros_odoo_existentes[chave] = item
+
+            logger.info(f"📊 {len(registros_odoo_existentes)} registros encontrados para {len(pedidos_na_sincronizacao)} pedidos sincronizados")
+
             # Criar conjunto de chaves dos novos dados para controle
             chaves_novos_dados = set()
             for item in dados_novos:
                 if item.get('num_pedido') and item.get('cod_produto'):
                     chaves_novos_dados.add((item['num_pedido'], item['cod_produto']))
-            
-            # ⚠️ NÃO REMOVER registros - apenas marcar obsoletos
-            # Registros com qtd_saldo = 0 precisam ser mantidos para histórico no módulo comercial
-            pedidos_odoo_obsoletos = 0
+
+            # 🔍 VERIFICAR E REMOVER PRODUTOS EXCLUÍDOS DO ODOO
+            produtos_suspeitos = []
             for chave, registro in registros_odoo_existentes.items():
                 if chave not in chaves_novos_dados:
-                    # NÃO DELETAR - apenas contar para log
-                    # Manter registro para histórico mesmo com saldo zero
-                    pedidos_odoo_obsoletos += 1
-                    # COMENTADO PARA PRESERVAR HISTÓRICO:
-                    # db.session.delete(registro)
+                    # Produto existe no banco mas NÃO veio na sincronização
+                    produtos_suspeitos.append((chave, registro))
 
-            if pedidos_odoo_obsoletos > 0:
-                logger.info(f"📋 {pedidos_odoo_obsoletos} registros não vieram do Odoo (mantidos para histórico)")
+            if produtos_suspeitos:
+                logger.info(f"🔍 {len(produtos_suspeitos)} produtos não vieram na sincronização. Verificando no Odoo...")
+                contador_removidos = 0
+                contador_mantidos = 0
+
+                for chave, registro in produtos_suspeitos:
+                    num_pedido, cod_produto = chave
+
+                    try:
+                        # 🔍 CONFIRMAÇÃO: Buscar no Odoo se o produto ainda existe no pedido
+                        existe_no_odoo = self._verificar_produto_no_odoo(num_pedido, cod_produto)
+
+                        if not existe_no_odoo:
+                            # ✅ CONFIRMADO: Produto foi excluído do pedido no Odoo
+                            logger.info(f"   ✅ Removendo produto excluído do Odoo: {num_pedido}/{cod_produto}")
+                            db.session.delete(registro)
+                            contador_removidos += 1
+                        else:
+                            # ⚠️ FALSO POSITIVO: Produto existe no Odoo mas não veio na sincronização
+                            logger.error(f"   ❌ ALERTA: Produto {num_pedido}/{cod_produto} existe no Odoo mas não veio na sinc (possível erro de conexão/timeout)")
+                            contador_mantidos += 1
+
+                    except Exception as e:
+                        logger.error(f"   ❌ Erro ao verificar produto {num_pedido}/{cod_produto} no Odoo: {e}")
+                        # Em caso de erro, manter o produto (segurança)
+                        contador_mantidos += 1
+
+                if contador_removidos > 0:
+                    logger.info(f"🗑️  Total de produtos removidos: {contador_removidos}")
+                if contador_mantidos > 0:
+                    logger.warning(f"⚠️  Total de produtos mantidos (falsos positivos ou erros): {contador_mantidos}")
+            else:
+                logger.info("✅ Todos os produtos da sincronização estão atualizados")
             
             # UPSERT: Atualizar existentes ou inserir novos COM COMMITS INCREMENTAIS
             contador_inseridos = 0

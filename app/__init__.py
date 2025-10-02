@@ -656,6 +656,7 @@ def create_app(config_name=None):
 
     # Integrações
     from app.integracoes.tagplus import tagplus_bp
+    from app.rastreamento import rastreamento_bp  # 🚚 Rastreamento GPS
 
     # MCP Logistica
 
@@ -687,6 +688,7 @@ def create_app(config_name=None):
     app.register_blueprint(cotacao_bp)
     app.register_blueprint(portaria_bp)
     app.register_blueprint(permissions_api)
+    app.register_blueprint(rastreamento_bp)  # 🚚 Rastreamento GPS
 
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)

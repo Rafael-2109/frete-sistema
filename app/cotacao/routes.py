@@ -18,6 +18,7 @@ from app.tabelas.models import TabelaFrete
 from app.localidades.models import Cidade
 from app.veiculos.models import Veiculo
 from app.vinculos.models import CidadeAtendida
+from app.rastreamento.models import RastreamentoEmbarque  # 🚚 RASTREAMENTO GPS
 
 # Utils
 from app.utils.localizacao import LocalizacaoService
@@ -1235,6 +1236,18 @@ def fechar_frete():
             db.session.add(embarque)
             db.session.flush()  # Para obter o ID do embarque
 
+            # 🚚 RASTREAMENTO GPS: Cria rastreamento automaticamente
+            try:
+                rastreamento = RastreamentoEmbarque(
+                    embarque_id=embarque.id,
+                    criado_por=current_user.nome
+                )
+                db.session.add(rastreamento)
+                print(f"[DEBUG] 🚚 Rastreamento GPS criado para embarque #{embarque.numero}")
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Erro ao criar rastreamento GPS: {str(e)}")
+                # Não falha a criação do embarque se rastreamento falhar
+
             # Cria EmbarqueItems apenas para criação nova
             for pedido_data in pedidos_data:
                 # Usa separacao_lote_id em vez de id
@@ -1569,6 +1582,18 @@ def fechar_frete_grupo():
         
         db.session.add(embarque)
         db.session.flush()
+
+        # 🚚 RASTREAMENTO GPS: Cria rastreamento automaticamente
+        try:
+            rastreamento = RastreamentoEmbarque(
+                embarque_id=embarque.id,
+                criado_por=current_user.nome
+            )
+            db.session.add(rastreamento)
+            print(f"[DEBUG] 🚚 Rastreamento GPS criado para embarque #{embarque.numero}")
+        except Exception as e:
+            print(f"[DEBUG] ⚠️ Erro ao criar rastreamento GPS: {str(e)}")
+            # Não falha a criação do embarque se rastreamento falhar
 
         # Cria EmbarqueItems
         for pedido in todos_pedidos:

@@ -225,6 +225,30 @@
         </div>
     </div>
 
+    <!-- 🚚 PÁGINA DE QR CODE PARA RASTREAMENTO -->
+    {% if qrcode_base64 %}
+    <div style="page-break-before: always; text-align: center; padding-top: 100px;">
+        <h2 style="color: #28a745; font-size: 24px; margin-bottom: 30px;">
+            🚚 RASTREAMENTO GPS DA ENTREGA
+        </h2>
+        <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+            Escaneie o QR Code abaixo para iniciar o rastreamento em tempo real:
+        </p>
+        <img src="{{ qrcode_base64 }}" alt="QR Code Rastreamento"
+             style="width: 300px; height: 300px; margin: 20px auto; display: block; border: 3px solid #28a745; border-radius: 10px;">
+        <p style="font-size: 14px; color: #666; margin-top: 30px;">
+            <strong>Instruções:</strong><br>
+            1. Abra a câmera do celular e escaneie o QR Code<br>
+            2. Aceite os termos LGPD de coleta de localização<br>
+            3. Mantenha o GPS ativo durante toda a entrega<br>
+            4. Ao concluir, tire foto do canhoto assinado
+        </p>
+        <p style="font-size: 12px; color: #999; margin-top: 40px;">
+            Embarque #{{ embarque.numero }} | Rastreamento GPS Ativo
+        </p>
+    </div>
+    {% endif %}
+
     <!-- Script para impressão automática -->
     <script>
         window.onload = function() {

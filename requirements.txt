@@ -132,3 +132,11 @@ cryptography==43.0.3       # Criptografia de cookies/sessões (atualizado para s
 # PyPDF2==3.0.1            # Removido - pypdf é o sucessor
 pdfplumber==0.11.7
 pypdf==5.1.0
+
+# ==========================================
+# RASTREAMENTO GPS E QRCODE
+# ==========================================
+qrcode==8.0              # Geração de QR Codes
+pillow==11.0.0           # Processamento de imagens (requerido por qrcode)
+geopy==2.4.1             # Cálculos geográficos e geocoding
+haversine==2.9.0         # Distância entre coordenadas GPS

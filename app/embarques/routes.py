@@ -14,6 +14,7 @@ from app.pedidos.models import Pedido
 from app.separacao.models import Separacao
 from app.cotacao.models import Cotacao
 from app.utils.embarque_numero import obter_proximo_numero_embarque
+from app.rastreamento.services.qrcode_service import QRCodeService  # 🚚 QR Code rastreamento
 
 
 embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
@@ -1052,13 +1053,20 @@ def imprimir_embarque(embarque_id):
     from flask import make_response
     
     embarque = Embarque.query.get_or_404(embarque_id)
-    
+
+    # 🚚 Gerar QR Code para rastreamento
+    qrcode_base64 = None
+    if hasattr(embarque, 'rastreamento') and embarque.rastreamento:
+        url_rastreamento = embarque.rastreamento.url_rastreamento
+        qrcode_base64 = QRCodeService.gerar_qrcode(url_rastreamento, tamanho=8, borda=1)
+
     # Renderiza template específico para impressão do embarque
     html = render_template(
         'embarques/imprimir_embarque.html',
         embarque=embarque,
         data_impressao=datetime.now(),
-        current_user=current_user
+        current_user=current_user,
+        qrcode_base64=qrcode_base64  # 🚚 QR Code
     )
     
     response = make_response(html)
@@ -1131,13 +1139,20 @@ def imprimir_embarque_completo(embarque_id):
                 'itens': itens_separacao
             })
     
+    # 🚚 Gerar QR Code para rastreamento
+    qrcode_base64 = None
+    if hasattr(embarque, 'rastreamento') and embarque.rastreamento:
+        url_rastreamento = embarque.rastreamento.url_rastreamento
+        qrcode_base64 = QRCodeService.gerar_qrcode(url_rastreamento, tamanho=8, borda=1)
+
     # Renderiza template específico para impressão completa
     html = render_template(
         'embarques/imprimir_completo.html',
         embarque=embarque,
         separacoes_data=separacoes_data,
         data_impressao=datetime.now(),
-        current_user=current_user
+        current_user=current_user,
+        qrcode_base64=qrcode_base64  # 🚚 QR Code
     )
     
     response = make_response(html)

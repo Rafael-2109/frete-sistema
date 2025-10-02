@@ -1,0 +1,25 @@
+Objetivo:
+1- Criar um sistema para controlar:
+    a- Pedidos
+    b- Clientes
+    c- Comissão
+    d- Estoque
+    e- Fretes
+    f- Financeiro (Contas a Pagar / Contas a Receber)
+    g- Despesas
+    h- Lucro
+
+2- Os produtos serão motos elétricas
+
+3- O estoque será controlado por variaveis como:
+    a- Modelo
+    b- Cor
+    c- Cor da Roda
+    d- Numero de Chassi (único)
+    e- Motor
+
+4- Os vendedores vendem as motos sem visualizar os numeros de chassi, apenas pelas outras caracteristicas.
+
+5- O sistema deverá realizar um FIFO para determinar o numero de chassi que estará sendo enviado no pedido realizado pelo vendedor
+
+6- O 
