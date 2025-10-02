@@ -632,6 +632,8 @@ def exportar_dados_faturamento():
                 'Linhas da fatura/Produto/Referência': p.cod_produto,
                 'Linhas da fatura/Produto/Nome': p.nome_produto,
                 'Linhas da fatura/Quantidade': p.qtd_produto_faturado,
+                'Peso Unitário (kg)': p.peso_unitario_produto if p.peso_unitario_produto else 0,
+                'Peso Total (kg)': p.peso_total if p.peso_total else 0,
                 'Linhas da fatura/Valor Total do Item da NF': f"{p.valor_produto_faturado:,.2f}".replace('.', ',').replace(',', '.', 1),
                 'Linhas da fatura/Data': p.data_fatura.strftime('%d/%m/%Y') if p.data_fatura else '',
                 'Status': getattr(p, 'status_nf', ''),

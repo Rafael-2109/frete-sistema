@@ -1551,7 +1551,7 @@ class FaturamentoService:
                 'preco_produto_faturado': linha.get('price_unit', 0),
                 
                 # 📏 CAMPOS CALCULADOS
-                'peso_total': self._calcular_peso_total(linha.get('quantity', 0), produto.get('weight', 0)),
+                'peso_total': self._calcular_peso_total(linha.get('quantity', 0), template.get('gross_weight', 0)),
                 
                 # Metadados
                 'created_at': datetime.now(),
