@@ -9,7 +9,6 @@ from app import db
 from app.portal.sendas.service_comparacao_sendas import ComparacaoSendasService
 from app.portal.sendas.service_exportacao_sendas import ExportacaoSendasService
 from app.portal.sendas.service_verificacao_sendas import VerificacaoSendasService
-from app.portal.models_fila_sendas import FilaAgendamentoSendas
 from app.portal.sendas.models import FilialDeParaSendas, ProdutoDeParaSendas
 from app.portal.sendas.models_planilha import PlanilhaModeloSendas
 from app.separacao.models import Separacao
@@ -21,7 +20,7 @@ from app.utils.lote_utils import gerar_lote_id
 from app.producao.models import CadastroPalletizacao
 from app.carteira.models import CarteiraPrincipal
 from decimal import Decimal
-from sqlalchemy import func, and_
+from sqlalchemy import and_
 
 
 logger = logging.getLogger(__name__)
@@ -341,8 +340,11 @@ def comparar_separacao():
         # Se fornecido separacao_lote_id, buscar TODOS os itens do lote
         if 'separacao_lote_id' in data:
             # Buscar TODOS os itens da separação com mesmo lote_id
-            separacoes = Separacao.query.filter_by(
-                separacao_lote_id=data['separacao_lote_id']
+            separacoes = Separacao.query.filter(
+                and_(
+                    Separacao.separacao_lote_id == data['separacao_lote_id'],
+                    Separacao.qtd_saldo > 0  # ✅ FILTRO: apenas qtd > 0
+                )
             ).all()
 
             if not separacoes:
@@ -517,28 +519,32 @@ def comparar_nf():
             # Montar lista com todos os produtos da NF
             cnpj_cliente = produtos_nf[0].cnpj_cliente if produtos_nf else None
             for produto in produtos_nf:
-                solicitacoes.append({
-                    'cnpj': produto.cnpj_cliente,
-                    'pedido_cliente': pedido_cliente,  # ✅ Usando pedido_cliente encontrado
-                    'num_pedido': produto.origem,  # ✅ ADICIONADO: usando origem como num_pedido
-                    'cod_produto': produto.cod_produto,
-                    'quantidade': float(produto.qtd_produto_faturado),
-                    'data_agendamento': data.get('data_agendamento')
-                })
-        else:
-            # Usar dados da entrega monitorada
-            # Buscar produtos detalhados da NF se disponível
-            if produtos_nf:
-                cnpj_cliente = entrega.cnpj_cliente
-                for produto in produtos_nf:
+                # ✅ FILTRO: apenas produtos com quantidade > 0
+                if produto.qtd_produto_faturado and produto.qtd_produto_faturado > 0:
                     solicitacoes.append({
-                        'cnpj': cnpj_cliente,
+                        'cnpj': produto.cnpj_cliente,
                         'pedido_cliente': pedido_cliente,  # ✅ Usando pedido_cliente encontrado
                         'num_pedido': produto.origem,  # ✅ ADICIONADO: usando origem como num_pedido
                         'cod_produto': produto.cod_produto,
                         'quantidade': float(produto.qtd_produto_faturado),
                         'data_agendamento': data.get('data_agendamento')
                     })
+        else:
+            # Usar dados da entrega monitorada
+            # Buscar produtos detalhados da NF se disponível
+            if produtos_nf:
+                cnpj_cliente = entrega.cnpj_cliente
+                for produto in produtos_nf:
+                    # ✅ FILTRO: apenas produtos com quantidade > 0
+                    if produto.qtd_produto_faturado and produto.qtd_produto_faturado > 0:
+                        solicitacoes.append({
+                            'cnpj': cnpj_cliente,
+                            'pedido_cliente': pedido_cliente,  # ✅ Usando pedido_cliente encontrado
+                            'num_pedido': produto.origem,  # ✅ ADICIONADO: usando origem como num_pedido
+                            'cod_produto': produto.cod_produto,
+                            'quantidade': float(produto.qtd_produto_faturado),
+                            'data_agendamento': data.get('data_agendamento')
+                        })
             else:
                 # Se não tem produtos detalhados, criar solicitação genérica
                 solicitacoes.append({

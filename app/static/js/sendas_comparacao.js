@@ -668,12 +668,56 @@ function compararNF() {
 
 /**
  * Exibe resultado da comparação de NF
+ * ✅ CORRIGIDO: Processa estrutura resultados_por_cnpj corretamente
  */
 function exibirResultadoComparacaoNF(resultado) {
     let html = '';
 
-    if (resultado.sucesso && resultado.tipo_match === 'exato') {
-        const disponivel = resultado.disponibilidades[0];
+    // ✅ ESTRUTURA CORRETA: resultado.resultados_por_cnpj[cnpj]
+    if (!resultado.sucesso || !resultado.resultados_por_cnpj) {
+        html = `
+            <div class="alert alert-danger">
+                <h6>❌ Erro na comparação</h6>
+                <p>${resultado.erro || 'Erro desconhecido'}</p>
+            </div>
+        `;
+        $('#resultado-comparacao-nf').html(html);
+        return;
+    }
+
+    // Pegar o primeiro (e único) CNPJ do resultado
+    const cnpjs = Object.keys(resultado.resultados_por_cnpj);
+    if (cnpjs.length === 0) {
+        html = `
+            <div class="alert alert-warning">
+                <h6>⚠️ Nenhum resultado encontrado</h6>
+            </div>
+        `;
+        $('#resultado-comparacao-nf').html(html);
+        return;
+    }
+
+    const cnpj = cnpjs[0];
+    const dadosCnpj = resultado.resultados_por_cnpj[cnpj];
+
+    // Verificar se há itens
+    if (!dadosCnpj.itens || dadosCnpj.itens.length === 0) {
+        html = `
+            <div class="alert alert-warning">
+                <h6>⚠️ Nenhum item encontrado para este CNPJ</h6>
+            </div>
+        `;
+        $('#resultado-comparacao-nf').html(html);
+        return;
+    }
+
+    // Pegar o primeiro item
+    const item = dadosCnpj.itens[0];
+
+    if (item.tipo_match === 'exato' && item.encontrado) {
+        const disponivel = item.encontrado;
+        const solicitado = item.solicitado;
+
         html = `
             <div class="alert alert-success">
                 <h6>✅ Disponibilidade confirmada!</h6>
@@ -685,27 +729,33 @@ function exibirResultadoComparacaoNF(resultado) {
             </div>
         `;
 
-        // IMPORTANTE: Armazenar APENAS dados da planilha modelo (o que será agendado)
+        // ✅ CORRIGIDO: Armazenar TODOS os campos necessários para o backend
         $('#modalComparacaoNF').data('item_confirmado', {
             // Identificação e rastreabilidade
             numero_nf: resultado.numero_nf,
-            entrega_id: resultado.entrega_id,
+            entrega_id: dadosCnpj.entrega_id,
             tipo_origem: 'nf',
             documento_origem: resultado.numero_nf,
 
-            // Dados da PLANILHA MODELO (o que será efetivamente agendado)
+            // ✅ Dados do NOSSO sistema (obrigatórios para o backend)
+            cnpj: cnpj,
+            num_pedido: solicitado.num_pedido,
+            cod_produto: solicitado.cod_produto,
+            pedido_cliente: solicitado.pedido_cliente,
+            nome_produto: disponivel.descricao,
+
+            // Dados da PLANILHA MODELO (para referência)
             codigo_pedido_sendas: disponivel.codigo_pedido_sendas,
             codigo_produto_sendas: disponivel.codigo_produto_sendas,
-            descricao: disponivel.descricao,
             saldo_disponivel: disponivel.saldo_disponivel,
             unidade_medida: disponivel.unidade_medida,
 
             // Data do agendamento
             data_agendamento: $('#nf-data-agendamento').val() || new Date().toISOString().split('T')[0],
 
-            // Quantidade solicitada (respeitando limite da planilha)
-            quantidade_solicitada: Math.min(
-                resultado.solicitacao.quantidade_solicitada || resultado.solicitacao.quantidade || disponivel.saldo_disponivel,
+            // Quantidade (usando nome esperado pelo backend)
+            quantidade: Math.min(
+                solicitado.quantidade || disponivel.saldo_disponivel,
                 disponivel.saldo_disponivel
             )
         });
@@ -716,7 +766,7 @@ function exibirResultadoComparacaoNF(resultado) {
         html = `
             <div class="alert alert-warning">
                 <h6>⚠️ Disponibilidade não encontrada</h6>
-                <p>${resultado.erro || 'Verifique os dados e tente novamente'}</p>
+                <p>${item.observacao || 'Produto não encontrado na planilha Sendas'}</p>
             </div>
         `;
     }

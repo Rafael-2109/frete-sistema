@@ -93,6 +93,7 @@ def _buscar_todas_separacoes(cnpj: str, protocolo: str = None) -> List[Dict[str,
         query = db.session.query(Separacao).filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
+                Separacao.qtd_saldo > 0,  # ✅ FILTRO: apenas qtd > 0
                 db.or_(
                     Separacao.sincronizado_nf == False,  # Não faturadas
                     Separacao.nf_cd == True              # NFs no CD
