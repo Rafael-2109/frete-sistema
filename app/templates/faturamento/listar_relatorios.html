@@ -229,6 +229,19 @@
           </a>
         </th>
 
+        {# 🆕 Peso Bruto #}
+        {% set next_dir = 'desc' if sort=='peso_bruto' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=peso_bruto&direction={{ next_dir }}">
+            Peso (kg)
+            {% if sort=='peso_bruto' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
         {# Transportadora #}
         {% set next_dir = 'desc' if sort=='nome_transportadora' and direction=='asc' else 'asc' %}
         <th>
@@ -322,6 +335,23 @@
         <td>{{ r.data_fatura | formatar_data_segura if r.data_fatura else '' }}</td>
         <td>{{ r.nome_cliente }}</td>
         <td>R$ {{ '%.2f'|format(r.valor_total or 0) }}</td>
+        <td>
+          <div class="d-flex align-items-center justify-content-between">
+            <span>
+              {% if r.peso_bruto and r.peso_bruto > 0 %}
+                {{ '%.2f'|format(r.peso_bruto) }} kg
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </span>
+            <button type="button"
+                    class="btn btn-sm {{ 'btn-info' if r.peso_bruto and r.peso_bruto > 0 else 'btn-warning' }} ms-2"
+                    onclick="atualizarPeso('{{ r.numero_nf }}')"
+                    title="{% if r.peso_bruto and r.peso_bruto > 0 %}Recalcular peso via CadastroPalletizacao{% else %}Calcular peso via CadastroPalletizacao{% endif %}">
+              ⚖️ {{ 'Recalc' if r.peso_bruto and r.peso_bruto > 0 else 'Calcular' }}
+            </button>
+          </div>
+        </td>
         <td>{{ r.nome_transportadora }}</td>
         <td>{{ r.municipio }}</td>
         <td>{{ r.estado }}</td>
@@ -604,6 +634,72 @@ function excluirNF(numeroNF) {
   .catch(error => {
     console.error('Erro:', error);
     alert(`❌ Erro ao excluir NF: ${error.message}`);
+    // Restaurar botão
+    btn.innerHTML = textoOriginal;
+    btn.disabled = false;
+  });
+}
+
+// 🆕 FUNÇÃO PARA ATUALIZAR PESO EM CASCATA
+function atualizarPeso(numeroNF) {
+  const confirmacao = confirm(`Atualizar peso da NF ${numeroNF}?\n\nIsso irá:\n✅ Calcular peso via CadastroPalletizacao\n✅ Atualizar FaturamentoProduto\n✅ Atualizar EmbarqueItem\n✅ Atualizar Embarque\n✅ Recalcular Frete (peso + valor)`);
+
+  if (!confirmacao) return;
+
+  // Mostrar loading
+  const btn = event.target;
+  const textoOriginal = btn.innerHTML;
+  btn.innerHTML = '⏳ Calculando...';
+  btn.disabled = true;
+
+  // Fazer requisição POST para a API
+  fetch(`/faturamento/atualizar-peso/${numeroNF}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+    },
+    credentials: 'same-origin'  // Importante para enviar cookies de sessão
+  })
+  .then(response => {
+    // Verificar se foi redirecionado para login
+    if (response.redirected && response.url.includes('/auth/login')) {
+      alert('❌ Sessão expirada! Por favor, faça login novamente.');
+      window.location.href = '/auth/login';
+      return Promise.reject('Sessão expirada');
+    }
+
+    // Verificar se resposta é JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Resposta não é JSON - possível erro de autenticação');
+    }
+
+    return response.json();
+  })
+  .then(data => {
+    if (data.success) {
+      const msg = `✅ Peso atualizado com sucesso!\n\n` +
+                  `📦 FaturamentoProduto: ${data.faturamento_produto?.atualizados || 0} itens\n` +
+                  `📊 RelatorioFaturamento: ${data.relatorio?.peso_bruto?.toFixed(2) || 0} kg\n` +
+                  `🚚 EmbarqueItem: ${data.embarque_item?.atualizados || 0} itens (${data.embarque_item?.peso_total?.toFixed(2) || 0} kg, ${data.embarque_item?.pallets_total?.toFixed(2) || 0} pallets)\n` +
+                  `📦 Embarque: ${data.embarque?.atualizados || 0} embarques\n` +
+                  `💰 Frete: ${data.frete?.recalculados || 0} fretes recalculados`;
+
+      alert(msg);
+      // Recarregar a página para atualizar a lista
+      window.location.reload();
+    } else {
+      alert(`❌ Erro ao atualizar peso: ${data.erro}`);
+      // Restaurar botão
+      btn.innerHTML = textoOriginal;
+      btn.disabled = false;
+    }
+  })
+  .catch(error => {
+    console.error('Erro:', error);
+    alert(`❌ Erro ao atualizar peso: ${error.message}`);
     // Restaurar botão
     btn.innerHTML = textoOriginal;
     btn.disabled = false;

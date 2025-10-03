@@ -14,6 +14,7 @@ from app.integracoes.tagplus.oauth2_v2 import TagPlusOAuth2V2
 from app.producao.models import CadastroPalletizacao
 # Usa o ProcessadorFaturamento padrão que já tem score como fallback
 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+from app.embarques.models import EmbarqueItem
 
 logger = logging.getLogger(__name__)
 

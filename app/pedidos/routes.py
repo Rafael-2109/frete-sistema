@@ -1,5 +1,5 @@
 from flask import render_template, request, redirect, url_for, Blueprint, flash, session
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.pedidos.models import Pedido
 from app.pedidos.forms import FiltroPedidosForm, CotarFreteForm, EditarPedidoForm
@@ -1563,3 +1563,34 @@ def detalhes_pedido(lote_id):
         embarque=embarque,
         contato_agendamento=contato_agendamento
     )
+
+
+@pedidos_bp.route('/sincronizar-items-faturamento/<lote_id>', methods=['POST'])
+@login_required
+def sincronizar_items_faturamento(lote_id):
+    """
+    Sincroniza items de Separacao com FaturamentoProduto
+
+    Busca dados reais de qtd, valor, peso e pallets do faturamento
+    e atualiza a Separacao com sincronizado_nf=True
+    """
+    try:
+        from app.pedidos.services.sincronizar_items_service import SincronizadorItemsService
+
+        # Executar sincronização
+        service = SincronizadorItemsService()
+        resultado = service.sincronizar_items_faturamento(
+            separacao_lote_id=lote_id,
+            usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+        )
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        import logging
+        logging.error(f"Erro ao sincronizar items do lote {lote_id}: {e}")
+        return jsonify({
+            'success': False,
+            'separacao_lote_id': lote_id,
+            'erro': str(e)
+        }), 500

@@ -2016,6 +2016,57 @@ function preencherDadosEnderecoPedido(dados) {
         }
     }
 }
+
+// 🆕 FUNÇÃO PARA SINCRONIZAR ITEMS COM FATURAMENTO
+function sincronizarItemsFaturamento(loteId) {
+    if (!confirm('⚠️ Tem certeza que deseja sincronizar os items com o faturamento?\n\nIsso irá:\n✅ Buscar dados em FaturamentoProduto (qtd, valor, peso, pallet)\n✅ Atualizar TODOS os items da Separacao deste lote\n\nApenas items com sincronizado_nf=True serão atualizados')) {
+        return;
+    }
+
+    // Mostrar loading
+    const btnSync = event.target;
+    const textoOriginal = btnSync.innerHTML;
+    btnSync.disabled = true;
+    btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+
+    fetch(`/pedidos/sincronizar-items-faturamento/${loteId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const msg = `✅ Items sincronizados com sucesso!\n\n` +
+                        `📋 NF: ${data.numero_nf}\n` +
+                        `📦 Items atualizados: ${data.atualizados}\n` +
+                        `❌ Erros: ${data.erros}`;
+
+            alert(msg);
+
+            // Fechar modal se estiver aberto
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEdicaoPedido'));
+            if (modal) {
+                modal.hide();
+            }
+
+            // Recarregar a página para atualizar a lista
+            window.location.reload();
+        } else {
+            alert(`❌ Erro ao sincronizar items: ${data.erro}`);
+            btnSync.disabled = false;
+            btnSync.innerHTML = textoOriginal;
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert(`❌ Erro ao sincronizar items: ${error.message}`);
+        btnSync.disabled = false;
+        btnSync.innerHTML = textoOriginal;
+    });
+}
 </script>
 
 <style>

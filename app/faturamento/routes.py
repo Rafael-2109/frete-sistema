@@ -1297,9 +1297,44 @@ def api_exportar_inconsistencias():
             'success': False,
             'message': 'Função em desenvolvimento'
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
             'message': str(e)
         })
+
+
+@faturamento_bp.route('/atualizar-peso/<numero_nf>', methods=['POST'])
+@login_required
+def atualizar_peso_nf(numero_nf):
+    """
+    Atualiza peso em cascata para uma NF usando CadastroPalletizacao
+
+    Fluxo:
+    1. FaturamentoProduto (peso_unitario_produto, peso_total)
+    2. RelatorioFaturamentoImportado (peso_bruto)
+    3. EmbarqueItem (peso, pallet)
+    4. Embarque (peso_total, pallet_total)
+    5. Frete (peso_total + RECALCULO de valor_cotado)
+    """
+    try:
+        from app.faturamento.services.atualizar_peso_service import AtualizadorPesoService
+
+        # Executar atualização em cascata
+        service = AtualizadorPesoService()
+        resultado = service.atualizar_peso_nf(
+            numero_nf=numero_nf,
+            usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+        )
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        import logging
+        logging.error(f"Erro ao atualizar peso da NF {numero_nf}: {e}")
+        return jsonify({
+            'success': False,
+            'numero_nf': numero_nf,
+            'erro': str(e)
+        }), 500
