@@ -1,0 +1,71 @@
+# ====================================================================
+# COMANDO PARA EXECUTAR NO SHELL DO RENDER
+# ====================================================================
+#
+# 1. Acesse o shell do Render
+# 2. Cole o comando abaixo (tudo de uma vez)
+# 3. Substitua '140050' e '136036' pelos números das NFs desejadas
+# ====================================================================
+
+python << 'EOF'
+from app import create_app, db
+from app.faturamento.services.atualizar_peso_service import AtualizadorPesoService
+
+# CONFIGURAÇÃO: Altere os números das NFs aqui
+NFS = ['140050', '136036']
+
+app = create_app()
+with app.app_context():
+    service = AtualizadorPesoService()
+
+    for nf in NFS:
+        print(f"\n🔄 Processando NF {nf}...")
+        try:
+            # Atualizar EmbarqueItem
+            r1 = service._atualizar_embarque_item(nf)
+            print(f"   EmbarqueItem: {r1.get('atualizados', 0)} itens")
+
+            # Atualizar Embarque
+            r2 = service._atualizar_embarque_totais(nf)
+            print(f"   Embarque: {r2.get('atualizados', 0)} embarques")
+
+            # Atualizar Frete
+            r3 = service._atualizar_frete(nf)
+            print(f"   Frete: {r3.get('atualizados', 0)} fretes ({r3.get('recalculados', 0)} recalculados)")
+
+            db.session.commit()
+            print(f"   ✅ Concluído!")
+        except Exception as e:
+            print(f"   ❌ Erro: {e}")
+            db.session.rollback()
+
+    print("\n✅ Processo finalizado!")
+EOF
+
+
+# ====================================================================
+# VERSÃO ALTERNATIVA: USAR ARQUIVO PYTHON
+# ====================================================================
+#
+# Se preferir criar um arquivo primeiro:
+#
+# 1. No shell do Render, crie o arquivo:
+#    nano atualizar_nfs.py
+#
+# 2. Cole o conteúdo de atualizar_embarque_frete_manual.py
+#
+# 3. Execute:
+#    python atualizar_nfs.py
+#
+# ====================================================================
+
+
+# ====================================================================
+# VERSÃO ULTRA COMPACTA (1 linha por NF)
+# ====================================================================
+
+# Para NF 140050:
+python -c "from app import create_app, db; from app.faturamento.services.atualizar_peso_service import AtualizadorPesoService; app = create_app(); ctx = app.app_context(); ctx.push(); s = AtualizadorPesoService(); r1 = s._atualizar_embarque_item('139906'); r2 = s._atualizar_embarque_totais('139906'); r3 = s._atualizar_frete('139906'); db.session.commit(); print(f'✅ NF 139906: EmbarqueItem={r1.get(\"atualizados\",0)}, Embarque={r2.get(\"atualizados\",0)}, Frete={r3.get(\"recalculados\",0)}')"
+
+# Para NF 136036:
+python -c "from app import create_app, db; from app.faturamento.services.atualizar_peso_service import AtualizadorPesoService; app = create_app(); ctx = app.app_context(); ctx.push(); s = AtualizadorPesoService(); r1 = s._atualizar_embarque_item('136036'); r2 = s._atualizar_embarque_totais('136036'); r3 = s._atualizar_frete('136036'); db.session.commit(); print(f'✅ NF 136036: EmbarqueItem={r1.get(\"atualizados\",0)}, Embarque={r2.get(\"atualizados\",0)}, Frete={r3.get(\"recalculados\",0)}')"

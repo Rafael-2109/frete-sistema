@@ -422,7 +422,7 @@ class AtualizadorPesoService:
                         valor_mercadoria=valor_total_cnpj,
                         tabela_dados=tabela_dados,
                         codigo_ibge=None,  # Poderia buscar da cidade se necessário
-                        transportadora_optante=transportadora.optante_simples,
+                        transportadora_optante=transportadora.optante if hasattr(transportadora, 'optante') else False,
                         transportadora_config=transportadora_config
                     )
 
