@@ -1,20 +1,31 @@
 """
 📍 SERVIÇO DE CÁLCULOS GPS
-Cálculo de distâncias, proximidade e geocoding
+Cálculo de distâncias, proximidade e geocoding com Google Maps API
 """
 
 from haversine import haversine, Unit
-from geopy.geocoders import Nominatim
-from geopy.exc import GeopyError
 from flask import current_app
-import time
+import os
+import hashlib
+import requests
 
 
 class GPSService:
     """Serviço para cálculos geográficos e GPS"""
 
-    # Configuração do geocoder
-    geocoder = Nominatim(user_agent="sistema_frete_nacom/1.0")
+    # Configuração do Google Maps API
+    _api_key = None
+    _geocoding_cache = {}
+    _base_geocoding_url = "https://maps.googleapis.com/maps/api/geocode/json"
+
+    @classmethod
+    def _get_api_key(cls):
+        """Obtém API key do Google Maps (lazy loading)"""
+        if cls._api_key is None:
+            cls._api_key = os.getenv('GOOGLE_MAPS_API_KEY', '')
+            if not cls._api_key:
+                current_app.logger.warning("⚠️ GOOGLE_MAPS_API_KEY não configurada")
+        return cls._api_key
 
     @staticmethod
     def calcular_distancia(coord1, coord2, unidade='metros'):
@@ -76,55 +87,118 @@ class GPSService:
             current_app.logger.error(f"Erro ao verificar proximidade: {str(e)}")
             return False
 
-    @staticmethod
-    def geocode_endereco(endereco, timeout=5):
+    @classmethod
+    def geocode_endereco(cls, endereco, timeout=10):
         """
-        Converte endereço em coordenadas GPS (geocoding)
+        Converte endereço em coordenadas GPS usando Google Maps Geocoding API
 
         Args:
             endereco (str): Endereço completo
-            timeout (int): Timeout em segundos (padrão: 5)
+            timeout (int): Timeout em segundos (padrão: 10)
 
         Returns:
             tuple: (latitude, longitude) ou None se falhar
         """
         try:
-            location = GPSService.geocoder.geocode(endereco, timeout=timeout)
-            if location:
-                return (location.latitude, location.longitude)
+            # Verificar cache primeiro
+            cache_key = hashlib.md5(endereco.encode()).hexdigest()
+            if cache_key in cls._geocoding_cache:
+                current_app.logger.debug(f"📍 Geocoding (cache): {endereco[:50]}...")
+                return cls._geocoding_cache[cache_key]
+
+            # Obter API key
+            api_key = cls._get_api_key()
+            if not api_key:
+                current_app.logger.error("❌ Google Maps API key não configurada")
+                return None
+
+            # Fazer requisição para Google Maps API
+            params = {
+                'address': endereco,
+                'key': api_key,
+                'region': 'br',
+                'language': 'pt-BR'
+            }
+
+            response = requests.get(cls._base_geocoding_url, params=params, timeout=timeout)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if data['status'] == 'OK' and data['results']:
+                    location = data['results'][0]['geometry']['location']
+                    lat = location['lat']
+                    lng = location['lng']
+
+                    # Salvar no cache
+                    cls._geocoding_cache[cache_key] = (lat, lng)
+
+                    current_app.logger.info(f"✅ Geocoding sucesso: {endereco[:50]}... → ({lat:.6f}, {lng:.6f})")
+                    return (lat, lng)
+                elif data['status'] == 'ZERO_RESULTS':
+                    current_app.logger.warning(f"⚠️ Nenhum resultado para: {endereco[:50]}...")
+                    return None
+                elif data['status'] == 'OVER_QUERY_LIMIT':
+                    current_app.logger.error("❌ Limite de requisições da API excedido")
+                    return None
+                else:
+                    current_app.logger.warning(f"⚠️ Google Maps API retornou: {data['status']}")
+                    return None
+
+            current_app.logger.error(f"❌ Erro HTTP {response.status_code} ao geocodificar")
             return None
 
-        except GeopyError as e:
-            current_app.logger.error(f"Erro de geocoding: {str(e)}")
+        except requests.exceptions.Timeout:
+            current_app.logger.error(f"❌ Timeout ao geocodificar: {endereco[:50]}...")
             return None
         except Exception as e:
-            current_app.logger.error(f"Erro inesperado no geocoding: {str(e)}")
+            current_app.logger.error(f"❌ Erro inesperado no geocoding: {str(e)}")
             return None
 
-    @staticmethod
-    def reverse_geocode(latitude, longitude, timeout=5):
+    @classmethod
+    def reverse_geocode(cls, latitude, longitude, timeout=10):
         """
-        Converte coordenadas GPS em endereço (reverse geocoding)
+        Converte coordenadas GPS em endereço usando Google Maps Reverse Geocoding API
 
         Args:
             latitude (float): Latitude
             longitude (float): Longitude
-            timeout (int): Timeout em segundos
+            timeout (int): Timeout em segundos (padrão: 10)
 
         Returns:
             str: Endereço formatado ou None
         """
         try:
-            location = GPSService.geocoder.reverse(f"{latitude}, {longitude}", timeout=timeout)
-            if location:
-                return location.address
+            # Obter API key
+            api_key = cls._get_api_key()
+            if not api_key:
+                current_app.logger.error("❌ Google Maps API key não configurada")
+                return None
+
+            # Fazer requisição para Google Maps API
+            params = {
+                'latlng': f"{latitude},{longitude}",
+                'key': api_key,
+                'language': 'pt-BR'
+            }
+
+            response = requests.get(cls._base_geocoding_url, params=params, timeout=timeout)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if data['status'] == 'OK' and data['results']:
+                    endereco = data['results'][0]['formatted_address']
+                    current_app.logger.info(f"✅ Reverse geocoding: ({latitude:.6f}, {longitude:.6f}) → {endereco[:50]}...")
+                    return endereco
+
             return None
 
-        except GeopyError as e:
-            current_app.logger.error(f"Erro de reverse geocoding: {str(e)}")
+        except requests.exceptions.Timeout:
+            current_app.logger.error(f"❌ Timeout no reverse geocoding")
             return None
         except Exception as e:
-            current_app.logger.error(f"Erro inesperado no reverse geocoding: {str(e)}")
+            current_app.logger.error(f"❌ Erro no reverse geocoding: {str(e)}")
             return None
 
     @staticmethod

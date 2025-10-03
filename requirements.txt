@@ -138,5 +138,5 @@ pypdf==5.1.0
 # ==========================================
 qrcode==8.0              # Geração de QR Codes
 pillow==11.0.0           # Processamento de imagens (requerido por qrcode)
-geopy==2.4.1             # Cálculos geográficos e geocoding
 haversine==2.9.0         # Distância entre coordenadas GPS
+# Geocoding agora usa Google Maps API (mesma do mapa_service.py)

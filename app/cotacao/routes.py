@@ -1236,17 +1236,25 @@ def fechar_frete():
             db.session.add(embarque)
             db.session.flush()  # Para obter o ID do embarque
 
-            # 🚚 RASTREAMENTO GPS: Cria rastreamento automaticamente
-            try:
-                rastreamento = RastreamentoEmbarque(
-                    embarque_id=embarque.id,
-                    criado_por=current_user.nome
-                )
-                db.session.add(rastreamento)
-                print(f"[DEBUG] 🚚 Rastreamento GPS criado para embarque #{embarque.numero}")
-            except Exception as e:
-                print(f"[DEBUG] ⚠️ Erro ao criar rastreamento GPS: {str(e)}")
-                # Não falha a criação do embarque se rastreamento falhar
+            # 🚚 RASTREAMENTO GPS: Cria rastreamento APENAS para carga DIRETA
+            if tipo == 'DIRETA':
+                try:
+                    rastreamento = RastreamentoEmbarque(
+                        embarque_id=embarque.id,
+                        criado_por=current_user.nome
+                    )
+                    db.session.add(rastreamento)
+                    db.session.flush()  # Gera ID do rastreamento
+
+                    # Criar EntregaRastreada para cada item (após criar EmbarqueItems)
+                    # Será executado depois do loop de criação de itens
+                    print(f"[DEBUG] 🚚 Rastreamento GPS criado para embarque DIRETA #{embarque.numero}")
+                except Exception as e:
+                    print(f"[DEBUG] ⚠️ Erro ao criar rastreamento GPS: {str(e)}")
+                    db.session.rollback()
+                    # Não falha a criação do embarque se rastreamento falhar
+            else:
+                print(f"[DEBUG] ⚠️ Rastreamento GPS NÃO criado - embarque é FRACIONADA")
 
             # Cria EmbarqueItems apenas para criação nova
             for pedido_data in pedidos_data:
@@ -1338,6 +1346,20 @@ def fechar_frete():
                 print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
         
         db.session.commit()
+
+        # 🚚 CRIAR ENTREGAS RASTREADAS (após commit dos EmbarqueItems)
+        if tipo == 'DIRETA' and embarque.rastreamento:
+            try:
+                from app.rastreamento.services.entrega_rastreada_service import EntregaRastreadaService
+                entregas_criadas = EntregaRastreadaService.criar_entregas_para_embarque(
+                    embarque.rastreamento.id,
+                    embarque.id
+                )
+                db.session.commit()
+                print(f"[DEBUG] ✅ {len(entregas_criadas)} entregas rastreadas criadas para embarque #{embarque.numero}")
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Erro ao criar entregas rastreadas: {str(e)}")
+                # Não falha a criação do embarque
 
         # ✅ LIMPA DADOS DA SESSÃO APÓS SUCESSO
         if alterando_embarque:

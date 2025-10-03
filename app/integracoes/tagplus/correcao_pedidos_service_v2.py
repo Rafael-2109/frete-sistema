@@ -221,6 +221,8 @@ class CorrecaoPedidosServiceV2:
                             qtd_produto_faturado=item.qtd_produto_faturado,
                             preco_produto_faturado=item.preco_produto_faturado,
                             valor_produto_faturado=item.valor_produto_faturado,
+                            peso_unitario_produto=item.peso_unitario_produto,
+                            peso_total=item.peso_total,
                             origem=item.origem,
                             status_nf='Lançado',
                             created_by='ImportTagPlus-Corrigido',
@@ -244,6 +246,13 @@ class CorrecaoPedidosServiceV2:
                             campos_atualizados = True
                         if not existe.origem and item.origem:
                             existe.origem = item.origem
+                            campos_atualizados = True
+                        # Atualizar peso se estiver vazio e temos dados de peso
+                        if (not existe.peso_unitario_produto or existe.peso_unitario_produto == 0) and item.peso_unitario_produto:
+                            existe.peso_unitario_produto = item.peso_unitario_produto
+                            campos_atualizados = True
+                        if (not existe.peso_total or existe.peso_total == 0) and item.peso_total:
+                            existe.peso_total = item.peso_total
                             campos_atualizados = True
                         if campos_atualizados:
                             itens_atualizados += 1

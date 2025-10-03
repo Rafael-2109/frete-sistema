@@ -206,9 +206,18 @@ def receber_ping_gps(token):
         # Atualizar rastreamento
         rastreamento.ultimo_ping_em = datetime.utcnow()
 
-        # Verificar se chegou próximo ao destino (200 metros)
+        # ✅ NOVO: Detectar proximidade de TODAS entregas pendentes
+        from app.rastreamento.services.entrega_rastreada_service import EntregaRastreadaService
+
+        entregas_proximas = EntregaRastreadaService.detectar_entrega_proxima(
+            rastreamento.id,
+            latitude,
+            longitude
+        )
+
+        # Manter lógica antiga para compatibilidade (distância do primeiro destino)
         config = ConfiguracaoRastreamento.get_config()
-        chegou_proximo = False
+        chegou_proximo = len(entregas_proximas) > 0
 
         if distancia_destino and distancia_destino <= config.distancia_chegada_metros:
             if rastreamento.status != 'CHEGOU_DESTINO':
@@ -222,20 +231,39 @@ def receber_ping_gps(token):
                     detalhes=json.dumps({
                         'distancia_metros': distancia_destino,
                         'latitude': latitude,
-                        'longitude': longitude
+                        'longitude': longitude,
+                        'entregas_proximas': len(entregas_proximas)
                     })
                 )
 
-                current_app.logger.info(f"Embarque #{rastreamento.embarque_id} chegou ao destino ({distancia_destino}m)")
-                chegou_proximo = True
-
-                # TODO: Enviar notificação para equipe de monitoramento
+                current_app.logger.info(
+                    f"Embarque #{rastreamento.embarque_id} chegou próximo de {len(entregas_proximas)} entrega(s)"
+                )
 
             # Atualizar distância mínima se for menor
             if rastreamento.distancia_minima_atingida is None or distancia_destino < rastreamento.distancia_minima_atingida:
                 rastreamento.distancia_minima_atingida = distancia_destino
 
         db.session.commit()
+
+        # ✅ NOVO: Preparar lista de entregas próximas para o frontend
+        entregas_proximas_json = [
+            {
+                'id': ep['entrega'].id,
+                'descricao': ep['entrega'].descricao_completa,
+                'descricao_com_endereco': ep['entrega'].descricao_com_endereco,
+                'cliente': ep['entrega'].cliente,
+                'cidade': ep['entrega'].cidade,
+                'uf': ep['entrega'].uf,
+                'numero_nf': ep['entrega'].numero_nf,
+                'distancia': ep['distancia'],
+                'distancia_formatada': GPSService.formatar_distancia(ep['distancia'])
+            }
+            for ep in entregas_proximas
+        ]
+
+        # ✅ NOVO: Obter estatísticas das entregas
+        stats = EntregaRastreadaService.obter_estatisticas_entregas(rastreamento.id)
 
         return jsonify({
             'success': True,
@@ -245,7 +273,13 @@ def receber_ping_gps(token):
                 'distancia_formatada': GPSService.formatar_distancia(distancia_destino),
                 'chegou_proximo': chegou_proximo,
                 'status': rastreamento.status,
-                'total_pings': rastreamento.pings.count()
+                'total_pings': rastreamento.pings.count(),
+                # ✅ NOVO: Dados das entregas individuais
+                'entregas_proximas': entregas_proximas_json,
+                'total_entregas': stats['total'],
+                'entregas_pendentes': stats['pendentes'],
+                'entregas_entregues': stats['entregues'],
+                'pode_finalizar': chegou_proximo  # Libera botão de confirmar entrega
             }
         })
 
@@ -284,12 +318,36 @@ def processar_upload_canhoto(token):
     """
     API para processar upload do canhoto de entrega
     ⚠️ CSRF desabilitado: API pública para transportadores externos
-    Salva no mesmo local que o sistema de monitoramento
+
+    REGRA DE NEGÓCIO:
+    - Exige seleção de entrega_id (qual NF está sendo entregue)
+    - Salva canhoto individual por entrega
+    - Atualiza EntregaRastreada + EntregaMonitorada
+    - Finaliza rastreamento apenas quando TODAS entregas concluídas
     """
     rastreamento = RastreamentoEmbarque.query.filter_by(token_acesso=token).first()
 
     if not rastreamento:
         return jsonify({'success': False, 'message': 'Token inválido'}), 404
+
+    # ✅ NOVO: Verificar qual entrega está sendo comprovada
+    entrega_id = request.form.get('entrega_id')
+
+    if not entrega_id:
+        return jsonify({
+            'success': False,
+            'message': 'Selecione a entrega que está comprovando'
+        }), 400
+
+    # ✅ NOVO: Buscar entrega rastreada
+    from app.rastreamento.models import EntregaRastreada
+    entrega = EntregaRastreada.query.get(entrega_id)
+
+    if not entrega or entrega.rastreamento_id != rastreamento.id:
+        return jsonify({'success': False, 'message': 'Entrega inválida'}), 404
+
+    if entrega.status == 'ENTREGUE':
+        return jsonify({'success': False, 'message': 'Esta entrega já foi confirmada'}), 400
 
     if 'canhoto' not in request.files:
         return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
@@ -301,7 +359,7 @@ def processar_upload_canhoto(token):
     # Validar extensão
     extensao = file.filename.split('.')[-1].lower()
     if extensao not in ['jpg', 'jpeg', 'png', 'pdf']:
-        return jsonify({'success': False, 'message': 'Apenas arquivos JPG, PNG ou PDF são permitidos'}), 400
+        return jsonify({'success': False, 'message': 'Apenas JPG, PNG ou PDF'}), 400
 
     try:
         # Obter coordenadas do upload
@@ -309,59 +367,98 @@ def processar_upload_canhoto(token):
         latitude = data.get('latitude')
         longitude = data.get('longitude')
 
-        # Salvar arquivo usando o mesmo sistema de storage
+        # ✅ Salvar arquivo usando MESMO sistema do monitoramento
         from app.utils.file_storage import get_file_storage
         storage = get_file_storage()
         file_path = storage.save_file(
             file=file,
-            folder='canhotos_rastreamento',
+            folder='canhotos_rastreamento',  # Mesma pasta do monitoramento
             allowed_extensions=['jpg', 'jpeg', 'png', 'pdf']
         )
 
         if not file_path:
             return jsonify({'success': False, 'message': 'Erro ao salvar arquivo'}), 500
 
-        # Atualizar rastreamento
-        rastreamento.canhoto_arquivo = file_path
-        rastreamento.canhoto_enviado_em = datetime.utcnow()
-        rastreamento.status = 'ENTREGUE'
-        rastreamento.rastreamento_finalizado_em = datetime.utcnow()
-
+        # ✅ Calcular distância do cliente no momento da entrega
+        distancia_entrega = None
         if latitude and longitude and GPSService.validar_coordenadas(latitude, longitude):
-            rastreamento.canhoto_latitude = float(latitude)
-            rastreamento.canhoto_longitude = float(longitude)
+            if entrega.tem_coordenadas:
+                distancia_entrega = GPSService.calcular_distancia(
+                    (float(latitude), float(longitude)),
+                    (entrega.destino_latitude, entrega.destino_longitude),
+                    'metros'
+                )
+
+        # ✅ Atualizar APENAS esta entrega
+        entrega.canhoto_arquivo = file_path
+        entrega.canhoto_latitude = float(latitude) if latitude and GPSService.validar_coordenadas(latitude, longitude) else None
+        entrega.canhoto_longitude = float(longitude) if longitude and GPSService.validar_coordenadas(latitude, longitude) else None
+        entrega.entregue_em = datetime.utcnow()
+        entrega.entregue_distancia_metros = distancia_entrega
+        entrega.status = 'ENTREGUE'
 
         # Registrar log
         rastreamento.registrar_log(
             evento='UPLOAD_CANHOTO',
             detalhes=json.dumps({
+                'entrega_id': entrega.id,
+                'nf': entrega.numero_nf,
+                'pedido': entrega.pedido,
+                'cliente': entrega.cliente,
                 'arquivo': file_path,
-                'latitude': latitude,
-                'longitude': longitude
+                'distancia_metros': distancia_entrega
             })
         )
 
-        # Atualizar EntregaMonitorada (se existir)
-        # Buscar pela separacao_lote_id dos itens do embarque
-        for item in rastreamento.embarque.itens:
-            if item.separacao_lote_id:
-                entregas = EntregaMonitorada.query.filter_by(
-                    separacao_lote_id=item.separacao_lote_id
-                ).all()
+        # ✅ Atualizar EntregaMonitorada correspondente (se existir)
+        if entrega.item.separacao_lote_id:
+            entrega_mon = EntregaMonitorada.query.filter_by(
+                separacao_lote_id=entrega.item.separacao_lote_id
+            ).first()
 
-                for entrega in entregas:
-                    entrega.canhoto_arquivo = file_path
-                    entrega.data_hora_entrega_realizada = datetime.utcnow()
-                    entrega.entregue = True
+            if entrega_mon:
+                entrega_mon.canhoto_arquivo = file_path
+                entrega_mon.entregue = True
+                entrega_mon.data_hora_entrega_realizada = datetime.utcnow()
+                current_app.logger.info(
+                    f"✅ EntregaMonitorada atualizada: NF {entrega_mon.numero_nf}"
+                )
+
+        # ✅ Verificar se TODAS entregas foram concluídas
+        from app.rastreamento.services.entrega_rastreada_service import EntregaRastreadaService
+
+        todas_concluidas = EntregaRastreadaService.verificar_todas_entregas_concluidas(
+            rastreamento.id
+        )
+
+        if todas_concluidas:
+            rastreamento.status = 'ENTREGUE'
+            rastreamento.rastreamento_finalizado_em = datetime.utcnow()
+            current_app.logger.info(
+                f"✅ TODAS entregas concluídas - Rastreamento finalizado para embarque #{rastreamento.embarque_id}"
+            )
+
+        # Contar entregas restantes
+        entregas_pendentes = rastreamento.entregas.filter(
+            EntregaRastreada.status.in_(['PENDENTE', 'EM_ROTA', 'PROXIMO'])
+        ).count()
 
         db.session.commit()
 
-        current_app.logger.info(f"Canhoto recebido para embarque #{rastreamento.embarque_id}")
+        current_app.logger.info(
+            f"✅ Canhoto recebido: {entrega.descricao_completa} | "
+            f"Distância: {distancia_entrega:.0f}m | "
+            f"Restantes: {entregas_pendentes}"
+        )
 
         return jsonify({
             'success': True,
-            'message': 'Canhoto enviado com sucesso! Entrega finalizada.',
-            'redirect': url_for('rastreamento.confirmacao_entrega', token=token)
+            'message': f'Entrega de {entrega.cliente} confirmada!' if entregas_pendentes > 0
+                      else 'Todas as entregas foram concluídas!',
+            'entregas_restantes': entregas_pendentes,
+            'todas_concluidas': todas_concluidas,
+            'redirect': url_for('rastreamento.rastrear', token=token) if entregas_pendentes > 0
+                       else url_for('rastreamento.confirmacao_entrega', token=token)
         })
 
     except Exception as e:

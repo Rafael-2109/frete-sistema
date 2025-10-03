@@ -240,3 +240,97 @@ class ConfiguracaoRastreamento(db.Model):
 
     def __repr__(self):
         return f'<ConfiguracaoRastreamento Ping: {self.intervalo_ping_segundos}s | Proximidade: {self.distancia_chegada_metros}m>'
+
+
+class EntregaRastreada(db.Model):
+    """
+    Controla entrega individual de cada NF dentro de um embarque
+    Permite rastreamento granular por cliente/NF
+
+    REGRA DE NEGÓCIO:
+    - Criada automaticamente quando RastreamentoEmbarque é criado
+    - Uma EntregaRastreada por EmbarqueItem
+    - Permite detecção de proximidade individual (<200m)
+    - Permite upload de canhoto individual por NF
+    """
+    __tablename__ = 'entregas_rastreadas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rastreamento_id = db.Column(db.Integer, db.ForeignKey('rastreamento_embarques.id'), nullable=False, index=True)
+    embarque_item_id = db.Column(db.Integer, db.ForeignKey('embarque_itens.id'), nullable=False, index=True)
+
+    # Dados da entrega
+    numero_nf = db.Column(db.String(20), nullable=True)  # Pode ser NULL se ainda não faturado
+    pedido = db.Column(db.String(50), nullable=False)     # Sempre tem pedido
+    cnpj_cliente = db.Column(db.String(20), nullable=True)
+    cliente = db.Column(db.String(255), nullable=False)
+
+    # Endereço completo (copiado de CarteiraPrincipal no momento da criação)
+    endereco_completo = db.Column(db.Text, nullable=True)
+    cidade = db.Column(db.String(100), nullable=False)
+    uf = db.Column(db.String(2), nullable=False)
+
+    # Coordenadas do destino (geocodificadas na criação)
+    destino_latitude = db.Column(db.Float, nullable=True)
+    destino_longitude = db.Column(db.Float, nullable=True)
+    geocodificado_em = db.Column(db.DateTime, nullable=True)
+
+    # Ordem de entrega (definida na criação, se DIRETA)
+    ordem_entrega = db.Column(db.Integer, nullable=True)  # NULL para FRACIONADA
+
+    # Status individual da entrega
+    status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
+    # PENDENTE: Aguardando início da entrega
+    # EM_ROTA: Motorista a caminho
+    # PROXIMO: Dentro de 200m do destino
+    # ENTREGUE: Entrega confirmada com canhoto
+    # NAO_ENTREGUE: Tentativa sem sucesso
+
+    # Comprovação de entrega individual
+    canhoto_arquivo = db.Column(db.String(500), nullable=True)  # Caminho no storage
+    canhoto_latitude = db.Column(db.Float, nullable=True)
+    canhoto_longitude = db.Column(db.Float, nullable=True)
+    entregue_em = db.Column(db.DateTime, nullable=True)
+    entregue_distancia_metros = db.Column(db.Float, nullable=True)  # Distância do cliente quando entregou
+
+    # Controle
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    rastreamento = db.relationship('RastreamentoEmbarque', backref=db.backref('entregas', lazy='dynamic'))
+    item = db.relationship('EmbarqueItem', backref='entrega_rastreada', uselist=False)
+
+    @property
+    def pode_entregar(self):
+        """
+        Verifica se motorista pode confirmar entrega
+        Permite entrega se estiver próximo (<200m) OU longe (permite seleção manual)
+        """
+        if self.status == 'PROXIMO':
+            return True
+
+        # Permite entrega manual mesmo longe (até 500m)
+        if self.entregue_distancia_metros and self.entregue_distancia_metros <= 500:
+            return True
+
+        return False
+
+    @property
+    def descricao_completa(self):
+        """Descrição completa para exibir ao motorista"""
+        nf_info = f"NF {self.numero_nf}" if self.numero_nf else f"Pedido {self.pedido}"
+        return f"{nf_info} - {self.cliente}"
+
+    @property
+    def descricao_com_endereco(self):
+        """Descrição com endereço para identificação precisa"""
+        nf_info = f"NF {self.numero_nf}" if self.numero_nf else f"Pedido {self.pedido}"
+        return f"{nf_info} | {self.cliente} | {self.cidade}/{self.uf}"
+
+    @property
+    def tem_coordenadas(self):
+        """Verifica se foi geocodificado com sucesso"""
+        return bool(self.destino_latitude and self.destino_longitude)
+
+    def __repr__(self):
+        return f'<EntregaRastreada {self.descricao_completa} - Status: {self.status}>'

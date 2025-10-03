@@ -542,10 +542,11 @@ class ImportadorTagPlusV2:
     def _gravar_nf_pendente(self, nfe_data):
         """
         Grava itens da NF em NFPendenteTagPlus quando não há pedido
-        Retorna lista vazia para não processar
+        Tenta buscar pedido no EmbarqueItem antes de gravar em pendências
+        Retorna lista vazia para não processar OU processa imediatamente se encontrar pedido
         """
         numero_nf = str(nfe_data.get('numero', ''))
-        logger.info(f"⚠️ NF {numero_nf} sem pedido - gravando em pendências")
+        logger.info(f"⚠️ NF {numero_nf} sem pedido - verificando EmbarqueItem...")
 
         # Extrai cliente
         cliente_data = nfe_data.get('cliente', {})
@@ -556,6 +557,18 @@ class ImportadorTagPlusV2:
         if not cnpj_cliente:
             logger.error(f"NF {numero_nf} sem CNPJ")
             return []
+
+        # NOVA LÓGICA: Tentar buscar pedido no EmbarqueItem
+        pedido_encontrado = self._buscar_pedido_em_embarque_item(numero_nf, cnpj_cliente)
+
+        if pedido_encontrado:
+            # Se encontrou pedido no EmbarqueItem, processar como NF normal
+            logger.info(f"✅ Pedido {pedido_encontrado} encontrado no EmbarqueItem para NF {numero_nf}")
+            logger.info(f"   Processando NF imediatamente com pedido extraído...")
+
+            # Adiciona o pedido na estrutura da NF e processa normalmente
+            nfe_data['numero_pedido'] = pedido_encontrado
+            return self._processar_nfe(nfe_data)
 
         # Busca ou cria cliente
         cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
@@ -615,6 +628,21 @@ class ImportadorTagPlusV2:
                 if valor_total == 0 and quantidade > 0 and valor_unitario > 0:
                     valor_total = quantidade * valor_unitario
 
+                # Calcular peso (buscar de CadastroPalletizacao)
+                peso_unitario = 0
+                peso_total_calc = 0
+                cadastro_peso = CadastroPalletizacao.query.filter_by(
+                    cod_produto=cod_produto,
+                    ativo=True
+                ).first()
+
+                if cadastro_peso:
+                    peso_unitario = float(cadastro_peso.peso_bruto)
+                    peso_total_calc = quantidade * peso_unitario
+                    logger.debug(f"Peso calculado para {cod_produto}: {peso_total_calc}kg (qtd={quantidade} * peso_unit={peso_unitario})")
+                else:
+                    logger.warning(f"⚠️ Produto {cod_produto} não encontrado em CadastroPalletizacao - peso será zerado")
+
                 # Criar registro pendente
                 pendente = NFPendenteTagPlus(
                     numero_nf=numero_nf,
@@ -628,6 +656,8 @@ class ImportadorTagPlusV2:
                     qtd_produto_faturado=quantidade,
                     preco_produto_faturado=valor_unitario,
                     valor_produto_faturado=valor_total,
+                    peso_unitario_produto=peso_unitario,
+                    peso_total=peso_total_calc,
                     origem=origem,  # Pode ser None ou ter pedido do item
                     resolvido=bool(origem),  # Se tem origem, já está resolvido
                     importado=False
@@ -652,6 +682,71 @@ class ImportadorTagPlusV2:
 
         # Retorna vazio para não processar
         return []
+
+    def _buscar_pedido_em_embarque_item(self, numero_nf, cnpj_cliente):
+        """
+        Busca pedido no EmbarqueItem quando NF vem sem pedido do TagPlus
+
+        Args:
+            numero_nf: Número da NF
+            cnpj_cliente: CNPJ do cliente (já limpo, apenas números)
+
+        Returns:
+            String com número do pedido se encontrado, None caso contrário
+        """
+        try:
+            from app.utils.cnpj_utils import normalizar_cnpj
+
+            # Normalizar CNPJ do cliente
+            cnpj_normalizado = normalizar_cnpj(cnpj_cliente)
+
+            # Buscar EmbarqueItems com esta NF
+            embarque_items = EmbarqueItem.query.filter_by(
+                nota_fiscal=numero_nf
+            ).all()
+
+            if not embarque_items:
+                logger.debug(f"   Nenhum EmbarqueItem encontrado para NF {numero_nf}")
+                return None
+
+            # Verificar se há mais de um item
+            if len(embarque_items) > 1:
+                logger.warning(f"   ⚠️ Múltiplos EmbarqueItems ({len(embarque_items)}) encontrados para NF {numero_nf}")
+                logger.warning(f"   Não é possível determinar pedido automaticamente - irá para correção manual")
+                return None
+
+            # Apenas 1 EmbarqueItem encontrado - validar CNPJ
+            item = embarque_items[0]
+            cnpj_embarque = normalizar_cnpj(item.cnpj_cliente or '')
+
+            if not cnpj_embarque:
+                logger.warning(f"   ⚠️ EmbarqueItem encontrado mas sem CNPJ - não é possível validar")
+                return None
+
+            # Validar se CNPJs são iguais
+            if cnpj_normalizado != cnpj_embarque:
+                logger.warning(f"   ⚠️ CNPJ divergente:")
+                logger.warning(f"      TagPlus: {cnpj_normalizado}")
+                logger.warning(f"      EmbarqueItem: {cnpj_embarque}")
+                return None
+
+            # Validação OK - extrair pedido
+            pedido = item.pedido
+
+            if not pedido:
+                logger.warning(f"   ⚠️ EmbarqueItem encontrado mas sem pedido preenchido")
+                return None
+
+            logger.info(f"   ✅ CNPJ validado! EmbarqueItem encontrado:")
+            logger.info(f"      Cliente: {item.cliente}")
+            logger.info(f"      Pedido: {pedido}")
+            logger.info(f"      CNPJ: {cnpj_embarque}")
+
+            return pedido
+
+        except Exception as e:
+            logger.error(f"   ❌ Erro ao buscar pedido em EmbarqueItem: {e}")
+            return None
 
     def _consolidar_relatorio_faturamento(self, itens_faturamento):
         """Consolida NFs no RelatorioFaturamentoImportado para ProcessadorFaturamento encontrar"""

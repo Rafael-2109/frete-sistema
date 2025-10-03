@@ -30,6 +30,10 @@ class NFPendenteTagPlus(db.Model):
     preco_produto_faturado = db.Column(db.Numeric(15, 4), nullable=False)
     valor_produto_faturado = db.Column(db.Numeric(15, 2), nullable=False)
 
+    # Campos de peso (calculados via CadastroPalletizacao)
+    peso_unitario_produto = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # Peso bruto unitário
+    peso_total = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # qtd_produto_faturado * peso_unitario_produto
+
     # Campo a ser preenchido pelo usuário
     origem = db.Column(db.String(50), nullable=True, index=True)  # Número do pedido
 
