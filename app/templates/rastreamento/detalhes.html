@@ -110,7 +110,22 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h2><i class="fas fa-route"></i> Rastreamento GPS - Embarque #{{ rastreamento.embarque.numero }}</h2>
-                    <p class="text-muted mb-0">Detalhes completos do rastreamento</p>
+                    <p class="text-muted mb-0">
+                        <strong>Transportadora:</strong> {{ rastreamento.embarque.transportadora.nome if rastreamento.embarque.transportadora else 'Não definida' }}
+                        |
+                        <strong>NFs:</strong>
+                        {% set nfs = [] %}
+                        {% for item in rastreamento.embarque.itens %}
+                            {% if item.nota_fiscal and item.status == 'ativo' and item.nota_fiscal not in nfs %}
+                                {% set _ = nfs.append(item.nota_fiscal) %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if nfs %}
+                            {{ nfs|join(', ') }}
+                        {% else %}
+                            Sem NF
+                        {% endif %}
+                    </p>
                 </div>
                 <a href="{{ url_for('rastreamento.dashboard_rastreamento') }}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
@@ -124,15 +139,8 @@
                         <div class="metric-box">
                             <div class="metric-label">Status</div>
                             <div class="metric-value">
-                                {% if rastreamento.status == 'ATIVO' %}
-                                    🚚 EM TRÂNSITO
-                                {% elif rastreamento.status == 'CHEGOU_DESTINO' %}
-                                    🎯 PRÓXIMO
-                                {% elif rastreamento.status == 'ENTREGUE' %}
-                                    ✅ ENTREGUE
-                                {% else %}
-                                    {{ rastreamento.status }}
-                                {% endif %}
+                                {% set status_map = {'AGUARDANDO_ACEITE': '⏳ Aguardando', 'ATIVO': '🚚 Em rota', 'CHEGOU_DESTINO': '🚚 Em rota', 'ENTREGUE': '✅ Finalizada', 'CANCELADO': '❌ Finalizada', 'EXPIRADO': '⏱️ Finalizada'} %}
+                                {{ status_map.get(rastreamento.status, rastreamento.status) }}
                             </div>
                         </div>
                     </div>

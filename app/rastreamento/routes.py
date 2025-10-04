@@ -14,6 +14,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app import db, csrf
 from datetime import datetime, timedelta
 import json
+from app.utils.timezone import agora_brasil
 
 
 # ========================================
@@ -38,7 +39,7 @@ def aceite_lgpd(token):
         return redirect(url_for('rastreamento.rastrear', token=token))
 
     # Verificar se expirou
-    if rastreamento.token_expiracao and datetime.utcnow() > rastreamento.token_expiracao:
+    if rastreamento.token_expiracao and agora_brasil() > rastreamento.token_expiracao:
         rastreamento.status = 'EXPIRADO'
         db.session.commit()
         return render_template('rastreamento/erro.html',
@@ -75,11 +76,11 @@ def processar_aceite_lgpd(token):
     try:
         # Coletar dados do aceite
         rastreamento.aceite_lgpd = True
-        rastreamento.aceite_lgpd_em = datetime.utcnow()
+        rastreamento.aceite_lgpd_em = agora_brasil()
         rastreamento.aceite_lgpd_ip = request.remote_addr
         rastreamento.aceite_lgpd_user_agent = request.headers.get('User-Agent', '')[:500]
         rastreamento.status = 'ATIVO'
-        rastreamento.rastreamento_iniciado_em = datetime.utcnow()
+        rastreamento.rastreamento_iniciado_em = agora_brasil()
 
         # Registrar log
         rastreamento.registrar_log(
@@ -204,7 +205,7 @@ def receber_ping_gps(token):
         db.session.add(ping)
 
         # Atualizar rastreamento
-        rastreamento.ultimo_ping_em = datetime.utcnow()
+        rastreamento.ultimo_ping_em = agora_brasil()
 
         # ✅ NOVO: Detectar proximidade de TODAS entregas pendentes
         from app.rastreamento.services.entrega_rastreada_service import EntregaRastreadaService
@@ -222,7 +223,7 @@ def receber_ping_gps(token):
         if distancia_destino and distancia_destino <= config.distancia_chegada_metros:
             if rastreamento.status != 'CHEGOU_DESTINO':
                 rastreamento.status = 'CHEGOU_DESTINO'
-                rastreamento.chegou_destino_em = datetime.utcnow()
+                rastreamento.chegou_destino_em = agora_brasil()
                 rastreamento.distancia_minima_atingida = distancia_destino
 
                 # Registrar log
@@ -393,7 +394,7 @@ def processar_upload_canhoto(token):
         entrega.canhoto_arquivo = file_path
         entrega.canhoto_latitude = float(latitude) if latitude and GPSService.validar_coordenadas(latitude, longitude) else None
         entrega.canhoto_longitude = float(longitude) if longitude and GPSService.validar_coordenadas(latitude, longitude) else None
-        entrega.entregue_em = datetime.utcnow()
+        entrega.entregue_em = agora_brasil()
         entrega.entregue_distancia_metros = distancia_entrega
         entrega.status = 'ENTREGUE'
 
@@ -419,7 +420,7 @@ def processar_upload_canhoto(token):
             if entrega_mon:
                 entrega_mon.canhoto_arquivo = file_path
                 entrega_mon.entregue = True
-                entrega_mon.data_hora_entrega_realizada = datetime.utcnow()
+                entrega_mon.data_hora_entrega_realizada = agora_brasil()
                 current_app.logger.info(
                     f"✅ EntregaMonitorada atualizada: NF {entrega_mon.numero_nf}"
                 )
@@ -433,7 +434,7 @@ def processar_upload_canhoto(token):
 
         if todas_concluidas:
             rastreamento.status = 'ENTREGUE'
-            rastreamento.rastreamento_finalizado_em = datetime.utcnow()
+            rastreamento.rastreamento_finalizado_em = agora_brasil()
             current_app.logger.info(
                 f"✅ TODAS entregas concluídas - Rastreamento finalizado para embarque #{rastreamento.embarque_id}"
             )
@@ -500,28 +501,94 @@ def dashboard_rastreamento():
         RastreamentoEmbarque.status.in_(['ATIVO', 'CHEGOU_DESTINO'])
     ).all()
 
+    # Coordenadas do CD (origem)
+    from app.carteira.services.mapa_service import MapaService
+    mapa_service = MapaService()
+    origem_cd = {
+        'lat': mapa_service.coordenadas_cd['lat'],
+        'lng': mapa_service.coordenadas_cd['lng'],
+        'nome': mapa_service.nome_cd,
+        'endereco': mapa_service.endereco_cd
+    }
+
     # Preparar dados para o mapa
-    marcadores = []
+    dados_mapa = []
     for rastr in rastreamentos_ativos:
         ultimo_ping = rastr.pings.first()
-        if ultimo_ping:
-            marcadores.append({
-                'embarque_id': rastr.embarque_id,
-                'embarque_numero': rastr.embarque.numero if rastr.embarque else 'N/A',
-                'latitude': ultimo_ping.latitude,
-                'longitude': ultimo_ping.longitude,
-                'distancia_destino': ultimo_ping.distancia_destino,
-                'status': rastr.status,
-                'ultimo_ping': rastr.ultimo_ping_em.strftime('%d/%m/%Y %H:%M') if rastr.ultimo_ping_em else 'N/A',
-                'bateria': ultimo_ping.bateria_nivel
-            })
+        if not ultimo_ping:
+            continue
+
+        embarque = rastr.embarque
+
+        # Coletar NFs únicas do embarque
+        nfs = set()
+        for item in embarque.itens:
+            if item.nota_fiscal and item.status == 'ativo':
+                nfs.add(item.nota_fiscal)
+
+        # Buscar destinos das entregas
+        destinos = []
+        from app.rastreamento.models import EntregaRastreada
+        entregas = rastr.entregas.filter(
+            EntregaRastreada.status.in_(['PENDENTE', 'EM_ROTA', 'PROXIMO'])
+        ).all()
+
+        for entrega in entregas:
+            if entrega.tem_coordenadas:
+                destinos.append({
+                    'lat': entrega.destino_latitude,
+                    'lng': entrega.destino_longitude,
+                    'cliente': entrega.cliente,
+                    'cidade': entrega.cidade,
+                    'uf': entrega.uf,
+                    'numero_nf': entrega.numero_nf,
+                    'pedido': entrega.pedido,
+                    'status': entrega.status
+                })
+
+        # Determinar status legível
+        status_legivel = _mapear_status_rastreamento(rastr)
+
+        dados_mapa.append({
+            'rastreamento_id': rastr.id,
+            'embarque_id': rastr.embarque_id,
+            'embarque_numero': embarque.numero if embarque else 'N/A',
+            'transportadora': embarque.transportadora.nome if embarque.transportadora else 'Não definida',
+            'nfs': list(nfs),
+            'status': rastr.status,
+            'status_legivel': status_legivel,
+            'ultimo_ping': rastr.ultimo_ping_em.strftime('%d/%m/%Y %H:%M') if rastr.ultimo_ping_em else 'N/A',
+            'bateria': ultimo_ping.bateria_nivel,
+            'motorista': {
+                'lat': ultimo_ping.latitude,
+                'lng': ultimo_ping.longitude,
+                'distancia_destino': ultimo_ping.distancia_destino
+            },
+            'destinos': destinos
+        })
 
     config = ConfiguracaoRastreamento.get_config()
 
     return render_template('rastreamento/dashboard.html',
                           rastreamentos=rastreamentos_ativos,
-                          marcadores=marcadores,
+                          dados_mapa=dados_mapa,
+                          origem_cd=origem_cd,
                           config=config)
+
+
+def _mapear_status_rastreamento(rastreamento):
+    """
+    Mapeia status técnico para status legível
+    """
+    mapeamento = {
+        'AGUARDANDO_ACEITE': 'Aguardando',
+        'ATIVO': 'Em rota',
+        'CHEGOU_DESTINO': 'Em rota',  # Ainda está em rota, só chegou próximo
+        'ENTREGUE': 'Finalizada',
+        'CANCELADO': 'Finalizada',
+        'EXPIRADO': 'Finalizada'
+    }
+    return mapeamento.get(rastreamento.status, rastreamento.status)
 
 
 @rastreamento_bp.route('/detalhes/<int:embarque_id>', methods=['GET'])
@@ -580,3 +647,57 @@ def api_status_rastreamento(embarque_id):
             'total_pings': rastreamento.pings.count()
         }
     })
+
+
+@rastreamento_bp.route('/api/encerrar/<int:rastreamento_id>', methods=['POST'])
+@login_required
+def encerrar_rastreamento(rastreamento_id):
+    """
+    Encerra um rastreamento GPS ativo
+    Desconecta o motorista e finaliza a coleta de dados
+    """
+    try:
+        rastreamento = RastreamentoEmbarque.query.get_or_404(rastreamento_id)
+
+        # Verificar se já está encerrado
+        if rastreamento.status in ['CANCELADO', 'ENTREGUE', 'EXPIRADO']:
+            return jsonify({
+                'success': False,
+                'message': f'Rastreamento já está {rastreamento.status}'
+            }), 400
+
+        # Atualizar status
+        rastreamento.status = 'CANCELADO'
+        rastreamento.rastreamento_finalizado_em = agora_brasil()
+
+        # Registrar log
+        rastreamento.registrar_log(
+            evento='ENCERRAMENTO_MANUAL',
+            detalhes=json.dumps({
+                'usuario': current_user.nome if current_user.is_authenticated else 'Sistema',
+                'motivo': 'Encerramento manual pelo dashboard'
+            })
+        )
+
+        db.session.commit()
+
+        current_app.logger.info(
+            f"✅ Rastreamento #{rastreamento_id} encerrado manualmente por {current_user.nome}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Rastreamento encerrado com sucesso',
+            'data': {
+                'status': rastreamento.status,
+                'finalizado_em': rastreamento.rastreamento_finalizado_em.isoformat()
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao encerrar rastreamento: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao encerrar rastreamento: {str(e)}'
+        }), 500

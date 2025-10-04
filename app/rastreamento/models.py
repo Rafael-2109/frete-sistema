@@ -13,6 +13,7 @@ CONFORMIDADE LGPD:
 from app import db
 from datetime import datetime, timedelta
 import secrets
+from app.utils.timezone import agora_brasil, agora_utc
 
 
 class RastreamentoEmbarque(db.Model):
@@ -55,7 +56,7 @@ class RastreamentoEmbarque(db.Model):
     canhoto_longitude = db.Column(db.Float, nullable=True)
 
     # Auditoria e LGPD
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False, default='Sistema')
     data_expurgo_lgpd = db.Column(db.DateTime, nullable=True)  # Automaticamente 90 dias após criação
 
@@ -71,7 +72,7 @@ class RastreamentoEmbarque(db.Model):
             self.token_acesso = secrets.token_urlsafe(48)  # 64 caracteres
         # Define data de expurgo LGPD (90 dias)
         if not self.data_expurgo_lgpd:
-            self.data_expurgo_lgpd = datetime.utcnow() + timedelta(days=90)
+            self.data_expurgo_lgpd = agora_brasil() + timedelta(days=90)
 
     @property
     def url_rastreamento(self):
@@ -166,7 +167,7 @@ class PingGPS(db.Model):
     bateria_carregando = db.Column(db.Boolean, default=False)
 
     # Timestamp
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
     timestamp_dispositivo = db.Column(db.DateTime, nullable=True)  # Horário do dispositivo
 
     def __repr__(self):
@@ -192,7 +193,7 @@ class LogRastreamento(db.Model):
     detalhes = db.Column(db.Text, nullable=True)  # JSON ou texto livre
 
     # Timestamp
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
 
     def __repr__(self):
         return f'<LogRastreamento {self.evento} - {self.criado_em}>'
@@ -294,7 +295,7 @@ class EntregaRastreada(db.Model):
     entregue_distancia_metros = db.Column(db.Float, nullable=True)  # Distância do cliente quando entregou
 
     # Controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
 
     # Relacionamentos
     rastreamento = db.relationship('RastreamentoEmbarque', backref=db.backref('entregas', lazy='dynamic'))

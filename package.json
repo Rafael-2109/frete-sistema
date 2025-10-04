@@ -1,0 +1,36 @@
+{
+  "name": "rastreamento-nacom",
+  "version": "1.0.0",
+  "description": "Sistema de Rastreamento GPS para Entregas Nacom",
+  "main": "index.js",
+  "scripts": {
+    "dev": "python run.py",
+    "sync": "npx cap sync",
+    "sync:android": "npx cap sync android",
+    "sync:ios": "npx cap sync ios",
+    "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios",
+    "build:web": "echo 'Web assets already in app/static'",
+    "build:android": "npx cap sync android && cd android && ./gradlew assembleRelease",
+    "build:android:debug": "npx cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "keywords": [
+    "rastreamento",
+    "gps",
+    "capacitor",
+    "geolocation"
+  ],
+  "author": "Nacom Sistemas",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/splash-screen": "^6.0.2",
+    "@capacitor-community/background-geolocation": "^1.2.17",
+    "@capacitor/geolocation": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

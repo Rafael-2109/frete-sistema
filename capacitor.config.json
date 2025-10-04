@@ -1,0 +1,32 @@
+{
+  "appId": "com.nacom.rastreamento",
+  "appName": "Rastreamento Nacom DEV",
+  "webDir": "app/static/capacitor",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "http://192.168.1.100:5000",
+    "cleartext": true,
+    "androidScheme": "http"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#28a745",
+      "androidSplashResourceName": "splash",
+      "iosSplashResourceName": "Default"
+    },
+    "BackgroundGeolocation": {
+      "notificationTitle": "🚚 Rastreamento Ativo (DEV)",
+      "notificationText": "Enviando localização - Modo Desenvolvimento"
+    }
+  },
+  "android": {
+    "buildOptions": {
+      "keystorePath": "",
+      "keystorePassword": "",
+      "keystoreAlias": "",
+      "keystoreAliasPassword": "",
+      "releaseType": "APK"
+    }
+  }
+}

@@ -11,6 +11,13 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- 🚀 CAPACITOR - Detecta automaticamente se é app ou web -->
+    <script type="module" src="{{ url_for('static', filename='js/capacitor/capacitor.js') }}" onerror="console.log('Rodando em modo WEB')"></script>
+
+    <!-- 📱 Serviço GPS Híbrido -->
+    <script src="{{ url_for('static', filename='js/capacitor/gps-service-hibrido.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/capacitor/rastreamento-integration.js') }}"></script>
+
     <style>
         body {
             background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
@@ -315,46 +322,38 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // Configurações
+        // 🚀 NOVA IMPLEMENTAÇÃO HÍBRIDA - Usa GPSServiceHibrido
+        // Detecta automaticamente se é app nativo ou web browser
+
+        // Inicializar quando página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configuração do rastreamento
+            inicializarRastreamento({
+                token: "{{ rastreamento.token_acesso }}",
+                intervaloPing: {{ intervalo_ping }}, // segundos
+                distanciaChegada: {{ config.distancia_chegada_metros }}, // metros
+                pingsIniciais: {{ rastreamento.pings.count() }},
+                urlUploadCanhoto: "{{ url_for('rastreamento.tela_upload_canhoto', token=rastreamento.token_acesso) }}"
+            });
+        });
+
+        // ========== CÓDIGO LEGACY REMOVIDO ==========
+        // A lógica antiga foi substituída pelo GPS Service Híbrido
+        // Veja: /static/js/capacitor/gps-service-hibrido.js
+        //       /static/js/capacitor/rastreamento-integration.js
+
+        // ========== MANTÉM APENAS FUNÇÕES DE UI ==========
         const TOKEN = "{{ rastreamento.token_acesso }}";
-        const INTERVALO_PING = {{ intervalo_ping }} * 1000; // Converter para milissegundos (2 minutos = 120000ms)
+        const INTERVALO_PING = {{ intervalo_ping }} * 1000;
         const DISTANCIA_CHEGADA = {{ config.distancia_chegada_metros }};
 
-        // Variáveis de controle
+        // ========== TODO CÓDIGO LEGACY COMENTADO ==========
+        // Foi substituído pelos novos módulos híbridos
+        /*
         let watchId = null;
         let intervalId = null;
         let ultimaLocalizacao = null;
         let totalPingsEnviados = {{ rastreamento.pings.count() }};
-
-        // Elementos DOM
-        const statusBadge = document.getElementById('statusBadge');
-        const distanciaDestino = document.getElementById('distanciaDestino');
-        const ultimaAtualizacao = document.getElementById('ultimaAtualizacao');
-        const totalPings = document.getElementById('totalPings');
-        const precisaoGPS = document.getElementById('precisaoGPS');
-        const bateriaIndicator = document.getElementById('bateriaIndicator');
-        const bateriaNivel = document.getElementById('bateriaNivel');
-        const btnEntregue = document.getElementById('btnEntregue');
-        const loadingOverlay = document.getElementById('loadingOverlay');
-        const alertFixed = document.getElementById('alertFixed');
-
-        // Inicializar rastreamento
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Iniciando rastreamento GPS...');
-            console.log('📍 Intervalo de ping:', INTERVALO_PING / 1000, 'segundos');
-
-            if ('geolocation' in navigator) {
-                iniciarRastreamento();
-                monitorarBateria();
-            } else {
-                mostrarAlerta('Seu dispositivo não suporta geolocalização.', 'danger');
-            }
-
-            // Botão de entrega
-            btnEntregue.addEventListener('click', function() {
-                window.location.href = "{{ url_for('rastreamento.tela_upload_canhoto', token=rastreamento.token_acesso) }}";
-            });
-        });
 
         function iniciarRastreamento() {
             // Opções de alta precisão
@@ -547,6 +546,8 @@
                 clearInterval(intervalId);
             }
         });
+        */
+        // ========== FIM DO CÓDIGO LEGACY ==========
     </script>
 </body>
 </html>

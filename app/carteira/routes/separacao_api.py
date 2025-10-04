@@ -82,11 +82,16 @@ def gerar_separacao_completa_pedido(num_pedido):
         except ValueError:
             return jsonify({"success": False, "error": "Formato de data inválido"}), 400
 
-        # Buscar todos os produtos ativos do pedido na carteira
-        itens_carteira = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido, ativo=True).all()
+        # Buscar todos os produtos ativos do pedido na carteira COM SALDO > 0
+        # IMPORTANTE: Filtrar qtd_saldo_produto_pedido >= 0.001 para evitar processar itens já faturados
+        itens_carteira = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.num_pedido == num_pedido,
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido >= 0.001  # Evita floats zerados
+        ).all()
 
         if not itens_carteira:
-            return jsonify({"success": False, "error": "Nenhum produto ativo encontrado para este pedido"}), 404
+            return jsonify({"success": False, "error": "Nenhum produto com saldo disponível encontrado para este pedido"}), 404
 
         # Gerar ID único para o lote
         separacao_lote_id = gerar_novo_lote_id()

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rastreamento Nacom</string>
+    <string name="title_activity_main">Rastreamento Nacom</string>
+    <string name="package_name">com.nacom.rastreamento</string>
+    <string name="custom_url_scheme">com.nacom.rastreamento</string>
+</resources>

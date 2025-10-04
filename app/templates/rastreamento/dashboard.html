@@ -103,6 +103,8 @@
                             <thead>
                                 <tr>
                                     <th>Embarque</th>
+                                    <th>Transportadora</th>
+                                    <th>NFs</th>
                                     <th>Status</th>
                                     <th>Distância</th>
                                     <th>Último Ping</th>
@@ -115,9 +117,25 @@
                                 {% set ultimo_ping = rastr.pings.first() %}
                                 <tr class="card-rastreamento clicavel" style="cursor: pointer;" data-url="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}">
                                     <td><strong>#{{ rastr.embarque.numero if rastr.embarque else rastr.embarque_id }}</strong></td>
+                                    <td>{{ rastr.embarque.transportadora.nome if rastr.embarque.transportadora else '-' }}</td>
                                     <td>
-                                        <span class="status-badge {% if rastr.status == 'ATIVO' %}status-ativo{% elif rastr.status == 'CHEGOU_DESTINO' %}status-proximo{% else %}status-entregue{% endif %}">
-                                            {{ rastr.status }}
+                                        {% set nfs = [] %}
+                                        {% for item in rastr.embarque.itens %}
+                                            {% if item.nota_fiscal and item.status == 'ativo' and item.nota_fiscal not in nfs %}
+                                                {% set _ = nfs.append(item.nota_fiscal) %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        {% if nfs %}
+                                            <span class="badge bg-info">{{ nfs|join(', ') }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% set status_map = {'AGUARDANDO_ACEITE': 'Aguardando', 'ATIVO': 'Em rota', 'CHEGOU_DESTINO': 'Em rota', 'ENTREGUE': 'Finalizada', 'CANCELADO': 'Finalizada', 'EXPIRADO': 'Finalizada'} %}
+                                        {% set status_legivel = status_map.get(rastr.status, rastr.status) %}
+                                        <span class="status-badge {% if rastr.status == 'ATIVO' or rastr.status == 'CHEGOU_DESTINO' %}status-ativo{% elif rastr.status == 'AGUARDANDO_ACEITE' %}status-proximo{% else %}status-entregue{% endif %}">
+                                            {{ status_legivel }}
                                         </span>
                                     </td>
                                     <td>
@@ -145,6 +163,9 @@
                                         <a href="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}" class="btn btn-sm btn-primary">
                                             <i class="fas fa-eye"></i> Detalhes
                                         </a>
+                                        <button class="btn btn-sm btn-danger ms-1" onclick="confirmarEncerramento({{ rastr.id }}, '{{ rastr.embarque.numero if rastr.embarque else rastr.embarque_id }}')">
+                                            <i class="fas fa-stop-circle"></i> Encerrar
+                                        </button>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -152,6 +173,30 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Encerramento -->
+<div class="modal fade" id="modalEncerrarRastreamento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmar Encerramento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja <strong>encerrar o rastreamento</strong> do embarque <strong>#<span id="modalEmbarqueNumero"></span></strong>?</p>
+                <p class="text-muted mb-0">
+                    <i class="fas fa-info-circle"></i> O motorista será desconectado e não poderá mais enviar localizações.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarEncerramento">
+                    <i class="fas fa-stop-circle"></i> Sim, Encerrar
+                </button>
             </div>
         </div>
     </div>
@@ -169,36 +214,110 @@
         attribution: '© OpenStreetMap contributors'
     }).addTo(mapa);
 
-    // Adicionar marcadores
-    const dadosMarcadores = {{ marcadores|tojson|safe }};
+    // Dados do mapa
+    const origemCD = {{ origem_cd|tojson|safe }};
+    const dadosMapa = {{ dados_mapa|tojson|safe }};
 
-    dadosMarcadores.forEach(function(m) {
-        const icone = m.status === 'CHEGOU_DESTINO' ? '🎯' : '🚚';
-        const cor = m.status === 'CHEGOU_DESTINO' ? 'orange' : 'green';
+    // ========== MARCADOR DA ORIGEM (CD NACOM GOYA) ==========
+    const iconeOrigem = L.divIcon({
+        html: '<i class="fas fa-warehouse" style="color: #6c757d; font-size: 32px;"></i>',
+        className: 'custom-marker-origem',
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
+    });
 
-        const marker = L.marker([m.latitude, m.longitude], {
+    L.marker([origemCD.lat, origemCD.lng], { icon: iconeOrigem })
+        .addTo(mapa)
+        .bindPopup(`
+            <strong>📍 ORIGEM</strong><br>
+            ${origemCD.nome}<br>
+            <small>${origemCD.endereco}</small>
+        `);
+
+    // Array para ajustar zoom
+    const todosMarkers = [];
+    todosMarkers.push(L.marker([origemCD.lat, origemCD.lng]));
+
+    // ========== PROCESSAR CADA RASTREAMENTO ==========
+    dadosMapa.forEach(function(dados) {
+        // 1. MARCADOR DO MOTORISTA (CAMINHÃO)
+        const iconeTruck = dados.status === 'CHEGOU_DESTINO'
+            ? '<i class="fas fa-truck" style="color: orange; font-size: 32px;"></i>'
+            : '<i class="fas fa-truck" style="color: #28a745; font-size: 32px;"></i>';
+
+        const markerMotorista = L.marker([dados.motorista.lat, dados.motorista.lng], {
             icon: L.divIcon({
-                html: `<div style="font-size: 30px;">${icone}</div>`,
-                className: 'custom-marker',
-                iconSize: [30, 30]
+                html: iconeTruck,
+                className: 'custom-marker-truck',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
             })
         }).addTo(mapa);
 
-        marker.bindPopup(`
-            <strong>Embarque #${m.embarque_numero}</strong><br>
-            Status: ${m.status}<br>
-            Distância: ${m.distancia_destino ? (m.distancia_destino / 1000).toFixed(1) + ' km' : 'N/A'}<br>
-            Último ping: ${m.ultimo_ping}<br>
-            Bateria: ${m.bateria || '-'}%<br>
-            <a href="/rastreamento/detalhes/${m.embarque_id}" class="btn btn-sm btn-primary mt-2">Ver Detalhes</a>
+        markerMotorista.bindPopup(`
+            <strong>🚚 Embarque #${dados.embarque_numero}</strong><br>
+            <strong>Transportadora:</strong> ${dados.transportadora}<br>
+            <strong>NFs:</strong> ${dados.nfs.length > 0 ? dados.nfs.join(', ') : 'Sem NF'}<br>
+            <strong>Status:</strong> ${dados.status_legivel}<br>
+            <strong>Distância:</strong> ${dados.motorista.distancia_destino ? (dados.motorista.distancia_destino / 1000).toFixed(1) + ' km' : 'N/A'}<br>
+            <strong>Último ping:</strong> ${dados.ultimo_ping}<br>
+            <strong>Bateria:</strong> ${dados.bateria || '-'}%<br>
+            <a href="/rastreamento/detalhes/${dados.embarque_id}" class="btn btn-sm btn-primary mt-2">Ver Detalhes</a>
         `);
+        todosMarkers.push(markerMotorista);
+
+        // 2. MARCADORES DOS DESTINOS
+        const iconeDestino = L.divIcon({
+            html: '<i class="fas fa-map-pin" style="color: #dc3545; font-size: 28px;"></i>',
+            className: 'custom-marker-destino',
+            iconSize: [35, 35],
+            iconAnchor: [17, 35]
+        });
+
+        dados.destinos.forEach(function(destino) {
+            const markerDestino = L.marker([destino.lat, destino.lng], { icon: iconeDestino })
+                .addTo(mapa)
+                .bindPopup(`
+                    <strong>📍 DESTINO</strong><br>
+                    <strong>Cliente:</strong> ${destino.cliente}<br>
+                    <strong>NF:</strong> ${destino.numero_nf || destino.pedido}<br>
+                    <strong>Cidade:</strong> ${destino.cidade} - ${destino.uf}<br>
+                    <strong>Status:</strong> ${destino.status}
+                `);
+            todosMarkers.push(markerDestino);
+        });
+
+        // 3. DESENHAR ROTA (POLYLINE)
+        const pontos = [
+            [origemCD.lat, origemCD.lng],  // Origem
+            [dados.motorista.lat, dados.motorista.lng]  // Motorista
+        ];
+
+        // Adicionar destinos pendentes
+        dados.destinos.forEach(d => pontos.push([d.lat, d.lng]));
+
+        // Linha tracejada verde
+        L.polyline(pontos, {
+            color: '#28a745',
+            weight: 3,
+            opacity: 0.7,
+            dashArray: '10, 10'
+        }).addTo(mapa);
+
+        // Linha sólida da origem até motorista (já percorrido)
+        L.polyline([
+            [origemCD.lat, origemCD.lng],
+            [dados.motorista.lat, dados.motorista.lng]
+        ], {
+            color: '#0d6efd',
+            weight: 4,
+            opacity: 0.8
+        }).addTo(mapa);
     });
 
     // Ajustar zoom para mostrar todos os marcadores
-    if (dadosMarcadores.length > 0) {
-        const grupo = L.featureGroup(
-            dadosMarcadores.map(m => L.marker([m.latitude, m.longitude]))
-        );
+    if (todosMarkers.length > 0) {
+        const grupo = L.featureGroup(todosMarkers);
         mapa.fitBounds(grupo.getBounds().pad(0.1));
     }
 
@@ -213,5 +332,58 @@
     setTimeout(function() {
         location.reload();
     }, 60000);
+
+    // ========== ENCERRAMENTO DE RASTREAMENTO ==========
+    let rastreamentoIdAtual = null;
+
+    function confirmarEncerramento(rastreamentoId, embarqueNumero) {
+        rastreamentoIdAtual = rastreamentoId;
+        document.getElementById('modalEmbarqueNumero').textContent = embarqueNumero;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalEncerrarRastreamento'));
+        modal.show();
+    }
+
+    document.getElementById('btnConfirmarEncerramento').addEventListener('click', async function() {
+        if (!rastreamentoIdAtual) return;
+
+        const btn = this;
+        const textoOriginal = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Encerrando...';
+
+        try {
+            const response = await fetch(`/rastreamento/api/encerrar/${rastreamentoIdAtual}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Fechar modal
+                bootstrap.Modal.getInstance(document.getElementById('modalEncerrarRastreamento')).hide();
+
+                // Mostrar mensagem de sucesso
+                alert('✅ Rastreamento encerrado com sucesso!');
+
+                // Recarregar página
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.message);
+                btn.disabled = false;
+                btn.innerHTML = textoOriginal;
+            }
+        } catch (error) {
+            console.error('Erro ao encerrar rastreamento:', error);
+            alert('❌ Erro ao encerrar rastreamento. Verifique sua conexão.');
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    });
 </script>
 {% endblock %}

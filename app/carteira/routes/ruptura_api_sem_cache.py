@@ -253,6 +253,7 @@ def analisar_ruptura_pedido_sem_cache(num_pedido):
         inicio_total = time.time()
         
         # ===== BUSCAR ITENS DO PEDIDO (Query Leve) =====
+        # IMPORTANTE: Filtrar qtd_saldo_produto_pedido >= 0.001 para evitar analisar itens já faturados
         itens = db.session.query(CarteiraPrincipal).options(
             load_only(
                 CarteiraPrincipal.cod_produto,
@@ -262,13 +263,14 @@ def analisar_ruptura_pedido_sem_cache(num_pedido):
             )
         ).filter(
             CarteiraPrincipal.num_pedido == num_pedido,
-            CarteiraPrincipal.ativo == True
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido >= 0.001  # Evita floats zerados (itens já faturados)
         ).all()
-        
+
         if not itens:
             return jsonify({
                 'success': False,
-                'message': 'Pedido não encontrado'
+                'message': 'Pedido não encontrado ou todos os itens já foram faturados'
             }), 404
         
         produtos_unicos = list(set([item.cod_produto for item in itens]))
