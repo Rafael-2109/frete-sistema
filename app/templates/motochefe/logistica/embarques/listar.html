@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-truck"></i> Embarques</h2>
+        <a href="{{ url_for('motochefe.adicionar_embarque') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Embarque
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="PLANEJADO" {% if request.args.get('status') == 'PLANEJADO' %}selected{% endif %}>Planejado</option>
+                        <option value="EM_TRANSITO" {% if request.args.get('status') == 'EM_TRANSITO' %}selected{% endif %}>Em Trânsito</option>
+                        <option value="ENTREGUE" {% if request.args.get('status') == 'ENTREGUE' %}selected{% endif %}>Entregue</option>
+                        <option value="CANCELADO" {% if request.args.get('status') == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Transportadora</th>
+                            <th>Data Embarque</th>
+                            <th>Pedidos</th>
+                            <th>Motos</th>
+                            <th>Frete Contratado</th>
+                            <th>Status</th>
+                            <th>Pag. Frete</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if embarques %}
+                            {% for e in embarques %}
+                            <tr>
+                                <td><strong>{{ e.numero_embarque }}</strong></td>
+                                <td>{{ e.transportadora.transportadora if e.transportadora else '-' }}</td>
+                                <td>{{ e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-' }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">{{ e.total_pedidos }}</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary">{{ e.total_motos }}</span>
+                                </td>
+                                <td>R$ {{ "%.2f"|format(e.valor_frete_contratado) }}</td>
+                                <td>
+                                    {% if e.status == 'PLANEJADO' %}
+                                        <span class="badge bg-secondary">Planejado</span>
+                                    {% elif e.status == 'EM_TRANSITO' %}
+                                        <span class="badge bg-warning text-dark">Em Trânsito</span>
+                                    {% elif e.status == 'ENTREGUE' %}
+                                        <span class="badge bg-success">Entregue</span>
+                                    {% elif e.status == 'CANCELADO' %}
+                                        <span class="badge bg-danger">Cancelado</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if e.status_pagamento_frete == 'PAGO' %}
+                                        <span class="badge bg-success">Pago</span>
+                                    {% elif e.status_pagamento_frete == 'PENDENTE' %}
+                                        <span class="badge bg-warning text-dark">Pendente</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Atrasado</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('motochefe.editar_embarque', id=e.id) }}"
+                                       class="btn btn-sm btn-warning" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('motochefe.remover_embarque', id=e.id) }}"
+                                          style="display: inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-danger"
+                                                onclick="return confirm('Confirma remoção? Todos os pedidos serão revertidos.')"
+                                                title="Remover">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted">
+                                    Nenhum embarque encontrado
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-file-invoice-dollar"></i>
+                {% if despesa %}Editar Despesa{% else %}Nova Despesa{% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="tipo_despesa" class="form-label">Tipo de Despesa *</label>
+                        <select class="form-select" id="tipo_despesa" name="tipo_despesa" required>
+                            <option value="">Selecione...</option>
+                            <option value="SALARIO" {% if despesa and despesa.tipo_despesa == 'SALARIO' %}selected{% endif %}>Salário</option>
+                            <option value="ALUGUEL" {% if despesa and despesa.tipo_despesa == 'ALUGUEL' %}selected{% endif %}>Aluguel</option>
+                            <option value="ENERGIA" {% if despesa and despesa.tipo_despesa == 'ENERGIA' %}selected{% endif %}>Energia Elétrica</option>
+                            <option value="AGUA" {% if despesa and despesa.tipo_despesa == 'AGUA' %}selected{% endif %}>Água</option>
+                            <option value="INTERNET" {% if despesa and despesa.tipo_despesa == 'INTERNET' %}selected{% endif %}>Internet</option>
+                            <option value="TELEFONE" {% if despesa and despesa.tipo_despesa == 'TELEFONE' %}selected{% endif %}>Telefone</option>
+                            <option value="MARKETING" {% if despesa and despesa.tipo_despesa == 'MARKETING' %}selected{% endif %}>Marketing</option>
+                            <option value="CONTABILIDADE" {% if despesa and despesa.tipo_despesa == 'CONTABILIDADE' %}selected{% endif %}>Contabilidade</option>
+                            <option value="SEGURO" {% if despesa and despesa.tipo_despesa == 'SEGURO' %}selected{% endif %}>Seguro</option>
+                            <option value="IMPOSTOS" {% if despesa and despesa.tipo_despesa == 'IMPOSTOS' %}selected{% endif %}>Impostos</option>
+                            <option value="MANUTENCAO" {% if despesa and despesa.tipo_despesa == 'MANUTENCAO' %}selected{% endif %}>Manutenção</option>
+                            <option value="DIVERSOS" {% if despesa and despesa.tipo_despesa == 'DIVERSOS' %}selected{% endif %}>Diversos</option>
+                            <option value="OUTROS" {% if despesa and despesa.tipo_despesa == 'OUTROS' %}selected{% endif %}>Outros</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="valor" class="form-label">Valor (R$) *</label>
+                        <input type="number" step="0.01" class="form-control" id="valor" name="valor"
+                               value="{{ despesa.valor if despesa else '' }}" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <textarea class="form-control" id="descricao" name="descricao" rows="3">{{ despesa.descricao if despesa else '' }}</textarea>
+                    <small class="text-muted">Informações adicionais sobre a despesa</small>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="mes_competencia" class="form-label">Mês Competência *</label>
+                        <select class="form-select" id="mes_competencia" name="mes_competencia" required>
+                            {% for m in range(1, 13) %}
+                            <option value="{{ m }}" {% if despesa and despesa.mes_competencia == m %}selected{% elif not despesa and mes_atual == m %}selected{% endif %}>
+                                {{ m }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="ano_competencia" class="form-label">Ano Competência *</label>
+                        <input type="number" class="form-control" id="ano_competencia" name="ano_competencia"
+                               value="{{ despesa.ano_competencia if despesa else ano_atual }}"
+                               min="2020" max="2030" required>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="data_vencimento" class="form-label">Data Vencimento</label>
+                        <input type="date" class="form-control" id="data_vencimento" name="data_vencimento"
+                               value="{{ despesa.data_vencimento.strftime('%Y-%m-%d') if despesa and despesa.data_vencimento else '' }}">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="PENDENTE" {% if not despesa or despesa.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                            <option value="PAGO" {% if despesa and despesa.status == 'PAGO' %}selected{% endif %}>Pago</option>
+                            <option value="ATRASADO" {% if despesa and despesa.status == 'ATRASADO' %}selected{% endif %}>Atrasado</option>
+                            <option value="CANCELADO" {% if despesa and despesa.status == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+
+                {% if despesa %}
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <h6><i class="fas fa-info-circle"></i> Informações Adicionais</h6>
+                        <small class="text-muted">
+                            <strong>Valor Pago:</strong> R$ {{ "%.2f"|format(despesa.valor_pago or 0) }}<br>
+                            <strong>Saldo Aberto:</strong> R$ {{ "%.2f"|format(despesa.saldo_aberto) }}<br>
+                            {% if despesa.data_pagamento %}
+                            <strong>Data Pagamento:</strong> {{ despesa.data_pagamento.strftime('%d/%m/%Y') }}<br>
+                            {% endif %}
+                            {% if despesa.atrasada %}
+                            <span class="badge bg-danger">ATRASADA</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_despesas') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

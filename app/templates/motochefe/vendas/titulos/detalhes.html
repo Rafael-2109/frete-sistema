@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Título #{{ titulo.id }} - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-file-invoice"></i> Detalhes do Título #{{ titulo.id }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_titulos') }}">Títulos</a></li>
+                    <li class="breadcrumb-item active">Título #{{ titulo.id }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações do Título -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-info-circle"></i> Informações do Título
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Parcela:</th>
+                            <td><strong>{{ titulo.numero_parcela }} / {{ titulo.total_parcelas }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Valor da Parcela:</th>
+                            <td><h4 class="mb-0">R$ {{ "%.2f"|format(titulo.valor_parcela|float) }}</h4></td>
+                        </tr>
+                        <tr>
+                            <th>Prazo (dias):</th>
+                            <td>{{ titulo.prazo_dias or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Data Vencimento:</th>
+                            <td>
+                                {% if titulo.data_vencimento %}
+                                    {{ titulo.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {% if titulo.atrasado %}
+                                        <span class="badge badge-danger ml-2"><i class="fas fa-exclamation-triangle"></i> VENCIDO</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">Não definida</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if titulo.status == 'PAGO' %}
+                                    <span class="badge badge-success"><i class="fas fa-check"></i> PAGO</span>
+                                {% elif titulo.status == 'ABERTO' %}
+                                    <span class="badge badge-warning"><i class="fas fa-clock"></i> ABERTO</span>
+                                {% elif titulo.status == 'RASCUNHO' %}
+                                    <span class="badge badge-secondary"><i class="fas fa-file"></i> RASCUNHO</span>
+                                {% else %}
+                                    <span class="badge badge-danger">{{ titulo.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recebimento -->
+            {% if titulo.status == 'PAGO' %}
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-check-circle"></i> Informações do Recebimento
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Data Recebimento:</th>
+                            <td><strong>{{ titulo.data_recebimento.strftime('%d/%m/%Y') }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Valor Recebido:</th>
+                            <td><h4 class="text-success mb-0">R$ {{ "%.2f"|format(titulo.valor_recebido|float) }}</h4></td>
+                        </tr>
+                        {% if titulo.atualizado_por %}
+                        <tr>
+                            <th>Baixado por:</th>
+                            <td>{{ titulo.atualizado_por }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Informações do Pedido Relacionado -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-shopping-cart"></i> Pedido Relacionado
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Número Pedido:</th>
+                            <td>
+                                <a href="{{ url_for('motochefe.detalhes_pedido', id=titulo.pedido.id) }}" class="btn btn-sm btn-outline-primary">
+                                    {{ titulo.pedido.numero_pedido }} <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Cliente:</th>
+                            <td><strong>{{ titulo.pedido.cliente.cliente }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>CNPJ:</th>
+                            <td>{{ titulo.pedido.cliente.cnpj_cliente }}</td>
+                        </tr>
+                        <tr>
+                            <th>Data Pedido:</th>
+                            <td>{{ titulo.pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Valor Total Pedido:</th>
+                            <td><strong>R$ {{ "%.2f"|format(titulo.pedido.valor_total_pedido|float) }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>NF:</th>
+                            <td>{{ titulo.pedido.numero_nf or 'Não faturado' }}</td>
+                        </tr>
+                        {% if titulo.pedido.data_nf %}
+                        <tr>
+                            <th>Data NF:</th>
+                            <td>{{ titulo.pedido.data_nf.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Vendedor:</th>
+                            <td>{{ titulo.pedido.vendedor.vendedor }}</td>
+                        </tr>
+                        {% if titulo.pedido.equipe %}
+                        <tr>
+                            <th>Equipe:</th>
+                            <td>{{ titulo.pedido.equipe.equipe_vendas }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+
+                    <div class="mt-3">
+                        <a href="{{ url_for('motochefe.detalhes_pedido', id=titulo.pedido.id) }}" class="btn btn-primary btn-block">
+                            <i class="fas fa-eye"></i> Ver Pedido Completo
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outras Parcelas do Pedido -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-list"></i> Outras Parcelas deste Pedido
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Parcela</th>
+                                <th>Vencimento</th>
+                                <th class="text-right">Valor</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in titulo.pedido.titulos %}
+                            <tr {% if t.id == titulo.id %}class="table-active font-weight-bold"{% endif %}>
+                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                <td>
+                                    {% if t.data_vencimento %}
+                                        {{ t.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">R$ {{ "%.2f"|format(t.valor_parcela|float) }}</td>
+                                <td>
+                                    {% if t.status == 'PAGO' %}
+                                        <span class="badge badge-success">PAGO</span>
+                                    {% elif t.status == 'ABERTO' %}
+                                        <span class="badge badge-warning">ABERTO</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">{{ t.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="font-weight-bold">
+                            <tr>
+                                <td colspan="2">TOTAL:</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(titulo.pedido.titulos|sum(attribute='valor_parcela')|float) }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de Ação -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('motochefe.listar_titulos') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar para Lista
+            </a>
+            <a href="{{ url_for('motochefe.extrato_financeiro') }}" class="btn btn-info">
+                <i class="fas fa-file-invoice-dollar"></i> Ver Extrato Financeiro
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

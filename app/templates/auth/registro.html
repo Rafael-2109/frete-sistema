@@ -5,12 +5,22 @@
     <div class="card shadow">
         <div class="card-header bg-primary text-white">
             <h3 class="card-title mb-0">
-                <i class="fas fa-user-plus"></i> Solicitar Acesso ao Sistema
+                <i class="fas fa-user-plus"></i> Solicitar Acesso
+                {% if sistema == 'motochefe' %}
+                - Sistema MotoChefe
+                {% else %}
+                - Sistema Logística Nacom Goya
+                {% endif %}
             </h3>
         </div>
         <div class="card-body">
             <p class="text-muted mb-4">
-                Preencha os dados abaixo para solicitar acesso ao sistema. 
+                Preencha os dados abaixo para solicitar acesso ao
+                {% if sistema == 'motochefe' %}
+                <strong>Sistema MotoChefe</strong>
+                {% else %}
+                <strong>Sistema de Logística</strong>
+                {% endif %}.
                 Sua solicitação será analisada pela administração.
             </p>
 

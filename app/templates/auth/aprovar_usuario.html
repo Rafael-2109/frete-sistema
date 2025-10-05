@@ -31,7 +31,15 @@
                                     </p>
                                 </div>
                             </div>
-                            <p><strong>Data da Solicitação:</strong> 
+                            <p><strong>Sistema Solicitado:</strong>
+                                {% if usuario.sistema_logistica %}
+                                <span class="badge bg-primary"><i class="fas fa-truck"></i> Sistema Logística</span>
+                                {% endif %}
+                                {% if usuario.sistema_motochefe %}
+                                <span class="badge bg-success"><i class="fas fa-motorcycle"></i> Sistema MotoChefe</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>Data da Solicitação:</strong>
                                 {{ usuario.criado_em | formatar_data_hora_brasil if usuario.criado_em else '-' }}
                             </p>
                         </div>
@@ -69,6 +77,27 @@
                                 <strong>Obrigatório para vendedores:</strong> Selecione o nome do vendedor 
                                 que aparece nos relatórios de faturamento
                             </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sistemas Permitidos -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label"><i class="fas fa-desktop"></i> Sistemas Permitidos:</label>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    {{ form.sistema_logistica(class="form-check-input", id="sistemaLogistica") }}
+                                    {{ form.sistema_logistica.label(class="form-check-label", for="sistemaLogistica") }}
+                                    <small class="text-muted d-block">Acesso ao sistema de logística, embarques e fretes</small>
+                                </div>
+                                <div class="form-check mt-2">
+                                    {{ form.sistema_motochefe(class="form-check-input", id="sistemaMotochefe") }}
+                                    {{ form.sistema_motochefe.label(class="form-check-label", for="sistemaMotochefe") }}
+                                    <small class="text-muted d-block">Acesso ao sistema de gestão de motos elétricas</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

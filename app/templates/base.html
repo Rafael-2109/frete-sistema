@@ -75,7 +75,13 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
       {% if not is_comercial_only %}
-      <a class="navbar-brand" href="{{ url_for('main.dashboard') }}">Logistica Nacom Goya</a>
+      <a class="navbar-brand" href="{% if current_user.sistema_motochefe and not current_user.sistema_logistica %}{{ url_for('motochefe.dashboard_motochefe') }}{% else %}{{ url_for('main.dashboard') }}{% endif %}">
+        {% if current_user.sistema_motochefe and not current_user.sistema_logistica %}
+        <i class="fas fa-motorcycle"></i> Sistema MotoChefe
+        {% else %}
+        <i class="fas fa-truck"></i> Logística Nacom Goya
+        {% endif %}
+      </a>
       {% else %}
       <span class="navbar-brand">Comercial Nacom Goya</span>
       {% endif %}
@@ -85,6 +91,79 @@
 
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
+
+          <!-- Dropdown MotoChefe -->
+          {% if current_user.is_authenticated and current_user.pode_acessar_motochefe() %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarMotochefe" role="button"
+               data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-motorcycle"></i> MotoChefe
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="navbarMotochefe">
+                <li><h6 class="dropdown-header"><i class="fas fa-address-book"></i> Cadastros Básicos</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_equipes') }}">
+                    <i class="fas fa-users"></i> Equipes de Vendas
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_vendedores') }}">
+                    <i class="fas fa-user-tie"></i> Vendedores
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_transportadoras') }}">
+                    <i class="fas fa-truck"></i> Transportadoras
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_clientes') }}">
+                    <i class="fas fa-building"></i> Clientes
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_empresas') }}">
+                    <i class="fas fa-industry"></i> Empresas de Faturamento
+                </a></li>
+
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-box"></i> Produtos e Estoque</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_modelos') }}">
+                    <i class="fas fa-list"></i> Modelos de Motos
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_motos') }}">
+                    <i class="fas fa-motorcycle"></i> Estoque de Motos (Chassi)
+                </a></li>
+
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-shopping-cart"></i> Vendas</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_pedidos') }}">
+                    <i class="fas fa-file-invoice"></i> Pedidos de Venda
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_titulos') }}">
+                    <i class="fas fa-receipt"></i> Títulos a Receber
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_comissoes') }}">
+                    <i class="fas fa-hand-holding-usd"></i> Comissões
+                </a></li>
+
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-truck-loading"></i> Logística</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_embarques') }}">
+                    <i class="fas fa-shipping-fast"></i> Embarques
+                </a></li>
+
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-dollar-sign"></i> Financeiro</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_contas_a_pagar') }}">
+                    <i class="fas fa-hand-holding-usd"></i> Contas a Pagar
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_contas_a_receber') }}">
+                    <i class="fas fa-money-bill-wave"></i> Contas a Receber
+                </a></li>
+
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-cog"></i> Operacional</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.custos_operacionais') }}">
+                    <i class="fas fa-dollar-sign"></i> Custos Operacionais
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('motochefe.listar_despesas') }}">
+                    <i class="fas fa-wallet"></i> Despesas Mensais
+                </a></li>
+            </ul>
+          </li>
+          {% endif %}
 
           <!-- OPERACIONAL - Fluxo principal do dia a dia -->
           {% if not is_comercial_only %}

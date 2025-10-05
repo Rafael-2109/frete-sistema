@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2><i class="fas fa-hand-holding-usd"></i> Contas a Pagar - Visão Consolidada</h2>
+    <hr>
+
+    <!-- RESUMO GERAL -->
+    <div class="card mb-4 border-danger">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-2">
+                    <h5>Total a Pagar</h5>
+                    <h3 class="text-danger">R$ {{ "%.2f"|format(total_geral) }}</h3>
+                </div>
+                <div class="col-md-2">
+                    <small>Motos</small><br>
+                    <strong>R$ {{ "%.2f"|format(total_motos) }}</strong>
+                </div>
+                <div class="col-md-2">
+                    <small>Fretes</small><br>
+                    <strong>R$ {{ "%.2f"|format(total_fretes) }}</strong>
+                </div>
+                <div class="col-md-2">
+                    <small>Comissões</small><br>
+                    <strong>R$ {{ "%.2f"|format(total_comissoes) }}</strong>
+                </div>
+                <div class="col-md-2">
+                    <small>Montagens</small><br>
+                    <strong>R$ {{ "%.2f"|format(total_montagens) }}</strong>
+                </div>
+                <div class="col-md-2">
+                    <small>Despesas</small><br>
+                    <strong>R$ {{ "%.2f"|format(total_despesas) }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('motochefe.pagar_lote') }}" id="formPagamento">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="itens_pagamento" id="itens_pagamento"/>
+        <input type="hidden" name="data_pagamento" id="data_pagamento_hidden"/>
+
+        <!-- 1. MOTOS -->
+        {% if motos_agrupados %}
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-motorcycle"></i> Motos (Custo Aquisição)
+                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_motos) }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for grupo in motos_agrupados %}
+                <div class="mb-3">
+                    <div class="d-flex align-items-center">
+                        <input type="checkbox" class="form-check-input me-2 grupo-check" data-tipo="moto-grupo" data-grupo="nf-{{ loop.index }}">
+                        <strong>NF {{ grupo.nf }}</strong> - {{ grupo.fornecedor }} -
+                        {{ grupo.motos|length }} motos -
+                        <span class="text-danger">R$ {{ "%.2f"|format(grupo.total_custo - grupo.total_pago) }}</span>
+                        <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('nf-{{ loop.index }}')">
+                            <i class="fas fa-chevron-down" id="icon-nf-{{ loop.index }}"></i>
+                        </button>
+                    </div>
+                    <div id="nf-{{ loop.index }}" class="collapse ms-4 mt-2">
+                        {% for moto in grupo.motos %}
+                        <div class="form-check">
+                            <input class="form-check-input item-check" type="checkbox"
+                                   data-tipo="moto"
+                                   data-id="{{ moto.numero_chassi }}"
+                                   data-valor="{{ moto.custo_aquisicao }}"
+                                   data-grupo="nf-{{ loop.index0 }}"
+                                   id="moto-{{ moto.numero_chassi }}">
+                            <label class="form-check-label" for="moto-{{ moto.numero_chassi }}">
+                                Chassi: {{ moto.numero_chassi }} | {{ moto.modelo.nome_modelo if moto.modelo else '-' }} |
+                                R$ {{ "%.2f"|format(moto.custo_aquisicao) }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 2. FRETES -->
+        {% if fretes_agrupados %}
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck"></i> Fretes de Embarques
+                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_fretes) }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for grupo in fretes_agrupados %}
+                <div class="mb-3">
+                    <div class="d-flex align-items-center">
+                        <input type="checkbox" class="form-check-input me-2 grupo-check" data-tipo="frete-grupo">
+                        <strong>{{ grupo.transportadora }}</strong> -
+                        {{ grupo.embarques|length }} embarques -
+                        <span class="text-danger">R$ {{ "%.2f"|format(grupo.total) }}</span>
+                        <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('transp-{{ loop.index }}')">
+                            <i class="fas fa-chevron-down" id="icon-transp-{{ loop.index }}"></i>
+                        </button>
+                    </div>
+                    <div id="transp-{{ loop.index }}" class="collapse ms-4 mt-2">
+                        {% for emb in grupo.embarques %}
+                        <div class="form-check">
+                            <input class="form-check-input item-check" type="checkbox"
+                                   data-tipo="frete"
+                                   data-id="{{ emb.id }}"
+                                   data-valor="{{ emb.valor_frete_contratado }}"
+                                   id="frete-{{ emb.id }}">
+                            <label class="form-check-label" for="frete-{{ emb.id }}">
+                                {{ emb.numero_embarque }} | R$ {{ "%.2f"|format(emb.valor_frete_contratado) }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 3. COMISSÕES -->
+        {% if comissoes_agrupadas %}
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-percent"></i> Comissões de Vendedores
+                    <span class="badge bg-dark float-end">R$ {{ "%.2f"|format(total_comissoes) }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for grupo in comissoes_agrupadas %}
+                <div class="mb-2">
+                    <strong>{{ grupo.vendedor }}</strong> - {{ grupo.comissoes|length }} comissões -
+                    R$ {{ "%.2f"|format(grupo.total) }}
+                    <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('vend-{{ loop.index }}')">
+                        <i class="fas fa-chevron-down" id="icon-vend-{{ loop.index }}"></i>
+                    </button>
+                    <div id="vend-{{ loop.index }}" class="collapse ms-4">
+                        {% for com in grupo.comissoes %}
+                        <div class="form-check">
+                            <input class="form-check-input item-check" type="checkbox"
+                                   data-tipo="comissao"
+                                   data-id="{{ com.id }}"
+                                   data-valor="{{ com.valor_rateado }}"
+                                   id="com-{{ com.id }}">
+                            <label class="form-check-label" for="com-{{ com.id }}">
+                                Pedido {{ com.pedido.numero_pedido if com.pedido else '-' }} | R$ {{ "%.2f"|format(com.valor_rateado) }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 4. MONTAGENS -->
+        {% if montagens_agrupadas %}
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-tools"></i> Montagens de Motos
+                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_montagens) }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for grupo in montagens_agrupadas %}
+                <div class="mb-2">
+                    <strong>{{ grupo.fornecedor }}</strong> - {{ grupo.montagens|length }} montagens -
+                    R$ {{ "%.2f"|format(grupo.total) }}
+                    <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('mont-{{ loop.index }}')">
+                        <i class="fas fa-chevron-down" id="icon-mont-{{ loop.index }}"></i>
+                    </button>
+                    <div id="mont-{{ loop.index }}" class="collapse ms-4">
+                        {% for mont in grupo.montagens %}
+                        <div class="form-check">
+                            <input class="form-check-input item-check" type="checkbox"
+                                   data-tipo="montagem"
+                                   data-id="{{ mont.id }}"
+                                   data-valor="{{ mont.valor_montagem }}"
+                                   id="mont-{{ mont.id }}">
+                            <label class="form-check-label" for="mont-{{ mont.id }}">
+                                Pedido {{ mont.pedido.numero_pedido if mont.pedido else '-' }} |
+                                Chassi {{ mont.numero_chassi }} |
+                                R$ {{ "%.2f"|format(mont.valor_montagem) }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 5. DESPESAS -->
+        {% if despesas_agrupadas %}
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-wallet"></i> Despesas Mensais
+                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_despesas) }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for grupo in despesas_agrupadas %}
+                <div class="mb-2">
+                    <strong>{{ grupo.tipo }}</strong> - R$ {{ "%.2f"|format(grupo.total) }}
+                    <a href="{{ url_for('motochefe.listar_despesas') }}" class="btn btn-sm btn-link">Ver Todas</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- RODAPÉ FIXO -->
+        <div class="card bg-dark text-white sticky-bottom">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <strong>Selecionados:</strong> <span id="qtd-selecionados">0</span> itens
+                        | <strong>Total:</strong> R$ <span id="total-selecionados">0,00</span>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="date" class="form-control" id="data_pagamento_input" required>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-check-circle"></i> Pagar Selecionados
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleGrupo(id) {
+    const elem = document.getElementById(id);
+    const icon = document.getElementById('icon-' + id);
+    if (elem.classList.contains('show')) {
+        elem.classList.remove('show');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        elem.classList.add('show');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    }
+}
+
+function atualizarTotal() {
+    const checks = document.querySelectorAll('.item-check:checked');
+    let total = 0;
+    checks.forEach(c => {
+        total += parseFloat(c.dataset.valor || 0);
+    });
+    document.getElementById('qtd-selecionados').textContent = checks.length;
+    document.getElementById('total-selecionados').textContent = total.toFixed(2).replace('.', ',');
+}
+
+document.querySelectorAll('.item-check').forEach(check => {
+    check.addEventListener('change', atualizarTotal);
+});
+
+document.getElementById('formPagamento').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const checks = document.querySelectorAll('.item-check:checked');
+    if (checks.length === 0) {
+        alert('Selecione ao menos um item para pagar');
+        return;
+    }
+
+    const itens = [];
+    checks.forEach(c => {
+        itens.push({
+            tipo: c.dataset.tipo,
+            id: c.dataset.id,
+            valor: c.dataset.valor
+        });
+    });
+
+    document.getElementById('itens_pagamento').value = JSON.stringify(itens);
+    document.getElementById('data_pagamento_hidden').value = document.getElementById('data_pagamento_input').value;
+    this.submit();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-file-invoice-dollar"></i> Despesas Mensais</h2>
+        <div>
+            <a href="{{ url_for('motochefe.adicionar_despesa') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Adicionar
+            </a>
+            <a href="{{ url_for('motochefe.exportar_despesas') }}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                <i class="fas fa-upload"></i> Importar
+            </button>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6>Total Geral</h6>
+                    <h3>R$ {{ "%.2f"|format(total_geral) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6>Total Pago</h6>
+                    <h3>R$ {{ "%.2f"|format(total_pago) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6>Saldo Aberto</h6>
+                    <h3>R$ {{ "%.2f"|format(total_aberto) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6>Total Despesas</h6>
+                    <h3>{{ despesas|length }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Mês</label>
+                    <select name="mes" class="form-select">
+                        <option value="">Todos</option>
+                        {% for m in range(1, 13) %}
+                        <option value="{{ m }}" {% if mes_filtro == m %}selected{% endif %}>{{ m }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ano</label>
+                    <input type="number" name="ano" class="form-control" value="{{ ano_filtro or '' }}" placeholder="2025">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_despesas') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Competência</th>
+                        <th>Valor</th>
+                        <th>Pago</th>
+                        <th>Saldo</th>
+                        <th>Status</th>
+                        <th>Vencimento</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in despesas %}
+                    <tr {% if d.atrasada %}class="table-danger"{% endif %}>
+                        <td>{{ d.id }}</td>
+                        <td><strong>{{ d.tipo_despesa }}</strong></td>
+                        <td>{{ d.descricao or '-' }}</td>
+                        <td>{{ d.mes_competencia }}/{{ d.ano_competencia }}</td>
+                        <td>R$ {{ "%.2f"|format(d.valor) }}</td>
+                        <td>R$ {{ "%.2f"|format(d.valor_pago or 0) }}</td>
+                        <td>R$ {{ "%.2f"|format(d.saldo_aberto) }}</td>
+                        <td>
+                            {% if d.status == 'PAGO' %}
+                            <span class="badge bg-success">{{ d.status }}</span>
+                            {% elif d.status == 'ATRASADO' or d.atrasada %}
+                            <span class="badge bg-danger">ATRASADO</span>
+                            {% elif d.status == 'CANCELADO' %}
+                            <span class="badge bg-secondary">{{ d.status }}</span>
+                            {% else %}
+                            <span class="badge bg-warning">{{ d.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ d.data_vencimento.strftime('%d/%m/%Y') if d.data_vencimento else '-' }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('motochefe.editar_despesa', id=d.id) }}" class="btn btn-warning">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% if d.status != 'PAGO' %}
+                                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalPagar{{ d.id }}">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </button>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('motochefe.remover_despesa', id=d.id) }}" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-danger" onclick="return confirm('Confirma remoção?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Modal de Pagamento -->
+                    <div class="modal fade" id="modalPagar{{ d.id }}">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5><i class="fas fa-dollar-sign"></i> Registrar Pagamento</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="POST" action="{{ url_for('motochefe.pagar_despesa', id=d.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <div class="modal-body">
+                                        <p><strong>Despesa:</strong> {{ d.tipo_despesa }} - {{ d.mes_competencia }}/{{ d.ano_competencia }}</p>
+                                        <p><strong>Valor Total:</strong> R$ {{ "%.2f"|format(d.valor) }}</p>
+                                        <p><strong>Saldo Aberto:</strong> R$ {{ "%.2f"|format(d.saldo_aberto) }}</p>
+                                        <hr>
+                                        <div class="mb-3">
+                                            <label class="form-label">Valor Pago *</label>
+                                            <input type="number" step="0.01" name="valor_pago" class="form-control"
+                                                   value="{{ d.saldo_aberto }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Data Pagamento *</label>
+                                            <input type="date" name="data_pagamento" class="form-control"
+                                                   value="{{ today if today else '' }}" required>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-check"></i> Confirmar Pagamento
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted">Nenhuma despesa cadastrada</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Importar -->
+<div class="modal fade" id="modalImportar">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5><i class="fas fa-upload"></i> Importar Despesas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('motochefe.importar_despesas') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <input type="file" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
+                    <div class="alert alert-info mt-2">
+                        <small>
+                            Colunas obrigatórias: <code>Tipo</code>, <code>Valor</code>, <code>Mês</code>, <code>Ano</code><br>
+                            Colunas opcionais: <code>Descrição</code>, <code>Status</code>
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2><i class="fas fa-motorcycle"></i> Bem-vindo ao Sistema MotoChefe</h2>
+            <p class="text-muted">Sistema de Gestão de Motos Elétricas</p>
+            <hr>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        <!-- Card Cadastros Básicos -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-address-book"></i> Cadastros Básicos</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('motochefe.listar_equipes') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-users text-primary"></i> Equipes de Vendas
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_vendedores') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-user-tie text-primary"></i> Vendedores
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_transportadoras') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-truck text-primary"></i> Transportadoras
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_clientes') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-building text-primary"></i> Clientes
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_empresas') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-industry text-primary"></i> Empresas de Faturamento
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Produtos e Estoque -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-box"></i> Produtos e Estoque</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('motochefe.listar_modelos') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-list text-success"></i> Modelos de Motos
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_motos') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-motorcycle text-success"></i> Estoque de Motos (Chassi)
+                            <span class="badge bg-success float-end">FIFO</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Vendas -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-shopping-cart"></i> Vendas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('motochefe.listar_pedidos') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-file-invoice text-danger"></i> Pedidos de Venda
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_titulos') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-receipt text-danger"></i> Títulos a Receber
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_comissoes') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-hand-holding-usd text-danger"></i> Comissões
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Logística -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-truck-loading"></i> Logística</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('motochefe.listar_embarques') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-shipping-fast text-info"></i> Embarques
+                            <span class="badge bg-info float-end">Rateio</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Operacional -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Operacional</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('motochefe.custos_operacionais') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-dollar-sign text-warning"></i> Custos Operacionais
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_despesas') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-wallet text-warning"></i> Despesas Mensais
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Informações -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-secondary">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-question-circle"></i> Informações</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Sistema MotoChefe v1.0</h6>
+                    <p class="card-text small">
+                        Sistema completo para gestão de motos elétricas incluindo:
+                    </p>
+                    <ul class="small">
+                        <li>Controle de Estoque (FIFO)</li>
+                        <li>Gestão de Vendas e Pedidos</li>
+                        <li>Faturamento e Títulos</li>
+                        <li>Cálculo de Comissões</li>
+                        <li>Controle de Embarques</li>
+                        <li>Despesas e Custos</li>
+                    </ul>
+                    <hr>
+                    <p class="small mb-0">
+                        <i class="fas fa-user"></i> <strong>Usuário:</strong> {{ current_user.nome }}<br>
+                        <i class="fas fa-envelope"></i> <strong>Email:</strong> {{ current_user.email }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Atalhos Rápidos -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-bolt"></i> Ações Rápidas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-auto">
+                            <a href="{{ url_for('motochefe.adicionar_pedido') }}" class="btn btn-danger">
+                                <i class="fas fa-cart-plus"></i> Novo Pedido de Venda
+                            </a>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{{ url_for('motochefe.adicionar_moto') }}" class="btn btn-success">
+                                <i class="fas fa-plus-circle"></i> Cadastrar Moto (Chassi)
+                            </a>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{{ url_for('motochefe.adicionar_cliente') }}" class="btn btn-primary">
+                                <i class="fas fa-user-plus"></i> Novo Cliente
+                            </a>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{{ url_for('motochefe.adicionar_embarque') }}" class="btn btn-info">
+                                <i class="fas fa-truck-loading"></i> Novo Embarque
+                            </a>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{{ url_for('motochefe.adicionar_despesa') }}" class="btn btn-warning text-dark">
+                                <i class="fas fa-file-invoice-dollar"></i> Lançar Despesa
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

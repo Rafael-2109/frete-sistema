@@ -15,11 +15,15 @@ class Usuario(db.Model, UserMixin):
     # Níveis de usuário conforme especificação
     perfil = db.Column(db.String(30), default='vendedor')  # portaria, vendedor, gerente_comercial, financeiro, logistica, administrador
     status = db.Column(db.String(20), default='pendente')  # pendente, ativo, rejeitado, bloqueado
-    
+
     empresa = db.Column(db.String(100), nullable=True)  # Empresa do usuário
     cargo = db.Column(db.String(100), nullable=True)  # Cargo do usuário
     telefone = db.Column(db.String(20), nullable=True)  # Telefone para contato
     vendedor_vinculado = db.Column(db.String(100), nullable=True)  # Nome do vendedor no faturamento (para perfil vendedor)
+
+    # Sistemas permitidos (novo - para separar logística de motochefe)
+    sistema_logistica = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema de logística
+    sistema_motochefe = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema motochefe
     
     # Dados de controle
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -127,6 +131,15 @@ class Usuario(db.Model, UserMixin):
     def pode_editar_cadastros(self):
         """Verifica se pode editar cadastros"""
         return self.perfil in ['administrador', 'financeiro', 'logistica', 'gerente_comercial']
+
+    # Métodos de verificação de acesso aos sistemas
+    def pode_acessar_logistica(self):
+        """Verifica se pode acessar o sistema de logística"""
+        return self.sistema_logistica
+
+    def pode_acessar_motochefe(self):
+        """Verifica se pode acessar o sistema motochefe"""
+        return self.sistema_motochefe
 
     def __repr__(self):
         return f'<Usuario {self.email}>'

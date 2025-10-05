@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 600px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-user-tie"></i>
+                {% if vendedor %}Editar Vendedor{% else %}Novo Vendedor{% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="mb-3">
+                    <label for="vendedor" class="form-label">Nome do Vendedor *</label>
+                    <input type="text"
+                           class="form-control"
+                           id="vendedor"
+                           name="vendedor"
+                           value="{{ vendedor.vendedor if vendedor else '' }}"
+                           required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="equipe_vendas_id" class="form-label">Equipe de Vendas</label>
+                    <select class="form-select" id="equipe_vendas_id" name="equipe_vendas_id">
+                        <option value="">Selecione uma equipe...</option>
+                        {% for equipe in equipes %}
+                        <option value="{{ equipe.id }}"
+                                {% if vendedor and vendedor.equipe_vendas_id == equipe.id %}selected{% endif %}>
+                            {{ equipe.equipe_vendas }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">Opcional - Vincular vendedor a uma equipe</small>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_vendedores') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

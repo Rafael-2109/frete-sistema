@@ -135,6 +135,27 @@
                     {% endif %}
                 </div>
 
+                <!-- Sistemas Permitidos -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label"><i class="fas fa-desktop"></i> Sistemas Permitidos:</label>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    {{ form.sistema_logistica(class="form-check-input", id="sistemaLogistica") }}
+                                    {{ form.sistema_logistica.label(class="form-check-label", for="sistemaLogistica") }}
+                                    <small class="text-muted d-block">Acesso ao sistema de logística, embarques e fretes</small>
+                                </div>
+                                <div class="form-check mt-2">
+                                    {{ form.sistema_motochefe(class="form-check-input", id="sistemaMotochefe") }}
+                                    {{ form.sistema_motochefe.label(class="form-check-label", for="sistemaMotochefe") }}
+                                    <small class="text-muted d-block">Acesso ao sistema de gestão de motos elétricas</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Informações sobre permissões -->
                 <div class="alert alert-info mb-4">
                     <h6><i class="fas fa-info-circle"></i> Permissões dos Perfis:</h6>

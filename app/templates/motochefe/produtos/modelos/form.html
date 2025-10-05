@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 700px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-motorcycle"></i>
+                {% if modelo %}Editar Modelo{% else %}Novo Modelo{% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="mb-3">
+                    <label for="nome_modelo" class="form-label">Nome do Modelo *</label>
+                    <input type="text" class="form-control" id="nome_modelo" name="nome_modelo"
+                           value="{{ modelo.nome_modelo if modelo else '' }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <textarea class="form-control" id="descricao" name="descricao" rows="3">{{ modelo.descricao if modelo else '' }}</textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="potencia_motor" class="form-label">Potência do Motor *</label>
+                        <input type="text" class="form-control" id="potencia_motor" name="potencia_motor"
+                               value="{{ modelo.potencia_motor if modelo else '' }}"
+                               placeholder="Ex: 1000W, 2000W, 3000W" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="preco_tabela" class="form-label">Preço Tabela (R$) *</label>
+                        <input type="number" step="0.01" class="form-control" id="preco_tabela" name="preco_tabela"
+                               value="{{ modelo.preco_tabela if modelo else '' }}" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="autopropelido" name="autopropelido"
+                               {% if modelo and modelo.autopropelido %}checked{% endif %}>
+                        <label class="form-check-label" for="autopropelido">
+                            Autopropelido
+                        </label>
+                    </div>
+                    <small class="text-muted">Marque se a moto possui sistema autopropelido</small>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_modelos') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

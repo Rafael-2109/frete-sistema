@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-hand-holding-usd"></i> Comissões de Vendedores</h2>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2">
+                <div class="col-md-5">
+                    <label class="form-label">Vendedor</label>
+                    <select name="vendedor_id" class="form-select">
+                        <option value="">Todos</option>
+                        {% for v in vendedores %}
+                        <option value="{{ v.id }}">{{ v.vendedor }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE">Pendente</option>
+                        <option value="PAGO">Pago</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Pedido/NF</th>
+                            <th>Vendedor</th>
+                            <th>Equipe</th>
+                            <th>Comissão Fixa</th>
+                            <th>Excedente</th>
+                            <th>Total</th>
+                            <th>Qtd Vendedores</th>
+                            <th>Valor Rateado</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in comissoes %}
+                        <tr>
+                            <td>
+                                <strong>{{ c.pedido.numero_pedido }}</strong><br>
+                                <small class="text-muted">NF: {{ c.pedido.numero_nf }}</small>
+                            </td>
+                            <td>{{ c.vendedor.vendedor if c.vendedor else '-' }}</td>
+                            <td>{{ c.vendedor.equipe.equipe_vendas if c.vendedor and c.vendedor.equipe else '-' }}</td>
+                            <td>R$ {{ "%.2f"|format(c.valor_comissao_fixa) }}</td>
+                            <td>R$ {{ "%.2f"|format(c.valor_excedente) }}</td>
+                            <td>R$ {{ "%.2f"|format(c.valor_total_comissao) }}</td>
+                            <td>{{ c.qtd_vendedores_equipe }}</td>
+                            <td><strong>R$ {{ "%.2f"|format(c.valor_rateado) }}</strong></td>
+                            <td>
+                                {% if c.status == 'PAGO' %}
+                                <span class="badge bg-success">{{ c.status }}</span><br>
+                                <small class="text-muted">{{ c.data_pagamento.strftime('%d/%m/%Y') if c.data_pagamento else '' }}</small>
+                                {% else %}
+                                <span class="badge bg-warning">{{ c.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if c.status != 'PAGO' %}
+                                <button type="button" class="btn btn-sm btn-success"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalPagar{{ c.id }}">
+                                    <i class="fas fa-dollar-sign"></i> Pagar
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+
+                        <!-- Modal Pagamento -->
+                        <div class="modal fade" id="modalPagar{{ c.id }}">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-success text-white">
+                                        <h5><i class="fas fa-dollar-sign"></i> Pagar Comissão</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('motochefe.pagar_comissao', id=c.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <div class="modal-body">
+                                            <p><strong>Pedido:</strong> {{ c.pedido.numero_pedido }}</p>
+                                            <p><strong>Vendedor:</strong> {{ c.vendedor.vendedor }}</p>
+                                            <p><strong>Valor Rateado:</strong> R$ {{ "%.2f"|format(c.valor_rateado) }}</p>
+                                            <hr>
+                                            <div class="mb-3">
+                                                <label class="form-label">Data Pagamento *</label>
+                                                <input type="date" name="data_pagamento"
+                                                       class="form-control"
+                                                       value="{{ today if today else '' }}" required>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="fas fa-check"></i> Confirmar Pagamento
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted">Nenhuma comissão encontrada</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

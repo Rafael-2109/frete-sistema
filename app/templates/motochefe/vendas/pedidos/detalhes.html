@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Pedido {{ pedido.numero_pedido }} - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-shopping-cart"></i> Pedido {{ pedido.numero_pedido }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_pedidos') }}">Pedidos</a></li>
+                    <li class="breadcrumb-item active">{{ pedido.numero_pedido }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Status Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card {% if pedido.faturado %}border-success{% else %}border-warning{% endif %}">
+                <div class="card-body text-center">
+                    <h6>Status Faturamento</h6>
+                    {% if pedido.faturado %}
+                        <h4 class="text-success"><i class="fas fa-check-circle"></i> FATURADO</h4>
+                        {% if pedido.numero_nf %}
+                            <p class="mb-0">NF: {{ pedido.numero_nf }}</p>
+                            <small>{{ pedido.data_nf.strftime('%d/%m/%Y') if pedido.data_nf else '' }}</small>
+                        {% endif %}
+                    {% else %}
+                        <h4 class="text-warning"><i class="fas fa-clock"></i> PENDENTE</h4>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card {% if pedido.enviado %}border-success{% else %}border-secondary{% endif %}">
+                <div class="card-body text-center">
+                    <h6>Status Envio</h6>
+                    {% if pedido.enviado %}
+                        <h4 class="text-success"><i class="fas fa-truck"></i> ENVIADO</h4>
+                    {% else %}
+                        <h4 class="text-secondary"><i class="fas fa-box"></i> NÃO ENVIADO</h4>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h6>Valor Total</h6>
+                    <h3 class="text-primary mb-0">R$ {{ "%.2f"|format(pedido.valor_total_pedido|float) }}</h3>
+                    {% if pedido.valor_frete_cliente > 0 %}
+                        <small class="text-muted">+ Frete: R$ {{ "%.2f"|format(pedido.valor_frete_cliente|float) }}</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações do Pedido -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-info-circle"></i> Informações do Pedido
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Número Pedido:</th>
+                            <td><strong>{{ pedido.numero_pedido }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Data Pedido:</th>
+                            <td>{{ pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        {% if pedido.data_expedicao %}
+                        <tr>
+                            <th>Data Expedição:</th>
+                            <td>{{ pedido.data_expedicao.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Forma Pagamento:</th>
+                            <td>{{ pedido.forma_pagamento or 'Não informada' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Condição Pagamento:</th>
+                            <td>{{ pedido.condicao_pagamento or 'Não informada' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Tipo Frete:</th>
+                            <td>{{ pedido.tipo_frete or '-' }}</td>
+                        </tr>
+                        {% if pedido.transportadora %}
+                        <tr>
+                            <th>Transportadora:</th>
+                            <td>{{ pedido.transportadora.transportadora }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if pedido.responsavel_movimentacao %}
+                        <tr>
+                            <th>Responsável Movimentação:</th>
+                            <td>{{ pedido.responsavel_movimentacao }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if pedido.observacoes %}
+                        <tr>
+                            <th>Observações:</th>
+                            <td><em>{{ pedido.observacoes }}</em></td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- Informações do Cliente -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-user"></i> Cliente
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Nome:</th>
+                            <td><strong>{{ pedido.cliente.cliente }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>CNPJ:</th>
+                            <td>{{ pedido.cliente.cnpj_cliente }}</td>
+                        </tr>
+                        {% if pedido.cliente.telefone %}
+                        <tr>
+                            <th>Telefone:</th>
+                            <td>{{ pedido.cliente.telefone }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if pedido.cliente.endereco %}
+                        <tr>
+                            <th>Endereço:</th>
+                            <td>{{ pedido.cliente.endereco }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- Informações do Vendedor -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-user-tie"></i> Vendedor
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Vendedor:</th>
+                            <td><strong>{{ pedido.vendedor.vendedor }}</strong></td>
+                        </tr>
+                        {% if pedido.equipe %}
+                        <tr>
+                            <th>Equipe:</th>
+                            <td>{{ pedido.equipe.equipe_vendas }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if pedido.vendedor.telefone %}
+                        <tr>
+                            <th>Telefone:</th>
+                            <td>{{ pedido.vendedor.telefone }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Itens do Pedido -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <i class="fas fa-motorcycle"></i> Motos do Pedido ({{ pedido.quantidade_motos }} unidade(s))
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Chassi</th>
+                                <th>Modelo</th>
+                                <th>Cor</th>
+                                <th class="text-right">Preço Venda</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in pedido.itens %}
+                            <tr>
+                                <td><small>{{ item.numero_chassi }}</small></td>
+                                <td>{{ item.moto.modelo.nome_modelo }}</td>
+                                <td>{{ item.moto.cor }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(item.preco_venda|float) }}</td>
+                            </tr>
+                            {% if item.montagem_contratada %}
+                            <tr class="table-secondary">
+                                <td colspan="3">
+                                    <small>
+                                        <i class="fas fa-tools"></i> Montagem
+                                        {% if item.fornecedor_montagem %}
+                                            - {{ item.fornecedor_montagem }}
+                                        {% endif %}
+                                        {% if item.montagem_paga %}
+                                            <span class="badge badge-success ml-2">PAGA</span>
+                                        {% else %}
+                                            <span class="badge badge-warning ml-2">PENDENTE</span>
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td class="text-right"><small>+ R$ {{ "%.2f"|format(item.valor_montagem|float) }}</small></td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="font-weight-bold bg-light">
+                            <tr>
+                                <td colspan="3" class="text-right">TOTAL:</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(pedido.valor_total_pedido|float) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Títulos Financeiros -->
+            {% if pedido.titulos %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-file-invoice"></i> Títulos / Parcelas ({{ pedido.titulos|length }})
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Parcela</th>
+                                <th>Vencimento</th>
+                                <th class="text-right">Valor</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in pedido.titulos %}
+                            <tr>
+                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                <td>
+                                    {% if t.data_vencimento %}
+                                        {{ t.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">R$ {{ "%.2f"|format(t.valor_parcela|float) }}</td>
+                                <td>
+                                    {% if t.status == 'PAGO' %}
+                                        <span class="badge badge-success">PAGO</span>
+                                    {% elif t.status == 'ABERTO' %}
+                                        <span class="badge badge-warning">ABERTO</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">{{ t.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('motochefe.detalhes_titulo', id=t.id) }}" class="btn btn-sm btn-info" title="Ver Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Comissões -->
+            {% if pedido.comissoes %}
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-percent"></i> Comissões ({{ pedido.comissoes|length }})
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Vendedor</th>
+                                <th class="text-right">Valor</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in pedido.comissoes %}
+                            <tr>
+                                <td>{{ c.vendedor.vendedor }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_rateado|float) }}</td>
+                                <td>
+                                    {% if c.status == 'PAGO' %}
+                                        <span class="badge badge-success">PAGO</span>
+                                    {% else %}
+                                        <span class="badge badge-warning">PENDENTE</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('motochefe.detalhes_comissao', id=c.id) }}" class="btn btn-sm btn-info" title="Ver Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Montagens Detalhadas (se houver) -->
+    {% set montagens = pedido.itens|selectattr('montagem_contratada')|list %}
+    {% if montagens %}
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-tools"></i> Detalhes das Montagens
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Chassi</th>
+                                <th>Fornecedor Montagem</th>
+                                <th class="text-right">Valor</th>
+                                <th>Data Pagamento</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in montagens %}
+                            <tr>
+                                <td><small>{{ item.numero_chassi }}</small></td>
+                                <td>{{ item.fornecedor_montagem or 'Não informado' }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(item.valor_montagem|float) }}</td>
+                                <td>
+                                    {% if item.data_pagamento_montagem %}
+                                        {{ item.data_pagamento_montagem.strftime('%d/%m/%Y') }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.montagem_paga %}
+                                        <span class="badge badge-success">PAGA</span>
+                                    {% else %}
+                                        <span class="badge badge-warning">PENDENTE</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="font-weight-bold">
+                            <tr>
+                                <td colspan="2" class="text-right">TOTAL MONTAGENS:</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(montagens|sum(attribute='valor_montagem')|float) }}</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Botões de Ação -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('motochefe.listar_pedidos') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar para Lista
+            </a>
+            <a href="{{ url_for('motochefe.extrato_financeiro') }}" class="btn btn-info">
+                <i class="fas fa-file-invoice-dollar"></i> Ver Extrato Financeiro
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

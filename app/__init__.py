@@ -825,6 +825,18 @@ def create_app(config_name=None):
 
         app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
 
+    # 🏍️ Módulo MotoChefe - Sistema de Gestão de Motos Elétricas
+    try:
+        from app.motochefe.routes import motochefe_bp
+
+        app.register_blueprint(motochefe_bp)
+        app.logger.info("✅ Módulo MotoChefe registrado com sucesso")
+    except ImportError as e:
+        app.logger.error(f"❌ Módulo MotoChefe - ImportError: {e}")
+        import traceback
+
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+
     # 🚀 MCP Logistica
 
     # 🔗 Integração TagPlus

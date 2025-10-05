@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-motorcycle"></i> Modelos de Motos</h2>
+        <div>
+            <a href="{{ url_for('motochefe.adicionar_modelo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Adicionar
+            </a>
+            <a href="{{ url_for('motochefe.exportar_modelos') }}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                <i class="fas fa-upload"></i> Importar
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Modelo</th>
+                        <th>Potência</th>
+                        <th>Autopropelido</th>
+                        <th>Preço Tabela</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for modelo in modelos %}
+                    <tr>
+                        <td>{{ modelo.id }}</td>
+                        <td>{{ modelo.nome_modelo }}</td>
+                        <td>{{ modelo.potencia_motor }}</td>
+                        <td>
+                            {% if modelo.autopropelido %}
+                            <span class="badge bg-success">Sim</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Não</span>
+                            {% endif %}
+                        </td>
+                        <td>R$ {{ "%.2f"|format(modelo.preco_tabela) }}</td>
+                        <td>
+                            <a href="{{ url_for('motochefe.editar_modelo', id=modelo.id) }}" class="btn btn-sm btn-warning">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('motochefe.remover_modelo', id=modelo.id) }}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirma remoção?')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">Nenhum modelo cadastrado</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalImportar">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5><i class="fas fa-upload"></i> Importar Modelos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('motochefe.importar_modelos') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <input type="file" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
+                    <div class="alert alert-info mt-2">
+                        <small>
+                            Colunas obrigatórias: <code>Modelo</code>, <code>Potência</code>, <code>Preço Tabela</code><br>
+                            Coluna opcional: <code>Autopropelido</code> (Sim/Não)
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

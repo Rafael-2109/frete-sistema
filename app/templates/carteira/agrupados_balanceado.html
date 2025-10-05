@@ -417,27 +417,23 @@
                                 <td>
                                     <div class="destino-info">
                                         {% if pedido.nome_cidade and pedido.cod_uf %}
-                                        <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf
-                                            }}</strong>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</strong>
+                                            <button class="btn btn-outline-primary btn-sm py-0 px-1"
+                                                onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
+                                                title="Ver endereço de entrega e dados do cliente"
+                                                style="font-size: 0.75rem;">
+                                                <i class="fas fa-map-marker-alt"></i>
+                                            </button>
+                                        </div>
                                         {% endif %}
                                         {% if pedido.incoterm == 'FOB' %}
-                                        <br><span class="badge bg-warning text-dark">FOB</span>
+                                        <span class="badge bg-warning text-dark">FOB{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% elif pedido.incoterm == 'RED' %}
-                                        <br><span class="badge bg-danger text-white">RED</span>
+                                        <span class="badge bg-danger text-white">RED{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% elif pedido.rota %}
-                                        <br><span class="badge bg-info text-white">{{ pedido.rota }}</span>
+                                        <span class="badge bg-info text-white">{{ pedido.rota }}{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% endif %}
-                                        {% if pedido.sub_rota %}
-                                        <br><small class="text-muted">{{ pedido.sub_rota }}</small>
-                                        {% endif %}
-
-                                        <!-- Botão Endereço -->
-                                        <br><button class="btn btn-outline-primary btn-sm mt-1"
-                                            onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
-                                            title="Ver endereço de entrega e dados do cliente">
-                                            <i class="fas fa-map-marker-alt me-1"></i>
-                                            Endereço
-                                        </button>
                                     </div>
                                 </td>
 
@@ -479,19 +475,15 @@
                                     </div>
                                 </td>
 
-                                <!-- ✅ CORREÇÃO 2: Informações (sem texto branco) -->
+                                <!-- Informações -->
                                 <td>
                                     <div class="valores-info text-end">
-                                        <strong class="text-success valor-pedido">{{ pedido.valor_total|moeda_carteira
-                                            }}</strong>
-                                        <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }}</small>
-                                        <br><small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small>
-                                        <br><span class="badge bg-primary text-white">{{ pedido.total_itens }}
-                                            itens</span>
+                                        <strong class="text-success valor-pedido">{{ pedido.valor_total|moeda_carteira }} | <small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small></strong>
+                                        <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }} | {{ pedido.total_itens }} itens</small>
                                     </div>
                                 </td>
 
-                                <!-- ✅ CORREÇÃO 3: Saldo (sem texto branco) -->
+                                <!-- Saldo -->
                                 <td>
                                     <div class="separacoes-container">
                                         <button class="btn btn-outline-primary btn-sm btn-separacoes" type="button"
@@ -509,14 +501,7 @@
                                         {% elif pedido.qtd_separacoes > 0 %}
                                         <br><span class="badge bg-warning text-dark mt-1">Parcial</span>
                                         {% else %}
-                                        <br><span class="badge bg-secondary text-white mt-1">Pendente</span>
-                                        {% endif %}
-
-                                        <!-- Total em separação com texto visível -->
-                                        {% if pedido.valor_saldo_restante %}
-                                        <br><small class="text-dark"><strong>Saldo sem separação:</strong></small>
-                                        <br><span class="badge bg-danger text-white">R$ {{
-                                            pedido.valor_saldo_restante|moeda_carteira }}</span>
+                                        <br><span class="badge bg-secondary text-white mt-1">Pendente {% if pedido.valor_saldo_restante %}R$ {{ pedido.valor_saldo_restante|moeda_carteira }}{% endif %}</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -529,13 +514,6 @@
                                             onclick="criarSeparacao('{{ pedido.num_pedido }}')"
                                             title="Criar nova separação">
                                             <i class="fas fa-plus me-1"></i> Separação
-                                        </button>
-
-                                        <button type="button" class="btn btn-info btn-sm"
-                                            data-pedido="{{ pedido.num_pedido }}"
-                                            onclick="avaliarEstoques('{{ pedido.num_pedido }}')"
-                                            title="Avaliar estoques do pedido">
-                                            <i class="fas fa-chart-line me-1"></i> Estoques
                                         </button>
 
                                         <!-- Botão Standby -->

@@ -1,0 +1,413 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-file-invoice"></i>
+                {% if pedido %}Editar Pedido{% else %}Novo Pedido de Venda{% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="formPedido">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="itens_json" id="itens_json"/>
+                <input type="hidden" name="parcelas_json" id="parcelas_json"/>
+                <input type="hidden" name="valor_total_pedido" id="valor_total_pedido"/>
+
+                <!-- Dados Gerais -->
+                <h5 class="mb-3"><i class="fas fa-info-circle"></i> Dados Gerais</h5>
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Nº Pedido *</label>
+                        <input type="text" name="numero_pedido" class="form-control"
+                               value="{{ pedido.numero_pedido if pedido else '' }}" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Data Pedido *</label>
+                        <input type="date" name="data_pedido" class="form-control"
+                               value="{{ pedido.data_pedido.strftime('%Y-%m-%d') if pedido and pedido.data_pedido else today }}" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Data Expedição</label>
+                        <input type="date" name="data_expedicao" class="form-control"
+                               value="{{ pedido.data_expedicao.strftime('%Y-%m-%d') if pedido and pedido.data_expedicao else '' }}">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Cliente *</label>
+                        <select name="cliente_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for c in clientes %}
+                            <option value="{{ c.id }}">{{ c.cliente }} - {{ c.cnpj_cliente }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Vendedor *</label>
+                        <select name="vendedor_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for v in vendedores %}
+                            <option value="{{ v.id }}">{{ v.vendedor }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Equipe de Vendas</label>
+                        <select name="equipe_vendas_id" class="form-select">
+                            <option value="">Selecione...</option>
+                            {% for e in equipes %}
+                            <option value="{{ e.id }}">{{ e.equipe_vendas }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Forma Pagamento</label>
+                        <input type="text" name="forma_pagamento" class="form-control" placeholder="Ex: Boleto, Cartão">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Condição Pagamento</label>
+                        <input type="text" name="condicao_pagamento" class="form-control" placeholder="Ex: 10x sem juros">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Valor Frete Cliente</label>
+                        <input type="number" step="0.01" name="valor_frete_cliente" class="form-control" value="0">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Transportadora</label>
+                        <select name="transportadora_id" class="form-select">
+                            <option value="">Selecione...</option>
+                            {% for t in transportadoras %}
+                            <option value="{{ t.id }}">{{ t.transportadora }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Tipo Frete</label>
+                        <select name="tipo_frete" class="form-select">
+                            <option value="">Selecione...</option>
+                            <option value="CIF">CIF</option>
+                            <option value="FOB">FOB</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Responsável Movimentação</label>
+                        <select name="responsavel_movimentacao" class="form-select">
+                            <option value="">Selecione...</option>
+                            <option value="RJ">RJ</option>
+                            <option value="NACOM">NACOM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Adicionar Item -->
+                <h5 class="mb-3"><i class="fas fa-motorcycle"></i> Itens do Pedido</h5>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Modelo</label>
+                                <select id="sel_modelo" class="form-select">
+                                    <option value="">Selecione...</option>
+                                    {% for m in modelos %}
+                                    <option value="{{ m.id }}" data-preco="{{ m.preco_tabela }}">
+                                        {{ m.nome_modelo }} - {{ m.potencia_motor }} (R$ {{ "%.2f"|format(m.preco_tabela) }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Estoque Disponível</label>
+                                <div id="div_estoque" class="form-control" style="height: auto; min-height: 38px;">
+                                    <small class="text-muted">Selecione um modelo</small>
+                                </div>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Cor</label>
+                                <input type="text" id="txt_cor" class="form-control" placeholder="Ex: Vermelho">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Quantidade</label>
+                                <input type="number" id="txt_qtd" class="form-control" min="1" value="1">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Preço Venda</label>
+                                <input type="number" step="0.01" id="txt_preco" class="form-control">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" id="chk_montagem" class="form-check-input">
+                                    <label class="form-check-label">Montagem Contratada</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Valor Montagem</label>
+                                <input type="number" step="0.01" id="txt_valor_montagem" class="form-control" disabled>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary" onclick="adicionarItem()">
+                                    <i class="fas fa-plus"></i> Adicionar Item
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de Itens -->
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Modelo</th>
+                            <th>Cor</th>
+                            <th>Qtd</th>
+                            <th>Preço Un</th>
+                            <th>Montagem</th>
+                            <th>Total</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody_itens">
+                        <tr id="tr_vazio">
+                            <td colspan="7" class="text-center text-muted">Nenhum item adicionado</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="5" class="text-end">TOTAL DO PEDIDO:</th>
+                            <th id="td_total">R$ 0,00</th>
+                            <th></th>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <hr class="my-4">
+
+                <!-- Parcelamento -->
+                <h5 class="mb-3"><i class="fas fa-calendar-alt"></i> Parcelamento</h5>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <button type="button" class="btn btn-sm btn-primary" onclick="adicionarParcela()">
+                            <i class="fas fa-plus"></i> Adicionar Parcela
+                        </button>
+                        <table class="table table-sm mt-3">
+                            <thead>
+                                <tr>
+                                    <th>Parcela</th>
+                                    <th>Valor (R$)</th>
+                                    <th>Prazo (dias)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody_parcelas">
+                                <tr id="tr_parcelas_vazio">
+                                    <td colspan="4" class="text-center text-muted">Nenhuma parcela cadastrada</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-save"></i> Salvar Pedido
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_pedidos') }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let itens = [];
+let parcelas = [];
+
+// Buscar estoque ao selecionar modelo
+document.getElementById('sel_modelo').addEventListener('change', async function() {
+    const modeloId = this.value;
+    const precoTabela = this.options[this.selectedIndex]?.dataset.preco || 0;
+    document.getElementById('txt_preco').value = precoTabela;
+    
+    if (!modeloId) {
+        document.getElementById('div_estoque').innerHTML = '<small class="text-muted">Selecione um modelo</small>';
+        return;
+    }
+    
+    const response = await fetch(`{{ url_for('motochefe.api_estoque_modelo') }}?modelo_id=${modeloId}`);
+    const estoque = await response.json();
+    
+    if (estoque.length === 0) {
+        document.getElementById('div_estoque').innerHTML = '<small class="text-danger">Sem estoque</small>';
+    } else {
+        document.getElementById('div_estoque').innerHTML = estoque.map(e => 
+            `<span class="badge bg-success me-1">${e.cor}: ${e.quantidade}</span>`
+        ).join('');
+    }
+});
+
+// Habilitar campo montagem
+document.getElementById('chk_montagem').addEventListener('change', function() {
+    document.getElementById('txt_valor_montagem').disabled = !this.checked;
+    if (!this.checked) document.getElementById('txt_valor_montagem').value = '';
+});
+
+// Adicionar item
+function adicionarItem() {
+    const selModelo = document.getElementById('sel_modelo');
+    const modelo_id = selModelo.value;
+    const modelo_nome = selModelo.options[selModelo.selectedIndex]?.text || '';
+    const cor = document.getElementById('txt_cor').value;
+    const quantidade = parseInt(document.getElementById('txt_qtd').value);
+    const preco_venda = parseFloat(document.getElementById('txt_preco').value);
+    const montagem = document.getElementById('chk_montagem').checked;
+    const valor_montagem = montagem ? parseFloat(document.getElementById('txt_valor_montagem').value || 0) : 0;
+    
+    if (!modelo_id || !cor || !quantidade || !preco_venda) {
+        alert('Preencha todos os campos do item');
+        return;
+    }
+    
+    const item = {
+        modelo_id: parseInt(modelo_id),
+        modelo_nome: modelo_nome.split(' (')[0],
+        cor: cor,
+        quantidade: quantidade,
+        preco_venda: preco_venda,
+        montagem: montagem,
+        valor_montagem: valor_montagem,
+        total: (preco_venda * quantidade) + (montagem ? valor_montagem * quantidade : 0)
+    };
+    
+    itens.push(item);
+    atualizarTabelaItens();
+    limparFormItem();
+}
+
+function removerItem(index) {
+    itens.splice(index, 1);
+    atualizarTabelaItens();
+}
+
+function atualizarTabelaItens() {
+    const tbody = document.getElementById('tbody_itens');
+    const trVazio = document.getElementById('tr_vazio');
+    
+    if (itens.length === 0) {
+        trVazio.style.display = '';
+        tbody.innerHTML = '<tr id="tr_vazio"><td colspan="7" class="text-center text-muted">Nenhum item adicionado</td></tr>';
+    } else {
+        tbody.innerHTML = itens.map((item, index) => `
+            <tr>
+                <td>${item.modelo_nome}</td>
+                <td>${item.cor}</td>
+                <td>${item.quantidade}</td>
+                <td>R$ ${item.preco_venda.toFixed(2)}</td>
+                <td>${item.montagem ? 'R$ ' + item.valor_montagem.toFixed(2) : '-'}</td>
+                <td>R$ ${item.total.toFixed(2)}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="removerItem(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    const total = itens.reduce((sum, item) => sum + item.total, 0);
+    document.getElementById('td_total').textContent = 'R$ ' + total.toFixed(2);
+    document.getElementById('valor_total_pedido').value = total.toFixed(2);
+}
+
+function limparFormItem() {
+    document.getElementById('sel_modelo').value = '';
+    document.getElementById('txt_cor').value = '';
+    document.getElementById('txt_qtd').value = '1';
+    document.getElementById('txt_preco').value = '';
+    document.getElementById('chk_montagem').checked = false;
+    document.getElementById('txt_valor_montagem').value = '';
+    document.getElementById('txt_valor_montagem').disabled = true;
+    document.getElementById('div_estoque').innerHTML = '<small class="text-muted">Selecione um modelo</small>';
+}
+
+// Parcelas
+function adicionarParcela() {
+    const numero = parcelas.length + 1;
+    const total = parseFloat(document.getElementById('valor_total_pedido').value || 0);
+    const valor = total > 0 ? (total / (numero)).toFixed(2) : 0;
+    
+    parcelas.push({
+        numero: numero,
+        valor: parseFloat(valor),
+        prazo_dias: 30 * numero
+    });
+    
+    atualizarTabelaParcelas();
+}
+
+function removerParcela(index) {
+    parcelas.splice(index, 1);
+    // Renumerar
+    parcelas.forEach((p, i) => p.numero = i + 1);
+    atualizarTabelaParcelas();
+}
+
+function atualizarTabelaParcelas() {
+    const tbody = document.getElementById('tbody_parcelas');
+    
+    if (parcelas.length === 0) {
+        tbody.innerHTML = '<tr id="tr_parcelas_vazio"><td colspan="4" class="text-center text-muted">Nenhuma parcela cadastrada</td></tr>';
+    } else {
+        tbody.innerHTML = parcelas.map((p, index) => `
+            <tr>
+                <td>${p.numero}/${parcelas.length}</td>
+                <td>
+                    <input type="number" step="0.01" class="form-control form-control-sm" 
+                           value="${p.valor}" onchange="parcelas[${index}].valor = parseFloat(this.value)">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" 
+                           value="${p.prazo_dias}" onchange="parcelas[${index}].prazo_dias = parseInt(this.value)">
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="removerParcela(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
+// Submit
+document.getElementById('formPedido').addEventListener('submit', function(e) {
+    if (itens.length === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos um item ao pedido');
+        return;
+    }
+    
+    document.getElementById('itens_json').value = JSON.stringify(itens);
+    document.getElementById('parcelas_json').value = JSON.stringify(parcelas);
+});
+</script>
+{% endblock %}

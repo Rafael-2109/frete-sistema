@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="fas fa-dollar-sign"></i> Custos Operacionais</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-4">
+                <i class="fas fa-info-circle"></i>
+                Estes custos são utilizados para cálculo de margem e comissões. Mantenha sempre atualizados.
+            </div>
+
+            <form method="POST" action="{{ url_for('motochefe.atualizar_custos') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="custo_montagem" class="form-label">
+                            <i class="fas fa-wrench"></i> Custo de Montagem (R$)
+                        </label>
+                        <input type="number"
+                               step="0.01"
+                               class="form-control"
+                               id="custo_montagem"
+                               name="custo_montagem"
+                               value="{{ custos.custo_montagem }}"
+                               required>
+                        <small class="form-text text-muted">Custo pago ao montador por moto</small>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="valor_comissao_fixa" class="form-label">
+                            <i class="fas fa-hand-holding-usd"></i> Comissão Fixa (R$)
+                        </label>
+                        <input type="number"
+                               step="0.01"
+                               class="form-control"
+                               id="valor_comissao_fixa"
+                               name="valor_comissao_fixa"
+                               value="{{ custos.valor_comissao_fixa }}"
+                               required>
+                        <small class="form-text text-muted">Valor fixo de comissão por venda</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="custo_movimentacao_rj" class="form-label">
+                            <i class="fas fa-truck-loading"></i> Custo Movimentação RJ (R$)
+                        </label>
+                        <input type="number"
+                               step="0.01"
+                               class="form-control"
+                               id="custo_movimentacao_rj"
+                               name="custo_movimentacao_rj"
+                               value="{{ custos.custo_movimentacao_rj }}"
+                               required>
+                        <small class="form-text text-muted">Custo de movimentação no Rio de Janeiro</small>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="custo_movimentacao_nacom" class="form-label">
+                            <i class="fas fa-truck-loading"></i> Custo Movimentação NACOM (R$)
+                        </label>
+                        <input type="number"
+                               step="0.01"
+                               class="form-control"
+                               id="custo_movimentacao_nacom"
+                               name="custo_movimentacao_nacom"
+                               value="{{ custos.custo_movimentacao_nacom }}"
+                               required>
+                        <small class="form-text text-muted">Custo de movimentação pela NACOM</small>
+                    </div>
+                </div>
+
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="fas fa-history"></i> Histórico</h6>
+                        <small class="text-muted">
+                            <strong>Última atualização:</strong>
+                            {{ custos.atualizado_em.strftime('%d/%m/%Y %H:%M') if custos.atualizado_em else custos.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                            {% if custos.atualizado_por %}por {{ custos.atualizado_por }}{% endif %}
+                        </small>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-save"></i> Atualizar Custos
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

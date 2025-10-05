@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-building"></i>
+                {% if empresa %}Editar Empresa{% else %}Nova Empresa{% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="cnpj_empresa" class="form-label">CNPJ *</label>
+                        <input type="text" class="form-control" id="cnpj_empresa" name="cnpj_empresa"
+                               value="{{ empresa.cnpj_empresa if empresa else '' }}"
+                               placeholder="00.000.000/0000-00" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="empresa" class="form-label">Nome da Empresa *</label>
+                        <input type="text" class="form-control" id="empresa" name="empresa"
+                               value="{{ empresa.empresa if empresa else '' }}" required>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+                <h5 class="mb-3"><i class="fas fa-university"></i> Dados Bancários</h5>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="banco" class="form-label">Banco</label>
+                        <input type="text" class="form-control" id="banco" name="banco"
+                               value="{{ empresa.banco if empresa else '' }}"
+                               placeholder="Ex: Banco do Brasil">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="cod_banco" class="form-label">Código Banco</label>
+                        <input type="text" class="form-control" id="cod_banco" name="cod_banco"
+                               value="{{ empresa.cod_banco if empresa else '' }}"
+                               placeholder="Ex: 001">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="agencia" class="form-label">Agência</label>
+                        <input type="text" class="form-control" id="agencia" name="agencia"
+                               value="{{ empresa.agencia if empresa else '' }}"
+                               placeholder="Ex: 1234-5">
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="conta" class="form-label">Conta</label>
+                        <input type="text" class="form-control" id="conta" name="conta"
+                               value="{{ empresa.conta if empresa else '' }}"
+                               placeholder="Ex: 12345-6">
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="chave_pix" class="form-label">Chave PIX</label>
+                        <input type="text" class="form-control" id="chave_pix" name="chave_pix"
+                               value="{{ empresa.chave_pix if empresa else '' }}"
+                               placeholder="CNPJ, email, celular">
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_empresas') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

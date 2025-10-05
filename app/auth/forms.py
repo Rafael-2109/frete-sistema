@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms.validators import DataRequired, Email, Length, EqualTo, Optional
-from wtforms import StringField, PasswordField, SubmitField, SelectField, TextAreaField
+from wtforms import StringField, PasswordField, SubmitField, SelectField, TextAreaField, BooleanField
 
 class LoginForm(FlaskForm):
     email = StringField('E-mail', validators=[DataRequired(), Email()])
@@ -27,13 +27,15 @@ class RegistroForm(FlaskForm):
 class AprovarUsuarioForm(FlaskForm):
     perfil = SelectField('Perfil', choices=[
         ('vendedor', 'Vendedor'),
-        ('portaria', 'Portaria'), 
+        ('portaria', 'Portaria'),
         ('financeiro', 'Financeiro'),
         ('logistica', 'Logística'),
         ('gerente_comercial', 'Gerente Comercial'),
         ('administrador', 'Administrador')
     ], validators=[DataRequired()])
     vendedor_vinculado = SelectField('Vendedor Vinculado', choices=[], validators=[Optional()])
+    sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
+    sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     observacoes = TextAreaField('Observações', validators=[Optional()])
     submit = SubmitField('Aprovar Usuário')
 
@@ -56,6 +58,8 @@ class EditarUsuarioForm(FlaskForm):
         ('administrador', 'Administrador')
     ], validators=[DataRequired()])
     vendedor_vinculado = SelectField('Vendedor Vinculado', choices=[], validators=[Optional()])
+    sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
+    sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     status = SelectField('Status', choices=[
         ('ativo', 'Ativo'),
         ('bloqueado', 'Bloqueado'),

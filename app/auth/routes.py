@@ -46,16 +46,16 @@ def logout():
 
 @auth_bp.route('/registro', methods=['GET', 'POST'])
 def registro():
-    """Página pública de registro"""
+    """Página pública de registro - Sistema Logística"""
     form = RegistroForm()
     if form.validate_on_submit():
         # Verificar se email já existe
         usuario_existente = Usuario.query.filter_by(email=form.email.data).first()
         if usuario_existente:
             flash('Este e-mail já está cadastrado.', 'danger')
-            return render_template('auth/registro.html', form=form)
-        
-        # Criar novo usuário
+            return render_template('auth/registro.html', form=form, sistema='logistica')
+
+        # Criar novo usuário para sistema de logística
         usuario = Usuario(
             nome=form.nome.data,
             email=form.email.data,
@@ -63,17 +63,52 @@ def registro():
             cargo=form.cargo.data,
             telefone=form.telefone.data,
             perfil=form.perfil.data,
-            status='pendente'
+            status='pendente',
+            sistema_logistica=True,  # ✅ NOVO
+            sistema_motochefe=False  # ✅ NOVO
         )
         usuario.set_senha(form.senha.data)
-        
+
         db.session.add(usuario)
         db.session.commit()
-        
-        flash('Solicitação de acesso enviada! Aguarde aprovação da administração.', 'success')
+
+        flash('Solicitação de acesso ao Sistema de Logística enviada! Aguarde aprovação da administração.', 'success')
         return redirect(url_for('auth.login'))
-    
-    return render_template('auth/registro.html', form=form)
+
+    return render_template('auth/registro.html', form=form, sistema='logistica')
+
+@auth_bp.route('/registro-motochefe', methods=['GET', 'POST'])
+def registro_motochefe():
+    """Página pública de registro - Sistema MotoChefe"""
+    form = RegistroForm()
+    if form.validate_on_submit():
+        # Verificar se email já existe
+        usuario_existente = Usuario.query.filter_by(email=form.email.data).first()
+        if usuario_existente:
+            flash('Este e-mail já está cadastrado.', 'danger')
+            return render_template('auth/registro.html', form=form, sistema='motochefe')
+
+        # Criar novo usuário para sistema motochefe
+        usuario = Usuario(
+            nome=form.nome.data,
+            email=form.email.data,
+            empresa=form.empresa.data,
+            cargo=form.cargo.data,
+            telefone=form.telefone.data,
+            perfil=form.perfil.data,
+            status='pendente',
+            sistema_logistica=False,  # ✅ NOVO
+            sistema_motochefe=True    # ✅ NOVO
+        )
+        usuario.set_senha(form.senha.data)
+
+        db.session.add(usuario)
+        db.session.commit()
+
+        flash('Solicitação de acesso ao Sistema MotoChefe enviada! Aguarde aprovação da administração.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/registro.html', form=form, sistema='motochefe')
 
 @auth_bp.route('/usuarios/pendentes')
 @login_required
@@ -106,14 +141,18 @@ def aprovar_usuario(user_id):
         vendedor_vinculado = form.vendedor_vinculado.data if form.vendedor_vinculado.data else None
         usuario.aprovar(current_user.email, vendedor_vinculado)
         usuario.observacoes = form.observacoes.data
-        
+        usuario.sistema_logistica = form.sistema_logistica.data  # ✅ NOVO
+        usuario.sistema_motochefe = form.sistema_motochefe.data  # ✅ NOVO
+
         db.session.commit()
         flash(f'Usuário {usuario.nome} aprovado com sucesso!', 'success')
         return redirect(url_for('auth.usuarios_pendentes'))
-    
-    # Pré-preencher com perfil solicitado
+
+    # Pré-preencher com dados do usuário
     form.perfil.data = usuario.perfil
-    
+    form.sistema_logistica.data = usuario.sistema_logistica  # ✅ NOVO
+    form.sistema_motochefe.data = usuario.sistema_motochefe  # ✅ NOVO
+
     return render_template('auth/aprovar_usuario.html', form=form, usuario=usuario)
 
 @auth_bp.route('/usuarios/<int:user_id>/rejeitar', methods=['GET', 'POST'])
@@ -171,11 +210,13 @@ def editar_usuario(user_id):
         usuario.vendedor_vinculado = form.vendedor_vinculado.data if form.vendedor_vinculado.data else None
         usuario.status = form.status.data
         usuario.observacoes = form.observacoes.data
-        
+        usuario.sistema_logistica = form.sistema_logistica.data  # ✅ NOVO
+        usuario.sistema_motochefe = form.sistema_motochefe.data  # ✅ NOVO
+
         db.session.commit()
         flash(f'Usuário {usuario.nome} atualizado com sucesso!', 'success')
         return redirect(url_for('auth.listar_usuarios'))
-    
+
     # Pré-preencher formulário
     form.nome.data = usuario.nome
     form.email.data = usuario.email
@@ -186,7 +227,9 @@ def editar_usuario(user_id):
     form.vendedor_vinculado.data = usuario.vendedor_vinculado
     form.status.data = usuario.status
     form.observacoes.data = usuario.observacoes
-    
+    form.sistema_logistica.data = usuario.sistema_logistica  # ✅ NOVO
+    form.sistema_motochefe.data = usuario.sistema_motochefe  # ✅ NOVO
+
     return render_template('auth/editar_usuario.html', form=form, usuario=usuario)
 
 def obter_lista_vendedores():

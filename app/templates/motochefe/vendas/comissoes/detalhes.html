@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes da Comissão #{{ comissao.id }} - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-percent"></i> Detalhes da Comissão #{{ comissao.id }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_comissoes') }}">Comissões</a></li>
+                    <li class="breadcrumb-item active">Comissão #{{ comissao.id }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações da Comissão -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-info-circle"></i> Informações da Comissão
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="45%">Vendedor:</th>
+                            <td><h5 class="mb-0">{{ comissao.vendedor.vendedor }}</h5></td>
+                        </tr>
+                        <tr>
+                            <th>CPF:</th>
+                            <td>{{ comissao.vendedor.cpf or 'Não informado' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if comissao.status == 'PAGO' %}
+                                    <span class="badge badge-success"><i class="fas fa-check"></i> PAGO</span>
+                                {% elif comissao.status == 'PENDENTE' %}
+                                    <span class="badge badge-warning"><i class="fas fa-clock"></i> PENDENTE</span>
+                                {% else %}
+                                    <span class="badge badge-danger">{{ comissao.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+
+                    <hr>
+
+                    <h6 class="mb-3"><i class="fas fa-calculator"></i> Cálculo da Comissão</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th width="60%">Comissão Fixa:</th>
+                            <td class="text-right">R$ {{ "%.2f"|format(comissao.valor_comissao_fixa|float) }}</td>
+                        </tr>
+                        <tr>
+                            <th>Excedente (acima tabela):</th>
+                            <td class="text-right text-success">+ R$ {{ "%.2f"|format(comissao.valor_excedente|float) }}</td>
+                        </tr>
+                        <tr class="font-weight-bold">
+                            <th>Valor Total Comissão:</th>
+                            <td class="text-right">R$ {{ "%.2f"|format(comissao.valor_total_comissao|float) }}</td>
+                        </tr>
+                        <tr>
+                            <th>Qtd Vendedores na Equipe:</th>
+                            <td class="text-right">{{ comissao.qtd_vendedores_equipe }}</td>
+                        </tr>
+                        <tr class="table-success font-weight-bold">
+                            <th>Valor Rateado (este vendedor):</th>
+                            <td class="text-right">
+                                <h4 class="mb-0">R$ {{ "%.2f"|format(comissao.valor_rateado|float) }}</h4>
+                            </td>
+                        </tr>
+                    </table>
+
+                    {% if comissao.percentual_excedente > 0 %}
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-chart-line"></i> O excedente representa <strong>{{ "%.1f"|format(comissao.percentual_excedente) }}%</strong> do valor total
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Pagamento -->
+            {% if comissao.status == 'PAGO' %}
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-check-circle"></i> Informações do Pagamento
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="45%">Data Pagamento:</th>
+                            <td><strong>{{ comissao.data_pagamento.strftime('%d/%m/%Y') }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Valor Pago:</th>
+                            <td><h4 class="text-success mb-0">R$ {{ "%.2f"|format(comissao.valor_rateado|float) }}</h4></td>
+                        </tr>
+                        {% if comissao.atualizado_por %}
+                        <tr>
+                            <th>Pago por:</th>
+                            <td>{{ comissao.atualizado_por }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Informações do Pedido Relacionado -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-shopping-cart"></i> Pedido que Gerou a Comissão
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="45%">Número Pedido:</th>
+                            <td>
+                                <a href="{{ url_for('motochefe.detalhes_pedido', id=comissao.pedido.id) }}" class="btn btn-sm btn-outline-primary">
+                                    {{ comissao.pedido.numero_pedido }} <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Cliente:</th>
+                            <td><strong>{{ comissao.pedido.cliente.cliente }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Data Pedido:</th>
+                            <td>{{ comissao.pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Valor Total Pedido:</th>
+                            <td><h5 class="mb-0">R$ {{ "%.2f"|format(comissao.pedido.valor_total_pedido|float) }}</h5></td>
+                        </tr>
+                        <tr>
+                            <th>NF:</th>
+                            <td>{{ comissao.pedido.numero_nf or 'Não informada' }}</td>
+                        </tr>
+                        {% if comissao.pedido.data_nf %}
+                        <tr>
+                            <th>Data NF:</th>
+                            <td>{{ comissao.pedido.data_nf.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Qtd Motos:</th>
+                            <td>{{ comissao.pedido.quantidade_motos }} unidade(s)</td>
+                        </tr>
+                    </table>
+
+                    <div class="mt-3">
+                        <a href="{{ url_for('motochefe.detalhes_pedido', id=comissao.pedido.id) }}" class="btn btn-primary btn-block">
+                            <i class="fas fa-eye"></i> Ver Pedido Completo
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Itens do Pedido (Excedente) -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-motorcycle"></i> Motos Vendidas (Cálculo Excedente)
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Chassi</th>
+                                <th>Modelo</th>
+                                <th class="text-right">Preço Tabela</th>
+                                <th class="text-right">Preço Venda</th>
+                                <th class="text-right">Excedente</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in comissao.pedido.itens %}
+                            <tr>
+                                <td><small>{{ item.numero_chassi }}</small></td>
+                                <td>{{ item.moto.modelo.nome_modelo }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(item.moto.modelo.preco_tabela|float) }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(item.preco_venda|float) }}</td>
+                                <td class="text-right {% if item.excedente_tabela > 0 %}text-success font-weight-bold{% endif %}">
+                                    {% if item.excedente_tabela > 0 %}
+                                        + R$ {{ "%.2f"|format(item.excedente_tabela|float) }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="font-weight-bold bg-light">
+                            <tr>
+                                <td colspan="4" class="text-right">TOTAL EXCEDENTE:</td>
+                                <td class="text-right text-success">
+                                    R$ {{ "%.2f"|format(comissao.pedido.itens|sum(attribute='excedente_tabela')|float) }}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outras Comissões do Pedido (Equipe) -->
+    {% if comissao.qtd_vendedores_equipe > 1 %}
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <i class="fas fa-users"></i> Comissões Rateadas da Equipe ({{ comissao.qtd_vendedores_equipe }} vendedores)
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Vendedor</th>
+                                <th class="text-right">Comissão Fixa</th>
+                                <th class="text-right">Excedente</th>
+                                <th class="text-right">Total</th>
+                                <th>Status</th>
+                                <th>Data Pagamento</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in comissao.pedido.comissoes %}
+                            <tr {% if c.id == comissao.id %}class="table-active font-weight-bold"{% endif %}>
+                                <td>{{ c.vendedor.vendedor }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_comissao_fixa|float) }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_excedente|float) }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_rateado|float) }}</td>
+                                <td>
+                                    {% if c.status == 'PAGO' %}
+                                        <span class="badge badge-success">PAGO</span>
+                                    {% else %}
+                                        <span class="badge badge-warning">PENDENTE</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ c.data_pagamento.strftime('%d/%m/%Y') if c.data_pagamento else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Botões de Ação -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('motochefe.listar_comissoes') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar para Lista
+            </a>
+            <a href="{{ url_for('motochefe.extrato_financeiro') }}" class="btn btn-info">
+                <i class="fas fa-file-invoice-dollar"></i> Ver Extrato Financeiro
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

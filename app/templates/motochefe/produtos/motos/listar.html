@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-motorcycle"></i> Estoque de Motos (Chassi)</h2>
+        <div>
+            <a href="{{ url_for('motochefe.adicionar_moto') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Adicionar
+            </a>
+            <a href="{{ url_for('motochefe.exportar_motos') }}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                <i class="fas fa-upload"></i> Importar
+            </button>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6>Total Motos</h6>
+                    <h3>{{ total_motos }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6>Disponíveis</h6>
+                    <h3>{{ disponiveis }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6>Reservadas</h6>
+                    <h3>{{ reservadas }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6>Vendidas</h6>
+                    <h3>{{ vendidas }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Modelo</label>
+                    <select name="modelo_id" class="form-select">
+                        <option value="">Todos</option>
+                        {% for m in modelos %}
+                        <option value="{{ m.id }}" {% if modelo_filtro == m.id %}selected{% endif %}>
+                            {{ m.nome_modelo }} - {{ m.potencia_motor }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="DISPONIVEL" {% if status_filtro == 'DISPONIVEL' %}selected{% endif %}>Disponível</option>
+                        <option value="RESERVADA" {% if status_filtro == 'RESERVADA' %}selected{% endif %}>Reservada</option>
+                        <option value="VENDIDA" {% if status_filtro == 'VENDIDA' %}selected{% endif %}>Vendida</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_motos') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Chassi</th>
+                            <th>Motor</th>
+                            <th>Modelo</th>
+                            <th>Cor</th>
+                            <th>Ano</th>
+                            <th>NF Entrada</th>
+                            <th>Data Entrada</th>
+                            <th>Fornecedor</th>
+                            <th>Custo</th>
+                            <th>Pallet</th>
+                            <th>Status</th>
+                            <th>Reservado</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for moto in motos %}
+                        <tr>
+                            <td><code>{{ moto.numero_chassi }}</code></td>
+                            <td><code>{{ moto.numero_motor }}</code></td>
+                            <td>
+                                <strong>{{ moto.modelo.nome_modelo }}</strong><br>
+                                <small class="text-muted">{{ moto.modelo.potencia_motor }}</small>
+                            </td>
+                            <td>{{ moto.cor }}</td>
+                            <td>{{ moto.ano_fabricacao or '-' }}</td>
+                            <td>{{ moto.nf_entrada }}</td>
+                            <td>{{ moto.data_entrada.strftime('%d/%m/%Y') if moto.data_entrada else '-' }}</td>
+                            <td>{{ moto.fornecedor }}</td>
+                            <td>R$ {{ "%.2f"|format(moto.custo_aquisicao) }}</td>
+                            <td>{{ moto.pallet or '-' }}</td>
+                            <td>
+                                {% if moto.status == 'DISPONIVEL' %}
+                                <span class="badge bg-success">{{ moto.status }}</span>
+                                {% elif moto.status == 'RESERVADA' %}
+                                <span class="badge bg-warning">{{ moto.status }}</span>
+                                {% elif moto.status == 'VENDIDA' %}
+                                <span class="badge bg-danger">{{ moto.status }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ moto.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if moto.reservado %}
+                                <span class="badge bg-warning">Sim</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('motochefe.editar_moto', chassi=moto.numero_chassi) }}" class="btn btn-warning">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% if moto.status != 'VENDIDA' and not moto.reservado %}
+                                    <form method="POST" action="{{ url_for('motochefe.remover_moto', chassi=moto.numero_chassi) }}" style="display: inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Confirma remoção?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="13" class="text-center text-muted">Nenhuma moto cadastrada</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Importar -->
+<div class="modal fade" id="modalImportar">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5><i class="fas fa-upload"></i> Importar Motos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('motochefe.importar_motos') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <input type="file" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
+                    <div class="alert alert-info mt-2">
+                        <small>
+                            <strong>Colunas obrigatórias:</strong><br>
+                            <code>Chassi</code>, <code>Motor</code>, <code>Modelo</code>, <code>Cor</code>,
+                            <code>NF Entrada</code>, <code>Fornecedor</code>, <code>Custo</code><br><br>
+                            <strong>Colunas opcionais:</strong><br>
+                            <code>Ano</code>, <code>Data NF</code>, <code>Data Entrada</code>, <code>Pallet</code>
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

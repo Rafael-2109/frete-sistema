@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2><i class="fas fa-money-bill-wave"></i> Contas a Receber - Visão Consolidada</h2>
+    <hr>
+
+    <!-- RESUMO GERAL -->
+    <div class="card mb-4 border-success">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <h5>Total a Receber</h5>
+                    <h3 class="text-success">R$ {{ "%.2f"|format(total_geral) }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <small>Vencidos</small><br>
+                    <strong class="text-danger">R$ {{ "%.2f"|format(total_vencidos) }}</strong>
+                    <span class="badge bg-danger">{{ vencidos|length }}</span>
+                </div>
+                <div class="col-md-3">
+                    <small>Vencendo Hoje</small><br>
+                    <strong class="text-warning">R$ {{ "%.2f"|format(total_hoje) }}</strong>
+                    <span class="badge bg-warning text-dark">{{ vencendo_hoje|length }}</span>
+                </div>
+                <div class="col-md-3">
+                    <small>A Vencer</small><br>
+                    <strong class="text-success">R$ {{ "%.2f"|format(total_a_vencer) }}</strong>
+                    <span class="badge bg-success">{{ a_vencer|length }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('motochefe.receber_lote') }}" id="formRecebimento">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="itens_recebimento" id="itens_recebimento"/>
+        <input type="hidden" name="data_recebimento" id="data_recebimento_hidden"/>
+
+        <!-- VENCIDOS -->
+        {% if vencidos %}
+        <div class="card mb-3 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Vencidos
+                    <span class="badge bg-light text-dark float-end">{{ vencidos|length }} títulos</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="check-all-vencidos" class="form-check-input"></th>
+                                <th>Pedido</th>
+                                <th>Parcela</th>
+                                <th>Vencimento</th>
+                                <th>Valor</th>
+                                <th>Cliente</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in vencidos %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input item-check check-vencidos" type="checkbox"
+                                           data-id="{{ t.id }}"
+                                           data-valor="{{ t.valor_parcela }}"
+                                           id="titulo-{{ t.id }}">
+                                </td>
+                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                <td class="text-danger">{{ t.data_vencimento.strftime('%d/%m/%Y') if t.data_vencimento else '-' }}</td>
+                                <td>R$ {{ "%.2f"|format(t.valor_parcela) }}</td>
+                                <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- VENCENDO HOJE -->
+        {% if vencendo_hoje %}
+        <div class="card mb-3 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-clock"></i> Vencendo Hoje
+                    <span class="badge bg-dark float-end">{{ vencendo_hoje|length }} títulos</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="check-all-hoje" class="form-check-input"></th>
+                                <th>Pedido</th>
+                                <th>Parcela</th>
+                                <th>Valor</th>
+                                <th>Cliente</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in vencendo_hoje %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input item-check check-hoje" type="checkbox"
+                                           data-id="{{ t.id }}"
+                                           data-valor="{{ t.valor_parcela }}"
+                                           id="titulo-{{ t.id }}">
+                                </td>
+                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                <td>R$ {{ "%.2f"|format(t.valor_parcela) }}</td>
+                                <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- A VENCER -->
+        {% if a_vencer %}
+        <div class="card mb-3 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-check"></i> A Vencer
+                    <span class="badge bg-light text-dark float-end">{{ a_vencer|length }} títulos</span>
+                    <button type="button" class="btn btn-sm btn-light" onclick="toggleGrupo('a-vencer')">
+                        <i class="fas fa-chevron-down" id="icon-a-vencer"></i>
+                    </button>
+                </h5>
+            </div>
+            <div id="a-vencer" class="collapse">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="check-all-avencer" class="form-check-input"></th>
+                                    <th>Pedido</th>
+                                    <th>Parcela</th>
+                                    <th>Vencimento</th>
+                                    <th>Valor</th>
+                                    <th>Cliente</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in a_vencer[:10] %}
+                                <tr>
+                                    <td>
+                                        <input class="form-check-input item-check check-avencer" type="checkbox"
+                                               data-id="{{ t.id }}"
+                                               data-valor="{{ t.valor_parcela }}"
+                                               id="titulo-{{ t.id }}">
+                                    </td>
+                                    <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                    <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                    <td>{{ t.data_vencimento.strftime('%d/%m/%Y') if t.data_vencimento else '-' }}</td>
+                                    <td>R$ {{ "%.2f"|format(t.valor_parcela) }}</td>
+                                    <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% if a_vencer|length > 10 %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        ... e mais {{ a_vencer|length - 10 }} títulos
+                                        <a href="{{ url_for('motochefe.listar_titulos') }}">Ver Todos</a>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- RODAPÉ FIXO -->
+        <div class="card bg-dark text-white sticky-bottom">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <strong>Selecionados:</strong> <span id="qtd-selecionados">0</span> títulos
+                        | <strong>Total:</strong> R$ <span id="total-selecionados">0,00</span>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="date" class="form-control" id="data_recebimento_input" required>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-check-circle"></i> Receber Selecionados
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleGrupo(id) {
+    const elem = document.getElementById(id);
+    const icon = document.getElementById('icon-' + id);
+    if (elem.classList.contains('show')) {
+        elem.classList.remove('show');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        elem.classList.add('show');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    }
+}
+
+function atualizarTotal() {
+    const checks = document.querySelectorAll('.item-check:checked');
+    let total = 0;
+    checks.forEach(c => {
+        total += parseFloat(c.dataset.valor || 0);
+    });
+    document.getElementById('qtd-selecionados').textContent = checks.length;
+    document.getElementById('total-selecionados').textContent = total.toFixed(2).replace('.', ',');
+}
+
+document.querySelectorAll('.item-check').forEach(check => {
+    check.addEventListener('change', atualizarTotal);
+});
+
+// Check all para cada seção
+['vencidos', 'hoje', 'avencer'].forEach(tipo => {
+    const checkAll = document.getElementById('check-all-' + tipo);
+    if (checkAll) {
+        checkAll.addEventListener('change', function() {
+            document.querySelectorAll('.check-' + tipo).forEach(c => {
+                c.checked = this.checked;
+            });
+            atualizarTotal();
+        });
+    }
+});
+
+document.getElementById('formRecebimento').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const checks = document.querySelectorAll('.item-check:checked');
+    if (checks.length === 0) {
+        alert('Selecione ao menos um título');
+        return;
+    }
+
+    const itens = [];
+    checks.forEach(c => {
+        itens.push({
+            id: c.dataset.id,
+            valor: c.dataset.valor
+        });
+    });
+
+    document.getElementById('itens_recebimento').value = JSON.stringify(itens);
+    document.getElementById('data_recebimento_hidden').value = document.getElementById('data_recebimento_input').value;
+    this.submit();
+});
+</script>
+{% endblock %}
