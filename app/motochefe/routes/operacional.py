@@ -12,6 +12,7 @@ from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import CustosOperacionais, DespesaMensal
+from app.utils.valores_brasileiros import converter_valor_brasileiro
 
 @motochefe_bp.route('/custos')
 @login_required
@@ -237,6 +238,21 @@ def exportar_despesas():
         download_name=f'despesas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
+@motochefe_bp.route('/despesas/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_despesas():
+    """Baixa modelo de importação para Despesas"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_despesas
+
+    output = gerar_modelo_despesas()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_despesas_{datetime.now().strftime("%Y%m%d")}.xlsx'
+    )
+
 @motochefe_bp.route('/despesas/importar', methods=['POST'])
 @login_required
 @requer_motochefe
@@ -270,10 +286,13 @@ def importar_despesas():
             if pd.isna(tipo) or pd.isna(valor) or pd.isna(mes) or pd.isna(ano):
                 continue
 
+            # Converter valor brasileiro (vírgula como decimal)
+            valor_convertido = converter_valor_brasileiro(str(valor))
+
             despesa = DespesaMensal(
                 tipo_despesa=str(tipo),
                 descricao=row.get('Descrição') if 'Descrição' in df.columns and not pd.isna(row.get('Descrição')) else None,
-                valor=Decimal(str(valor)),
+                valor=Decimal(str(valor_convertido)),
                 mes_competencia=int(mes),
                 ano_competencia=int(ano),
                 status=row.get('Status', 'PENDENTE') if 'Status' in df.columns else 'PENDENTE',

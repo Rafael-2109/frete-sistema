@@ -12,7 +12,8 @@ class VendedorMoto(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     vendedor = db.Column(db.String(100), nullable=False)
-    equipe_vendas_id = db.Column(db.Integer, db.ForeignKey('equipe_vendas_moto.id'), nullable=True)
+    equipe_vendas_id = db.Column(db.Integer, db.ForeignKey('equipe_vendas_moto.id'), nullable=False, index=True)
+    # OBRIGATÓRIO: Todo vendedor DEVE estar em uma equipe
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -31,6 +32,27 @@ class EquipeVendasMoto(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     equipe_vendas = db.Column(db.String(100), nullable=False, unique=True)
+
+    # Configuração de Movimentação
+    responsavel_movimentacao = db.Column(db.String(20), nullable=True)
+    # Valores: 'RJ' ou 'NACOM'
+
+    # Configuração de Comissão
+    tipo_comissao = db.Column(db.String(20), default='FIXA_EXCEDENTE', nullable=False)
+    # Valores: 'FIXA_EXCEDENTE' ou 'PERCENTUAL'
+
+    # Para tipo FIXA_EXCEDENTE
+    valor_comissao_fixa = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    # Excedente calculado automaticamente: (preco_venda - preco_tabela)
+
+    # Para tipo PERCENTUAL
+    percentual_comissao = db.Column(db.Numeric(5, 2), default=0, nullable=False)
+    # Ex: 5.00 = 5%
+
+    # Controle de Rateio
+    comissao_rateada = db.Column(db.Boolean, default=True, nullable=False)
+    # TRUE: Divide entre todos vendedores da equipe
+    # FALSE: Apenas vendedor do pedido recebe
 
     # Relacionamentos
     vendedores = db.relationship('VendedorMoto', backref='equipe', lazy='dynamic')

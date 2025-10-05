@@ -1,6 +1,7 @@
 from flask import current_app
 from app.utils.file_storage import get_file_storage
 from app.utils.timezone import utc_para_brasil, formatar_data_hora_brasil, formatar_data_brasil
+from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import locale
 
 def file_url(file_path):
@@ -35,8 +36,17 @@ def date_br(dt, formato="%d/%m/%Y"):
     """
     return formatar_data_brasil(dt, formato)
 
+def valor_br(valor, decimais=2):
+    """
+    Filtro para exibir valores monetários no formato brasileiro (1.234,56)
+    Uso no template: {{ meu_valor|valor_br }}
+    Uso com decimais: {{ meu_valor|valor_br(0) }} -> 1.234
+    """
+    return formatar_valor_brasileiro(valor, decimais)
+
 def register_template_filters(app):
     """Registra filtros customizados no Flask"""
     app.jinja_env.filters['file_url'] = file_url
     app.jinja_env.filters['datetime_br'] = datetime_br
-    app.jinja_env.filters['date_br'] = date_br 
+    app.jinja_env.filters['date_br'] = date_br
+    app.jinja_env.filters['valor_br'] = valor_br 

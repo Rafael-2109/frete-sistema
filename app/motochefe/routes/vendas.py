@@ -154,9 +154,18 @@ def adicionar_pedido():
     """Adiciona novo pedido com parcelamento e alocação FIFO"""
     if request.method == 'POST':
         try:
-            # 1. CRIAR PEDIDO
+            # VALIDAR número de pedido único
+            from app.motochefe.services.numero_pedido_service import validar_numero_pedido_unico
+
+            numero_pedido = request.form.get('numero_pedido')
+            valido, mensagem = validar_numero_pedido_unico(numero_pedido)
+            if not valido:
+                flash(mensagem, 'danger')
+                return redirect(url_for('motochefe.adicionar_pedido'))
+
+            # 1. CRIAR PEDIDO (sem responsavel_movimentacao - vem da equipe)
             pedido = PedidoVendaMoto(
-                numero_pedido=request.form.get('numero_pedido'),
+                numero_pedido=numero_pedido,
                 cliente_id=int(request.form.get('cliente_id')),
                 vendedor_id=int(request.form.get('vendedor_id')),
                 equipe_vendas_id=int(request.form.get('equipe_vendas_id')) if request.form.get('equipe_vendas_id') else None,
@@ -168,7 +177,6 @@ def adicionar_pedido():
                 condicao_pagamento=request.form.get('condicao_pagamento'),
                 transportadora_id=int(request.form.get('transportadora_id')) if request.form.get('transportadora_id') else None,
                 tipo_frete=request.form.get('tipo_frete'),
-                responsavel_movimentacao=request.form.get('responsavel_movimentacao'),
                 observacoes=request.form.get('observacoes'),
                 criado_por=current_user.nome
             )
@@ -287,6 +295,17 @@ def api_estoque_modelo():
         'cor': e.cor,
         'quantidade': e.quantidade
     } for e in estoque])
+
+
+@motochefe_bp.route('/pedidos/api/proximo-numero')
+@login_required
+@requer_motochefe
+def api_proximo_numero_pedido():
+    """API: Gera próximo número de pedido no formato MC ####"""
+    from app.motochefe.services.numero_pedido_service import gerar_proximo_numero_pedido
+
+    numero = gerar_proximo_numero_pedido()
+    return jsonify({'numero': numero})
 
 
 @motochefe_bp.route('/pedidos/<int:id>/faturar', methods=['POST'])
@@ -409,41 +428,59 @@ def pagar_titulo(id):
 
 
 def gerar_comissao_pedido(pedido):
-    """Gera comissão para todos vendedores da equipe quando pedido quitado"""
-    # 1. Buscar valores de comissão
-    custos = CustosOperacionais.get_custos_vigentes()
-    if not custos:
-        raise Exception('Custos operacionais não configurados')
+    """
+    Gera comissão quando pedido quitado
+    Regras vêm da EquipeVendasMoto:
+    - Tipo: FIXA_EXCEDENTE ou PERCENTUAL
+    - Rateio: TRUE (divide) ou FALSE (só vendedor do pedido)
+    """
+    equipe = pedido.vendedor.equipe
 
-    comissao_fixa = custos.valor_comissao_fixa
+    # Se equipe não tem configuração de comissão, não gera
+    if not equipe:
+        return
 
-    # 2. Calcular excedente (soma de todos itens)
-    excedente = sum(item.excedente_tabela for item in pedido.itens)
+    # Calcular valor total do pedido
+    valor_total_pedido = pedido.valor_total_pedido
 
-    # 3. Total da comissão
-    valor_total = comissao_fixa + excedente
+    # TIPO 1: FIXA + EXCEDENTE
+    if equipe.tipo_comissao == 'FIXA_EXCEDENTE':
+        comissao_fixa = equipe.valor_comissao_fixa or Decimal('0')
+        excedente = sum(item.excedente_tabela for item in pedido.itens)
+        valor_total_comissao = comissao_fixa + excedente
 
-    # 4. Buscar TODOS vendedores da equipe
-    if not pedido.equipe_vendas_id:
-        # Se não tem equipe, comissão só para o vendedor
-        vendedores_equipe = [pedido.vendedor]
+    # TIPO 2: PERCENTUAL
+    elif equipe.tipo_comissao == 'PERCENTUAL':
+        percentual = equipe.percentual_comissao or Decimal('0')
+        valor_total_comissao = (valor_total_pedido * percentual) / Decimal('100')
+        comissao_fixa = Decimal('0')
+        excedente = Decimal('0')
     else:
+        return  # Tipo desconhecido
+
+    # Definir quem recebe comissão
+    if equipe.comissao_rateada:
+        # Ratear entre TODOS vendedores da equipe
         vendedores_equipe = VendedorMoto.query.filter_by(
-            equipe_vendas_id=pedido.equipe_vendas_id,
+            equipe_vendas_id=equipe.id,
             ativo=True
         ).all()
+        qtd_vendedores = len(vendedores_equipe)
+        valor_por_vendedor = valor_total_comissao / qtd_vendedores if qtd_vendedores > 0 else Decimal('0')
+    else:
+        # Apenas vendedor do pedido recebe
+        vendedores_equipe = [pedido.vendedor]
+        qtd_vendedores = 1
+        valor_por_vendedor = valor_total_comissao
 
-    qtd_vendedores = len(vendedores_equipe)
-    valor_por_vendedor = valor_total / qtd_vendedores
-
-    # 5. Criar 1 REGISTRO PARA CADA VENDEDOR
+    # Criar registros de comissão
     for vendedor in vendedores_equipe:
         comissao = ComissaoVendedor(
             pedido_id=pedido.id,
             vendedor_id=vendedor.id,
-            valor_comissao_fixa=comissao_fixa / qtd_vendedores,
-            valor_excedente=excedente / qtd_vendedores,
-            valor_total_comissao=valor_por_vendedor,
+            valor_comissao_fixa=comissao_fixa / qtd_vendedores if equipe.comissao_rateada else comissao_fixa,
+            valor_excedente=excedente / qtd_vendedores if equipe.comissao_rateada else excedente,
+            valor_total_comissao=valor_total_comissao,
             qtd_vendedores_equipe=qtd_vendedores,
             valor_rateado=valor_por_vendedor,
             status='PENDENTE'

@@ -12,6 +12,7 @@ from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import ModeloMoto, Moto
+from app.utils.valores_brasileiros import converter_valor_brasileiro
 
 @motochefe_bp.route('/modelos')
 @login_required
@@ -122,6 +123,21 @@ def exportar_modelos():
         download_name=f'modelos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
+@motochefe_bp.route('/modelos/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_modelos():
+    """Baixa modelo de importação para Modelos de Motos"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_modelos
+
+    output = gerar_modelo_modelos()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_modelos_motos_{datetime.now().strftime("%Y%m%d")}.xlsx'
+    )
+
 @motochefe_bp.route('/modelos/importar', methods=['POST'])
 @login_required
 @requer_motochefe
@@ -163,12 +179,15 @@ def importar_modelos():
             if 'Autopropelido' in df.columns and not pd.isna(row['Autopropelido']):
                 autopropelido = str(row['Autopropelido']).strip().lower() in ['sim', 'yes', 'true', '1']
 
+            # Converter preço brasileiro (vírgula como decimal)
+            preco_convertido = converter_valor_brasileiro(str(preco))
+
             modelo = ModeloMoto(
                 nome_modelo=nome,
                 descricao=row.get('Descrição') if 'Descrição' in df.columns else None,
                 potencia_motor=potencia,
                 autopropelido=autopropelido,
-                preco_tabela=Decimal(str(preco)),
+                preco_tabela=Decimal(str(preco_convertido)),
                 criado_por=current_user.nome
             )
             db.session.add(modelo)
@@ -360,6 +379,21 @@ def exportar_motos():
         download_name=f'motos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
+@motochefe_bp.route('/motos/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_motos():
+    """Baixa modelo de importação para Motos (Chassi)"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_motos
+
+    output = gerar_modelo_motos()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_motos_{datetime.now().strftime("%Y%m%d")}.xlsx'
+    )
+
 @motochefe_bp.route('/motos/importar', methods=['POST'])
 @login_required
 @requer_motochefe
@@ -406,6 +440,9 @@ def importar_motos():
                 erros.append(f'Linha {idx+2}: Modelo "{modelo_nome}" não encontrado')
                 continue
 
+            # Converter custo brasileiro (vírgula como decimal)
+            custo_convertido = converter_valor_brasileiro(str(row['Custo']))
+
             moto = Moto(
                 numero_chassi=str(chassi),
                 numero_motor=str(motor),
@@ -416,7 +453,7 @@ def importar_motos():
                 data_nf_entrada=pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today(),
                 data_entrada=pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today(),
                 fornecedor=str(row['Fornecedor']),
-                custo_aquisicao=Decimal(str(row['Custo'])),
+                custo_aquisicao=Decimal(str(custo_convertido)),
                 pallet=str(row['Pallet']) if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None,
                 criado_por=current_user.nome
             )

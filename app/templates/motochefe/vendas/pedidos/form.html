@@ -21,8 +21,15 @@
                 <div class="row">
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Nº Pedido *</label>
-                        <input type="text" name="numero_pedido" class="form-control"
-                               value="{{ pedido.numero_pedido if pedido else '' }}" required>
+                        <div class="input-group">
+                            <input type="text" name="numero_pedido" id="numero_pedido" class="form-control"
+                                   value="{{ pedido.numero_pedido if pedido else '' }}" required
+                                   placeholder="Ex: MC 1321">
+                            <button type="button" class="btn btn-info" onclick="buscarProximoNumero()" title="Gerar próximo número">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Campo editável - Clique no botão para gerar automaticamente</small>
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Data Pedido *</label>
@@ -91,20 +98,12 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label class="form-label">Tipo Frete</label>
                         <select name="tipo_frete" class="form-select">
                             <option value="">Selecione...</option>
                             <option value="CIF">CIF</option>
                             <option value="FOB">FOB</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Responsável Movimentação</label>
-                        <select name="responsavel_movimentacao" class="form-select">
-                            <option value="">Selecione...</option>
-                            <option value="RJ">RJ</option>
-                            <option value="NACOM">NACOM</option>
                         </select>
                     </div>
                 </div>
@@ -409,5 +408,17 @@ document.getElementById('formPedido').addEventListener('submit', function(e) {
     document.getElementById('itens_json').value = JSON.stringify(itens);
     document.getElementById('parcelas_json').value = JSON.stringify(parcelas);
 });
+
+// Função para buscar próximo número de pedido
+async function buscarProximoNumero() {
+    try {
+        const response = await fetch('/motochefe/pedidos/api/proximo-numero');
+        const data = await response.json();
+        document.getElementById('numero_pedido').value = data.numero;
+    } catch (error) {
+        console.error('Erro ao buscar próximo número:', error);
+        alert('Erro ao gerar próximo número');
+    }
+}
 </script>
 {% endblock %}

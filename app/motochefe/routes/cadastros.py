@@ -75,7 +75,7 @@ def listar_equipes():
 @login_required
 @requer_motochefe
 def adicionar_equipe():
-    """Adiciona nova equipe"""
+    """Adiciona nova equipe com configurações de movimentação e comissão"""
     if request.method == 'POST':
         nome = request.form.get('equipe_vendas')
 
@@ -89,8 +89,22 @@ def adicionar_equipe():
             flash('Equipe já cadastrada', 'warning')
             return redirect(url_for('motochefe.listar_equipes'))
 
+        # Capturar novos campos
+        from decimal import Decimal
+
+        responsavel_movimentacao = request.form.get('responsavel_movimentacao') or None
+        tipo_comissao = request.form.get('tipo_comissao', 'FIXA_EXCEDENTE')
+        valor_comissao_fixa = Decimal(request.form.get('valor_comissao_fixa', '0') or '0')
+        percentual_comissao = Decimal(request.form.get('percentual_comissao', '0') or '0')
+        comissao_rateada = bool(request.form.get('comissao_rateada'))
+
         equipe = EquipeVendasMoto(
             equipe_vendas=nome,
+            responsavel_movimentacao=responsavel_movimentacao,
+            tipo_comissao=tipo_comissao,
+            valor_comissao_fixa=valor_comissao_fixa,
+            percentual_comissao=percentual_comissao,
+            comissao_rateada=comissao_rateada,
             criado_por=current_user.nome
         )
         db.session.add(equipe)
@@ -105,12 +119,20 @@ def adicionar_equipe():
 @login_required
 @requer_motochefe
 def editar_equipe(id):
-    """Edita equipe existente"""
+    """Edita equipe existente com configurações"""
     equipe = EquipeVendasMoto.query.get_or_404(id)
 
     if request.method == 'POST':
+        from decimal import Decimal
+
         equipe.equipe_vendas = request.form.get('equipe_vendas')
+        equipe.responsavel_movimentacao = request.form.get('responsavel_movimentacao') or None
+        equipe.tipo_comissao = request.form.get('tipo_comissao', 'FIXA_EXCEDENTE')
+        equipe.valor_comissao_fixa = Decimal(request.form.get('valor_comissao_fixa', '0') or '0')
+        equipe.percentual_comissao = Decimal(request.form.get('percentual_comissao', '0') or '0')
+        equipe.comissao_rateada = bool(request.form.get('comissao_rateada'))
         equipe.atualizado_por = current_user.nome
+
         db.session.commit()
 
         flash('Equipe atualizada com sucesso!', 'success')
@@ -156,6 +178,21 @@ def exportar_equipes():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'equipes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@motochefe_bp.route('/equipes/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_equipes():
+    """Baixa modelo de importação para Equipes"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_equipes
+
+    output = gerar_modelo_equipes()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_equipes_{datetime.now().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/equipes/importar', methods=['POST'])
@@ -233,9 +270,14 @@ def adicionar_vendedor():
             flash('Nome do vendedor é obrigatório', 'danger')
             return redirect(url_for('motochefe.adicionar_vendedor'))
 
+        # VALIDAÇÃO OBRIGATÓRIA: Equipe é obrigatória
+        if not equipe_id:
+            flash('Equipe de vendas é obrigatória', 'danger')
+            return redirect(url_for('motochefe.adicionar_vendedor'))
+
         vendedor = VendedorMoto(
             vendedor=nome,
-            equipe_vendas_id=equipe_id if equipe_id else None,
+            equipe_vendas_id=int(equipe_id),
             criado_por=current_user.nome
         )
         db.session.add(vendedor)
@@ -305,6 +347,21 @@ def exportar_vendedores():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'vendedores_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@motochefe_bp.route('/vendedores/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_vendedores():
+    """Baixa modelo de importação para Vendedores"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_vendedores
+
+    output = gerar_modelo_vendedores()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_vendedores_{datetime.now().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/vendedores/importar', methods=['POST'])
@@ -463,6 +520,21 @@ def exportar_transportadoras():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'transportadoras_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@motochefe_bp.route('/transportadoras/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_transportadoras():
+    """Baixa modelo de importação para Transportadoras"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_transportadoras
+
+    output = gerar_modelo_transportadoras()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_transportadoras_{datetime.now().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/transportadoras/importar', methods=['POST'])
@@ -643,6 +715,21 @@ def exportar_clientes():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'clientes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@motochefe_bp.route('/clientes/modelo')
+@login_required
+@requer_motochefe
+def baixar_modelo_clientes():
+    """Baixa modelo de importação para Clientes"""
+    from app.motochefe.services.modelo_importacao_service import gerar_modelo_clientes
+
+    output = gerar_modelo_clientes()
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'modelo_importacao_clientes_{datetime.now().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/clientes/importar', methods=['POST'])

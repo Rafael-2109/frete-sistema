@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 600px;">
+<div class="container mt-4" style="max-width: 800px;">
     <div class="card">
         <div class="card-header bg-primary text-white">
             <h4 class="mb-0">
@@ -13,8 +13,9 @@
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-                <div class="mb-3">
-                    <label for="equipe_vendas" class="form-label">Nome da Equipe *</label>
+                <!-- Nome da Equipe -->
+                <div class="mb-4">
+                    <label for="equipe_vendas" class="form-label fw-bold">Nome da Equipe *</label>
                     <input type="text"
                            class="form-control"
                            id="equipe_vendas"
@@ -23,6 +24,96 @@
                            required>
                 </div>
 
+                <hr>
+
+                <!-- Configuração de Movimentação -->
+                <h5 class="mb-3"><i class="fas fa-truck"></i> Movimentação</h5>
+                <div class="mb-4">
+                    <label for="responsavel_movimentacao" class="form-label">Responsável Movimentação</label>
+                    <select class="form-select" id="responsavel_movimentacao" name="responsavel_movimentacao">
+                        <option value="">Não configurado</option>
+                        <option value="RJ" {% if equipe and equipe.responsavel_movimentacao == 'RJ' %}selected{% endif %}>RJ</option>
+                        <option value="NACOM" {% if equipe and equipe.responsavel_movimentacao == 'NACOM' %}selected{% endif %}>NACOM</option>
+                    </select>
+                    <small class="text-muted">Local responsável pela movimentação dos pedidos desta equipe</small>
+                </div>
+
+                <hr>
+
+                <!-- Configuração de Comissão -->
+                <h5 class="mb-3"><i class="fas fa-percent"></i> Comissão</h5>
+
+                <!-- Tipo de Comissão -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Comissão *</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_comissao" id="tipo_fixa" value="FIXA_EXCEDENTE"
+                                   {% if not equipe or equipe.tipo_comissao == 'FIXA_EXCEDENTE' %}checked{% endif %}
+                                   onchange="toggleTipoComissao()">
+                            <label class="form-check-label" for="tipo_fixa">
+                                Fixa + Excedente
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_comissao" id="tipo_percentual" value="PERCENTUAL"
+                                   {% if equipe and equipe.tipo_comissao == 'PERCENTUAL' %}checked{% endif %}
+                                   onchange="toggleTipoComissao()">
+                            <label class="form-check-label" for="tipo_percentual">
+                                Percentual
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campos para Fixa + Excedente -->
+                <div id="div_fixa_excedente" class="mb-3">
+                    <label for="valor_comissao_fixa" class="form-label">Valor Comissão Fixa (R$)</label>
+                    <input type="number"
+                           class="form-control"
+                           id="valor_comissao_fixa"
+                           name="valor_comissao_fixa"
+                           step="0.01"
+                           min="0"
+                           value="{{ '%.2f'|format(equipe.valor_comissao_fixa|float) if equipe else '0.00' }}">
+                    <small class="text-muted">Valor fixo + (Preço Venda - Preço Tabela)</small>
+                </div>
+
+                <!-- Campos para Percentual -->
+                <div id="div_percentual" class="mb-3" style="display: none;">
+                    <label for="percentual_comissao" class="form-label">Percentual da Comissão (%)</label>
+                    <div class="input-group">
+                        <input type="number"
+                               class="form-control"
+                               id="percentual_comissao"
+                               name="percentual_comissao"
+                               step="0.01"
+                               min="0"
+                               max="100"
+                               value="{{ '%.2f'|format(equipe.percentual_comissao|float) if equipe else '0.00' }}">
+                        <span class="input-group-text">%</span>
+                    </div>
+                    <small class="text-muted">Percentual sobre o valor total da venda</small>
+                </div>
+
+                <!-- Rateio de Comissão -->
+                <div class="mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="comissao_rateada" name="comissao_rateada" value="1"
+                               {% if not equipe or equipe.comissao_rateada %}checked{% endif %}>
+                        <label class="form-check-label" for="comissao_rateada">
+                            <strong>Ratear comissão entre todos vendedores da equipe</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        • Marcado: Comissão dividida igualmente entre todos vendedores da equipe<br>
+                        • Desmarcado: Apenas o vendedor do pedido recebe a comissão integral
+                    </small>
+                </div>
+
+                <hr>
+
+                <!-- Botões -->
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Salvar
@@ -35,4 +126,25 @@
         </div>
     </div>
 </div>
+
+<script>
+function toggleTipoComissao() {
+    const tipoFixa = document.getElementById('tipo_fixa').checked;
+    const divFixa = document.getElementById('div_fixa_excedente');
+    const divPercentual = document.getElementById('div_percentual');
+
+    if (tipoFixa) {
+        divFixa.style.display = 'block';
+        divPercentual.style.display = 'none';
+    } else {
+        divFixa.style.display = 'none';
+        divPercentual.style.display = 'block';
+    }
+}
+
+// Executar ao carregar página
+document.addEventListener('DOMContentLoaded', function() {
+    toggleTipoComissao();
+});
+</script>
 {% endblock %}

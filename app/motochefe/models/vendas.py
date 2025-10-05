@@ -50,9 +50,6 @@ class PedidoVendaMoto(db.Model):
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadora_moto.id'), nullable=True)
     tipo_frete = db.Column(db.String(20), nullable=True)  # 'CIF', 'FOB'
 
-    # Custos operacionais
-    responsavel_movimentacao = db.Column(db.String(20), nullable=True)  # 'RJ', 'NACOM'
-
     # Empresa emissora da NF (faturamento)
     empresa_venda_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True)
 

@@ -24,8 +24,8 @@
                 </div>
 
                 <div class="mb-3">
-                    <label for="equipe_vendas_id" class="form-label">Equipe de Vendas</label>
-                    <select class="form-select" id="equipe_vendas_id" name="equipe_vendas_id">
+                    <label for="equipe_vendas_id" class="form-label">Equipe de Vendas *</label>
+                    <select class="form-select" id="equipe_vendas_id" name="equipe_vendas_id" required>
                         <option value="">Selecione uma equipe...</option>
                         {% for equipe in equipes %}
                         <option value="{{ equipe.id }}"
@@ -34,7 +34,7 @@
                         </option>
                         {% endfor %}
                     </select>
-                    <small class="form-text text-muted">Opcional - Vincular vendedor a uma equipe</small>
+                    <small class="form-text text-muted"><strong>Obrigatório</strong> - Todo vendedor DEVE estar em uma equipe</small>
                 </div>
 
                 <div class="d-flex gap-2">
