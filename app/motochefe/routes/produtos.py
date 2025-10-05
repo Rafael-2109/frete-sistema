@@ -14,6 +14,32 @@ from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import ModeloMoto, Moto
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 
+
+def _ativar_motos_rejeitadas(nome_modelo, modelo_id):
+    """
+    Ativa motos que foram rejeitadas (ativo=False) por falta do modelo
+
+    Args:
+        nome_modelo (str): Nome do modelo recém-cadastrado
+        modelo_id (int): ID do modelo recém-cadastrado
+
+    Returns:
+        int: Quantidade de motos ativadas
+    """
+    motos_inativas = Moto.query.filter_by(
+        ativo=False,
+        modelo_rejeitado=nome_modelo
+    ).all()
+
+    qtd_ativadas = 0
+    for moto in motos_inativas:
+        moto.modelo_id = modelo_id  # Atualiza para o modelo correto
+        moto.ativo = True  # Ativa a moto
+        moto.atualizado_por = 'Sistema (Ativação Automática)'
+        qtd_ativadas += 1
+
+    return qtd_ativadas
+
 @motochefe_bp.route('/modelos')
 @login_required
 @requer_motochefe
@@ -51,9 +77,17 @@ def adicionar_modelo():
             criado_por=current_user.nome
         )
         db.session.add(modelo)
+        db.session.flush()  # Garante que modelo tem ID antes de ativar motos
+
+        # Ativar motos rejeitadas que esperavam este modelo
+        motos_ativadas = _ativar_motos_rejeitadas(nome, modelo.id)
+
         db.session.commit()
 
-        flash(f'Modelo "{nome}" cadastrado com sucesso!', 'success')
+        mensagem = f'Modelo "{nome}" cadastrado com sucesso!'
+        if motos_ativadas > 0:
+            mensagem += f' | {motos_ativadas} motos inativas foram ativadas automaticamente'
+        flash(mensagem, 'success')
         return redirect(url_for('motochefe.listar_modelos'))
 
     return render_template('motochefe/produtos/modelos/form.html', modelo=None)
@@ -191,10 +225,25 @@ def importar_modelos():
                 criado_por=current_user.nome
             )
             db.session.add(modelo)
+            db.session.flush()  # Garante que modelo tem ID
+
+            # Ativar motos rejeitadas que esperavam este modelo
+            _ativar_motos_rejeitadas(nome, modelo.id)
+
             importados += 1
 
         db.session.commit()
-        flash(f'{importados} modelos importados com sucesso!', 'success')
+
+        # Verificar quantas motos foram ativadas
+        motos_ativadas = Moto.query.filter_by(
+            atualizado_por='Sistema (Ativação Automática)',
+            ativo=True
+        ).count()
+
+        mensagem = f'{importados} modelos importados com sucesso!'
+        if motos_ativadas > 0:
+            mensagem += f' | {motos_ativadas} motos inativas foram ativadas automaticamente'
+        flash(mensagem, 'success')
 
     except Exception as e:
         flash(f'Erro ao importar: {str(e)}', 'danger')
@@ -207,12 +256,17 @@ def importar_modelos():
 @login_required
 @requer_motochefe
 def listar_motos():
-    """Lista motos (chassi)"""
+    """Lista motos (chassi) - Com filtro de inativas"""
     # Filtros opcionais
     status = request.args.get('status')
     modelo_id = request.args.get('modelo_id', type=int)
+    mostrar_inativas = request.args.get('inativas', type=int, default=0)  # 0=ativas, 1=inativas
 
-    query = Moto.query.filter_by(ativo=True)
+    # Filtro base: ativo ou inativo
+    if mostrar_inativas == 1:
+        query = Moto.query.filter_by(ativo=False)
+    else:
+        query = Moto.query.filter_by(ativo=True)
 
     if status:
         query = query.filter_by(status=status)
@@ -229,6 +283,7 @@ def listar_motos():
     disponiveis = sum(1 for m in motos if m.status == 'DISPONIVEL')
     reservadas = sum(1 for m in motos if m.status == 'RESERVADA')
     vendidas = sum(1 for m in motos if m.status == 'VENDIDA')
+    inativas = Moto.query.filter_by(ativo=False).count()  # Total de inativas
 
     return render_template('motochefe/produtos/motos/listar.html',
                          motos=motos,
@@ -237,8 +292,10 @@ def listar_motos():
                          disponiveis=disponiveis,
                          reservadas=reservadas,
                          vendidas=vendidas,
+                         inativas=inativas,
                          status_filtro=status,
-                         modelo_filtro=modelo_id)
+                         modelo_filtro=modelo_id,
+                         mostrar_inativas=mostrar_inativas)
 
 @motochefe_bp.route('/motos/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -379,6 +436,45 @@ def exportar_motos():
         download_name=f'motos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
+@motochefe_bp.route('/motos/exportar-inativas')
+@login_required
+@requer_motochefe
+def exportar_motos_inativas():
+    """Exporta motos INATIVAS (rejeitadas por falta de modelo)"""
+    motos_inativas = Moto.query.filter_by(ativo=False).order_by(Moto.data_entrada.desc()).all()
+
+    if not motos_inativas:
+        flash('Não há motos inativas para exportar', 'info')
+        return redirect(url_for('motochefe.listar_motos'))
+
+    data = [{
+        'Chassi': m.numero_chassi,
+        'Motor': m.numero_motor,
+        'Modelo Rejeitado': m.modelo_rejeitado or 'N/A',  # Modelo que não foi encontrado
+        'Cor': m.cor,
+        'Ano': m.ano_fabricacao or '',
+        'NF Entrada': m.nf_entrada,
+        'Data NF': m.data_nf_entrada.strftime('%d/%m/%Y') if m.data_nf_entrada else '',
+        'Data Entrada': m.data_entrada.strftime('%d/%m/%Y') if m.data_entrada else '',
+        'Fornecedor': m.fornecedor,
+        'Custo': float(m.custo_aquisicao),
+        'Pallet': m.pallet or '',
+        'Criado Em': m.criado_em.strftime('%d/%m/%Y %H:%M') if m.criado_em else ''
+    } for m in motos_inativas]
+
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Motos Inativas')
+
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'motos_INATIVAS_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
 @motochefe_bp.route('/motos/modelo')
 @login_required
 @requer_motochefe
@@ -398,7 +494,7 @@ def baixar_modelo_motos():
 @login_required
 @requer_motochefe
 def importar_motos():
-    """Importa motos de Excel"""
+    """Importa motos de Excel - Salva rejeitadas como inativas"""
     if 'arquivo' not in request.files:
         flash('Nenhum arquivo selecionado', 'danger')
         return redirect(url_for('motochefe.listar_motos'))
@@ -417,7 +513,23 @@ def importar_motos():
             flash(f'Planilha deve conter colunas: {", ".join(required_cols)}', 'danger')
             return redirect(url_for('motochefe.listar_motos'))
 
+        # Buscar ou criar modelo placeholder para motos rejeitadas
+        modelo_placeholder = ModeloMoto.query.filter_by(nome_modelo='MODELO_NAO_ENCONTRADO').first()
+        if not modelo_placeholder:
+            modelo_placeholder = ModeloMoto(
+                nome_modelo='MODELO_NAO_ENCONTRADO',
+                descricao='Placeholder para motos importadas sem modelo cadastrado',
+                potencia_motor='N/A',
+                autopropelido=False,
+                preco_tabela=Decimal('0.00'),
+                criado_por='Sistema',
+                ativo=False  # Modelo inativo, apenas para referência técnica
+            )
+            db.session.add(modelo_placeholder)
+            db.session.flush()
+
         importados = 0
+        rejeitados = 0
         erros = []
 
         for idx, row in df.iterrows():
@@ -428,7 +540,7 @@ def importar_motos():
             if pd.isna(chassi) or pd.isna(motor) or pd.isna(modelo_nome):
                 continue
 
-            # Verificar duplicidade
+            # Verificar duplicidade de chassi
             existe = Moto.query.filter_by(numero_chassi=chassi).first()
             if existe:
                 erros.append(f'Linha {idx+2}: Chassi {chassi} já existe')
@@ -436,38 +548,63 @@ def importar_motos():
 
             # Buscar modelo
             modelo = ModeloMoto.query.filter_by(nome_modelo=modelo_nome, ativo=True).first()
-            if not modelo:
-                erros.append(f'Linha {idx+2}: Modelo "{modelo_nome}" não encontrado')
-                continue
 
             # Converter custo brasileiro (vírgula como decimal)
             custo_convertido = converter_valor_brasileiro(str(row['Custo']))
 
-            moto = Moto(
-                numero_chassi=str(chassi),
-                numero_motor=str(motor),
-                modelo_id=modelo.id,
-                cor=str(row['Cor']),
-                ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,
-                nf_entrada=str(row['NF Entrada']),
-                data_nf_entrada=pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today(),
-                data_entrada=pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today(),
-                fornecedor=str(row['Fornecedor']),
-                custo_aquisicao=Decimal(str(custo_convertido)),
-                pallet=str(row['Pallet']) if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None,
-                criado_por=current_user.nome
-            )
-            db.session.add(moto)
-            importados += 1
+            if not modelo:
+                # MODELO NÃO ENCONTRADO: Salvar moto como INATIVA
+                moto = Moto(
+                    numero_chassi=str(chassi),
+                    numero_motor=str(motor),
+                    modelo_id=modelo_placeholder.id,  # Usa placeholder
+                    modelo_rejeitado=str(modelo_nome),  # Guarda nome do modelo não encontrado
+                    cor=str(row['Cor']),
+                    ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,
+                    nf_entrada=str(row['NF Entrada']),
+                    data_nf_entrada=pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today(),
+                    data_entrada=pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today(),
+                    fornecedor=str(row['Fornecedor']),
+                    custo_aquisicao=Decimal(str(custo_convertido)),
+                    pallet=str(row['Pallet']) if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None,
+                    ativo=False,  # MARCA COMO INATIVA
+                    criado_por=current_user.nome
+                )
+                db.session.add(moto)
+                rejeitados += 1
+            else:
+                # MODELO ENCONTRADO: Salvar moto normalmente
+                moto = Moto(
+                    numero_chassi=str(chassi),
+                    numero_motor=str(motor),
+                    modelo_id=modelo.id,
+                    cor=str(row['Cor']),
+                    ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,
+                    nf_entrada=str(row['NF Entrada']),
+                    data_nf_entrada=pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today(),
+                    data_entrada=pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today(),
+                    fornecedor=str(row['Fornecedor']),
+                    custo_aquisicao=Decimal(str(custo_convertido)),
+                    pallet=str(row['Pallet']) if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None,
+                    criado_por=current_user.nome
+                )
+                db.session.add(moto)
+                importados += 1
 
         db.session.commit()
 
+        # Mensagem de retorno
+        mensagem = f'{importados} motos importadas com sucesso'
+        if rejeitados > 0:
+            mensagem += f' | {rejeitados} motos salvas como INATIVAS (modelo não encontrado)'
         if erros:
-            flash(f'{importados} motos importadas. Erros: {"; ".join(erros[:5])}', 'warning')
+            mensagem += f' | Erros: {"; ".join(erros[:5])}'
+            flash(mensagem, 'warning')
         else:
-            flash(f'{importados} motos importadas com sucesso!', 'success')
+            flash(mensagem, 'success')
 
     except Exception as e:
+        db.session.rollback()
         flash(f'Erro ao importar: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_motos'))

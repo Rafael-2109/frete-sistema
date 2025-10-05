@@ -81,6 +81,9 @@ class Moto(db.Model):
     # Relacionamentos
     modelo = db.relationship('ModeloMoto', backref='motos')
 
+    # Controle de motos rejeitadas (modelo não encontrado na importação)
+    modelo_rejeitado = db.Column(db.String(100), nullable=True)  # Nome do modelo não encontrado (quando ativo=False)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
