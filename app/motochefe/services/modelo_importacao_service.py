@@ -4,8 +4,6 @@ Centraliza a lógica de criação de arquivos modelo com instruções detalhadas
 """
 import pandas as pd
 from io import BytesIO
-from datetime import datetime
-from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
@@ -59,7 +57,8 @@ def _ajustar_larguras_colunas(ws):
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except Exception as e:
+                print(f"Erro ao ajustar largura da coluna {column_letter}: {e}")
                 pass
 
         adjusted_width = min(max_length + 2, 50)  # Limite de 50

@@ -124,7 +124,11 @@ def importar():
 
             # Processar arquivo Excel
             df = pd.read_excel(temp_filepath)
-            lote_id = gerar_lote_id()
+
+            # 🎯 Dicionário para mapear (num_pedido, expedicao) → separacao_lote_id
+            # Cada combinação única de pedido + data de expedição recebe seu próprio lote
+            lotes_por_pedido_expedicao = {}
+
             for i, row in df.iterrows():
 
                 # Exemplo: se QTD_SALDO for int, mas às vezes vem com pontos/virgula
@@ -133,15 +137,30 @@ def importar():
                     qtd_saldo = 0  # se quiser forçar 0 caso não parse
 
                 try:
+                    # ✅ EXTRAIR num_pedido e expedicao ANTES de criar a Separacao
+                    num_pedido_str = parse_str(row.get('NUM_PEDIDO'))
+                    data_expedicao_obj = parse_date(row.get('EXPEDIÇÃO'))
+
+                    # Criar chave única: "PEDIDO123_2025-01-15" ou "PEDIDO123_sem_data"
+                    chave_lote = f"{num_pedido_str}_{data_expedicao_obj if data_expedicao_obj else 'sem_data'}"
+
+                    # Se ainda não existe lote para essa combinação, criar um novo
+                    if chave_lote not in lotes_por_pedido_expedicao:
+                        lotes_por_pedido_expedicao[chave_lote] = gerar_lote_id()
+                        print(f"✅ Novo lote criado: {lotes_por_pedido_expedicao[chave_lote]} para {chave_lote}")
+
+                    # Obter o lote_id correto para essa combinação
+                    lote_id = lotes_por_pedido_expedicao[chave_lote]
+
                     # Truncar observ_ped_1 se for maior que 700 caracteres
                     observ_ped_1_value = parse_str(row.get('OBSERV_PED_1'))
                     if observ_ped_1_value is not None and len(observ_ped_1_value) > 700:
                         original_length = len(observ_ped_1_value)
                         observ_ped_1_value = observ_ped_1_value[:700]
                         print(f"⚠️ Linha {i}: Campo observ_ped_1 truncado de {original_length} para 700 caracteres")
-                    
+
                     pedido = Separacao(
-                        num_pedido=parse_str(row.get('NUM_PEDIDO')),
+                        num_pedido=num_pedido_str,
                         data_pedido=parse_date(row.get('DATA_PEDIDO')),
                         cnpj_cpf=parse_str(row.get('CNPJ_CPF')),
                         raz_social_red=parse_str(row.get('RAZ_SOCIAL_RED')),
@@ -160,10 +179,10 @@ def importar():
                         observ_ped_1=observ_ped_1_value,
                         roteirizacao=parse_str(row.get('ROTEIRIZAÇÃO')),
 
-                        expedicao=parse_date(row.get('EXPEDIÇÃO')),
+                        expedicao=data_expedicao_obj,
                         agendamento=parse_date(row.get('AGENDAMENTO')),
                         protocolo=parse_str(row.get('PROTOCOLO')),
-                        separacao_lote_id=lote_id
+                        separacao_lote_id=lote_id  # ✅ Agora usa o lote específico da combinação
                     )
                     db.session.add(pedido)
                     db.session.flush()  # tenta inserir/validar já

@@ -9,8 +9,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 from app import create_app, db
-from sqlalchemy import text, inspect
-from datetime import datetime
+from sqlalchemy import text
 
 def tornar_motor_nullable():
     """Altera numero_motor para nullable=True mantendo unique=True"""
