@@ -196,6 +196,8 @@ def importar_modelos():
             return redirect(url_for('motochefe.listar_modelos'))
 
         importados = 0
+        atualizados = 0
+
         for _, row in df.iterrows():
             nome = row['Modelo']
             potencia = row['Potência']
@@ -204,33 +206,44 @@ def importar_modelos():
             if pd.isna(nome) or pd.isna(potencia) or pd.isna(preco):
                 continue
 
-            # Verificar se já existe
-            existe = ModeloMoto.query.filter_by(nome_modelo=nome, ativo=True).first()
-            if existe:
-                continue
-
+            # Processar autopropelido
             autopropelido = False
             if 'Autopropelido' in df.columns and not pd.isna(row['Autopropelido']):
                 autopropelido = str(row['Autopropelido']).strip().lower() in ['sim', 'yes', 'true', '1']
 
             # Converter preço brasileiro (vírgula como decimal)
             preco_convertido = converter_valor_brasileiro(str(preco))
+            descricao = row.get('Descrição') if 'Descrição' in df.columns else None
 
-            modelo = ModeloMoto(
-                nome_modelo=nome,
-                descricao=row.get('Descrição') if 'Descrição' in df.columns else None,
-                potencia_motor=potencia,
-                autopropelido=autopropelido,
-                preco_tabela=Decimal(str(preco_convertido)),
-                criado_por=current_user.nome
-            )
-            db.session.add(modelo)
-            db.session.flush()  # Garante que modelo tem ID
+            # Verificar se já existe
+            existe = ModeloMoto.query.filter_by(nome_modelo=nome, ativo=True).first()
 
-            # Ativar motos rejeitadas que esperavam este modelo
-            _ativar_motos_rejeitadas(nome, modelo.id)
+            if existe:
+                # ✅ ATUALIZAR modelo existente com todos os campos
+                existe.potencia_motor = potencia
+                existe.preco_tabela = Decimal(str(preco_convertido))
+                existe.descricao = descricao
+                existe.autopropelido = autopropelido
+                existe.atualizado_por = current_user.nome
+                db.session.flush()
+                atualizados += 1
+            else:
+                # ✅ CRIAR novo modelo
+                modelo = ModeloMoto(
+                    nome_modelo=nome,
+                    descricao=descricao,
+                    potencia_motor=potencia,
+                    autopropelido=autopropelido,
+                    preco_tabela=Decimal(str(preco_convertido)),
+                    criado_por=current_user.nome
+                )
+                db.session.add(modelo)
+                db.session.flush()  # Garante que modelo tem ID
 
-            importados += 1
+                # Ativar motos rejeitadas que esperavam este modelo
+                _ativar_motos_rejeitadas(nome, modelo.id)
+
+                importados += 1
 
         db.session.commit()
 
@@ -240,9 +253,16 @@ def importar_modelos():
             ativo=True
         ).count()
 
-        mensagem = f'{importados} modelos importados com sucesso!'
+        # Montar mensagem de feedback
+        partes_mensagem = []
+        if importados > 0:
+            partes_mensagem.append(f'{importados} modelo(s) novo(s) criado(s)')
+        if atualizados > 0:
+            partes_mensagem.append(f'{atualizados} modelo(s) atualizado(s)')
         if motos_ativadas > 0:
-            mensagem += f' | {motos_ativadas} motos inativas foram ativadas automaticamente'
+            partes_mensagem.append(f'{motos_ativadas} moto(s) inativa(s) ativada(s) automaticamente')
+
+        mensagem = ' | '.join(partes_mensagem) if partes_mensagem else 'Nenhum modelo foi importado'
         flash(mensagem, 'success')
 
     except Exception as e:
@@ -533,12 +553,20 @@ def importar_motos():
         erros = []
 
         for idx, row in df.iterrows():
-            chassi = row['Chassi']
+            chassi_raw = row['Chassi']
             motor = row.get('Motor')  # Agora é opcional
             modelo_nome = row['Modelo']
 
             # Chassi e Modelo são obrigatórios, Motor é opcional
-            if pd.isna(chassi) or pd.isna(modelo_nome):
+            if pd.isna(chassi_raw) or pd.isna(modelo_nome):
+                continue
+
+            # ✅ LIMPAR E VALIDAR CHASSI
+            chassi = str(chassi_raw).strip().upper()  # Remove espaços e converte para maiúscula
+
+            # Validar tamanho máximo (VARCHAR(30) no banco)
+            if len(chassi) > 30:
+                erros.append(f'Linha {idx+2}: Chassi "{chassi}" muito longo ({len(chassi)} caracteres, máximo 30).')
                 continue
 
             # Verificar duplicidade de chassi
@@ -563,8 +591,8 @@ def importar_motos():
             if not modelo:
                 # MODELO NÃO ENCONTRADO: Salvar moto como INATIVA
                 moto = Moto(
-                    numero_chassi=str(chassi),
-                    numero_motor=str(motor) if not pd.isna(motor) else None,  # Nullable
+                    numero_chassi=chassi,  # ✅ Já limpo e validado
+                    numero_motor=str(motor).strip() if not pd.isna(motor) else None,  # Nullable
                     modelo_id=modelo_placeholder.id,  # Usa placeholder
                     modelo_rejeitado=str(modelo_nome),  # Guarda nome do modelo não encontrado
                     cor=str(row['Cor']),
@@ -583,8 +611,8 @@ def importar_motos():
             else:
                 # MODELO ENCONTRADO: Salvar moto normalmente
                 moto = Moto(
-                    numero_chassi=str(chassi),
-                    numero_motor=str(motor) if not pd.isna(motor) else None,  # Nullable
+                    numero_chassi=chassi,  # ✅ Já limpo e validado
+                    numero_motor=str(motor).strip() if not pd.isna(motor) else None,  # Nullable
                     modelo_id=modelo.id,
                     cor=str(row['Cor']),
                     ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,

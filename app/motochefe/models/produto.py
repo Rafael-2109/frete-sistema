@@ -49,7 +49,7 @@ class Moto(db.Model):
     __tablename__ = 'moto'
 
     # PK
-    numero_chassi = db.Column(db.String(17), primary_key=True)
+    numero_chassi = db.Column(db.String(30), primary_key=True)  # Aumentado de 17 para 30 para suportar variações de VIN
 
     # Identificação física
     numero_motor = db.Column(db.String(50), unique=True, nullable=True)  # Nullable mas UNIQUE quando preenchido

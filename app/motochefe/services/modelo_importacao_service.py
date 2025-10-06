@@ -511,13 +511,13 @@ def gerar_modelo_motos():
     data = {
         'Chassi': ['9BD123456789ABC01', '9BD987654321XYZ02'],
         'Motor': ['MOT123456', 'MOT987654'],
-        'Modelo': ['HONDA CG 160', 'YAMAHA FAZER 250'],
+        'Modelo': ['X11', 'X12'],
         'Cor': ['Preta', 'Vermelha'],
         'Ano': [2024, 2025],
         'NF Entrada': ['12345', '67890'],
         'Data NF': ['01/10/2025', '15/10/2025'],
         'Data Entrada': ['05/10/2025', '20/10/2025'],
-        'Fornecedor': ['Honda Motos Ltda', 'Yamaha Brasil S.A.'],
+        'Fornecedor': ['MANAUS', 'IMPORTADA'],
         'Custo': ['11.000,00', '16.500,00'],  # Formato brasileiro
         'Pallet': ['P001', 'P002']
     }

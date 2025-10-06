@@ -23,23 +23,72 @@
     <!-- Tabela -->
     <div class="card">
         <div class="card-body">
-            <table class="table table-hover">
+            <table class="table table-hover table-sm">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Equipe</th>
-                        <th>Criado Em</th>
-                        <th>Criado Por</th>
-                        <th>Ações</th>
+                        <th style="width: 15%;">ID / Equipe</th>
+                        <th style="width: 12%;">Movimentação</th>
+                        <th style="width: 20%;">Tipo Comissão</th>
+                        <th style="width: 15%;">Valor</th>
+                        <th style="width: 20%;">Criação</th>
+                        <th style="width: 18%;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for equipe in equipes %}
                     <tr>
-                        <td>{{ equipe.id }}</td>
-                        <td>{{ equipe.equipe_vendas }}</td>
-                        <td>{{ equipe.criado_em.strftime('%d/%m/%Y %H:%M') if equipe.criado_em else '-' }}</td>
-                        <td>{{ equipe.criado_por or '-' }}</td>
+                        <!-- Coluna 1: ID / Equipe -->
+                        <td>
+                            <div><small class="text-muted">ID {{ equipe.id }}</small></div>
+                            <div><strong>{{ equipe.equipe_vendas }}</strong></div>
+                        </td>
+
+                        <!-- Coluna 2: Movimentação -->
+                        <td class="text-center">
+                            {% if equipe.responsavel_movimentacao %}
+                            <span class="badge bg-info">{{ equipe.responsavel_movimentacao }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Coluna 3: Tipo Comissão (com Rateado/Individual) -->
+                        <td>
+                            {% if equipe.tipo_comissao == 'FIXA_EXCEDENTE' %}
+                            <div><span class="badge bg-primary">Fixa + Excedente</span></div>
+                            {% elif equipe.tipo_comissao == 'PERCENTUAL' %}
+                            <div><span class="badge bg-success">Percentual</span></div>
+                            {% else %}
+                            <div><span class="text-muted">-</span></div>
+                            {% endif %}
+
+                            <div class="mt-1">
+                                {% if equipe.comissao_rateada %}
+                                <small class="text-success"><i class="fas fa-users"></i> Rateado</small>
+                                {% else %}
+                                <small class="text-secondary"><i class="fas fa-user"></i> Individual</small>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Coluna 4: Valor (R$ ou %) -->
+                        <td>
+                            {% if equipe.tipo_comissao == 'FIXA_EXCEDENTE' %}
+                            <strong>R$ {{ "%.2f"|format(equipe.valor_comissao_fixa or 0) }}</strong>
+                            {% elif equipe.tipo_comissao == 'PERCENTUAL' %}
+                            <strong>{{ "%.2f"|format(equipe.percentual_comissao or 0) }}%</strong>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Coluna 5: Criação (Criado Por em cima, Criado Em embaixo) -->
+                        <td>
+                            <div><small><i class="fas fa-user"></i> {{ equipe.criado_por or '-' }}</small></div>
+                            <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ equipe.criado_em.strftime('%d/%m/%Y %H:%M') if equipe.criado_em else '-' }}</small></div>
+                        </td>
+
+                        <!-- Coluna 6: Ações -->
                         <td>
                             <a href="{{ url_for('motochefe.editar_equipe', id=equipe.id) }}" class="btn btn-sm btn-warning">
                                 <i class="fas fa-edit"></i>
@@ -54,7 +103,9 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted">Nenhuma equipe cadastrada</td>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fas fa-info-circle"></i> Nenhuma equipe cadastrada
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

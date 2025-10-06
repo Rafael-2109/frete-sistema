@@ -27,6 +27,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Modelo</th>
+                        <th>Descrição</th>
                         <th>Potência</th>
                         <th>Autopropelido</th>
                         <th>Preço Tabela</th>
@@ -38,6 +39,7 @@
                     <tr>
                         <td>{{ modelo.id }}</td>
                         <td>{{ modelo.nome_modelo }}</td>
+                        <td>{{ modelo.descricao or '-' }}</td>
                         <td>{{ modelo.potencia_motor }}</td>
                         <td>
                             {% if modelo.autopropelido %}
@@ -61,7 +63,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted">Nenhum modelo cadastrado</td>
+                        <td colspan="7" class="text-center text-muted">Nenhum modelo cadastrado</td>
                     </tr>
                     {% endfor %}
                 </tbody>
