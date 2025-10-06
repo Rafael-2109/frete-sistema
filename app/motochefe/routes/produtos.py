@@ -534,10 +534,11 @@ def importar_motos():
 
         for idx, row in df.iterrows():
             chassi = row['Chassi']
-            motor = row['Motor']
+            motor = row.get('Motor')  # Agora é opcional
             modelo_nome = row['Modelo']
 
-            if pd.isna(chassi) or pd.isna(motor) or pd.isna(modelo_nome):
+            # Chassi e Modelo são obrigatórios, Motor é opcional
+            if pd.isna(chassi) or pd.isna(modelo_nome):
                 continue
 
             # Verificar duplicidade de chassi
@@ -545,6 +546,13 @@ def importar_motos():
             if existe:
                 erros.append(f'Linha {idx+2}: Chassi {chassi} já existe')
                 continue
+
+            # Verificar duplicidade de motor (se preenchido)
+            if not pd.isna(motor):
+                motor_existe = Moto.query.filter_by(numero_motor=str(motor)).first()
+                if motor_existe:
+                    erros.append(f'Linha {idx+2}: Motor {motor} já existe')
+                    continue
 
             # Buscar modelo
             modelo = ModeloMoto.query.filter_by(nome_modelo=modelo_nome, ativo=True).first()
@@ -556,7 +564,7 @@ def importar_motos():
                 # MODELO NÃO ENCONTRADO: Salvar moto como INATIVA
                 moto = Moto(
                     numero_chassi=str(chassi),
-                    numero_motor=str(motor),
+                    numero_motor=str(motor) if not pd.isna(motor) else None,  # Nullable
                     modelo_id=modelo_placeholder.id,  # Usa placeholder
                     modelo_rejeitado=str(modelo_nome),  # Guarda nome do modelo não encontrado
                     cor=str(row['Cor']),
@@ -576,7 +584,7 @@ def importar_motos():
                 # MODELO ENCONTRADO: Salvar moto normalmente
                 moto = Moto(
                     numero_chassi=str(chassi),
-                    numero_motor=str(motor),
+                    numero_motor=str(motor) if not pd.isna(motor) else None,  # Nullable
                     modelo_id=modelo.id,
                     cor=str(row['Cor']),
                     ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,

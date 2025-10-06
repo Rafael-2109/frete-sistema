@@ -52,7 +52,7 @@ class Moto(db.Model):
     numero_chassi = db.Column(db.String(17), primary_key=True)
 
     # Identificação física
-    numero_motor = db.Column(db.String(50), unique=True, nullable=False)
+    numero_motor = db.Column(db.String(50), unique=True, nullable=True)  # Nullable mas UNIQUE quando preenchido
     modelo_id = db.Column(db.Integer, db.ForeignKey('modelo_moto.id'), nullable=False)
     cor = db.Column(db.String(50), nullable=False)
     ano_fabricacao = db.Column(db.Integer, nullable=True)
