@@ -609,6 +609,138 @@ def importar_motos():
 
     return redirect(url_for('motochefe.listar_motos'))
 
+@motochefe_bp.route('/motos/api/agrupamento')
+@login_required
+@requer_motochefe
+def api_motos_agrupamento():
+    """API: Retorna motos agrupadas por modelo/cor/potência com filtros em tempo real"""
+    from collections import defaultdict
+
+    # Filtros da query string
+    autopropelido_sim = request.args.get('autopropelido_sim', 'true') == 'true'
+    autopropelido_nao = request.args.get('autopropelido_nao', 'true') == 'true'
+    status_filtro = request.args.get('status', '')  # DISPONIVEL, RESERVADA, VENDIDA ou vazio (todos)
+    modelo_filtro = request.args.get('modelo', '')
+    cor_filtro = request.args.get('cor', '')
+    potencia_filtro = request.args.get('potencia', '')
+
+    # Query base: apenas motos ativas
+    query = Moto.query.filter_by(ativo=True)
+
+    # Filtro de status
+    if status_filtro:
+        query = query.filter_by(status=status_filtro)
+
+    # Filtro de autopropelido
+    autopropelido_valores = []
+    if autopropelido_sim:
+        autopropelido_valores.append(True)
+    if autopropelido_nao:
+        autopropelido_valores.append(False)
+
+    if autopropelido_valores:
+        # Filtrar por modelos que são ou não autopropelidos
+        modelos_ids = [m.id for m in ModeloMoto.query.filter(
+            ModeloMoto.autopropelido.in_(autopropelido_valores),
+            ModeloMoto.ativo == True
+        ).all()]
+        query = query.filter(Moto.modelo_id.in_(modelos_ids))
+
+    # Filtro de modelo
+    if modelo_filtro:
+        modelo = ModeloMoto.query.filter_by(nome_modelo=modelo_filtro, ativo=True).first()
+        if modelo:
+            query = query.filter_by(modelo_id=modelo.id)
+
+    # Filtro de cor
+    if cor_filtro:
+        query = query.filter_by(cor=cor_filtro)
+
+    # Filtro de potência
+    if potencia_filtro:
+        modelos_potencia = ModeloMoto.query.filter_by(potencia_motor=potencia_filtro, ativo=True).all()
+        if modelos_potencia:
+            modelos_ids = [m.id for m in modelos_potencia]
+            query = query.filter(Moto.modelo_id.in_(modelos_ids))
+
+    motos = query.all()
+
+    # Agrupar dados
+    agrupamento = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+
+    for moto in motos:
+        modelo_nome = moto.modelo.nome_modelo
+        potencia = moto.modelo.potencia_motor
+        cor = moto.cor
+
+        agrupamento[modelo_nome][cor][potencia].append({
+            'chassi': moto.numero_chassi,
+            'motor': moto.numero_motor,
+            'status': moto.status,
+            'reservado': moto.reservado,
+            'ano': moto.ano_fabricacao,
+            'nf': moto.nf_entrada
+        })
+
+    # Converter para estrutura serializable
+    resultado = []
+    for modelo, cores in sorted(agrupamento.items()):
+        modelo_obj = ModeloMoto.query.filter_by(nome_modelo=modelo, ativo=True).first()
+
+        cores_data = []
+        total_modelo = 0
+
+        for cor, potencias in sorted(cores.items()):
+            potencias_data = []
+            total_cor = 0
+
+            for potencia, motos_lista in sorted(potencias.items()):
+                qtd = len(motos_lista)
+                total_cor += qtd
+                total_modelo += qtd
+
+                potencias_data.append({
+                    'potencia': potencia,
+                    'quantidade': qtd,
+                    'motos': motos_lista
+                })
+
+            cores_data.append({
+                'cor': cor,
+                'quantidade': total_cor,
+                'potencias': potencias_data
+            })
+
+        resultado.append({
+            'modelo': modelo,
+            'autopropelido': modelo_obj.autopropelido if modelo_obj else False,
+            'quantidade': total_modelo,
+            'cores': cores_data
+        })
+
+    return jsonify(resultado)
+
+@motochefe_bp.route('/motos/api/opcoes-filtros')
+@login_required
+@requer_motochefe
+def api_opcoes_filtros():
+    """API: Retorna opções disponíveis para os filtros (modelos, cores, potências)"""
+    from sqlalchemy import distinct
+
+    # Buscar apenas de motos ativas
+    motos_ativas = Moto.query.filter_by(ativo=True).all()
+
+    # Extrair valores únicos
+    modelos = sorted(list(set([m.modelo.nome_modelo for m in motos_ativas])))
+    cores = sorted(list(set([m.cor for m in motos_ativas])))
+    potencias = sorted(list(set([m.modelo.potencia_motor for m in motos_ativas])))
+
+    return jsonify({
+        'modelos': modelos,
+        'cores': cores,
+        'potencias': potencias
+    })
+
 @motochefe_bp.route('/motos/api/disponiveis')
 @login_required
 @requer_motochefe

@@ -2,6 +2,12 @@
 Script para adicionar campo modelo_rejeitado na tabela moto
 Executar: python3 -m app.motochefe.scripts.adicionar_campo_modelo_rejeitado
 """
+import sys
+import os
+
+# Adicionar path do projeto
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
 from app import create_app, db
 from sqlalchemy import text
 
