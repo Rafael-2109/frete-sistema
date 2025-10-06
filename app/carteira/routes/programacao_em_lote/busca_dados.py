@@ -16,6 +16,7 @@ from app.separacao.models import Separacao
 from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 from app.producao.models import CadastroPalletizacao
 from app.odoo.utils.pedido_cliente_utils import buscar_pedido_cliente_odoo
+from app.utils.text_utils import truncar_observacao
 
 logger = logging.getLogger(__name__)
 
@@ -360,8 +361,8 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                     agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
                     expedicao=None,    # ZERAR - para validar se foi realmente agendado
 
-                    # Manter observ_ped_1 original se houver
-                    observ_ped_1=item.observ_ped_1,
+                    # Manter observ_ped_1 original se houver (truncado)
+                    observ_ped_1=truncar_observacao(item.observ_ped_1),
 
                     # Tipo de envio baseado em se já existe separação
                     tipo_envio=tipo_envio

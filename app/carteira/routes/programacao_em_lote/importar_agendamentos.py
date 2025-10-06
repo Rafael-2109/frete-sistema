@@ -30,6 +30,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
 from app.carteira.utils.separacao_utils import calcular_peso_pallet_produto
 from app.utils.lote_utils import gerar_lote_id
+from app.utils.text_utils import truncar_observacao
 from . import programacao_em_lote_bp
 
 logger = logging.getLogger(__name__)
@@ -500,7 +501,7 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                         status='ABERTO',  # Status para agendamentos importados
                         sincronizado_nf=False,
                         nf_cd=False,
-                        observ_ped_1=f'Importado Assai {datetime.now().strftime("%d/%m/%Y %H:%M")} - Protocolo: {protocolo}'
+                        observ_ped_1=truncar_observacao(item.observ_ped_1)
                     )
 
                     db.session.add(nova_separacao)

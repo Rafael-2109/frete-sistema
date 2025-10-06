@@ -9,6 +9,7 @@ from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
 from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+from app.utils.text_utils import truncar_observacao
 import logging
 
 logger = logging.getLogger(__name__)
@@ -129,9 +130,10 @@ class AtualizarDadosService:
                             separacao.sub_rota = sub_rota_calculada
                             campos_alterados.append('sub_rota')
                         
-                        # Observação
-                        if separacao.observ_ped_1 != item_produto.observ_ped_1:
-                            separacao.observ_ped_1 = item_produto.observ_ped_1
+                        # Observação (trunca se necessário)
+                        observacao_truncada = truncar_observacao(item_produto.observ_ped_1)
+                        if separacao.observ_ped_1 != observacao_truncada:
+                            separacao.observ_ped_1 = observacao_truncada
                             campos_alterados.append('observ_ped_1')
                         
                         if campos_alterados:

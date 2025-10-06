@@ -18,6 +18,7 @@ from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
 from app.producao.models import CadastroPalletizacao
+from app.utils.text_utils import truncar_observacao
 from app.carteira.models import CarteiraPrincipal
 
 logger = logging.getLogger(__name__)
@@ -257,7 +258,7 @@ class RecuperadorSeparacoesPerdidas:
                         separacao.rota = dados_carteira.get('rota')
                         separacao.sub_rota = dados_carteira.get('sub_rota')
                         separacao.roteirizacao = dados_carteira.get('roteirizacao')
-                        separacao.observ_ped_1 = dados_carteira.get('observ_ped_1')
+                        separacao.observ_ped_1 = truncar_observacao(dados_carteira.get('observ_ped_1'))
                     
                     # Tipo de envio (sempre total para recuperação)
                     separacao.tipo_envio = 'total'

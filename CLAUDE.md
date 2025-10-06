@@ -181,7 +181,7 @@ criado_em = db.Column(db.DateTime, default=datetime.utcnow)     # ✅ Data cria�
 
 # Campos operacionais:
 tipo_envio = db.Column(db.String(10), default='total', nullable=True) # ✅ total, parcial
-observ_ped_1 = db.Column(db.String(700), nullable=True)         # ✅ Observações
+observ_ped_1 = db.Column(db.String(700), nullable=True)         # ✅ Observações (truncado automaticamente)
 roteirizacao = db.Column(db.String(255), nullable=True)         # ✅ Transportadora sugerida
 rota = db.Column(db.String(50), nullable=True)                  # ✅ Rota
 sub_rota = db.Column(db.String(50), nullable=True)              # ✅ Sub-rota

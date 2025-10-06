@@ -15,6 +15,7 @@ from app import db
 from app.carteira.models import FaturamentoParcialJustificativa
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.separacao.models import Separacao
+from app.utils.text_utils import truncar_observacao
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ def api_justificar_faturamento_parcial(id):
             nova_sep.cod_produto = justificativa.cod_produto
             nova_sep.qtd_saldo = justificativa.qtd_saldo
             nova_sep.status = 'PREVISAO'
-            nova_sep.observ_ped_1 = f"Retorno de faturamento parcial - NF {justificativa.numero_nf}"
+            nova_sep.observ_ped_1 = truncar_observacao(f"Retorno de faturamento parcial - NF {justificativa.numero_nf}")
 
             # Campos obrigatórios com fallback
             if item_carteira:

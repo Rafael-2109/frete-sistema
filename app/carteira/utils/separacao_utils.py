@@ -7,6 +7,7 @@ from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
 from app.localidades.models import CadastroRota, CadastroSubRota
+from app.utils.text_utils import truncar_observacao
 import logging
 import re
 
@@ -227,7 +228,7 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
                 pallet=pallet_calculado,
                 rota=rota_calculada,
                 sub_rota=sub_rota_calculada,
-                observ_ped_1=item_carteira.observ_ped_1,
+                observ_ped_1=truncar_observacao(item_carteira.observ_ped_1),
                 roteirizacao=None,
                 expedicao=expedicao_obj,
                 agendamento=agendamento_obj,

@@ -16,6 +16,7 @@ from app.carteira.utils.separacao_utils import (
     buscar_sub_rota_por_uf_cidade,
 )
 from app.utils.lote_utils import gerar_lote_id as gerar_novo_lote_id  # Função padronizada
+from app.utils.text_utils import truncar_observacao  # Função centralizada para truncar observações
 import logging
 
 from . import carteira_bp
@@ -138,7 +139,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 pallet=pallet_calculado,
                 rota=rota_calculada,
                 sub_rota=sub_rota_calculada,
-                observ_ped_1=item.observ_ped_1,
+                observ_ped_1=truncar_observacao(item.observ_ped_1),
                 roteirizacao=None,  # Será preenchido depois
                 expedicao=data_expedicao_obj,
                 agendamento=data_agendamento_obj,
@@ -407,7 +408,7 @@ def salvar_separacao_generic():
                 agendamento=data.get("agendamento"),
                 protocolo=data.get("protocolo"),
                 tipo_envio=data.get("tipo_envio", "parcial"),  # Por padrão parcial no drag & drop
-                observ_ped_1=item_carteira.observ_ped_1,
+                observ_ped_1=truncar_observacao(item_carteira.observ_ped_1),
                 pedido_cliente=item_carteira.pedido_cliente,
                 # vendedor=item_carteira.vendedor,  # REMOVIDO: campo não existe em Separacao
                 # equipe_vendas=item_carteira.equipe_vendas,  # REMOVIDO: campo não existe em Separacao

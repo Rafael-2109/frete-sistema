@@ -9,6 +9,7 @@ enquanto migramos gradualmente para usar Separacao com status='PREVISAO'
 from app import db
 from datetime import datetime
 from app.separacao.models import Separacao
+from app.utils.text_utils import truncar_observacao
 from sqlalchemy import and_, or_
 import logging
 
@@ -159,7 +160,7 @@ class PreSeparacaoItemAdapter:
     
     @observacoes_usuario.setter
     def observacoes_usuario(self, value):
-        self._separacao.observ_ped_1 = value
+        self._separacao.observ_ped_1 = truncar_observacao(value)
     
     # Status e controle
     @property
