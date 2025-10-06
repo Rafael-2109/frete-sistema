@@ -2,12 +2,14 @@
 Rotas de Cadastros Básicos - MotoChefe
 CRUD completo para: Equipes, Vendedores, Transportadoras, Clientes
 """
-from flask import render_template, redirect, url_for, flash, request, send_file
+from flask import render_template, redirect, url_for, flash, request, send_file, jsonify
 from flask_login import login_required, current_user
 from functools import wraps
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
+import requests
+import re
 
 from app import db
 from app.motochefe.routes import motochefe_bp
@@ -586,6 +588,100 @@ def importar_transportadoras():
         flash(f'Erro ao importar: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_transportadoras'))
+
+# ============================================================
+# API - CONSULTA CNPJ (ReceitaWS)
+# ============================================================
+
+@motochefe_bp.route('/api/consultar-cnpj/<cnpj>')
+@login_required
+@requer_motochefe
+def consultar_cnpj(cnpj):
+    """
+    Consulta dados de CNPJ na API ReceitaWS (gratuita, sem certificado digital)
+    Endpoint: https://www.receitaws.com.br/v1/cnpj/{cnpj}
+    Limite: ~3 requisições por minuto por IP
+    """
+    try:
+        # Remove caracteres não numéricos do CNPJ
+        cnpj_limpo = re.sub(r'\D', '', cnpj)
+
+        # Valida se tem 14 dígitos
+        if len(cnpj_limpo) != 14:
+            return jsonify({
+                'success': False,
+                'message': 'CNPJ deve conter 14 dígitos.'
+            }), 400
+
+        # Monta URL da API ReceitaWS
+        url = f'https://www.receitaws.com.br/v1/cnpj/{cnpj_limpo}'
+
+        # Faz requisição com timeout de 10 segundos
+        response = requests.get(url, timeout=10)
+
+        # Verifica status da resposta
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'message': f'Erro na API ReceitaWS. Status: {response.status_code}'
+            }), response.status_code
+
+        # Parse do JSON
+        dados = response.json()
+
+        # Verifica se houve erro na API (campo "status" == "ERROR")
+        if dados.get('status') == 'ERROR':
+            return jsonify({
+                'success': False,
+                'message': dados.get('message', 'CNPJ não encontrado ou inválido.')
+            }), 404
+
+        # Mapeia campos da API para os campos do modelo ClienteMoto
+        dados_cliente = {
+            'cliente': dados.get('nome', ''),  # Razão Social
+            'endereco_cliente': dados.get('logradouro', ''),  # Logradouro completo
+            'numero_cliente': dados.get('numero', ''),
+            'complemento_cliente': dados.get('complemento', ''),
+            'bairro_cliente': dados.get('bairro', ''),
+            'cidade_cliente': dados.get('municipio', ''),
+            'estado_cliente': dados.get('uf', ''),
+            'cep_cliente': dados.get('cep', ''),
+            'telefone_cliente': dados.get('telefone', ''),
+            'email_cliente': dados.get('email', ''),
+        }
+
+        # Remove campos vazios/nulos
+        dados_cliente = {k: v for k, v in dados_cliente.items() if v}
+
+        return jsonify({
+            'success': True,
+            'message': 'CNPJ consultado com sucesso!',
+            'dados': dados_cliente
+        }), 200
+
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'success': False,
+            'message': 'Timeout: A API ReceitaWS demorou muito para responder. Tente novamente.'
+        }), 408
+
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'success': False,
+            'message': 'Erro de conexão: Não foi possível conectar à API ReceitaWS. Verifique sua internet.'
+        }), 503
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro na requisição: {str(e)}'
+        }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro inesperado: {str(e)}'
+        }), 500
 
 # ============================================================
 # CLIENTES

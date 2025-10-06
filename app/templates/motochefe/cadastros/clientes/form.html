@@ -21,8 +21,16 @@
                     </div>
                     <div class="col-md-4 mb-3">
                         <label for="cnpj_cliente" class="form-label">CNPJ *</label>
-                        <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente"
-                               value="{{ cliente.cnpj_cliente if cliente else '' }}" required>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente"
+                                   value="{{ cliente.cnpj_cliente if cliente else '' }}" required
+                                   placeholder="00.000.000/0000-00" maxlength="18">
+                            <button type="button" class="btn btn-info" id="btn-consultar-cnpj"
+                                    title="Consultar CNPJ na Receita Federal">
+                                <i class="fas fa-search"></i> Consultar
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Digite o CNPJ e clique em "Consultar" para preencher automaticamente</small>
                     </div>
                 </div>
 
@@ -95,4 +103,150 @@
         </div>
     </div>
 </div>
+
+<script>
+/**
+ * Script de Consulta de CNPJ via ReceitaWS
+ * Preenche automaticamente os campos do formulário
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    const btnConsultar = document.getElementById('btn-consultar-cnpj');
+    const inputCnpj = document.getElementById('cnpj_cliente');
+
+    // Máscara de CNPJ (00.000.000/0000-00)
+    inputCnpj.addEventListener('input', function(e) {
+        let valor = e.target.value.replace(/\D/g, '');
+
+        if (valor.length <= 14) {
+            valor = valor.replace(/^(\d{2})(\d)/, '$1.$2');
+            valor = valor.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            valor = valor.replace(/\.(\d{3})(\d)/, '.$1/$2');
+            valor = valor.replace(/(\d{4})(\d)/, '$1-$2');
+            e.target.value = valor;
+        }
+    });
+
+    // Permitir Enter para consultar
+    inputCnpj.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            btnConsultar.click();
+        }
+    });
+
+    // Botão Consultar
+    btnConsultar.addEventListener('click', function() {
+        const cnpj = inputCnpj.value.replace(/\D/g, ''); // Remove formatação
+
+        // Validação básica
+        if (!cnpj || cnpj.length !== 14) {
+            alert('Por favor, digite um CNPJ válido com 14 dígitos.');
+            inputCnpj.focus();
+            return;
+        }
+
+        // Desabilita botão e mostra loading
+        btnConsultar.disabled = true;
+        btnConsultar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
+
+        // Faz requisição AJAX
+        fetch(`{{ url_for('motochefe.consultar_cnpj', cnpj='PLACEHOLDER') }}`.replace('PLACEHOLDER', cnpj))
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.message || 'Erro na consulta');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Preenche os campos com os dados retornados
+                    if (data.dados.cliente) {
+                        document.getElementById('cliente').value = data.dados.cliente;
+                    }
+                    if (data.dados.endereco_cliente) {
+                        document.getElementById('endereco_cliente').value = data.dados.endereco_cliente;
+                    }
+                    if (data.dados.numero_cliente) {
+                        document.getElementById('numero_cliente').value = data.dados.numero_cliente;
+                    }
+                    if (data.dados.complemento_cliente) {
+                        document.getElementById('complemento_cliente').value = data.dados.complemento_cliente;
+                    }
+                    if (data.dados.bairro_cliente) {
+                        document.getElementById('bairro_cliente').value = data.dados.bairro_cliente;
+                    }
+                    if (data.dados.cidade_cliente) {
+                        document.getElementById('cidade_cliente').value = data.dados.cidade_cliente;
+                    }
+                    if (data.dados.estado_cliente) {
+                        document.getElementById('estado_cliente').value = data.dados.estado_cliente;
+                    }
+                    if (data.dados.cep_cliente) {
+                        document.getElementById('cep_cliente').value = data.dados.cep_cliente;
+                    }
+                    if (data.dados.telefone_cliente) {
+                        document.getElementById('telefone_cliente').value = data.dados.telefone_cliente;
+                    }
+                    if (data.dados.email_cliente) {
+                        document.getElementById('email_cliente').value = data.dados.email_cliente;
+                    }
+
+                    // Feedback visual de sucesso
+                    mostrarMensagem('Dados preenchidos com sucesso!', 'success');
+                } else {
+                    throw new Error(data.message || 'Erro desconhecido');
+                }
+            })
+            .catch(error => {
+                // Mostra erro e permite preenchimento manual
+                mostrarMensagem(error.message || 'Erro ao consultar CNPJ. Você pode preencher manualmente.', 'error');
+                console.error('Erro na consulta CNPJ:', error);
+            })
+            .finally(() => {
+                // Reabilita botão
+                btnConsultar.disabled = false;
+                btnConsultar.innerHTML = '<i class="fas fa-search"></i> Consultar';
+            });
+    });
+
+    /**
+     * Mostra mensagem de feedback ao usuário
+     */
+    function mostrarMensagem(mensagem, tipo) {
+        const cor = tipo === 'success' ? '#28a745' : '#dc3545';
+        const icone = tipo === 'success' ? 'check-circle' : 'exclamation-triangle';
+
+        // Cria elemento de mensagem
+        const div = document.createElement('div');
+        div.className = 'alert alert-dismissible fade show';
+        div.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+            background-color: ${cor};
+            color: white;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        `;
+        div.innerHTML = `
+            <i class="fas fa-${icone} me-2"></i>
+            ${mensagem}
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        `;
+
+        document.body.appendChild(div);
+
+        // Remove após 5 segundos
+        setTimeout(() => {
+            div.classList.remove('show');
+            setTimeout(() => div.remove(), 150);
+        }, 5000);
+    }
+});
+</script>
+
 {% endblock %}

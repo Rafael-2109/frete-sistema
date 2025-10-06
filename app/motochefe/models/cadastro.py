@@ -110,10 +110,10 @@ class ClienteMoto(db.Model):
     bairro_cliente = db.Column(db.String(100), nullable=True)
     cidade_cliente = db.Column(db.String(100), nullable=True)
     estado_cliente = db.Column(db.String(2), nullable=True)
-    cep_cliente = db.Column(db.String(10), nullable=True)
+    cep_cliente = db.Column(db.String(15), nullable=True)  # Aumentado de 10 para 15 (suporta formatos diversos)
 
     # Contato
-    telefone_cliente = db.Column(db.String(20), nullable=True)
+    telefone_cliente = db.Column(db.String(100), nullable=True)  # Aumentado de 20 para 100 (múltiplos telefones)
     email_cliente = db.Column(db.String(100), nullable=True)
 
     # Auditoria
