@@ -120,7 +120,9 @@ def exportar_relatorios_producao():
                 'Peso Bruto (kg)': float(pallet_info.peso_bruto) if pallet_info else 0,
                 'Palletização': float(pallet_info.palletizacao) if pallet_info else 0,
                 'Categoria': pallet_info.categoria_produto if pallet_info else '',
-                'Subcategoria': pallet_info.subcategoria if pallet_info else '',
+                'Linha': pallet_info.linha_producao if pallet_info else '',  # ✅ NOVA COLUNA
+                'MP': pallet_info.tipo_materia_prima if pallet_info else '',  # ✅ NOVA COLUNA
+                'Emb.': pallet_info.tipo_embalagem if pallet_info else '',  # ✅ NOVA COLUNA
                 'Última Atualização': datetime.now()  # Manter como datetime para formatação correta
             })
         
@@ -142,7 +144,9 @@ def exportar_relatorios_producao():
             pallet_info_mov = palletizacoes.get(cod_produto, None)
             nome_produto = pallet_info_mov.nome_produto if pallet_info_mov else f"Produto {cod_produto}"
             categoria_produto = pallet_info_mov.categoria_produto if pallet_info_mov else ''
-            subcategoria_produto = pallet_info_mov.subcategoria if pallet_info_mov else ''
+            linha_producao = pallet_info_mov.linha_producao if pallet_info_mov else ''
+            tipo_materia_prima = pallet_info_mov.tipo_materia_prima if pallet_info_mov else ''
+            tipo_embalagem = pallet_info_mov.tipo_embalagem if pallet_info_mov else ''
 
             # Verificar se há projeção e se é uma lista
             projecao = estoque_info.get('projecao')
@@ -198,7 +202,9 @@ def exportar_relatorios_producao():
                             'cod_produto': cod_produto,
                             'nome_produto': nome_produto,
                             'categoria': categoria_produto,
-                            'subcategoria': subcategoria_produto,
+                            'linha_producao': linha_producao,
+                            'tipo_materia_prima': tipo_materia_prima,
+                            'tipo_embalagem': tipo_embalagem,
                             'saida': saida_val,
                             'entrada': entrada_val,
                             'saldo': saldo_val
@@ -211,10 +217,12 @@ def exportar_relatorios_producao():
         for (data_str, cod_produto), mov in sorted(movimentacoes_por_dia_produto.items()):
             dados_movimentacoes.append({
                 'Data': mov['data_obj'],  # Usar datetime object para ordenação correta
+                'Linha': mov['linha_producao'],  # ✅ NOVA COLUNA após Data
                 'Código Produto': mov['cod_produto'],
                 'Nome Produto': mov['nome_produto'],
                 'Categoria': mov['categoria'],
-                'Subcategoria': mov['subcategoria'],
+                'MP': mov['tipo_materia_prima'],  # ✅ NOVA COLUNA após Categoria
+                'Emb.': mov['tipo_embalagem'],  # ✅ NOVA COLUNA após MP
                 'Saídas Previstas': int(round(mov['saida'])),  # Inteiro puro
                 'Entradas Previstas': int(round(mov['entrada'])),  # Inteiro puro
                 'Saldo Projetado': int(round(mov['saldo']))  # Inteiro puro
@@ -313,6 +321,12 @@ def exportar_relatorios_producao():
                     worksheet_estoque.set_column(col_num, col_num, 15)
                 elif col_name in ['Data Ruptura', 'Última Atualização']:
                     worksheet_estoque.set_column(col_num, col_num, 18)
+                elif col_name == 'Linha':
+                    worksheet_estoque.set_column(col_num, col_num, 15)  # ✅ NOVA
+                elif col_name == 'MP':
+                    worksheet_estoque.set_column(col_num, col_num, 15)  # ✅ NOVA
+                elif col_name == 'Emb.':
+                    worksheet_estoque.set_column(col_num, col_num, 12)  # ✅ NOVA
                 else:
                     column_width = max(df_estoque[col_name].astype(str).map(len).max() if len(df_estoque) > 0 else 10, len(col_name)) + 2
                     worksheet_estoque.set_column(col_num, col_num, min(column_width, 50))
@@ -330,14 +344,18 @@ def exportar_relatorios_producao():
                 for col_num, col_name in enumerate(df_movimentacoes.columns):
                     if col_name == 'Data':
                         worksheet_mov.set_column(col_num, col_num, 12)
+                    elif col_name == 'Linha':
+                        worksheet_mov.set_column(col_num, col_num, 15)  # ✅ NOVA
                     elif col_name == 'Código Produto':
                         worksheet_mov.set_column(col_num, col_num, 15)
                     elif col_name == 'Nome Produto':
                         worksheet_mov.set_column(col_num, col_num, 40)
                     elif col_name == 'Categoria':
                         worksheet_mov.set_column(col_num, col_num, 20)
-                    elif col_name == 'Subcategoria':
-                        worksheet_mov.set_column(col_num, col_num, 20)
+                    elif col_name == 'MP':
+                        worksheet_mov.set_column(col_num, col_num, 15)  # ✅ NOVA
+                    elif col_name == 'Emb.':
+                        worksheet_mov.set_column(col_num, col_num, 12)  # ✅ NOVA
                     elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
                         worksheet_mov.set_column(col_num, col_num, 18)
 
@@ -421,7 +439,7 @@ def exportar_relatorios_producao():
                         # Aplicar formato específico por tipo de coluna
                         if col_name == 'Data':
                             worksheet_mov.write_datetime(row_num, col_num, valor, formato_data_linha)
-                        elif col_name in ['Código Produto', 'Nome Produto', 'Categoria', 'Subcategoria']:
+                        elif col_name in ['Código Produto', 'Nome Produto', 'Categoria', 'Linha', 'MP', 'Emb.']:
                             worksheet_mov.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto)
                         elif col_name == 'Saldo Projetado' and saldo_negativo:
                             # Saldo negativo - formato especial vermelho escuro
@@ -434,8 +452,8 @@ def exportar_relatorios_producao():
             else:
                 # Criar aba vazia se não houver movimentações
                 logger.warning("Criando aba vazia de Movimentações Previstas")
-                df_vazia = pd.DataFrame(columns=['Data', 'Código Produto', 'Nome Produto',
-                                                 'Categoria', 'Subcategoria',
+                df_vazia = pd.DataFrame(columns=['Data', 'Linha', 'Código Produto', 'Nome Produto',
+                                                 'Categoria', 'MP', 'Emb.',
                                                  'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado'])
                 df_vazia.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
                 worksheet_mov = writer.sheets['Movimentações Previstas']

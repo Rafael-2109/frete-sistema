@@ -30,34 +30,34 @@
     min-width: 100px;
   }
   
-  .itens-embarque-table th:nth-child(5),  /* Data Agenda */
+  .itens-embarque-table th:nth-child(5),  /* Agendamento (Data + Confirmação) */
   .itens-embarque-table td:nth-child(5) {
-    width: 10%;
-    min-width: 90px;
+    width: 15%;
+    min-width: 140px;
   }
-  
+
   .itens-embarque-table th:nth-child(6),  /* Volumes */
   .itens-embarque-table td:nth-child(6) {
     width: 6%;
     min-width: 70px;
   }
-  
+
   .itens-embarque-table th:nth-child(7),  /* UF */
   .itens-embarque-table td:nth-child(7) {
     width: 4%;
     min-width: 50px;
   }
-  
+
   .itens-embarque-table th:nth-child(8),  /* Cidade */
   .itens-embarque-table td:nth-child(8) {
-    width: 16%;
+    width: 15%;
     min-width: 120px;
   }
-  
+
   .itens-embarque-table th:nth-child(9),  /* Status/Ações */
   .itens-embarque-table td:nth-child(9) {
-    width: 15%;
-    min-width: 140px;
+    width: 14%;
+    min-width: 130px;
   }
   
   /* Configurações gerais da tabela */
@@ -142,6 +142,36 @@
   }
   
   /* ======================================================================== */
+  /* ESTILOS DA COLUNA AGENDAMENTO (DATA + BADGE INLINE)                     */
+  /* ======================================================================== */
+
+  .agendamento-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+  }
+
+  .agendamento-data {
+    flex-shrink: 0;
+    min-width: 80px;
+  }
+
+  .agendamento-badge {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .agendamento-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  /* ======================================================================== */
   /* ESTILOS ESPECÍFICOS PARA ITENS CANCELADOS                               */
   /* ======================================================================== */
   
@@ -215,6 +245,37 @@
     input, select, textarea { font-size: 11px !important; padding: 2px !important; }
     h1, h2, h3, h4, h5, h6 { font-size: 14px; }
     .item-form { page-break-inside: avoid; }
+
+    /* Ajustar coluna de agendamento na impressão */
+    .itens-embarque-table th:nth-child(5),
+    .itens-embarque-table td:nth-child(5) {
+      width: 10% !important;
+      min-width: 80px !important;
+    }
+
+    /* Mostrar apenas data + checkmark na impressão */
+    .agendamento-badge {
+      font-size: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      background: transparent !important;
+    }
+
+    .agendamento-badge::after {
+      content: '✓';
+      font-size: 14px !important;
+      color: #28a745 !important;
+      font-weight: bold;
+    }
+
+    .agendamento-badge.badge-secondary::after,
+    .agendamento-badge.badge-warning::after {
+      content: '';
+    }
+
+    .agendamento-cell {
+      gap: 0.2rem;
+    }
   }
 </style>
 
@@ -462,8 +523,7 @@
                 <th>Pedido</th>
                 <th>Nota Fiscal</th>
                 <th>Protocolo</th>
-                <th>Data Agenda</th>
-                <th class="no-print">Confirmação</th>
+                <th>Agendamento</th>
                 <th>Volumes</th>
                 <th>UF</th>
                 <th>Cidade</th>
@@ -489,41 +549,41 @@
                   {{ item_form.protocolo_agendamento(class="form-control form-control-sm") }}
                 </td>
                 <td>
-                  {{ item_form.data_agenda(class="form-control form-control-sm", placeholder="DD/MM/AAAA") }}
-                </td>
-                <td class="no-print text-center">
-                  {% if item %}
-                    {% set tem_data = item.data_agenda and item.data_agenda.strip() %}
-                    {% set confirmado = item.agendamento_confirmado %}
+                  <div class="agendamento-cell">
+                    <!-- Input de Data -->
+                    <div class="agendamento-data">
+                      {{ item_form.data_agenda(class="form-control form-control-sm", placeholder="DD/MM/AAAA") }}
+                    </div>
 
-                    {% if confirmado and tem_data %}
-                      <!-- Estado: Confirmado (Azul) -->
-                      <button type="button" class="btn btn-sm btn-primary w-100"
+                    <!-- Badge de Status com Click para Modal -->
+                    {% if item %}
+                      {% set tem_data = item.data_agenda and item.data_agenda.strip() %}
+                      {% set confirmado = item.agendamento_confirmado %}
+
+                      {% if confirmado and tem_data %}
+                        <!-- Estado: Confirmado (Azul) -->
+                        <span class="badge bg-primary agendamento-badge"
                               onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', true)"
-                              style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">
-                        <div>📅 {{ item.data_agenda }}</div>
-                        <small style="font-size: 0.65rem;">✓ Confirmado</small>
-                      </button>
-                    {% elif tem_data and not confirmado %}
-                      <!-- Estado: Aguardando (Amarelo) -->
-                      <button type="button" class="btn btn-sm btn-warning w-100"
+                              title="Clique para editar">
+                          ✓ Confirmado
+                        </span>
+                      {% elif tem_data and not confirmado %}
+                        <!-- Estado: Aguardando (Amarelo) -->
+                        <span class="badge bg-warning text-dark agendamento-badge"
                               onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', false)"
-                              style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">
-                        <div>📅 {{ item.data_agenda }}</div>
-                        <small style="font-size: 0.65rem;">⏳ Aguardando</small>
-                      </button>
-                    {% else %}
-                      <!-- Estado: Sem Data (Cinza) -->
-                      <button type="button" class="btn btn-sm btn-secondary w-100"
+                              title="Clique para confirmar">
+                          ⏳ Aguardando
+                        </span>
+                      {% else %}
+                        <!-- Estado: Sem Data (Cinza) -->
+                        <span class="badge bg-secondary agendamento-badge"
                               onclick="abrirModalConfirmacao('{{ item.id }}', '', false)"
-                              style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">
-                        <div style="font-size: 1.2rem;">📅</div>
-                        <small style="font-size: 0.65rem;">Agendar</small>
-                      </button>
+                              title="Clique para agendar">
+                          📅 Agendar
+                        </span>
+                      {% endif %}
                     {% endif %}
-                  {% else %}
-                    <span class="text-muted" style="font-size: 0.7rem;">-</span>
-                  {% endif %}
+                  </div>
                 </td>
                 <td>
                   {{ item_form.volumes(class="form-control form-control-sm text-center") }}
