@@ -1,0 +1,21 @@
+{#
+  PARTIAL: Lista de Clientes Mobile (Cards)
+  Visível apenas em mobile (<768px)
+#}
+
+<!-- Botão Flutuante de Filtros (Mobile) -->
+<button id="filtrosMobileButton" style="display: none;">
+    <i class="fas fa-filter"></i>
+    <span class="badge-filtros-ativos" id="badgeFiltrosAtivos" style="display: none;">0</span>
+</button>
+
+<!-- Container de Cards Mobile -->
+<div id="clientesListaMobile" style="display: none;">
+    <!-- Cards serão inseridos aqui via JavaScript -->
+    <div class="cliente-card-mobile-loading">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Carregando clientes...</p>
+    </div>
+</div>
+
+<!-- Botão Carregar Mais será inserido via JS -->

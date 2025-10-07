@@ -2,6 +2,11 @@
 
 {% block title %}Acompanhamento Comercial - Diretoria{% endblock %}
 
+{% block extra_css %}
+<!-- CSS Responsivo -->
+<link rel="stylesheet" href="{{ url_for('static', filename='comercial/css/dashboard_diretoria_responsive.css') }}">
+{% endblock %}
+
 {% block content %}
 <style>
     /* ChatGPT Dark Theme */

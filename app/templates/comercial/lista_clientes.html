@@ -2,6 +2,12 @@
 
 {% block title %}Acompanhamento de Clientes{% endblock %}
 
+{% block extra_css %}
+<!-- CSS Responsivo -->
+<link rel="stylesheet" href="{{ url_for('static', filename='comercial/css/lista_clientes_responsive.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='comercial/css/cards_mobile.css') }}">
+{% endblock %}
+
 {% block content %}
 <style>
     /* ChatGPT Dark Theme */
@@ -435,10 +441,10 @@
             </div>
         </div>
 
-        <!-- Card de Filtros -->
+        <!-- Card de Filtros Desktop -->
         <div class="row mb-4">
             <div class="col-12">
-                <div class="card" style="background-color: #343541; border: 1px solid #444654;">
+                <div class="card" id="filtrosDesktop" style="background-color: #343541; border: 1px solid #444654;">
                     <div class="card-header" style="background-color: #40414f; border-bottom: 1px solid #444654;">
                         <span class="text-light"><i class="fas fa-filter"></i> Filtros de Busca</span>
                     </div>
@@ -615,6 +621,9 @@
             </div>
         </div>
 
+        <!-- Versão Mobile: Cards de Clientes -->
+        {% include 'comercial/partials/_clientes_mobile.html' %}
+
         {% if not clientes %}
         <div class="row mt-4">
             <div class="col-12">
@@ -626,6 +635,9 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Bottom Sheet de Filtros Mobile -->
+{% include 'comercial/partials/_filtros_mobile.html' %}
 
 <!-- Modal de Pedidos -->
 <div class="modal fade" id="modalPedidos" tabindex="-1">
@@ -763,7 +775,14 @@
                     return;
                 }
 
-                // Criar tabela de pedidos
+                // DETECTAR SE É MOBILE E USAR RENDERIZAÇÃO APROPRIADA
+                if (window.innerWidth <= 767 && typeof renderizarPedidosMobile === 'function') {
+                    // Renderizar cards mobile
+                    renderizarPedidosMobile(data, page);
+                    return;
+                }
+
+                // Criar tabela de pedidos (desktop)
                 let html = `
                     <div style="overflow-x: auto;">
                         <table class="table table-sm">
@@ -1338,4 +1357,8 @@
         return num.toFixed(casasDecimais).replace('.', ',');
     }
 </script>
+
+<!-- Scripts Mobile -->
+<script src="{{ url_for('static', filename='comercial/js/lista_clientes_mobile.js') }}"></script>
+<script src="{{ url_for('static', filename='comercial/js/modal_pedidos_mobile.js') }}"></script>
 {% endblock %}

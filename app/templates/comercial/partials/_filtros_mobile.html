@@ -1,0 +1,77 @@
+{#
+  PARTIAL: Bottom Sheet de Filtros Mobile
+  Painel que sobe de baixo com filtros
+#}
+
+<!-- Overlay escuro -->
+<div class="bottom-sheet-overlay" id="bottomSheetOverlay"></div>
+
+<!-- Bottom Sheet -->
+<div class="bottom-sheet" id="bottomSheetFiltros" style="display: none;">
+    <!-- Handle para arrastar -->
+    <div class="bottom-sheet-handle"></div>
+
+    <!-- Header -->
+    <div class="bottom-sheet-header">
+        <h5><i class="fas fa-filter"></i> Filtros de Busca</h5>
+        <button type="button" class="btn-close" id="btnFecharFiltros" aria-label="Fechar"></button>
+    </div>
+
+    <!-- Body -->
+    <div class="bottom-sheet-body">
+        <div class="mb-3">
+            <label for="filtroMobileCnpj" class="form-label">CNPJ/CPF</label>
+            <input type="text"
+                   class="form-control"
+                   id="filtroMobileCnpj"
+                   placeholder="Digite o CNPJ ou CPF..."
+                   value="{{ request.args.get('cnpj_cpf', '') }}">
+        </div>
+
+        <div class="mb-3">
+            <label for="filtroMobileCliente" class="form-label">
+                <i class="fas fa-building"></i> Cliente
+            </label>
+            <input type="text"
+                   class="form-control"
+                   id="filtroMobileCliente"
+                   placeholder="Razão social ou nome fantasia..."
+                   value="{{ request.args.get('cliente', '') }}">
+            <small>Busca em Razão Social e Nome Fantasia</small>
+        </div>
+
+        <div class="mb-3">
+            <label for="filtroMobilePedido" class="form-label">
+                <i class="fas fa-file-alt"></i> Pedido
+            </label>
+            <input type="text"
+                   class="form-control"
+                   id="filtroMobilePedido"
+                   placeholder="Número do pedido..."
+                   value="{{ request.args.get('pedido', '') }}">
+            <small>Busca em Nº Pedido e Pedido Cliente</small>
+        </div>
+
+        <div class="mb-3">
+            <label for="filtroMobileUF" class="form-label">UF</label>
+            <select class="form-select" id="filtroMobileUF">
+                <option value="">Todas</option>
+                {% for uf_item in ufs_disponiveis %}
+                <option value="{{ uf_item }}" {% if request.args.get('uf') == uf_item %}selected{% endif %}>
+                    {{ uf_item }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="bottom-sheet-footer">
+        <button type="button" class="btn btn-limpar" id="btnLimparFiltrosMobile">
+            <i class="fas fa-eraser"></i> Limpar
+        </button>
+        <button type="button" class="btn btn-aplicar" id="btnAplicarFiltrosMobile">
+            <i class="fas fa-check"></i> Aplicar Filtros
+        </button>
+    </div>
+</div>
