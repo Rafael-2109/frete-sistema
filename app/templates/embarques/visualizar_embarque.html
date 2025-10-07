@@ -462,11 +462,12 @@
                 <th>Pedido</th>
                 <th>Nota Fiscal</th>
                 <th>Protocolo</th>
-              <th>Data Agenda</th>
-              <th>Volumes</th>
-              <th>UF</th>
-              <th>Cidade</th>
-              <th>Status/Ações</th>
+                <th>Data Agenda</th>
+                <th class="no-print">Confirmação</th>
+                <th>Volumes</th>
+                <th>UF</th>
+                <th>Cidade</th>
+                <th>Status/Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -489,6 +490,40 @@
                 </td>
                 <td>
                   {{ item_form.data_agenda(class="form-control form-control-sm", placeholder="DD/MM/AAAA") }}
+                </td>
+                <td class="no-print text-center">
+                  {% if item %}
+                    {% set tem_data = item.data_agenda and item.data_agenda.strip() %}
+                    {% set confirmado = item.agendamento_confirmado %}
+
+                    {% if confirmado and tem_data %}
+                      <!-- Estado: Confirmado (Azul) -->
+                      <button type="button" class="btn btn-sm btn-primary w-100"
+                              onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', true)"
+                              style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+                        <div>📅 {{ item.data_agenda }}</div>
+                        <small style="font-size: 0.65rem;">✓ Confirmado</small>
+                      </button>
+                    {% elif tem_data and not confirmado %}
+                      <!-- Estado: Aguardando (Amarelo) -->
+                      <button type="button" class="btn btn-sm btn-warning w-100"
+                              onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', false)"
+                              style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+                        <div>📅 {{ item.data_agenda }}</div>
+                        <small style="font-size: 0.65rem;">⏳ Aguardando</small>
+                      </button>
+                    {% else %}
+                      <!-- Estado: Sem Data (Cinza) -->
+                      <button type="button" class="btn btn-sm btn-secondary w-100"
+                              onclick="abrirModalConfirmacao('{{ item.id }}', '', false)"
+                              style="font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+                        <div style="font-size: 1.2rem;">📅</div>
+                        <small style="font-size: 0.65rem;">Agendar</small>
+                      </button>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted" style="font-size: 0.7rem;">-</span>
+                  {% endif %}
                 </td>
                 <td>
                   {{ item_form.volumes(class="form-control form-control-sm text-center") }}
@@ -863,5 +898,124 @@ function confirmarRemocaoItem(itemId, pedido, cliente) {
         form.submit();
     }
 }
+
+// ✅ NOVA FUNÇÃO: Abrir modal de confirmação de agendamento
+function abrirModalConfirmacao(itemId, dataAtual, confirmadoAtual) {
+    // Preencher valores no modal
+    document.getElementById('modal_item_id').value = itemId;
+    document.getElementById('modal_data_agendamento').value = dataAtual;
+    document.getElementById('modal_confirmado').checked = confirmadoAtual;
+
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmarAgendamento'));
+    modal.show();
+}
+
+// ✅ NOVA FUNÇÃO: Salvar confirmação de agendamento
+function salvarConfirmacaoAgendamento() {
+    const itemId = document.getElementById('modal_item_id').value;
+    const dataAgendamento = document.getElementById('modal_data_agendamento').value;
+    const confirmado = document.getElementById('modal_confirmado').checked;
+
+    // Validar data
+    if (!dataAgendamento || dataAgendamento.trim() === '') {
+        alert('⚠️ Por favor, informe a data de agendamento antes de confirmar');
+        return;
+    }
+
+    // Mostrar loading
+    const btnSalvar = document.getElementById('btn_salvar_confirmacao');
+    const textoOriginal = btnSalvar.innerHTML;
+    btnSalvar.disabled = true;
+    btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    // Enviar para backend
+    fetch(`/embarques/item/${itemId}/confirmar_agendamento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify({
+            data_agenda: dataAgendamento,
+            agendamento_confirmado: confirmado
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Fechar modal
+            bootstrap.Modal.getInstance(document.getElementById('modalConfirmarAgendamento')).hide();
+
+            // Mostrar sucesso
+            alert('✅ Agendamento atualizado com sucesso!');
+
+            // Recarregar página para atualizar botão
+            window.location.reload();
+        } else {
+            alert(`❌ Erro: ${data.message}`);
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginal;
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('❌ Erro ao salvar confirmação');
+        btnSalvar.disabled = false;
+        btnSalvar.innerHTML = textoOriginal;
+    });
+}
 </script>
+
+<!-- ✅ MODAL: Confirmar Agendamento -->
+<div class="modal fade" id="modalConfirmarAgendamento" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title">
+                    <i class="fas fa-calendar-check"></i> Confirmar Agendamento
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modal_item_id">
+
+                <!-- Data de Agendamento -->
+                <div class="mb-3">
+                    <label for="modal_data_agendamento" class="form-label">
+                        <i class="fas fa-calendar"></i> Data de Agendamento
+                    </label>
+                    <input type="text"
+                           class="form-control"
+                           id="modal_data_agendamento"
+                           placeholder="DD/MM/AAAA"
+                           maxlength="10"
+                           required>
+                    <small class="text-muted">Formato: DD/MM/AAAA</small>
+                </div>
+
+                <!-- Checkbox Confirmação -->
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="modal_confirmado">
+                    <label class="form-check-label" for="modal_confirmado">
+                        <i class="fas fa-check-circle"></i> <strong>Agendamento Confirmado</strong>
+                    </label>
+                    <br>
+                    <small class="text-muted">Marque quando o cliente confirmar o agendamento</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn_salvar_confirmacao" onclick="salvarConfirmacaoAgendamento()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

@@ -567,7 +567,45 @@ def editar_pedido(lote_id):
             print(f"  - Protocolo: {valores_originais['protocolo']} → {form.protocolo.data}")
             print(f"  - Agendamento Confirmado: {valores_originais['agendamento_confirmado']} → {form.agendamento_confirmado.data}")
             print(f"  - Separações atualizadas: {separacoes_atualizadas}")
-            
+
+            # ✅ NOVA FUNCIONALIDADE: Sincronizar agendamento entre todas as tabelas
+            from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+            try:
+                sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema')
+
+                # Preparar dados
+                dados_agendamento = {
+                    'agendamento': form.agendamento.data,
+                    'protocolo': form.protocolo.data,
+                    'agendamento_confirmado': form.agendamento_confirmado.data,
+                    'numero_nf': form.numero_nf.data if form.numero_nf.data else None,
+                    'nf_cd': form.nf_cd.data if form.nf_cd.data else False
+                }
+
+                identificador = {
+                    'separacao_lote_id': pedido.separacao_lote_id,
+                    'numero_nf': form.numero_nf.data if form.numero_nf.data else None
+                }
+
+                # Executar sincronização
+                resultado = sincronizador.sincronizar_agendamento(
+                    dados_agendamento=dados_agendamento,
+                    identificador=identificador
+                )
+
+                if resultado['success']:
+                    print(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(resultado['tabelas_atualizadas'])}")
+                    flash(f"Sincronização completa: {', '.join(resultado['tabelas_atualizadas'])}", "info")
+                else:
+                    print(f"[SINCRONIZAÇÃO] Erro: {resultado['error']}")
+                    flash(f"Aviso: Erro na sincronização - {resultado['error']}", "warning")
+
+            except Exception as e:
+                print(f"[SINCRONIZAÇÃO] Erro ao sincronizar: {e}")
+                flash(f"Aviso: Erro na sincronização - {str(e)}", "warning")
+                # Não falhar a edição se sincronização der erro
+
             return redirect(url_for('pedidos.lista_pedidos'))
             
         except Exception as e:
@@ -1593,4 +1631,142 @@ def sincronizar_items_faturamento(lote_id):
             'success': False,
             'separacao_lote_id': lote_id,
             'erro': str(e)
+        }), 500
+
+@pedidos_bp.route('/validar_nf/<string:numero_nf>', methods=['GET'])
+@login_required
+def validar_nf(numero_nf):
+    """
+    Valida se NF existe em FaturamentoProduto e retorna status
+
+    Query params:
+    - lote_id: ID do lote (opcional, para log)
+
+    Response:
+    {
+        "success": true,
+        "existe": true/false,
+        "status": "Lançado"|"Cancelado"|"Provisório"|null,
+        "sincronizado_nf": true/false
+    }
+    """
+    from app.faturamento.models import FaturamentoProduto
+
+    try:
+        lote_id = request.args.get('lote_id', 'N/A')
+
+        # Buscar NF em FaturamentoProduto
+        faturamento = FaturamentoProduto.query.filter_by(
+            numero_nf=numero_nf
+        ).first()
+
+        if faturamento:
+            # NF encontrada
+            status = faturamento.status_nf or 'Lançado'
+            sincronizado = (status != 'Cancelado')
+
+            print(f"[VALIDAR NF] Lote: {lote_id} | NF: {numero_nf} | Status: {status} | Sincronizado: {sincronizado}")
+
+            return jsonify({
+                'success': True,
+                'existe': True,
+                'status': status,
+                'sincronizado_nf': sincronizado,
+                'message': f'NF encontrada com status: {status}'
+            })
+        else:
+            # NF não encontrada
+            print(f"[VALIDAR NF] Lote: {lote_id} | NF: {numero_nf} | Não encontrada")
+
+            return jsonify({
+                'success': True,
+                'existe': False,
+                'status': None,
+                'sincronizado_nf': False,
+                'message': 'NF não encontrada no faturamento'
+            })
+
+    except Exception as e:
+        print(f"[ERRO VALIDAR NF] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao validar NF: {str(e)}'
+        }), 500
+
+
+@pedidos_bp.route('/verificar_monitoramento', methods=['POST'])
+@login_required
+def verificar_monitoramento():
+    """
+    Verifica status de nf_cd em EntregaMonitorada
+
+    Payload:
+    {
+        "lote_id": "LOTE-123",
+        "numero_nf": "12345" (optional)
+    }
+
+    Response:
+    {
+        "success": true,
+        "encontrado": true/false,
+        "nf_cd": true/false,
+        "message": "..."
+    }
+    """
+    from app.monitoramento.models import EntregaMonitorada
+
+    try:
+        data = request.get_json()
+        lote_id = data.get('lote_id')
+        numero_nf = data.get('numero_nf')
+
+        if not lote_id and not numero_nf:
+            return jsonify({
+                'success': False,
+                'message': 'Informe lote_id ou numero_nf'
+            }), 400
+
+        # Buscar EntregaMonitorada
+        # Prioridade 1: Por separacao_lote_id
+        entrega = None
+        if lote_id:
+            entrega = EntregaMonitorada.query.filter_by(
+                separacao_lote_id=lote_id
+            ).first()
+
+        # Fallback: Por numero_nf
+        if not entrega and numero_nf:
+            entrega = EntregaMonitorada.query.filter_by(
+                numero_nf=numero_nf
+            ).first()
+
+        if entrega:
+            # Encontrado
+            nf_cd = bool(entrega.nf_cd)
+
+            print(f"[VERIFICAR MONITORAMENTO] Lote: {lote_id} | NF: {numero_nf} | nf_cd: {nf_cd}")
+
+            return jsonify({
+                'success': True,
+                'encontrado': True,
+                'nf_cd': nf_cd,
+                'message': f'Entrega encontrada (nf_cd={nf_cd})'
+            })
+        else:
+            # Não encontrado
+            print(f"[VERIFICAR MONITORAMENTO] Lote: {lote_id} | NF: {numero_nf} | Não encontrado")
+
+            return jsonify({
+                'success': True,
+                'encontrado': False,
+                'nf_cd': False,
+                'message': 'Entrega não encontrada no monitoramento'
+            })
+
+    except Exception as e:
+        print(f"[ERRO VERIFICAR MONITORAMENTO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao verificar monitoramento: {str(e)}'
         }), 500

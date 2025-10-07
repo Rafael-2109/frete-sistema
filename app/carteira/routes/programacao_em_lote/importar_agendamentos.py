@@ -333,7 +333,7 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
         if (sep.protocolo == protocolo and 
             sep.agendamento_confirmado == True and 
             sep.agendamento == data_agendamento and
-            sep.agendamento is not None):
+            sep.agendamento is not None): # type: ignore
             logger.info(f"Ignorando Separacao ID {sep.id}: já tem protocolo {protocolo} confirmado com data {data_agendamento}")
             encontrado = True
             continue
@@ -376,7 +376,7 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
         if (nf.protocolo == protocolo and 
             nf.agendamento_confirmado == True and 
             nf.agendamento == data_agendamento and
-            nf.agendamento is not None):
+            nf.agendamento is not None): # type: ignore
             logger.info(f"Ignorando NF no CD ID {nf.id}: já tem protocolo {protocolo} confirmado com data {data_agendamento}")
             encontrado = True
             continue

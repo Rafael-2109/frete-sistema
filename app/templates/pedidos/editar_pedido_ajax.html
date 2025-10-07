@@ -112,7 +112,7 @@
                         {{ form.agendamento_confirmado(class="form-check-input") }}
                         {{ form.agendamento_confirmado.label(class="form-check-label") }}
                         <small class="text-muted ms-2">
-                            <i class="fas fa-info-circle"></i> 
+                            <i class="fas fa-info-circle"></i>
                             {{ form.agendamento_confirmado.description }}
                         </small>
                         {% if form.agendamento_confirmado.errors %}
@@ -123,6 +123,86 @@
                             </div>
                         {% endif %}
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ✅ NOVA SEÇÃO: Gestão de NF e Status -->
+    <div class="card mb-3">
+        <div class="card-header bg-info text-white">
+            <h6 class="mb-0">
+                <i class="fas fa-file-invoice"></i> Gestão de NF e Status
+            </h6>
+        </div>
+        <div class="card-body">
+            <!-- Linha 1: Input NF + Badge Sincronização -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.numero_nf.label(class="form-label") }}
+                    <div class="input-group">
+                        {{ form.numero_nf(class="form-control", id="input_numero_nf", placeholder="Ex: 123456") }}
+                        <button type="button" class="btn btn-outline-secondary" onclick="validarNF('{{ pedido.separacao_lote_id }}')" title="Validar NF em FaturamentoProduto">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted">{{ form.numero_nf.description }}</small>
+                    {% if form.numero_nf.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.numero_nf.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <div>
+                        <label class="form-label">Status Sincronização</label>
+                        <div id="badge-sincronizacao">
+                            {% if pedido.sincronizado_nf %}
+                                <span class="badge bg-success fs-6">✅ Sincronizado</span>
+                            {% else %}
+                                <span class="badge bg-danger fs-6">❌ Não sincronizado</span>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted" id="mensagem-validacao">
+                            {% if pedido.nf %}
+                                NF Atual: {{ pedido.nf }}
+                            {% else %}
+                                Nenhuma NF vinculada
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Linha 2: Toggle NF no CD + Status Monitoramento + Botão Verificar -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-check form-switch">
+                        {{ form.nf_cd(class="form-check-input", id="toggle_nf_cd") }}
+                        {{ form.nf_cd.label(class="form-check-label") }}
+                    </div>
+                    <small class="text-muted">{{ form.nf_cd.description }}</small>
+                    {% if form.nf_cd.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.nf_cd.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status em Monitoramento</label>
+                    <div id="status-monitoramento">
+                        <span class="badge bg-secondary">🔍 Não verificado</span>
+                    </div>
+                    <small class="text-muted" id="info-monitoramento">Clique em "Verificar" para sincronizar</small>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="button" class="btn btn-info w-100" onclick="verificarMonitoramento('{{ pedido.separacao_lote_id }}', '{{ pedido.nf or '' }}')">
+                        <i class="fas fa-sync"></i> Verificar Monitoramento
+                    </button>
                 </div>
             </div>
         </div>

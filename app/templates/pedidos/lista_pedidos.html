@@ -1579,6 +1579,119 @@ function cancelarSeparacao(loteId) {
     });
 }
 
+// ✅ NOVA FUNÇÃO: Validar NF em FaturamentoProduto
+function validarNF(loteId) {
+    const inputNF = document.getElementById('input_numero_nf');
+    const numeroNF = inputNF.value.trim();
+
+    if (!numeroNF) {
+        alert('⚠️ Por favor, preencha o número da NF antes de validar');
+        return;
+    }
+
+    // Mostrar loading
+    const badgeSincronizacao = document.getElementById('badge-sincronizacao');
+    const mensagemValidacao = document.getElementById('mensagem-validacao');
+    badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6"><i class="fas fa-spinner fa-spin"></i> Validando...</span>';
+
+    fetch(`/pedidos/validar_nf/${numeroNF}?lote_id=${loteId}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.existe) {
+                if (data.status === 'Cancelado') {
+                    // NF cancelada
+                    badgeSincronizacao.innerHTML = '<span class="badge bg-danger fs-6">❌ NF Cancelada</span>';
+                    mensagemValidacao.textContent = 'NF encontrada mas está cancelada. Será removida ao salvar.';
+                    inputNF.value = '';  // Limpar campo
+                } else {
+                    // NF válida
+                    badgeSincronizacao.innerHTML = '<span class="badge bg-success fs-6">✅ Sincronizado</span>';
+                    mensagemValidacao.textContent = `NF válida (Status: ${data.status})`;
+                }
+            } else {
+                // NF não encontrada
+                badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6">⚠️ Não encontrada</span>';
+                mensagemValidacao.textContent = 'NF não encontrada no faturamento. Pode salvar mesmo assim.';
+            }
+        } else {
+            badgeSincronizacao.innerHTML = '<span class="badge bg-danger fs-6">❌ Erro</span>';
+            mensagemValidacao.textContent = data.message || 'Erro ao validar NF';
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        badgeSincronizacao.innerHTML = '<span class="badge bg-danger fs-6">❌ Erro</span>';
+        mensagemValidacao.textContent = 'Erro ao validar NF';
+    });
+}
+
+// ✅ NOVA FUNÇÃO: Verificar e Sincronizar nf_cd com EntregaMonitorada
+function verificarMonitoramento(loteId, numeroNF) {
+    // Mostrar loading
+    const statusMonitoramento = document.getElementById('status-monitoramento');
+    const infoMonitoramento = document.getElementById('info-monitoramento');
+    statusMonitoramento.innerHTML = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> Verificando...</span>';
+
+    fetch(`/pedidos/verificar_monitoramento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify({
+            lote_id: loteId,
+            numero_nf: numeroNF
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.encontrado) {
+                // EntregaMonitorada encontrada
+                const nfCdMonitoramento = data.nf_cd;
+                const toggleNfCd = document.getElementById('toggle_nf_cd');
+
+                if (nfCdMonitoramento) {
+                    statusMonitoramento.innerHTML = '<span class="badge bg-danger fs-6">📦 NF no CD</span>';
+                    infoMonitoramento.textContent = 'NF está marcada como "no CD" no monitoramento';
+                } else {
+                    statusMonitoramento.innerHTML = '<span class="badge bg-success fs-6">✅ Ativa</span>';
+                    infoMonitoramento.textContent = 'NF está ativa no monitoramento';
+                }
+
+                // Perguntar se quer sincronizar
+                if (toggleNfCd.checked !== nfCdMonitoramento) {
+                    const msg = nfCdMonitoramento
+                        ? 'O monitoramento indica "NF no CD". Deseja sincronizar aqui também?'
+                        : 'O monitoramento indica "NF Ativa". Deseja sincronizar aqui também?';
+
+                    if (confirm(msg)) {
+                        toggleNfCd.checked = nfCdMonitoramento;
+                    }
+                }
+            } else {
+                // Não encontrado
+                statusMonitoramento.innerHTML = '<span class="badge bg-secondary">🔍 Não encontrado</span>';
+                infoMonitoramento.textContent = data.message || 'NF não encontrada no monitoramento';
+            }
+        } else {
+            statusMonitoramento.innerHTML = '<span class="badge bg-danger">❌ Erro</span>';
+            infoMonitoramento.textContent = data.message || 'Erro ao verificar monitoramento';
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        statusMonitoramento.innerHTML = '<span class="badge bg-danger">❌ Erro</span>';
+        infoMonitoramento.textContent = 'Erro ao conectar com o servidor';
+    });
+}
+
 // ✅ NOVAS FUNÇÕES: Geração de URLs com preservação de filtros
 window.sort_url = function(campo) {
     const urlParams = new URLSearchParams(window.location.search);

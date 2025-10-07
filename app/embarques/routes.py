@@ -175,10 +175,45 @@ def visualizar_embarque(id):
                         item_existente.volumes = int(item_form.volumes.data or 0)
                         item_existente.protocolo_agendamento = item_form.protocolo_agendamento.data.strip() if item_form.protocolo_agendamento.data else None
                         item_existente.data_agenda = item_form.data_agenda.data.strip() if item_form.data_agenda.data else None
-                        
+
+                        # ✅ SINCRONIZAÇÃO: Propagar alterações para outras tabelas
+                        from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+                        try:
+                            sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema')
+
+                            # Converter data_agenda (String DD/MM/YYYY) para Date
+                            data_agendamento = None
+                            if item_existente.data_agenda:
+                                try:
+                                    data_agendamento = datetime.strptime(item_existente.data_agenda, '%d/%m/%Y').date()
+                                except Exception as e:
+                                    print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Erro ao converter data_agenda: {e}")
+                                    pass
+
+                            dados_agendamento = {
+                                'agendamento': data_agendamento,
+                                'protocolo': item_existente.protocolo_agendamento,
+                                'agendamento_confirmado': getattr(item_existente, 'agendamento_confirmado', False),
+                                'numero_nf': item_existente.nota_fiscal
+                            }
+
+                            identificador = {
+                                'separacao_lote_id': item_existente.separacao_lote_id,
+                                'numero_nf': item_existente.nota_fiscal
+                            }
+
+                            resultado = sincronizador.sincronizar_agendamento(dados_agendamento, identificador)
+
+                            if resultado['success'] and resultado['tabelas_atualizadas']:
+                                print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Lote {item_existente.separacao_lote_id}: {', '.join(resultado['tabelas_atualizadas'])}")
+
+                        except Exception as e:
+                            print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Erro: {e}")
+
                         # ✅ PRESERVA todos os dados importantes: CNPJ, peso, valor, tabelas, separação
                         # Estes dados SÓ vêm da cotação e NUNCA devem ser alterados manualmente
-                        
+
                         # Validar NF do cliente
                         try:
                             sucesso, erro = validar_nf_cliente(item_existente)
@@ -262,6 +297,22 @@ def visualizar_embarque(id):
                     except Exception as e:
                         print(f"Erro na sincronização de entrega {item.nota_fiscal}: {e}")
                         messages_entregas.append(f"⚠️ Erro na entrega {item.nota_fiscal}: {e}")
+
+                # ✅ SINCRONIZAÇÃO: Atualizar expedição nas Separacoes quando data_prevista_embarque mudar
+                if embarque.data_prevista_embarque:
+                    from app.separacao.models import Separacao
+
+                    count_total = 0
+                    for item in embarque.itens_ativos:
+                        if item.separacao_lote_id:
+                            count = Separacao.query.filter_by(
+                                separacao_lote_id=item.separacao_lote_id
+                            ).update({'expedicao': embarque.data_prevista_embarque})
+                            count_total += count
+
+                    if count_total > 0:
+                        print(f"[SINCRONIZAÇÃO EMBARQUE] {count_total} separações atualizadas com expedição {embarque.data_prevista_embarque}")
+                        messages_sync.append(f"📅 {count_total} pedidos atualizados com nova data de expedição")
 
                 # ✅ CORREÇÃO: Commit ÚNICO após TODAS as operações
                 db.session.commit()
@@ -1963,3 +2014,106 @@ def desvincular_pedido(lote_id):
         print(f"[ERRO DESVINCULAR] {str(e)}")
     
     return redirect(url_for('pedidos.lista_pedidos'))
+
+
+@embarques_bp.route('/item/<int:item_id>/confirmar_agendamento', methods=['POST'])
+@login_required
+def confirmar_agendamento_item(item_id):
+    """
+    Confirma/atualiza agendamento de um EmbarqueItem
+
+    Payload:
+    {
+        "data_agenda": "DD/MM/AAAA",
+        "agendamento_confirmado": true/false
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "...",
+        "item_id": 123,
+        "data_agenda": "01/01/2025",
+        "agendamento_confirmado": true
+    }
+    """
+    try:
+        # Buscar EmbarqueItem
+        item = EmbarqueItem.query.get_or_404(item_id)
+
+        # Obter dados do payload
+        data = request.get_json()
+        data_agenda = data.get('data_agenda', '').strip()
+        agendamento_confirmado = data.get('agendamento_confirmado', False)
+
+        # Validar data
+        if not data_agenda:
+            return jsonify({
+                'success': False,
+                'message': 'Data de agendamento é obrigatória'
+            }), 400
+
+        # Atualizar EmbarqueItem
+        item.data_agenda = data_agenda
+        item.agendamento_confirmado = agendamento_confirmado
+
+        # ✅ SINCRONIZAÇÃO: Propagar para outras tabelas
+        from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+        try:
+            sincronizador = SincronizadorAgendamentoService(
+                usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            )
+
+            # Converter data_agenda (String DD/MM/YYYY) para Date
+            data_agendamento_obj = None
+            if data_agenda:
+                try:
+                    data_agendamento_obj = datetime.strptime(data_agenda, '%d/%m/%Y').date()
+                except Exception as e:
+                    print(f"[CONFIRMAÇÃO AGENDAMENTO] Erro ao converter data: {e}")
+                    pass
+
+            dados_agendamento = {
+                'agendamento': data_agendamento_obj,
+                'protocolo': item.protocolo_agendamento,
+                'agendamento_confirmado': agendamento_confirmado,
+                'numero_nf': item.nota_fiscal
+            }
+
+            identificador = {
+                'separacao_lote_id': item.separacao_lote_id,
+                'numero_nf': item.nota_fiscal
+            }
+
+            resultado = sincronizador.sincronizar_agendamento(dados_agendamento, identificador)
+
+            if resultado['success']:
+                print(f"[CONFIRMAÇÃO AGENDAMENTO] Item {item_id}: {', '.join(resultado['tabelas_atualizadas'])}")
+            else:
+                print(f"[CONFIRMAÇÃO AGENDAMENTO] Erro na sincronização: {resultado['error']}")
+
+        except Exception as e:
+            print(f"[CONFIRMAÇÃO AGENDAMENTO] Erro ao sincronizar: {e}")
+            # Não falhar a atualização se sincronização der erro
+
+        # Salvar alterações
+        db.session.commit()
+
+        print(f"[CONFIRMAÇÃO AGENDAMENTO] Item {item_id} atualizado: data={data_agenda}, confirmado={agendamento_confirmado}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Agendamento atualizado com sucesso',
+            'item_id': item_id,
+            'data_agenda': data_agenda,
+            'agendamento_confirmado': agendamento_confirmado
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO CONFIRMAÇÃO AGENDAMENTO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao atualizar agendamento: {str(e)}'
+        }), 500

@@ -103,13 +103,23 @@ def processar_nf_cd_pedido(entrega_id):
             update_data = {
                 'nf_cd': True,
                 'data_embarque': None,
-                'expedicao': None  # ✅ LIMPAR expedição - NF voltou para o CD
+                # ✅ CORREÇÃO: NÃO apagar expedição - manter data planejada
+                # 'expedicao': None  # ❌ REMOVIDO
             }
-            
+
             if entrega.data_agenda:
                 update_data['agendamento'] = entrega.data_agenda
-                update_data['protocolo'] = entrega.protocolo_agendamento
-            
+
+            # ✅ CORREÇÃO: Buscar protocolo em AgendamentoEntrega mais recente
+            from app.monitoramento.models import AgendamentoEntrega
+            agendamento_recente = AgendamentoEntrega.query.filter_by(
+                entrega_id=entrega.id
+            ).order_by(AgendamentoEntrega.criado_em.desc()).first()
+
+            if agendamento_recente:
+                update_data['protocolo'] = agendamento_recente.protocolo_agendamento
+                update_data['agendamento_confirmado'] = (agendamento_recente.status == 'confirmado')
+
             Separacao.query.filter_by(
                 separacao_lote_id=pedido.separacao_lote_id
             ).update(update_data)
@@ -239,7 +249,8 @@ def adicionar_evento(id):
             entrega.status_finalizacao = None
             entrega.data_embarque = None
             entrega.data_entrega_prevista = None
-            entrega.data_agenda = None
+            # ✅ CORREÇÃO: NÃO apagar data_agenda - manter agendamento quando NF volta ao CD
+            # entrega.data_agenda = None  # ❌ REMOVIDO
             entrega.data_hora_entrega_realizada = None
             entrega.finalizado_por = None
             entrega.finalizado_em = None

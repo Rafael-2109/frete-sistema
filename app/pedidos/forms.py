@@ -37,22 +37,24 @@ class EditarPedidoForm(FlaskForm):
     """
     Formulário para editar campos específicos do pedido:
     - Data de expedição
-    - Data de agendamento  
+    - Data de agendamento
     - Protocolo
     - Confirmação de agendamento
+    - Nota Fiscal (validação em FaturamentoProduto)
+    - Status NF no CD
     """
     expedicao = DateField(
-        "Data de Expedição", 
+        "Data de Expedição",
         validators=[Optional()],
         description="Data prevista para expedição do pedido"
     )
     agendamento = DateField(
-        "Data de Agendamento", 
+        "Data de Agendamento",
         validators=[Optional()],
         description="Data agendada para entrega/coleta"
     )
     protocolo = StringField(
-        "Protocolo", 
+        "Protocolo",
         validators=[Optional()],
         description="Número do protocolo de agendamento"
     )
@@ -60,5 +62,16 @@ class EditarPedidoForm(FlaskForm):
         "Agendamento Confirmado",
         validators=[Optional()],
         description="Marque se o agendamento foi confirmado pelo cliente"
+    )
+    # ✅ NOVOS CAMPOS PARA GESTÃO DE NF
+    numero_nf = StringField(
+        "Nota Fiscal",
+        validators=[Optional()],
+        description="Número da NF para validar em FaturamentoProduto"
+    )
+    nf_cd = BooleanField(
+        "NF no CD",
+        validators=[Optional()],
+        description="Marque se a NF voltou para o CD"
     )
     submit = SubmitField("Salvar Alterações")

@@ -178,6 +178,7 @@ class EmbarqueItem(db.Model):
     pedido = db.Column(db.String(50), nullable=False)
     protocolo_agendamento = db.Column(db.String(50))
     data_agenda = db.Column(db.String(10))
+    agendamento_confirmado = db.Column(db.Boolean, default=False)  # ✅ NOVO: Status de confirmação do agendamento
     nota_fiscal = db.Column(db.String(20))
     volumes = db.Column(db.Integer, nullable=True)
     peso = db.Column(db.Float)  # Peso do item
