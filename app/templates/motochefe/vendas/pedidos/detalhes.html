@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 
+{#
+⚠️ TEMPLATE DEPRECATED - Usa campos antigos de TituloFinanceiro na seção de títulos
+TODO: Atualizar para novo sistema
+#}
+
 {% block title %}Detalhes do Pedido {{ pedido.numero_pedido }} - MotoChefe{% endblock %}
 
 {% block content %}
@@ -234,15 +239,18 @@
             {% if pedido.titulos %}
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-file-invoice"></i> Títulos / Parcelas ({{ pedido.titulos|length }})
+                    <i class="fas fa-file-invoice"></i> Títulos Financeiros ({{ pedido.titulos|length }})
+                    <small class="text-muted">- Sistema por Moto + Tipo</small>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-sm table-hover mb-0">
                         <thead class="thead-light">
                             <tr>
+                                <th>Chassi</th>
+                                <th>Tipo</th>
                                 <th>Parcela</th>
                                 <th>Vencimento</th>
-                                <th class="text-right">Valor</th>
+                                <th class="text-right">Valor Saldo</th>
                                 <th>Status</th>
                                 <th></th>
                             </tr>
@@ -250,7 +258,15 @@
                         <tbody>
                             {% for t in pedido.titulos %}
                             <tr>
-                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                <td>
+                                    {% if t.numero_chassi %}
+                                        <small>{{ t.numero_chassi[-6:] }}</small>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge badge-primary">{{ t.tipo_titulo }}</span></td>
+                                <td>{{ t.numero_parcela }}</td>
                                 <td>
                                     {% if t.data_vencimento %}
                                         {{ t.data_vencimento.strftime('%d/%m/%Y') }}
@@ -258,7 +274,7 @@
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-right">R$ {{ "%.2f"|format(t.valor_parcela|float) }}</td>
+                                <td class="text-right">R$ {{ "%.2f"|format(t.valor_saldo|float) }}</td>
                                 <td>
                                     {% if t.status == 'PAGO' %}
                                         <span class="badge badge-success">PAGO</span>

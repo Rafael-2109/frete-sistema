@@ -11,6 +11,8 @@ class CustosOperacionais(db.Model):
     """
     Custos operacionais fixos
     Sistema sempre usa registro com ativo=True e data_vigencia_fim=NULL
+
+    NOTA: custo_movimentacao e valor_comissao_fixa foram movidos para EquipeVendasMoto
     """
     __tablename__ = 'custos_operacionais'
 
@@ -19,9 +21,6 @@ class CustosOperacionais(db.Model):
 
     # Custos fixos
     custo_montagem = db.Column(db.Numeric(15, 2), nullable=False, default=0)
-    custo_movimentacao_rj = db.Column(db.Numeric(15, 2), nullable=False, default=0)
-    custo_movimentacao_nacom = db.Column(db.Numeric(15, 2), nullable=False, default=0)
-    valor_comissao_fixa = db.Column(db.Numeric(15, 2), nullable=False, default=0)
 
     # Vigência
     data_vigencia_inicio = db.Column(db.Date, nullable=False, default=date.today)

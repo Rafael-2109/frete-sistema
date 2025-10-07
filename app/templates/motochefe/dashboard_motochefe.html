@@ -98,6 +98,32 @@
             </div>
         </div>
 
+        <!-- Card Financeiro -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-dollar-sign"></i> Financeiro</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('motochefe.extrato_financeiro') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-file-invoice-dollar text-success"></i> Extrato Financeiro
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_contas_a_pagar') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-hand-holding-usd text-success"></i> Contas a Pagar
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_contas_a_receber') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-money-bill-wave text-success"></i> Contas a Receber
+                        </a>
+                        <a href="{{ url_for('motochefe.listar_titulos_a_pagar_route') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-file-invoice text-success"></i> Títulos a Pagar
+                            <span class="badge bg-success float-end">Novo</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Card Operacional -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 border-warning">

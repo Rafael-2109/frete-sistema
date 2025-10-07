@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container-fluid mt-4" style="max-width: 800px;">
+<div class="container-fluid mt-4" style="max-width: 1000px;">
     <div class="card">
         <div class="card-header bg-primary text-white">
             <h4 class="mb-0">
@@ -26,16 +26,93 @@
 
                 <hr>
 
-                <!-- Configuração de Movimentação -->
+                <!-- ============================================== -->
+                <!-- CONFIGURAÇÃO DE PRECIFICAÇÃO -->
+                <!-- ============================================== -->
+                <h5 class="mb-3"><i class="fas fa-tag"></i> Precificação</h5>
+
+                <!-- Tipo de Precificação -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Precificação *</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_precificacao" id="tipo_tabela" value="TABELA"
+                                   {% if not equipe or equipe.tipo_precificacao == 'TABELA' %}checked{% endif %}
+                                   onchange="toggleTipoPrecificacao()">
+                            <label class="form-check-label" for="tipo_tabela">
+                                Tabela de Preços
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_precificacao" id="tipo_custo_markup" value="CUSTO_MARKUP"
+                                   {% if equipe and equipe.tipo_precificacao == 'CUSTO_MARKUP' %}checked{% endif %}
+                                   onchange="toggleTipoPrecificacao()">
+                            <label class="form-check-label" for="tipo_custo_markup">
+                                Custo + Markup
+                            </label>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        <strong>Tabela:</strong> Usa preços cadastrados na tabela de preços por modelo (gerenciada abaixo)<br>
+                        <strong>Custo + Markup:</strong> Calcula preço como custo_aquisicao do chassi + valor fixo de markup
+                    </small>
+                </div>
+
+                <!-- Campo Markup (apenas para CUSTO_MARKUP) -->
+                <div id="div_markup" class="mb-4" style="display: none;">
+                    <label for="markup" class="form-label">Valor do Markup (R$)</label>
+                    <input type="number"
+                           class="form-control"
+                           id="markup"
+                           name="markup"
+                           step="0.01"
+                           min="0"
+                           value="{{ '%.2f'|format(equipe.markup|float) if equipe else '0.00' }}">
+                    <small class="text-muted">Valor fixo adicionado ao custo de aquisição do chassi (ex: R$ 500,00)</small>
+                </div>
+
+                <hr>
+
+                <!-- ============================================== -->
+                <!-- CONFIGURAÇÃO DE MOVIMENTAÇÃO -->
+                <!-- ============================================== -->
                 <h5 class="mb-3"><i class="fas fa-truck"></i> Movimentação</h5>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="responsavel_movimentacao" class="form-label">Responsável Movimentação</label>
+                        <select class="form-select" id="responsavel_movimentacao" name="responsavel_movimentacao">
+                            <option value="">Não configurado</option>
+                            <option value="NACOM" {% if equipe and equipe.responsavel_movimentacao == 'NACOM' %}selected{% endif %}>NACOM</option>
+                        </select>
+                        <small class="text-muted">Local responsável pela movimentação dos pedidos desta equipe</small>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="custo_movimentacao" class="form-label">Custo de Movimentação (R$)</label>
+                        <input type="number"
+                               class="form-control"
+                               id="custo_movimentacao"
+                               name="custo_movimentacao"
+                               step="0.01"
+                               min="0"
+                               value="{{ '%.2f'|format(equipe.custo_movimentacao|float) if equipe else '0.00' }}">
+                        <small class="text-muted">Custo específico de movimentação desta equipe</small>
+                    </div>
+                </div>
+
                 <div class="mb-4">
-                    <label for="responsavel_movimentacao" class="form-label">Responsável Movimentação</label>
-                    <select class="form-select" id="responsavel_movimentacao" name="responsavel_movimentacao">
-                        <option value="">Não configurado</option>
-                        <option value="RJ" {% if equipe and equipe.responsavel_movimentacao == 'RJ' %}selected{% endif %}>RJ</option>
-                        <option value="NACOM" {% if equipe and equipe.responsavel_movimentacao == 'NACOM' %}selected{% endif %}>NACOM</option>
-                    </select>
-                    <small class="text-muted">Local responsável pela movimentação dos pedidos desta equipe</small>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="incluir_custo_movimentacao" name="incluir_custo_movimentacao" value="1"
+                               {% if equipe and equipe.incluir_custo_movimentacao %}checked{% endif %}>
+                        <label class="form-check-label" for="incluir_custo_movimentacao">
+                            <strong>Incluir custo de movimentação no preço final</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        • Marcado: Custo de movimentação será ADICIONADO ao preço final na cotação<br>
+                        • Desmarcado: Custo já está INCLUÍDO na tabela de preços
+                    </small>
                 </div>
 
                 <hr>
@@ -113,6 +190,27 @@
 
                 <hr>
 
+                <!-- ============================================== -->
+                <!-- CONFIGURAÇÃO DE MONTAGEM -->
+                <!-- ============================================== -->
+                <h5 class="mb-3"><i class="fas fa-wrench"></i> Montagem</h5>
+
+                <div class="mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="permitir_montagem" name="permitir_montagem" value="1"
+                               {% if not equipe or equipe.permitir_montagem %}checked{% endif %}>
+                        <label class="form-check-label" for="permitir_montagem">
+                            <strong>Permitir contratação de montagem para esta equipe</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        • Marcado: Exibe campos de "Montagem Contratada" e "Valor Montagem" no formulário de pedidos<br>
+                        • Desmarcado: Oculta campos e força montagem=False para pedidos desta equipe
+                    </small>
+                </div>
+
+                <hr>
+
                 <!-- Botões -->
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary">
@@ -142,9 +240,21 @@ function toggleTipoComissao() {
     }
 }
 
+function toggleTipoPrecificacao() {
+    const tipoTabela = document.getElementById('tipo_tabela').checked;
+    const divMarkup = document.getElementById('div_markup');
+
+    if (tipoTabela) {
+        divMarkup.style.display = 'none';
+    } else {
+        divMarkup.style.display = 'block';
+    }
+}
+
 // Executar ao carregar página
 document.addEventListener('DOMContentLoaded', function() {
     toggleTipoComissao();
+    toggleTipoPrecificacao();
 });
 </script>
 {% endblock %}

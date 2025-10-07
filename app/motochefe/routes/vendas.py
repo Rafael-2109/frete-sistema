@@ -151,11 +151,13 @@ def detalhes_pedido(id):
 @login_required
 @requer_motochefe
 def adicionar_pedido():
-    """Adiciona novo pedido com parcelamento e alocação FIFO"""
+    """Adiciona novo pedido com títulos por moto e alocação FIFO"""
     if request.method == 'POST':
         try:
             # VALIDAR número de pedido único
             from app.motochefe.services.numero_pedido_service import validar_numero_pedido_unico
+            from app.motochefe.services.pedido_service import criar_pedido_completo
+            import json
 
             numero_pedido = request.form.get('numero_pedido')
             valido, mensagem = validar_numero_pedido_unico(numero_pedido)
@@ -163,89 +165,47 @@ def adicionar_pedido():
                 flash(mensagem, 'danger')
                 return redirect(url_for('motochefe.adicionar_pedido'))
 
-            # 1. CRIAR PEDIDO (sem responsavel_movimentacao - vem da equipe)
-            pedido = PedidoVendaMoto(
-                numero_pedido=numero_pedido,
-                cliente_id=int(request.form.get('cliente_id')),
-                vendedor_id=int(request.form.get('vendedor_id')),
-                equipe_vendas_id=int(request.form.get('equipe_vendas_id')) if request.form.get('equipe_vendas_id') else None,
-                data_pedido=request.form.get('data_pedido') or date.today(),
-                data_expedicao=request.form.get('data_expedicao') or None,
-                valor_total_pedido=Decimal(request.form.get('valor_total_pedido', 0)),
-                valor_frete_cliente=Decimal(request.form.get('valor_frete_cliente', 0)),
-                forma_pagamento=request.form.get('forma_pagamento'),
-                condicao_pagamento=request.form.get('condicao_pagamento'),
-                transportadora_id=int(request.form.get('transportadora_id')) if request.form.get('transportadora_id') else None,
-                tipo_frete=request.form.get('tipo_frete'),
-                observacoes=request.form.get('observacoes'),
-                criado_por=current_user.nome
-            )
-            db.session.add(pedido)
-            db.session.flush()  # Pega ID sem commit
+            # 1. PREPARAR DADOS DO PEDIDO
+            dados_pedido = {
+                'numero_pedido': numero_pedido,
+                'cliente_id': int(request.form.get('cliente_id')),
+                'vendedor_id': int(request.form.get('vendedor_id')),
+                'equipe_vendas_id': int(request.form.get('equipe_vendas_id')) if request.form.get('equipe_vendas_id') else None,
+                'data_pedido': request.form.get('data_pedido') or date.today(),
+                'data_expedicao': request.form.get('data_expedicao') or None,
+                'valor_total_pedido': Decimal(request.form.get('valor_total_pedido', 0)),
+                'valor_frete_cliente': Decimal(request.form.get('valor_frete_cliente', 0)),
+                'forma_pagamento': request.form.get('forma_pagamento'),
+                'condicao_pagamento': request.form.get('condicao_pagamento'),
+                'transportadora_id': int(request.form.get('transportadora_id')) if request.form.get('transportadora_id') else None,
+                'tipo_frete': request.form.get('tipo_frete'),
+                'observacoes': request.form.get('observacoes'),
+                'criado_por': current_user.nome
+            }
 
             # 2. PROCESSAR ITENS (JSON do form)
-            import json
             itens_json = request.form.get('itens_json')
             if not itens_json:
                 raise Exception('Nenhum item adicionado ao pedido')
 
             itens = json.loads(itens_json)
 
-            for item_data in itens:
-                modelo_id = item_data['modelo_id']
-                cor = item_data['cor']
-                quantidade = int(item_data['quantidade'])
-                preco_venda = Decimal(item_data['preco_venda'])
-                montagem = item_data.get('montagem', False)
-                valor_montagem = Decimal(item_data.get('valor_montagem', 0))
-
-                # 3. ALOCAR CHASSI VIA FIFO
-                motos_disponiveis = Moto.query.filter_by(
-                    modelo_id=modelo_id,
-                    cor=cor,
-                    status='DISPONIVEL',
-                    reservado=False,
-                    ativo=True
-                ).order_by(Moto.data_entrada.asc()).limit(quantidade).all()
-
-                if len(motos_disponiveis) < quantidade:
-                    raise Exception(f'Estoque insuficiente para modelo ID {modelo_id} cor {cor}. Disponível: {len(motos_disponiveis)}, Solicitado: {quantidade}')
-
-                # 4. CRIAR ITENS E RESERVAR MOTOS
-                for moto in motos_disponiveis:
-                    item = PedidoVendaMotoItem(
-                        pedido_id=pedido.id,
-                        numero_chassi=moto.numero_chassi,
-                        preco_venda=preco_venda,
-                        montagem_contratada=montagem,
-                        valor_montagem=valor_montagem if montagem else 0,
-                        criado_por=current_user.nome
-                    )
-                    db.session.add(item)
-
-                    # ATUALIZAR STATUS DA MOTO
-                    moto.status = 'RESERVADA'
-                    moto.reservado = True
-
-            # 5. CRIAR TÍTULOS FINANCEIROS (JSON das parcelas)
-            parcelas_json = request.form.get('parcelas_json')
-            if parcelas_json:
-                parcelas = json.loads(parcelas_json)
-
-                for parcela_data in parcelas:
-                    titulo = TituloFinanceiro(
-                        pedido_id=pedido.id,
-                        numero_parcela=parcela_data['numero'],
-                        total_parcelas=len(parcelas),
-                        valor_parcela=Decimal(parcela_data['valor']),
-                        prazo_dias=int(parcela_data['prazo_dias']),
-                        data_vencimento=None,  # Calculado no faturamento
-                        status='RASCUNHO'  # Muda para ABERTO no faturamento
-                    )
-                    db.session.add(titulo)
+            # 3. CRIAR PEDIDO COMPLETO (novo sistema)
+            # Cria: Pedido + Itens + Reserva Motos + 4 Títulos por Moto + Títulos a Pagar
+            resultado = criar_pedido_completo(dados_pedido, itens)
 
             db.session.commit()
-            flash(f'Pedido "{pedido.numero_pedido}" criado com sucesso!', 'success')
+
+            # 4. Mensagem de sucesso detalhada
+            pedido = resultado['pedido']
+            total_titulos = len(resultado['titulos_financeiros'])
+            total_titulos_pagar = len(resultado['titulos_a_pagar'])
+
+            flash(
+                f'Pedido "{pedido.numero_pedido}" criado com sucesso! '
+                f'{total_titulos} títulos a receber e {total_titulos_pagar} títulos a pagar gerados.',
+                'success'
+            )
             return redirect(url_for('motochefe.listar_pedidos'))
 
         except Exception as e:
@@ -312,7 +272,9 @@ def api_proximo_numero_pedido():
 @login_required
 @requer_motochefe
 def faturar_pedido(id):
-    """Fatura pedido: preenche NF, calcula vencimentos, atualiza motos"""
+    """Fatura pedido: preenche NF, calcula vencimentos, atualiza motos e títulos"""
+    from app.motochefe.services.pedido_service import faturar_pedido_completo
+
     pedido = PedidoVendaMoto.query.get_or_404(id)
 
     if pedido.faturado:
@@ -330,26 +292,25 @@ def faturar_pedido(id):
         # Converter data
         data_nf_obj = datetime.strptime(data_nf, '%Y-%m-%d').date()
 
-        # ATUALIZAR PEDIDO
-        pedido.faturado = True
-        pedido.numero_nf = numero_nf
-        pedido.data_nf = data_nf_obj
-        pedido.empresa_venda_id = int(empresa_id)
+        # Registrar usuário
         pedido.atualizado_por = current_user.nome
 
-        # ATUALIZAR MOTOS (status VENDIDA)
-        for item in pedido.itens:
-            moto = item.moto
-            moto.status = 'VENDIDA'
-
-        # ATUALIZAR TÍTULOS (calcular vencimentos)
-        for titulo in pedido.titulos:
-            if titulo.prazo_dias:
-                titulo.data_vencimento = data_nf_obj + timedelta(days=titulo.prazo_dias)
-            titulo.status = 'ABERTO'  # Muda de RASCUNHO para ABERTO
+        # FATURAR PEDIDO (novo sistema)
+        # Atualiza: Pedido + Motos + Títulos (RASCUNHO → ABERTO)
+        resultado = faturar_pedido_completo(
+            pedido=pedido,
+            empresa_id=int(empresa_id),
+            numero_nf=numero_nf,
+            data_nf=data_nf_obj
+        )
 
         db.session.commit()
-        flash(f'Pedido faturado com sucesso! NF: {numero_nf}', 'success')
+
+        total_titulos = resultado['total_titulos']
+        flash(
+            f'Pedido faturado com sucesso! NF: {numero_nf} - {total_titulos} títulos liberados para recebimento.',
+            'success'
+        )
 
     except Exception as e:
         db.session.rollback()
@@ -364,19 +325,11 @@ def faturar_pedido(id):
 @login_required
 @requer_motochefe
 def listar_titulos():
-    """Lista títulos financeiros"""
-    status = request.args.get('status')
-
-    query = TituloFinanceiro.query
-
-    if status:
-        query = query.filter_by(status=status)
-
-    titulos = query.join(PedidoVendaMoto).filter(
-        PedidoVendaMoto.faturado == True  # Só mostra títulos de pedidos faturados
-    ).order_by(TituloFinanceiro.data_vencimento.asc()).all()
-
-    return render_template('motochefe/vendas/titulos/listar.html', titulos=titulos)
+    """
+    DEPRECATED: Redireciona para contas a receber (novo sistema)
+    Antiga lista de títulos foi substituída por visão consolidada com empresa recebedora
+    """
+    return redirect(url_for('motochefe.listar_contas_a_receber'))
 
 
 @motochefe_bp.route('/titulos/<int:id>/detalhes')
@@ -388,104 +341,14 @@ def detalhes_titulo(id):
     return render_template('motochefe/vendas/titulos/detalhes.html', titulo=titulo)
 
 
-@motochefe_bp.route('/titulos/<int:id>/pagar', methods=['POST'])
-@login_required
-@requer_motochefe
-def pagar_titulo(id):
-    """Marca título como pago e verifica se gera comissão"""
-    titulo = TituloFinanceiro.query.get_or_404(id)
-
-    if titulo.status == 'PAGO':
-        flash('Título já foi pago', 'warning')
-        return redirect(url_for('motochefe.listar_titulos'))
-
-    try:
-        valor_recebido = request.form.get('valor_recebido')
-        data_recebimento = request.form.get('data_recebimento') or date.today()
-
-        titulo.valor_recebido = Decimal(valor_recebido)
-        titulo.data_recebimento = datetime.strptime(data_recebimento, '%Y-%m-%d').date() if isinstance(data_recebimento, str) else data_recebimento
-        titulo.status = 'PAGO'
-
-        # VERIFICAR SE TODOS OS TÍTULOS DO PEDIDO FORAM PAGOS
-        pedido = titulo.pedido
-        todos_pagos = all(t.status == 'PAGO' for t in pedido.titulos)
-
-        if todos_pagos:
-            # GERAR COMISSÃO
-            gerar_comissao_pedido(pedido)
-            flash(f'Título pago! Pedido totalmente quitado - Comissões geradas.', 'success')
-        else:
-            flash('Título pago com sucesso!', 'success')
-
-        db.session.commit()
-
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Erro ao pagar título: {str(e)}', 'danger')
-
-    return redirect(url_for('motochefe.listar_titulos'))
+# FUNÇÃO REMOVIDA: pagar_titulo()
+# Substituída pelo novo sistema de recebimento em titulo_service.receber_titulo()
+# O recebimento agora é feito via routes/financeiro.py com MovimentacaoFinanceira
 
 
-def gerar_comissao_pedido(pedido):
-    """
-    Gera comissão quando pedido quitado
-    Regras vêm da EquipeVendasMoto:
-    - Tipo: FIXA_EXCEDENTE ou PERCENTUAL
-    - Rateio: TRUE (divide) ou FALSE (só vendedor do pedido)
-    """
-    equipe = pedido.vendedor.equipe
-
-    # Se equipe não tem configuração de comissão, não gera
-    if not equipe:
-        return
-
-    # Calcular valor total do pedido
-    valor_total_pedido = pedido.valor_total_pedido
-
-    # TIPO 1: FIXA + EXCEDENTE
-    if equipe.tipo_comissao == 'FIXA_EXCEDENTE':
-        comissao_fixa = equipe.valor_comissao_fixa or Decimal('0')
-        excedente = sum(item.excedente_tabela for item in pedido.itens)
-        valor_total_comissao = comissao_fixa + excedente
-
-    # TIPO 2: PERCENTUAL
-    elif equipe.tipo_comissao == 'PERCENTUAL':
-        percentual = equipe.percentual_comissao or Decimal('0')
-        valor_total_comissao = (valor_total_pedido * percentual) / Decimal('100')
-        comissao_fixa = Decimal('0')
-        excedente = Decimal('0')
-    else:
-        return  # Tipo desconhecido
-
-    # Definir quem recebe comissão
-    if equipe.comissao_rateada:
-        # Ratear entre TODOS vendedores da equipe
-        vendedores_equipe = VendedorMoto.query.filter_by(
-            equipe_vendas_id=equipe.id,
-            ativo=True
-        ).all()
-        qtd_vendedores = len(vendedores_equipe)
-        valor_por_vendedor = valor_total_comissao / qtd_vendedores if qtd_vendedores > 0 else Decimal('0')
-    else:
-        # Apenas vendedor do pedido recebe
-        vendedores_equipe = [pedido.vendedor]
-        qtd_vendedores = 1
-        valor_por_vendedor = valor_total_comissao
-
-    # Criar registros de comissão
-    for vendedor in vendedores_equipe:
-        comissao = ComissaoVendedor(
-            pedido_id=pedido.id,
-            vendedor_id=vendedor.id,
-            valor_comissao_fixa=comissao_fixa / qtd_vendedores if equipe.comissao_rateada else comissao_fixa,
-            valor_excedente=excedente / qtd_vendedores if equipe.comissao_rateada else excedente,
-            valor_total_comissao=valor_total_comissao,
-            qtd_vendedores_equipe=qtd_vendedores,
-            valor_rateado=valor_por_vendedor,
-            status='PENDENTE'
-        )
-        db.session.add(comissao)
+# FUNÇÃO REMOVIDA: gerar_comissao_pedido()
+# Substituída por comissao_service.gerar_comissao_moto() (sistema por moto)
+# A comissão agora é gerada automaticamente pelo trigger em titulo_service.receber_titulo()
 
 
 # ===== COMISSÃO VENDEDOR =====

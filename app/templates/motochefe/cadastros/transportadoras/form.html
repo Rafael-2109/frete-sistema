@@ -21,9 +21,15 @@
 
                 <div class="mb-3">
                     <label for="cnpj" class="form-label">CNPJ</label>
-                    <input type="text" class="form-control" id="cnpj" name="cnpj"
-                           value="{{ transportadora.cnpj if transportadora else '' }}"
-                           placeholder="00.000.000/0000-00">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="cnpj" name="cnpj"
+                               value="{{ transportadora.cnpj if transportadora else '' }}"
+                               placeholder="00.000.000/0000-00">
+                        <button type="button" class="btn btn-info" onclick="consultarCNPJ()" title="Consultar CNPJ na ReceitaWS">
+                            <i class="fas fa-search"></i> Consultar
+                        </button>
+                    </div>
+                    <small class="text-muted">Clique em "Consultar" para preencher automaticamente os dados da ReceitaWS</small>
                 </div>
 
                 <div class="mb-3">
@@ -32,6 +38,51 @@
                            value="{{ transportadora.telefone if transportadora else '' }}"
                            placeholder="(00) 0000-0000">
                 </div>
+
+                <hr>
+
+                <h5 class="mb-3"><i class="fas fa-university"></i> Dados Bancários</h5>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="chave_pix" class="form-label">Chave PIX</label>
+                        <input type="text" class="form-control" id="chave_pix" name="chave_pix"
+                               value="{{ transportadora.chave_pix if transportadora else '' }}"
+                               placeholder="CPF, CNPJ, Email ou Telefone">
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <label for="cod_banco" class="form-label">Código Banco</label>
+                        <input type="text" class="form-control" id="cod_banco" name="cod_banco"
+                               value="{{ transportadora.cod_banco if transportadora else '' }}"
+                               placeholder="001">
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <label for="banco" class="form-label">Nome Banco</label>
+                        <input type="text" class="form-control" id="banco" name="banco"
+                               value="{{ transportadora.banco if transportadora else '' }}"
+                               placeholder="Banco do Brasil">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="agencia" class="form-label">Agência</label>
+                        <input type="text" class="form-control" id="agencia" name="agencia"
+                               value="{{ transportadora.agencia if transportadora else '' }}"
+                               placeholder="0001">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="conta" class="form-label">Conta</label>
+                        <input type="text" class="form-control" id="conta" name="conta"
+                               value="{{ transportadora.conta if transportadora else '' }}"
+                               placeholder="12345-6">
+                    </div>
+                </div>
+
+                <hr>
 
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary">
@@ -45,4 +96,49 @@
         </div>
     </div>
 </div>
+
+<script>
+function consultarCNPJ() {
+    const cnpjInput = document.getElementById('cnpj');
+    const cnpj = cnpjInput.value.replace(/\D/g, ''); // Remove formatação
+
+    if (!cnpj || cnpj.length !== 14) {
+        alert('Por favor, informe um CNPJ válido com 14 dígitos.');
+        return;
+    }
+
+    // Desabilitar botão durante consulta
+    const btnConsultar = event.target;
+    btnConsultar.disabled = true;
+    btnConsultar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
+
+    // Fazer requisição para a API
+    fetch(`{{ url_for('motochefe.consultar_cnpj', cnpj='CNPJ_PLACEHOLDER') }}`.replace('CNPJ_PLACEHOLDER', cnpj))
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Preencher campos com os dados retornados
+                if (data.dados.cliente) {
+                    document.getElementById('transportadora').value = data.dados.cliente;
+                }
+                if (data.dados.telefone_cliente) {
+                    document.getElementById('telefone').value = data.dados.telefone_cliente;
+                }
+
+                alert('Dados consultados com sucesso! Verifique os campos preenchidos.');
+            } else {
+                alert('Erro ao consultar CNPJ: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao consultar CNPJ. Verifique sua conexão e tente novamente.');
+        })
+        .finally(() => {
+            // Reabilitar botão
+            btnConsultar.disabled = false;
+            btnConsultar.innerHTML = '<i class="fas fa-search"></i> Consultar';
+        });
+}
+</script>
 {% endblock %}

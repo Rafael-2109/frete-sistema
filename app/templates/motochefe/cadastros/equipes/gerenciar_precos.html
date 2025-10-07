@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-dollar-sign"></i> Tabela de Preços - {{ equipe.equipe_vendas }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_equipes') }}">Equipes de Vendas</a></li>
+                    <li class="breadcrumb-item active">Tabela de Preços</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Card de Informações -->
+    <div class="card mb-4 border-info">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Equipe:</strong><br>
+                    <span class="text-primary">{{ equipe.equipe_vendas }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Tipo Precificação:</strong><br>
+                    <span class="badge bg-success"><i class="fas fa-table"></i> TABELA</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Preços Cadastrados:</strong><br>
+                    <span class="text-success">{{ dados_tabela|selectattr('tem_preco')|list|length }} de {{ dados_tabela|length }}</span>
+                </div>
+                <div class="col-md-3 text-end">
+                    <a href="{{ url_for('motochefe.editar_equipe', id=equipe.id) }}" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-cog"></i> Configurar Equipe
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> <strong>Como funciona:</strong>
+        <ul class="mb-0 mt-2">
+            <li>Esta tabela usa os <strong>modelos de motos cadastrados</strong> como base (esqueleto)</li>
+            <li>Cada modelo pode ter um <strong>preço de venda específico</strong> para esta equipe</li>
+            <li>Modelos <strong>sem preço cadastrado</strong> usarão o preço padrão do modelo (preco_tabela)</li>
+            <li>Digite o preço e clique em <strong>"Salvar"</strong> para confirmar cada entrada</li>
+        </ul>
+    </div>
+
+    <!-- Tabela de Preços -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-table"></i> Preços por Modelo</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%;">ID</th>
+                            <th style="width: 25%;">Modelo</th>
+                            <th style="width: 12%;">Potência</th>
+                            <th style="width: 10%;">Autoprop.</th>
+                            <th style="width: 13%;">Preço Padrão</th>
+                            <th style="width: 18%;">Preço Equipe</th>
+                            <th style="width: 12%;">Status</th>
+                            <th style="width: 5%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in dados_tabela %}
+                        <tr {% if item.tem_preco %}class="table-success"{% endif %}>
+                            <!-- ID Modelo -->
+                            <td class="text-muted"><small>#{{ item.modelo.id }}</small></td>
+
+                            <!-- Nome Modelo -->
+                            <td><strong>{{ item.modelo.nome_modelo }}</strong></td>
+
+                            <!-- Potência -->
+                            <td>{{ item.modelo.potencia_motor }}</td>
+
+                            <!-- Autopropelido -->
+                            <td class="text-center">
+                                {% if item.modelo.autopropelido %}
+                                <span class="badge bg-info">Sim</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Preço Padrão (preco_tabela do modelo) -->
+                            <td>
+                                <span class="text-muted">R$ {{ "%.2f"|format(item.modelo.preco_tabela|float) }}</span>
+                            </td>
+
+                            <!-- Preço da Equipe (form inline) -->
+                            <td>
+                                {% if item.tem_preco %}
+                                <!-- EDITAR preço existente -->
+                                <form method="POST"
+                                      action="{{ url_for('motochefe.editar_preco_equipe', preco_id=item.preco_tabela.id) }}"
+                                      style="display: inline-flex; gap: 5px; align-items: center;"
+                                      onsubmit="return confirm('Confirma alteração do preço?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <div class="input-group input-group-sm" style="width: 150px;">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number"
+                                               name="preco_venda"
+                                               class="form-control form-control-sm"
+                                               step="0.01"
+                                               min="0"
+                                               value="{{ '%.2f'|format(item.preco_venda|float) }}"
+                                               required>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary" title="Salvar alteração">
+                                        <i class="fas fa-save"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <!-- ADICIONAR novo preço -->
+                                <form method="POST"
+                                      action="{{ url_for('motochefe.adicionar_preco_equipe', equipe_id=equipe.id) }}"
+                                      style="display: inline-flex; gap: 5px; align-items: center;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <input type="hidden" name="modelo_id" value="{{ item.modelo.id }}"/>
+                                    <div class="input-group input-group-sm" style="width: 150px;">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number"
+                                               name="preco_venda"
+                                               class="form-control form-control-sm"
+                                               step="0.01"
+                                               min="0"
+                                               placeholder="0.00"
+                                               required>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-success" title="Adicionar preço">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+
+                            <!-- Status -->
+                            <td>
+                                {% if item.tem_preco %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Configurado</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Padrão</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Ações (Remover) -->
+                            <td>
+                                {% if item.tem_preco %}
+                                <form method="POST"
+                                      action="{{ url_for('motochefe.remover_preco_equipe', preco_id=item.preco_tabela.id) }}"
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Confirma remoção? O preço voltará ao padrão.')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Remover preço (volta ao padrão)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <i class="fas fa-info-circle"></i> Nenhum modelo cadastrado.
+                                <a href="{{ url_for('motochefe.listar_modelos') }}">Cadastrar modelos</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="card mt-3">
+        <div class="card-body">
+            <h6><i class="fas fa-question-circle"></i> Legenda:</h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul class="small mb-0">
+                        <li><strong>Linha Verde:</strong> Preço específico configurado para esta equipe</li>
+                        <li><strong>Linha Branca:</strong> Usando preço padrão do modelo</li>
+                        <li><strong>Preço Padrão:</strong> Valor cadastrado no modelo (preco_tabela)</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul class="small mb-0">
+                        <li><strong>Preço Equipe:</strong> Valor específico para esta equipe (sobrescreve padrão)</li>
+                        <li><strong><i class="fas fa-plus"></i> Adicionar:</strong> Cadastrar preço específico</li>
+                        <li><strong><i class="fas fa-trash"></i> Remover:</strong> Voltar ao preço padrão</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de Navegação -->
+    <div class="mt-4 mb-4">
+        <a href="{{ url_for('motochefe.listar_equipes') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar para Equipes
+        </a>
+        <a href="{{ url_for('motochefe.editar_equipe', id=equipe.id) }}" class="btn btn-warning">
+            <i class="fas fa-cog"></i> Configurar Equipe
+        </a>
+    </div>
+</div>
+
+<style>
+/* Destacar linhas com preço configurado */
+.table-success {
+    background-color: #d1f7d1 !important;
+}
+
+/* Melhorar aparência dos inputs inline */
+.input-group-sm .form-control-sm {
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}

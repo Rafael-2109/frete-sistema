@@ -65,13 +65,13 @@
                                 <td>
                                     <input class="form-check-input item-check check-vencidos" type="checkbox"
                                            data-id="{{ t.id }}"
-                                           data-valor="{{ t.valor_parcela }}"
+                                           data-valor="{{ t.valor_saldo }}"
                                            id="titulo-{{ t.id }}">
                                 </td>
                                 <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
-                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                <td>{{ t.tipo_titulo }} - Parc. {{ t.numero_parcela }}</td>
                                 <td class="text-danger">{{ t.data_vencimento.strftime('%d/%m/%Y') if t.data_vencimento else '-' }}</td>
-                                <td>R$ {{ "%.2f"|format(t.valor_parcela) }}</td>
+                                <td>R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
                                 <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
                             </tr>
                             {% endfor %}
@@ -109,12 +109,12 @@
                                 <td>
                                     <input class="form-check-input item-check check-hoje" type="checkbox"
                                            data-id="{{ t.id }}"
-                                           data-valor="{{ t.valor_parcela }}"
+                                           data-valor="{{ t.valor_saldo }}"
                                            id="titulo-{{ t.id }}">
                                 </td>
                                 <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
-                                <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
-                                <td>R$ {{ "%.2f"|format(t.valor_parcela) }}</td>
+                                <td>{{ t.tipo_titulo }} - Parc. {{ t.numero_parcela }}</td>
+                                <td>R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
                                 <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
                             </tr>
                             {% endfor %}
@@ -157,13 +157,13 @@
                                     <td>
                                         <input class="form-check-input item-check check-avencer" type="checkbox"
                                                data-id="{{ t.id }}"
-                                               data-valor="{{ t.valor_parcela }}"
+                                               data-valor="{{ t.valor_saldo }}"
                                                id="titulo-{{ t.id }}">
                                     </td>
                                     <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
-                                    <td>{{ t.numero_parcela }}/{{ t.total_parcelas }}</td>
+                                    <td>{{ t.tipo_titulo }} - Parc. {{ t.numero_parcela }}</td>
                                     <td>{{ t.data_vencimento.strftime('%d/%m/%Y') if t.data_vencimento else '-' }}</td>
-                                    <td>R$ {{ "%.2f"|format(t.valor_parcela) }}</td>
+                                    <td>R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
                                     <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
                                 </tr>
                                 {% endfor %}
@@ -187,16 +187,30 @@
         <div class="card bg-dark text-white sticky-bottom">
             <div class="card-body">
                 <div class="row align-items-center">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <strong>Selecionados:</strong> <span id="qtd-selecionados">0</span> títulos
                         | <strong>Total:</strong> R$ <span id="total-selecionados">0,00</span>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label class="form-label mb-1 small">Empresa Recebedora *</label>
+                        <select name="empresa_recebedora_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for empresa in empresas %}
+                            <option value="{{ empresa.id }}">
+                                {{ empresa.empresa }}
+                                {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label mb-1 small">Data Recebimento</label>
                         <input type="date" class="form-control" id="data_recebimento_input" required>
                     </div>
-                    <div class="col-md-4 text-end">
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="fas fa-check-circle"></i> Receber Selecionados
+                    <div class="col-md-3 text-end">
+                        <label class="form-label mb-1 small">&nbsp;</label>
+                        <button type="submit" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-check-circle"></i> Receber
                         </button>
                     </div>
                 </div>

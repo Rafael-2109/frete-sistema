@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Título a Pagar #{{ titulo.id }} - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-file-invoice"></i> Detalhes do Título a Pagar #{{ titulo.id }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_titulos_a_pagar_route') }}">Títulos a Pagar</a></li>
+                    <li class="breadcrumb-item active">Título #{{ titulo.id }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações do Título -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-info-circle"></i> Informações do Título
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Tipo:</th>
+                            <td><span class="badge bg-info">{{ titulo.tipo }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Fornecedor:</th>
+                            <td><strong>{{ titulo.fornecedor_nome or 'N/A' }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Valor Original:</th>
+                            <td><h4 class="mb-0">R$ {{ "%.2f"|format(titulo.valor_original|float) }}</h4></td>
+                        </tr>
+                        <tr>
+                            <th>Valor Pago:</th>
+                            <td><h5 class="text-success mb-0">R$ {{ "%.2f"|format(titulo.valor_pago_total|float) }}</h5></td>
+                        </tr>
+                        <tr>
+                            <th>Saldo Devedor:</th>
+                            <td><h5 class="text-danger mb-0">R$ {{ "%.2f"|format(titulo.valor_saldo|float) }}</h5></td>
+                        </tr>
+                        <tr>
+                            <th>Data Criação:</th>
+                            <td>{{ titulo.criado_em.strftime('%d/%m/%Y %H:%M') if titulo.criado_em else 'N/A' }}</td>
+                        </tr>
+                        {% if titulo.data_ultimo_pagamento %}
+                        <tr>
+                            <th>Último Pagamento:</th>
+                            <td>{{ titulo.data_ultimo_pagamento.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if titulo.status == 'PAGO' %}
+                                    <span class="badge bg-success"><i class="fas fa-check"></i> PAGO</span>
+                                {% elif titulo.status == 'ABERTO' %}
+                                    <span class="badge bg-warning text-dark"><i class="fas fa-unlock"></i> ABERTO</span>
+                                {% elif titulo.status == 'PENDENTE' %}
+                                    <span class="badge bg-secondary"><i class="fas fa-lock"></i> PENDENTE</span>
+                                {% elif titulo.status == 'PARCIAL' %}
+                                    <span class="badge bg-info"><i class="fas fa-hourglass-half"></i> PARCIAL</span>
+                                {% else %}
+                                    <span class="badge bg-danger">{{ titulo.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if titulo.status == 'PENDENTE' and titulo.titulo_recebimento %}
+                        <tr>
+                            <th>Aguardando:</th>
+                            <td>
+                                <small class="text-muted">
+                                    Título de Recebimento #{{ titulo.titulo_recebimento.id }}
+                                    ({{ titulo.titulo_recebimento.status }})
+                                </small>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empresa Pagadora (se já pagou) -->
+            {% if titulo.empresa_pagadora %}
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-building"></i> Empresa Pagadora
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>{{ titulo.empresa_pagadora.empresa }}</strong></p>
+                    {% if titulo.empresa_pagadora.tipo_conta %}
+                    <small class="text-muted">{{ titulo.empresa_pagadora.tipo_conta }}</small>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Informações da Moto e Pedido -->
+        <div class="col-md-6">
+            {% if titulo.moto %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-motorcycle"></i> Moto Relacionada
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Chassi:</th>
+                            <td><strong>{{ titulo.numero_chassi }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Modelo:</th>
+                            <td>{{ titulo.moto.modelo.nome_modelo if titulo.moto.modelo else 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Cor:</th>
+                            <td>{{ titulo.moto.cor }}</td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td><span class="badge bg-secondary">{{ titulo.moto.status }}</span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if titulo.pedido %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-shopping-cart"></i> Pedido Relacionado
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">Número Pedido:</th>
+                            <td>
+                                <a href="{{ url_for('motochefe.detalhes_pedido', id=titulo.pedido.id) }}" class="btn btn-sm btn-outline-primary">
+                                    {{ titulo.pedido.numero_pedido }} <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Cliente:</th>
+                            <td><strong>{{ titulo.pedido.cliente.cliente }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Data Pedido:</th>
+                            <td>{{ titulo.pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        <tr>
+                            <th>NF:</th>
+                            <td>{{ titulo.pedido.numero_nf or 'Não faturado' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Descrição do Tipo -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info"></i> Sobre este Título
+                </div>
+                <div class="card-body">
+                    {% if titulo.tipo == 'MOVIMENTACAO' %}
+                    <p class="mb-0">
+                        <strong>Movimentação:</strong> Custo de transporte/logística da moto até o cliente.
+                        Este título é gerado automaticamente quando um pedido é faturado e liberado para pagamento
+                        quando o título de recebimento correspondente é quitado.
+                    </p>
+                    {% elif titulo.tipo == 'MONTAGEM' %}
+                    <p class="mb-0">
+                        <strong>Montagem:</strong> Custo de montagem da moto.
+                        Este título é gerado automaticamente quando um pedido é faturado e liberado para pagamento
+                        quando o título de recebimento correspondente é quitado.
+                    </p>
+                    {% else %}
+                    <p class="mb-0 text-muted">Tipo: {{ titulo.tipo }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Movimentações Financeiras -->
+    {% if titulo.movimentacoes_financeiras and titulo.movimentacoes_financeiras|length > 0 %}
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-exchange-alt"></i> Histórico de Pagamentos
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>Categoria</th>
+                                <th class="text-end">Valor</th>
+                                <th>Empresa</th>
+                                <th>Criado Por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mov in titulo.movimentacoes_financeiras %}
+                            <tr>
+                                <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    {% if mov.tipo == 'PAGAMENTO' %}
+                                    <span class="badge bg-danger">{{ mov.tipo }}</span>
+                                    {% else %}
+                                    <span class="badge bg-success">{{ mov.tipo }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ mov.categoria }}</td>
+                                <td class="text-end">R$ {{ "%.2f"|format(mov.valor|abs|float) }}</td>
+                                <td>
+                                    {% if mov.empresa_origem %}
+                                        {{ mov.empresa_origem.empresa }}
+                                    {% elif mov.empresa_destino %}
+                                        {{ mov.empresa_destino.empresa }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ mov.criado_por or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Botões de Ação -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('motochefe.listar_titulos_a_pagar_route') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar para Títulos a Pagar
+            </a>
+            {% if titulo.pedido %}
+            <a href="{{ url_for('motochefe.detalhes_pedido', id=titulo.pedido.id) }}" class="btn btn-primary">
+                <i class="fas fa-shopping-cart"></i> Ver Pedido
+            </a>
+            {% endif %}
+            {% if titulo.pode_pagar %}
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalPagar">
+                <i class="fas fa-money-bill-wave"></i> Pagar Título
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pagamento Individual -->
+{% if titulo.pode_pagar %}
+<div class="modal fade" id="modalPagar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('motochefe.pagar_titulo_a_pagar_route', id=titulo.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-money-bill-wave"></i> Pagar Título #{{ titulo.id }}
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Saldo Devedor:</strong> R$ {{ "%.2f"|format(titulo.valor_saldo|float) }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Empresa Pagadora: *</label>
+                        <select name="empresa_pagadora_id" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for emp in empresas if emp.ativo %}
+                            <option value="{{ emp.id }}">{{ emp.empresa }} {% if emp.tipo_conta %}({{ emp.tipo_conta }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Valor a Pagar: *</label>
+                        <input type="number" name="valor_pago" class="form-control"
+                               step="0.01" min="0.01" max="{{ titulo.valor_saldo }}"
+                               value="{{ titulo.valor_saldo }}" required>
+                        <small class="form-text text-muted">
+                            Informe o valor total ou parcial a pagar
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Confirmar Pagamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

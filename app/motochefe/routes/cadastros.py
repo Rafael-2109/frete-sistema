@@ -94,19 +94,40 @@ def adicionar_equipe():
         # Capturar novos campos
         from decimal import Decimal
 
+        # Movimentação
         responsavel_movimentacao = request.form.get('responsavel_movimentacao') or None
+        custo_movimentacao = Decimal(request.form.get('custo_movimentacao', '0') or '0')
+        incluir_custo_movimentacao = bool(request.form.get('incluir_custo_movimentacao'))
+
+        # Precificação
+        tipo_precificacao = request.form.get('tipo_precificacao', 'TABELA')
+        markup = Decimal(request.form.get('markup', '0') or '0')
+
+        # Comissão
         tipo_comissao = request.form.get('tipo_comissao', 'FIXA_EXCEDENTE')
         valor_comissao_fixa = Decimal(request.form.get('valor_comissao_fixa', '0') or '0')
         percentual_comissao = Decimal(request.form.get('percentual_comissao', '0') or '0')
         comissao_rateada = bool(request.form.get('comissao_rateada'))
 
+        # Montagem
+        permitir_montagem = bool(request.form.get('permitir_montagem'))
+
         equipe = EquipeVendasMoto(
             equipe_vendas=nome,
+            # Movimentação
             responsavel_movimentacao=responsavel_movimentacao,
+            custo_movimentacao=custo_movimentacao,
+            incluir_custo_movimentacao=incluir_custo_movimentacao,
+            # Precificação
+            tipo_precificacao=tipo_precificacao,
+            markup=markup,
+            # Comissão
             tipo_comissao=tipo_comissao,
             valor_comissao_fixa=valor_comissao_fixa,
             percentual_comissao=percentual_comissao,
             comissao_rateada=comissao_rateada,
+            # Montagem
+            permitir_montagem=permitir_montagem,
             criado_por=current_user.nome
         )
         db.session.add(equipe)
@@ -128,11 +149,25 @@ def editar_equipe(id):
         from decimal import Decimal
 
         equipe.equipe_vendas = request.form.get('equipe_vendas')
+
+        # Movimentação
         equipe.responsavel_movimentacao = request.form.get('responsavel_movimentacao') or None
+        equipe.custo_movimentacao = Decimal(request.form.get('custo_movimentacao', '0') or '0')
+        equipe.incluir_custo_movimentacao = bool(request.form.get('incluir_custo_movimentacao'))
+
+        # Precificação
+        equipe.tipo_precificacao = request.form.get('tipo_precificacao', 'TABELA')
+        equipe.markup = Decimal(request.form.get('markup', '0') or '0')
+
+        # Comissão
         equipe.tipo_comissao = request.form.get('tipo_comissao', 'FIXA_EXCEDENTE')
         equipe.valor_comissao_fixa = Decimal(request.form.get('valor_comissao_fixa', '0') or '0')
         equipe.percentual_comissao = Decimal(request.form.get('percentual_comissao', '0') or '0')
         equipe.comissao_rateada = bool(request.form.get('comissao_rateada'))
+
+        # Montagem
+        equipe.permitir_montagem = bool(request.form.get('permitir_montagem'))
+
         equipe.atualizado_por = current_user.nome
 
         db.session.commit()
@@ -140,7 +175,11 @@ def editar_equipe(id):
         flash('Equipe atualizada com sucesso!', 'success')
         return redirect(url_for('motochefe.listar_equipes'))
 
-    return render_template('motochefe/cadastros/equipes/form.html', equipe=equipe)
+    # GET - Buscar modelos para a sub-tabela de preços
+    from app.motochefe.models import ModeloMoto
+    modelos = ModeloMoto.query.filter_by(ativo=True).order_by(ModeloMoto.nome_modelo).all()
+
+    return render_template('motochefe/cadastros/equipes/form.html', equipe=equipe, modelos=modelos)
 
 @motochefe_bp.route('/equipes/<int:id>/remover', methods=['POST'])
 @login_required
@@ -154,6 +193,153 @@ def remover_equipe(id):
 
     flash('Equipe removida com sucesso!', 'success')
     return redirect(url_for('motochefe.listar_equipes'))
+
+# ============================================================
+# TABELA DE PREÇOS POR EQUIPE
+# ============================================================
+
+@motochefe_bp.route('/equipes/<int:equipe_id>/precos/adicionar', methods=['POST'])
+@login_required
+@requer_motochefe
+def adicionar_preco_equipe(equipe_id):
+    """Adiciona preço específico de um modelo para uma equipe"""
+    from app.motochefe.models import TabelaPrecoEquipe, ModeloMoto
+    from decimal import Decimal
+
+    equipe = EquipeVendasMoto.query.get_or_404(equipe_id)
+
+    modelo_id = request.form.get('modelo_id')
+    preco_venda = request.form.get('preco_venda')
+
+    if not modelo_id or not preco_venda:
+        flash('Modelo e Preço são obrigatórios', 'danger')
+        return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
+
+    # Verificar se modelo existe
+    modelo = ModeloMoto.query.get(int(modelo_id))
+    if not modelo:
+        flash('Modelo não encontrado', 'danger')
+        return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
+
+    # Verificar duplicidade
+    existe = TabelaPrecoEquipe.query.filter_by(
+        equipe_vendas_id=equipe_id,
+        modelo_id=int(modelo_id),
+        ativo=True
+    ).first()
+
+    if existe:
+        flash(f'Preço para {modelo.nome_modelo} já cadastrado nesta equipe', 'warning')
+        return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
+
+    # Criar registro
+    tabela_preco = TabelaPrecoEquipe(
+        equipe_vendas_id=equipe_id,
+        modelo_id=int(modelo_id),
+        preco_venda=Decimal(preco_venda),
+        criado_por=current_user.nome
+    )
+
+    db.session.add(tabela_preco)
+    db.session.commit()
+
+    flash(f'Preço para {modelo.nome_modelo} adicionado com sucesso!', 'success')
+    return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
+
+
+@motochefe_bp.route('/equipes/precos/<int:preco_id>/editar', methods=['POST'])
+@login_required
+@requer_motochefe
+def editar_preco_equipe(preco_id):
+    """Edita preço específico de um modelo para uma equipe"""
+    from app.motochefe.models import TabelaPrecoEquipe
+    from decimal import Decimal
+
+    tabela_preco = TabelaPrecoEquipe.query.get_or_404(preco_id)
+
+    preco_venda = request.form.get('preco_venda')
+
+    if not preco_venda:
+        flash('Preço é obrigatório', 'danger')
+        return redirect(url_for('motochefe.editar_equipe', id=tabela_preco.equipe_vendas_id))
+
+    tabela_preco.preco_venda = Decimal(preco_venda)
+    tabela_preco.atualizado_por = current_user.nome
+
+    db.session.commit()
+
+    flash('Preço atualizado com sucesso!', 'success')
+    return redirect(url_for('motochefe.editar_equipe', id=tabela_preco.equipe_vendas_id))
+
+
+@motochefe_bp.route('/equipes/precos/<int:preco_id>/remover', methods=['POST'])
+@login_required
+@requer_motochefe
+def remover_preco_equipe(preco_id):
+    """Remove (desativa) preço específico"""
+    from app.motochefe.models import TabelaPrecoEquipe
+
+    tabela_preco = TabelaPrecoEquipe.query.get_or_404(preco_id)
+    equipe_id = tabela_preco.equipe_vendas_id
+
+    tabela_preco.ativo = False
+    tabela_preco.atualizado_por = current_user.nome
+
+    db.session.commit()
+
+    flash('Preço removido com sucesso!', 'success')
+    return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
+
+
+@motochefe_bp.route('/equipes/<int:equipe_id>/gerenciar-precos')
+@login_required
+@requer_motochefe
+def gerenciar_precos_equipe(equipe_id):
+    """
+    Tela de gerenciamento da tabela de preços da equipe
+    Usa modelos cadastrados como esqueleto
+    """
+    from app.motochefe.models import TabelaPrecoEquipe, ModeloMoto
+
+    equipe = EquipeVendasMoto.query.get_or_404(equipe_id)
+
+    # Verificar se equipe usa tabela de preços
+    if equipe.tipo_precificacao != 'TABELA':
+        flash(f'Equipe "{equipe.equipe_vendas}" não usa tabela de preços (tipo: {equipe.tipo_precificacao})', 'warning')
+        return redirect(url_for('motochefe.listar_equipes'))
+
+    # Buscar todos os modelos ativos
+    modelos = ModeloMoto.query.filter_by(ativo=True).order_by(ModeloMoto.nome_modelo).all()
+
+    # Buscar preços existentes da equipe
+    precos_existentes = {}
+    tabelas = TabelaPrecoEquipe.query.filter_by(
+        equipe_vendas_id=equipe_id,
+        ativo=True
+    ).all()
+
+    for tabela in tabelas:
+        precos_existentes[tabela.modelo_id] = tabela
+
+    # Criar lista com dados combinados (modelo + preço se existir)
+    dados_tabela = []
+    for modelo in modelos:
+        preco_cadastrado = precos_existentes.get(modelo.id)
+        dados_tabela.append({
+            'modelo': modelo,
+            'preco_tabela': preco_cadastrado,
+            'preco_venda': preco_cadastrado.preco_venda if preco_cadastrado else None,
+            'tem_preco': preco_cadastrado is not None
+        })
+
+    return render_template('motochefe/cadastros/equipes/gerenciar_precos.html',
+                         equipe=equipe,
+                         dados_tabela=dados_tabela)
+
+
+# ============================================================
+# EXPORTAÇÃO/IMPORTAÇÃO DE EQUIPES
+# ============================================================
 
 @motochefe_bp.route('/equipes/exportar')
 @login_required
@@ -453,6 +639,12 @@ def adicionar_transportadora():
             transportadora=nome,
             cnpj=cnpj,
             telefone=telefone,
+            # Dados bancários
+            chave_pix=request.form.get('chave_pix'),
+            banco=request.form.get('banco'),
+            cod_banco=request.form.get('cod_banco'),
+            agencia=request.form.get('agencia'),
+            conta=request.form.get('conta'),
             criado_por=current_user.nome
         )
         db.session.add(transportadora)
@@ -474,6 +666,12 @@ def editar_transportadora(id):
         transportadora.transportadora = request.form.get('transportadora')
         transportadora.cnpj = request.form.get('cnpj')
         transportadora.telefone = request.form.get('telefone')
+        # Dados bancários
+        transportadora.chave_pix = request.form.get('chave_pix')
+        transportadora.banco = request.form.get('banco')
+        transportadora.cod_banco = request.form.get('cod_banco')
+        transportadora.agencia = request.form.get('agencia')
+        transportadora.conta = request.form.get('conta')
         transportadora.atualizado_por = current_user.nome
         db.session.commit()
 

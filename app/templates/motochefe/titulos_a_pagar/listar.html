@@ -1,0 +1,404 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2><i class="fas fa-file-invoice"></i> Títulos a Pagar - Movimentação e Montagem</h2>
+    <p class="text-muted">Gestão de pagamentos de movimentação e montagem gerados automaticamente</p>
+    <hr>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status:</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {% if status_filtro == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                        <option value="ABERTO" {% if status_filtro == 'ABERTO' %}selected{% endif %}>Aberto</option>
+                        <option value="PARCIAL" {% if status_filtro == 'PARCIAL' %}selected{% endif %}>Parcial</option>
+                        <option value="PAGO" {% if status_filtro == 'PAGO' %}selected{% endif %}>Pago</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo:</label>
+                    <select name="tipo" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="MOVIMENTACAO" {% if tipo_filtro == 'MOVIMENTACAO' %}selected{% endif %}>Movimentação</option>
+                        <option value="MONTAGEM" {% if tipo_filtro == 'MONTAGEM' %}selected{% endif %}>Montagem</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label><br>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_titulos_a_pagar_route') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RESUMO GERAL -->
+    <div class="card mb-4 border-warning">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <small>Pendentes</small><br>
+                    <strong class="text-secondary">R$ {{ "%.2f"|format(total_pendente) }}</strong>
+                    <span class="badge bg-secondary">{{ pendentes|length }}</span>
+                </div>
+                <div class="col-md-4">
+                    <small>Abertos</small><br>
+                    <strong class="text-warning">R$ {{ "%.2f"|format(total_aberto) }}</strong>
+                    <span class="badge bg-warning text-dark">{{ abertos|length }}</span>
+                </div>
+                <div class="col-md-4">
+                    <small>Parciais</small><br>
+                    <strong class="text-info">R$ {{ "%.2f"|format(total_parcial) }}</strong>
+                    <span class="badge bg-info">{{ parciais|length }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Pagamento em Lote -->
+    <form method="POST" action="{{ url_for('motochefe.pagar_lote_titulos_a_pagar') }}" id="formPagamento">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="itens_pagamento" id="itens_pagamento"/>
+
+        <!-- Barra de Ações -->
+        <div class="card mb-3 bg-light">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <label class="form-label mb-0">Empresa Pagadora:</label>
+                        <select name="empresa_pagadora_id" id="empresa_pagadora_id" class="form-select form-select-sm" required>
+                            <option value="">Selecione...</option>
+                            {% for emp in empresas %}
+                            <option value="{{ emp.id }}">{{ emp.empresa }} {% if emp.tipo_conta %}({{ emp.tipo_conta }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label mb-0">Selecionados:</label>
+                        <h5 class="mb-0" id="total-selecionados">R$ 0,00 <small class="text-muted">(0 títulos)</small></h5>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label mb-0">&nbsp;</label><br>
+                        <button type="submit" class="btn btn-success btn-sm" id="btnPagar" disabled>
+                            <i class="fas fa-check"></i> Pagar Selecionados
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PENDENTES (aguardando liberação) -->
+        {% if pendentes %}
+        <div class="card mb-3 border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-lock"></i> Pendentes (Aguardando Liberação)
+                    <span class="badge bg-light text-dark float-end">{{ pendentes|length }} títulos</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    <i class="fas fa-info-circle"></i> Estes títulos serão liberados automaticamente quando o título de recebimento correspondente for quitado.
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Chassi</th>
+                                <th>Tipo</th>
+                                <th>Fornecedor</th>
+                                <th class="text-end">Valor</th>
+                                <th>Título Receb.</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in pendentes %}
+                            <tr>
+                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
+                                <td><span class="badge bg-info">{{ t.tipo }}</span></td>
+                                <td>{{ t.fornecedor_nome or '-' }}</td>
+                                <td class="text-end">R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
+                                <td>
+                                    {% if t.titulo_recebimento %}
+                                    <small>#{{ t.titulo_recebimento.id }} - {{ t.titulo_recebimento.status }}</small>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge bg-secondary">{{ t.status }}</span></td>
+                                <td>
+                                    <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ABERTOS (podem ser pagos) -->
+        {% if abertos %}
+        <div class="card mb-3 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-unlock"></i> Abertos (Prontos para Pagamento)
+                    <span class="badge bg-dark float-end">{{ abertos|length }} títulos</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th width="30px"><input type="checkbox" id="check-all-abertos" class="form-check-input"></th>
+                                <th>Pedido</th>
+                                <th>Chassi</th>
+                                <th>Tipo</th>
+                                <th>Fornecedor</th>
+                                <th class="text-end">Valor</th>
+                                <th>Data Criação</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in abertos %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input item-check check-abertos" type="checkbox"
+                                           data-id="{{ t.id }}"
+                                           data-valor="{{ t.valor_saldo }}"
+                                           id="titulo-{{ t.id }}">
+                                </td>
+                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
+                                <td><span class="badge bg-info">{{ t.tipo }}</span></td>
+                                <td>{{ t.fornecedor_nome or '-' }}</td>
+                                <td class="text-end">R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
+                                <td><small>{{ t.criado_em.strftime('%d/%m/%Y') if t.criado_em else '-' }}</small></td>
+                                <td><span class="badge bg-warning text-dark">{{ t.status }}</span></td>
+                                <td>
+                                    <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- PARCIAIS -->
+        {% if parciais %}
+        <div class="card mb-3 border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-hourglass-half"></i> Parcialmente Pagos
+                    <span class="badge bg-light text-dark float-end">{{ parciais|length }} títulos</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th width="30px"><input type="checkbox" id="check-all-parciais" class="form-check-input"></th>
+                                <th>Pedido</th>
+                                <th>Chassi</th>
+                                <th>Tipo</th>
+                                <th>Fornecedor</th>
+                                <th class="text-end">Valor Original</th>
+                                <th class="text-end">Saldo</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in parciais %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input item-check check-parciais" type="checkbox"
+                                           data-id="{{ t.id }}"
+                                           data-valor="{{ t.valor_saldo }}"
+                                           id="titulo-{{ t.id }}">
+                                </td>
+                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
+                                <td><span class="badge bg-info">{{ t.tipo }}</span></td>
+                                <td>{{ t.fornecedor_nome or '-' }}</td>
+                                <td class="text-end text-muted"><s>R$ {{ "%.2f"|format(t.valor_original) }}</s></td>
+                                <td class="text-end"><strong>R$ {{ "%.2f"|format(t.valor_saldo) }}</strong></td>
+                                <td><span class="badge bg-info">{{ t.status }}</span></td>
+                                <td>
+                                    <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- PAGOS (histórico) -->
+        {% if pagos %}
+        <div class="card mb-3 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-check-circle"></i> Pagos
+                    <span class="badge bg-light text-dark float-end">{{ pagos|length }} títulos</span>
+                    <button type="button" class="btn btn-sm btn-light" onclick="toggleGrupo('pagos')">
+                        <i class="fas fa-chevron-down" id="icon-pagos"></i>
+                    </button>
+                </h5>
+            </div>
+            <div id="pagos" class="collapse">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Chassi</th>
+                                    <th>Tipo</th>
+                                    <th>Fornecedor</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Data Pagamento</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in pagos %}
+                                <tr>
+                                    <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
+                                    <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
+                                    <td><span class="badge bg-info">{{ t.tipo }}</span></td>
+                                    <td>{{ t.fornecedor_nome or '-' }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(t.valor_original) }}</td>
+                                    <td><small>{{ t.data_ultimo_pagamento.strftime('%d/%m/%Y') if t.data_ultimo_pagamento else '-' }}</small></td>
+                                    <td><span class="badge bg-success">{{ t.status }}</span></td>
+                                    <td>
+                                        <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not pendentes and not abertos and not parciais and not pagos %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Nenhum título a pagar encontrado.
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<script>
+// Toggle grupos colapsáveis
+function toggleGrupo(id) {
+    const elem = document.getElementById(id);
+    const icon = document.getElementById('icon-' + id);
+    if (elem.classList.contains('show')) {
+        elem.classList.remove('show');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        elem.classList.add('show');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    }
+}
+
+// Check all por grupo
+document.getElementById('check-all-abertos')?.addEventListener('change', function() {
+    document.querySelectorAll('.check-abertos').forEach(cb => cb.checked = this.checked);
+    atualizarTotal();
+});
+
+document.getElementById('check-all-parciais')?.addEventListener('change', function() {
+    document.querySelectorAll('.check-parciais').forEach(cb => cb.checked = this.checked);
+    atualizarTotal();
+});
+
+// Atualizar total ao selecionar items
+document.querySelectorAll('.item-check').forEach(checkbox => {
+    checkbox.addEventListener('change', atualizarTotal);
+});
+
+function atualizarTotal() {
+    let total = 0;
+    let count = 0;
+    const itens = [];
+
+    document.querySelectorAll('.item-check:checked').forEach(cb => {
+        const valor = parseFloat(cb.getAttribute('data-valor'));
+        total += valor;
+        count++;
+        itens.push({
+            id: cb.getAttribute('data-id'),
+            valor: valor.toFixed(2)
+        });
+    });
+
+    document.getElementById('total-selecionados').innerHTML =
+        `R$ ${total.toFixed(2).replace('.', ',')} <small class="text-muted">(${count} títulos)</small>`;
+
+    document.getElementById('btnPagar').disabled = (count === 0);
+    document.getElementById('itens_pagamento').value = JSON.stringify(itens);
+}
+
+// Validar formulário
+document.getElementById('formPagamento')?.addEventListener('submit', function(e) {
+    const empresa = document.getElementById('empresa_pagadora_id').value;
+    const itens = document.getElementById('itens_pagamento').value;
+
+    if (!empresa) {
+        e.preventDefault();
+        alert('Selecione a empresa pagadora');
+        return false;
+    }
+
+    if (!itens || itens === '[]') {
+        e.preventDefault();
+        alert('Selecione pelo menos um título para pagar');
+        return false;
+    }
+
+    if (!confirm(`Confirma o pagamento de ${JSON.parse(itens).length} título(s)?`)) {
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+{% endblock %}

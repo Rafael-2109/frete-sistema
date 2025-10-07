@@ -26,12 +26,13 @@
             <table class="table table-hover table-sm">
                 <thead>
                     <tr>
-                        <th style="width: 15%;">ID / Equipe</th>
-                        <th style="width: 12%;">Movimentação</th>
-                        <th style="width: 20%;">Tipo Comissão</th>
-                        <th style="width: 15%;">Valor</th>
-                        <th style="width: 20%;">Criação</th>
-                        <th style="width: 18%;">Ações</th>
+                        <th style="width: 12%;">ID / Equipe</th>
+                        <th style="width: 10%;">Precificação</th>
+                        <th style="width: 10%;">Movimentação</th>
+                        <th style="width: 16%;">Tipo Comissão</th>
+                        <th style="width: 10%;">Valor</th>
+                        <th style="width: 16%;">Criação</th>
+                        <th style="width: 26%;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -43,7 +44,18 @@
                             <div><strong>{{ equipe.equipe_vendas }}</strong></div>
                         </td>
 
-                        <!-- Coluna 2: Movimentação -->
+                        <!-- Coluna 2: Precificação -->
+                        <td class="text-center">
+                            {% if equipe.tipo_precificacao == 'TABELA' %}
+                            <span class="badge bg-success" title="Usa tabela de preços cadastrada"><i class="fas fa-table"></i> Tabela</span>
+                            {% elif equipe.tipo_precificacao == 'CUSTO_MARKUP' %}
+                            <span class="badge bg-info" title="Custo + Markup fixo"><i class="fas fa-calculator"></i> Markup</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Coluna 3: Movimentação -->
                         <td class="text-center">
                             {% if equipe.responsavel_movimentacao %}
                             <span class="badge bg-info">{{ equipe.responsavel_movimentacao }}</span>
@@ -88,14 +100,19 @@
                             <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ equipe.criado_em.strftime('%d/%m/%Y %H:%M') if equipe.criado_em else '-' }}</small></div>
                         </td>
 
-                        <!-- Coluna 6: Ações -->
+                        <!-- Coluna 7: Ações -->
                         <td>
-                            <a href="{{ url_for('motochefe.editar_equipe', id=equipe.id) }}" class="btn btn-sm btn-warning">
+                            <a href="{{ url_for('motochefe.editar_equipe', id=equipe.id) }}" class="btn btn-sm btn-warning" title="Editar equipe">
                                 <i class="fas fa-edit"></i>
                             </a>
+                            {% if equipe.tipo_precificacao == 'TABELA' %}
+                            <a href="{{ url_for('motochefe.gerenciar_precos_equipe', equipe_id=equipe.id) }}" class="btn btn-sm btn-success" title="Gerenciar tabela de preços">
+                                <i class="fas fa-dollar-sign"></i>
+                            </a>
+                            {% endif %}
                             <form method="POST" action="{{ url_for('motochefe.remover_equipe', id=equipe.id) }}" style="display: inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirma remoção?')">
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirma remoção?')" title="Remover equipe">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>
@@ -103,7 +120,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">
+                        <td colspan="7" class="text-center text-muted py-4">
                             <i class="fas fa-info-circle"></i> Nenhuma equipe cadastrada
                         </td>
                     </tr>

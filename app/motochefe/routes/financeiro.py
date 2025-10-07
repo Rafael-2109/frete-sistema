@@ -252,11 +252,12 @@ def pagar_lote():
 @requer_motochefe
 def listar_contas_a_receber():
     """
-    Tela consolidada de contas a receber
-    Mostra: Títulos Financeiros (parcelas de vendas)
+    Tela consolidada de contas a receber (novo sistema)
+    Mostra: Títulos Financeiros por moto + tipo
     """
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
 
-    # Títulos em aberto
+    # Títulos em aberto (novo sistema usa valor_saldo)
     titulos_abertos = TituloFinanceiro.query.filter(
         TituloFinanceiro.status != 'PAGO'
     ).order_by(TituloFinanceiro.data_vencimento).all()
@@ -269,11 +270,17 @@ def listar_contas_a_receber():
     a_vencer = [t for t in titulos_abertos if t.data_vencimento and t.data_vencimento > hoje]
     sem_vencimento = [t for t in titulos_abertos if not t.data_vencimento]
 
-    # Totais
-    total_vencidos = sum(t.valor_parcela - (t.valor_recebido or Decimal('0')) for t in vencidos)
-    total_hoje = sum(t.valor_parcela - (t.valor_recebido or Decimal('0')) for t in vencendo_hoje)
-    total_a_vencer = sum(t.valor_parcela - (t.valor_recebido or Decimal('0')) for t in a_vencer)
+    # Totais (novo sistema usa valor_saldo diretamente)
+    total_vencidos = sum(t.valor_saldo for t in vencidos)
+    total_hoje = sum(t.valor_saldo for t in vencendo_hoje)
+    total_a_vencer = sum(t.valor_saldo for t in a_vencer)
     total_geral = total_vencidos + total_hoje + total_a_vencer
+
+    # Buscar empresas ativas para o select
+    empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
+        EmpresaVendaMoto.tipo_conta,
+        EmpresaVendaMoto.empresa
+    ).all()
 
     return render_template('motochefe/financeiro/contas_a_receber.html',
                          vencidos=vencidos,
@@ -283,6 +290,7 @@ def listar_contas_a_receber():
                          total_hoje=total_hoje,
                          total_a_vencer=total_a_vencer,
                          total_geral=total_geral,
+                         empresas=empresas,
                          hoje=hoje)
 
 
@@ -291,47 +299,59 @@ def listar_contas_a_receber():
 @requer_motochefe
 def receber_lote():
     """
-    Recebimento em lote de títulos
+    Recebimento em lote de títulos (novo sistema)
+    Cria MovimentacaoFinanceira, atualiza saldo, dispara triggers
     """
+    from app.motochefe.services.titulo_service import receber_titulo
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+
     try:
         import json
         itens_json = request.form.get('itens_recebimento')
-        data_recebimento = request.form.get('data_recebimento')
+        empresa_recebedora_id = request.form.get('empresa_recebedora_id')
 
         if not itens_json:
             flash('Nenhum título selecionado', 'warning')
             return redirect(url_for('motochefe.listar_contas_a_receber'))
 
+        if not empresa_recebedora_id:
+            flash('Selecione a empresa recebedora', 'warning')
+            return redirect(url_for('motochefe.listar_contas_a_receber'))
+
         itens = json.loads(itens_json)
-        data_rec = datetime.strptime(data_recebimento, '%Y-%m-%d').date() if data_recebimento else date.today()
+        empresa = EmpresaVendaMoto.query.get_or_404(int(empresa_recebedora_id))
 
         contador = 0
+        total_recebido = Decimal('0')
 
         for item in itens:
             titulo_id = int(item['id'])
             valor_recebido = Decimal(item.get('valor', '0'))
 
             titulo = TituloFinanceiro.query.get(titulo_id)
-            if titulo:
-                titulo.data_recebimento = data_rec
-                titulo.valor_recebido = valor_recebido
-                titulo.status = 'PAGO'
-                titulo.atualizado_por = current_user.nome
+            if titulo and valor_recebido > 0:
+                # USAR NOVO SISTEMA DE RECEBIMENTO
+                # Cria MovimentacaoFinanceira, atualiza saldo, dispara triggers:
+                # - Libera TituloAPagar
+                # - Baixa automática de motos (se empresa.baixa_compra_auto=True)
+                # - Gera comissão por moto (se título de VENDA)
+                resultado = receber_titulo(
+                    titulo=titulo,
+                    valor_recebido=valor_recebido,
+                    empresa_recebedora=empresa,
+                    usuario=current_user.nome
+                )
+
                 contador += 1
-
-                # TRIGGER: Verificar se todos os títulos do pedido estão pagos
-                pedido = titulo.pedido
-                todos_pagos = all(t.status == 'PAGO' for t in pedido.titulos)
-
-                if todos_pagos:
-                    # Importar função de geração de comissão
-                    from app.motochefe.routes.vendas import gerar_comissao_pedido
-                    gerar_comissao_pedido(pedido)
+                total_recebido += valor_recebido
 
         db.session.commit()
 
         if contador > 0:
-            flash(f'{contador} títulos baixados com sucesso!', 'success')
+            flash(
+                f'{contador} título(s) recebido(s) com sucesso! Total: R$ {total_recebido:,.2f}',
+                'success'
+            )
 
     except Exception as e:
         db.session.rollback()

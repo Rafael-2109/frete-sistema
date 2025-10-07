@@ -25,9 +25,6 @@ def custos_operacionais():
         # Criar registro inicial se não existir
         custos = CustosOperacionais(
             custo_montagem=Decimal('70.00'),
-            custo_movimentacao_rj=Decimal('40.00'),
-            custo_movimentacao_nacom=Decimal('50.00'),
-            valor_comissao_fixa=Decimal('80.00'),
             criado_por=current_user.nome
         )
         db.session.add(custos)
@@ -48,9 +45,6 @@ def atualizar_custos():
 
     try:
         custos.custo_montagem = Decimal(request.form.get('custo_montagem'))
-        custos.custo_movimentacao_rj = Decimal(request.form.get('custo_movimentacao_rj'))
-        custos.custo_movimentacao_nacom = Decimal(request.form.get('custo_movimentacao_nacom'))
-        custos.valor_comissao_fixa = Decimal(request.form.get('valor_comissao_fixa'))
         custos.atualizado_por = current_user.nome
 
         db.session.commit()

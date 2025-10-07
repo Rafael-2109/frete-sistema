@@ -7,6 +7,7 @@ Facilita importação em outros módulos
 from .cadastro import (
     VendedorMoto,
     EquipeVendasMoto,
+    TabelaPrecoEquipe,
     TransportadoraMoto,
     ClienteMoto,
     EmpresaVendaMoto
@@ -46,6 +47,7 @@ __all__ = [
     # Cadastros
     'VendedorMoto',
     'EquipeVendasMoto',
+    'TabelaPrecoEquipe',
     'TransportadoraMoto',
     'ClienteMoto',
     'EmpresaVendaMoto',
