@@ -19,9 +19,11 @@ from app.motochefe.services.titulo_a_pagar_service import pagar_titulo_a_pagar, 
 @login_required
 @requer_motochefe
 def listar_titulos_a_pagar_route():
-    """Lista títulos a pagar com filtros"""
+    """Lista títulos a pagar com filtros e paginação"""
     status_filtro = request.args.get('status')
     tipo_filtro = request.args.get('tipo')
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     # Buscar títulos
     titulos = listar_titulos_a_pagar(
@@ -29,7 +31,7 @@ def listar_titulos_a_pagar_route():
         tipo=tipo_filtro
     )
 
-    # Agrupar por status
+    # Agrupar por status (para totalizadores)
     pendentes = [t for t in titulos if t.status == 'PENDENTE']
     abertos = [t for t in titulos if t.status == 'ABERTO']
     parciais = [t for t in titulos if t.status == 'PARCIAL']
@@ -40,14 +42,33 @@ def listar_titulos_a_pagar_route():
     total_aberto = sum(t.valor_saldo for t in abertos)
     total_parcial = sum(t.valor_saldo for t in parciais)
 
+    # Paginação manual da lista consolidada
+    total_items = len(titulos)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    titulos_paginados = titulos[start_idx:end_idx]
+
+    # Criar objeto paginacao manual
+    class PaginacaoManual:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1 if self.has_prev else None
+            self.next_num = page + 1 if self.has_next else None
+
+    paginacao = PaginacaoManual(titulos_paginados, page, per_page, total_items)
+
     # Empresas para pagamento
     empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(EmpresaVendaMoto.empresa).all()
 
     return render_template('motochefe/titulos_a_pagar/listar.html',
-                         pendentes=pendentes,
-                         abertos=abertos,
-                         parciais=parciais,
-                         pagos=pagos,
+                         titulos=paginacao.items,
+                         paginacao=paginacao,
                          total_pendente=total_pendente,
                          total_aberto=total_aberto,
                          total_parcial=total_parcial,

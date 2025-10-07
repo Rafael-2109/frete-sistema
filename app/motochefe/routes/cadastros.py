@@ -69,9 +69,17 @@ def requer_motochefe(f):
 @login_required
 @requer_motochefe
 def listar_equipes():
-    """Lista todas as equipes de vendas"""
-    equipes = EquipeVendasMoto.query.filter_by(ativo=True).order_by(EquipeVendasMoto.equipe_vendas).all()
-    return render_template('motochefe/cadastros/equipes/listar.html', equipes=equipes)
+    """Lista todas as equipes de vendas com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = EquipeVendasMoto.query.filter_by(ativo=True)\
+        .order_by(EquipeVendasMoto.equipe_vendas)\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/cadastros/equipes/listar.html',
+                         equipes=paginacao.items,
+                         paginacao=paginacao)
 
 @motochefe_bp.route('/equipes/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -439,9 +447,17 @@ def importar_equipes():
 @login_required
 @requer_motochefe
 def listar_vendedores():
-    """Lista todos os vendedores"""
-    vendedores = VendedorMoto.query.filter_by(ativo=True).order_by(VendedorMoto.vendedor).all()
-    return render_template('motochefe/cadastros/vendedores/listar.html', vendedores=vendedores)
+    """Lista todos os vendedores com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = VendedorMoto.query.filter_by(ativo=True)\
+        .order_by(VendedorMoto.vendedor)\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/cadastros/vendedores/listar.html',
+                         vendedores=paginacao.items,
+                         paginacao=paginacao)
 
 @motochefe_bp.route('/vendedores/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -611,9 +627,17 @@ def importar_vendedores():
 @login_required
 @requer_motochefe
 def listar_transportadoras():
-    """Lista todas as transportadoras"""
-    transportadoras = TransportadoraMoto.query.filter_by(ativo=True).order_by(TransportadoraMoto.transportadora).all()
-    return render_template('motochefe/cadastros/transportadoras/listar.html', transportadoras=transportadoras)
+    """Lista todas as transportadoras com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = TransportadoraMoto.query.filter_by(ativo=True)\
+        .order_by(TransportadoraMoto.transportadora)\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/cadastros/transportadoras/listar.html',
+                         transportadoras=paginacao.items,
+                         paginacao=paginacao)
 
 @motochefe_bp.route('/transportadoras/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -889,9 +913,17 @@ def consultar_cnpj(cnpj):
 @login_required
 @requer_motochefe
 def listar_clientes():
-    """Lista todos os clientes"""
-    clientes = ClienteMoto.query.filter_by(ativo=True).order_by(ClienteMoto.cliente).all()
-    return render_template('motochefe/cadastros/clientes/listar.html', clientes=clientes)
+    """Lista todos os clientes com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = ClienteMoto.query.filter_by(ativo=True)\
+        .order_by(ClienteMoto.cliente)\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/cadastros/clientes/listar.html',
+                         clientes=paginacao.items,
+                         paginacao=paginacao)
 
 @motochefe_bp.route('/clientes/adicionar', methods=['GET', 'POST'])
 @login_required

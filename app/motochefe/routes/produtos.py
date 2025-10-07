@@ -44,9 +44,17 @@ def _ativar_motos_rejeitadas(nome_modelo, modelo_id):
 @login_required
 @requer_motochefe
 def listar_modelos():
-    """Lista modelos de motos"""
-    modelos = ModeloMoto.query.filter_by(ativo=True).order_by(ModeloMoto.nome_modelo).all()
-    return render_template('motochefe/produtos/modelos/listar.html', modelos=modelos)
+    """Lista modelos de motos com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = ModeloMoto.query.filter_by(ativo=True)\
+        .order_by(ModeloMoto.nome_modelo)\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/produtos/modelos/listar.html',
+                         modelos=paginacao.items,
+                         paginacao=paginacao)
 
 @motochefe_bp.route('/modelos/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -276,11 +284,13 @@ def importar_modelos():
 @login_required
 @requer_motochefe
 def listar_motos():
-    """Lista motos (chassi) - Com filtro de inativas"""
+    """Lista motos (chassi) - Com filtro de inativas e paginação"""
     # Filtros opcionais
     status = request.args.get('status')
     modelo_id = request.args.get('modelo_id', type=int)
     mostrar_inativas = request.args.get('inativas', type=int, default=0)  # 0=ativas, 1=inativas
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     # Filtro base: ativo ou inativo
     if mostrar_inativas == 1:
@@ -293,20 +303,29 @@ def listar_motos():
     if modelo_id:
         query = query.filter_by(modelo_id=modelo_id)
 
-    motos = query.order_by(Moto.data_entrada.desc()).all()
+    paginacao = query.order_by(Moto.data_entrada.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
 
     # Buscar modelos para filtro
     modelos = ModeloMoto.query.filter_by(ativo=True).order_by(ModeloMoto.nome_modelo).all()
 
-    # Estatísticas
-    total_motos = len(motos)
-    disponiveis = sum(1 for m in motos if m.status == 'DISPONIVEL')
-    reservadas = sum(1 for m in motos if m.status == 'RESERVADA')
-    vendidas = sum(1 for m in motos if m.status == 'VENDIDA')
+    # Estatísticas (calculadas ANTES da paginação)
+    query_stats = Moto.query.filter_by(ativo=(False if mostrar_inativas == 1 else True))
+    if status:
+        query_stats = query_stats.filter_by(status=status)
+    if modelo_id:
+        query_stats = query_stats.filter_by(modelo_id=modelo_id)
+
+    motos_stats = query_stats.all()
+    total_motos = len(motos_stats)
+    disponiveis = sum(1 for m in motos_stats if m.status == 'DISPONIVEL')
+    reservadas = sum(1 for m in motos_stats if m.status == 'RESERVADA')
+    vendidas = sum(1 for m in motos_stats if m.status == 'VENDIDA')
     inativas = Moto.query.filter_by(ativo=False).count()  # Total de inativas
 
     return render_template('motochefe/produtos/motos/listar.html',
-                         motos=motos,
+                         motos=paginacao.items,
+                         paginacao=paginacao,
                          modelos=modelos,
                          total_motos=total_motos,
                          disponiveis=disponiveis,

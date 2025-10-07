@@ -776,7 +776,8 @@
                 }
 
                 // DETECTAR SE É MOBILE E USAR RENDERIZAÇÃO APROPRIADA
-                if (window.innerWidth <= 767 && typeof renderizarPedidosMobile === 'function') {
+                // ALTERADO: 991px para cobrir iPhones Pro Max e tablets pequenos
+                if (window.innerWidth <= 991 && typeof renderizarPedidosMobile === 'function') {
                     // Renderizar cards mobile
                     renderizarPedidosMobile(data, page);
                     return;

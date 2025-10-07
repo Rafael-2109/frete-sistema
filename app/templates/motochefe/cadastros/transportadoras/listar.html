@@ -58,6 +58,10 @@
                     {% endfor %}
                 </tbody>
             </table>
+            <!-- Paginação -->
+            {% if paginacao %}
+                {% include 'motochefe/_pagination.html' %}
+            {% endif %}
         </div>
     </div>
 </div>

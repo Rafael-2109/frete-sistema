@@ -1,0 +1,66 @@
+{#
+  Componente de Paginação Reutilizável para MotoChefe
+  Detecta automaticamente o endpoint atual e preserva todos os parâmetros de filtro
+#}
+
+{% if paginacao and paginacao.pages > 1 %}
+  {# Captura o endpoint atual e argumentos #}
+  {% set current_endpoint = request.endpoint %}
+  {% set args_no_page = request.args.to_dict() %}
+  {% set _ = args_no_page.pop('page', None) %}
+
+<nav aria-label="Navegação de páginas" class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+    <!-- Primeira Página -->
+    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+      <a class="page-link"
+         href="{% if paginacao.has_prev %}{{ url_for(current_endpoint, page=1, **args_no_page) }}{% else %}#{% endif %}"
+         aria-label="Primeira">
+        <span aria-hidden="true">&laquo;</span>
+      </a>
+    </li>
+
+    <!-- Página Anterior -->
+    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+      <a class="page-link"
+         href="{% if paginacao.has_prev %}{{ url_for(current_endpoint, page=paginacao.prev_num, **args_no_page) }}{% else %}#{% endif %}"
+         aria-label="Anterior">
+        <span aria-hidden="true">&lsaquo;</span>
+      </a>
+    </li>
+
+    <!-- Páginas Numeradas (mostra ±2 páginas ao redor da atual) -->
+    {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg > 0 and pg <= paginacao.pages %}
+    <li class="page-item {% if pg == paginacao.page %}active{% endif %}">
+      <a class="page-link" href="{{ url_for(current_endpoint, page=pg, **args_no_page) }}">
+        {{ pg }}
+      </a>
+    </li>
+    {% endfor %}
+
+    <!-- Próxima Página -->
+    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+      <a class="page-link"
+         href="{% if paginacao.has_next %}{{ url_for(current_endpoint, page=paginacao.next_num, **args_no_page) }}{% else %}#{% endif %}"
+         aria-label="Próxima">
+        <span aria-hidden="true">&rsaquo;</span>
+      </a>
+    </li>
+
+    <!-- Última Página -->
+    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+      <a class="page-link"
+         href="{% if paginacao.has_next %}{{ url_for(current_endpoint, page=paginacao.pages, **args_no_page) }}{% else %}#{% endif %}"
+         aria-label="Última">
+        <span aria-hidden="true">&raquo;</span>
+      </a>
+    </li>
+  </ul>
+
+  <!-- Informação de registros -->
+  <div class="text-center text-muted mt-2 small">
+    Página {{ paginacao.page }} de {{ paginacao.pages }}
+    ({{ paginacao.total }} registro{{ 's' if paginacao.total != 1 else '' }} no total)
+  </div>
+</nav>
+{% endif %}

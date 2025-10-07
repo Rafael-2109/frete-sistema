@@ -22,9 +22,17 @@ from app.motochefe.models import (
 @login_required
 @requer_motochefe
 def listar_empresas():
-    """Lista empresas de faturamento"""
-    empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(EmpresaVendaMoto.empresa).all()
-    return render_template('motochefe/cadastros/empresas/listar.html', empresas=empresas)
+    """Lista empresas de faturamento com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = EmpresaVendaMoto.query.filter_by(ativo=True)\
+        .order_by(EmpresaVendaMoto.empresa)\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/cadastros/empresas/listar.html',
+                         empresas=paginacao.items,
+                         paginacao=paginacao)
 
 @motochefe_bp.route('/empresas/adicionar', methods=['GET', 'POST'])
 @login_required
@@ -111,10 +119,12 @@ def remover_empresa(id):
 @login_required
 @requer_motochefe
 def listar_pedidos():
-    """Lista pedidos de venda"""
+    """Lista pedidos de venda com paginação"""
     # Filtros
     faturado = request.args.get('faturado')
     enviado = request.args.get('enviado')
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     query = PedidoVendaMoto.query.filter_by(ativo=True)
 
@@ -128,13 +138,15 @@ def listar_pedidos():
     elif enviado == '0':
         query = query.filter_by(enviado=False)
 
-    pedidos = query.order_by(PedidoVendaMoto.data_pedido.desc()).all()
+    paginacao = query.order_by(PedidoVendaMoto.data_pedido.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
 
     # Buscar empresas para modal de faturamento
     empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(EmpresaVendaMoto.empresa).all()
 
     return render_template('motochefe/vendas/pedidos/listar.html',
-                         pedidos=pedidos,
+                         pedidos=paginacao.items,
+                         paginacao=paginacao,
                          empresas=empresas)
 
 
@@ -357,9 +369,11 @@ def detalhes_titulo(id):
 @login_required
 @requer_motochefe
 def listar_comissoes():
-    """Lista comissões por vendedor"""
+    """Lista comissões por vendedor com paginação"""
     vendedor_id = request.args.get('vendedor_id', type=int)
     status = request.args.get('status')
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     query = ComissaoVendedor.query
 
@@ -368,12 +382,14 @@ def listar_comissoes():
     if status:
         query = query.filter_by(status=status)
 
-    comissoes = query.order_by(ComissaoVendedor.criado_em.desc()).all()
+    paginacao = query.order_by(ComissaoVendedor.criado_em.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
 
     vendedores = VendedorMoto.query.filter_by(ativo=True).order_by(VendedorMoto.vendedor).all()
 
     return render_template('motochefe/vendas/comissoes/listar.html',
-                         comissoes=comissoes,
+                         comissoes=paginacao.items,
+                         paginacao=paginacao,
                          vendedores=vendedores)
 
 

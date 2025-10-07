@@ -42,17 +42,22 @@ def gerar_numero_embarque():
 @login_required
 @requer_motochefe
 def listar_embarques():
-    """Lista todos os embarques"""
+    """Lista todos os embarques com paginação"""
     status = request.args.get('status')
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     query = EmbarqueMoto.query.filter_by(ativo=True)
 
     if status:
         query = query.filter_by(status=status)
 
-    embarques = query.order_by(EmbarqueMoto.data_embarque.desc()).all()
+    paginacao = query.order_by(EmbarqueMoto.data_embarque.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
 
-    return render_template('motochefe/logistica/embarques/listar.html', embarques=embarques)
+    return render_template('motochefe/logistica/embarques/listar.html',
+                         embarques=paginacao.items,
+                         paginacao=paginacao)
 
 
 @motochefe_bp.route('/embarques/adicionar', methods=['GET', 'POST'])

@@ -61,10 +61,12 @@ def atualizar_custos():
 @login_required
 @requer_motochefe
 def listar_despesas():
-    """Lista despesas mensais"""
+    """Lista despesas mensais com paginação"""
     # Filtros opcionais
     mes = request.args.get('mes', type=int)
     ano = request.args.get('ano', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     query = DespesaMensal.query.filter_by(ativo=True)
 
@@ -73,19 +75,22 @@ def listar_despesas():
     if ano:
         query = query.filter_by(ano_competencia=ano)
 
-    despesas = query.order_by(
+    # Buscar todas para totalizadores (antes da paginação)
+    despesas_todas = query.all()
+    total_geral = sum(d.valor for d in despesas_todas)
+    total_pago = sum(d.valor_pago or 0 for d in despesas_todas)
+    total_aberto = total_geral - total_pago
+
+    # Aplicar paginação
+    paginacao = query.order_by(
         DespesaMensal.ano_competencia.desc(),
         DespesaMensal.mes_competencia.desc(),
         DespesaMensal.tipo_despesa
-    ).all()
-
-    # Totalizadores
-    total_geral = sum(d.valor for d in despesas)
-    total_pago = sum(d.valor_pago or 0 for d in despesas)
-    total_aberto = total_geral - total_pago
+    ).paginate(page=page, per_page=per_page, error_out=False)
 
     return render_template('motochefe/operacional/despesas/listar.html',
-                         despesas=despesas,
+                         despesas=paginacao.items,
+                         paginacao=paginacao,
                          total_geral=total_geral,
                          total_pago=total_pago,
                          total_aberto=total_aberto,

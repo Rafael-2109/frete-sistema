@@ -4,8 +4,12 @@
    ======================================== */
 
 /* ===========================
-   GLOBAL - PREVENIR OVERFLOW
+   GLOBAL - PREVENIR OVERFLOW NO CONTAINER
    =========================== */
+body {
+    overflow-x: hidden !important;
+}
+
 .comercial-container {
     overflow-x: hidden !important;
     width: 100%;
@@ -17,8 +21,42 @@
     max-width: 100%;
 }
 
+/* Permitir scroll apenas dentro da tabela */
+.table-responsive.table-dark-custom {
+    overflow-x: auto !important;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Estilizar barra de rolagem (scrollbar) - tema dark */
+.table-responsive.table-dark-custom::-webkit-scrollbar {
+    height: 8px; /* Altura da scrollbar horizontal */
+}
+
+.table-responsive.table-dark-custom::-webkit-scrollbar-track {
+    background-color: #2d2d35; /* Fundo da trilha */
+    border-radius: 4px;
+}
+
+.table-responsive.table-dark-custom::-webkit-scrollbar-thumb {
+    background-color: #565869; /* Cor do "polegar" */
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.table-responsive.table-dark-custom::-webkit-scrollbar-thumb:hover {
+    background-color: #7289da; /* Cor ao passar mouse */
+}
+
+/* Para Firefox */
+.table-responsive.table-dark-custom {
+    scrollbar-width: thin;
+    scrollbar-color: #565869 #2d2d35;
+}
+
 /* ===========================
    MOBILE SMALL (<576px)
+   iPhones: SE (375px), 13 Mini (375px), 12 (390px)
    =========================== */
 @media (max-width: 575px) {
     /* Container principal */
@@ -117,9 +155,12 @@
 }
 
 /* ===========================
-   MOBILE LARGE (576px - 767px)
+   MOBILE LARGE (576px - 991px)
+   iPhones PRO MAX: 13 Pro Max (428px), 14/15/16 Pro Max (430px)
+   Android grandes: Galaxy S23 Ultra (412px), Pixel 7 Pro (412px)
+   ALTERADO: Expandido até 991px para cobrir todos smartphones
    =========================== */
-@media (min-width: 576px) and (max-width: 767px) {
+@media (min-width: 576px) and (max-width: 991px) {
     /* Container */
     .comercial-container {
         padding-left: 1rem;
@@ -175,160 +216,6 @@
 
     #filtrosMobileButton {
         display: block !important;
-    }
-}
-
-/* ===========================
-   TABLET (768px - 991px)
-   =========================== */
-@media (min-width: 768px) and (max-width: 991px) {
-    /* === MOSTRAR TABELA DESKTOP COM AJUSTES === */
-    .table-responsive.table-dark-custom {
-        display: block !important;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    #tabelaClientes_wrapper {
-        display: block !important;
-    }
-
-    /* === MOSTRAR FILTROS DESKTOP === */
-    .card#filtrosDesktop {
-        display: block !important;
-    }
-
-    /* === OCULTAR VERSÃO MOBILE === */
-    #clientesListaMobile {
-        display: none !important;
-    }
-
-    #filtrosMobileButton {
-        display: none !important;
-    }
-
-    #filtrosMobileSheet {
-        display: none !important;
-    }
-
-    /* Tabela com scroll horizontal */
-    .table-dark-custom table {
-        min-width: 900px;
-    }
-
-    /* Colunas fixas (CNPJ e Cliente) - CORRIGIDO */
-    .table-dark-custom thead th:nth-child(1),
-    .table-dark-custom tbody td:nth-child(1) {
-        position: sticky !important;
-        left: 0 !important;
-        z-index: 20 !important;
-        background-color: #40414f !important; /* Cor do header */
-    }
-
-    .table-dark-custom tbody td:nth-child(1) {
-        background-color: #343541 !important; /* Cor do body */
-        box-shadow: 2px 0 4px rgba(0,0,0,0.3); /* Sombra para destaque */
-    }
-
-    .table-dark-custom thead th:nth-child(2),
-    .table-dark-custom tbody td:nth-child(2) {
-        position: sticky !important;
-        left: 150px !important;
-        z-index: 19 !important;
-        background-color: #40414f !important;
-    }
-
-    .table-dark-custom tbody td:nth-child(2) {
-        background-color: #343541 !important;
-        box-shadow: 2px 0 4px rgba(0,0,0,0.3);
-    }
-
-    /* Garantir que colunas não fixas fiquem atrás */
-    .table-dark-custom thead th:not(:nth-child(1)):not(:nth-child(2)),
-    .table-dark-custom tbody td:not(:nth-child(1)):not(:nth-child(2)) {
-        z-index: 1 !important;
-    }
-
-    /* Fontes menores */
-    .table-dark-custom {
-        font-size: 0.85rem;
-    }
-
-    .dataTables_length select,
-    .dataTables_filter input {
-        font-size: 0.85rem;
-    }
-
-    /* Filtros em grid 2 colunas */
-    .card#filtrosDesktop .row .col-md-3 {
-        flex: 0 0 50%;
-        max-width: 50%;
-    }
-
-    .card#filtrosDesktop .row .col-md-4 {
-        flex: 0 0 50%;
-        max-width: 50%;
-    }
-
-    .card#filtrosDesktop .row .col-md-2 {
-        flex: 0 0 50%;
-        max-width: 50%;
-    }
-
-    /* === MODAL DE PEDIDOS COM COLUNAS FIXAS (TABLET) === */
-    #modalPedidos .modal-body {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    #modalPedidos .modal-body table {
-        min-width: 1000px;
-    }
-
-    /* Fixar primeiras 3 colunas do modal */
-    #modalPedidos table thead th:nth-child(1),
-    #modalPedidos table tbody tr td:nth-child(1) {
-        position: sticky !important;
-        left: 0 !important;
-        z-index: 20 !important;
-        background-color: #40414f !important;
-    }
-
-    #modalPedidos table tbody tr td:nth-child(1) {
-        background-color: #343541 !important;
-        box-shadow: 2px 0 4px rgba(0,0,0,0.3);
-    }
-
-    #modalPedidos table thead th:nth-child(2),
-    #modalPedidos table tbody tr td:nth-child(2) {
-        position: sticky !important;
-        left: 50px !important;
-        z-index: 19 !important;
-        background-color: #40414f !important;
-    }
-
-    #modalPedidos table tbody tr td:nth-child(2) {
-        background-color: #343541 !important;
-        box-shadow: 2px 0 4px rgba(0,0,0,0.3);
-    }
-
-    #modalPedidos table thead th:nth-child(3),
-    #modalPedidos table tbody tr td:nth-child(3) {
-        position: sticky !important;
-        left: 150px !important;
-        z-index: 18 !important;
-        background-color: #40414f !important;
-    }
-
-    #modalPedidos table tbody tr td:nth-child(3) {
-        background-color: #343541 !important;
-        box-shadow: 2px 0 4px rgba(0,0,0,0.3);
-    }
-
-    /* Garantir que outras colunas fiquem atrás */
-    #modalPedidos table thead th:not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(3)),
-    #modalPedidos table tbody tr td:not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(3)) {
-        z-index: 1 !important;
     }
 }
 
@@ -399,8 +286,9 @@
 
 /* ===========================
    CARDS MOBILE - ESTILO
+   ALTERADO: 991px para cobrir iPhones Pro Max
    =========================== */
-@media (max-width: 767px) {
+@media (max-width: 991px) {
     #clientesListaMobile {
         margin-top: 1rem;
     }
@@ -573,7 +461,7 @@
 /* ===========================
    BOTTOM SHEET DE FILTROS
    =========================== */
-@media (max-width: 767px) {
+@media (max-width: 991px) {
     /* Botão de filtros fixo */
     #filtrosMobileButton {
         position: fixed;
@@ -750,7 +638,7 @@
 /* ===========================
    MODAL FULL-SCREEN (MOBILE)
    =========================== */
-@media (max-width: 767px) {
+@media (max-width: 991px) {
     /* Transformar modal em full-screen */
     #modalPedidos .modal-dialog {
         margin: 0;
@@ -827,7 +715,7 @@
 /* ===========================
    ALERTAS E MENSAGENS
    =========================== */
-@media (max-width: 767px) {
+@media (max-width: 991px) {
     .alert-dark-info {
         padding: 0.75rem;
         font-size: 0.875rem;

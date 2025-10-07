@@ -1,22 +1,15 @@
 # Imports principais
 import logging
-import re
-import json
-import os
-import uuid
-import mimetypes
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Union, Tuple
+from datetime import datetime
 
 # Flask imports
-from flask import render_template, request, jsonify, current_app, redirect, url_for, flash, abort, send_file, g
+from flask import render_template, request, jsonify, current_app, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 # Database imports
-from sqlalchemy import text, desc, func, and_, or_
+from sqlalchemy import text
 from sqlalchemy import inspect
-from app import db
 
 # Módulos internos
 from . import claude_ai_bp
@@ -24,7 +17,7 @@ from app.utils.auth_decorators import require_admin
 from app.claude_transition import processar_consulta_transicao
 
 # Adicionar import do Claude Development AI no topo do arquivo
-from .claude_development_ai import ClaudeDevelopmentAI, get_claude_development_ai, init_claude_development_ai
+from .claude_development_ai import get_claude_development_ai, init_claude_development_ai
 
 # Imports com fallback para MCP e Redis
 try:

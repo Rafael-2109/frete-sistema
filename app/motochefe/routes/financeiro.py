@@ -25,9 +25,11 @@ from app.motochefe.models import (
 @requer_motochefe
 def listar_contas_a_pagar():
     """
-    Tela consolidada de contas a pagar
+    Tela consolidada de contas a pagar com paginação
     Mostra: Motos, Fretes, Comissões, Montagens, Despesas
     """
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     # 1. MOTOS - Custo de Aquisição Pendente
     motos_pendentes = Moto.query.filter(
@@ -150,15 +152,52 @@ def listar_contas_a_pagar():
     # TOTAIS GERAIS
     total_geral = total_motos + total_fretes + total_comissoes + total_montagens + total_despesas
 
+    # Consolidar TODOS os itens em uma lista única para paginação
+    # Cada item terá um 'tipo' para identificação no template
+    todos_itens = []
+
+    for item in motos_agrupados:
+        todos_itens.append({'tipo': 'MOTO', 'dados': item})
+
+    for item in fretes_agrupados:
+        todos_itens.append({'tipo': 'FRETE', 'dados': item})
+
+    for item in comissoes_agrupadas:
+        todos_itens.append({'tipo': 'COMISSAO', 'dados': item})
+
+    for item in montagens_agrupadas:
+        todos_itens.append({'tipo': 'MONTAGEM', 'dados': item})
+
+    for item in despesas_agrupadas:
+        todos_itens.append({'tipo': 'DESPESA', 'dados': item})
+
+    # Paginação manual
+    total_items = len(todos_itens)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    itens_paginados = todos_itens[start_idx:end_idx]
+
+    # Criar objeto paginacao manual
+    class PaginacaoManual:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1 if self.has_prev else None
+            self.next_num = page + 1 if self.has_next else None
+
+    paginacao = PaginacaoManual(itens_paginados, page, per_page, total_items)
+
     # Vencidos (hoje)
     hoje = date.today()
 
     return render_template('motochefe/financeiro/contas_a_pagar.html',
-                         motos_agrupados=motos_agrupados,
-                         fretes_agrupados=fretes_agrupados,
-                         comissoes_agrupadas=comissoes_agrupadas,
-                         montagens_agrupadas=montagens_agrupadas,
-                         despesas_agrupadas=despesas_agrupadas,
+                         itens=paginacao.items,
+                         paginacao=paginacao,
                          total_motos=total_motos,
                          total_fretes=total_fretes,
                          total_comissoes=total_comissoes,
@@ -253,9 +292,12 @@ def pagar_lote():
 def listar_contas_a_receber():
     """
     Tela consolidada de contas a receber (novo sistema)
-    Mostra: Títulos Financeiros por moto + tipo
+    Mostra: Títulos Financeiros por moto + tipo com paginação
     """
     from app.motochefe.models.cadastro import EmpresaVendaMoto
+
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
 
     # Títulos em aberto (novo sistema usa valor_saldo)
     titulos_abertos = TituloFinanceiro.query.filter(
@@ -276,6 +318,28 @@ def listar_contas_a_receber():
     total_a_vencer = sum(t.valor_saldo for t in a_vencer)
     total_geral = total_vencidos + total_hoje + total_a_vencer
 
+    # Paginação manual da lista consolidada (vencidos + hoje + a_vencer)
+    todos_titulos = vencidos + vencendo_hoje + a_vencer
+    total_items = len(todos_titulos)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    titulos_paginados = todos_titulos[start_idx:end_idx]
+
+    # Criar objeto paginacao manual
+    class PaginacaoManual:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1 if self.has_prev else None
+            self.next_num = page + 1 if self.has_next else None
+
+    paginacao = PaginacaoManual(titulos_paginados, page, per_page, total_items)
+
     # Buscar empresas ativas para o select
     empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
         EmpresaVendaMoto.tipo_conta,
@@ -283,9 +347,8 @@ def listar_contas_a_receber():
     ).all()
 
     return render_template('motochefe/financeiro/contas_a_receber.html',
-                         vencidos=vencidos,
-                         vencendo_hoje=vencendo_hoje,
-                         a_vencer=a_vencer,
+                         titulos=paginacao.items,
+                         paginacao=paginacao,
                          total_vencidos=total_vencidos,
                          total_hoje=total_hoje,
                          total_a_vencer=total_a_vencer,

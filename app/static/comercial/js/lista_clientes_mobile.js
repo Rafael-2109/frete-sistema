@@ -15,7 +15,8 @@ let filtrosAtivosMobile = 0;
 // INICIALIZAÇÃO
 // ===========================
 document.addEventListener('DOMContentLoaded', function() {
-    if (window.innerWidth <= 767) {
+    // ALTERADO: 991px para cobrir iPhones Pro Max e tablets pequenos
+    if (window.innerWidth <= 991) {
         inicializarMobile();
     }
 
@@ -24,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(function() {
-            if (window.innerWidth <= 767 && clientesMobileData.length === 0) {
+            if (window.innerWidth <= 991 && clientesMobileData.length === 0) {
                 inicializarMobile();
             }
         }, 250);
