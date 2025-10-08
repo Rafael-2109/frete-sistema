@@ -1146,135 +1146,381 @@ def sugerir_datas(rede):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@programacao_em_lote_bp.route('/api/analisar-ruptura-cnpj/<cnpj>', methods=['GET'])
+@programacao_em_lote_bp.route('/api/analisar-ruptura-cnpj/<path:cnpj>', methods=['GET'])
 @login_required
 def analisar_ruptura_cnpj(cnpj):
     """
     API para análise de ruptura de UM CNPJ considerando TODOS os seus pedidos
-    Usa as funções consolidadas de ruptura_utils.py
+    Replica a lógica de ruptura_sem_cache mas busca por CNPJ ao invés de pedido
     Retorna formato compatível com o modal de ruptura existente
     """
     try:
-        from .ruptura_utils import analisar_ruptura_lote as analisar_ruptura_funcao
-        from app.producao.models import CadastroPalletizacao
+        import time
+        from sqlalchemy import func, text
+        from sqlalchemy.orm import load_only
+        from app.estoque.models import UnificacaoCodigos
 
+        inicio_total = time.time()
         logger.info(f"Analisando ruptura para CNPJ {cnpj} - TODOS os pedidos")
 
-        # Data de agendamento para análise (D+7 para projeção)
-        data_agendamento = date.today() + timedelta(days=7)
-
-        # Chamar função que AGREGA todos os produtos do CNPJ
-        resultado_ruptura = analisar_ruptura_funcao([cnpj], data_agendamento)
-
-        # Buscar informações adicionais do CNPJ para o resumo
-        pedidos_cnpj = db.session.query(CarteiraPrincipal).filter(
-            and_(
-                CarteiraPrincipal.cnpj_cpf == cnpj,
-                CarteiraPrincipal.ativo == True,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        # ===== BUSCAR ITENS DO CNPJ (AGRUPA PRODUTOS AUTOMATICAMENTE) =====
+        # IMPORTANTE: Filtrar qtd_saldo >= 0.001 para evitar floats zerados
+        itens = db.session.query(CarteiraPrincipal).options(
+            load_only(
+                CarteiraPrincipal.cod_produto,
+                CarteiraPrincipal.nome_produto,
+                CarteiraPrincipal.qtd_saldo_produto_pedido,
+                CarteiraPrincipal.preco_produto_pedido
             )
+        ).filter(
+            CarteiraPrincipal.cnpj_cpf == cnpj,
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido >= 0.001
         ).all()
 
-        # Calcular valores totais
-        valor_total = sum(
-            float(p.qtd_saldo_produto_pedido or 0) * float(p.preco_produto_pedido or 0)
-            for p in pedidos_cnpj
+        if not itens:
+            return jsonify({
+                'success': False,
+                'message': 'CNPJ não encontrado ou todos os itens já foram faturados'
+            }), 404
+
+        # Agrupar produtos e somar quantidades (CONSOLIDAÇÃO POR CNPJ)
+        produtos_agrupados = {}
+        for item in itens:
+            cod = item.cod_produto
+            if cod not in produtos_agrupados:
+                produtos_agrupados[cod] = {
+                    'cod_produto': cod,
+                    'nome_produto': item.nome_produto,
+                    'qtd_saldo': 0,
+                    'preco': float(item.preco_produto_pedido or 0)
+                }
+            produtos_agrupados[cod]['qtd_saldo'] += float(item.qtd_saldo_produto_pedido)
+
+        produtos_unicos = list(produtos_agrupados.keys())
+
+        # ===== EXPANDIR CÓDIGOS COM UNIFICAÇÃO =====
+        produtos_expandidos = {}
+        for produto in produtos_unicos:
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(produto)
+            produtos_expandidos[produto] = list(codigos_relacionados)
+
+        # Coletar todos os códigos únicos
+        todos_codigos = set()
+        for codigos in produtos_expandidos.values():
+            todos_codigos.update(codigos)
+
+        # ===== QUERY OTIMIZADA COM CTE (IGUAL ruptura_sem_cache) =====
+        inicio_query = time.time()
+
+        query_sql = """
+        WITH estoque_atual AS (
+            SELECT
+                cod_produto,
+                COALESCE(SUM(qtd_movimentacao), 0) as estoque
+            FROM movimentacao_estoque
+            WHERE cod_produto = ANY(:codigos_array)
+              AND ativo = true
+            GROUP BY cod_produto
+        ),
+        saidas_previstas AS (
+            SELECT
+                cod_produto,
+                expedicao as data,
+                SUM(qtd_saldo) as quantidade
+            FROM separacao
+            WHERE cod_produto = ANY(:codigos_array)
+              AND sincronizado_nf = false
+              AND expedicao BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+            GROUP BY cod_produto, expedicao
+        ),
+        producoes_previstas AS (
+            SELECT
+                cod_produto,
+                data_programacao as data,
+                SUM(qtd_programada) as quantidade
+            FROM programacao_producao
+            WHERE cod_produto = ANY(:codigos_array)
+              AND data_programacao BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+            GROUP BY cod_produto, data_programacao
+        ),
+        todos_codigos AS (
+            SELECT DISTINCT cod_produto FROM (
+                SELECT cod_produto FROM estoque_atual
+                UNION ALL
+                SELECT cod_produto FROM saidas_previstas
+                UNION ALL
+                SELECT cod_produto FROM producoes_previstas
+            ) sub
+            WHERE cod_produto IS NOT NULL
         )
+        SELECT
+            c.cod_produto,
+            COALESCE(e.estoque, 0) as estoque_atual,
+            COALESCE(json_agg(
+                jsonb_build_object(
+                    'data', s.data,
+                    'tipo', 'saida',
+                    'qtd', s.quantidade
+                ) ORDER BY s.data
+            ) FILTER (WHERE s.data IS NOT NULL), '[]'::json) as saidas,
+            COALESCE(json_agg(
+                jsonb_build_object(
+                    'data', p.data,
+                    'tipo', 'producao',
+                    'qtd', p.quantidade
+                ) ORDER BY p.data
+            ) FILTER (WHERE p.data IS NOT NULL), '[]'::json) as producoes
+        FROM todos_codigos c
+        LEFT JOIN estoque_atual e ON e.cod_produto = c.cod_produto
+        LEFT JOIN saidas_previstas s ON s.cod_produto = c.cod_produto
+        LEFT JOIN producoes_previstas p ON p.cod_produto = c.cod_produto
+        GROUP BY c.cod_produto, e.estoque
+        """
 
-        # Preparar itens em ruptura com detalhes
-        itens_ruptura = []
-        itens_disponiveis = []
-        valor_com_ruptura = 0.0
+        resultado_raw = db.session.execute(text(query_sql), {'codigos_array': list(todos_codigos)}).fetchall()
 
-        for produto_ruptura in resultado_ruptura.get('produtos_em_ruptura', []):
-            # Buscar informações do produto na carteira
-            pedido_produto = next(
-                (p for p in pedidos_cnpj if p.cod_produto == produto_ruptura['cod_produto']),
-                None
+        # Converter resultado e agregar por produto principal
+        dados_por_codigo = {}
+        for row in resultado_raw:
+            cod_produto = row[0]
+            estoque_atual = float(row[1] or 0)
+            saidas = row[2] if row[2] else []
+            producoes = row[3] if row[3] else []
+
+            dados_por_codigo[cod_produto] = {
+                'estoque': estoque_atual,
+                'saidas': saidas,
+                'producoes': producoes
+            }
+
+        # Agregar por produto principal (unificação)
+        dados_produtos = {}
+        for produto_principal, codigos_relacionados in produtos_expandidos.items():
+            estoque_total = 0
+            todas_saidas = []
+            todas_producoes = []
+
+            for codigo in codigos_relacionados:
+                if codigo in dados_por_codigo:
+                    estoque_total += dados_por_codigo[codigo]['estoque']
+                    todas_saidas.extend(dados_por_codigo[codigo]['saidas'])
+                    todas_producoes.extend(dados_por_codigo[codigo]['producoes'])
+
+            # Calcular projeção D+7
+            def calcular_projecao(estoque_atual, saidas, producoes):
+                data_inicio = date.today()
+                estoque_dia = float(estoque_atual)
+                menor_estoque = estoque_dia
+
+                saidas_por_data = {s['data']: float(s['qtd']) for s in saidas if s}
+                producoes_por_data = {p['data']: float(p['qtd']) for p in producoes if p}
+
+                for dias in range(8):
+                    data = data_inicio + timedelta(days=dias)
+                    data_str = data.isoformat()
+
+                    saida_dia = saidas_por_data.get(data_str, 0)
+                    entrada_dia = producoes_por_data.get(data_str, 0)
+
+                    estoque_dia = estoque_dia - saida_dia + entrada_dia
+                    menor_estoque = min(menor_estoque, estoque_dia)
+
+                return {'estoque_atual': estoque_atual, 'menor_estoque_d7': menor_estoque}
+
+            dados_produtos[produto_principal] = calcular_projecao(estoque_total, todas_saidas, todas_producoes)
+
+        tempo_query = (time.time() - inicio_query) * 1000
+
+        # ===== BUSCAR PRODUÇÕES FUTURAS (até D+28 para calcular data disponibilidade) =====
+        producoes_futuras = db.session.query(
+            ProgramacaoProducao.cod_produto,
+            ProgramacaoProducao.data_programacao,
+            func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
+        ).filter(
+            ProgramacaoProducao.cod_produto.in_(list(todos_codigos)),
+            ProgramacaoProducao.data_programacao >= datetime.now().date()
+        ).group_by(
+            ProgramacaoProducao.cod_produto,
+            ProgramacaoProducao.data_programacao
+        ).order_by(
+            ProgramacaoProducao.data_programacao
+        ).all()
+
+        # Organizar produções por produto principal
+        producoes_por_produto = {}
+        producoes_por_codigo = {}
+
+        for prod in producoes_futuras:
+            if prod.cod_produto not in producoes_por_codigo:
+                producoes_por_codigo[prod.cod_produto] = []
+            producoes_por_codigo[prod.cod_produto].append({
+                'data': prod.data_programacao,
+                'qtd': float(prod.qtd_producao)
+            })
+
+        # Agregar por produto principal
+        for produto_principal, codigos_relacionados in produtos_expandidos.items():
+            todas_producoes = []
+            for codigo in codigos_relacionados:
+                if codigo in producoes_por_codigo:
+                    todas_producoes.extend(producoes_por_codigo[codigo])
+
+            # Agrupar por data e somar
+            producoes_agrupadas = {}
+            for prod in todas_producoes:
+                data_str = prod['data'].isoformat() if hasattr(prod['data'], 'isoformat') else str(prod['data'])
+                if data_str not in producoes_agrupadas:
+                    producoes_agrupadas[data_str] = {'data': prod['data'], 'qtd': 0}
+                producoes_agrupadas[data_str]['qtd'] += prod['qtd']
+
+            producoes_por_produto[produto_principal] = sorted(
+                producoes_agrupadas.values(),
+                key=lambda x: x['data']
             )
 
-            if pedido_produto:
-                valor_produto = float(pedido_produto.qtd_saldo_produto_pedido or 0) * float(pedido_produto.preco_produto_pedido or 0)
-                valor_com_ruptura += valor_produto
+        # ===== ANÁLISE DOS ITENS =====
+        itens_com_ruptura = []
+        itens_disponiveis_lista = []
+        valor_total_pedido = 0
+        valor_com_ruptura = 0
+        datas_producao_ruptura = []
+        tem_item_sem_producao = False
 
-                # Buscar palletização para informações adicionais
-                pallet_info = db.session.query(CadastroPalletizacao).filter_by(
-                    cod_produto=produto_ruptura['cod_produto']
-                ).first()
+        for cod, info in produtos_agrupados.items():
+            qtd_saldo = info['qtd_saldo']
+            preco = info['preco']
+            valor_item = qtd_saldo * preco
+            valor_total_pedido += valor_item
 
-                itens_ruptura.append({
-                    'cod_produto': produto_ruptura['cod_produto'],
-                    'nome_produto': pedido_produto.nome_produto,
-                    'qtd_saldo': produto_ruptura['quantidade_necessaria'],
-                    'estoque_atual': produto_ruptura['estoque_atual'],
-                    'estoque_min_d7': produto_ruptura['estoque_projetado'],
-                    'data_producao': None,  # TODO: Buscar da programação de produção
-                    'qtd_producao': produto_ruptura['entradas_projetadas'],
-                    'data_disponivel': None,  # Produto em ruptura não tem data disponível imediata
-                    'falta': produto_ruptura.get('falta', 0)
+            dados = dados_produtos.get(cod, {})
+            estoque_atual = dados.get('estoque_atual', 0)
+            estoque_d7 = dados.get('menor_estoque_d7', 0)
+
+            if qtd_saldo > estoque_d7:
+                # Item COM RUPTURA
+                ruptura = qtd_saldo - estoque_d7
+                valor_com_ruptura += valor_item
+
+                producoes = producoes_por_produto.get(cod, [])
+                data_disponivel = None
+                primeira_producao = None
+                qtd_primeira_producao = 0
+
+                if producoes:
+                    primeira_producao = producoes[0]
+                    qtd_primeira_producao = primeira_producao['qtd']
+
+                    # Calcular quando terá estoque (IGUAL ruptura_sem_cache)
+                    qtd_acumulada = estoque_d7
+                    for prod in producoes:
+                        qtd_acumulada += prod['qtd']
+                        if qtd_acumulada >= qtd_saldo:
+                            data_disponivel = prod['data']
+                            data_disponivel = data_disponivel + timedelta(days=1)  # +1 dia lead time
+                            break
+
+                    if data_disponivel:
+                        datas_producao_ruptura.append(data_disponivel)
+                else:
+                    tem_item_sem_producao = True
+
+                itens_com_ruptura.append({
+                    'cod_produto': cod,
+                    'nome_produto': info['nome_produto'],
+                    'qtd_saldo': int(qtd_saldo),
+                    'estoque_atual': int(estoque_atual),
+                    'estoque_min_d7': int(estoque_d7),
+                    'ruptura_qtd': int(ruptura),
+                    'data_producao': primeira_producao['data'].isoformat() if primeira_producao else None,
+                    'qtd_producao': int(qtd_primeira_producao),
+                    'data_disponivel': data_disponivel.isoformat() if data_disponivel else None
+                })
+            else:
+                # Item SEM RUPTURA (disponível)
+                itens_disponiveis_lista.append({
+                    'cod_produto': cod,
+                    'nome_produto': info['nome_produto'],
+                    'qtd_saldo': int(qtd_saldo),
+                    'estoque_atual': int(estoque_atual),
+                    'estoque_min_d7': int(estoque_d7),
+                    'preco_unitario': preco,
+                    'valor_total': valor_item
                 })
 
-        # Preparar itens disponíveis
-        for produto_ok in resultado_ruptura.get('produtos_ok', []):
-            pedido_produto = next(
-                (p for p in pedidos_cnpj if p.cod_produto == produto_ok['cod_produto']),
-                None
-            )
+        # ===== MONTAR RESULTADO =====
+        tempo_total = (time.time() - inicio_total) * 1000
 
-            if pedido_produto:
-                itens_disponiveis.append({
-                    'cod_produto': produto_ok['cod_produto'],
-                    'nome_produto': pedido_produto.nome_produto,
-                    'qtd_saldo': produto_ok['quantidade_necessaria'],
-                    'estoque_atual': produto_ok['estoque_atual'],
-                    'estoque_min_d7': produto_ok['estoque_projetado']
-                })
+        if not itens_com_ruptura:
+            # Todos disponíveis
+            resposta = {
+                'success': True,
+                'cnpj': cnpj,
+                'data': {
+                    'resumo': {
+                        'num_pedido': f"CNPJ {cnpj}",
+                        'criticidade': 'BAIXA',
+                        'qtd_itens_ruptura': 0,
+                        'qtd_itens_disponiveis': len(itens_disponiveis_lista),
+                        'total_itens': len(itens_disponiveis_lista),
+                        'percentual_disponibilidade': 100.0,
+                        'percentual_ruptura': 0.0,
+                        'valor_total_pedido': round(valor_total_pedido, 2),
+                        'valor_com_ruptura': 0,
+                        'data_disponibilidade_total': 'agora'
+                    },
+                    'itens': [],
+                    'itens_disponiveis': itens_disponiveis_lista
+                }
+            }
+            logger.info(f"✅ CNPJ {cnpj} OK em {tempo_total:.2f}ms")
+            return jsonify(resposta)
 
-        # Calcular percentuais
-        total_itens = len(resultado_ruptura.get('produtos_em_ruptura', [])) + \
-                     len(resultado_ruptura.get('produtos_ok', [])) + \
-                     len(resultado_ruptura.get('produtos_criticos', []))
+        # Calcular métricas
+        percentual_ruptura = (valor_com_ruptura / valor_total_pedido * 100) if valor_total_pedido > 0 else 0
+        percentual_disponibilidade = 100 - percentual_ruptura
 
-        qtd_itens_ruptura = len(resultado_ruptura.get('produtos_em_ruptura', []))
-        qtd_itens_disponiveis = len(resultado_ruptura.get('produtos_ok', []))
+        # Data disponibilidade total (IGUAL ruptura_sem_cache)
+        if tem_item_sem_producao:
+            data_disponibilidade_total = None
+        elif datas_producao_ruptura:
+            data_disponibilidade_total = max(datas_producao_ruptura).isoformat()
+        else:
+            data_disponibilidade_total = None
 
-        percentual_disponibilidade = (qtd_itens_disponiveis / total_itens * 100) if total_itens > 0 else 100.0
-        percentual_ruptura = (qtd_itens_ruptura / total_itens * 100) if total_itens > 0 else 0.0
-
-        # Determinar criticidade
-        if percentual_ruptura >= 50:
+        # Criticidade
+        qtd_itens_ruptura = len(itens_com_ruptura)
+        if qtd_itens_ruptura > 3 and percentual_ruptura > 10:
             criticidade = 'CRITICA'
-        elif percentual_ruptura >= 30:
+        elif qtd_itens_ruptura <= 3 and percentual_ruptura <= 10:
             criticidade = 'ALTA'
-        elif percentual_ruptura >= 10:
+        elif qtd_itens_ruptura <= 2 and percentual_ruptura <= 5:
             criticidade = 'MEDIA'
         else:
             criticidade = 'BAIXA'
 
-        # Montar resposta no formato esperado pelo modal
         resposta = {
             'success': True,
             'cnpj': cnpj,
             'data': {
                 'resumo': {
-                    'num_pedido': f"CNPJ {cnpj}",  # Identificação
+                    'num_pedido': f"CNPJ {cnpj}",
                     'criticidade': criticidade,
                     'qtd_itens_ruptura': qtd_itens_ruptura,
-                    'qtd_itens_disponiveis': qtd_itens_disponiveis,
-                    'total_itens': total_itens,
-                    'percentual_disponibilidade': round(percentual_disponibilidade, 2),
+                    'qtd_itens_disponiveis': len(itens_disponiveis_lista),
+                    'total_itens': len(produtos_agrupados),
+                    'percentual_disponibilidade': round(percentual_disponibilidade, 0),
                     'percentual_ruptura': round(percentual_ruptura, 2),
-                    'valor_total_pedido': valor_total,
-                    'valor_com_ruptura': valor_com_ruptura,
-                    'data_disponibilidade_total': data_agendamento.strftime('%Y-%m-%d') if qtd_itens_ruptura > 0 else None
+                    'valor_total_pedido': round(valor_total_pedido, 2),
+                    'valor_com_ruptura': round(valor_com_ruptura, 2),
+                    'data_disponibilidade_total': data_disponibilidade_total
                 },
-                'itens': itens_ruptura,
-                'itens_disponiveis': itens_disponiveis
+                'itens': itens_com_ruptura,
+                'itens_disponiveis': itens_disponiveis_lista
             }
         }
 
-        logger.info(f"Ruptura analisada: {qtd_itens_ruptura}/{total_itens} itens em ruptura ({percentual_ruptura:.1f}%)")
-
+        logger.info(f"⚠️ CNPJ {cnpj} com ruptura em {tempo_total:.2f}ms")
         return jsonify(resposta)
 
     except Exception as e:

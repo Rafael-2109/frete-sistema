@@ -268,12 +268,12 @@ def _calcular_entradas_projetadas(cod_produto: str, data_inicio: date, data_fim:
     """
     try:
         producao = db.session.query(
-            func.sum(ProgramacaoProducao.quantidade_programada)
+            func.sum(ProgramacaoProducao.qtd_programada)
         ).filter(
             and_(
                 ProgramacaoProducao.cod_produto == cod_produto,
-                ProgramacaoProducao.data_producao >= data_inicio,
-                ProgramacaoProducao.data_producao <= data_fim,
+                ProgramacaoProducao.data_programacao >= data_inicio,
+                ProgramacaoProducao.data_programacao <= data_fim,
                 ProgramacaoProducao.status.in_(['programado', 'em_producao'])
             )
         ).scalar()

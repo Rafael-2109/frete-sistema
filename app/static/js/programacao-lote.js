@@ -102,9 +102,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Usar novo endpoint que analisa TODOS os pedidos do CNPJ
             console.log(`Analisando ruptura para CNPJ ${cnpj} - TODOS os pedidos`);
 
+            // Fazer URL encoding do CNPJ para evitar problemas com caracteres especiais (/, -, .)
+            const cnpjEncoded = encodeURIComponent(cnpj);
+            console.log(`CNPJ original: ${cnpj} | CNPJ encoded: ${cnpjEncoded}`);
+
             // Fazer chamada ao endpoint que consolida TODOS os produtos do CNPJ
-            console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
-            const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
+            console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpjEncoded}`);
+            const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpjEncoded}`);
             
             console.log('Status da resposta:', response.status);
             console.log('Status OK?', response.ok);
@@ -124,18 +128,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 const disponibilidade = Math.round(resumo.percentual_disponibilidade || 0);
 
                 // Usar data_disponibilidade_total que vem da API
-                let dataCompleta = resumo.data_disponibilidade_total || 'Disponível';
+                let dataCompleta = resumo.data_disponibilidade_total;
 
-                // Formatar data se vier no formato YYYY-MM-DD
-                if (dataCompleta && dataCompleta !== 'Disponível' && dataCompleta.includes('-')) {
+                // Tratar diferentes formatos de resposta
+                if (!dataCompleta || dataCompleta === 'null' || dataCompleta === 'agora') {
+                    dataCompleta = 'Disponível';
+                } else if (dataCompleta.includes('-')) {
+                    // Formatar data ISO (YYYY-MM-DD) para DD/MM
                     const partes = dataCompleta.split('-');
                     if (partes.length === 3) {
                         const [ano, mes, dia] = partes;
                         dataCompleta = `${dia}/${mes}`;  // Formato DD/MM
                     }
-                } else if (dataCompleta === null || dataCompleta === 'null' || !dataCompleta) {
-                    dataCompleta = 'Disponível';
                 }
+
+                console.log(`Data completa formatada: ${dataCompleta}`);
+                console.log(`Disponibilidade: ${disponibilidade}%`);
 
                 // Atualizar botão
                 const span = btn.querySelector('.ruptura-info');
@@ -146,21 +154,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Formatação consistente: X% | Disp. DD/MM ou X% | Disponível
                 if (disponibilidade === 100) {
+                    // 100% disponível - sempre mostra "Disponível"
                     span.innerHTML = `100% | Disponível`;
                     btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
                     btn.classList.add('btn-success');
-                } else if (disponibilidade >= 80) {
-                    // Se tem data, mostrar "Disp. DD/MM", senão "Parcial"
-                    const textoData = (dataCompleta && dataCompleta !== 'Disponível') ? `Disp. ${dataCompleta}` : 'Parcial';
-                    span.innerHTML = `${disponibilidade}% | ${textoData}`;
-                    btn.classList.remove('btn-primary', 'btn-success', 'btn-danger');
-                    btn.classList.add('btn-warning');
                 } else {
-                    // Se tem data, mostrar "Disp. DD/MM", senão "Ruptura"
-                    const textoData = (dataCompleta && dataCompleta !== 'Disponível') ? `Disp. ${dataCompleta}` : 'Ruptura';
+                    // Tem ruptura - mostrar data se disponível, senão mostrar texto apropriado
+                    let textoData;
+                    if (dataCompleta && dataCompleta !== 'Disponível') {
+                        // Tem data de disponibilidade calculada
+                        textoData = `Disp. ${dataCompleta}`;
+                    } else {
+                        // Sem data (sem produção programada)
+                        textoData = disponibilidade >= 80 ? 'Parcial' : 'Sem Produção';
+                    }
+
                     span.innerHTML = `${disponibilidade}% | ${textoData}`;
-                    btn.classList.remove('btn-primary', 'btn-success', 'btn-warning');
-                    btn.classList.add('btn-danger');
+
+                    // Cor do botão conforme severidade
+                    btn.classList.remove('btn-primary', 'btn-success', 'btn-warning', 'btn-danger');
+                    if (disponibilidade >= 80) {
+                        btn.classList.add('btn-warning');  // Amarelo: quase pronto
+                    } else {
+                        btn.classList.add('btn-danger');   // Vermelho: ruptura crítica
+                    }
                 }
 
                 // Guardar dados completos para uso no modal
@@ -455,15 +472,21 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Guardar texto original antes do try
+        const originalText = btn.innerHTML;
+
         try {
             // Mostrar loading
             btn.disabled = true;
-            const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analisando...';
 
+            // Fazer URL encoding do CNPJ para evitar problemas com caracteres especiais (/, -, .)
+            const cnpjEncoded = encodeURIComponent(cnpj);
+            console.log(`CNPJ original: ${cnpj} | CNPJ encoded: ${cnpjEncoded}`);
+
             // Fazer requisição para API de ruptura consolidada (TODOS os pedidos do CNPJ)
-            console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
-            const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
+            console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpjEncoded}`);
+            const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpjEncoded}`);
 
             console.log('Status da resposta:', response.status);
 

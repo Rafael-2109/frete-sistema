@@ -15,8 +15,9 @@ programacao_em_lote_bp = Blueprint(
 # Importar rotas depois de criar o blueprint - FORÇA IMPORTAÇÃO
 from .routes import (
     listar,
-    analisar_estoques, 
+    analisar_estoques,
     sugerir_datas,
+    analisar_ruptura_cnpj,  # ✅ Nova função que analisa TODO o CNPJ
     analisar_ruptura_lote,
 )
 
