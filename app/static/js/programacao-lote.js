@@ -99,84 +99,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Análise simplificada de ruptura para o botão
     async function analisarRupturaSimplificada(cnpj, btn) {
         try {
-            // Tentar parsear pedidos se existir
-            let pedidosData = [];
-            let numerosPedidos = [];
-            
-            // Processar pedidos - agora é uma string simples separada por vírgula
-            if (btn.dataset.pedidos) {
-                const pedidosString = btn.dataset.pedidos.trim();
-                console.log('Valor de data-pedidos:', pedidosString);
-                
-                if (pedidosString) {
-                    // Dividir por vírgula e remover espaços
-                    numerosPedidos = pedidosString
-                        .split(',')
-                        .map(p => p.trim())
-                        .filter(p => p && p !== '');
-                    
-                    console.log('Números de pedidos extraídos:', numerosPedidos);
-                }
-            }
-            
-            console.log('Números de pedidos extraídos:', numerosPedidos);
-            console.log('Quantidade de pedidos:', numerosPedidos.length);
-            
-            // Se não há pedidos, mostrar como disponível
-            if (!numerosPedidos || numerosPedidos.length === 0) {
-                const span = btn.querySelector('.ruptura-info');
-                if (span) {
-                    span.innerHTML = `100% | Disponível`;
-                    btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
-                    btn.classList.add('btn-success');
-                }
-                return;
-            }
-            
-            // Pegar o primeiro pedido para análise real via API
-            const numPedido = numerosPedidos[0];
-            console.log(`Analisando ruptura para CNPJ ${cnpj}, pedido ${numPedido}`);
-            
-            // Fazer chamada real à API de ruptura
-            console.log(`Fazendo requisição para: /carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
-            const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
+            // Usar novo endpoint que analisa TODOS os pedidos do CNPJ
+            console.log(`Analisando ruptura para CNPJ ${cnpj} - TODOS os pedidos`);
+
+            // Fazer chamada ao endpoint que consolida TODOS os produtos do CNPJ
+            console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
+            const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
             
             console.log('Status da resposta:', response.status);
             console.log('Status OK?', response.ok);
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('Erro na resposta da API:', response.status, errorText);
                 throw new Error(`API retornou erro ${response.status}: ${errorText}`);
             }
-            
+
             const data = await response.json();
-            console.log('Dados da API de ruptura:', data);
-            console.log('Estrutura detalhada:');
-            console.log('- data.success:', data.success);
-            console.log('- data.data:', data.data);
-            console.log('- data.data?.resumo:', data.data?.resumo);
-            console.log('- data.message:', data.message);
-            console.log('- Chaves em data:', Object.keys(data));
-            if (data.data) {
-                console.log('- Chaves em data.data:', Object.keys(data.data));
-            }
-            
-            // A API retorna diretamente o objeto resultado, não tem campo 'success' no nível principal
-            // Verificar se tem a estrutura esperada: data.resumo ou data.data.resumo
-            const dadosRupturaAPI = data.data || data;  // Pode vir em data.data ou direto em data
-            
-            if (dadosRupturaAPI && dadosRupturaAPI.resumo) {
-                const resumo = dadosRupturaAPI.resumo;
+            console.log('Dados da API de ruptura (CNPJ completo):', data);
+
+            // Novo formato: { success: true, cnpj: "...", data: { resumo: {...}, itens: [...], itens_disponiveis: [...] } }
+            if (data.success && data.data && data.data.resumo) {
+                const resumo = data.data.resumo;
                 const disponibilidade = Math.round(resumo.percentual_disponibilidade || 0);
-                
-                // Debug da data
-                console.log('Data disponibilidade no resumo:', resumo.data_disponibilidade_total);
-                console.log('Data disponibilidade no dadosRupturaAPI:', dadosRupturaAPI.data_disponibilidade_total);
-                
+
                 // Usar data_disponibilidade_total que vem da API
-                let dataCompleta = resumo.data_disponibilidade_total || dadosRupturaAPI.data_disponibilidade_total || 'Disponível';
-                
+                let dataCompleta = resumo.data_disponibilidade_total || 'Disponível';
+
                 // Formatar data se vier no formato YYYY-MM-DD
                 if (dataCompleta && dataCompleta !== 'Disponível' && dataCompleta.includes('-')) {
                     const partes = dataCompleta.split('-');
@@ -187,14 +136,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (dataCompleta === null || dataCompleta === 'null' || !dataCompleta) {
                     dataCompleta = 'Disponível';
                 }
-                
+
                 // Atualizar botão
                 const span = btn.querySelector('.ruptura-info');
                 if (!span) {
                     console.error('Span .ruptura-info não encontrado');
                     return;
                 }
-                
+
                 // Formatação consistente: X% | Disp. DD/MM ou X% | Disponível
                 if (disponibilidade === 100) {
                     span.innerHTML = `100% | Disponível`;
@@ -213,17 +162,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     btn.classList.remove('btn-primary', 'btn-success', 'btn-warning');
                     btn.classList.add('btn-danger');
                 }
-                
-                // Guardar dados reais da API
+
+                // Guardar dados completos para uso no modal
                 dadosRuptura[cnpj] = {
                     disponibilidade: disponibilidade,
                     dataCompleta: dataCompleta,
                     resumo: resumo,
-                    itens: dadosRupturaAPI.itens || [],
-                    itens_disponiveis: dadosRupturaAPI.itens_disponiveis || []
+                    itens: data.data.itens || [],
+                    itens_disponiveis: data.data.itens_disponiveis || []
                 };
-                
-                console.log(`Ruptura analisada para ${cnpj}:`, disponibilidade + '%', dataCompleta);
+
+                console.log(`Ruptura analisada para CNPJ ${cnpj}: ${disponibilidade}% disponível (${resumo.qtd_itens_disponiveis}/${resumo.total_itens} itens)`);
             } else {
                 // Se falhou, mostrar como disponível
                 console.log('Falha na API ou sem dados, mostrando como disponível');
@@ -487,45 +436,17 @@ document.addEventListener('DOMContentLoaded', function() {
     async function handleAnalisarRupturaIndividual(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const btn = e.currentTarget;
         const cnpj = btn.dataset.cnpj;
-        
-        // Parsear e extrair números de pedidos
-        let pedidosData = [];
-        let numerosPedidos = [];
-        
-        // Processar pedidos - agora é uma string simples separada por vírgula
-        const pedidosString = (btn.dataset.pedidos || '').trim();
-        console.log('Valor de data-pedidos (click):', pedidosString);
-        
-        if (pedidosString) {
-            // Dividir por vírgula e remover espaços
-            numerosPedidos = pedidosString
-                .split(',')
-                .map(p => p.trim())
-                .filter(p => p && p !== '');
-            
-            console.log('Números de pedidos extraídos:', numerosPedidos);
-        }
-        
+
         console.log('handleAnalisarRupturaIndividual chamado para CNPJ:', cnpj);
-        console.log('Números de pedidos extraídos:', numerosPedidos);
-        
-        // Se não há pedidos para este CNPJ, retornar
-        if (!numerosPedidos || numerosPedidos.length === 0) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Sem pedidos',
-                text: 'Não há pedidos para analisar neste CNPJ'
-            });
-            return;
-        }
-        
+
         // Verificar se já temos dados em cache
         if (dadosRuptura[cnpj] && dadosRuptura[cnpj].resumo) {
             console.log('Usando dados em cache para', cnpj);
-            console.log('Itens disponíveis em cache:', dadosRuptura[cnpj].itens_disponiveis?.length || 0);
+            console.log('Itens em ruptura:', dadosRuptura[cnpj].itens?.length || 0);
+            console.log('Itens disponíveis:', dadosRuptura[cnpj].itens_disponiveis?.length || 0);
             mostrarModalRupturaDetalhado({
                 resumo: dadosRuptura[cnpj].resumo,
                 itens: dadosRuptura[cnpj].itens || [],
@@ -533,70 +454,64 @@ document.addEventListener('DOMContentLoaded', function() {
             }, cnpj);
             return;
         }
-        
-        // Pegar o primeiro pedido (principal) para análise
-        const numPedido = numerosPedidos[0];
-        console.log('Fazendo chamada à API para pedido:', numPedido);
-        
+
         try {
             // Mostrar loading
             btn.disabled = true;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analisando...';
-            
-            // Fazer requisição para API de ruptura
-            console.log(`Fazendo requisição manual para: /carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
-            const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`);
-            
-            console.log('Status da resposta (manual):', response.status);
-            console.log('Status OK?', response.ok);
-            
+
+            // Fazer requisição para API de ruptura consolidada (TODOS os pedidos do CNPJ)
+            console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
+            const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpj}`);
+
+            console.log('Status da resposta:', response.status);
+
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('Erro na resposta da API (manual):', response.status, errorText);
+                console.error('Erro na resposta da API:', response.status, errorText);
                 throw new Error(`API retornou erro ${response.status}: ${errorText}`);
             }
-            
+
             const data = await response.json();
-            console.log('Resposta da API (manual):', data);
-            
+            console.log('Resposta da API (modal):', data);
+
             // Restaurar botão
             btn.disabled = false;
             btn.innerHTML = originalText;
-            
-            // A API retorna diretamente o objeto resultado
-            const dadosRupturaAPI = data.data || data;
-            
-            if (dadosRupturaAPI && dadosRupturaAPI.resumo) {
-                // Salvar em cache de forma segura (usando o objeto global)
+
+            // Novo formato: { success: true, cnpj: "...", data: { resumo: {...}, itens: [...], itens_disponiveis: [...] } }
+            if (data.success && data.data && data.data.resumo) {
+                // Salvar em cache
                 dadosRuptura[cnpj] = {
                     ...(dadosRuptura[cnpj] || {}),
-                    resumo: dadosRupturaAPI.resumo,
-                    itens: dadosRupturaAPI.itens || [],
-                    itens_disponiveis: dadosRupturaAPI.itens_disponiveis || []
+                    resumo: data.data.resumo,
+                    itens: data.data.itens || [],
+                    itens_disponiveis: data.data.itens_disponiveis || []
                 };
-                
-                // Criar e mostrar modal de ruptura
+
+                // Mostrar modal com dados completos
                 console.log('Chamando mostrarModalRupturaDetalhado');
-                console.log('Itens disponíveis:', dadosRupturaAPI.itens_disponiveis?.length || 0);
-                mostrarModalRupturaDetalhado(dadosRupturaAPI, cnpj);
+                console.log('Itens em ruptura:', data.data.itens?.length || 0);
+                console.log('Itens disponíveis:', data.data.itens_disponiveis?.length || 0);
+                mostrarModalRupturaDetalhado(data.data, cnpj);
             } else {
                 console.error('API retornou erro:', data);
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro na análise',
-                    text: data.message || 'Erro ao analisar ruptura'
+                    text: data.error || 'Erro ao analisar ruptura'
                 });
             }
         } catch (error) {
             console.error('Erro ao analisar ruptura:', error);
             btn.disabled = false;
-            btn.innerHTML = '<span class="text-danger">Erro</span>';
-            
+            btn.innerHTML = originalText;
+
             Swal.fire({
                 icon: 'error',
                 title: 'Erro',
-                text: 'Erro ao analisar ruptura do pedido: ' + error.message
+                text: 'Erro ao analisar ruptura do CNPJ: ' + error.message
             });
         }
     }

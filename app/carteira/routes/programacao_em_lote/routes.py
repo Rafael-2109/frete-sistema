@@ -1146,6 +1146,147 @@ def sugerir_datas(rede):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@programacao_em_lote_bp.route('/api/analisar-ruptura-cnpj/<cnpj>', methods=['GET'])
+@login_required
+def analisar_ruptura_cnpj(cnpj):
+    """
+    API para análise de ruptura de UM CNPJ considerando TODOS os seus pedidos
+    Usa as funções consolidadas de ruptura_utils.py
+    Retorna formato compatível com o modal de ruptura existente
+    """
+    try:
+        from .ruptura_utils import analisar_ruptura_lote as analisar_ruptura_funcao
+        from app.producao.models import CadastroPalletizacao
+
+        logger.info(f"Analisando ruptura para CNPJ {cnpj} - TODOS os pedidos")
+
+        # Data de agendamento para análise (D+7 para projeção)
+        data_agendamento = date.today() + timedelta(days=7)
+
+        # Chamar função que AGREGA todos os produtos do CNPJ
+        resultado_ruptura = analisar_ruptura_funcao([cnpj], data_agendamento)
+
+        # Buscar informações adicionais do CNPJ para o resumo
+        pedidos_cnpj = db.session.query(CarteiraPrincipal).filter(
+            and_(
+                CarteiraPrincipal.cnpj_cpf == cnpj,
+                CarteiraPrincipal.ativo == True,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            )
+        ).all()
+
+        # Calcular valores totais
+        valor_total = sum(
+            float(p.qtd_saldo_produto_pedido or 0) * float(p.preco_produto_pedido or 0)
+            for p in pedidos_cnpj
+        )
+
+        # Preparar itens em ruptura com detalhes
+        itens_ruptura = []
+        itens_disponiveis = []
+        valor_com_ruptura = 0.0
+
+        for produto_ruptura in resultado_ruptura.get('produtos_em_ruptura', []):
+            # Buscar informações do produto na carteira
+            pedido_produto = next(
+                (p for p in pedidos_cnpj if p.cod_produto == produto_ruptura['cod_produto']),
+                None
+            )
+
+            if pedido_produto:
+                valor_produto = float(pedido_produto.qtd_saldo_produto_pedido or 0) * float(pedido_produto.preco_produto_pedido or 0)
+                valor_com_ruptura += valor_produto
+
+                # Buscar palletização para informações adicionais
+                pallet_info = db.session.query(CadastroPalletizacao).filter_by(
+                    cod_produto=produto_ruptura['cod_produto']
+                ).first()
+
+                itens_ruptura.append({
+                    'cod_produto': produto_ruptura['cod_produto'],
+                    'nome_produto': pedido_produto.nome_produto,
+                    'qtd_saldo': produto_ruptura['quantidade_necessaria'],
+                    'estoque_atual': produto_ruptura['estoque_atual'],
+                    'estoque_min_d7': produto_ruptura['estoque_projetado'],
+                    'data_producao': None,  # TODO: Buscar da programação de produção
+                    'qtd_producao': produto_ruptura['entradas_projetadas'],
+                    'data_disponivel': None,  # Produto em ruptura não tem data disponível imediata
+                    'falta': produto_ruptura.get('falta', 0)
+                })
+
+        # Preparar itens disponíveis
+        for produto_ok in resultado_ruptura.get('produtos_ok', []):
+            pedido_produto = next(
+                (p for p in pedidos_cnpj if p.cod_produto == produto_ok['cod_produto']),
+                None
+            )
+
+            if pedido_produto:
+                itens_disponiveis.append({
+                    'cod_produto': produto_ok['cod_produto'],
+                    'nome_produto': pedido_produto.nome_produto,
+                    'qtd_saldo': produto_ok['quantidade_necessaria'],
+                    'estoque_atual': produto_ok['estoque_atual'],
+                    'estoque_min_d7': produto_ok['estoque_projetado']
+                })
+
+        # Calcular percentuais
+        total_itens = len(resultado_ruptura.get('produtos_em_ruptura', [])) + \
+                     len(resultado_ruptura.get('produtos_ok', [])) + \
+                     len(resultado_ruptura.get('produtos_criticos', []))
+
+        qtd_itens_ruptura = len(resultado_ruptura.get('produtos_em_ruptura', []))
+        qtd_itens_disponiveis = len(resultado_ruptura.get('produtos_ok', []))
+
+        percentual_disponibilidade = (qtd_itens_disponiveis / total_itens * 100) if total_itens > 0 else 100.0
+        percentual_ruptura = (qtd_itens_ruptura / total_itens * 100) if total_itens > 0 else 0.0
+
+        # Determinar criticidade
+        if percentual_ruptura >= 50:
+            criticidade = 'CRITICA'
+        elif percentual_ruptura >= 30:
+            criticidade = 'ALTA'
+        elif percentual_ruptura >= 10:
+            criticidade = 'MEDIA'
+        else:
+            criticidade = 'BAIXA'
+
+        # Montar resposta no formato esperado pelo modal
+        resposta = {
+            'success': True,
+            'cnpj': cnpj,
+            'data': {
+                'resumo': {
+                    'num_pedido': f"CNPJ {cnpj}",  # Identificação
+                    'criticidade': criticidade,
+                    'qtd_itens_ruptura': qtd_itens_ruptura,
+                    'qtd_itens_disponiveis': qtd_itens_disponiveis,
+                    'total_itens': total_itens,
+                    'percentual_disponibilidade': round(percentual_disponibilidade, 2),
+                    'percentual_ruptura': round(percentual_ruptura, 2),
+                    'valor_total_pedido': valor_total,
+                    'valor_com_ruptura': valor_com_ruptura,
+                    'data_disponibilidade_total': data_agendamento.strftime('%Y-%m-%d') if qtd_itens_ruptura > 0 else None
+                },
+                'itens': itens_ruptura,
+                'itens_disponiveis': itens_disponiveis
+            }
+        }
+
+        logger.info(f"Ruptura analisada: {qtd_itens_ruptura}/{total_itens} itens em ruptura ({percentual_ruptura:.1f}%)")
+
+        return jsonify(resposta)
+
+    except Exception as e:
+        logger.error(f"Erro ao analisar ruptura do CNPJ {cnpj}: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'cnpj': cnpj
+        }), 500
+
+
 @programacao_em_lote_bp.route('/api/analisar-ruptura-lote', methods=['POST'])
 @login_required
 def analisar_ruptura_lote():
