@@ -356,10 +356,11 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                     nome_cidade=item.municipio,
                     cod_uf=item.estado,
 
-                    # Dados do agendamento
+                    # Dados do agendamento ✅ CORRIGIDO: preencher com valores fornecidos
                     protocolo=protocolo,
-                    agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
-                    expedicao=None,    # ZERAR - para validar se foi realmente agendado
+                    agendamento=data_agendamento,  # ✅ Preencher com data fornecida
+                    expedicao=data_expedicao,      # ✅ Preencher com data fornecida
+                    agendamento_confirmado=False,  # ✅ False para indicar que ainda não foi confirmado no portal
 
                     # Manter observ_ped_1 original se houver (truncado)
                     observ_ped_1=truncar_observacao(item.observ_ped_1),
@@ -376,8 +377,8 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
 
                 logger.debug(f"      Criada Separação para {chave_item}: {saldo_liquido} unidades (tipo: {tipo_envio})")
 
-        # 3. ATUALIZAR SEPARAÇÕES EXISTENTES COM O PROTOCOLO
-        # IMPORTANTE: Zerar datas de agendamento/expedição primeiro para validação posterior
+        # 3. ATUALIZAR SEPARAÇÕES EXISTENTES COM PROTOCOLO, EXPEDIÇÃO E AGENDAMENTO
+        # ✅ CORRIGIDO: Preencher datas imediatamente
 
         # Separações não faturadas
         logger.info("  📝 Atualizando Separações não faturadas...")
@@ -387,9 +388,10 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                 Separacao.sincronizado_nf == False,
             )
         ).update({
-            'protocolo': protocolo,  # Sobrescreve protocolo anterior se houver
-            'agendamento': None,  # ZERAR para preencher apenas no retorno
-            'expedicao': None     # ZERAR para validar se foi realmente agendado
+            'protocolo': protocolo,              # ✅ Protocolo único do CNPJ
+            'agendamento': data_agendamento,     # ✅ Preencher com data fornecida
+            'expedicao': data_expedicao,         # ✅ Preencher com data fornecida
+            'agendamento_confirmado': False      # ✅ Resetar para False
             # NÃO mexer em observ_ped_1
         })
         contador_atualizadas += resultado_nao_fat
@@ -402,9 +404,10 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                 Separacao.nf_cd == True
             )
         ).update({
-            'protocolo': protocolo,  # Sobrescreve protocolo anterior se houver
-            'agendamento': None,  # ZERAR para preencher apenas no retorno
-            'expedicao': None     # ZERAR para validar se foi realmente agendado
+            'protocolo': protocolo,              # ✅ Protocolo único do CNPJ
+            'agendamento': data_agendamento,     # ✅ Preencher com data fornecida
+            'expedicao': data_expedicao,         # ✅ Preencher com data fornecida
+            'agendamento_confirmado': False      # ✅ Resetar para False
             # NÃO mexer em observ_ped_1
         })
         contador_atualizadas += resultado_nf_cd

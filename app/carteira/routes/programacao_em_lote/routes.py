@@ -1163,9 +1163,15 @@ def analisar_ruptura_cnpj(cnpj):
         inicio_total = time.time()
         logger.info(f"Analisando ruptura para CNPJ {cnpj} - TODOS os pedidos")
 
-        # ===== BUSCAR ITENS DO CNPJ (AGRUPA PRODUTOS AUTOMATICAMENTE) =====
-        # IMPORTANTE: Filtrar qtd_saldo >= 0.001 para evitar floats zerados
-        itens = db.session.query(CarteiraPrincipal).options(
+        # ===== BUSCAR ITENS DO CNPJ - OPÇÃO 2 =====
+        # 1. CarteiraPrincipal (qtd_saldo > 0) - representa tudo não faturado
+        # 2. Separacao (sincronizado_nf=True AND nf_cd=True) - NFs voltaram para CD
+
+        produtos_agrupados = {}
+
+        # 1. Buscar de CarteiraPrincipal
+        logger.info("  📋 Buscando de CarteiraPrincipal...")
+        itens_carteira = db.session.query(CarteiraPrincipal).options(
             load_only(
                 CarteiraPrincipal.cod_produto,
                 CarteiraPrincipal.nome_produto,
@@ -1178,15 +1184,7 @@ def analisar_ruptura_cnpj(cnpj):
             CarteiraPrincipal.qtd_saldo_produto_pedido >= 0.001
         ).all()
 
-        if not itens:
-            return jsonify({
-                'success': False,
-                'message': 'CNPJ não encontrado ou todos os itens já foram faturados'
-            }), 404
-
-        # Agrupar produtos e somar quantidades (CONSOLIDAÇÃO POR CNPJ)
-        produtos_agrupados = {}
-        for item in itens:
+        for item in itens_carteira:
             cod = item.cod_produto
             if cod not in produtos_agrupados:
                 produtos_agrupados[cod] = {
@@ -1196,6 +1194,50 @@ def analisar_ruptura_cnpj(cnpj):
                     'preco': float(item.preco_produto_pedido or 0)
                 }
             produtos_agrupados[cod]['qtd_saldo'] += float(item.qtd_saldo_produto_pedido)
+
+        logger.info(f"  ✅ CarteiraPrincipal: {len(itens_carteira)} itens, {len(produtos_agrupados)} produtos únicos")
+
+        # 2. Buscar NFs no CD (sincronizado_nf=True AND nf_cd=True)
+        logger.info("  📄 Buscando NFs no CD...")
+        itens_nf_cd = db.session.query(Separacao).options(
+            load_only(
+                Separacao.cod_produto,
+                Separacao.nome_produto,
+                Separacao.qtd_saldo,
+                Separacao.valor_saldo
+            )
+        ).filter(
+            and_(
+                Separacao.cnpj_cpf == cnpj,
+                Separacao.sincronizado_nf == True,
+                Separacao.nf_cd == True,
+                Separacao.qtd_saldo > 0
+            )
+        ).all()
+
+        for item in itens_nf_cd:
+            cod = item.cod_produto
+            # Calcular preço médio: valor_saldo / qtd_saldo
+            preco_unitario = (float(item.valor_saldo) / float(item.qtd_saldo)) if item.qtd_saldo > 0 else 0
+
+            if cod not in produtos_agrupados:
+                produtos_agrupados[cod] = {
+                    'cod_produto': cod,
+                    'nome_produto': item.nome_produto or f"Produto {cod}",
+                    'qtd_saldo': 0,
+                    'preco': preco_unitario
+                }
+            produtos_agrupados[cod]['qtd_saldo'] += float(item.qtd_saldo)
+
+        logger.info(f"  ✅ NFs no CD: {len(itens_nf_cd)} itens adicionados")
+
+        if not produtos_agrupados:
+            return jsonify({
+                'success': False,
+                'message': 'CNPJ não encontrado ou todos os itens já foram faturados'
+            }), 404
+
+        logger.info(f"  ✅ TOTAL: {len(produtos_agrupados)} produtos únicos para análise")
 
         produtos_unicos = list(produtos_agrupados.keys())
 
@@ -1733,145 +1775,95 @@ def processar_agendamento_sendas_async():
             dados_completos['tipo_fluxo'] = 'programacao_lote'
             dados_completos['protocolo'] = protocolo  # Garantir que o protocolo está presente
 
+            # ✅ COMPARAR COM PLANILHA MODELO E GRAVAR NA FILA
+            logger.info(f"  🔍 Comparando {len(dados_completos['itens'])} itens com planilha modelo Sendas...")
+            from app.portal.sendas.service_comparacao_sendas import ComparacaoSendasService
+            comparacao_service = ComparacaoSendasService()
+
+            # Preparar solicitações para comparação (formato esperado pelo service)
+            solicitacoes = []
+            for item in dados_completos['itens']:
+                solicitacoes.append({
+                    'cnpj': cnpj,
+                    'num_pedido': item['num_pedido'],
+                    'pedido_cliente': item.get('pedido_cliente'),
+                    'cod_produto': item['cod_produto'],
+                    'nome_produto': item['nome_produto'],
+                    'quantidade': item['quantidade'],
+                    'data_agendamento': data_agendamento
+                })
+
+            # Comparar com planilha modelo (converte códigos, valida disponibilidade, etc)
+            resultado_comparacao = comparacao_service.comparar_multiplas_solicitacoes(solicitacoes)
+
+            # Verificar se a comparação foi bem-sucedida
+            if cnpj not in resultado_comparacao or not resultado_comparacao[cnpj].get('sucesso'):
+                erro_msg = resultado_comparacao.get(cnpj, {}).get('erro', 'Erro desconhecido na comparação')
+                logger.error(f"  ❌ Erro na comparação para CNPJ {cnpj}: {erro_msg}")
+                # Continuar mesmo com erro (outros CNPJs podem ter sucesso)
+                lista_cnpjs_agendamento.append(dados_completos)
+                continue
+
+            # Extrair itens confirmados da comparação
+            itens_comparados = resultado_comparacao[cnpj].get('itens', [])
+            if not itens_comparados:
+                logger.warning(f"  ⚠️ Nenhum item encontrado na planilha modelo para CNPJ {cnpj}")
+                lista_cnpjs_agendamento.append(dados_completos)
+                continue
+
+            logger.info(f"  ✅ {len(itens_comparados)} itens comparados com sucesso")
+
+            # Preparar itens para gravar na fila (usando dados da comparação)
+            itens_para_fila = []
+            for item_comp in itens_comparados:
+                # Dados da planilha modelo já estão em item_comp['encontrado']
+                encontrado = item_comp.get('encontrado', {})
+                solicitado = item_comp.get('solicitado', {})
+
+                itens_para_fila.append({
+                    'cnpj': cnpj,
+                    'num_pedido': solicitado.get('num_pedido'),
+                    'cod_produto': encontrado.get('codigo_produto_cliente'),  # ✅ Código Sendas
+                    'nome_produto': encontrado.get('descricao_item'),         # ✅ Descrição Sendas
+                    'quantidade': solicitado.get('quantidade'),
+                    'data_expedicao': data_expedicao,
+                    'data_agendamento': data_agendamento,
+                    'pedido_cliente': encontrado.get('codigo_pedido_cliente')  # ✅ Pedido Sendas
+                })
+
+            # Gravar na fila com tipo_origem='lote' e documento_origem=CNPJ
+            resultado_fila = comparacao_service.gravar_fila_agendamento(
+                itens_confirmados=itens_para_fila,
+                tipo_origem='lote',
+                documento_origem=cnpj
+            )
+
+            if resultado_fila['sucesso']:
+                logger.info(f"  ✅ {resultado_fila['total_itens']} itens gravados na fila com protocolo {protocolo}")
+            else:
+                logger.error(f"  ❌ Erro ao gravar na fila: {resultado_fila.get('erro')}")
+
             lista_cnpjs_agendamento.append(dados_completos)
-        
-        # Criar registro de integração no banco
-        # Gerar lote_id único usando a função padrão
-        lote_id = gerar_lote_id()
-        
-        # Preparar dados para JSONB - converter dates e estruturas complexas
-        lista_cnpjs_json = []
-        for item in lista_cnpjs_agendamento:
-            # Serializar item para JSON, convertendo dates e Decimals
-            item_json = {
-                'cnpj': item['cnpj'],
-                'data_agendamento': item['data_agendamento'].isoformat() if item.get('data_agendamento') and hasattr(item['data_agendamento'], 'isoformat') else str(item.get('data_agendamento')),
-                'data_expedicao': item['data_expedicao'].isoformat() if item.get('data_expedicao') and hasattr(item['data_expedicao'], 'isoformat') else str(item.get('data_expedicao')),
-                'protocolo': item.get('protocolo'),
-                'peso_total': float(item.get('peso_total', 0)),
-                'tipo_fluxo': item.get('tipo_fluxo', 'programacao_lote'),
-                'total_itens': len(item.get('itens', []))
-            }
-            lista_cnpjs_json.append(item_json)
-        
-        integracao = PortalIntegracao(
-            portal='sendas',
-            lote_id=lote_id,
-            tipo_lote='agendamento_lote',
-            status='aguardando',
-            dados_enviados={
-                'cnpjs': lista_cnpjs_json,  # Dados resumidos para log
-                'total': len(lista_cnpjs_json),
-                'usuario': current_user.nome if current_user else 'Sistema',
-                # Incluir metadados do fluxo nos dados_enviados
-                'tipo_fluxo': 'programacao_lote',
-                'origem': 'programacao_em_lote'
-            }
-        )
-        db.session.add(integracao)
-        db.session.commit()
-        
-        logger.info(f"📝 Integração criada com ID: {integracao.id}")
-        
-        # Enfileirar job no Redis Queue
-        try:
-            job = enqueue_job(
-                processar_sendas_job,
-                integracao.id,
-                lista_cnpjs_agendamento,
-                current_user.nome if current_user else 'Sistema',
-                queue_name='sendas',  # Usa fila específica do Sendas
-                timeout='15m'  # Timeout de 15 minutos
-            )
-            
-            # Salvar job_id na integração
-            integracao.job_id = job.id
-            db.session.commit()
-            
-            logger.info(f"✅ Job {job.id} enfileirado na fila 'sendas'")
-            
-            # Log de enfileiramento
-            log = PortalLog(
-                integracao_id=integracao.id,
-                acao='job_enfileirado',
-                sucesso=True,
-                mensagem=f'Job {job.id} criado para processar {len(lista_cnpjs_agendamento)} CNPJs',
-                dados_contexto={'job_id': job.id, 'queue': 'sendas'}
-            )
-            db.session.add(log)
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Processamento iniciado em background',
-                'job_id': job.id,
-                'integracao_id': integracao.id,
-                'total_cnpjs': len(lista_cnpjs_agendamento),
-                'status_url': f'/portal/api/status-job/{job.id}'
-            }), 202  # 202 Accepted - processamento assíncrono
-            
-        except Exception as queue_error:
-            logger.error(f"❌ Erro ao enfileirar job: {queue_error}")
-            
-            # Atualizar status da integração
-            integracao.status = 'erro'
-            integracao.resposta_portal = {'erro': str(queue_error)}
-            db.session.commit()
-            
-            # Se Redis não estiver disponível, sugerir processamento síncrono
-            return jsonify({
-                'success': False,
-                'error': 'Fila de processamento indisponível. Use o endpoint síncrono ou verifique o Redis.',
-                'detalhes': str(queue_error)
-            }), 503  # 503 Service Unavailable
-            
+
+        # ✅ PRONTO! Itens gravados na fila com status='pendente'
+        # O usuário pode exportar em /portal/sendas/exportacao
+
+        logger.info(f"✅ Processamento concluído: {len(lista_cnpjs_agendamento)} CNPJs agendados")
+        logger.info(f"📋 Planilhas disponíveis para exportação em /portal/sendas/exportacao")
+
+        return jsonify({
+            'success': True,
+            'message': f'{len(lista_cnpjs_agendamento)} CNPJs agendados com sucesso',
+            'total_cnpjs': len(lista_cnpjs_agendamento),
+            'cnpjs_processados': [item['cnpj'] for item in lista_cnpjs_agendamento],
+            'exportacao_url': '/portal/sendas/exportacao'
+        })
+
     except Exception as e:
-        logger.error(f"❌ Erro no endpoint assíncrono: {e}")
+        logger.error(f"❌ Erro no processamento: {e}")
         logger.error(traceback.format_exc())
-        
+
         return jsonify({
             'success': False,
-            'error': f'Erro ao iniciar processamento: {str(e)}'
+            'error': f'Erro ao processar agendamento: {str(e)}'
         }), 500
-
-
-@programacao_em_lote_bp.route('/api/status-job-sendas/<job_id>', methods=['GET'])
-@login_required
-def status_job_sendas(job_id):
-    """
-    Verifica o status de um job Sendas no Redis Queue
-    """
-    try:
-        from rq.job import Job
-        from app.portal.workers import get_redis_connection
-        
-        redis_conn = get_redis_connection()
-        job = Job.fetch(job_id, connection=redis_conn)
-        
-        status = job.get_status()
-        result = None
-        error = None
-        
-        if status == 'finished':
-            result = job.result
-        elif status == 'failed':
-            error = str(job.exc_info) if job.exc_info else 'Erro desconhecido'
-        
-        return jsonify({
-            'job_id': job_id,
-            'status': status,
-            'created_at': job.created_at.isoformat() if job.created_at else None,
-            'started_at': job.started_at.isoformat() if job.started_at else None,
-            'ended_at': job.ended_at.isoformat() if job.ended_at else None,
-            'result': result,
-            'error': error,
-            'meta': job.meta
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao verificar status do job {job_id}: {e}")
-        return jsonify({
-            'job_id': job_id,
-            'status': 'not_found',
-            'error': str(e)
-        }), 404
