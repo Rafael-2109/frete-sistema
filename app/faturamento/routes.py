@@ -621,6 +621,18 @@ def exportar_dados_faturamento():
             flash('Nenhum dado encontrado para exportar.', 'warning')
             return redirect(url_for('faturamento.listar_faturamento_produtos'))
         
+        # ✅ Função auxiliar para formatar números com separador BR
+        def formatar_numero_br(valor):
+            """Formata número com vírgula decimal e ponto para milhar"""
+            if valor is None or valor == 0:
+                return "0,00"
+            # Converte para float e formata
+            valor_float = float(valor)
+            # Formata com 2 casas decimais
+            valor_formatado = f"{valor_float:,.2f}"
+            # Troca separadores: . vira , e , vira .
+            return valor_formatado.replace(',', 'TEMP').replace('.', ',').replace('TEMP', '.')
+
         # Converter para formato Excel com colunas exatas
         dados_export = []
         for p in produtos:
@@ -631,31 +643,46 @@ def exportar_dados_faturamento():
                 'Linhas da fatura/Parceiro/Município': f"{p.municipio} ({p.estado})" if p.municipio and p.estado else p.municipio,
                 'Linhas da fatura/Produto/Referência': p.cod_produto,
                 'Linhas da fatura/Produto/Nome': p.nome_produto,
-                'Linhas da fatura/Quantidade': p.qtd_produto_faturado,
-                'Peso Unitário (kg)': p.peso_unitario_produto if p.peso_unitario_produto else 0,
-                'Peso Total (kg)': p.peso_total if p.peso_total else 0,
-                'Linhas da fatura/Valor Total do Item da NF': f"{p.valor_produto_faturado:,.2f}".replace('.', ',').replace(',', '.', 1),
-                'Linhas da fatura/Data': p.data_fatura.strftime('%d/%m/%Y') if p.data_fatura else '',
+                'Linhas da fatura/Quantidade': formatar_numero_br(p.qtd_produto_faturado),
+                'Peso Unitário (kg)': formatar_numero_br(p.peso_unitario_produto if p.peso_unitario_produto else 0),
+                'Peso Total (kg)': formatar_numero_br(p.peso_total if p.peso_total else 0),
+                'Linhas da fatura/Valor Total do Item da NF': formatar_numero_br(p.valor_produto_faturado),
+                'Linhas da fatura/Data': p.data_fatura if p.data_fatura else '',  # ✅ Mantém como objeto Date
+                'Número Pedido': p.origem if p.origem else '',  # ✅ NOVO: Coluna origem
                 'Status': getattr(p, 'status_nf', ''),
                 'Vendedor': p.vendedor,
                 'Incoterm': p.incoterm
             })
         
         df = pd.DataFrame(dados_export)
-        
+
+        # ✅ Converter coluna de data para datetime (formato Date do Excel)
+        if 'Linhas da fatura/Data' in df.columns:
+            df['Linhas da fatura/Data'] = pd.to_datetime(df['Linhas da fatura/Data'], errors='coerce')
+
         # Criar arquivo Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Faturamento Produto', index=False)
-            
+
+            # ✅ Formatar coluna de data como dd/mm/yyyy
+            worksheet = writer.sheets['Faturamento Produto']
+            for row in range(2, len(df) + 2):  # Começa da linha 2 (após cabeçalho)
+                # Encontrar coluna de data
+                for col_idx, col_name in enumerate(df.columns, start=1):
+                    if col_name == 'Linhas da fatura/Data':
+                        cell = worksheet.cell(row=row, column=col_idx)
+                        if cell.value:
+                            cell.number_format = 'DD/MM/YYYY'
+
             # Aba de estatísticas
             stats = pd.DataFrame({
                 'Estatística': ['Total de Registros', 'NFs Únicas', 'Produtos Únicos', 'Total Valor'],
                 'Valor': [
                     len(produtos),
                     len(set(p.numero_nf for p in produtos)),
-                    len(set(p.cod_produto for p in produtos)), 
-                    f"R$ {sum(p.valor_produto_faturado for p in produtos):,.2f}"
+                    len(set(p.cod_produto for p in produtos)),
+                    formatar_numero_br(sum(p.valor_produto_faturado for p in produtos))
                 ]
             })
             stats.to_excel(writer, sheet_name='Estatísticas', index=False)

@@ -44,9 +44,10 @@ class EmbarqueItemForm(FlaskForm):
     # ✅ CAMPOS EDITÁVEIS pelo usuário
     protocolo_agendamento = StringField('Protocolo de Agendamento', validators=[Optional()])
     data_agenda = StringField('Data do Embarque', validators=[Optional()])
+    agendamento_confirmado = BooleanField('Agendamento Confirmado', validators=[Optional()])  # ✅ ADICIONADO
     nota_fiscal = StringField('Nota Fiscal', validators=[Optional()])
     volumes = StringField('Volumes', validators=[Optional()])
-    
+
     # ✅ REMOVIDOS: Todos os campos ocultos desnecessários
     # cnpj_cliente, separacao_lote_id, peso, valor, erro_validacao
     # modalidade, tabela_*, icms_destino, cotacao_id

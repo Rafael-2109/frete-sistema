@@ -2117,3 +2117,83 @@ def confirmar_agendamento_item(item_id):
             'success': False,
             'message': f'Erro ao atualizar agendamento: {str(e)}'
         }), 500
+
+
+@embarques_bp.route('/item/<int:item_id>/sincronizar_faturamento', methods=['POST'])
+@login_required
+def sincronizar_item_faturamento(item_id):
+    """
+    Sincroniza valor e peso de um EmbarqueItem com o total da NF em FaturamentoProduto
+
+    Busca todos os produtos da NF e soma:
+    - valor_produto_faturado (para atualizar item.valor)
+    - peso_total (para atualizar item.peso)
+
+    Response:
+    {
+        "success": true,
+        "message": "...",
+        "valor_anterior": 1000.00,
+        "valor_novo": 1050.00,
+        "peso_anterior": 500.0,
+        "peso_novo": 520.5
+    }
+    """
+    try:
+        # Buscar EmbarqueItem
+        item = EmbarqueItem.query.get_or_404(item_id)
+
+        # Validar se tem NF
+        if not item.nota_fiscal or item.nota_fiscal.strip() == '':
+            return jsonify({
+                'success': False,
+                'message': 'Item não possui Nota Fiscal para sincronizar'
+            }), 400
+
+        # Buscar produtos da NF em FaturamentoProduto
+        from app.faturamento.models import FaturamentoProduto
+
+        produtos_nf = FaturamentoProduto.query.filter_by(
+            numero_nf=item.nota_fiscal
+        ).all()
+
+        if not produtos_nf:
+            return jsonify({
+                'success': False,
+                'message': f'NF {item.nota_fiscal} não encontrada em FaturamentoProduto. Importação pendente?'
+            }), 404
+
+        # Calcular totais da NF
+        valor_nf_total = sum(float(p.valor_produto_faturado or 0) for p in produtos_nf)
+        peso_nf_total = sum(float(p.peso_total or 0) for p in produtos_nf)
+
+        # Guardar valores anteriores
+        valor_anterior = float(item.valor or 0)
+        peso_anterior = float(item.peso or 0)
+
+        # Atualizar EmbarqueItem
+        item.valor = valor_nf_total
+        item.peso = peso_nf_total
+
+        db.session.commit()
+
+        print(f"[SINCRONIZAÇÃO FATURAMENTO] Item {item_id} | NF {item.nota_fiscal} | Valor: {valor_anterior} → {valor_nf_total} | Peso: {peso_anterior} → {peso_nf_total}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Sincronizado com sucesso! NF: {item.nota_fiscal}',
+            'numero_nf': item.nota_fiscal,
+            'qtd_produtos_nf': len(produtos_nf),
+            'valor_anterior': round(valor_anterior, 2),
+            'valor_novo': round(valor_nf_total, 2),
+            'peso_anterior': round(peso_anterior, 2),
+            'peso_novo': round(peso_nf_total, 2)
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO SINCRONIZAÇÃO FATURAMENTO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao sincronizar: {str(e)}'
+        }), 500

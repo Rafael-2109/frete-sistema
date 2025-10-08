@@ -214,13 +214,14 @@
                                 <tr>
                                     <th style="width: 80px;">NF</th>
                                     <th style="width: 100px;">Data Fatura</th>
-                                    <th style="width: 100px;"></th>Cliente</th>
+                                    <th style="width: 100px;">Cliente</th>
                                     <th style="width: 100px;">UF/Municipio</th>
                                     <th style="width: 80px;">Código</th>
                                     <th style="width: 380px;">Nome Produto</th>
                                     <th style="width: 70px;">Qtd</th>
                                     <th style="width: 90px;">Preço Unit.</th>
                                     <th style="width: 100px;">Valor Total</th>
+                                    <th style="width: 90px;">Peso Total</th>
                                     <th style="width: 200px;">Vendedor</th>
                                     <th style="width: 100px;">Incoterm</th>
                                     <th style="width: 100px;">Origem</th>
@@ -261,6 +262,13 @@
                                     <td>{{ produto.preco_produto_faturado | valor_br }}</td>
                                     <td>
                                         <strong>{{ produto.valor_produto_faturado | valor_br }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if produto.peso_total %}
+                                        <span class="text-success fw-bold">{{ produto.peso_total | numero_br }} kg</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if produto.vendedor %}

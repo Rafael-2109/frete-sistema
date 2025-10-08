@@ -1,15 +1,28 @@
 """
-Serviço de Sincronização Bidirecional de Agendamentos
-=====================================================
+Serviço de Sincronização Bidirecional de Agendamentos - VERSÃO FINAL CORRIGIDA
+===============================================================================
 
-Sincroniza dados de agendamento entre:
-- Separacao
-- EmbarqueItem
-- EntregaMonitorada
-- AgendamentoEntrega (histórico)
+REGRAS DEFINITIVAS:
+- **FONTES DA VERDADE** (propagam entre si e para receptores):
+  * Separacao ↔ AgendamentoEntrega (último)
+
+- **RECEPTORES** (apenas recebem):
+  * EmbarqueItem
+  * EntregaMonitorada
+
+IMPORTANTE:
+- AgendamentoEntrega é N:1 com EntregaMonitorada
+- SEMPRE criar novo AgendamentoEntrega quando houver agendamento
+- Usar último AgendamentoEntrega (por criado_em) como fonte da verdade
+
+Campos Sincronizados:
+- agendamento/data: Separacao.agendamento ↔ AgendamentoEntrega.data_agendada ↔ EmbarqueItem.data_agenda ↔ EntregaMonitorada.data_agenda
+- protocolo: Separacao.protocolo ↔ AgendamentoEntrega.protocolo_agendamento ↔ EmbarqueItem.protocolo_agendamento
+- confirmação: Separacao.agendamento_confirmado (bool) ↔ AgendamentoEntrega.status ('aguardando'/'confirmado') ↔ EmbarqueItem.agendamento_confirmado (bool)
+- nf_cd: Separacao.nf_cd ↔ EntregaMonitorada.nf_cd (bidirecional)
 
 Autor: Claude Code
-Data: 2025-01-06
+Data: 2025-01-08 (VERSÃO FINAL)
 """
 
 from app import db
@@ -24,70 +37,229 @@ logger = logging.getLogger(__name__)
 
 class SincronizadorAgendamentoService:
     """
-    Serviço para sincronizar agendamentos entre todas as tabelas relacionadas
+    Serviço para sincronizar agendamentos entre TODAS as tabelas relacionadas
+
+    LÓGICA FINAL:
+    - Separacao e AgendamentoEntrega são fontes da verdade (propagam entre si)
+    - EmbarqueItem e EntregaMonitorada são receptores
+    - nf_cd sincroniza bidirecionalmente entre Separacao e EntregaMonitorada
     """
 
     def __init__(self, usuario='Sistema'):
         self.usuario = usuario
         self.log_operacoes = []
 
-    def sincronizar_agendamento(self, dados_agendamento, identificador):
+    def sincronizar_desde_separacao(self, separacao_lote_id, criar_agendamento=True):
         """
-        Sincroniza agendamento entre TODAS as tabelas
+        🔴 FONTE DA VERDADE: Separacao
+
+        Propaga dados de Separacao para:
+        1. AgendamentoEntrega (cria novo registro se criar_agendamento=True)
+        2. EmbarqueItem (receptor)
+        3. EntregaMonitorada (receptor)
 
         Args:
-            dados_agendamento (dict): {
-                'agendamento': date,
-                'protocolo': str,
-                'agendamento_confirmado': bool,
-                'numero_nf': str (optional),
-                'nf_cd': bool (optional)
-            }
-            identificador (dict): {
-                'separacao_lote_id': str (optional),
-                'numero_nf': str (optional)
-            }
+            separacao_lote_id: ID do lote de separação
+            criar_agendamento: Se True, cria novo AgendamentoEntrega
 
         Returns:
-            dict: {
-                'success': bool,
-                'tabelas_atualizadas': list,
-                'detalhes': dict,
-                'log': list
-            }
+            dict: Resultado da sincronização
         """
         try:
+            # Buscar Separacao (primeira ocorrência como referência)
+            separacao = Separacao.query.filter_by(
+                separacao_lote_id=separacao_lote_id
+            ).first()
+
+            if not separacao:
+                return {
+                    'success': False,
+                    'error': f'Separacao com lote {separacao_lote_id} não encontrada'
+                }
+
+            # Extrair dados da fonte
+            dados_agendamento = {
+                'agendamento': separacao.agendamento,
+                'protocolo': separacao.protocolo,
+                'agendamento_confirmado': separacao.agendamento_confirmado or False,
+                'numero_nf': separacao.numero_nf,
+                'nf_cd': separacao.nf_cd or False
+            }
+
+            identificador = {
+                'separacao_lote_id': separacao_lote_id,
+                'numero_nf': separacao.numero_nf
+            }
+
             tabelas_atualizadas = []
             detalhes = {}
 
-            # Extrair dados
-            agendamento = dados_agendamento.get('agendamento')
-            protocolo = dados_agendamento.get('protocolo')
-            agendamento_confirmado = dados_agendamento.get('agendamento_confirmado', False)
-            numero_nf = dados_agendamento.get('numero_nf')
-            nf_cd = dados_agendamento.get('nf_cd', False)
+            # 1. ATUALIZAR RECEPTORES (EmbarqueItem + EntregaMonitorada)
+            resultado_receptores = self._propagar_para_receptores(dados_agendamento, identificador)
+            if resultado_receptores['success']:
+                tabelas_atualizadas.extend(resultado_receptores.get('tabelas_atualizadas', []))
+                detalhes.update(resultado_receptores.get('detalhes', {}))
 
-            separacao_lote_id = identificador.get('separacao_lote_id')
-            numero_nf_identificador = identificador.get('numero_nf')
+            # 2. CRIAR NOVO AGENDAMENTOENTREGA (se solicitado e houver agendamento)
+            if criar_agendamento and dados_agendamento.get('agendamento'):
+                # Buscar EntregaMonitorada para vincular
+                entrega = EntregaMonitorada.query.filter_by(
+                    separacao_lote_id=separacao_lote_id
+                ).first()
 
-            # Usar NF do identificador se não vier em dados
-            if not numero_nf:
-                numero_nf = numero_nf_identificador
+                if not entrega and dados_agendamento.get('numero_nf'):
+                    entrega = EntregaMonitorada.query.filter_by(
+                        numero_nf=dados_agendamento['numero_nf']
+                    ).first()
 
-            # 1. ATUALIZAR SEPARACAO
+                if entrega:
+                    novo_agendamento = self._criar_agendamento_entrega(
+                        entrega_id=entrega.id,
+                        data_agendada=dados_agendamento['agendamento'],
+                        protocolo=dados_agendamento.get('protocolo'),
+                        confirmado=dados_agendamento['agendamento_confirmado']
+                    )
+                    if novo_agendamento:
+                        tabelas_atualizadas.append('AgendamentoEntrega')
+                        detalhes['agendamento_entrega'] = novo_agendamento.id
+
+            # Commit final
+            db.session.commit()
+
+            logger.info(f"[SINCRONIZAÇÃO DESDE Separacao] Sucesso | Lote: {separacao_lote_id} | Tabelas: {', '.join(tabelas_atualizadas)}")
+
+            return {
+                'success': True,
+                'fonte': 'Separacao',
+                'tabelas_atualizadas': tabelas_atualizadas,
+                'detalhes': detalhes,
+                'log': self.log_operacoes
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[SINCRONIZAÇÃO SEPARACAO] Erro: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def sincronizar_desde_agendamento_entrega(self, entrega_id, agendamento_id=None):
+        """
+        🔴 FONTE DA VERDADE: AgendamentoEntrega (último)
+
+        Propaga dados do último AgendamentoEntrega para:
+        1. Separacao (outra fonte da verdade)
+        2. EmbarqueItem (receptor)
+        3. EntregaMonitorada (receptor)
+
+        Args:
+            entrega_id: ID da EntregaMonitorada
+            agendamento_id: ID específico do AgendamentoEntrega (None = buscar último)
+
+        Returns:
+            dict: Resultado da sincronização
+        """
+        try:
+            # Buscar EntregaMonitorada
+            entrega = EntregaMonitorada.query.get(entrega_id)
+
+            if not entrega:
+                return {
+                    'success': False,
+                    'error': f'EntregaMonitorada {entrega_id} não encontrada'
+                }
+
+            # Buscar agendamento específico ou último
+            if agendamento_id:
+                agendamento = AgendamentoEntrega.query.get(agendamento_id)
+            else:
+                if not entrega.agendamentos:
+                    return {
+                        'success': False,
+                        'error': 'Nenhum agendamento encontrado para esta entrega'
+                    }
+                agendamento = max(entrega.agendamentos, key=lambda ag: ag.criado_em)
+
+            if not agendamento:
+                return {
+                    'success': False,
+                    'error': 'Agendamento não encontrado'
+                }
+
+            # Extrair dados da fonte
+            dados_agendamento = {
+                'agendamento': agendamento.data_agendada,
+                'protocolo': agendamento.protocolo_agendamento,
+                'agendamento_confirmado': (agendamento.status == 'confirmado'),
+                'numero_nf': entrega.numero_nf,
+                'nf_cd': entrega.nf_cd or False
+            }
+
+            identificador = {
+                'separacao_lote_id': entrega.separacao_lote_id,
+                'numero_nf': entrega.numero_nf
+            }
+
+            tabelas_atualizadas = []
+            detalhes = {}
+
+            # 1. ATUALIZAR SEPARACAO (outra fonte da verdade)
             separacoes_atualizadas = self._atualizar_separacao(
-                separacao_lote_id=separacao_lote_id,
-                agendamento=agendamento,
-                protocolo=protocolo,
-                agendamento_confirmado=agendamento_confirmado,
-                numero_nf=numero_nf,
-                nf_cd=nf_cd
+                separacao_lote_id=entrega.separacao_lote_id,
+                agendamento=dados_agendamento['agendamento'],
+                protocolo=dados_agendamento.get('protocolo'),
+                agendamento_confirmado=dados_agendamento['agendamento_confirmado'],
+                numero_nf=dados_agendamento['numero_nf'],
+                nf_cd=dados_agendamento['nf_cd']
             )
             if separacoes_atualizadas > 0:
                 tabelas_atualizadas.append('Separacao')
                 detalhes['separacao'] = separacoes_atualizadas
 
-            # 2. ATUALIZAR EMBARQUEITEM
+            # 2. ATUALIZAR RECEPTORES (EmbarqueItem + EntregaMonitorada)
+            resultado_receptores = self._propagar_para_receptores(dados_agendamento, identificador)
+            if resultado_receptores['success']:
+                tabelas_atualizadas.extend(resultado_receptores.get('tabelas_atualizadas', []))
+                detalhes.update(resultado_receptores.get('detalhes', {}))
+
+            # Commit final
+            db.session.commit()
+
+            logger.info(f"[SINCRONIZAÇÃO DESDE AgendamentoEntrega] Sucesso | Entrega: {entrega_id} | Tabelas: {', '.join(tabelas_atualizadas)}")
+
+            return {
+                'success': True,
+                'fonte': 'AgendamentoEntrega',
+                'tabelas_atualizadas': tabelas_atualizadas,
+                'detalhes': detalhes,
+                'log': self.log_operacoes
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[SINCRONIZAÇÃO AGENDAMENTO_ENTREGA] Erro: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _propagar_para_receptores(self, dados_agendamento, identificador):
+        """
+        Propaga dados apenas para receptores (EmbarqueItem e EntregaMonitorada)
+        """
+        try:
+            tabelas_atualizadas = []
+            detalhes = {}
+
+            agendamento = dados_agendamento.get('agendamento')
+            protocolo = dados_agendamento.get('protocolo')
+            agendamento_confirmado = dados_agendamento.get('agendamento_confirmado', False)
+            numero_nf = dados_agendamento.get('numero_nf')
+            nf_cd = dados_agendamento.get('nf_cd', False)
+            separacao_lote_id = identificador.get('separacao_lote_id')
+
+            # 1. ATUALIZAR EMBARQUEITEM
             embarques_atualizados = self._atualizar_embarque_item(
                 separacao_lote_id=separacao_lote_id,
                 numero_nf=numero_nf,
@@ -99,53 +271,27 @@ class SincronizadorAgendamentoService:
                 tabelas_atualizadas.append('EmbarqueItem')
                 detalhes['embarque_item'] = embarques_atualizados
 
-            # 3. ATUALIZAR ENTREGAMONITORADA + CRIAR AGENDAMENTOENTREGA
+            # 2. ATUALIZAR ENTREGAMONITORADA
             entrega_monitorada = self._atualizar_entrega_monitorada(
                 separacao_lote_id=separacao_lote_id,
                 numero_nf=numero_nf,
                 agendamento=agendamento,
-                protocolo=protocolo,
-                agendamento_confirmado=agendamento_confirmado,
                 nf_cd=nf_cd
             )
             if entrega_monitorada:
                 tabelas_atualizadas.append('EntregaMonitorada')
                 detalhes['entrega_monitorada'] = entrega_monitorada.id
 
-                # Criar AgendamentoEntrega se houver agendamento
-                if agendamento:
-                    agendamento_entrega_criado = self._criar_agendamento_entrega(
-                        entrega_id=entrega_monitorada.id,
-                        data_agendada=agendamento,
-                        protocolo=protocolo,
-                        confirmado=agendamento_confirmado
-                    )
-                    if agendamento_entrega_criado:
-                        tabelas_atualizadas.append('AgendamentoEntrega')
-                        detalhes['agendamento_entrega'] = agendamento_entrega_criado.id
-
-            # Commit final
-            db.session.commit()
-
-            logger.info(f"[SINCRONIZAÇÃO] Sucesso | Tabelas: {', '.join(tabelas_atualizadas)} | Lote: {separacao_lote_id} | NF: {numero_nf}")
-
             return {
                 'success': True,
                 'tabelas_atualizadas': tabelas_atualizadas,
-                'detalhes': detalhes,
-                'log': self.log_operacoes
+                'detalhes': detalhes
             }
 
         except Exception as e:
-            db.session.rollback()
-            logger.error(f"[SINCRONIZAÇÃO] Erro: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'log': self.log_operacoes
-            }
+            raise e
 
-    def _atualizar_separacao(self, separacao_lote_id, agendamento, protocolo, agendamento_confirmado, numero_nf, nf_cd):
+    def _atualizar_separacao(self, separacao_lote_id, agendamento, protocolo, agendamento_confirmado, numero_nf, nf_cd=None):
         """Atualiza registros de Separacao"""
         if not separacao_lote_id:
             return 0
@@ -200,7 +346,7 @@ class SincronizadorAgendamentoService:
         self.log_operacoes.append(f"EmbarqueItem: {count} registros atualizados")
         return count
 
-    def _atualizar_entrega_monitorada(self, separacao_lote_id, numero_nf, agendamento, protocolo, agendamento_confirmado, nf_cd):
+    def _atualizar_entrega_monitorada(self, separacao_lote_id, numero_nf, agendamento, nf_cd=None):
         """Atualiza registro de EntregaMonitorada"""
         if not separacao_lote_id and not numero_nf:
             return None
@@ -231,7 +377,7 @@ class SincronizadorAgendamentoService:
         return entrega
 
     def _criar_agendamento_entrega(self, entrega_id, data_agendada, protocolo, confirmado):
-        """Cria registro em AgendamentoEntrega (histórico)"""
+        """Cria novo registro em AgendamentoEntrega (sempre criar novo, relação N:1)"""
         try:
             status = 'confirmado' if confirmado else 'aguardando'
 
@@ -256,3 +402,20 @@ class SincronizadorAgendamentoService:
         except Exception as e:
             logger.warning(f"Não foi possível criar AgendamentoEntrega: {e}")
             return None
+
+    # ===== MÉTODO LEGADO (manter para compatibilidade) =====
+    def sincronizar_agendamento(self, dados_agendamento, identificador):
+        """
+        MÉTODO LEGADO - Mantido para compatibilidade com código existente
+
+        Detecta automaticamente o contexto e chama o método apropriado
+        """
+        # Detectar contexto
+        separacao_lote_id = identificador.get('separacao_lote_id')
+
+        # Por padrão, propaga como se fosse desde Separacao (fonte)
+        if separacao_lote_id:
+            return self.sincronizar_desde_separacao(separacao_lote_id, criar_agendamento=True)
+        else:
+            # Fallback: propagação simples para receptores
+            return self._propagar_para_receptores(dados_agendamento, identificador)

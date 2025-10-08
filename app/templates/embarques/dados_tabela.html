@@ -313,13 +313,21 @@
               <p><strong>Pedido:</strong> {{ item.pedido }}</p>
               <p><strong>CNPJ:</strong> {{ item.cnpj_cliente or 'N/A' }}</p>
               <p><strong>Cidade/UF:</strong> {{ item.cidade_destino }}/{{ item.uf_destino }}</p>
-              <p><strong>Peso:</strong> {{ "%.0f"|format(item.peso) if item.peso else 'N/A' }} kg</p>
-              <p><strong>Valor:</strong> R$ {{ "%.2f"|format(item.valor) if item.valor else 'N/A' }}</p>
+              <p><strong>Peso:</strong> <span id="peso-item-{{ item.id }}">{{ "%.0f"|format(item.peso) if item.peso else 'N/A' }}</span> kg</p>
+              <p><strong>Valor:</strong> R$ <span id="valor-item-{{ item.id }}">{{ "%.2f"|format(item.valor) if item.valor else 'N/A' }}</span></p>
             </div>
             <div class="col-md-6">
               <p><strong>Protocolo:</strong> {{ (item.protocolo_agendamento | formatar_protocolo) or 'N/A' }}</p>
               <p><strong>Data Agenda:</strong> {{ item.data_agenda or 'N/A' }}</p>
               <p><strong>NFe:</strong> {{ item.nota_fiscal or 'N/A' }}</p>
+              {% if item.nota_fiscal %}
+              <button type="button"
+                      class="btn btn-sm btn-outline-primary mt-2"
+                      onclick="sincronizarItemFaturamento({{ item.id }}, '{{ item.nota_fiscal }}')"
+                      id="btn-sync-{{ item.id }}">
+                <i class="fas fa-sync"></i> Sincronizar com Faturamento
+              </button>
+              {% endif %}
             </div>
           </div>
 
@@ -526,4 +534,52 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function sincronizarItemFaturamento(itemId, numeroNf) {
+    const btn = document.getElementById(`btn-sync-${itemId}`);
+    const originalHtml = btn.innerHTML;
+
+    // Desabilitar botão e mostrar loading
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+
+    // Fazer requisição AJAX
+    fetch(`/embarques/item/${itemId}/sincronizar_faturamento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Atualizar valores na tela
+            document.getElementById(`peso-item-${itemId}`).textContent = data.peso_novo.toFixed(0);
+            document.getElementById(`valor-item-${itemId}`).textContent = data.valor_novo.toFixed(2);
+
+            // Mostrar mensagem de sucesso
+            alert(`✅ ${data.message}\n\n` +
+                  `Produtos na NF: ${data.qtd_produtos_nf}\n\n` +
+                  `Valor: R$ ${data.valor_anterior.toFixed(2)} → R$ ${data.valor_novo.toFixed(2)}\n` +
+                  `Peso: ${data.peso_anterior.toFixed(0)} kg → ${data.peso_novo.toFixed(0)} kg`);
+
+            // Recarregar página para atualizar todos os dados
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            alert(`❌ Erro: ${data.message}`);
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('❌ Erro ao sincronizar com faturamento');
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+}
+</script>
 {% endblock %}
