@@ -1579,7 +1579,7 @@ function cancelarSeparacao(loteId) {
     });
 }
 
-// ✅ NOVA FUNÇÃO: Validar NF em FaturamentoProduto
+// ✅ FUNÇÃO ATUALIZADA: Validar NF em FaturamentoProduto E GRAVAR em Separacao
 function validarNF(loteId) {
     const inputNF = document.getElementById('input_numero_nf');
     const numeroNF = inputNF.value.trim();
@@ -1592,42 +1592,56 @@ function validarNF(loteId) {
     // Mostrar loading
     const badgeSincronizacao = document.getElementById('badge-sincronizacao');
     const mensagemValidacao = document.getElementById('mensagem-validacao');
-    badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6"><i class="fas fa-spinner fa-spin"></i> Validando...</span>';
+    badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6"><i class="fas fa-spinner fa-spin"></i> Validando e gravando...</span>';
 
-    fetch(`/pedidos/validar_nf/${numeroNF}?lote_id=${loteId}`, {
-        method: 'GET',
+    // ✅ NOVO: Chama endpoint que VALIDA + GRAVA
+    fetch(`/pedidos/gravar_nf/${loteId}`, {
+        method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
-        }
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify({
+            numero_nf: numeroNF
+        })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
             if (data.existe) {
-                if (data.status === 'Cancelado') {
+                if (data.sincronizado_nf) {
+                    // NF válida e sincronizada
+                    badgeSincronizacao.innerHTML = '<span class="badge bg-success fs-6">✅ Sincronizado</span>';
+                    mensagemValidacao.textContent = `✅ ${data.message}`;
+                    mensagemValidacao.className = 'text-success';
+                } else {
                     // NF cancelada
                     badgeSincronizacao.innerHTML = '<span class="badge bg-danger fs-6">❌ NF Cancelada</span>';
-                    mensagemValidacao.textContent = 'NF encontrada mas está cancelada. Será removida ao salvar.';
-                    inputNF.value = '';  // Limpar campo
-                } else {
-                    // NF válida
-                    badgeSincronizacao.innerHTML = '<span class="badge bg-success fs-6">✅ Sincronizado</span>';
-                    mensagemValidacao.textContent = `NF válida (Status: ${data.status})`;
+                    mensagemValidacao.textContent = `⚠️ ${data.message}`;
+                    mensagemValidacao.className = 'text-danger';
                 }
             } else {
-                // NF não encontrada
+                // NF não encontrada no faturamento (mas foi gravada)
                 badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6">⚠️ Não encontrada</span>';
-                mensagemValidacao.textContent = 'NF não encontrada no faturamento. Pode salvar mesmo assim.';
+                mensagemValidacao.textContent = `⚠️ ${data.message}`;
+                mensagemValidacao.className = 'text-warning';
             }
+
+            // Mostrar alerta com resultado
+            alert(data.message);
         } else {
             badgeSincronizacao.innerHTML = '<span class="badge bg-danger fs-6">❌ Erro</span>';
-            mensagemValidacao.textContent = data.message || 'Erro ao validar NF';
+            mensagemValidacao.textContent = data.message || 'Erro ao validar/gravar NF';
+            mensagemValidacao.className = 'text-danger';
+            alert('❌ ' + (data.message || 'Erro ao validar/gravar NF'));
         }
     })
     .catch(error => {
         console.error('Erro:', error);
         badgeSincronizacao.innerHTML = '<span class="badge bg-danger fs-6">❌ Erro</span>';
-        mensagemValidacao.textContent = 'Erro ao validar NF';
+        mensagemValidacao.textContent = 'Erro ao validar/gravar NF';
+        mensagemValidacao.className = 'text-danger';
+        alert('❌ Erro ao validar/gravar NF: ' + error.message);
     });
 }
 

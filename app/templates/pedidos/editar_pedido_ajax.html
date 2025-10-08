@@ -159,15 +159,15 @@
                     <div>
                         <label class="form-label">Status Sincronização</label>
                         <div id="badge-sincronizacao">
-                            {% if pedido.sincronizado_nf %}
+                            {% if separacao and separacao.sincronizado_nf %}
                                 <span class="badge bg-success fs-6">✅ Sincronizado</span>
                             {% else %}
                                 <span class="badge bg-danger fs-6">❌ Não sincronizado</span>
                             {% endif %}
                         </div>
                         <small class="text-muted" id="mensagem-validacao">
-                            {% if pedido.nf %}
-                                NF Atual: {{ pedido.nf }}
+                            {% if separacao and separacao.numero_nf %}
+                                NF Atual: {{ separacao.numero_nf }}
                             {% else %}
                                 Nenhuma NF vinculada
                             {% endif %}

@@ -499,13 +499,16 @@ def editar_pedido(lote_id):
     """
     
     pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
-    
-    
+
+    # ✅ NOVO: Busca primeiro item de Separacao para obter sincronizado_nf e numero_nf
+    # (Como todos os itens do lote têm o mesmo numero_nf e sincronizado_nf, pega o primeiro)
+    separacao_exemplo = Separacao.query.filter_by(separacao_lote_id=lote_id).first()
+
     # ✅ NOVO: Busca contato de agendamento para este CNPJ
     contato_agendamento = None
     if pedido.cnpj_cpf:
         contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=pedido.cnpj_cpf).first()
-    
+
     form = EditarPedidoForm()
     
     if form.validate_on_submit():
@@ -631,12 +634,17 @@ def editar_pedido(lote_id):
         form.agendamento.data = pedido.agendamento
         form.protocolo.data = pedido.protocolo
         form.agendamento_confirmado.data = pedido.agendamento_confirmado
-    
+
+        # ✅ NOVO: Pré-preenche numero_nf e nf_cd de Separacao
+        if separacao_exemplo:
+            form.numero_nf.data = separacao_exemplo.numero_nf
+            form.nf_cd.data = separacao_exemplo.nf_cd or False
+
     # ✅ RESPOSTA PARA AJAX (apenas o conteúdo do formulário)
     if request.args.get('ajax'):
-        return render_template('pedidos/editar_pedido_ajax.html', form=form, pedido=pedido, contato_agendamento=contato_agendamento)
-    
-    return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, contato_agendamento=contato_agendamento)
+        return render_template('pedidos/editar_pedido_ajax.html', form=form, pedido=pedido, separacao=separacao_exemplo, contato_agendamento=contato_agendamento)
+
+    return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, separacao=separacao_exemplo, contato_agendamento=contato_agendamento)
 
 @pedidos_bp.route('/reset_status/<string:lote_id>', methods=['POST'])
 @login_required
@@ -1691,6 +1699,106 @@ def validar_nf(numero_nf):
         return jsonify({
             'success': False,
             'message': f'Erro ao validar NF: {str(e)}'
+        }), 500
+
+
+@pedidos_bp.route('/gravar_nf/<string:lote_id>', methods=['POST'])
+@login_required
+def gravar_nf(lote_id):
+    """
+    Valida NF em FaturamentoProduto E grava em Separacao.numero_nf
+
+    Payload:
+    {
+        "numero_nf": "12345"
+    }
+
+    Response:
+    {
+        "success": true,
+        "existe": true/false,
+        "status": "Lançado"|"Cancelado"|null,
+        "sincronizado_nf": true/false,
+        "itens_atualizados": 3,
+        "message": "..."
+    }
+    """
+    from app.faturamento.models import FaturamentoProduto
+
+    try:
+        data = request.get_json()
+        numero_nf = data.get('numero_nf', '').strip()
+
+        if not numero_nf:
+            return jsonify({
+                'success': False,
+                'message': 'Número da NF não informado'
+            }), 400
+
+        # PASSO 1: Validar NF em FaturamentoProduto
+        faturamento = FaturamentoProduto.query.filter_by(
+            numero_nf=numero_nf
+        ).first()
+
+        existe_faturamento = False
+        status_nf = None
+        sincronizado = False
+
+        if faturamento:
+            existe_faturamento = True
+            status_nf = faturamento.status_nf or 'Lançado'
+            sincronizado = (status_nf != 'Cancelado')
+
+        # PASSO 2: Gravar em Separacao (TODAS as linhas do lote)
+        itens_separacao = Separacao.query.filter_by(
+            separacao_lote_id=lote_id
+        ).all()
+
+        if not itens_separacao:
+            return jsonify({
+                'success': False,
+                'message': f'Nenhum item de separação encontrado para o lote {lote_id}'
+            }), 404
+
+        # Atualizar TODOS os itens do lote
+        itens_atualizados = 0
+        for item in itens_separacao:
+            item.numero_nf = numero_nf
+            item.sincronizado_nf = sincronizado  # Marca como sincronizado apenas se NF válida
+
+            if sincronizado:
+                item.data_sincronizacao = datetime.now()
+
+            itens_atualizados += 1
+
+        db.session.commit()
+
+        # PASSO 3: Log e resposta
+        print(f"[GRAVAR NF] Lote: {lote_id} | NF: {numero_nf} | Existe: {existe_faturamento} | Status: {status_nf} | Sincronizado: {sincronizado} | Itens: {itens_atualizados}")
+
+        if existe_faturamento:
+            if sincronizado:
+                mensagem = f'✅ NF {numero_nf} gravada e sincronizada com sucesso! (Status: {status_nf}) - {itens_atualizados} itens atualizados'
+            else:
+                mensagem = f'⚠️ NF {numero_nf} está CANCELADA. Não foi marcada como sincronizada. - {itens_atualizados} itens atualizados'
+        else:
+            mensagem = f'⚠️ NF {numero_nf} NÃO encontrada no faturamento, mas foi gravada para referência. - {itens_atualizados} itens atualizados'
+
+        return jsonify({
+            'success': True,
+            'existe': existe_faturamento,
+            'status': status_nf,
+            'sincronizado_nf': sincronizado,
+            'itens_atualizados': itens_atualizados,
+            'message': mensagem
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO GRAVAR NF] Lote: {lote_id} | Erro: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao gravar NF: {str(e)}'
         }), 500
 
 

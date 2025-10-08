@@ -7,10 +7,8 @@ Baseado na documentação oficial do TagPlus
 import requests
 import json
 import os
-import sys
 from urllib.parse import urlencode, parse_qs, urlparse
 from datetime import datetime, timedelta
-import webbrowser
 
 class TagPlusIntegration:
     """Cliente OAuth2 para TagPlus - Versão Definitiva"""

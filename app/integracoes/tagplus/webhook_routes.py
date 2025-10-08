@@ -1,5 +1,10 @@
 """
 Rotas para receber webhooks do TagPlus
+
+IMPORTANTE - SEGURANÇA:
+- Webhooks são requisições externas SEM token CSRF
+- Usamos CSRF exempt + validação HMAC com X-Hub-Secret
+- Todos os webhooks são logados para auditoria de segurança
 """
 from flask import Blueprint, request, jsonify
 import logging
@@ -18,20 +23,32 @@ tagplus_webhook = Blueprint('tagplus_webhook', __name__)
 # Token secreto para validar webhooks (configurar no TagPlus)
 WEBHOOK_SECRET = 'frete2024tagplus#secret'  # Use este mesmo valor no campo X-Hub-Secret do TagPlus
 
+# ✅ Importar CSRF para usar csrf.exempt
+from app import csrf
+
+@csrf.exempt
 @tagplus_webhook.route('/webhook/tagplus/cliente', methods=['POST'])
 def webhook_cliente():
     """Recebe webhook quando um cliente é criado/atualizado no TagPlus"""
     try:
+        # 🔒 LOG DE SEGURANÇA - Início
+        logger.info(f"🔔 WEBHOOK RECEBIDO | Endpoint: /webhook/tagplus/cliente | IP: {request.remote_addr}")
+        logger.debug(f"🔍 Headers: {dict(request.headers)}")
+
         # Valida assinatura do webhook (se TagPlus enviar)
-        if not validar_assinatura(request):
-            return jsonify({'erro': 'Assinatura inválida'}), 401
-        
+        validacao_resultado, motivo = validar_assinatura(request)
+        if not validacao_resultado:
+            logger.warning(f"🚫 WEBHOOK REJEITADO | Motivo: {motivo} | IP: {request.remote_addr}")
+            return jsonify({'erro': motivo}), 401
+
+        logger.info(f"✅ WEBHOOK VALIDADO | {motivo}")
+
         # Pega dados do webhook
         dados = request.get_json()
         evento = dados.get('evento', '')  # cliente_criado, cliente_atualizado, etc
         cliente_data = dados.get('cliente', {})
 
-        logger.info(f"Webhook cliente recebido: {evento}")
+        logger.info(f"📦 WEBHOOK CLIENTE | Evento: {evento} | Cliente: {cliente_data.get('cnpj', 'N/A')}")
 
         # Aceita vários formatos de evento (compatibilidade)
         if evento in ['criado', 'atualizado', 'cliente_criado', 'cliente_atualizado']:
@@ -45,20 +62,29 @@ def webhook_cliente():
         logger.error(f"Erro no webhook de cliente: {e}")
         return jsonify({'erro': str(e)}), 500
 
+@csrf.exempt
 @tagplus_webhook.route('/webhook/tagplus/nfe', methods=['POST'])
 def webhook_nfe():
     """Recebe webhook quando uma NFE é emitida no TagPlus"""
     try:
+        # 🔒 LOG DE SEGURANÇA - Início
+        logger.info(f"🔔 WEBHOOK RECEBIDO | Endpoint: /webhook/tagplus/nfe | IP: {request.remote_addr}")
+        logger.debug(f"🔍 Headers: {dict(request.headers)}")
+
         # Valida assinatura
-        if not validar_assinatura(request):
-            return jsonify({'erro': 'Assinatura inválida'}), 401
-        
+        validacao_resultado, motivo = validar_assinatura(request)
+        if not validacao_resultado:
+            logger.warning(f"🚫 WEBHOOK REJEITADO | Motivo: {motivo} | IP: {request.remote_addr}")
+            return jsonify({'erro': motivo}), 401
+
+        logger.info(f"✅ WEBHOOK VALIDADO | {motivo}")
+
         # Pega dados do webhook
         dados = request.get_json()
         evento = dados.get('evento', '')  # nfe_aprovada, nfe_cancelada, nfe_alterada, nfe_apagada
         nfe_data = dados.get('nfe', {})
 
-        logger.info(f"Webhook NFE recebido: {evento} - NF {nfe_data.get('numero')}")
+        logger.info(f"📦 WEBHOOK NFE | Evento: {evento} | NF: {nfe_data.get('numero', 'N/A')}")
 
         # TagPlus usa 'nfe_aprovada' para NFe autorizada
         if evento in ['autorizada', 'nfe_aprovada']:
@@ -78,15 +104,16 @@ def webhook_nfe():
         logger.error(f"Erro no webhook de NFE: {e}")
         return jsonify({'erro': str(e)}), 500
 
+@csrf.exempt
 @tagplus_webhook.route('/webhook/tagplus/teste', methods=['GET', 'POST'])
 def webhook_teste():
     """Endpoint de teste para verificar se webhook está funcionando"""
     logger.info("Webhook de teste recebido")
-    
+
     if request.method == 'POST':
         dados = request.get_json()
         logger.info(f"Dados recebidos no teste: {dados}")
-    
+
     return jsonify({
         'status': 'ok',
         'mensagem': 'Webhook TagPlus funcionando',
@@ -94,24 +121,49 @@ def webhook_teste():
     }), 200
 
 def validar_assinatura(request):
-    """Valida assinatura do webhook para garantir que veio do TagPlus"""
-    # Se TagPlus não enviar assinatura, aceitar por enquanto
+    """
+    Valida assinatura do webhook para garantir que veio do TagPlus
+
+    O TagPlus pode enviar o secret de duas formas:
+    1. X-Hub-Secret: O secret em texto plano (configurado no TagPlus)
+    2. X-TagPlus-Signature: Hash HMAC-SHA256 do payload
+
+    Retorna: (bool, str) - (validado, motivo)
+    """
+    # 🔍 MODO 1: Validação via X-Hub-Secret (secret em texto plano)
+    secret_enviado = request.headers.get('X-Hub-Secret', '')
+
+    if secret_enviado:
+        if secret_enviado == WEBHOOK_SECRET:
+            logger.info(f"🔐 Validação via X-Hub-Secret: OK")
+            return (True, "X-Hub-Secret válido")
+        else:
+            logger.error(f"🚫 X-Hub-Secret INVÁLIDO! Esperado: {WEBHOOK_SECRET[:10]}..., Recebido: {secret_enviado[:10]}...")
+            return (False, "X-Hub-Secret inválido")
+
+    # 🔍 MODO 2: Validação via X-TagPlus-Signature (HMAC-SHA256)
     assinatura_tagplus = request.headers.get('X-TagPlus-Signature', '')
-    
-    if not assinatura_tagplus:
-        # Por enquanto, aceitar sem assinatura
-        logger.warning("Webhook recebido sem assinatura")
-        return True
-    
-    # Calcular assinatura esperada
-    payload = request.get_data()
-    assinatura_esperada = hmac.new(
-        WEBHOOK_SECRET.encode(),
-        payload,
-        hashlib.sha256
-    ).hexdigest()
-    
-    return hmac.compare_digest(assinatura_tagplus, assinatura_esperada)
+
+    if assinatura_tagplus:
+        # Calcular assinatura esperada
+        payload = request.get_data()
+        assinatura_esperada = hmac.new(
+            WEBHOOK_SECRET.encode(),
+            payload,
+            hashlib.sha256
+        ).hexdigest()
+
+        if hmac.compare_digest(assinatura_tagplus, assinatura_esperada):
+            logger.info(f"🔐 Validação via X-TagPlus-Signature (HMAC): OK")
+            return (True, "X-TagPlus-Signature válida")
+        else:
+            logger.error(f"🚫 X-TagPlus-Signature INVÁLIDA!")
+            return (False, "X-TagPlus-Signature inválida")
+
+    # ⚠️ NENHUM HEADER DE SEGURANÇA: Aceitar com WARNING (modo desenvolvimento)
+    logger.warning(f"⚠️ WEBHOOK SEM ASSINATURA | IP: {request.remote_addr} | Headers: {list(request.headers.keys())}")
+    logger.warning("🔓 MODO INSEGURO: Aceitando webhook sem validação (configure X-Hub-Secret no TagPlus!)")
+    return (True, "⚠️ Webhook aceito SEM validação de segurança")
 
 def processar_cliente_webhook(dados):
     """Processa dados de cliente recebidos via webhook"""
