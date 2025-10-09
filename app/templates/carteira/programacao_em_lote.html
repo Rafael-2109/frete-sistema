@@ -736,7 +736,12 @@
                 'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
-                cnpjs: cnpjsSelecionados.map(c => c.cnpj)
+                // ✅ CORREÇÃO: Enviar datas junto com CNPJs
+                cnpjs: cnpjsSelecionados.map(c => ({
+                    cnpj: c.cnpj,
+                    data_agendamento: c.data_agendamento,
+                    data_expedicao: c.data_expedicao
+                }))
             })
         })
         .then(response => response.json())
@@ -1102,10 +1107,12 @@
         const itensConfirmados = resultado.itens.map(item => ({
             cnpj: dadosCnpj.cnpj,
             num_pedido: item.solicitado.num_pedido,
-            pedido_cliente: item.solicitado.pedido_cliente,
-            cod_produto: item.solicitado.cod_produto,
+            // ✅ CORREÇÃO: Usar códigos Sendas do encontrado quando disponível
+            pedido_cliente: item.encontrado?.codigo_pedido_sendas || item.solicitado.pedido_cliente,
+            cod_produto: item.encontrado?.codigo_produto_sendas || item.solicitado.cod_produto,
             nome_produto: item.solicitado.nome_produto || '',
             quantidade: item.solicitado.quantidade,
+            separacao_lote_id: item.solicitado.separacao_lote_id,  // ✅ ADICIONADO
             data_expedicao: document.getElementById('modal-data-expedicao').value,
             data_agendamento: document.getElementById('modal-data-agendamento').value
         }));

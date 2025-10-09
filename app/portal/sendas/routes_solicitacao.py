@@ -101,14 +101,27 @@ def preparar_lote_sendas():
         if not cnpjs:
             return jsonify({'sucesso': False, 'erro': 'Nenhum CNPJ selecionado'}), 400
 
-        # Data de agendamento padrão (D+1)
-        data_agendamento = datetime.now().date()
-        data_agendamento = data_agendamento.replace(day=data_agendamento.day + 1)
-
         resultado = {'solicitacoes': []}
 
         for cnpj_info in cnpjs:
-            cnpj = cnpj_info if isinstance(cnpj_info, str) else cnpj_info.get('cnpj')
+            # ✅ CORREÇÃO: cnpj_info pode ser string ou dict com {cnpj, data_agendamento, data_expedicao}
+            if isinstance(cnpj_info, str):
+                cnpj = cnpj_info
+                # Se não tem datas, usar padrão (D+1 para agendamento, D+0 para expedição)
+                data_agendamento = datetime.now().date()
+                data_agendamento = data_agendamento.replace(day=data_agendamento.day + 1)
+                data_expedicao = datetime.now().date()
+            else:
+                cnpj = cnpj_info.get('cnpj')
+                # ✅ PEGAR DATAS DO FRONTEND (programação em lote)
+                data_agendamento = cnpj_info.get('data_agendamento')
+                data_expedicao = cnpj_info.get('data_expedicao')
+
+                # Converter strings para date se necessário
+                if isinstance(data_agendamento, str):
+                    data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+                if isinstance(data_expedicao, str):
+                    data_expedicao = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
 
             if not cnpj:
                 continue
@@ -116,21 +129,24 @@ def preparar_lote_sendas():
             # 1. Gerar protocolo único para este CNPJ
             protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
 
-            # 2. Criar separações do saldo (se houver)
+            # 2. ✅ CORREÇÃO: Criar separações do saldo COM data_expedicao
             logger.info(f"Criando separações do saldo para CNPJ {cnpj}")
             criar_separacoes_do_saldo(
                 cnpj=cnpj,
                 data_agendamento=data_agendamento,
+                data_expedicao=data_expedicao,  # ✅ ADICIONADO
                 protocolo=protocolo
             )
 
-            # 3. Buscar todos os dados (separações criadas + existentes + NF CD)
+            # 3. ✅ CORREÇÃO: Buscar todos os dados COM data_expedicao e protocolo
             dados = buscar_dados_completos_cnpj(
                 cnpj=cnpj,
-                data_agendamento=data_agendamento
+                data_agendamento=data_agendamento,
+                data_expedicao=data_expedicao,  # ✅ ADICIONADO
+                protocolo=protocolo  # ✅ ADICIONADO para filtrar apenas as deste agendamento
             )
 
-            # 4. Converter para formato esperado pelo comparador
+            # 4. ✅ CORREÇÃO: Converter para formato esperado incluindo separacao_lote_id
             for item in dados['itens']:
                 resultado['solicitacoes'].append({
                     'cnpj': cnpj,
@@ -139,7 +155,9 @@ def preparar_lote_sendas():
                     'nome_produto': item.get('nome_produto'),
                     'quantidade': item['quantidade'],
                     'num_pedido': item.get('num_pedido'),
-                    'data_agendamento': str(data_agendamento)
+                    'separacao_lote_id': item.get('separacao_lote_id'),  # ✅ ADICIONADO
+                    'data_agendamento': str(data_agendamento),
+                    'data_expedicao': str(data_expedicao)  # ✅ ADICIONADO
                 })
 
         return jsonify({
@@ -217,90 +235,37 @@ def confirmar_lote():
                 protocolo = resultado['protocolos'][cnpj]
                 protocolos_gerados[cnpj] = protocolo
 
-                # Propagar protocolo para Separação (criar ou atualizar)
+                # ✅ CORREÇÃO: Agrupar itens por separacao_lote_id para atualizar em lote
+                lotes_para_atualizar = {}
                 for item in itens:
-                    # Se tem separacao_lote_id, atualizar
-                    if 'separacao_lote_id' in item and item['separacao_lote_id']:
-                        Separacao.query.filter_by(
-                            separacao_lote_id=item['separacao_lote_id']
-                        ).update({
-                            'protocolo': protocolo,
-                            'agendamento': None,  # ZERAR - será preenchido apenas no retorno após sucesso
-                            'expedicao': None     # ZERAR - para validar se foi realmente agendado
-                        })
+                    lote_id = item.get('separacao_lote_id')
+                    if lote_id:
+                        if lote_id not in lotes_para_atualizar:
+                            lotes_para_atualizar[lote_id] = item  # Guardar qualquer item do lote para pegar datas
                     else:
-                        # Buscar dados adicionais do produto e cliente na CarteiraPrincipal
-                        item_carteira = CarteiraPrincipal.query.filter_by(
-                            num_pedido=item.get('num_pedido'),
-                            cod_produto=item['cod_produto'],
-                            cnpj_cpf=cnpj
-                        ).first()
+                        logger.warning(f"Item sem separacao_lote_id: {item.get('num_pedido')} - {item.get('cod_produto')}")
 
-                        # Buscar dados de palletização
-                        pallet_info = CadastroPalletizacao.query.filter_by(
-                            cod_produto=item['cod_produto']
-                        ).first()
+                # ✅ CORREÇÃO: Atualizar TODAS as separações de cada lote com protocolo e datas
+                for lote_id, item_referencia in lotes_para_atualizar.items():
+                    # Converter datas de string para date se necessário
+                    data_agendamento = item_referencia.get('data_agendamento')
+                    data_expedicao = item_referencia.get('data_expedicao')
 
-                        # Calcular peso e pallets
-                        peso_item = Decimal('0')
-                        pallets_item = Decimal('0')
-                        qtd_decimal = Decimal(str(item['quantidade']))
+                    if isinstance(data_agendamento, str):
+                        from datetime import datetime as dt
+                        data_agendamento = dt.strptime(data_agendamento, '%Y-%m-%d').date()
+                    if isinstance(data_expedicao, str):
+                        from datetime import datetime as dt
+                        data_expedicao = dt.strptime(data_expedicao, '%Y-%m-%d').date()
 
-                        if pallet_info:
-                            peso_item = qtd_decimal * Decimal(str(pallet_info.peso_bruto or 0))
-                            if pallet_info.palletizacao and pallet_info.palletizacao > 0:
-                                pallets_item = qtd_decimal / Decimal(str(pallet_info.palletizacao))
-
-                        # Calcular valor_saldo
-                        preco_unitario = Decimal('0')
-                        if item_carteira and item_carteira.preco_produto_pedido:
-                            preco_unitario = Decimal(str(item_carteira.preco_produto_pedido))
-                        valor_saldo = float(qtd_decimal * preco_unitario)
-
-                        # Verificar se já existe separação para este pedido (para definir tipo_envio)
-                        existe_separacao = Separacao.query.filter_by(
-                            num_pedido=item.get('num_pedido'),
-                            cnpj_cpf=cnpj,
-                            sincronizado_nf=False
-                        ).first()
-
-                        tipo_envio = 'parcial' if existe_separacao else 'total'
-
-                        # Criar nova separação com status='ABERTO' e todos os campos necessários
-                        nova_sep = Separacao(
-                            separacao_lote_id=gerar_lote_id(),
-                            status='ABERTO',
-                            sincronizado_nf=False,
-                            nf_cd=False,  # Não é NF no CD
-
-                            # Dados do pedido
-                            num_pedido=item.get('num_pedido'),
-                            pedido_cliente=item.get('pedido_cliente'),
-                            cod_produto=item['cod_produto'],
-                            nome_produto=item_carteira.nome_produto if item_carteira else item.get('nome_produto', ''),
-                            qtd_saldo=item['quantidade'],
-                            valor_saldo=valor_saldo,
-                            peso=float(peso_item),
-                            pallet=float(pallets_item),
-
-                            # Dados do cliente
-                            cnpj_cpf=cnpj,
-                            raz_social_red=item_carteira.raz_social_red if item_carteira else item.get('raz_social_red', ''),
-                            nome_cidade=item_carteira.municipio if item_carteira else item.get('nome_cidade', ''),
-                            cod_uf=item_carteira.estado if item_carteira else item.get('cod_uf', ''),
-
-                            # Dados do agendamento - ZERAR para preencher apenas no retorno
-                            protocolo=protocolo,
-                            agendamento=None,  # ZERAR - será preenchido apenas no retorno após sucesso
-                            expedicao=None,    # ZERAR - para validar se foi realmente agendado
-
-                            # Manter observ_ped_1 original se houver
-                            observ_ped_1=item_carteira.observ_ped_1 if item_carteira else item.get('observacoes', ''),
-
-                            # Tipo de envio baseado em se já existe separação
-                            tipo_envio=tipo_envio
-                        )
-                        db.session.add(nova_sep)
+                    Separacao.query.filter_by(
+                        separacao_lote_id=lote_id
+                    ).update({
+                        'protocolo': protocolo,
+                        'agendamento': data_agendamento,  # ✅ PREENCHER com valor real
+                        'expedicao': data_expedicao,      # ✅ PREENCHER com valor real
+                        'agendamento_confirmado': False   # ✅ False até confirmação do portal
+                    })
 
 
 

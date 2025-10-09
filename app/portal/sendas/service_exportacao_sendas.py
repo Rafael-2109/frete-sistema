@@ -116,11 +116,13 @@ class ExportacaoSendasService:
 
             # 3. Processar cada protocolo
             linhas_exportacao = []
-            peso_total = 0
             numero_demanda = 1  # Começa em 1 e incrementa POR PROTOCOLO
 
             for protocolo_atual, itens_protocolo in itens_por_protocolo.items():
                 logger.info(f"Processando protocolo {protocolo_atual} com {len(itens_protocolo)} itens")
+
+                # ✅ CORREÇÃO PROBLEMA 5: Calcular peso POR PROTOCOLO
+                peso_total_protocolo = 0
 
                 # Pegar CNPJ e data do primeiro item do protocolo
                 cnpj = itens_protocolo[0].cnpj
@@ -173,10 +175,10 @@ class ExportacaoSendasService:
                         'EAN': planilha_item_especifico.ean if planilha_item_especifico and planilha_item_especifico.ean and str(planilha_item_especifico.ean).lower() != 'nan' else '',
                         'Setor': planilha_item.setor if planilha_item.setor and str(planilha_item.setor).lower() != 'nan' else '',
                         'Número do pedido Trizy': planilha_item_especifico.numero_pedido_trizy if planilha_item_especifico and planilha_item_especifico.numero_pedido_trizy and str(planilha_item_especifico.numero_pedido_trizy).lower() != 'nan' else '',
-                        'Descrição do Item': item_fila.nome_produto,  # ✅ Já tem descrição da planilha
-                        'Quantidade total': float(planilha_item_especifico.quantidade_total or 0) if planilha_item_especifico else 0,
-                        'Saldo disponível': float(planilha_item_especifico.saldo_disponivel or 0) if planilha_item_especifico else 0,
-                        'Unidade de medida': planilha_item_especifico.unidade_medida if planilha_item_especifico else 'UN',
+                        'Descrição do Item': planilha_item_especifico.descricao_item if planilha_item_especifico and planilha_item_especifico.descricao_item and str(planilha_item_especifico.descricao_item).lower() != 'nan' else '',
+                        'Quantidade total': float(planilha_item_especifico.quantidade_total or 0) if planilha_item_especifico and planilha_item_especifico.quantidade_total else 0,
+                        'Saldo disponível': float(planilha_item_especifico.saldo_disponivel or 0) if planilha_item_especifico and planilha_item_especifico.saldo_disponivel else 0,
+                        'Unidade de medida': planilha_item_especifico.unidade_medida if planilha_item_especifico and planilha_item_especifico.unidade_medida else 'UN',
 
                         # Colunas 17-24 - Editáveis (dados da FILA)
                         'Quantidade entrega': float(item_fila.quantidade),  # ✅ Quantidade da FILA
@@ -196,20 +198,22 @@ class ExportacaoSendasService:
                         item_fila.cod_produto,
                         float(item_fila.quantidade)
                     )
-                    peso_total += peso_item
+                    peso_total_protocolo += peso_item
+
+                # ✅ CORREÇÃO PROBLEMA 5: Calcular veículo POR PROTOCOLO
+                veiculo_protocolo = self.calcular_veiculo(peso_total_protocolo)
+
+                # Atualizar linhas DESTE PROTOCOLO com o veículo calculado
+                # Pegar as linhas que acabamos de adicionar (últimas len(itens_protocolo))
+                inicio_protocolo = len(linhas_exportacao) - len(itens_protocolo)
+                for i in range(inicio_protocolo, len(linhas_exportacao)):
+                    linhas_exportacao[i]['Característica do veículo'] = veiculo_protocolo
 
                 # ✅ INCREMENTAR DEMANDA APENAS APÓS PROCESSAR TODOS OS ITENS DO PROTOCOLO
                 numero_demanda += 1
 
             if not linhas_exportacao:
                 return False, "Nenhuma linha encontrada na planilha modelo para exportar", None # type: ignore
-
-            # 4. Calcular veículo baseado no peso total
-            veiculo = self.calcular_veiculo(peso_total)
-
-            # Atualizar todas as linhas com o veículo calculado
-            for linha in linhas_exportacao:
-                linha['Característica do veículo'] = veiculo
 
             # 5. Criar DataFrame e exportar para Excel
             df = pd.DataFrame(linhas_exportacao)

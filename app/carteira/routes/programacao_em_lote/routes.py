@@ -1768,7 +1768,8 @@ def processar_agendamento_sendas_async():
             dados_completos = buscar_dados_completos_cnpj(
                 cnpj=cnpj,
                 data_agendamento=data_agendamento,
-                data_expedicao=data_expedicao
+                data_expedicao=data_expedicao,
+                protocolo=protocolo  # ✅ CORREÇÃO CRÍTICA: Passar o MESMO protocolo
             )
 
             # Adicionar tipo_fluxo e protocolo para identificação no retorno
@@ -1823,12 +1824,12 @@ def processar_agendamento_sendas_async():
                 itens_para_fila.append({
                     'cnpj': cnpj,
                     'num_pedido': solicitado.get('num_pedido'),
-                    'cod_produto': encontrado.get('codigo_produto_cliente'),  # ✅ Código Sendas
-                    'nome_produto': encontrado.get('descricao_item'),         # ✅ Descrição Sendas
+                    'cod_produto': encontrado.get('codigo_produto_sendas'),  # ✅ CORRIGIDO: usar codigo_produto_sendas
+                    'nome_produto': encontrado.get('descricao'),              # ✅ CORRIGIDO: usar descricao
                     'quantidade': solicitado.get('quantidade'),
                     'data_expedicao': data_expedicao,
                     'data_agendamento': data_agendamento,
-                    'pedido_cliente': encontrado.get('codigo_pedido_cliente')  # ✅ Pedido Sendas
+                    'pedido_cliente': encontrado.get('codigo_pedido_sendas')  # ✅ CORRIGIDO: usar codigo_pedido_sendas
                 })
 
             # Gravar na fila com tipo_origem='lote' e documento_origem=CNPJ
