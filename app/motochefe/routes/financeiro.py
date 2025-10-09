@@ -2,19 +2,17 @@
 Rotas Financeiras - MotoChefe
 Contas a Pagar e Contas a Receber - Visão Consolidada
 """
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from decimal import Decimal
 from datetime import datetime, date
-from sqlalchemy import and_, or_, func
 
 from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import (
-    Moto, PedidoVendaMotoItem, EmbarqueMoto, EmbarquePedido,
-    ComissaoVendedor, DespesaMensal, TituloFinanceiro,
-    TransportadoraMoto
+    Moto, PedidoVendaMotoItem, EmbarqueMoto, 
+    ComissaoVendedor, DespesaMensal, TituloFinanceiro
 )
 
 
@@ -245,11 +243,36 @@ def pagar_lote():
                     contador += 1
 
             elif tipo == 'frete':
+                from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
+                from app.motochefe.services.empresa_service import atualizar_saldo
+                from app.motochefe.models.cadastro import EmpresaVendaMoto
+
                 embarque = EmbarqueMoto.query.get(item_id)
-                if embarque:
+                empresa_pagadora_id = request.form.get('empresa_pagadora_id')
+
+                if not empresa_pagadora_id:
+                    raise Exception('Selecione a empresa pagadora para o frete')
+
+                empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+
+                if embarque and empresa_pagadora:
+                    # 1. REGISTRAR MOVIMENTAÇÃO
+                    movimentacao = registrar_pagamento_frete_embarque(
+                        embarque,
+                        valor_pago,
+                        empresa_pagadora,
+                        current_user.nome
+                    )
+
+                    # 2. ATUALIZAR SALDO DA EMPRESA
+                    atualizar_saldo(empresa_pagadora.id, valor_pago, 'SUBTRAIR')
+
+                    # 3. ATUALIZAR EMBARQUE
                     embarque.valor_frete_pago = valor_pago
                     embarque.data_pagamento_frete = data_pag
+                    embarque.empresa_pagadora_id = empresa_pagadora.id
                     embarque.status_pagamento_frete = 'PAGO'
+
                     contador += 1
 
             elif tipo == 'comissao':

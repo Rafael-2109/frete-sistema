@@ -50,8 +50,8 @@ ORDER BY LENGTH(numero_chassi) DESC;
 -- ⚠️ PostgreSQL permite aumentar VARCHAR sem perda de dados
 -- ⚠️ Operação é rápida pois não reescreve os dados
 
-ALTER TABLE moto
-ALTER COLUMN numero_chassi TYPE VARCHAR(30);
+    ALTER TABLE transportadora_moto
+    ALTER COLUMN telefone TYPE VARCHAR(50);
 
 -- =====================================================
 -- 4. VERIFICAR ALTERAÇÃO APLICADA

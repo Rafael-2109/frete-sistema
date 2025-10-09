@@ -167,24 +167,51 @@ def editar_despesa(id):
 @login_required
 @requer_motochefe
 def pagar_despesa(id):
-    """Registra pagamento de despesa"""
+    """Registra pagamento de despesa com MovimentacaoFinanceira"""
     despesa = DespesaMensal.query.get_or_404(id)
 
-    valor_pago = request.form.get('valor_pago')
-    data_pagamento = request.form.get('data_pagamento') or date.today()
+    try:
+        valor_pago = request.form.get('valor_pago')
+        data_pagamento = request.form.get('data_pagamento') or date.today()
+        empresa_pagadora_id = request.form.get('empresa_pagadora_id')
 
-    if not valor_pago:
-        flash('Informe o valor pago', 'danger')
+        if not valor_pago:
+            raise Exception('Informe o valor pago')
+
+        if not empresa_pagadora_id:
+            raise Exception('Selecione a empresa pagadora')
+
+        empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+        if not empresa_pagadora:
+            raise Exception('Empresa pagadora não encontrada')
+
+        # 1. REGISTRAR MOVIMENTAÇÃO
+        from app.motochefe.services.movimentacao_service import registrar_pagamento_despesa_mensal
+        movimentacao = registrar_pagamento_despesa_mensal(
+            despesa,
+            empresa_pagadora,
+            current_user.nome
+        )
+
+        # 2. ATUALIZAR SALDO DA EMPRESA
+        from app.motochefe.services.empresa_service import atualizar_saldo
+        atualizar_saldo(empresa_pagadora.id, Decimal(valor_pago), 'SUBTRAIR')
+
+        # 3. ATUALIZAR DESPESA
+        despesa.valor_pago = Decimal(valor_pago)
+        despesa.data_pagamento = data_pagamento
+        despesa.empresa_pagadora_id = empresa_pagadora.id
+        despesa.status = 'PAGO' if despesa.saldo_aberto <= 0 else 'PENDENTE'
+        despesa.atualizado_por = current_user.nome
+
+        db.session.commit()
+        flash('Pagamento registrado com sucesso!', 'success')
         return redirect(url_for('motochefe.listar_despesas'))
 
-    despesa.valor_pago = Decimal(valor_pago)
-    despesa.data_pagamento = data_pagamento
-    despesa.status = 'PAGO' if despesa.saldo_aberto <= 0 else 'PENDENTE'
-    despesa.atualizado_por = current_user.nome
-
-    db.session.commit()
-    flash('Pagamento registrado com sucesso!', 'success')
-    return redirect(url_for('motochefe.listar_despesas'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao registrar pagamento: {str(e)}', 'danger')
+        return redirect(url_for('motochefe.listar_despesas'))
 
 @motochefe_bp.route('/despesas/<int:id>/remover', methods=['POST'])
 @login_required

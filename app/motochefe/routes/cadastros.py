@@ -933,9 +933,15 @@ def adicionar_cliente():
     if request.method == 'POST':
         nome = request.form.get('cliente')
         cnpj = request.form.get('cnpj_cliente')
+        vendedor_id = request.form.get('vendedor_id')
 
+        # Validações obrigatórias
         if not nome or not cnpj:
             flash('Nome e CNPJ são obrigatórios', 'danger')
+            return redirect(url_for('motochefe.adicionar_cliente'))
+
+        if not vendedor_id:
+            flash('Vendedor Responsável é obrigatório', 'danger')
             return redirect(url_for('motochefe.adicionar_cliente'))
 
         # Verificar duplicidade de CNPJ
@@ -945,6 +951,8 @@ def adicionar_cliente():
             return redirect(url_for('motochefe.listar_clientes'))
 
         cliente = ClienteMoto(
+            vendedor_id=int(vendedor_id),  # ✅ NOVO
+            crossdocking=bool(request.form.get('crossdocking')),  # ✅ NOVO
             cliente=nome,
             cnpj_cliente=cnpj,
             endereco_cliente=request.form.get('endereco_cliente'),
@@ -964,7 +972,9 @@ def adicionar_cliente():
         flash(f'Cliente "{nome}" cadastrado com sucesso!', 'success')
         return redirect(url_for('motochefe.listar_clientes'))
 
-    return render_template('motochefe/cadastros/clientes/form.html', cliente=None)
+    # GET: Listar vendedores para o dropdown
+    vendedores = VendedorMoto.query.filter_by(ativo=True).order_by(VendedorMoto.vendedor).all()
+    return render_template('motochefe/cadastros/clientes/form.html', cliente=None, vendedores=vendedores)
 
 @motochefe_bp.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -974,6 +984,15 @@ def editar_cliente(id):
     cliente = ClienteMoto.query.get_or_404(id)
 
     if request.method == 'POST':
+        vendedor_id = request.form.get('vendedor_id')
+
+        # Validação obrigatória de vendedor
+        if not vendedor_id:
+            flash('Vendedor Responsável é obrigatório', 'danger')
+            return redirect(url_for('motochefe.editar_cliente', id=id))
+
+        cliente.vendedor_id = int(vendedor_id)  # ✅ NOVO
+        cliente.crossdocking = bool(request.form.get('crossdocking'))  # ✅ NOVO
         cliente.cliente = request.form.get('cliente')
         cliente.cnpj_cliente = request.form.get('cnpj_cliente')
         cliente.endereco_cliente = request.form.get('endereco_cliente')
@@ -991,7 +1010,9 @@ def editar_cliente(id):
         flash('Cliente atualizado com sucesso!', 'success')
         return redirect(url_for('motochefe.listar_clientes'))
 
-    return render_template('motochefe/cadastros/clientes/form.html', cliente=cliente)
+    # GET: Listar vendedores para o dropdown
+    vendedores = VendedorMoto.query.filter_by(ativo=True).order_by(VendedorMoto.vendedor).all()
+    return render_template('motochefe/cadastros/clientes/form.html', cliente=cliente, vendedores=vendedores)
 
 @motochefe_bp.route('/clientes/<int:id>/remover', methods=['POST'])
 @login_required

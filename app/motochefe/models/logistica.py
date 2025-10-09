@@ -31,6 +31,8 @@ class EmbarqueMoto(db.Model):
     valor_frete_pago = db.Column(db.Numeric(15, 2), nullable=True)         # Valor efetivamente pago
     data_pagamento_frete = db.Column(db.Date, nullable=True)               # Data do pagamento
     status_pagamento_frete = db.Column(db.String(20), default='PENDENTE', nullable=False)  # PENDENTE, PAGO, ATRASADO
+    empresa_pagadora_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True, index=True)
+    # Empresa que pagou o frete
     tipo_veiculo = db.Column(db.String(50), nullable=True)
 
     # Status
@@ -43,6 +45,7 @@ class EmbarqueMoto(db.Model):
     # Relacionamentos
     transportadora = db.relationship('TransportadoraMoto', backref='embarques')
     pedidos_rel = db.relationship('EmbarquePedido', backref='embarque', lazy='dynamic', cascade='all, delete-orphan')
+    empresa_pagadora = db.relationship('EmpresaVendaMoto', backref='embarques_pagos')
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

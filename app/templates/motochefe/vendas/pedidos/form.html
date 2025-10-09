@@ -45,51 +45,48 @@
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Cliente *</label>
-                        <select name="cliente_id" class="form-select" required>
+                        <label class="form-label">Equipe de Vendas *</label>
+                        <select name="equipe_vendas_id" id="sel_equipe" class="form-select" required>
                             <option value="">Selecione...</option>
-                            {% for c in clientes %}
-                            <option value="{{ c.id }}">{{ c.cliente }} - {{ c.cnpj_cliente }}</option>
+                            {% for e in equipes %}
+                            <option value="{{ e.id }}"
+                                    data-permitir-prazo="{{ e.permitir_prazo|lower }}"
+                                    data-permitir-parcelamento="{{ e.permitir_parcelamento|lower }}"
+                                    data-permitir-montagem="{{ e.permitir_montagem|lower }}">
+                                {{ e.equipe_vendas }}
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Vendedor *</label>
-                        <select name="vendedor_id" class="form-select" required>
-                            <option value="">Selecione...</option>
-                            {% for v in vendedores %}
-                            <option value="{{ v.id }}">{{ v.vendedor }}</option>
-                            {% endfor %}
+                        <select name="vendedor_id" id="sel_vendedor" class="form-select" required disabled>
+                            <option value="">Selecione equipe primeiro...</option>
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Equipe de Vendas</label>
-                        <select name="equipe_vendas_id" class="form-select">
-                            <option value="">Selecione...</option>
-                            {% for e in equipes %}
-                            <option value="{{ e.id }}">{{ e.equipe_vendas }}</option>
-                            {% endfor %}
+                        <label class="form-label">Cliente *</label>
+                        <select name="cliente_id" id="sel_cliente" class="form-select" required disabled>
+                            <option value="">Selecione vendedor primeiro...</option>
                         </select>
                     </div>
                 </div>
 
+                <!-- Campo de Prazo (condicional) -->
+                <div class="row" id="div_prazo" style="display: none;">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Prazo (dias) *</label>
+                        <input type="number" name="prazo_dias" id="input_prazo" class="form-control" min="0" value="0">
+                        <small class="text-muted">Dias após data de expedição</small>
+                    </div>
+                </div>
+
                 <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Forma Pagamento</label>
-                        <input type="text" name="forma_pagamento" class="form-control" placeholder="Ex: Boleto, Cartão">
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Condição Pagamento</label>
-                        <input type="text" name="condicao_pagamento" class="form-control" placeholder="Ex: 10x sem juros">
-                    </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Valor Frete Cliente</label>
-                        <input type="number" step="0.01" name="valor_frete_cliente" class="form-control" value="0">
+                        <input type="number" step="0.01" name="valor_frete_cliente" id="input_frete" class="form-control" value="0">
                     </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Transportadora</label>
                         <select name="transportadora_id" class="form-select">
                             <option value="">Selecione...</option>
@@ -98,9 +95,9 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-3 mb-3" id="div_tipo_frete">
                         <label class="form-label">Tipo Frete</label>
-                        <select name="tipo_frete" class="form-select">
+                        <select name="tipo_frete" id="sel_tipo_frete" class="form-select">
                             <option value="">Selecione...</option>
                             <option value="CIF">CIF</option>
                             <option value="FOB">FOB</option>
@@ -132,14 +129,10 @@
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">Estoque Disponível</label>
-                                <div id="div_estoque" class="form-control" style="height: auto; min-height: 38px;">
-                                    <small class="text-muted">Selecione um modelo</small>
-                                </div>
-                            </div>
-                            <div class="col-md-2 mb-3">
-                                <label class="form-label">Cor</label>
-                                <input type="text" id="txt_cor" class="form-control" placeholder="Ex: Vermelho">
+                                <label class="form-label">Cor *</label>
+                                <select id="sel_cor" class="form-select" required>
+                                    <option value="">Selecione modelo primeiro...</option>
+                                </select>
                             </div>
                             <div class="col-md-2 mb-3">
                                 <label class="form-label">Quantidade</label>
@@ -150,21 +143,23 @@
                                 <input type="number" step="0.01" id="txt_preco" class="form-control">
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-3 mb-3">
-                                <div class="form-check">
-                                    <input type="checkbox" id="chk_montagem" class="form-check-input">
-                                    <label class="form-check-label">Montagem Contratada</label>
+                        <div id="div_montagem">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" id="chk_montagem" class="form-check-input">
+                                        <label class="form-check-label">Montagem Contratada</label>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Valor Montagem</label>
-                                <input type="number" step="0.01" id="txt_valor_montagem" class="form-control" disabled>
-                            </div>
-                            <div class="col-md-3 d-flex align-items-end">
-                                <button type="button" class="btn btn-primary" onclick="adicionarItem()">
-                                    <i class="fas fa-plus"></i> Adicionar Item
-                                </button>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">Valor Montagem</label>
+                                    <input type="number" step="0.01" id="txt_valor_montagem" class="form-control" disabled>
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary" onclick="adicionarItem()">
+                                        <i class="fas fa-plus"></i> Adicionar Item
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -197,30 +192,32 @@
                     </tfoot>
                 </table>
 
-                <hr class="my-4">
+                <div id="div_parcelas" style="display: none;">
+                    <hr class="my-4">
 
-                <!-- Parcelamento -->
-                <h5 class="mb-3"><i class="fas fa-calendar-alt"></i> Parcelamento</h5>
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <button type="button" class="btn btn-sm btn-primary" onclick="adicionarParcela()">
-                            <i class="fas fa-plus"></i> Adicionar Parcela
-                        </button>
-                        <table class="table table-sm mt-3">
-                            <thead>
-                                <tr>
-                                    <th>Parcela</th>
-                                    <th>Valor (R$)</th>
-                                    <th>Prazo (dias)</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody_parcelas">
-                                <tr id="tr_parcelas_vazio">
-                                    <td colspan="4" class="text-center text-muted">Nenhuma parcela cadastrada</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <!-- Parcelamento -->
+                    <h5 class="mb-3"><i class="fas fa-calendar-alt"></i> Parcelamento</h5>
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="adicionarParcela()">
+                                <i class="fas fa-plus"></i> Adicionar Parcela
+                            </button>
+                            <table class="table table-sm mt-3">
+                                <thead>
+                                    <tr>
+                                        <th>Parcela</th>
+                                        <th>Valor (R$)</th>
+                                        <th>Prazo (dias)</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody_parcelas">
+                                    <tr id="tr_parcelas_vazio">
+                                        <td colspan="4" class="text-center text-muted">Nenhuma parcela cadastrada</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -240,27 +237,134 @@
 <script>
 let itens = [];
 let parcelas = [];
+let cliente_crossdocking = false;
 
-// Buscar estoque ao selecionar modelo
+// 🆕 CASCATA: Equipe → Vendedor
+document.getElementById('sel_equipe').addEventListener('change', async function() {
+    const equipeId = this.value;
+    const selVendedor = document.getElementById('sel_vendedor');
+    const selCliente = document.getElementById('sel_cliente');
+
+    selVendedor.innerHTML = '<option value="">Carregando...</option>';
+    selVendedor.disabled = true;
+    selCliente.innerHTML = '<option value="">Selecione vendedor primeiro...</option>';
+    selCliente.disabled = true;
+
+    if (!equipeId) {
+        selVendedor.innerHTML = '<option value="">Selecione equipe primeiro...</option>';
+        return;
+    }
+
+    const response = await fetch(`/motochefe/api/vendedores-por-equipe?equipe_id=${equipeId}`);
+    const vendedores = await response.json();
+
+    selVendedor.innerHTML = '<option value="">Selecione...</option>';
+    vendedores.forEach(v => {
+        selVendedor.innerHTML += `<option value="${v.id}">${v.vendedor}</option>`;
+    });
+    selVendedor.disabled = false;
+
+    const option = this.options[this.selectedIndex];
+    const permitirMontagem = option.dataset.permitirMontagem === 'true';
+    const permitirPrazo = option.dataset.permitirPrazo === 'true';
+    const permitirParcelamento = option.dataset.permitirParcelamento === 'true';
+
+    const divMontagem = document.getElementById('div_montagem');
+    if (divMontagem) {
+        divMontagem.style.display = permitirMontagem ? 'block' : 'none';
+    }
+
+    const divPrazo = document.getElementById('div_prazo');
+    const divParcelas = document.getElementById('div_parcelas');
+
+    // Lógica de exibição:
+    // - permitir_prazo=False: À vista (sem prazo, sem parcelas)
+    // - permitir_prazo=True, permitir_parcelamento=False: Prazo único (1 vencimento)
+    // - permitir_prazo=True, permitir_parcelamento=True: Prazo E parcelas (múltiplos vencimentos)
+
+    if (!permitirPrazo) {
+        // À vista: esconde tudo
+        if (divPrazo) divPrazo.style.display = 'none';
+        if (divParcelas) divParcelas.style.display = 'none';
+        // Limpar parcelas
+        parcelas = [];
+        atualizarTabelaParcelas();
+    } else {
+        // COM prazo
+        if (divPrazo) divPrazo.style.display = 'block';
+
+        if (permitirParcelamento) {
+            // COM parcelamento: mostrar seção de parcelas
+            if (divParcelas) divParcelas.style.display = 'block';
+        } else {
+            // SEM parcelamento: esconder seção, limpar array
+            if (divParcelas) divParcelas.style.display = 'none';
+            parcelas = [];
+            atualizarTabelaParcelas();
+        }
+    }
+});
+
+// 🆕 CASCATA: Vendedor → Cliente
+document.getElementById('sel_vendedor').addEventListener('change', async function() {
+    const vendedorId = this.value;
+    const selCliente = document.getElementById('sel_cliente');
+
+    selCliente.innerHTML = '<option value="">Carregando...</option>';
+    selCliente.disabled = true;
+
+    if (!vendedorId) {
+        selCliente.innerHTML = '<option value="">Selecione vendedor primeiro...</option>';
+        return;
+    }
+
+    const response = await fetch(`/motochefe/api/clientes-por-vendedor?vendedor_id=${vendedorId}`);
+    const clientes = await response.json();
+
+    selCliente.innerHTML = '<option value="">Selecione...</option>';
+    clientes.forEach(c => {
+        selCliente.innerHTML += `<option value="${c.id}" data-crossdocking="${c.crossdocking}">${c.cliente} - ${c.cnpj}</option>`;
+    });
+    selCliente.disabled = false;
+});
+
+// 🆕 EVENTO: Cliente → CrossDocking
+document.getElementById('sel_cliente').addEventListener('change', function() {
+    const option = this.options[this.selectedIndex];
+    cliente_crossdocking = option.dataset.crossdocking === 'true';
+
+    const divTipoFrete = document.getElementById('div_tipo_frete');
+    if (divTipoFrete) {
+        divTipoFrete.style.display = cliente_crossdocking ? 'none' : 'block';
+    }
+});
+
+// Buscar cores ao selecionar modelo
 document.getElementById('sel_modelo').addEventListener('change', async function() {
     const modeloId = this.value;
     const precoTabela = this.options[this.selectedIndex]?.dataset.preco || 0;
     document.getElementById('txt_preco').value = precoTabela;
-    
+
+    const selCor = document.getElementById('sel_cor');
+
     if (!modeloId) {
-        document.getElementById('div_estoque').innerHTML = '<small class="text-muted">Selecione um modelo</small>';
+        selCor.innerHTML = '<option value="">Selecione modelo primeiro...</option>';
+        selCor.disabled = true;
         return;
     }
-    
-    const response = await fetch(`{{ url_for('motochefe.api_estoque_modelo') }}?modelo_id=${modeloId}`);
-    const estoque = await response.json();
-    
-    if (estoque.length === 0) {
-        document.getElementById('div_estoque').innerHTML = '<small class="text-danger">Sem estoque</small>';
+
+    const response = await fetch(`/motochefe/api/cores-disponiveis?modelo_id=${modeloId}`);
+    const cores = await response.json();
+
+    if (cores.length === 0) {
+        selCor.innerHTML = '<option value="">Sem estoque disponível</option>';
+        selCor.disabled = true;
     } else {
-        document.getElementById('div_estoque').innerHTML = estoque.map(e => 
-            `<span class="badge bg-success me-1">${e.cor}: ${e.quantidade}</span>`
-        ).join('');
+        selCor.innerHTML = '<option value="">Selecione...</option>';
+        cores.forEach(c => {
+            selCor.innerHTML += `<option value="${c.cor}">${c.label}</option>`;
+        });
+        selCor.disabled = false;
     }
 });
 
@@ -275,17 +379,18 @@ function adicionarItem() {
     const selModelo = document.getElementById('sel_modelo');
     const modelo_id = selModelo.value;
     const modelo_nome = selModelo.options[selModelo.selectedIndex]?.text || '';
-    const cor = document.getElementById('txt_cor').value;
+    const selCor = document.getElementById('sel_cor');
+    const cor = selCor.value;
     const quantidade = parseInt(document.getElementById('txt_qtd').value);
     const preco_venda = parseFloat(document.getElementById('txt_preco').value);
     const montagem = document.getElementById('chk_montagem').checked;
     const valor_montagem = montagem ? parseFloat(document.getElementById('txt_valor_montagem').value || 0) : 0;
-    
+
     if (!modelo_id || !cor || !quantidade || !preco_venda) {
         alert('Preencha todos os campos do item');
         return;
     }
-    
+
     const item = {
         modelo_id: parseInt(modelo_id),
         modelo_nome: modelo_nome.split(' (')[0],
@@ -296,7 +401,7 @@ function adicionarItem() {
         valor_montagem: valor_montagem,
         total: (preco_venda * quantidade) + (montagem ? valor_montagem * quantidade : 0)
     };
-    
+
     itens.push(item);
     atualizarTabelaItens();
     limparFormItem();
@@ -310,7 +415,7 @@ function removerItem(index) {
 function atualizarTabelaItens() {
     const tbody = document.getElementById('tbody_itens');
     const trVazio = document.getElementById('tr_vazio');
-    
+
     if (itens.length === 0) {
         trVazio.style.display = '';
         tbody.innerHTML = '<tr id="tr_vazio"><td colspan="7" class="text-center text-muted">Nenhum item adicionado</td></tr>';
@@ -331,35 +436,55 @@ function atualizarTabelaItens() {
             </tr>
         `).join('');
     }
-    
-    const total = itens.reduce((sum, item) => sum + item.total, 0);
-    document.getElementById('td_total').textContent = 'R$ ' + total.toFixed(2);
-    document.getElementById('valor_total_pedido').value = total.toFixed(2);
+
+    const totalItens = itens.reduce((sum, item) => sum + item.total, 0);
+    const frete = parseFloat(document.getElementById('input_frete')?.value || 0);
+    const totalComFrete = totalItens + frete;
+
+    document.getElementById('td_total').textContent = 'R$ ' + totalComFrete.toFixed(2);
+    document.getElementById('valor_total_pedido').value = totalComFrete.toFixed(2);
 }
+
+// Listener no frete
+document.getElementById('input_frete').addEventListener('input', atualizarTabelaItens);
 
 function limparFormItem() {
     document.getElementById('sel_modelo').value = '';
-    document.getElementById('txt_cor').value = '';
+    document.getElementById('sel_cor').innerHTML = '<option value="">Selecione modelo primeiro...</option>';
+    document.getElementById('sel_cor').disabled = true;
     document.getElementById('txt_qtd').value = '1';
     document.getElementById('txt_preco').value = '';
     document.getElementById('chk_montagem').checked = false;
     document.getElementById('txt_valor_montagem').value = '';
     document.getElementById('txt_valor_montagem').disabled = true;
-    document.getElementById('div_estoque').innerHTML = '<small class="text-muted">Selecione um modelo</small>';
 }
 
 // Parcelas
 function adicionarParcela() {
     const numero = parcelas.length + 1;
     const total = parseFloat(document.getElementById('valor_total_pedido').value || 0);
-    const valor = total > 0 ? (total / (numero)).toFixed(2) : 0;
-    
+
+    if (total === 0) {
+        alert('Adicione itens ao pedido antes de criar parcelas');
+        return;
+    }
+
+    const valorPorParcela = (total / numero).toFixed(2);
+
+    // Adicionar nova parcela
     parcelas.push({
         numero: numero,
-        valor: parseFloat(valor),
-        prazo_dias: 30 * numero
+        valor: parseFloat(valorPorParcela),
+        prazo_dias: 30  // Padrão 30 dias, EDITÁVEL pelo usuário
     });
-    
+
+    // ✅ RECALCULAR VALORES das parcelas (mantém prazo_dias editado)
+    parcelas.forEach((p, index) => {
+        p.numero = index + 1;
+        p.valor = parseFloat(valorPorParcela);
+        // NÃO recalcular prazo_dias - usuário pode ter editado
+    });
+
     atualizarTabelaParcelas();
 }
 
@@ -397,14 +522,43 @@ function atualizarTabelaParcelas() {
     }
 }
 
-// Submit
+// Submit com validações
 document.getElementById('formPedido').addEventListener('submit', function(e) {
+    // Validação 1: Itens
     if (itens.length === 0) {
         e.preventDefault();
         alert('Adicione pelo menos um item ao pedido');
         return;
     }
-    
+
+    // Validação 2: Parcelas (se houver)
+    if (parcelas.length > 0) {
+        const totalPedido = parseFloat(document.getElementById('valor_total_pedido').value || 0);
+        const totalParcelas = parcelas.reduce((sum, p) => sum + p.valor, 0);
+        const diferenca = Math.abs(totalPedido - totalParcelas);
+
+        // Tolerância de R$ 0.02 para arredondamentos
+        if (diferenca > 0.02) {
+            e.preventDefault();
+            alert(
+                `ERRO: Soma das parcelas (R$ ${totalParcelas.toFixed(2)}) ` +
+                `difere do total do pedido (R$ ${totalPedido.toFixed(2)}).\n\n` +
+                `Diferença: R$ ${diferenca.toFixed(2)}\n\n` +
+                `Ajuste os valores das parcelas.`
+            );
+            return;
+        }
+
+        // Validação 3: Prazo das parcelas
+        const parcelasSemPrazo = parcelas.filter(p => !p.prazo_dias || p.prazo_dias <= 0);
+        if (parcelasSemPrazo.length > 0) {
+            e.preventDefault();
+            alert('Todas as parcelas devem ter prazo em dias maior que 0');
+            return;
+        }
+    }
+
+    // Tudo OK: serializar dados
     document.getElementById('itens_json').value = JSON.stringify(itens);
     document.getElementById('parcelas_json').value = JSON.stringify(parcelas);
 });

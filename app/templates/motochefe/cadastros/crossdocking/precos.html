@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-dollar-sign"></i> Tabela de Preços - {{ crossdocking.nome }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_crossdocking') }}">CrossDocking</a></li>
+                    <li class="breadcrumb-item active">Tabela de Preços</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Formulário de Adição Rápida -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-plus"></i> Adicionar/Editar Preço</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('motochefe.salvar_preco_crossdocking', crossdocking_id=crossdocking.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="row align-items-end">
+                    <div class="col-md-6">
+                        <label for="modelo_id" class="form-label">Modelo *</label>
+                        <select class="form-select" id="modelo_id" name="modelo_id" required>
+                            <option value="">Selecione...</option>
+                            {% for modelo in modelos %}
+                            <option value="{{ modelo.id }}">
+                                {{ modelo.nome_modelo }} - {{ modelo.potencia_motor }} (Padrão: R$ {{ "%.2f"|format(modelo.preco_tabela) }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="preco_venda" class="form-label">Preço de Venda (R$) *</label>
+                        <input type="number" class="form-control" id="preco_venda" name="preco_venda" step="0.01" min="0" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Preços Cadastrados -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Preços Cadastrados ({{ precos|length }})</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th style="width: 10%;">ID</th>
+                        <th style="width: 40%;">Modelo</th>
+                        <th style="width: 15%;">Potência</th>
+                        <th style="width: 15%;">Preço Padrão</th>
+                        <th style="width: 15%;">Preço CrossDocking</th>
+                        <th style="width: 5%;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for preco in precos %}
+                    <tr>
+                        <td><small class="text-muted">#{{ preco.modelo.id }}</small></td>
+                        <td><strong>{{ preco.modelo.nome_modelo }}</strong></td>
+                        <td>{{ preco.modelo.potencia_motor }}</td>
+                        <td class="text-muted">R$ {{ "%.2f"|format(preco.modelo.preco_tabela) }}</td>
+                        <td><strong class="text-success">R$ {{ "%.2f"|format(preco.preco_venda) }}</strong></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('motochefe.remover_preco_crossdocking', id=preco.id) }}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirma remoção?')" title="Remover">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fas fa-info-circle"></i> Nenhum preço cadastrado. Use o formulário acima para adicionar.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <a href="{{ url_for('motochefe.listar_crossdocking') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+{% endblock %}

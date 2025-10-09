@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-truck-loading"></i> CrossDocking</h2>
+        <div>
+            <!-- ⚠️ BOTÃO REMOVIDO: Apenas 1 CrossDocking genérico é permitido -->
+            <!-- A rota /crossdocking agora redireciona automaticamente para edição -->
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th style="width: 12%;">ID / Nome</th>
+                        <th style="width: 10%;">Precificação</th>
+                        <th style="width: 10%;">Movimentação</th>
+                        <th style="width: 16%;">Tipo Comissão</th>
+                        <th style="width: 10%;">Valor</th>
+                        <th style="width: 16%;">Criação</th>
+                        <th style="width: 26%;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cd in crossdockings %}
+                    <tr>
+                        <!-- Coluna 1: ID / Nome -->
+                        <td>
+                            <div><small class="text-muted">ID {{ cd.id }}</small></div>
+                            <div><strong>{{ cd.nome }}</strong></div>
+                        </td>
+
+                        <!-- Coluna 2: Precificação -->
+                        <td class="text-center">
+                            {% if cd.tipo_precificacao == 'TABELA' %}
+                            <span class="badge bg-success" title="Usa tabela de preços cadastrada"><i class="fas fa-table"></i> Tabela</span>
+                            {% elif cd.tipo_precificacao == 'CUSTO_MARKUP' %}
+                            <span class="badge bg-info" title="Custo + Markup fixo"><i class="fas fa-calculator"></i> Markup</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Coluna 3: Movimentação -->
+                        <td class="text-center">
+                            {% if cd.responsavel_movimentacao %}
+                            <span class="badge bg-info">{{ cd.responsavel_movimentacao }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Coluna 4: Tipo Comissão -->
+                        <td>
+                            {% if cd.tipo_comissao == 'FIXA_EXCEDENTE' %}
+                            <div><span class="badge bg-primary">Fixa + Excedente</span></div>
+                            {% elif cd.tipo_comissao == 'PERCENTUAL' %}
+                            <div><span class="badge bg-success">Percentual</span></div>
+                            {% else %}
+                            <div><span class="text-muted">-</span></div>
+                            {% endif %}
+
+                            <div class="mt-1">
+                                {% if cd.comissao_rateada %}
+                                <small class="text-success"><i class="fas fa-users"></i> Rateado</small>
+                                {% else %}
+                                <small class="text-secondary"><i class="fas fa-user"></i> Individual</small>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Coluna 5: Valor -->
+                        <td>
+                            {% if cd.tipo_comissao == 'FIXA_EXCEDENTE' %}
+                            <strong>R$ {{ "%.2f"|format(cd.valor_comissao_fixa or 0) }}</strong>
+                            {% elif cd.tipo_comissao == 'PERCENTUAL' %}
+                            <strong>{{ "%.2f"|format(cd.percentual_comissao or 0) }}%</strong>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Coluna 6: Criação -->
+                        <td>
+                            <div><small><i class="fas fa-user"></i> {{ cd.criado_por or '-' }}</small></div>
+                            <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ cd.criado_em.strftime('%d/%m/%Y %H:%M') if cd.criado_em else '-' }}</small></div>
+                        </td>
+
+                        <!-- Coluna 7: Ações -->
+                        <td>
+                            <a href="{{ url_for('motochefe.editar_crossdocking', id=cd.id) }}" class="btn btn-sm btn-warning" title="Editar CrossDocking">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {% if cd.tipo_precificacao == 'TABELA' %}
+                            <a href="{{ url_for('motochefe.gerenciar_precos_crossdocking', id=cd.id) }}" class="btn btn-sm btn-success" title="Gerenciar tabela de preços">
+                                <i class="fas fa-dollar-sign"></i>
+                            </a>
+                            {% endif %}
+                            <!-- ⚠️ BOTÃO REMOVER OCULTO: Não é permitido remover o único CrossDocking genérico -->
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="fas fa-info-circle"></i> Nenhum CrossDocking cadastrado
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Paginação -->
+            {% if paginacao %}
+                {% include 'motochefe/_pagination.html' %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4" style="max-width: 1000px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-truck-loading"></i>
+                {% if crossdocking %}Editar CrossDocking{% else %}Novo CrossDocking{% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <!-- Nome -->
+                <div class="mb-4">
+                    <label for="nome" class="form-label fw-bold">Nome do CrossDocking *</label>
+                    <input type="text"
+                           class="form-control"
+                           id="nome"
+                           name="nome"
+                           value="{{ crossdocking.nome if crossdocking else '' }}"
+                           required>
+                </div>
+
+                <!-- Descrição -->
+                <div class="mb-4">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <textarea class="form-control" id="descricao" name="descricao" rows="2">{{ crossdocking.descricao if crossdocking else '' }}</textarea>
+                </div>
+
+                <hr>
+
+                <!-- PRECIFICAÇÃO -->
+                <h5 class="mb-3"><i class="fas fa-tag"></i> Precificação</h5>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Precificação *</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_precificacao" id="tipo_tabela" value="TABELA"
+                                   {% if not crossdocking or crossdocking.tipo_precificacao == 'TABELA' %}checked{% endif %}
+                                   onchange="toggleTipoPrecificacao()">
+                            <label class="form-check-label" for="tipo_tabela">Tabela de Preços</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_precificacao" id="tipo_custo_markup" value="CUSTO_MARKUP"
+                                   {% if crossdocking and crossdocking.tipo_precificacao == 'CUSTO_MARKUP' %}checked{% endif %}
+                                   onchange="toggleTipoPrecificacao()">
+                            <label class="form-check-label" for="tipo_custo_markup">Custo + Markup</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="div_markup" class="mb-4" style="display: none;">
+                    <label for="markup" class="form-label">Valor do Markup (R$)</label>
+                    <input type="number" class="form-control" id="markup" name="markup" step="0.01" min="0"
+                           value="{{ '%.2f'|format(crossdocking.markup|float) if crossdocking else '0.00' }}">
+                </div>
+
+                <hr>
+
+                <!-- MOVIMENTAÇÃO -->
+                <h5 class="mb-3"><i class="fas fa-truck"></i> Movimentação</h5>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="responsavel_movimentacao" class="form-label">Responsável Movimentação</label>
+                        <select class="form-select" id="responsavel_movimentacao" name="responsavel_movimentacao">
+                            <option value="">Não configurado</option>
+                            <option value="RJ" {% if crossdocking and crossdocking.responsavel_movimentacao == 'RJ' %}selected{% endif %}>RJ</option>
+                            <option value="NACOM" {% if crossdocking and crossdocking.responsavel_movimentacao == 'NACOM' %}selected{% endif %}>NACOM</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="custo_movimentacao" class="form-label">Custo de Movimentação (R$)</label>
+                        <input type="number" class="form-control" id="custo_movimentacao" name="custo_movimentacao" step="0.01" min="0"
+                               value="{{ '%.2f'|format(crossdocking.custo_movimentacao|float) if crossdocking else '0.00' }}">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="incluir_custo_movimentacao" name="incluir_custo_movimentacao" value="1"
+                               {% if crossdocking and crossdocking.incluir_custo_movimentacao %}checked{% endif %}>
+                        <label class="form-check-label" for="incluir_custo_movimentacao">
+                            <strong>Incluir custo de movimentação no preço final</strong>
+                        </label>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- COMISSÃO -->
+                <h5 class="mb-3"><i class="fas fa-percent"></i> Comissão</h5>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Comissão *</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_comissao" id="tipo_fixa" value="FIXA_EXCEDENTE"
+                                   {% if not crossdocking or crossdocking.tipo_comissao == 'FIXA_EXCEDENTE' %}checked{% endif %}
+                                   onchange="toggleTipoComissao()">
+                            <label class="form-check-label" for="tipo_fixa">Fixa + Excedente</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo_comissao" id="tipo_percentual" value="PERCENTUAL"
+                                   {% if crossdocking and crossdocking.tipo_comissao == 'PERCENTUAL' %}checked{% endif %}
+                                   onchange="toggleTipoComissao()">
+                            <label class="form-check-label" for="tipo_percentual">Percentual</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="div_fixa_excedente" class="mb-3">
+                    <label for="valor_comissao_fixa" class="form-label">Valor Comissão Fixa (R$)</label>
+                    <input type="number" class="form-control" id="valor_comissao_fixa" name="valor_comissao_fixa" step="0.01" min="0"
+                           value="{{ '%.2f'|format(crossdocking.valor_comissao_fixa|float) if crossdocking else '0.00' }}">
+                </div>
+
+                <div id="div_percentual" class="mb-3" style="display: none;">
+                    <label for="percentual_comissao" class="form-label">Percentual da Comissão (%)</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="percentual_comissao" name="percentual_comissao" step="0.01" min="0" max="100"
+                               value="{{ '%.2f'|format(crossdocking.percentual_comissao|float) if crossdocking else '0.00' }}">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="comissao_rateada" name="comissao_rateada" value="1"
+                               {% if not crossdocking or crossdocking.comissao_rateada %}checked{% endif %}>
+                        <label class="form-check-label" for="comissao_rateada">
+                            <strong>Ratear comissão entre todos vendedores da equipe</strong>
+                        </label>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- MONTAGEM -->
+                <h5 class="mb-3"><i class="fas fa-wrench"></i> Montagem</h5>
+
+                <div class="mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="permitir_montagem" name="permitir_montagem" value="1"
+                               {% if not crossdocking or crossdocking.permitir_montagem %}checked{% endif %}>
+                        <label class="form-check-label" for="permitir_montagem">
+                            <strong>Permitir montagem contratada</strong>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Botões -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('motochefe.listar_crossdocking') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleTipoPrecificacao() {
+    const tipo = document.querySelector('input[name="tipo_precificacao"]:checked').value;
+    document.getElementById('div_markup').style.display = tipo === 'CUSTO_MARKUP' ? 'block' : 'none';
+}
+
+function toggleTipoComissao() {
+    const tipo = document.querySelector('input[name="tipo_comissao"]:checked').value;
+    document.getElementById('div_fixa_excedente').style.display = tipo === 'FIXA_EXCEDENTE' ? 'block' : 'none';
+    document.getElementById('div_percentual').style.display = tipo === 'PERCENTUAL' ? 'block' : 'none';
+}
+
+// Inicializar
+toggleTipoPrecificacao();
+toggleTipoComissao();
+</script>
+{% endblock %}

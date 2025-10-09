@@ -2,15 +2,14 @@
 Service para Extrato Financeiro - Sistema MotoCHEFE
 Consolida TODAS as movimentações financeiras (recebimentos e pagamentos) realizadas
 """
-from sqlalchemy import text, union_all, select, literal, case
+from sqlalchemy import text
 from decimal import Decimal
-from datetime import datetime, date
 from app import db
 
 
 def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
-                                     cliente_id=None, fornecedor=None, vendedor_id=None,
-                                     transportadora_id=None, tipo_movimentacao=None):
+                                     cliente_id=None, fornecedor=None, vendedor_id=None, #type: ignore
+                                     transportadora_id=None, tipo_movimentacao=None): #type: ignore
     """
     Retorna TODAS as movimentações financeiras consolidadas
 

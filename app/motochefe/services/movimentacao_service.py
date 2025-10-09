@@ -224,6 +224,77 @@ def obter_extrato(data_inicial, data_final, empresa_id=None):
     ).all()
 
 
+def registrar_pagamento_despesa_mensal(despesa, empresa_pagadora, usuario=None):
+    """
+    Registra pagamento de despesa mensal
+
+    Args:
+        despesa: DespesaMensal
+        empresa_pagadora: EmpresaVendaMoto
+        usuario: str
+
+    Returns:
+        MovimentacaoFinanceira criada
+    """
+    movimentacao = MovimentacaoFinanceira(
+        tipo='PAGAMENTO',
+        categoria='Despesa',
+        valor=despesa.valor,
+        data_movimentacao=despesa.data_pagamento or date.today(),
+
+        empresa_origem_id=empresa_pagadora.id,
+        empresa_destino_id=None,
+        destino_tipo='Despesa',
+        destino_identificacao=f'{despesa.tipo_despesa} - {despesa.mes_competencia}/{despesa.ano_competencia}',
+
+        despesa_mensal_id=despesa.id,
+
+        descricao=f'Pagamento Despesa - {despesa.tipo_despesa} - {despesa.descricao or ""}',
+        criado_por=usuario
+    )
+
+    db.session.add(movimentacao)
+    db.session.flush()
+
+    return movimentacao
+
+
+def registrar_pagamento_frete_embarque(embarque, valor_pago, empresa_pagadora, usuario=None):
+    """
+    Registra pagamento de frete de embarque
+
+    Args:
+        embarque: EmbarqueMoto
+        valor_pago: Decimal
+        empresa_pagadora: EmpresaVendaMoto
+        usuario: str
+
+    Returns:
+        MovimentacaoFinanceira criada
+    """
+    movimentacao = MovimentacaoFinanceira(
+        tipo='PAGAMENTO',
+        categoria='Frete Embarque',
+        valor=valor_pago,
+        data_movimentacao=embarque.data_pagamento_frete or date.today(),
+
+        empresa_origem_id=empresa_pagadora.id,
+        empresa_destino_id=None,
+        destino_tipo='Transportadora',
+        destino_identificacao=embarque.transportadora.transportadora if embarque.transportadora else 'Sem Transportadora',
+
+        embarque_moto_id=embarque.id,
+
+        descricao=f'Pagamento Frete Embarque #{embarque.numero_embarque} - {embarque.transportadora.transportadora if embarque.transportadora else "Sem Transp"}',
+        criado_por=usuario
+    )
+
+    db.session.add(movimentacao)
+    db.session.flush()
+
+    return movimentacao
+
+
 def calcular_saldo_periodo(movimentacoes):
     """
     Calcula saldo acumulado período

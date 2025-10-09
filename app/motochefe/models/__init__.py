@@ -10,7 +10,9 @@ from .cadastro import (
     TabelaPrecoEquipe,
     TransportadoraMoto,
     ClienteMoto,
-    EmpresaVendaMoto
+    EmpresaVendaMoto,
+    CrossDocking,
+    TabelaPrecoCrossDocking
 )
 
 # Produtos
@@ -51,6 +53,8 @@ __all__ = [
     'TransportadoraMoto',
     'ClienteMoto',
     'EmpresaVendaMoto',
+    'CrossDocking',
+    'TabelaPrecoCrossDocking',
     # Produtos
     'ModeloMoto',
     'Moto',

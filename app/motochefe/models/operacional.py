@@ -73,10 +73,15 @@ class DespesaMensal(db.Model):
     # Pagamento
     data_pagamento = db.Column(db.Date, nullable=True)
     valor_pago = db.Column(db.Numeric(15, 2), default=0)
+    empresa_pagadora_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True, index=True)
+    # Empresa que pagou a despesa
 
     # Status
     status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
     # Valores: PENDENTE, PAGO, ATRASADO, CANCELADO
+
+    # Relacionamentos
+    empresa_pagadora = db.relationship('EmpresaVendaMoto', backref='despesas_pagas')
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

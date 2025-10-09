@@ -177,7 +177,39 @@ def adicionar_pedido():
                 flash(mensagem, 'danger')
                 return redirect(url_for('motochefe.adicionar_pedido'))
 
-            # 1. PREPARAR DADOS DO PEDIDO
+            # 1. PROCESSAR ITENS (JSON do form)
+            itens_json = request.form.get('itens_json')
+            if not itens_json:
+                raise Exception('Nenhum item adicionado ao pedido')
+
+            itens = json.loads(itens_json)
+
+            # 2. PROCESSAR PARCELAS (JSON do form)
+            parcelas_json = request.form.get('parcelas_json')
+            parcelas = []
+            prazo_dias = 0
+            numero_parcelas = 1
+
+            if parcelas_json:
+                parcelas = json.loads(parcelas_json)
+                numero_parcelas = len(parcelas) if parcelas else 1
+
+                # VALIDAR: Soma das parcelas deve ser igual ao total
+                if parcelas:
+                    valor_total_pedido = Decimal(request.form.get('valor_total_pedido', 0))
+                    soma_parcelas = sum(Decimal(str(p['valor'])) for p in parcelas)
+                    diferenca = abs(valor_total_pedido - soma_parcelas)
+
+                    if diferenca > Decimal('0.02'):  # Tolerância de R$ 0.02
+                        raise Exception(
+                            f'Soma das parcelas (R$ {soma_parcelas}) difere do total do pedido '
+                            f'(R$ {valor_total_pedido}). Diferença: R$ {diferenca}'
+                        )
+            else:
+                # Sem parcelamento: usar prazo simples
+                prazo_dias = int(request.form.get('prazo_dias', 0))
+
+            # 3. PREPARAR DADOS DO PEDIDO
             dados_pedido = {
                 'numero_pedido': numero_pedido,
                 'cliente_id': int(request.form.get('cliente_id')),
@@ -189,21 +221,17 @@ def adicionar_pedido():
                 'valor_frete_cliente': Decimal(request.form.get('valor_frete_cliente', 0)),
                 'forma_pagamento': request.form.get('forma_pagamento'),
                 'condicao_pagamento': request.form.get('condicao_pagamento'),
+                'prazo_dias': prazo_dias,  # ✅ Usado se sem parcelamento
+                'numero_parcelas': numero_parcelas,  # ✅ Quantidade de parcelas
+                'parcelas': parcelas,  # ✅ Array de parcelas (se houver)
                 'transportadora_id': int(request.form.get('transportadora_id')) if request.form.get('transportadora_id') else None,
                 'tipo_frete': request.form.get('tipo_frete'),
                 'observacoes': request.form.get('observacoes'),
                 'criado_por': current_user.nome
             }
 
-            # 2. PROCESSAR ITENS (JSON do form)
-            itens_json = request.form.get('itens_json')
-            if not itens_json:
-                raise Exception('Nenhum item adicionado ao pedido')
-
-            itens = json.loads(itens_json)
-
-            # 3. CRIAR PEDIDO COMPLETO (novo sistema)
-            # Cria: Pedido + Itens + Reserva Motos + 4 Títulos por Moto + Títulos a Pagar
+            # 4. CRIAR PEDIDO COMPLETO (novo sistema FIFO)
+            # Cria: Pedido + Itens + Reserva Motos + Títulos com FIFO entre parcelas + Títulos a Pagar
             resultado = criar_pedido_completo(dados_pedido, itens)
 
             db.session.commit()
@@ -428,3 +456,78 @@ def pagar_comissao(id):
         flash(f'Erro ao pagar comissão: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_comissoes'))
+
+
+# ===== APIs DE CASCATA =====
+
+@motochefe_bp.route('/api/vendedores-por-equipe')
+@login_required
+@requer_motochefe
+def api_vendedores_por_equipe():
+    """API: Retorna vendedores de uma equipe"""
+    equipe_id = request.args.get('equipe_id', type=int)
+
+    if not equipe_id:
+        return jsonify([])
+
+    vendedores = VendedorMoto.query.filter_by(
+        equipe_vendas_id=equipe_id,
+        ativo=True
+    ).order_by(VendedorMoto.vendedor).all()
+
+    return jsonify([{
+        'id': v.id,
+        'vendedor': v.vendedor
+    } for v in vendedores])
+
+
+@motochefe_bp.route('/api/clientes-por-vendedor')
+@login_required
+@requer_motochefe
+def api_clientes_por_vendedor():
+    """API: Retorna clientes de um vendedor"""
+    vendedor_id = request.args.get('vendedor_id', type=int)
+
+    if not vendedor_id:
+        return jsonify([])
+
+    clientes = ClienteMoto.query.filter_by(
+        vendedor_id=vendedor_id,
+        ativo=True
+    ).order_by(ClienteMoto.cliente).all()
+
+    return jsonify([{
+        'id': c.id,
+        'cliente': c.cliente,
+        'cnpj': c.cnpj_cliente,
+        'crossdocking': c.crossdocking
+    } for c in clientes])
+
+
+@motochefe_bp.route('/api/cores-disponiveis')
+@login_required
+@requer_motochefe
+def api_cores_disponiveis():
+    """API: Retorna cores disponíveis de um modelo com quantidade"""
+    modelo_id = request.args.get('modelo_id', type=int)
+
+    if not modelo_id:
+        return jsonify([])
+
+    from sqlalchemy import func
+
+    cores = db.session.query(
+        Moto.cor,
+        func.count(Moto.numero_chassi).label('quantidade')
+    ).filter(
+        Moto.modelo_id == modelo_id,
+        Moto.status == 'DISPONIVEL',
+        Moto.reservado == False,
+        Moto.ativo == True
+    ).group_by(Moto.cor).all()
+
+    return jsonify([{
+        'cor': c.cor,
+        'quantidade': c.quantidade,
+        'label': f'{c.cor} ({c.quantidade} un)'
+    } for c in cores])

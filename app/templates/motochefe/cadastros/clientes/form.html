@@ -13,6 +13,34 @@
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
+                <!-- Vendedor e CrossDocking -->
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="vendedor_id" class="form-label">Vendedor Responsável *</label>
+                        <select class="form-select" id="vendedor_id" name="vendedor_id" required>
+                            <option value="">Selecione o Vendedor</option>
+                            {% for vendedor in vendedores %}
+                                <option value="{{ vendedor.id }}"
+                                        {% if cliente and cliente.vendedor_id == vendedor.id %}selected{% endif %}>
+                                    {{ vendedor.vendedor }} - {{ vendedor.equipe.equipe_vendas }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Define a equipe de vendas e regras de precificação</small>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Tipo de Operação</label>
+                        <div class="form-check form-switch" style="padding-top: 0.5rem;">
+                            <input class="form-check-input" type="checkbox" id="crossdocking" name="crossdocking"
+                                   value="1" {% if cliente and cliente.crossdocking %}checked{% endif %}>
+                            <label class="form-check-label" for="crossdocking">
+                                <i class="fas fa-exchange-alt"></i> CrossDocking
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">Usa tabela de CrossDocking ao invés da equipe</small>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-md-8 mb-3">
                         <label for="cliente" class="form-label">Nome/Razão Social *</label>

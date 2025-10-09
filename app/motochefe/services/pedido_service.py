@@ -5,7 +5,7 @@ Gerencia emissão completa de pedidos com títulos financeiros e títulos a paga
 from app import db
 from app.motochefe.models.vendas import PedidoVendaMoto, PedidoVendaMotoItem
 from app.motochefe.models.produto import Moto
-from app.motochefe.services.titulo_service import gerar_titulos_por_moto, calcular_valores_titulos_moto
+from app.motochefe.services.titulo_service import gerar_titulos_com_fifo_parcelas
 from app.motochefe.services.titulo_a_pagar_service import (
     criar_titulo_a_pagar_movimentacao,
     criar_titulo_a_pagar_montagem
@@ -15,10 +15,31 @@ from decimal import Decimal
 
 def criar_pedido_completo(dados_pedido, itens_json):
     """
-    Cria pedido com alocação FIFO + títulos financeiros + títulos a pagar
+    Cria pedido com alocação FIFO + títulos financeiros com parcelas + títulos a pagar
 
     Args:
-        dados_pedido: dict com dados do pedido
+        dados_pedido: dict com dados do pedido {
+            'numero_pedido': str,
+            'cliente_id': int,
+            'vendedor_id': int,
+            'equipe_vendas_id': int (opcional),
+            'data_pedido': date,
+            'data_expedicao': date,
+            'valor_total_pedido': Decimal,
+            'valor_frete_cliente': Decimal,
+            'forma_pagamento': str,
+            'condicao_pagamento': str,
+            'prazo_dias': int (se sem parcelamento),
+            'numero_parcelas': int,
+            'parcelas': [  # Se com parcelamento
+                {'numero': 1, 'valor': 7800, 'prazo_dias': 28},
+                {'numero': 2, 'valor': 7800, 'prazo_dias': 35}
+            ],
+            'transportadora_id': int,
+            'tipo_frete': str,
+            'observacoes': str,
+            'criado_por': str
+        }
         itens_json: list de dicts com itens [
             {
                 'modelo_id': int,
@@ -51,6 +72,8 @@ def criar_pedido_completo(dados_pedido, itens_json):
         valor_frete_cliente=dados_pedido.get('valor_frete_cliente', 0),
         forma_pagamento=dados_pedido.get('forma_pagamento'),
         condicao_pagamento=dados_pedido.get('condicao_pagamento'),
+        prazo_dias=dados_pedido.get('prazo_dias', 0),
+        numero_parcelas=dados_pedido.get('numero_parcelas', 1),
         transportadora_id=dados_pedido.get('transportadora_id'),
         tipo_frete=dados_pedido.get('tipo_frete'),
         observacoes=dados_pedido.get('observacoes'),
@@ -60,9 +83,8 @@ def criar_pedido_completo(dados_pedido, itens_json):
     db.session.add(pedido)
     db.session.flush()
 
-    # 2. PROCESSAR ITENS
+    # 2. PROCESSAR ITENS - ALOCAR MOTOS (FIFO)
     itens_criados = []
-    titulos_financeiros_criados = []
     titulos_a_pagar_criados = []
 
     for item_data in itens_json:
@@ -74,7 +96,7 @@ def criar_pedido_completo(dados_pedido, itens_json):
         valor_montagem = Decimal(str(item_data.get('valor_montagem', 0)))
         fornecedor_montagem = item_data.get('fornecedor_montagem')
 
-        # 3. ALOCAR MOTOS (FIFO)
+        # Alocar motos disponíveis (FIFO por data_entrada)
         motos_disponiveis = Moto.query.filter_by(
             modelo_id=modelo_id,
             cor=cor,
@@ -89,9 +111,8 @@ def criar_pedido_completo(dados_pedido, itens_json):
                 f'Disponível: {len(motos_disponiveis)}, Solicitado: {quantidade}'
             )
 
-        # 4. CRIAR ITENS E TÍTULOS POR MOTO
+        # Criar itens do pedido
         for moto in motos_disponiveis:
-            # Criar item
             item = PedidoVendaMotoItem(
                 pedido_id=pedido.id,
                 numero_chassi=moto.numero_chassi,
@@ -103,32 +124,34 @@ def criar_pedido_completo(dados_pedido, itens_json):
             )
             db.session.add(item)
             db.session.flush()
-
             itens_criados.append(item)
 
             # Reservar moto
             moto.status = 'RESERVADA'
             moto.reservado = True
 
-            # Calcular valores dos títulos
-            equipe = pedido.vendedor.equipe
-            valores = calcular_valores_titulos_moto(item, equipe)
+    # 3. GERAR TÍTULOS COM FIFO ENTRE PARCELAS
+    parcelas_config = dados_pedido.get('parcelas', [])
+    titulos_financeiros_criados = gerar_titulos_com_fifo_parcelas(
+        pedido,
+        itens_criados,
+        parcelas_config
+    )
 
-            # Gerar 4 títulos financeiros (Movimentação, Montagem, Frete, Venda)
-            titulos = gerar_titulos_por_moto(pedido, item, valores)
-            titulos_financeiros_criados.extend(titulos)
+    # 4. CRIAR TÍTULOS A PAGAR (PENDENTES)
+    for titulo in titulos_financeiros_criados:
+        if titulo.tipo_titulo == 'MOVIMENTACAO':
+            titulo_pagar = criar_titulo_a_pagar_movimentacao(titulo)
+            if titulo_pagar:
+                titulos_a_pagar_criados.append(titulo_pagar)
 
-            # Criar títulos a pagar (PENDENTES)
-            for titulo in titulos:
-                if titulo.tipo_titulo == 'MOVIMENTACAO':
-                    titulo_pagar = criar_titulo_a_pagar_movimentacao(titulo)
-                    if titulo_pagar:
-                        titulos_a_pagar_criados.append(titulo_pagar)
-
-                elif titulo.tipo_titulo == 'MONTAGEM' and item.montagem_contratada:
-                    titulo_pagar = criar_titulo_a_pagar_montagem(titulo, item)
-                    if titulo_pagar:
-                        titulos_a_pagar_criados.append(titulo_pagar)
+        elif titulo.tipo_titulo == 'MONTAGEM':
+            # Buscar item correspondente
+            item = next((i for i in itens_criados if i.numero_chassi == titulo.numero_chassi), None)
+            if item and item.montagem_contratada:
+                titulo_pagar = criar_titulo_a_pagar_montagem(titulo, item)
+                if titulo_pagar:
+                    titulos_a_pagar_criados.append(titulo_pagar)
 
     db.session.flush()
 
@@ -142,13 +165,13 @@ def criar_pedido_completo(dados_pedido, itens_json):
 
 def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf):
     """
-    Fatura pedido: atualiza NF, calcula vencimentos, muda status
+    Fatura pedido: atualiza NF, calcula vencimentos baseado em prazo_dias, muda status
 
     Args:
         pedido: PedidoVendaMoto
         empresa_id: int
         numero_nf: str
-        data_nf: date
+        data_nf: date (ou data_expedicao do pedido)
 
     Returns:
         dict com resultado
@@ -169,10 +192,13 @@ def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf):
         item.moto.status = 'VENDIDA'
 
     # Atualizar títulos (RASCUNHO → ABERTO)
+    # Calcula data_vencimento = data_expedicao (ou data_nf) + prazo_dias do título
     titulos_atualizados = []
+    data_base = pedido.data_expedicao or data_nf
+
     for titulo in pedido.titulos:
-        if titulo.prazo_dias:
-            titulo.data_vencimento = data_nf + timedelta(days=titulo.prazo_dias)
+        if titulo.prazo_dias is not None:
+            titulo.data_vencimento = data_base + timedelta(days=titulo.prazo_dias)
         titulo.status = 'ABERTO'
         titulos_atualizados.append(titulo)
 

@@ -45,6 +45,8 @@ class PedidoVendaMoto(db.Model):
     # Pagamento
     forma_pagamento = db.Column(db.String(50), nullable=True)
     condicao_pagamento = db.Column(db.String(100), nullable=True)  # '10x sem juros'
+    prazo_dias = db.Column(db.Integer, default=0, nullable=False)  # Prazo em dias para cálculo de vencimento
+    numero_parcelas = db.Column(db.Integer, default=1, nullable=False)  # Número de parcelas do pedido
 
     # Logística
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadora_moto.id'), nullable=True)

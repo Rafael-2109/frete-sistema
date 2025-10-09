@@ -102,7 +102,7 @@ def executar_alteracao():
 
         if engine_name == 'postgresql':
             # PostgreSQL
-            sql = "ALTER TABLE moto ALTER COLUMN numero_chassi TYPE VARCHAR(30);"
+            sql = "ALTER TABLE transportadora_moto ALTER COLUMN telefone TYPE VARCHAR(50);"
             print(f"\n📝 SQL a executar (PostgreSQL):")
             print(f"   {sql}")
 

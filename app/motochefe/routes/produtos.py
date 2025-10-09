@@ -601,8 +601,12 @@ def importar_motos():
                     erros.append(f'Linha {idx+2}: Motor {motor} já existe')
                     continue
 
-            # Buscar modelo
-            modelo = ModeloMoto.query.filter_by(nome_modelo=modelo_nome, ativo=True).first()
+            # Buscar modelo (case-insensitive)
+            from sqlalchemy import func
+            modelo = ModeloMoto.query.filter(
+                func.upper(ModeloMoto.nome_modelo) == str(modelo_nome).strip().upper(),
+                ModeloMoto.ativo == True
+            ).first()
 
             # Converter custo brasileiro (vírgula como decimal)
             custo_convertido = converter_valor_brasileiro(str(row['Custo']))

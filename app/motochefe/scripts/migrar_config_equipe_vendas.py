@@ -3,7 +3,7 @@ Script de Migração - Configurações de Equipe de Vendas
 Sistema MotoCHEFE
 
 Adiciona campos de configuração em equipe_vendas_moto:
-1. Responsável Movimentação (RJ/NACOM)
+1. Responsável Movimentação (NACOM)
 2. Tipo de Comissão (FIXA_EXCEDENTE ou PERCENTUAL)
 3. Valores de comissão
 4. Controle de rateio
@@ -49,7 +49,7 @@ def adicionar_campos_equipe_vendas():
 
     -- Comentários
     COMMENT ON COLUMN equipe_vendas_moto.responsavel_movimentacao
-        IS 'Responsável pela movimentação: RJ ou NACOM';
+        IS 'Responsável pela movimentação: NACOM';
 
     COMMENT ON COLUMN equipe_vendas_moto.tipo_comissao
         IS 'Tipo de comissão: FIXA_EXCEDENTE ou PERCENTUAL';
