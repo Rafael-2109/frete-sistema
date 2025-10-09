@@ -68,13 +68,21 @@ class Embarque(db.Model):
 
     # Relacionamentos
     transportadora = db.relationship('Transportadora', backref='embarques')
-    # ✅ CORREÇÃO: order_by='EmbarqueItem.id' garante ordem estável dos itens
-    # Isso evita que a ordem mude após commits e garante consistência nas comparações
-    itens = db.relationship('EmbarqueItem', backref='embarque', cascade='all, delete-orphan', order_by='EmbarqueItem.id')
+    # ✅ CORREÇÃO: Relacionamento base (sem order_by para evitar erros do SQLAlchemy)
+    # A ordenação será garantida através da propriedade itens_ordenados
+    _itens = db.relationship('EmbarqueItem', backref='embarque', cascade='all, delete-orphan',
+                            lazy='dynamic')  # lazy='dynamic' permite ordenação posterior
     # Para carga DIRETA: Uma cotação -> Um embarque
     cotacao = db.relationship('Cotacao', backref='embarque_direto', foreign_keys=[cotacao_id])
 
-    
+    @property
+    def itens(self):
+        """
+        ✅ SOLUÇÃO DEFINITIVA: Propriedade que SEMPRE retorna itens ordenados por ID
+        Isso garante ordem estável independente de commits, reloads ou operações do SQLAlchemy
+        """
+        return self._itens.order_by(EmbarqueItem.id).all()
+
     def total_notas(self):
         return len([i for i in self.itens if i.status == 'ativo'])
 
