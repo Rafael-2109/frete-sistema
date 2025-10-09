@@ -68,7 +68,9 @@ class Embarque(db.Model):
 
     # Relacionamentos
     transportadora = db.relationship('Transportadora', backref='embarques')
-    itens = db.relationship('EmbarqueItem', backref='embarque', cascade='all, delete-orphan')
+    # ✅ CORREÇÃO: order_by='EmbarqueItem.id' garante ordem estável dos itens
+    # Isso evita que a ordem mude após commits e garante consistência nas comparações
+    itens = db.relationship('EmbarqueItem', backref='embarque', cascade='all, delete-orphan', order_by='EmbarqueItem.id')
     # Para carga DIRETA: Uma cotação -> Um embarque
     cotacao = db.relationship('Cotacao', backref='embarque_direto', foreign_keys=[cotacao_id])
 

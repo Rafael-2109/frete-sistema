@@ -78,11 +78,13 @@ class FilaAgendamentoSendas(db.Model):
             # AG_[CNPJ posições 7-4]_[data ddmmyyyy]_[hora HHMM]
             protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
 
-        # Verificar duplicata (mesmo documento + produto)
+        # Verificar duplicata (mesmo documento + produto + num_pedido)
+        # ✅ CORREÇÃO: Incluir num_pedido para permitir múltiplos pedidos do mesmo CNPJ com mesmo produto
         existe = cls.query.filter_by(
             tipo_origem=tipo_origem,
             documento_origem=documento_origem,
             cod_produto=cod_produto,
+            num_pedido=num_pedido,  # ✅ ADICIONADO para diferenciar pedidos
             status='pendente'
         ).first()
 
@@ -92,7 +94,8 @@ class FilaAgendamentoSendas(db.Model):
             existe.data_expedicao = data_expedicao
             existe.data_agendamento = data_agendamento
             existe.protocolo = protocolo
-            db.session.commit()
+            # ✅ CORREÇÃO: Não fazer commit aqui - deixar para a transação externa
+            # db.session.commit()
             return existe
 
         # Criar novo
@@ -111,7 +114,8 @@ class FilaAgendamentoSendas(db.Model):
         )
 
         db.session.add(novo)
-        db.session.commit()
+        # ✅ CORREÇÃO: Não fazer commit aqui - deixar para a transação externa
+        # db.session.commit()
         return novo
     
     @classmethod
