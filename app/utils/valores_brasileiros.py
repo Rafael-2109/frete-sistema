@@ -1,37 +1,49 @@
 from typing import Tuple, Union
 
-def converter_valor_brasileiro(valor_str: Union[str, None]) -> float:
+def converter_valor_brasileiro(valor_str: Union[str, None, int, float]) -> float:
     """
     Converte valor em formato brasileiro (1.234,56) para float
-    
+    ✅ DETECTA se valor já é numérico (float/int do pandas) e retorna direto
+
     Args:
-        valor_str (str): Valor em formato brasileiro
-        
+        valor_str (str|int|float): Valor em formato brasileiro ou já numérico
+
     Returns:
         float: Valor convertido
-        
+
     Raises:
         ValueError: Se o valor não puder ser convertido
     """
-    if not valor_str:
+    if not valor_str and valor_str != 0:
         return 0.0
-    
+
+    # ✅ Se já é numérico (int ou float), retorna direto
+    if isinstance(valor_str, (int, float)):
+        if valor_str < 0:
+            raise ValueError("Valor deve ser positivo")
+        return float(valor_str)
+
     # Remove espaços
     valor_limpo = str(valor_str).strip()
-    
+
     if not valor_limpo:
         return 0.0
-    
+
     try:
-        # Remove pontos (milhares) e substitui vírgula por ponto (decimal)
-        valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
-        valor_float = float(valor_limpo)
-        
+        # ✅ DETECTAR: Se contém apenas dígitos e ponto (já é formato americano/pandas)
+        # Exemplo: "12500.0" (pandas converteu) - NÃO reconverter
+        if ',' not in valor_limpo and valor_limpo.replace('.', '').replace('-', '').isdigit():
+            valor_float = float(valor_limpo)
+        else:
+            # Formato brasileiro: Remove pontos (milhares) e substitui vírgula por ponto (decimal)
+            valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
+            valor_float = float(valor_limpo)
+
         if valor_float < 0:
             raise ValueError("Valor deve ser positivo")
-            
+
         return valor_float
-        
+
     except (ValueError, TypeError) as e:
         raise ValueError(f'Valor inválido: {valor_str}. Use formato: 1.234,56') from e
 

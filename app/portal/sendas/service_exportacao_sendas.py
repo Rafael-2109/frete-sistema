@@ -134,6 +134,15 @@ class ExportacaoSendasService:
                     logger.error(f"CNPJ {cnpj} não encontrado no DE-PARA de filiais")
                     continue  # Pular este protocolo e continuar com os outros
 
+                # ✅ VALIDAÇÃO ANTECIPADA: Verificar se a filial TEM dados na planilha modelo
+                planilha_existe = PlanilhaModeloSendas.query.filter_by(
+                    unidade_destino=filial_sendas
+                ).first()
+
+                if not planilha_existe:
+                    logger.error(f"Filial {filial_sendas} não tem dados na planilha modelo")
+                    return False, f"ERRO: Filial {filial_sendas} não tem dados cadastrados na planilha modelo Sendas. Por favor, solicite ao suporte o cadastro desta filial.", None
+
                 # ✅ CORREÇÃO: Processar cada item DO PROTOCOLO ATUAL
                 for item_fila in itens_protocolo:  # ✅ USAR itens_protocolo, não itens_fila!
                     # FilaAgendamentoSendas JÁ TEM os dados corretos da planilha

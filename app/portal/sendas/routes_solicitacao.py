@@ -16,10 +16,6 @@ from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from datetime import datetime
 import logging
 from app.faturamento.models import FaturamentoProduto
-from app.utils.lote_utils import gerar_lote_id
-from app.producao.models import CadastroPalletizacao
-from app.carteira.models import CarteiraPrincipal
-from decimal import Decimal
 from sqlalchemy import and_
 
 
@@ -224,6 +220,21 @@ def confirmar_lote():
 
         # Processar cada CNPJ
         for cnpj, itens in itens_por_cnpj.items():
+            # ✅ VALIDAÇÃO: Verificar se a filial tem dados na planilha modelo
+
+            filial_sendas = FilialDeParaSendas.cnpj_to_filial(cnpj)
+            if not filial_sendas:
+                logger.warning(f"CNPJ {cnpj} não encontrado no DE-PARA, pulando...")
+                continue
+
+            planilha_existe = PlanilhaModeloSendas.query.filter_by(
+                unidade_destino=filial_sendas
+            ).first()
+
+            if not planilha_existe:
+                logger.warning(f"Filial {filial_sendas} não tem dados na planilha modelo, pulando CNPJ {cnpj}...")
+                continue
+
             # Gravar na fila (1 protocolo por CNPJ)
             resultado = comparacao_service.gravar_fila_agendamento(
                 itens_confirmados=itens,
