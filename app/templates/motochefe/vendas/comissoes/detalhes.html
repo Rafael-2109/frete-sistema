@@ -38,11 +38,11 @@
                             <th>Status:</th>
                             <td>
                                 {% if comissao.status == 'PAGO' %}
-                                    <span class="badge badge-success"><i class="fas fa-check"></i> PAGO</span>
+                                    <span class="badge bg-success"><i class="fas fa-check"></i> PAGO</span>
                                 {% elif comissao.status == 'PENDENTE' %}
-                                    <span class="badge badge-warning"><i class="fas fa-clock"></i> PENDENTE</span>
+                                    <span class="badge bg-warning"><i class="fas fa-clock"></i> PENDENTE</span>
                                 {% else %}
-                                    <span class="badge badge-danger">{{ comissao.status }}</span>
+                                    <span class="badge bg-danger">{{ comissao.status }}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -240,9 +240,9 @@
                                 <td class="text-right">R$ {{ "%.2f"|format(c.valor_rateado|float) }}</td>
                                 <td>
                                     {% if c.status == 'PAGO' %}
-                                        <span class="badge badge-success">PAGO</span>
+                                        <span class="badge bg-success">PAGO</span>
                                     {% else %}
-                                        <span class="badge badge-warning">PENDENTE</span>
+                                        <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ c.data_pagamento.strftime('%d/%m/%Y') if c.data_pagamento else '-' }}</td>

@@ -39,6 +39,13 @@ class TituloFinanceiro(db.Model):
     numero_parcela = db.Column(db.Integer, nullable=False, index=True)
     # Dinâmico: pode ser 1, 2, 3... N
 
+    total_parcelas = db.Column(db.Integer, nullable=False, default=1, index=True)
+    # Total de parcelas do título (ex: 3 se título dividido em 3x)
+
+    valor_parcela = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    # Valor total da parcela (referência do parcelas_config)
+    # 0 quando não há parcelamento (parcela única)
+
     # ====================
     # VALORES
     # ====================

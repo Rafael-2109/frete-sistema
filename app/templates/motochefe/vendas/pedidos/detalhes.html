@@ -195,6 +195,7 @@ TODO: Atualizar para novo sistema
                                 <th>Modelo</th>
                                 <th>Cor</th>
                                 <th class="text-right">Preço Venda</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -204,6 +205,16 @@ TODO: Atualizar para novo sistema
                                 <td>{{ item.moto.modelo.nome_modelo }}</td>
                                 <td>{{ item.moto.cor }}</td>
                                 <td class="text-right">R$ {{ "%.2f"|format(item.preco_venda|float) }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                        data-chassi="{{ item.numero_chassi }}"
+                                        data-modelo="{{ item.moto.modelo.nome_modelo }}"
+                                        data-cor="{{ item.moto.cor }}"
+                                        data-preco="{{ item.preco_venda|float }}"
+                                        onclick="abrirModalSubstituicao(this)">
+                                        <i class="fas fa-exchange-alt"></i> Substituir
+                                    </button>
+                                </td>
                             </tr>
                             {% if item.montagem_contratada %}
                             <tr class="table-secondary">
@@ -214,9 +225,9 @@ TODO: Atualizar para novo sistema
                                             - {{ item.fornecedor_montagem }}
                                         {% endif %}
                                         {% if item.montagem_paga %}
-                                            <span class="badge badge-success ml-2">PAGA</span>
+                                            <span class="badge bg-success ml-2">PAGA</span>
                                         {% else %}
-                                            <span class="badge badge-warning ml-2">PENDENTE</span>
+                                            <span class="badge bg-warning ml-2">PENDENTE</span>
                                         {% endif %}
                                     </small>
                                 </td>
@@ -265,7 +276,7 @@ TODO: Atualizar para novo sistema
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td><span class="badge badge-primary">{{ t.tipo_titulo }}</span></td>
+                                <td><span class="badge bg-primary">{{ t.tipo_titulo }}</span></td>
                                 <td>{{ t.numero_parcela }}</td>
                                 <td>
                                     {% if t.data_vencimento %}
@@ -277,11 +288,11 @@ TODO: Atualizar para novo sistema
                                 <td class="text-right">R$ {{ "%.2f"|format(t.valor_saldo|float) }}</td>
                                 <td>
                                     {% if t.status == 'PAGO' %}
-                                        <span class="badge badge-success">PAGO</span>
+                                        <span class="badge bg-success">PAGO</span>
                                     {% elif t.status == 'ABERTO' %}
-                                        <span class="badge badge-warning">ABERTO</span>
+                                        <span class="badge bg-warning">ABERTO</span>
                                     {% else %}
-                                        <span class="badge badge-secondary">{{ t.status }}</span>
+                                        <span class="badge bg-secondary">{{ t.status }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -320,9 +331,9 @@ TODO: Atualizar para novo sistema
                                 <td class="text-right">R$ {{ "%.2f"|format(c.valor_rateado|float) }}</td>
                                 <td>
                                     {% if c.status == 'PAGO' %}
-                                        <span class="badge badge-success">PAGO</span>
+                                        <span class="badge bg-success">PAGO</span>
                                     {% else %}
-                                        <span class="badge badge-warning">PENDENTE</span>
+                                        <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -375,9 +386,9 @@ TODO: Atualizar para novo sistema
                                 </td>
                                 <td>
                                     {% if item.montagem_paga %}
-                                        <span class="badge badge-success">PAGA</span>
+                                        <span class="badge bg-success">PAGA</span>
                                     {% else %}
-                                        <span class="badge badge-warning">PENDENTE</span>
+                                        <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -409,4 +420,274 @@ TODO: Atualizar para novo sistema
         </div>
     </div>
 </div>
+
+<!-- Modal Seleção de Moto para Substituição -->
+<div class="modal fade" id="modalSelecaoMoto" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Substituir Moto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Moto a ser substituída -->
+                <div class="card mb-3 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <strong>Moto a ser Substituída</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3"><strong>Chassi:</strong> <span id="chassiAtual"></span></div>
+                            <div class="col-md-3"><strong>Modelo:</strong> <span id="modeloAtual"></span></div>
+                            <div class="col-md-3"><strong>Cor:</strong> <span id="corAtual"></span></div>
+                            <div class="col-md-3"><strong>Preço:</strong> R$ <span id="precoAtual"></span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading -->
+                <div id="loadingMotos" class="text-center py-4" style="display:none;">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Carregando motos disponíveis...</p>
+                </div>
+
+                <!-- Accordion de Motos Disponíveis -->
+                <div id="accordionMotos"></div>
+
+                <!-- Mensagem vazia -->
+                <div id="mensagemVazio" class="alert alert-warning" style="display:none;">
+                    Nenhuma moto disponível para substituição.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmação de Substituição -->
+<div class="modal fade" id="modalConfirmacaoSubstituicao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formSubstituicao" action="{{ url_for('motochefe.substituir_moto', pedido_id=pedido.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="chassi_antigo" id="chassiAntigoForm"/>
+                <input type="hidden" name="chassi_novo" id="chassiNovoForm"/>
+
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmar Substituição</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Valores</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Preço Moto Atual:</label>
+                            <input type="text" class="form-control" id="precoAntigoForm" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Preço Moto Nova: <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" class="form-control" name="preco_novo" id="precoNovoForm" required>
+                            <small class="text-muted">Campo editável - você pode ajustar o valor se necessário</small>
+                        </div>
+                    </div>
+
+                    <h6>Motivo da Substituição <span class="text-danger">*</span></h6>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="motivo" id="motivoAvaria" value="AVARIA" required>
+                            <label class="form-check-label" for="motivoAvaria">
+                                <strong>Avaria</strong> - A moto atual será marcada como AVARIADO
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="motivo" id="motivoOutros" value="OUTROS" required>
+                            <label class="form-check-label" for="motivoOutros">
+                                <strong>Outros</strong> - A moto atual volta para DISPONIVEL
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observação: <span class="text-danger">*</span></label>
+                        <textarea name="observacao" class="form-control" rows="3" required placeholder="Descreva o motivo da substituição..."></textarea>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <small><i class="fas fa-info-circle"></i> <strong>Importante:</strong>
+                        Se o valor da moto nova for diferente, o título financeiro será ajustado automaticamente.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-exchange-alt"></i> Confirmar Substituição
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let chassiAtualGlobal = '';
+let precoAtualGlobal = 0;
+
+function abrirModalSubstituicao(button) {
+    const chassi = button.getAttribute('data-chassi');
+    const modelo = button.getAttribute('data-modelo');
+    const cor = button.getAttribute('data-cor');
+    const preco = parseFloat(button.getAttribute('data-preco'));
+
+    // Armazenar globalmente
+    chassiAtualGlobal = chassi;
+    precoAtualGlobal = preco;
+
+    // Preencher dados da moto atual
+    document.getElementById('chassiAtual').textContent = chassi;
+    document.getElementById('modeloAtual').textContent = modelo;
+    document.getElementById('corAtual').textContent = cor;
+    document.getElementById('precoAtual').textContent = preco.toFixed(2);
+
+    // Carregar motos disponíveis
+    carregarMotosDisponiveis(chassi);
+
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalSelecaoMoto'));
+    modal.show();
+}
+
+function carregarMotosDisponiveis(chassiAtual) {
+    const loadingDiv = document.getElementById('loadingMotos');
+    const accordionDiv = document.getElementById('accordionMotos');
+    const mensagemVazio = document.getElementById('mensagemVazio');
+
+    // Mostrar loading
+    loadingDiv.style.display = 'block';
+    accordionDiv.style.display = 'none';
+    mensagemVazio.style.display = 'none';
+
+    // Buscar motos
+    fetch(`/motochefe/pedidos/{{ pedido.id }}/motos-disponiveis/${chassiAtual}`)
+        .then(res => res.json())
+        .then(data => {
+            loadingDiv.style.display = 'none';
+
+            // Verificar se há motos
+            const totalMotos = Object.values(data).reduce((sum, arr) => sum + arr.length, 0);
+            if (totalMotos === 0) {
+                mensagemVazio.style.display = 'block';
+                return;
+            }
+
+            // Renderizar accordion
+            renderizarAccordionMotos(data);
+            accordionDiv.style.display = 'block';
+        })
+        .catch(err => {
+            console.error('Erro ao carregar motos:', err);
+            loadingDiv.style.display = 'none';
+            mensagemVazio.style.display = 'block';
+        });
+}
+
+function renderizarAccordionMotos(dados) {
+    const accordion = document.getElementById('accordionMotos');
+    let html = '<div class="accordion" id="accordionPrioridades">';
+
+    // Prioridade 1: Mesmo modelo + mesma cor
+    if (dados.mesmo_modelo_mesma_cor && dados.mesmo_modelo_mesma_cor.length > 0) {
+        html += criarGrupoAccordion('prioridade1', 'Mesmo Modelo + Mesma Cor', dados.mesmo_modelo_mesma_cor, 'success');
+    }
+
+    // Prioridade 2: Mesmo modelo
+    if (dados.mesmo_modelo && dados.mesmo_modelo.length > 0) {
+        html += criarGrupoAccordion('prioridade2', 'Mesmo Modelo', dados.mesmo_modelo, 'primary');
+    }
+
+    // Prioridade 3: Mesma cor
+    if (dados.mesma_cor && dados.mesma_cor.length > 0) {
+        html += criarGrupoAccordion('prioridade3', 'Mesma Cor', dados.mesma_cor, 'info');
+    }
+
+    // Prioridade 4: Outros
+    if (dados.outros && dados.outros.length > 0) {
+        html += criarGrupoAccordion('prioridade4', 'Outros Modelos e Cores', dados.outros, 'secondary');
+    }
+
+    html += '</div>';
+    accordion.innerHTML = html;
+}
+
+function criarGrupoAccordion(id, titulo, motos, cor) {
+    let html = `
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${id}">
+                    <strong>${titulo}</strong>
+                    <span class="badge bg-${cor} ms-2">${motos.length} motos</span>
+                </button>
+            </h2>
+            <div id="${id}" class="accordion-collapse collapse">
+                <div class="accordion-body">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Chassi</th>
+                                <th>Modelo</th>
+                                <th>Cor</th>
+                                <th>Preço</th>
+                                <th>Ano</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+
+    motos.forEach(moto => {
+        html += `
+            <tr>
+                <td><code>${moto.chassi}</code></td>
+                <td>${moto.modelo}<br><small class="text-muted">${moto.potencia}</small></td>
+                <td>${moto.cor}</td>
+                <td>R$ ${moto.preco_tabela.toFixed(2)}</td>
+                <td>${moto.ano || '-'}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-success" onclick="selecionarMoto('${moto.chassi}', ${moto.preco_tabela})">
+                        <i class="fas fa-check"></i> Substituir
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+function selecionarMoto(chassiNovo, precoNovo) {
+    // Fechar modal de seleção
+    const modalSelecao = bootstrap.Modal.getInstance(document.getElementById('modalSelecaoMoto'));
+    modalSelecao.hide();
+
+    // Preencher formulário de confirmação
+    document.getElementById('chassiAntigoForm').value = chassiAtualGlobal;
+    document.getElementById('chassiNovoForm').value = chassiNovo;
+    document.getElementById('precoAntigoForm').value = `R$ ${precoAtualGlobal.toFixed(2)}`;
+    // Campo editável - preencher apenas o valor numérico
+    document.getElementById('precoNovoForm').value = precoNovo.toFixed(2);
+
+    // Abrir modal de confirmação
+    const modalConfirmacao = new bootstrap.Modal(document.getElementById('modalConfirmacaoSubstituicao'));
+    modalConfirmacao.show();
+}
+</script>
 {% endblock %}

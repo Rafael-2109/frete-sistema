@@ -211,6 +211,41 @@
 
                 <hr>
 
+                <!-- ============================================== -->
+                <!-- CONFIGURAÇÃO DE PRAZO E PARCELAMENTO -->
+                <!-- ============================================== -->
+                <h5 class="mb-3"><i class="fas fa-calendar-check"></i> Prazo e Parcelamento</h5>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="permitir_prazo" name="permitir_prazo" value="1"
+                               {% if equipe and equipe.permitir_prazo %}checked{% endif %}>
+                        <label class="form-check-label" for="permitir_prazo">
+                            <strong>Permitir definição de prazo de pagamento</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        • Marcado: Exibe campo "Prazo (dias)" no formulário de pedidos<br>
+                        • Desmarcado: Vencimento = data de expedição (sem prazo adicional)
+                    </small>
+                </div>
+
+                <div class="mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="permitir_parcelamento" name="permitir_parcelamento" value="1"
+                               {% if equipe and equipe.permitir_parcelamento %}checked{% endif %}>
+                        <label class="form-check-label" for="permitir_parcelamento">
+                            <strong>Permitir parcelamento do valor total</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        • Marcado: Exibe seção de "Parcelamento" com grid de parcelas no formulário<br>
+                        • Desmarcado: Apenas 1 parcela (vencimento único conforme prazo definido)
+                    </small>
+                </div>
+
+                <hr>
+
                 <!-- Botões -->
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary">

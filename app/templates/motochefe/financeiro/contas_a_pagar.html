@@ -14,10 +14,14 @@
                     <h3 class="text-danger">R$ {{ "%.2f"|format(total_geral) }}</h3>
                 </div>
                 <div class="col-md-2">
+                    <small>Títulos a Pagar</small><br>
+                    <strong class="text-warning">R$ {{ "%.2f"|format(total_titulos_a_pagar) }}</strong>
+                </div>
+                <div class="col-md-2">
                     <small>Motos</small><br>
                     <strong>R$ {{ "%.2f"|format(total_motos) }}</strong>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <small>Fretes</small><br>
                     <strong>R$ {{ "%.2f"|format(total_fretes) }}</strong>
                 </div>
@@ -25,7 +29,7 @@
                     <small>Comissões</small><br>
                     <strong>R$ {{ "%.2f"|format(total_comissoes) }}</strong>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <small>Montagens</small><br>
                     <strong>R$ {{ "%.2f"|format(total_montagens) }}</strong>
                 </div>
@@ -85,7 +89,44 @@
         </div>
         {% endif %}
 
-        <!-- 2. FRETES -->
+        <!-- 2. TÍTULOS A PAGAR (Movimentação e Montagem) -->
+        {% for item in itens %}
+        {% if item.tipo == 'TITULO_A_PAGAR' %}
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-invoice"></i> Títulos a Pagar - {{ item.dados.tipo }}
+                    <span class="badge bg-dark float-end">R$ {{ "%.2f"|format(item.dados.total) }}</span>
+                    <small class="ms-2">({{ item.dados.titulos|length }} título(s))</small>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for titulo in item.dados.titulos %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input item-check" type="checkbox"
+                           data-tipo="titulo_a_pagar"
+                           data-id="{{ titulo.id }}"
+                           data-valor="{{ titulo.valor_saldo }}"
+                           id="titulo-{{ titulo.id }}">
+                    <label class="form-check-label" for="titulo-{{ titulo.id }}">
+                        <span class="badge bg-{{ 'secondary' if titulo.status == 'PENDENTE' else 'warning' if titulo.status == 'ABERTO' else 'info' }}">
+                            {{ titulo.status }}
+                        </span>
+                        Pedido {{ titulo.pedido.numero_pedido if titulo.pedido else '-' }} |
+                        Chassi {{ titulo.numero_chassi }} |
+                        R$ {{ "%.2f"|format(titulo.valor_saldo) }}
+                        {% if titulo.status == 'PENDENTE' %}
+                        <small class="text-muted">(Aguardando pagamento do cliente)</small>
+                        {% endif %}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+
+        <!-- 3. FRETES -->
         {% if fretes_agrupados %}
         <div class="card mb-3">
             <div class="card-header bg-info text-white">

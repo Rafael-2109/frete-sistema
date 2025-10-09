@@ -48,43 +48,46 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
 
     # ==================== RECEBIMENTOS ====================
 
-    # 1. TÍTULOS FINANCEIROS (Recebimentos de Clientes)
-    sql_titulo = """
+    # 1. MOVIMENTAÇÕES FINANCEIRAS DE RECEBIMENTO (da tabela movimentacao_financeira)
+    sql_recebimento = """
     SELECT
         'RECEBIMENTO' AS tipo,
-        'Título' AS categoria,
-        tf.data_recebimento AS data_movimentacao,
+        mf.categoria AS categoria,
+        mf.data_movimentacao AS data_movimentacao,
         CONCAT(
-            'Título #', tf.id, ' - Parcela ', tf.numero_parcela, '/', tf.total_parcelas,
-            ' - Pedido ', pvm.numero_pedido,
-            ' - Cliente: ', cm.cliente
+            mf.categoria, ' - ', mf.descricao,
+            CASE WHEN mf.origem_identificacao IS NOT NULL
+                 THEN CONCAT(' - ', mf.origem_identificacao)
+                 ELSE '' END
         ) AS descricao,
-        tf.valor_recebido AS valor,
-        cm.cliente AS cliente_fornecedor,
-        pvm.numero_pedido AS numero_pedido,
-        pvm.numero_nf AS numero_nf,
-        NULL AS numero_chassi,
+        mf.valor AS valor,
+        COALESCE(mf.origem_identificacao, 'Cliente') AS cliente_fornecedor,
+        CASE WHEN mf.pedido_id IS NOT NULL
+             THEN (SELECT numero_pedido FROM pedido_venda_moto WHERE id = mf.pedido_id)
+             ELSE NULL END AS numero_pedido,
+        NULL AS numero_nf,
+        mf.numero_chassi AS numero_chassi,
         NULL AS numero_embarque,
-        CONCAT('/motochefe/titulos/', tf.id, '/detalhes') AS rota_detalhes,
-        CAST(tf.id AS TEXT) AS id_original
-    FROM titulo_financeiro tf
-    JOIN pedido_venda_moto pvm ON tf.pedido_id = pvm.id
-    JOIN cliente_moto cm ON pvm.cliente_id = cm.id
-    WHERE tf.status = 'PAGO'
-      AND tf.data_recebimento IS NOT NULL
+        CASE WHEN mf.titulo_financeiro_id IS NOT NULL
+             THEN CONCAT('/motochefe/titulos/', mf.titulo_financeiro_id, '/detalhes')
+             ELSE NULL END AS rota_detalhes,
+        CAST(mf.id AS TEXT) AS id_original
+    FROM movimentacao_financeira mf
+    WHERE mf.tipo = 'RECEBIMENTO'
     """
 
-    # Filtros para títulos
-    filtros_titulo = []
+    # Filtros para recebimentos
+    filtros_recebimento = []
     if data_inicial and data_final:
-        filtros_titulo.append(f"AND tf.data_recebimento BETWEEN '{data_inicial}' AND '{data_final}'")
+        filtros_recebimento.append(f"AND mf.data_movimentacao BETWEEN '{data_inicial}' AND '{data_final}'")
     if cliente_id:
-        filtros_titulo.append(f"AND pvm.cliente_id = {cliente_id}")
+        # Filtrar por cliente através do pedido relacionado
+        filtros_recebimento.append(f"AND mf.pedido_id IN (SELECT id FROM pedido_venda_moto WHERE cliente_id = {cliente_id})")
     if tipo_movimentacao == 'PAGAMENTO':
         sql_parts.append("SELECT NULL LIMIT 0")  # Não incluir recebimentos
     else:
-        sql_titulo += " " + " ".join(filtros_titulo)
-        sql_parts.append(sql_titulo)
+        sql_recebimento += " " + " ".join(filtros_recebimento)
+        sql_parts.append(sql_recebimento)
 
 
     # ==================== PAGAMENTOS ====================

@@ -120,6 +120,10 @@ def adicionar_equipe():
         # Montagem
         permitir_montagem = bool(request.form.get('permitir_montagem'))
 
+        # Prazo e Parcelamento
+        permitir_prazo = bool(request.form.get('permitir_prazo'))
+        permitir_parcelamento = bool(request.form.get('permitir_parcelamento'))
+
         equipe = EquipeVendasMoto(
             equipe_vendas=nome,
             # Movimentação
@@ -136,6 +140,9 @@ def adicionar_equipe():
             comissao_rateada=comissao_rateada,
             # Montagem
             permitir_montagem=permitir_montagem,
+            # Prazo e Parcelamento
+            permitir_prazo=permitir_prazo,
+            permitir_parcelamento=permitir_parcelamento,
             criado_por=current_user.nome
         )
         db.session.add(equipe)
@@ -175,6 +182,10 @@ def editar_equipe(id):
 
         # Montagem
         equipe.permitir_montagem = bool(request.form.get('permitir_montagem'))
+
+        # Prazo e Parcelamento
+        equipe.permitir_prazo = bool(request.form.get('permitir_prazo'))
+        equipe.permitir_parcelamento = bool(request.form.get('permitir_parcelamento'))
 
         equipe.atualizado_por = current_user.nome
 

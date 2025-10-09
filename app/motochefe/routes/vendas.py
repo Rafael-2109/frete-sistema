@@ -336,7 +336,7 @@ def faturar_pedido(id):
         pedido.atualizado_por = current_user.nome
 
         # FATURAR PEDIDO (novo sistema)
-        # Atualiza: Pedido + Motos + Títulos (RASCUNHO → ABERTO)
+        # Atualiza: Pedido + Motos + Calcula data_vencimento dos títulos
         resultado = faturar_pedido_completo(
             pedido=pedido,
             empresa_id=int(empresa_id),
@@ -355,6 +355,106 @@ def faturar_pedido(id):
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao faturar: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_pedidos'))
+
+
+@motochefe_bp.route('/pedidos/<int:id>/editar-nf', methods=['POST'])
+@login_required
+@requer_motochefe
+def editar_nf_pedido(id):
+    """Edita número e data da NF de um pedido já faturado"""
+    pedido = PedidoVendaMoto.query.get_or_404(id)
+
+    if not pedido.faturado:
+        flash('Pedido ainda não foi faturado', 'warning')
+        return redirect(url_for('motochefe.listar_pedidos'))
+
+    try:
+        numero_nf = request.form.get('numero_nf')
+        data_nf = request.form.get('data_nf')
+
+        if not all([numero_nf, data_nf]):
+            raise Exception('Número NF e Data NF são obrigatórios')
+
+        # Validar se novo número de NF já existe (exceto se for o mesmo)
+        if numero_nf != pedido.numero_nf:
+            nf_existente = PedidoVendaMoto.query.filter_by(numero_nf=numero_nf, ativo=True).first()
+            if nf_existente:
+                raise Exception(f'Número de NF "{numero_nf}" já está em uso no pedido {nf_existente.numero_pedido}')
+
+        # Atualizar NF
+        pedido.numero_nf = numero_nf
+        pedido.data_nf = datetime.strptime(data_nf, '%Y-%m-%d').date()
+        pedido.atualizado_por = current_user.nome
+
+        db.session.commit()
+
+        flash(f'NF do pedido {pedido.numero_pedido} atualizada com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao editar NF: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_pedidos'))
+
+
+@motochefe_bp.route('/pedidos/<int:id>/receber', methods=['POST'])
+@login_required
+@requer_motochefe
+def receber_pedido(id):
+    """
+    Recebe pagamento por pedido inteiro
+    Distribui valor automaticamente pelos títulos na ordem correta
+    Pode receber antes ou depois do faturamento
+    """
+    from app.motochefe.services.titulo_service import receber_por_pedido
+
+    pedido = PedidoVendaMoto.query.get_or_404(id)
+
+    try:
+        empresa_id = request.form.get('empresa_recebedora_id')
+        valor_recebido = request.form.get('valor_recebido')
+
+        if not all([empresa_id, valor_recebido]):
+            raise Exception('Empresa recebedora e valor são obrigatórios')
+
+        valor = Decimal(valor_recebido)
+        if valor <= 0:
+            raise Exception('Valor deve ser maior que zero')
+
+        empresa = EmpresaVendaMoto.query.get_or_404(int(empresa_id))
+
+        # RECEBER POR PEDIDO (novo sistema)
+        # Distribui valor automaticamente pelos títulos na ordem:
+        # 1º Movimentação → 2º Montagem → 3º Frete → 4º Venda
+        resultado = receber_por_pedido(
+            pedido_id=pedido.id,
+            valor_recebido=valor,
+            empresa_recebedora=empresa,
+            usuario=current_user.nome
+        )
+
+        db.session.commit()
+
+        total_titulos = len(resultado['titulos_recebidos'])
+        total_aplicado = resultado['total_aplicado']
+        saldo_restante = resultado['saldo_restante']
+
+        mensagem = (
+            f'Recebimento registrado com sucesso! '
+            f'{total_titulos} título(s) atualizado(s). '
+            f'Valor aplicado: R$ {total_aplicado:,.2f}'
+        )
+
+        if saldo_restante > 0:
+            mensagem += f' | Saldo não aplicado: R$ {saldo_restante:,.2f} (todos os títulos foram pagos)'
+
+        flash(mensagem, 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar recebimento: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_pedidos'))
 
@@ -531,3 +631,91 @@ def api_cores_disponiveis():
         'quantidade': c.quantidade,
         'label': f'{c.cor} ({c.quantidade} un)'
     } for c in cores])
+
+
+# ===== SUBSTITUIÇÃO DE MOTOS =====
+
+@motochefe_bp.route('/pedidos/<int:pedido_id>/motos-disponiveis/<string:chassi_atual>')
+@login_required
+@requer_motochefe
+def api_motos_disponiveis_substituicao(pedido_id, chassi_atual):
+    """API: Retorna motos disponíveis agrupadas por prioridade para substituição"""
+    from app.motochefe.services.substituicao_moto_service import buscar_motos_disponiveis_agrupadas
+
+    # Buscar moto atual
+    moto_atual = Moto.query.get_or_404(chassi_atual)
+
+    # Buscar motos agrupadas
+    grupos = buscar_motos_disponiveis_agrupadas(
+        modelo_id_referencia=moto_atual.modelo_id,
+        cor_referencia=moto_atual.cor
+    )
+
+    # Converter para JSON
+    resultado = {}
+    for chave, motos in grupos.items():
+        resultado[chave] = [{
+            'chassi': m.numero_chassi,
+            'motor': m.numero_motor,
+            'modelo': m.modelo.nome_modelo,
+            'modelo_id': m.modelo_id,
+            'potencia': m.modelo.potencia_motor,
+            'cor': m.cor,
+            'preco_tabela': float(m.modelo.preco_tabela),
+            'ano': m.ano_fabricacao,
+            'data_entrada': m.data_entrada.strftime('%d/%m/%Y') if m.data_entrada else None
+        } for m in motos]
+
+    return jsonify(resultado)
+
+
+@motochefe_bp.route('/pedidos/<int:pedido_id>/substituir-moto', methods=['POST'])
+@login_required
+@requer_motochefe
+def substituir_moto(pedido_id):
+    """Substitui uma moto em um pedido"""
+    from app.motochefe.services.substituicao_moto_service import substituir_moto_pedido
+
+    try:
+        from decimal import Decimal
+
+        chassi_antigo = request.form.get('chassi_antigo')
+        chassi_novo = request.form.get('chassi_novo')
+        preco_novo_str = request.form.get('preco_novo')
+        motivo = request.form.get('motivo')  # 'AVARIA' ou 'OUTROS'
+        observacao = request.form.get('observacao', '')
+
+        if not all([chassi_antigo, chassi_novo, preco_novo_str, motivo]):
+            raise Exception('Dados incompletos para substituição')
+
+        # Converter preço para Decimal
+        try:
+            preco_novo = Decimal(str(preco_novo_str))
+        except:
+            raise Exception('Preço da moto nova inválido')
+
+        # Executar substituição
+        resultado = substituir_moto_pedido(
+            pedido_id=pedido_id,
+            chassi_antigo=chassi_antigo,
+            chassi_novo=chassi_novo,
+            preco_novo=preco_novo,
+            motivo=motivo,
+            observacao=observacao,
+            usuario=current_user.nome
+        )
+
+        # Montar mensagem de sucesso
+        mensagem = f'Moto substituída com sucesso! '
+        mensagem += f'Chassi antigo: {chassi_antigo} → Chassi novo: {chassi_novo}'
+
+        if resultado['resultado_ajuste_titulo']:
+            mensagem += f" | {resultado['resultado_ajuste_titulo']['mensagem']}"
+
+        flash(mensagem, 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao substituir moto: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.detalhes_pedido', id=pedido_id))

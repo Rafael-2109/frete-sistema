@@ -19,9 +19,9 @@
                         <th>ID</th>
                         <th>CNPJ</th>
                         <th>Empresa</th>
+                        <th>Tipo Conta</th>
+                        <th>Saldo Atual</th>
                         <th>Banco</th>
-                        <th>Agência</th>
-                        <th>Conta</th>
                         <th>Chave PIX</th>
                         <th>Ações</th>
                     </tr>
@@ -31,10 +31,21 @@
                     <tr>
                         <td>{{ emp.id }}</td>
                         <td>{{ emp.cnpj_empresa }}</td>
-                        <td><strong>{{ emp.empresa }}</strong></td>
+                        <td>
+                            <strong>{{ emp.empresa }}</strong>
+                            {% if emp.baixa_compra_auto %}
+                            <span class="badge bg-info text-white" title="Baixa Automática Ativa">AUTO</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ emp.tipo_conta or 'N/A' }}</span>
+                        </td>
+                        <td>
+                            <strong class="{% if emp.saldo < 0 %}text-danger{% elif emp.saldo > 0 %}text-success{% else %}text-muted{% endif %}">
+                                R$ {{ "%.2f"|format(emp.saldo) }}
+                            </strong>
+                        </td>
                         <td>{{ emp.banco or '-' }}</td>
-                        <td>{{ emp.agencia or '-' }}</td>
-                        <td>{{ emp.conta or '-' }}</td>
                         <td>{{ emp.chave_pix or '-' }}</td>
                         <td>
                             <div class="btn-group btn-group-sm">

@@ -30,7 +30,9 @@ from .vendas import (
 # Financeiro
 from .financeiro import (
     TituloFinanceiro,
-    ComissaoVendedor
+    ComissaoVendedor,
+    MovimentacaoFinanceira,
+    TituloAPagar
 )
 
 # Logística
@@ -64,6 +66,8 @@ __all__ = [
     # Financeiro
     'TituloFinanceiro',
     'ComissaoVendedor',
+    'MovimentacaoFinanceira',
+    'TituloAPagar',
     # Logística
     'EmbarqueMoto',
     'EmbarquePedido',

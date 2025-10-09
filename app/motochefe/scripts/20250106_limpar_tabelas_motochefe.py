@@ -18,12 +18,13 @@ from app.motochefe.models import (
     # Cadastros
     VendedorMoto, EquipeVendasMoto, TabelaPrecoEquipe,
     TransportadoraMoto, ClienteMoto, EmpresaVendaMoto,
+    CrossDocking, TabelaPrecoCrossDocking,
     # Produtos
     ModeloMoto, Moto,
     # Vendas
     PedidoVendaMoto, PedidoVendaMotoItem,
     # Financeiro
-    TituloFinanceiro, ComissaoVendedor,
+    TituloFinanceiro, ComissaoVendedor, MovimentacaoFinanceira, TituloAPagar,
     # Logística
     EmbarqueMoto, EmbarquePedido,
     # Operacional
@@ -52,74 +53,90 @@ def limpar_tabelas():
     try:
         # Ordem de deleção (das mais dependentes para as menos)
 
-        # 1. Financeiro (depende de Pedido e Vendedor)
-        print("1️⃣  Limpando ComissaoVendedor...")
+        # 1. Financeiro (ordem: MovimentacaoFinanceira -> TituloAPagar -> ComissaoVendedor -> TituloFinanceiro)
+        print("1️⃣  Limpando MovimentacaoFinanceira...")
+        count = MovimentacaoFinanceira.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
+        print("2️⃣  Limpando TituloAPagar...")
+        count = TituloAPagar.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
+        print("3️⃣  Limpando ComissaoVendedor...")
         count = ComissaoVendedor.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("2️⃣  Limpando TituloFinanceiro...")
+        print("4️⃣  Limpando TituloFinanceiro...")
         count = TituloFinanceiro.query.delete()
         print(f"   ✅ {count} registros removidos")
 
         # 2. Logística (depende de Pedido e Transportadora)
-        print("3️⃣  Limpando EmbarquePedido...")
+        print("5️⃣  Limpando EmbarquePedido...")
         count = EmbarquePedido.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("4️⃣  Limpando EmbarqueMoto...")
+        print("6️⃣  Limpando EmbarqueMoto...")
         count = EmbarqueMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
         # 3. Vendas (depende de Cliente, Vendedor, Moto)
-        print("5️⃣  Limpando PedidoVendaMotoItem...")
+        print("7️⃣  Limpando PedidoVendaMotoItem...")
         count = PedidoVendaMotoItem.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("6️⃣  Limpando PedidoVendaMoto...")
+        print("8️⃣  Limpando PedidoVendaMoto...")
         count = PedidoVendaMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
         # 4. Produtos (depende de Modelo)
-        print("7️⃣  Limpando Moto...")
+        print("9️⃣  Limpando Moto...")
         count = Moto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("8️⃣  Limpando ModeloMoto...")
+        print("🔟 Limpando ModeloMoto...")
         count = ModeloMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        # 5. Tabela de Preços (depende de Equipe e Modelo)
-        print("9️⃣  Limpando TabelaPrecoEquipe...")
+        # 5. Tabela de Preços (depende de Equipe/CrossDocking e Modelo)
+        print("1️⃣1️⃣  Limpando TabelaPrecoCrossDocking...")
+        count = TabelaPrecoCrossDocking.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
+        print("1️⃣2️⃣  Limpando TabelaPrecoEquipe...")
         count = TabelaPrecoEquipe.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        # 6. Cadastros (ordem: Vendedor -> Equipe -> demais)
-        print("🔟 Limpando VendedorMoto...")
-        count = VendedorMoto.query.delete()
-        print(f"   ✅ {count} registros removidos")
-
-        print("1️⃣1️⃣  Limpando EquipeVendasMoto...")
-        count = EquipeVendasMoto.query.delete()
-        print(f"   ✅ {count} registros removidos")
-
-        print("1️⃣2️⃣  Limpando ClienteMoto...")
+        # 6. Cadastros (ordem: Cliente -> Vendedor -> Equipe/CrossDocking -> demais)
+        print("1️⃣3️⃣  Limpando ClienteMoto...")
         count = ClienteMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("1️⃣3️⃣  Limpando TransportadoraMoto...")
+        print("1️⃣4️⃣  Limpando VendedorMoto...")
+        count = VendedorMoto.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
+        print("1️⃣5️⃣  Limpando EquipeVendasMoto...")
+        count = EquipeVendasMoto.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
+        print("1️⃣6️⃣  Limpando CrossDocking...")
+        count = CrossDocking.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
+        print("1️⃣7️⃣  Limpando TransportadoraMoto...")
         count = TransportadoraMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("1️⃣4️⃣  Limpando EmpresaVendaMoto...")
+        print("1️⃣8️⃣  Limpando EmpresaVendaMoto...")
         count = EmpresaVendaMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
         # 7. Operacional
-        print("1️⃣5️⃣  Limpando DespesaMensal...")
+        print("1️⃣9️⃣  Limpando DespesaMensal...")
         count = DespesaMensal.query.delete()
         print(f"   ✅ {count} registros removidos")
 
-        print("1️⃣6️⃣  Limpando CustosOperacionais...")
+        print("2️⃣0️⃣  Limpando CustosOperacionais...")
         count = CustosOperacionais.query.delete()
         print(f"   ✅ {count} registros removidos")
 
@@ -131,9 +148,11 @@ def limpar_tabelas():
         print("=" * 80)
         print("\n📋 PRÓXIMOS PASSOS:")
         print("   1. Configure as equipes de vendas com os novos campos")
-        print("   2. Cadastre transportadoras, clientes e vendedores")
-        print("   3. Cadastre modelos de motos")
-        print("   4. Configure tabela de preços por equipe (se tipo_precificacao='TABELA')")
+        print("   2. Configure CrossDocking (se necessário)")
+        print("   3. Cadastre transportadoras, clientes e vendedores")
+        print("   4. Cadastre modelos de motos")
+        print("   5. Configure tabela de preços por equipe (se tipo_precificacao='TABELA')")
+        print("   6. Configure tabela de preços CrossDocking (se crossdocking.tipo_precificacao='TABELA')")
         print("\n")
 
     except Exception as e:
@@ -150,6 +169,8 @@ def verificar_limpeza():
     print("\n🔍 Verificando limpeza...")
 
     tabelas_verificar = [
+        ('MovimentacaoFinanceira', MovimentacaoFinanceira),
+        ('TituloAPagar', TituloAPagar),
         ('ComissaoVendedor', ComissaoVendedor),
         ('TituloFinanceiro', TituloFinanceiro),
         ('EmbarquePedido', EmbarquePedido),
@@ -158,10 +179,12 @@ def verificar_limpeza():
         ('PedidoVendaMoto', PedidoVendaMoto),
         ('Moto', Moto),
         ('ModeloMoto', ModeloMoto),
+        ('TabelaPrecoCrossDocking', TabelaPrecoCrossDocking),
         ('TabelaPrecoEquipe', TabelaPrecoEquipe),
+        ('ClienteMoto', ClienteMoto),
         ('VendedorMoto', VendedorMoto),
         ('EquipeVendasMoto', EquipeVendasMoto),
-        ('ClienteMoto', ClienteMoto),
+        ('CrossDocking', CrossDocking),
         ('TransportadoraMoto', TransportadoraMoto),
         ('EmpresaVendaMoto', EmpresaVendaMoto),
         ('DespesaMensal', DespesaMensal),

@@ -57,6 +57,28 @@ Este arquivo contém os nomes corretos dos campos de todos os modelos para evita
 **Data de Criação**: 22/07/2025  
 **Última Atualização**: 23/07/2025
 
+# CRIAÇÃO DE TABELAS E CAMPOS:
+
+**Formato esperado**: Todos os campos ou modelos criados, deverá ser gerado um script python para rodar localmente e um script SQL simples para rodar no Shell do Render.
+==============================
+- Exemplo de script python:
+
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
+from app import create_app, db
+from sqlalchemy import text
+
+def tornar_motor_nullable():
+    app = create_app()
+
+    with app.app_context():
+        try:
+            resultado = db.session.execute(text("""
+                SELECT column_name, is_nullable.....
+===========================
 ---
 
 ## 🎯 CarteiraPrincipal (app/carteira/models.py)

@@ -191,14 +191,16 @@ def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf):
     for item in pedido.itens:
         item.moto.status = 'VENDIDA'
 
-    # Atualizar títulos (RASCUNHO → ABERTO)
-    # Calcula data_vencimento = data_expedicao (ou data_nf) + prazo_dias do título
+    # Atualizar títulos: calcular data_vencimento
+    # NOTA: Títulos já são criados com status='ABERTO' desde a criação do pedido
+    # Aqui apenas calculamos data_vencimento = data_expedicao (ou data_nf) + prazo_dias
     titulos_atualizados = []
     data_base = pedido.data_expedicao or data_nf
 
     for titulo in pedido.titulos:
         if titulo.prazo_dias is not None:
             titulo.data_vencimento = data_base + timedelta(days=titulo.prazo_dias)
+        # Linha abaixo é redundante mas mantida por segurança (já criado como ABERTO)
         titulo.status = 'ABERTO'
         titulos_atualizados.append(titulo)
 

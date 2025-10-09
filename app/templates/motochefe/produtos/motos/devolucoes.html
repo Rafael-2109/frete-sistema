@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-undo text-danger"></i> Motos Devolvidas ao Fornecedor</h2>
+        <div>
+            <a href="{{ url_for('motochefe.listar_motos') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar para Estoque
+            </a>
+            <a href="{{ url_for('motochefe.listar_avarias') }}" class="btn btn-warning">
+                <i class="fas fa-exclamation-triangle"></i> Ver Avarias
+            </a>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6>Total de Motos Devolvidas</h6>
+                    <h3>{{ motos|length }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="checkboxSelectAll" onclick="toggleSelectAll()"></th>
+                            <th>Chassi</th>
+                            <th>Motor</th>
+                            <th>Modelo</th>
+                            <th>Cor</th>
+                            <th>Fornecedor</th>
+                            <th>Observação</th>
+                            <th>Devolvido Em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for moto in motos %}
+                        <tr>
+                            <td><input type="checkbox" class="checkbox-moto" value="{{ moto.numero_chassi }}"></td>
+                            <td><code>{{ moto.numero_chassi }}</code></td>
+                            <td><code>{{ moto.numero_motor }}</code></td>
+                            <td>
+                                <strong>{{ moto.modelo.nome_modelo }}</strong><br>
+                                <small class="text-muted">{{ moto.modelo.potencia_motor }}</small>
+                            </td>
+                            <td>{{ moto.cor }}</td>
+                            <td>{{ moto.fornecedor }}</td>
+                            <td>
+                                <small>{{ moto.observacao[:100] }}{% if moto.observacao and moto.observacao|length > 100 %}...{% endif %}</small>
+                                {% if moto.observacao and moto.observacao|length > 100 %}
+                                <br><button type="button" class="btn btn-sm btn-link" onclick="mostrarObservacao('{{ moto.numero_chassi }}', `{{ moto.observacao|replace('`', '\\`')|replace('\n', '\\n') }}`)">Ver completa</button>
+                                {% endif %}
+                            </td>
+                            <td>{{ moto.atualizado_em.strftime('%d/%m/%Y %H:%M') if moto.atualizado_em else '-' }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-success" onclick="reverterMoto('{{ moto.numero_chassi }}')" title="Reverter para Disponível">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-warning" onclick="voltarAvaria('{{ moto.numero_chassi }}')" title="Voltar para Avaria">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">Nenhuma moto devolvida</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Ações em Lote -->
+            {% if motos %}
+            <div class="mt-3">
+                <button type="button" class="btn btn-success" onclick="reverterSelecionadas()">
+                    <i class="fas fa-check"></i> Reverter Selecionadas
+                </button>
+                <button type="button" class="btn btn-warning" onclick="voltarAvariaSelecionadas()">
+                    <i class="fas fa-exclamation-triangle"></i> Voltar para Avaria Selecionadas
+                </button>
+            </div>
+            {% endif %}
+
+            <!-- Paginação -->
+            {% if paginacao %}
+                {% include 'motochefe/_pagination.html' %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ver Observação -->
+<div class="modal fade" id="modalObservacao" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Observação Completa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Chassi:</strong> <span id="chassiObs"></span></p>
+                <pre id="observacaoCompleta" style="white-space: pre-wrap;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.checkbox-moto');
+    const selectAll = document.getElementById('checkboxSelectAll').checked;
+    checkboxes.forEach(cb => cb.checked = selectAll);
+}
+
+function getSelecionadas() {
+    const checkboxes = document.querySelectorAll('.checkbox-moto:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function reverterMoto(chassi) {
+    if (confirm('Confirma reverter moto para DISPONÍVEL?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/motochefe/motos/${chassi}/reverter-avaria`;
+
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrf_token';
+        csrf.value = '{{ csrf_token() }}';
+        form.appendChild(csrf);
+
+        const origem = document.createElement('input');
+        origem.type = 'hidden';
+        origem.name = 'origem';
+        origem.value = 'devolucoes';
+        form.appendChild(origem);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function voltarAvaria(chassi) {
+    if (confirm('Confirma retornar moto para AVARIADO?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/motochefe/motos/${chassi}/voltar-avaria`;
+
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrf_token';
+        csrf.value = '{{ csrf_token() }}';
+        form.appendChild(csrf);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function reverterSelecionadas() {
+    const selecionadas = getSelecionadas();
+    if (selecionadas.length === 0) {
+        alert('Selecione pelo menos uma moto');
+        return;
+    }
+    if (confirm(`Confirma reverter ${selecionadas.length} moto(s) para DISPONÍVEL?`)) {
+        selecionadas.forEach(chassi => {
+            setTimeout(() => reverterMoto(chassi), 100); // Pequeno delay para evitar sobrecarga
+        });
+    }
+}
+
+function voltarAvariaSelecionadas() {
+    const selecionadas = getSelecionadas();
+    if (selecionadas.length === 0) {
+        alert('Selecione pelo menos uma moto');
+        return;
+    }
+    if (confirm(`Confirma retornar ${selecionadas.length} moto(s) para AVARIADO?`)) {
+        selecionadas.forEach(chassi => {
+            setTimeout(() => voltarAvaria(chassi), 100); // Pequeno delay para evitar sobrecarga
+        });
+    }
+}
+
+function mostrarObservacao(chassi, observacao) {
+    document.getElementById('chassiObs').textContent = chassi;
+    document.getElementById('observacaoCompleta').textContent = observacao;
+    const modal = new bootstrap.Modal(document.getElementById('modalObservacao'));
+    modal.show();
+}
+</script>
+{% endblock %}

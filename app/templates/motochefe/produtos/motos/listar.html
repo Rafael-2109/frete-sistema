@@ -8,6 +8,12 @@
             <a href="{{ url_for('motochefe.adicionar_moto') }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Adicionar
             </a>
+            <a href="{{ url_for('motochefe.listar_avarias') }}" class="btn btn-warning">
+                <i class="fas fa-exclamation-triangle"></i> Avarias
+            </a>
+            <a href="{{ url_for('motochefe.listar_devolucoes') }}" class="btn btn-danger">
+                <i class="fas fa-undo"></i> Devoluções
+            </a>
             <a href="{{ url_for('motochefe.exportar_motos') }}" class="btn btn-success">
                 <i class="fas fa-file-excel"></i> Exportar
             </a>
@@ -184,10 +190,15 @@
                                     <a href="{{ url_for('motochefe.editar_moto', chassi=moto.numero_chassi) }}" class="btn btn-warning">
                                         <i class="fas fa-edit"></i>
                                     </a>
+                                    {% if moto.status not in ['AVARIADO', 'DEVOLVIDO'] and not moto.reservado %}
+                                    <button type="button" class="btn btn-danger" onclick="abrirModalAvaria('{{ moto.numero_chassi }}')">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </button>
+                                    {% endif %}
                                     {% if moto.status != 'VENDIDA' and not moto.reservado %}
                                     <form method="POST" action="{{ url_for('motochefe.remover_moto', chassi=moto.numero_chassi) }}" style="display: inline;">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Confirma remoção?')">
+                                        <button type="submit" class="btn btn-secondary" onclick="return confirm('Confirma remoção?')">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </form>
@@ -681,5 +692,45 @@
         });
     };
 })();
+</script>
+
+<!-- Modal Marcar como Avariada -->
+<div class="modal fade" id="modalMarcarAvaria" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formMarcarAvaria">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Marcar Moto como Avariada</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Chassi:</strong> <span id="chassiAvaria"></span></p>
+                    <div class="mb-3">
+                        <label class="form-label">Observação da Avaria: <span class="text-danger">*</span></label>
+                        <textarea name="observacao" class="form-control" rows="4" required placeholder="Descreva o problema encontrado..."></textarea>
+                    </div>
+                    <div class="alert alert-warning">
+                        <small><i class="fas fa-info-circle"></i> A moto será marcada como <strong>AVARIADA</strong> e ficará indisponível para venda.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Marcar como Avariada
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalAvaria(chassi) {
+    document.getElementById('chassiAvaria').textContent = chassi;
+    document.getElementById('formMarcarAvaria').action = `/motochefe/motos/${chassi}/marcar-avariada`;
+    const modal = new bootstrap.Modal(document.getElementById('modalMarcarAvaria'));
+    modal.show();
+}
 </script>
 {% endblock %}

@@ -14,6 +14,9 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
     Gera títulos aplicando FIFO entre parcelas
     Títulos podem ser divididos entre parcelas conforme necessário
 
+    IMPORTANTE: Títulos são criados com status='ABERTO' desde a criação do pedido.
+    A data_vencimento é calculada posteriormente no faturamento (data_expedicao + prazo_dias).
+
     Args:
         pedido: PedidoVendaMoto
         itens_pedido: list de PedidoVendaMotoItem
@@ -71,6 +74,7 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
 
     # 2. APLICAR FIFO - Distribuir títulos entre parcelas
     titulos_criados = []
+    total_parcelas = len(parcelas_config) if parcelas_config else 1
 
     if not parcelas_config:
         # Sem parcelamento: todos títulos na parcela 1, prazo do pedido
@@ -81,12 +85,14 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
                 tipo_titulo=t_data['tipo'],
                 ordem_pagamento=t_data['ordem'],
                 numero_parcela=1,
+                total_parcelas=1,
+                valor_parcela=Decimal('0'),  # 0 quando não há parcelamento
                 prazo_dias=pedido.prazo_dias,
                 valor_original=t_data['valor'],
                 valor_saldo=t_data['valor'],
                 valor_pago_total=0,
                 data_emissao=date.today(),
-                status='RASCUNHO',
+                status='ABERTO',
                 criado_por='SISTEMA'
             )
             db.session.add(titulo)
@@ -109,12 +115,14 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
                     tipo_titulo=t_data['tipo'],
                     ordem_pagamento=t_data['ordem'],
                     numero_parcela=parcela_atual['numero'],
+                    total_parcelas=total_parcelas,
+                    valor_parcela=Decimal(str(parcela_atual['valor'])),
                     prazo_dias=parcela_atual['prazo_dias'],
                     valor_original=valor_titulo,
                     valor_saldo=valor_titulo,
                     valor_pago_total=0,
                     data_emissao=date.today(),
-                    status='RASCUNHO',
+                    status='ABERTO',
                     criado_por='SISTEMA'
                 )
                 db.session.add(titulo)
@@ -126,18 +134,21 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
             else:
                 # SPLIT: Título excede parcela atual
                 # Parte 1: Preenche parcela atual
+                parcela_p1_valor = Decimal(str(parcela_atual['valor']))
                 titulo_p1 = TituloFinanceiro(
                     pedido_id=pedido.id,
                     numero_chassi=t_data['chassi'],
                     tipo_titulo=t_data['tipo'],
                     ordem_pagamento=t_data['ordem'],
                     numero_parcela=parcela_atual['numero'],
+                    total_parcelas=total_parcelas,
+                    valor_parcela=parcela_p1_valor,
                     prazo_dias=parcela_atual['prazo_dias'],
                     valor_original=valor_restante_parcela,
                     valor_saldo=valor_restante_parcela,
                     valor_pago_total=0,
                     data_emissao=date.today(),
-                    status='RASCUNHO',
+                    status='ABERTO',
                     criado_por='SISTEMA'
                 )
                 db.session.add(titulo_p1)
@@ -156,25 +167,28 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
 
                 # Parte 2: Restante vai para próxima parcela
                 valor_p2 = valor_titulo - valor_restante_parcela
+                parcela_p2_valor = Decimal(str(parcela_atual['valor']))
                 titulo_p2 = TituloFinanceiro(
                     pedido_id=pedido.id,
                     numero_chassi=t_data['chassi'],
                     tipo_titulo=t_data['tipo'],
                     ordem_pagamento=t_data['ordem'],
                     numero_parcela=parcela_atual['numero'],
+                    total_parcelas=total_parcelas,
+                    valor_parcela=parcela_p2_valor,
                     prazo_dias=parcela_atual['prazo_dias'],
                     valor_original=valor_p2,
                     valor_saldo=valor_p2,
                     valor_pago_total=0,
                     data_emissao=date.today(),
-                    status='RASCUNHO',
+                    status='ABERTO',
                     criado_por='SISTEMA'
                 )
                 db.session.add(titulo_p2)
                 db.session.flush()
                 titulos_criados.append(titulo_p2)
 
-                valor_restante_parcela = Decimal(str(parcela_atual['valor'])) - valor_p2
+                valor_restante_parcela = parcela_p2_valor - valor_p2
 
     return titulos_criados
 
@@ -297,6 +311,8 @@ def processar_pagamento_fifo(pedido, valor_pago, empresa_recebedora, usuario=Non
                 tipo_titulo=titulo.tipo_titulo,
                 ordem_pagamento=titulo.ordem_pagamento,
                 numero_parcela=titulo.numero_parcela,
+                total_parcelas=titulo.total_parcelas,
+                valor_parcela=titulo.valor_parcela,
                 prazo_dias=titulo.prazo_dias,
                 data_vencimento=titulo.data_vencimento,
                 valor_original=valor_recebido,
@@ -324,6 +340,8 @@ def processar_pagamento_fifo(pedido, valor_pago, empresa_recebedora, usuario=Non
                 tipo_titulo=titulo.tipo_titulo,
                 ordem_pagamento=titulo.ordem_pagamento,
                 numero_parcela=titulo.numero_parcela,
+                total_parcelas=titulo.total_parcelas,
+                valor_parcela=titulo.valor_parcela,
                 prazo_dias=titulo.prazo_dias,
                 data_vencimento=titulo.data_vencimento,
                 valor_original=valor_restante_titulo,
@@ -528,3 +546,202 @@ def obter_titulos_por_pedido_agrupados(pedido_id):
         agrupado[parcela][chassi].append(titulo)
 
     return agrupado
+
+
+def obter_todos_titulos_agrupados():
+    """
+    Retorna TODOS os títulos (em aberto) agrupados por Pedido > Parcela > Moto > Tipo
+    Para exibir em accordion consolidado
+
+    Returns:
+        dict estruturado: {pedido_id: {pedido, parcelas: {numero: {motos: {chassi: [titulos]}}}}}
+    """
+
+    # Buscar todos títulos em aberto
+    titulos = TituloFinanceiro.query.filter(
+        TituloFinanceiro.status == 'ABERTO'
+    ).order_by(
+        TituloFinanceiro.pedido_id,
+        TituloFinanceiro.numero_parcela,
+        TituloFinanceiro.numero_chassi,
+        TituloFinanceiro.ordem_pagamento
+    ).all()
+
+    # Agrupar
+    agrupado = {}
+
+    for titulo in titulos:
+        pedido_id = titulo.pedido_id
+
+        if pedido_id not in agrupado:
+            agrupado[pedido_id] = {
+                'pedido': titulo.pedido,
+                'parcelas': {}
+            }
+
+        parcela = titulo.numero_parcela
+
+        if parcela not in agrupado[pedido_id]['parcelas']:
+            agrupado[pedido_id]['parcelas'][parcela] = {
+                'motos': {}
+            }
+
+        chassi = titulo.numero_chassi
+
+        if chassi not in agrupado[pedido_id]['parcelas'][parcela]['motos']:
+            agrupado[pedido_id]['parcelas'][parcela]['motos'][chassi] = []
+
+        agrupado[pedido_id]['parcelas'][parcela]['motos'][chassi].append(titulo)
+
+    return agrupado
+
+
+def receber_por_pedido(pedido_id, valor_recebido, empresa_recebedora, usuario):
+    """
+    Recebe pagamento por pedido inteiro, distribuindo automaticamente pelos títulos
+    PAGAMENTO POR MOTO COMPLETA: Para cada moto, paga na ordem 1º MOV → 2º MONT → 3º FRETE → 4º VENDA
+
+    Args:
+        pedido_id: ID do pedido
+        valor_recebido: Valor total recebido do cliente
+        empresa_recebedora: EmpresaVendaMoto que recebeu
+        usuario: Nome do usuário que registrou
+
+    Returns:
+        dict {
+            'titulos_recebidos': list de titulo_id,
+            'total_aplicado': Decimal,
+            'saldo_restante': Decimal (se sobrou dinheiro)
+        }
+    """
+    from app.motochefe.models.financeiro import TituloFinanceiro
+    from decimal import Decimal
+
+    valor_restante = Decimal(str(valor_recebido))
+    titulos_recebidos = []
+
+    # Buscar todos os títulos do pedido em ABERTO, ordenados por:
+    # 1. numero_chassi (agrupa por moto)
+    # 2. numero_parcela (ordem das parcelas)
+    # 3. ordem_pagamento (1=Movimentação, 2=Montagem, 3=Frete, 4=Venda)
+    # RESULTADO: Paga TODOS os títulos de UMA moto antes de passar para a próxima
+    titulos = TituloFinanceiro.query.filter_by(
+        pedido_id=pedido_id
+    ).filter(
+        TituloFinanceiro.status == 'ABERTO'
+    ).filter(
+        TituloFinanceiro.valor_saldo > 0
+    ).order_by(
+        TituloFinanceiro.numero_chassi.asc(),
+        TituloFinanceiro.numero_parcela.asc(),
+        TituloFinanceiro.ordem_pagamento.asc()
+    ).all()
+
+    if not titulos:
+        raise Exception('Nenhum título em aberto encontrado para este pedido')
+
+    # Aplicar valor aos títulos na ordem
+    for titulo in titulos:
+        if valor_restante <= 0:
+            break
+
+        saldo_titulo = titulo.valor_saldo
+
+        if valor_restante >= saldo_titulo:
+            # Pagar título completo
+            receber_titulo(
+                titulo=titulo,
+                valor_recebido=saldo_titulo,
+                empresa_recebedora=empresa_recebedora,
+                usuario=usuario
+            )
+            valor_restante -= saldo_titulo
+            titulos_recebidos.append(titulo.id)
+        else:
+            # Pagamento parcial do título
+            receber_titulo(
+                titulo=titulo,
+                valor_recebido=valor_restante,
+                empresa_recebedora=empresa_recebedora,
+                usuario=usuario
+            )
+            titulos_recebidos.append(titulo.id)
+            valor_restante = Decimal('0')
+            break
+
+    return {
+        'titulos_recebidos': titulos_recebidos,
+        'total_aplicado': Decimal(str(valor_recebido)) - valor_restante,
+        'saldo_restante': valor_restante
+    }
+
+
+def receber_por_moto(pedido_id, numero_chassi, valor_recebido, empresa_recebedora, usuario):
+    """
+    Recebe pagamento de uma moto específica dentro de um pedido
+    Segue mesma lógica de receber_por_pedido mas filtra por moto
+
+    Args:
+        pedido_id: ID do pedido
+        numero_chassi: Chassi da moto específica
+        valor_recebido: Valor recebido
+        empresa_recebedora: EmpresaVendaMoto que recebeu
+        usuario: Nome do usuário
+
+    Returns:
+        dict com resultado do recebimento
+    """
+    from app.motochefe.models.financeiro import TituloFinanceiro
+    from decimal import Decimal
+
+    valor_restante = Decimal(str(valor_recebido))
+    titulos_recebidos = []
+
+    # Buscar títulos da moto específica, ordenados por parcela e tipo
+    titulos = TituloFinanceiro.query.filter_by(
+        pedido_id=pedido_id,
+        numero_chassi=numero_chassi
+    ).filter(
+        TituloFinanceiro.status == 'ABERTO'
+    ).filter(
+        TituloFinanceiro.valor_saldo > 0
+    ).order_by(
+        TituloFinanceiro.numero_parcela.asc(),
+        TituloFinanceiro.ordem_pagamento.asc()
+    ).all()
+
+    if not titulos:
+        raise Exception(f'Nenhum título em aberto para a moto {numero_chassi}')
+
+    # Aplicar valor aos títulos na ordem
+    for titulo in titulos:
+        if valor_restante <= 0:
+            break
+
+        saldo_titulo = titulo.valor_saldo
+
+        if valor_restante >= saldo_titulo:
+            receber_titulo(
+                titulo=titulo,
+                valor_recebido=saldo_titulo,
+                empresa_recebedora=empresa_recebedora,
+                usuario=usuario
+            )
+            valor_restante -= saldo_titulo
+            titulos_recebidos.append(titulo.id)
+        else:
+            receber_titulo(
+                titulo=titulo,
+                valor_recebido=valor_restante,
+                empresa_recebedora=empresa_recebedora,
+                usuario=usuario
+            )
+            titulos_recebidos.append(titulo.id)
+            valor_restante = Decimal('0')
+            break
+
+    return {
+        'titulos_recebidos': titulos_recebidos,
+        'total_aplicado': Decimal(str(valor_recebido)) - valor_restante,
+        'saldo_restante': valor_restante
+    }

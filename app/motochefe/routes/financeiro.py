@@ -147,8 +147,32 @@ def listar_contas_a_pagar():
     despesas_agrupadas = list(despesas_por_tipo.values())
     total_despesas = sum(g['total'] for g in despesas_agrupadas)
 
+    # 6. TÍTULOS A PAGAR - Movimentação e Montagem (Pendentes e Abertos)
+    from app.motochefe.models.financeiro import TituloAPagar
+
+    titulos_a_pagar = TituloAPagar.query.filter(
+        TituloAPagar.status.in_(['PENDENTE', 'ABERTO', 'PARCIAL'])
+    ).order_by(TituloAPagar.data_criacao.desc()).all()
+
+    # Agrupar por tipo
+    titulos_por_tipo = {}
+    for titulo in titulos_a_pagar:
+        tipo = titulo.tipo  # MOVIMENTACAO ou MONTAGEM
+        if tipo not in titulos_por_tipo:
+            titulos_por_tipo[tipo] = {
+                'tipo': tipo,
+                'titulos': [],
+                'total': Decimal('0')
+            }
+
+        titulos_por_tipo[tipo]['titulos'].append(titulo)
+        titulos_por_tipo[tipo]['total'] += titulo.valor_saldo
+
+    titulos_agrupados = list(titulos_por_tipo.values())
+    total_titulos_a_pagar = sum(g['total'] for g in titulos_agrupados)
+
     # TOTAIS GERAIS
-    total_geral = total_motos + total_fretes + total_comissoes + total_montagens + total_despesas
+    total_geral = total_motos + total_fretes + total_comissoes + total_montagens + total_despesas + total_titulos_a_pagar
 
     # Consolidar TODOS os itens em uma lista única para paginação
     # Cada item terá um 'tipo' para identificação no template
@@ -168,6 +192,9 @@ def listar_contas_a_pagar():
 
     for item in despesas_agrupadas:
         todos_itens.append({'tipo': 'DESPESA', 'dados': item})
+
+    for item in titulos_agrupados:
+        todos_itens.append({'tipo': 'TITULO_A_PAGAR', 'dados': item})
 
     # Paginação manual
     total_items = len(todos_itens)
@@ -201,6 +228,7 @@ def listar_contas_a_pagar():
                          total_comissoes=total_comissoes,
                          total_montagens=total_montagens,
                          total_despesas=total_despesas,
+                         total_titulos_a_pagar=total_titulos_a_pagar,
                          total_geral=total_geral,
                          hoje=hoje)
 
@@ -314,54 +342,34 @@ def pagar_lote():
 @requer_motochefe
 def listar_contas_a_receber():
     """
-    Tela consolidada de contas a receber (novo sistema)
-    Mostra: Títulos Financeiros por moto + tipo com paginação
+    Tela consolidada de contas a receber (novo sistema com accordion)
+    Mostra: Pedidos > Parcelas > Motos > Títulos
     """
     from app.motochefe.models.cadastro import EmpresaVendaMoto
+    from app.motochefe.services.titulo_service import obter_todos_titulos_agrupados
 
-    page = request.args.get('page', 1, type=int)
-    per_page = 100
+    # Buscar títulos agrupados por Pedido > Parcela > Moto
+    pedidos_agrupados = obter_todos_titulos_agrupados()
 
-    # Títulos em aberto (novo sistema usa valor_saldo)
-    titulos_abertos = TituloFinanceiro.query.filter(
-        TituloFinanceiro.status != 'PAGO'
-    ).order_by(TituloFinanceiro.data_vencimento).all()
-
-    # Agrupar por status (vencido, hoje, a vencer)
+    # Calcular totais
     hoje = date.today()
+    total_vencidos = Decimal('0')
+    total_hoje = Decimal('0')
+    total_a_vencer = Decimal('0')
 
-    vencidos = [t for t in titulos_abertos if t.data_vencimento and t.data_vencimento < hoje]
-    vencendo_hoje = [t for t in titulos_abertos if t.data_vencimento == hoje]
-    a_vencer = [t for t in titulos_abertos if t.data_vencimento and t.data_vencimento > hoje]
-    sem_vencimento = [t for t in titulos_abertos if not t.data_vencimento]
+    for pedido_id, dados_pedido in pedidos_agrupados.items():
+        for parcela_num, dados_parcela in dados_pedido['parcelas'].items():
+            for chassi, titulos in dados_parcela['motos'].items():
+                for titulo in titulos:
+                    if titulo.data_vencimento:
+                        if titulo.data_vencimento < hoje:
+                            total_vencidos += titulo.valor_saldo
+                        elif titulo.data_vencimento == hoje:
+                            total_hoje += titulo.valor_saldo
+                        else:
+                            total_a_vencer += titulo.valor_saldo
 
-    # Totais (novo sistema usa valor_saldo diretamente)
-    total_vencidos = sum(t.valor_saldo for t in vencidos)
-    total_hoje = sum(t.valor_saldo for t in vencendo_hoje)
-    total_a_vencer = sum(t.valor_saldo for t in a_vencer)
     total_geral = total_vencidos + total_hoje + total_a_vencer
-
-    # Paginação manual da lista consolidada (vencidos + hoje + a_vencer)
-    todos_titulos = vencidos + vencendo_hoje + a_vencer
-    total_items = len(todos_titulos)
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    titulos_paginados = todos_titulos[start_idx:end_idx]
-
-    # Criar objeto paginacao manual
-    class PaginacaoManual:
-        def __init__(self, items, page, per_page, total):
-            self.items = items
-            self.page = page
-            self.per_page = per_page
-            self.total = total
-            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
-            self.has_prev = page > 1
-            self.has_next = page < self.pages
-            self.prev_num = page - 1 if self.has_prev else None
-            self.next_num = page + 1 if self.has_next else None
-
-    paginacao = PaginacaoManual(titulos_paginados, page, per_page, total_items)
 
     # Buscar empresas ativas para o select
     empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
@@ -370,8 +378,7 @@ def listar_contas_a_receber():
     ).all()
 
     return render_template('motochefe/financeiro/contas_a_receber.html',
-                         titulos=paginacao.items,
-                         paginacao=paginacao,
+                         pedidos_agrupados=pedidos_agrupados,
                          total_vencidos=total_vencidos,
                          total_hoje=total_hoje,
                          total_a_vencer=total_a_vencer,
@@ -442,5 +449,107 @@ def receber_lote():
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao processar recebimentos: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_contas_a_receber'))
+
+
+@motochefe_bp.route('/contas-a-receber/receber-pedido/<int:pedido_id>', methods=['POST'])
+@login_required
+@requer_motochefe
+def receber_pedido_contas(pedido_id):
+    """
+    Recebe pagamento de um pedido inteiro na tela de Contas a Receber
+    Usa mesma lógica da listagem de pedidos
+    """
+    from app.motochefe.services.titulo_service import receber_por_pedido
+    from app.motochefe.models.vendas import PedidoVendaMoto
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+
+    try:
+        empresa_id = request.form.get('empresa_recebedora_id')
+        valor_recebido = request.form.get('valor_recebido')
+
+        if not all([empresa_id, valor_recebido]):
+            raise Exception('Empresa recebedora e valor são obrigatórios')
+
+        valor = Decimal(valor_recebido)
+        if valor <= 0:
+            raise Exception('Valor deve ser maior que zero')
+
+        pedido = PedidoVendaMoto.query.get_or_404(pedido_id)
+        empresa = EmpresaVendaMoto.query.get_or_404(int(empresa_id))
+
+        resultado = receber_por_pedido(
+            pedido_id=pedido.id,
+            valor_recebido=valor,
+            empresa_recebedora=empresa,
+            usuario=current_user.nome
+        )
+
+        db.session.commit()
+
+        total_titulos = len(resultado['titulos_recebidos'])
+        total_aplicado = resultado['total_aplicado']
+
+        flash(
+            f'Recebimento do pedido {pedido.numero_pedido} registrado! '
+            f'{total_titulos} título(s) atualizado(s). Valor: R$ {total_aplicado:,.2f}',
+            'success'
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar recebimento: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_contas_a_receber'))
+
+
+@motochefe_bp.route('/contas-a-receber/receber-moto/<int:pedido_id>/<string:chassi>', methods=['POST'])
+@login_required
+@requer_motochefe
+def receber_moto_contas(pedido_id, chassi):
+    """
+    Recebe pagamento de uma moto específica na tela de Contas a Receber
+    """
+    from app.motochefe.services.titulo_service import receber_por_moto
+    from app.motochefe.models.vendas import PedidoVendaMoto
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+
+    try:
+        empresa_id = request.form.get('empresa_recebedora_id')
+        valor_recebido = request.form.get('valor_recebido')
+
+        if not all([empresa_id, valor_recebido]):
+            raise Exception('Empresa recebedora e valor são obrigatórios')
+
+        valor = Decimal(valor_recebido)
+        if valor <= 0:
+            raise Exception('Valor deve ser maior que zero')
+
+        pedido = PedidoVendaMoto.query.get_or_404(pedido_id)
+        empresa = EmpresaVendaMoto.query.get_or_404(int(empresa_id))
+
+        resultado = receber_por_moto(
+            pedido_id=pedido.id,
+            numero_chassi=chassi,
+            valor_recebido=valor,
+            empresa_recebedora=empresa,
+            usuario=current_user.nome
+        )
+
+        db.session.commit()
+
+        total_titulos = len(resultado['titulos_recebidos'])
+        total_aplicado = resultado['total_aplicado']
+
+        flash(
+            f'Recebimento da moto {chassi} registrado! '
+            f'{total_titulos} título(s) atualizado(s). Valor: R$ {total_aplicado:,.2f}',
+            'success'
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar recebimento: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_contas_a_receber'))

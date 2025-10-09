@@ -73,7 +73,10 @@ class Moto(db.Model):
     # Status e controle (para FIFO e reserva)
     reservado = db.Column(db.Boolean, default=False, nullable=False, index=True)
     status = db.Column(db.String(20), default='DISPONIVEL', nullable=False, index=True)
-    # Valores possíveis: DISPONIVEL, RESERVADA, VENDIDA
+    # Valores possíveis: DISPONIVEL, RESERVADA, VENDIDA, AVARIADO, DEVOLVIDO
+
+    # Observações (avarias, substituições, etc)
+    observacao = db.Column(db.Text, nullable=True)
 
     # Localização física (estoque)
     pallet = db.Column(db.String(20), nullable=True)

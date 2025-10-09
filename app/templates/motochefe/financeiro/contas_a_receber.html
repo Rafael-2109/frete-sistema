@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <h2><i class="fas fa-money-bill-wave"></i> Contas a Receber - Visão Consolidada</h2>
+    <h2><i class="fas fa-money-bill-wave"></i> Contas a Receber - Visão por Pedido</h2>
     <hr>
 
     <!-- RESUMO GERAL -->
@@ -16,17 +16,14 @@
                 <div class="col-md-3">
                     <small>Vencidos</small><br>
                     <strong class="text-danger">R$ {{ "%.2f"|format(total_vencidos) }}</strong>
-                    <span class="badge bg-danger">{{ vencidos|length }}</span>
                 </div>
                 <div class="col-md-3">
                     <small>Vencendo Hoje</small><br>
                     <strong class="text-warning">R$ {{ "%.2f"|format(total_hoje) }}</strong>
-                    <span class="badge bg-warning text-dark">{{ vencendo_hoje|length }}</span>
                 </div>
                 <div class="col-md-3">
                     <small>A Vencer</small><br>
                     <strong class="text-success">R$ {{ "%.2f"|format(total_a_vencer) }}</strong>
-                    <span class="badge bg-success">{{ a_vencer|length }}</span>
                 </div>
             </div>
         </div>
@@ -37,158 +34,158 @@
         <input type="hidden" name="itens_recebimento" id="itens_recebimento"/>
         <input type="hidden" name="data_recebimento" id="data_recebimento_hidden"/>
 
-        <!-- VENCIDOS -->
-        {% if vencidos %}
-        <div class="card mb-3 border-danger">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0">
-                    <i class="fas fa-exclamation-triangle"></i> Vencidos
-                    <span class="badge bg-light text-dark float-end">{{ vencidos|length }} títulos</span>
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="check-all-vencidos" class="form-check-input"></th>
-                                <th>Pedido</th>
-                                <th>Parcela</th>
-                                <th>Vencimento</th>
-                                <th>Valor</th>
-                                <th>Cliente</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for t in vencidos %}
-                            <tr>
-                                <td>
-                                    <input class="form-check-input item-check check-vencidos" type="checkbox"
-                                           data-id="{{ t.id }}"
-                                           data-valor="{{ t.valor_saldo }}"
-                                           id="titulo-{{ t.id }}">
-                                </td>
-                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
-                                <td>{{ t.tipo_titulo }} - Parc. {{ t.numero_parcela }}</td>
-                                <td class="text-danger">{{ t.data_vencimento.strftime('%d/%m/%Y') if t.data_vencimento else '-' }}</td>
-                                <td>R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
-                                <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-            <!-- Paginação -->
-            {% if paginacao %}
-                {% include 'motochefe/_pagination.html' %}
-            {% endif %}
-        </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- VENCENDO HOJE -->
-        {% if vencendo_hoje %}
-        <div class="card mb-3 border-warning">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">
-                    <i class="fas fa-clock"></i> Vencendo Hoje
-                    <span class="badge bg-dark float-end">{{ vencendo_hoje|length }} títulos</span>
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="check-all-hoje" class="form-check-input"></th>
-                                <th>Pedido</th>
-                                <th>Parcela</th>
-                                <th>Valor</th>
-                                <th>Cliente</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for t in vencendo_hoje %}
-                            <tr>
-                                <td>
-                                    <input class="form-check-input item-check check-hoje" type="checkbox"
-                                           data-id="{{ t.id }}"
-                                           data-valor="{{ t.valor_saldo }}"
-                                           id="titulo-{{ t.id }}">
-                                </td>
-                                <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
-                                <td>{{ t.tipo_titulo }} - Parc. {{ t.numero_parcela }}</td>
-                                <td>R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
-                                <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- A VENCER -->
-        {% if a_vencer %}
-        <div class="card mb-3 border-success">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">
-                    <i class="fas fa-calendar-check"></i> A Vencer
-                    <span class="badge bg-light text-dark float-end">{{ a_vencer|length }} títulos</span>
-                    <button type="button" class="btn btn-sm btn-light" onclick="toggleGrupo('a-vencer')">
-                        <i class="fas fa-chevron-down" id="icon-a-vencer"></i>
+        <!-- ACCORDION POR PEDIDO -->
+        <div class="accordion" id="accordionPedidos">
+            {% for pedido_id, dados_pedido in pedidos_agrupados.items() %}
+            <div class="accordion-item">
+                <h2 class="accordion-header d-flex align-items-center" id="heading-pedido-{{ pedido_id }}">
+                    <button class="accordion-button collapsed flex-grow-1" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#collapse-pedido-{{ pedido_id }}" aria-expanded="false">
+                        <strong>Pedido {{ dados_pedido.pedido.numero_pedido }}</strong>
+                        &nbsp;-&nbsp;
+                        {{ dados_pedido.pedido.cliente.cliente if dados_pedido.pedido.cliente else 'Cliente não definido' }}
+                        <span class="badge bg-primary ms-2">
+                            {{ dados_pedido.parcelas|length }} parcela(s)
+                        </span>
+                        <span class="badge bg-success ms-2">
+                            Total: R$ {{ "%.2f"|format(dados_pedido.pedido.saldo_a_receber) }}
+                        </span>
                     </button>
-                </h5>
-            </div>
-            <div id="a-vencer" class="collapse">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th><input type="checkbox" id="check-all-avencer" class="form-check-input"></th>
-                                    <th>Pedido</th>
-                                    <th>Parcela</th>
-                                    <th>Vencimento</th>
-                                    <th>Valor</th>
-                                    <th>Cliente</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for t in a_vencer[:10] %}
-                                <tr>
-                                    <td>
-                                        <input class="form-check-input item-check check-avencer" type="checkbox"
-                                               data-id="{{ t.id }}"
-                                               data-valor="{{ t.valor_saldo }}"
-                                               id="titulo-{{ t.id }}">
-                                    </td>
-                                    <td>{{ t.pedido.numero_pedido if t.pedido else '-' }}</td>
-                                    <td>{{ t.tipo_titulo }} - Parc. {{ t.numero_parcela }}</td>
-                                    <td>{{ t.data_vencimento.strftime('%d/%m/%Y') if t.data_vencimento else '-' }}</td>
-                                    <td>R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
-                                    <td>{{ t.pedido.cliente.cliente if t.pedido and t.pedido.cliente else '-' }}</td>
-                                </tr>
-                                {% endfor %}
-                                {% if a_vencer|length > 10 %}
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted">
-                                        ... e mais {{ a_vencer|length - 10 }} títulos
-                                        <a href="{{ url_for('motochefe.listar_titulos') }}">Ver Todos</a>
-                                    </td>
-                                </tr>
-                                {% endif %}
-                            </tbody>
-                        </table>
+                    {% if dados_pedido.pedido.saldo_a_receber > 0 %}
+                    <button type="button" class="btn btn-sm btn-success ms-2"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalReceberPedido{{ pedido_id }}"
+                            style="white-space: nowrap;">
+                        <i class="fas fa-dollar-sign"></i> Receber
+                    </button>
+                    {% endif %}
+                </h2>
+                <div id="collapse-pedido-{{ pedido_id }}" class="accordion-collapse collapse"
+                     aria-labelledby="heading-pedido-{{ pedido_id }}">
+                    <div class="accordion-body">
+                        <!-- ACCORDION POR PARCELA -->
+                        <div class="accordion" id="accordionParcelas-{{ pedido_id }}">
+                            {% for parcela_num, dados_parcela in dados_pedido.parcelas.items()|sort %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading-parcela-{{ pedido_id }}-{{ parcela_num }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#collapse-parcela-{{ pedido_id }}-{{ parcela_num }}">
+                                        <strong>Parcela {{ parcela_num }}</strong>
+                                        <span class="badge bg-primary ms-2">
+                                            {{ dados_parcela.motos|length }} moto(s)
+                                        </span>
+                                        {% set total_parcela = namespace(valor=0) %}
+                                        {% for chassi, titulos in dados_parcela.motos.items() %}
+                                            {% for titulo in titulos %}
+                                                {% set total_parcela.valor = total_parcela.valor + titulo.valor_saldo %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                        <span class="badge bg-success ms-2">
+                                            Total: R$ {{ "%.2f"|format(total_parcela.valor) }}
+                                        </span>
+                                    </button>
+                                </h2>
+                                <div id="collapse-parcela-{{ pedido_id }}-{{ parcela_num }}"
+                                     class="accordion-collapse collapse"
+                                     aria-labelledby="heading-parcela-{{ pedido_id }}-{{ parcela_num }}">
+                                    <div class="accordion-body">
+                                        <!-- ACCORDION POR MOTO -->
+                                        <div class="accordion" id="accordionMotos-{{ pedido_id }}-{{ parcela_num }}">
+                                            {% for chassi, titulos in dados_parcela.motos.items()|sort %}
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header d-flex align-items-center" id="heading-moto-{{ pedido_id }}-{{ parcela_num }}-{{ loop.index }}">
+                                                    <button class="accordion-button collapsed flex-grow-1" type="button" data-bs-toggle="collapse"
+                                                            data-bs-target="#collapse-moto-{{ pedido_id }}-{{ parcela_num }}-{{ loop.index }}">
+                                                        <strong>Moto {{ chassi }}</strong>
+                                                        <span class="badge bg-primary ms-2">{{ titulos|length }} título(s)</span>
+                                                        {% set total_moto = namespace(valor=0) %}
+                                                        {% for titulo in titulos %}
+                                                            {% set total_moto.valor = total_moto.valor + titulo.valor_saldo %}
+                                                        {% endfor %}
+                                                        <span class="badge bg-success ms-2">
+                                                            Total: R$ {{ "%.2f"|format(total_moto.valor) }}
+                                                        </span>
+                                                    </button>
+                                                    {% if total_moto.valor > 0 %}
+                                                    <button type="button" class="btn btn-sm btn-warning ms-2"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#modalReceberMoto{{ pedido_id }}-{{ chassi|replace('.', '-') }}"
+                                                            style="white-space: nowrap;">
+                                                        <i class="fas fa-motorcycle"></i> Receber
+                                                    </button>
+                                                    {% endif %}
+                                                </h2>
+                                                <div id="collapse-moto-{{ pedido_id }}-{{ parcela_num }}-{{ loop.index }}"
+                                                     class="accordion-collapse collapse"
+                                                     aria-labelledby="heading-moto-{{ pedido_id }}-{{ parcela_num }}-{{ loop.index }}">
+                                                    <div class="accordion-body">
+                                                        <!-- TABELA DE TÍTULOS -->
+                                                        <table class="table table-sm table-striped">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th><input type="checkbox" class="form-check-input check-all-moto" data-moto="{{ chassi }}"></th>
+                                                                    <th>Tipo</th>
+                                                                    <th>Vencimento</th>
+                                                                    <th>Saldo</th>
+                                                                    <th>Valor a Receber</th>
+                                                                    <th>Status</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {% for titulo in titulos|sort(attribute='ordem_pagamento') %}
+                                                                <tr class="{% if titulo.data_vencimento %}{% if titulo.data_vencimento < hoje %}table-danger{% elif titulo.data_vencimento == hoje %}table-warning{% endif %}{% endif %}">
+                                                                    <td>
+                                                                        <input class="form-check-input item-check"
+                                                                               type="checkbox"
+                                                                               data-id="{{ titulo.id }}"
+                                                                               data-valor-saldo="{{ titulo.valor_saldo }}"
+                                                                               data-moto="{{ chassi }}"
+                                                                               onchange="handleCheckboxChange(this)">
+                                                                    </td>
+                                                                    <td>{{ titulo.tipo_titulo }}</td>
+                                                                    <td>{{ titulo.data_vencimento.strftime('%d/%m/%Y') if titulo.data_vencimento else 'Sem vencimento' }}</td>
+                                                                    <td><strong>R$ {{ "%.2f"|format(titulo.valor_saldo) }}</strong></td>
+                                                                    <td>
+                                                                        <input type="number"
+                                                                               class="form-control form-control-sm valor-input"
+                                                                               id="valor-{{ titulo.id }}"
+                                                                               data-titulo-id="{{ titulo.id }}"
+                                                                               step="0.01"
+                                                                               min="0.01"
+                                                                               max="{{ titulo.valor_saldo }}"
+                                                                               value="{{ titulo.valor_saldo }}"
+                                                                               style="width: 120px;"
+                                                                               disabled>
+                                                                    </td>
+                                                                    <td><span class="badge bg-{{ 'warning' if titulo.status == 'RASCUNHO' else 'info' }}">{{ titulo.status }}</span></td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
             </div>
+            {% endfor %}
+        </div>
+
+        {% if not pedidos_agrupados %}
+        <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle"></i> Não há títulos em aberto no momento.
         </div>
         {% endif %}
 
         <!-- RODAPÉ FIXO -->
-        <div class="card bg-dark text-white sticky-bottom">
+        <div class="card bg-dark text-white sticky-bottom mt-3">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col-md-3">
@@ -221,65 +218,199 @@
             </div>
         </div>
     </form>
+
+    <!-- MODAIS DE RECEBIMENTO (FORA DO FORM PRINCIPAL) -->
+    {% for pedido_id, dados_pedido in pedidos_agrupados.items() %}
+        <!-- Modal Receber Pedido -->
+        <div class="modal fade" id="modalReceberPedido{{ pedido_id }}" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h6 class="modal-title m-0">
+                            <i class="fas fa-dollar-sign"></i> Receber - Pedido {{ dados_pedido.pedido.numero_pedido }}
+                        </h6>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('motochefe.receber_pedido_contas', pedido_id=pedido_id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="modal-body p-3">
+                            <div class="mb-2 pb-2 border-bottom">
+                                <small class="text-muted">Saldo Total:</small><br>
+                                <h5 class="text-success mb-0">R$ {{ "%.2f"|format(dados_pedido.pedido.saldo_a_receber) }}</h5>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small mb-1">Empresa Recebedora *</label>
+                                <select name="empresa_recebedora_id" class="form-select form-select-sm" required>
+                                    <option value="">Selecione...</option>
+                                    {% for emp in empresas %}
+                                    <option value="{{ emp.id }}">{{ emp.empresa }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Valor Recebido *</label>
+                                <input type="number" step="0.01" name="valor_recebido"
+                                       class="form-control form-control-sm"
+                                       value="{{ dados_pedido.pedido.saldo_a_receber }}"
+                                       required>
+                            </div>
+                        </div>
+                        <div class="modal-footer p-2">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-sm btn-success">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modais Receber Moto -->
+        {% for parcela_num, dados_parcela in dados_pedido.parcelas.items() %}
+            {% for chassi, titulos in dados_parcela.motos.items() %}
+                {% set total_moto_modal = namespace(valor=0) %}
+                {% for titulo in titulos %}
+                    {% set total_moto_modal.valor = total_moto_modal.valor + titulo.valor_saldo %}
+                {% endfor %}
+                {% if total_moto_modal.valor > 0 %}
+                <div class="modal fade" id="modalReceberMoto{{ pedido_id }}-{{ chassi|replace('.', '-') }}" tabindex="-1">
+                    <div class="modal-dialog modal-sm">
+                        <div class="modal-content">
+                            <div class="modal-header bg-warning">
+                                <h6 class="modal-title m-0">
+                                    <i class="fas fa-motorcycle"></i> Receber - Moto {{ chassi }}
+                                </h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="POST" action="{{ url_for('motochefe.receber_moto_contas', pedido_id=pedido_id, chassi=chassi) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <div class="modal-body p-3">
+                                    <div class="mb-2 pb-2 border-bottom">
+                                        <small class="text-muted">Pedido:</small> <strong>{{ dados_pedido.pedido.numero_pedido }}</strong><br>
+                                        <small class="text-muted">Saldo Moto:</small><br>
+                                        <h5 class="text-warning mb-0">R$ {{ "%.2f"|format(total_moto_modal.valor) }}</h5>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small mb-1">Empresa Recebedora *</label>
+                                        <select name="empresa_recebedora_id" class="form-select form-select-sm" required>
+                                            <option value="">Selecione...</option>
+                                            {% for emp in empresas %}
+                                            <option value="{{ emp.id }}">{{ emp.empresa }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small mb-1">Valor Recebido *</label>
+                                        <input type="number" step="0.01" name="valor_recebido"
+                                               class="form-control form-control-sm"
+                                               value="{{ total_moto_modal.valor }}"
+                                               required>
+                                    </div>
+                                </div>
+                                <div class="modal-footer p-2">
+                                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-check"></i> Confirmar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    {% endfor %}
 </div>
 
 <script>
-function toggleGrupo(id) {
-    const elem = document.getElementById(id);
-    const icon = document.getElementById('icon-' + id);
-    if (elem.classList.contains('show')) {
-        elem.classList.remove('show');
-        icon.classList.remove('fa-chevron-up');
-        icon.classList.add('fa-chevron-down');
+// Função para habilitar/desabilitar campo valor quando checkbox é marcado
+function handleCheckboxChange(checkbox) {
+    const tituloId = checkbox.dataset.id;
+    const valorInput = document.getElementById(`valor-${tituloId}`);
+
+    if (checkbox.checked) {
+        valorInput.disabled = false;
+        valorInput.focus();
     } else {
-        elem.classList.add('show');
-        icon.classList.remove('fa-chevron-down');
-        icon.classList.add('fa-chevron-up');
+        valorInput.disabled = true;
+        // Restaurar valor original
+        valorInput.value = checkbox.dataset.valorSaldo;
     }
+
+    atualizarTotal();
 }
 
 function atualizarTotal() {
     const checks = document.querySelectorAll('.item-check:checked');
     let total = 0;
+
     checks.forEach(c => {
-        total += parseFloat(c.dataset.valor || 0);
+        const tituloId = c.dataset.id;
+        const valorInput = document.getElementById(`valor-${tituloId}`);
+        const valorReceber = parseFloat(valorInput.value || 0);
+        total += valorReceber;
     });
+
     document.getElementById('qtd-selecionados').textContent = checks.length;
     document.getElementById('total-selecionados').textContent = total.toFixed(2).replace('.', ',');
 }
 
-document.querySelectorAll('.item-check').forEach(check => {
-    check.addEventListener('change', atualizarTotal);
+// Atualizar total quando valor input mudar
+document.querySelectorAll('.valor-input').forEach(input => {
+    input.addEventListener('input', atualizarTotal);
 });
 
-// Check all para cada seção
-['vencidos', 'hoje', 'avencer'].forEach(tipo => {
-    const checkAll = document.getElementById('check-all-' + tipo);
-    if (checkAll) {
-        checkAll.addEventListener('change', function() {
-            document.querySelectorAll('.check-' + tipo).forEach(c => {
-                c.checked = this.checked;
-            });
-            atualizarTotal();
+// Check all por moto
+document.querySelectorAll('.check-all-moto').forEach(checkAll => {
+    checkAll.addEventListener('change', function() {
+        const moto = this.dataset.moto;
+        document.querySelectorAll(`.item-check[data-moto="${moto}"]`).forEach(c => {
+            c.checked = this.checked;
+            handleCheckboxChange(c);
         });
-    }
+    });
 });
 
 document.getElementById('formRecebimento').addEventListener('submit', function(e) {
     e.preventDefault();
     const checks = document.querySelectorAll('.item-check:checked');
+
     if (checks.length === 0) {
         alert('Selecione ao menos um título');
         return;
     }
 
     const itens = [];
+    let erro = false;
+
     checks.forEach(c => {
+        const tituloId = c.dataset.id;
+        const valorInput = document.getElementById(`valor-${tituloId}`);
+        const valorReceber = parseFloat(valorInput.value || 0);
+        const valorSaldo = parseFloat(c.dataset.valorSaldo || 0);
+
+        // Validar valor
+        if (valorReceber <= 0) {
+            alert(`Valor a receber deve ser maior que zero (Título #${tituloId})`);
+            erro = true;
+            return;
+        }
+
+        if (valorReceber > valorSaldo) {
+            alert(`Valor a receber (R$ ${valorReceber.toFixed(2)}) não pode ser maior que o saldo (R$ ${valorSaldo.toFixed(2)}) - Título #${tituloId}`);
+            erro = true;
+            return;
+        }
+
         itens.push({
-            id: c.dataset.id,
-            valor: c.dataset.valor
+            id: tituloId,
+            valor: valorReceber.toFixed(2)
         });
     });
+
+    if (erro) return;
 
     document.getElementById('itens_recebimento').value = JSON.stringify(itens);
     document.getElementById('data_recebimento_hidden').value = document.getElementById('data_recebimento_input').value;

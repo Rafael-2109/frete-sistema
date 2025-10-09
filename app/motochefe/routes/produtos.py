@@ -824,3 +824,167 @@ def api_motos_disponiveis():
         'data_entrada': m.data_entrada.strftime('%d/%m/%Y'),
         'pallet': m.pallet
     } for m in motos])
+
+
+# ===== GESTÃO DE AVARIAS =====
+
+@motochefe_bp.route('/motos/<string:chassi>/marcar-avariada', methods=['POST'])
+@login_required
+@requer_motochefe
+def marcar_moto_avariada(chassi):
+    """Marca moto como AVARIADO e registra observação"""
+    moto = Moto.query.get_or_404(chassi)
+
+    try:
+        observacao = request.form.get('observacao', '').strip()
+
+        if not observacao:
+            raise Exception('Observação é obrigatória para marcar como avariada')
+
+
+        # Marcar como avariada
+        moto.status = 'AVARIADO'
+        moto.observacao = observacao
+        moto.atualizado_por = current_user.nome
+
+        db.session.commit()
+
+        flash(f'Moto {chassi} marcada como AVARIADA com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao marcar moto como avariada: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_motos'))
+
+
+@motochefe_bp.route('/motos/avarias')
+@login_required
+@requer_motochefe
+def listar_avarias():
+    """Lista motos com status AVARIADO"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = Moto.query.filter_by(status='AVARIADO', ativo=True)\
+        .order_by(Moto.atualizado_em.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/produtos/motos/avarias.html',
+                         motos=paginacao.items,
+                         paginacao=paginacao)
+
+
+@motochefe_bp.route('/motos/<string:chassi>/devolver', methods=['POST'])
+@login_required
+@requer_motochefe
+def devolver_moto(chassi):
+    """Marca moto como DEVOLVIDO (devolução ao fornecedor)"""
+    moto = Moto.query.get_or_404(chassi)
+
+    try:
+        if moto.status != 'AVARIADO':
+            raise Exception('Apenas motos avariadas podem ser devolvidas')
+
+        # Atualizar observação se fornecida
+        observacao_adicional = request.form.get('observacao_adicional', '').strip()
+        if observacao_adicional:
+            moto.observacao += f"\n\nDevolução: {observacao_adicional}"
+
+        moto.status = 'DEVOLVIDO'
+        moto.atualizado_por = current_user.nome
+
+        db.session.commit()
+
+        flash(f'Moto {chassi} marcada como DEVOLVIDA com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao devolver moto: {str(e)}', 'danger')
+
+    # Redirecionar para onde veio
+    origem = request.form.get('origem', 'avarias')
+    if origem == 'estoque':
+        return redirect(url_for('motochefe.listar_motos'))
+    else:
+        return redirect(url_for('motochefe.listar_avarias'))
+
+
+@motochefe_bp.route('/motos/<string:chassi>/reverter-avaria', methods=['POST'])
+@login_required
+@requer_motochefe
+def reverter_avaria(chassi):
+    """Reverte moto de AVARIADO para DISPONIVEL"""
+    moto = Moto.query.get_or_404(chassi)
+
+    try:
+        if moto.status not in ['AVARIADO', 'DEVOLVIDO']:
+            raise Exception('Apenas motos avariadas ou devolvidas podem ser revertidas')
+
+        # Registrar reversão na observação
+        moto.observacao += f"\n\nRevertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+
+        moto.status = 'DISPONIVEL'
+        moto.atualizado_por = current_user.nome
+
+        db.session.commit()
+
+        flash(f'Moto {chassi} revertida para DISPONIVEL com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao reverter moto: {str(e)}', 'danger')
+
+    # Redirecionar para onde veio
+    origem = request.form.get('origem', 'avarias')
+    if origem == 'devolucoes':
+        return redirect(url_for('motochefe.listar_devolucoes'))
+    elif origem == 'estoque':
+        return redirect(url_for('motochefe.listar_motos'))
+    else:
+        return redirect(url_for('motochefe.listar_avarias'))
+
+
+@motochefe_bp.route('/motos/devolucoes')
+@login_required
+@requer_motochefe
+def listar_devolucoes():
+    """Lista motos com status DEVOLVIDO"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+
+    paginacao = Moto.query.filter_by(status='DEVOLVIDO', ativo=True)\
+        .order_by(Moto.atualizado_em.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/produtos/motos/devolucoes.html',
+                         motos=paginacao.items,
+                         paginacao=paginacao)
+
+
+@motochefe_bp.route('/motos/<string:chassi>/voltar-avaria', methods=['POST'])
+@login_required
+@requer_motochefe
+def voltar_avaria(chassi):
+    """Volta moto de DEVOLVIDO para AVARIADO"""
+    moto = Moto.query.get_or_404(chassi)
+
+    try:
+        if moto.status != 'DEVOLVIDO':
+            raise Exception('Apenas motos devolvidas podem voltar para avaria')
+
+        # Registrar na observação
+        moto.observacao += f"\n\nRetornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+
+        moto.status = 'AVARIADO'
+        moto.atualizado_por = current_user.nome
+
+        db.session.commit()
+
+        flash(f'Moto {chassi} retornada para AVARIADO com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao retornar moto para avaria: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_devolucoes'))

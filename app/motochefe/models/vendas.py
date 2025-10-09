@@ -86,6 +86,19 @@ class PedidoVendaMoto(db.Model):
         """Retorna valor total + frete"""
         return self.valor_total_pedido + (self.valor_frete_cliente or 0)
 
+    @property
+    def saldo_a_receber(self):
+        """Retorna saldo total a receber somando todos os títulos do pedido"""
+        from sqlalchemy import func
+        from app.motochefe.models.financeiro import TituloFinanceiro
+
+        saldo = db.session.query(func.sum(TituloFinanceiro.valor_saldo))\
+            .filter(TituloFinanceiro.pedido_id == self.id)\
+            .filter(TituloFinanceiro.status != 'CANCELADO')\
+            .scalar()
+
+        return saldo or 0
+
 
 class PedidoVendaMotoItem(db.Model):
     """
