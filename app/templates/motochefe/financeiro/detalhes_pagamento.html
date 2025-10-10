@@ -52,7 +52,7 @@
                 <div class="col-md-3">
                     <strong>Valor Total:</strong><br>
                     <h4 class="{% if movimentacao_pai.tipo == 'RECEBIMENTO' %}text-success{% else %}text-danger{% endif %}">
-                        R$ {{ "%.2f"|format(movimentacao_pai.valor) }}
+                        R$ {{ movimentacao_pai.valor|valor_br }}
                     </h4>
                 </div>
             </div>
@@ -113,7 +113,7 @@
                     </div>
                     <div class="col-md-4">
                         <strong>Valor Total Despesa:</strong><br>
-                        R$ {{ "%.2f"|format(item.item_objeto.valor) }}
+                        R$ {{ item.item_objeto.valor|valor_br }}
                     </div>
                     {% endif %}
                 </div>
@@ -192,16 +192,16 @@
                         <!-- Saldos (para TODOS os tipos) -->
                         {% if 'saldo_anterior' in item %}
                             <td class="text-end">
-                                <span class="text-muted">R$ {{ "%.2f"|format(item.saldo_anterior) }}</span>
+                                <span class="text-muted">R$ {{ item.saldo_anterior|valor_br }}</span>
                             </td>
                             <td class="text-end">
                                 <strong class="{% if movimentacao_pai.tipo == 'RECEBIMENTO' %}text-success{% else %}text-danger{% endif %}">
-                                    R$ {{ "%.2f"|format(item.valor_pagamento) }}
+                                    R$ {{ item.valor_pagamento|valor_br }}
                                 </strong>
                             </td>
                             <td class="text-end">
                                 <strong class="{% if item.saldo_apos > 0 %}text-dark{% else %}text-success{% endif %}">
-                                    R$ {{ "%.2f"|format(item.saldo_apos) }}
+                                    R$ {{ item.saldo_apos|valor_br }}
                                 </strong>
                             </td>
                         {% else %}
@@ -211,7 +211,7 @@
                             </td>
                             <td class="text-end">
                                 <strong class="{% if movimentacao_pai.tipo == 'RECEBIMENTO' %}text-success{% else %}text-danger{% endif %}">
-                                    R$ {{ "%.2f"|format(item.movimentacao.valor) }}
+                                    R$ {{ item.movimentacao.valor|valor_br }}
                                 </strong>
                             </td>
                             <td class="text-end">
@@ -225,15 +225,15 @@
                     <tr>
                         <th colspan="4" class="text-end">TOTAIS DESTA MOVIMENTAÇÃO:</th>
                         <th class="text-end">
-                            <h6 class="text-white mb-0">R$ {{ "%.2f"|format(total_saldo_anterior) }}</h6>
+                            <h6 class="text-white mb-0">R$ {{ total_saldo_anterior|valor_br }}</h6>
                         </th>
                         <th class="text-end">
                             <h5 class="text-white mb-0">
-                                R$ {{ "%.2f"|format(movimentacao_pai.valor) }}
+                                R$ {{ movimentacao_pai.valor|valor_br }}
                             </h5>
                         </th>
                         <th class="text-end">
-                            <h6 class="text-white mb-0">R$ {{ "%.2f"|format(total_saldo_apos) }}</h6>
+                            <h6 class="text-white mb-0">R$ {{ total_saldo_apos|valor_br }}</h6>
                         </th>
                     </tr>
                 </tfoot>
@@ -286,10 +286,10 @@
                                 <span class="badge bg-danger">{{ titulo.status }}</span>
                             {% endif %}
                         </td>
-                        <td class="text-end">R$ {{ "%.2f"|format(titulo.valor_original) }}</td>
+                        <td class="text-end">R$ {{ titulo.valor_original|valor_br }}</td>
                         <td class="text-end">
-                            <strong class="{% if titulo.valor_saldo > 0 %}text-danger{% else %}text-success{% endif %}">
-                                R$ {{ "%.2f"|format(titulo.valor_saldo) }}
+                            <strong class="{% if titulo.valor_saldo > 0.1 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ titulo.valor_saldo|valor_br }}
                             </strong>
                         </td>
                     </tr>
@@ -299,11 +299,11 @@
                     <tr>
                         <th colspan="6" class="text-end">TOTAIS DO PEDIDO:</th>
                         <th class="text-end">
-                            R$ {{ "%.2f"|format(todos_titulos_pedido|sum(attribute='valor_original')) }}
+                            R$ {{ (todos_titulos_pedido|sum(attribute='valor_original'))|valor_br }}
                         </th>
                         <th class="text-end">
                             <strong class="{% if todos_titulos_pedido|sum(attribute='valor_saldo') > 0 %}text-danger{% else %}text-success{% endif %}">
-                                R$ {{ "%.2f"|format(todos_titulos_pedido|sum(attribute='valor_saldo')) }}
+                                R$ {{ (todos_titulos_pedido|sum(attribute='valor_saldo'))|valor_br }}
                             </strong>
                         </th>
                     </tr>

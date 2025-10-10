@@ -94,7 +94,7 @@
 
                             <!-- Preço Padrão (preco_tabela do modelo) -->
                             <td>
-                                <span class="text-muted">R$ {{ "%.2f"|format(item.modelo.preco_tabela|float) }}</span>
+                                <span class="text-muted">R$ {{ item.modelo.preco_tabela|float|valor_br }}</span>
                             </td>
 
                             <!-- Preço da Equipe (form inline) -->

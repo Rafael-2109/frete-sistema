@@ -26,7 +26,7 @@
             <div class="card bg-primary text-white">
                 <div class="card-body">
                     <h6>Total Geral</h6>
-                    <h3>R$ {{ "%.2f"|format(total_geral) }}</h3>
+                    <h3>R$ {{ total_geral|valor_br }}</h3>
                 </div>
             </div>
         </div>
@@ -34,7 +34,7 @@
             <div class="card bg-success text-white">
                 <div class="card-body">
                     <h6>Total Pago</h6>
-                    <h3>R$ {{ "%.2f"|format(total_pago) }}</h3>
+                    <h3>R$ {{ total_pago|valor_br }}</h3>
                 </div>
             </div>
         </div>
@@ -42,7 +42,7 @@
             <div class="card bg-warning text-white">
                 <div class="card-body">
                     <h6>Saldo Aberto</h6>
-                    <h3>R$ {{ "%.2f"|format(total_aberto) }}</h3>
+                    <h3>R$ {{ total_aberto|valor_br }}</h3>
                 </div>
             </div>
         </div>
@@ -110,9 +110,9 @@
                         <td><strong>{{ d.tipo_despesa }}</strong></td>
                         <td>{{ d.descricao or '-' }}</td>
                         <td>{{ d.mes_competencia }}/{{ d.ano_competencia }}</td>
-                        <td>R$ {{ "%.2f"|format(d.valor) }}</td>
-                        <td>R$ {{ "%.2f"|format(d.valor_pago or 0) }}</td>
-                        <td>R$ {{ "%.2f"|format(d.saldo_aberto) }}</td>
+                        <td>R$ {{ d.valor|valor_br }}</td>
+                        <td>R$ {{ d.valor_pago or 0|valor_br }}</td>
+                        <td>R$ {{ d.saldo_aberto|valor_br }}</td>
                         <td>
                             {% if d.status == 'PAGO' %}
                             <span class="badge bg-success">{{ d.status }}</span>
@@ -157,8 +157,8 @@
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <div class="modal-body">
                                         <p><strong>Despesa:</strong> {{ d.tipo_despesa }} - {{ d.mes_competencia }}/{{ d.ano_competencia }}</p>
-                                        <p><strong>Valor Total:</strong> R$ {{ "%.2f"|format(d.valor) }}</p>
-                                        <p><strong>Saldo Aberto:</strong> R$ {{ "%.2f"|format(d.saldo_aberto) }}</p>
+                                        <p><strong>Valor Total:</strong> R$ {{ d.valor|valor_br }}</p>
+                                        <p><strong>Saldo Aberto:</strong> R$ {{ d.saldo_aberto|valor_br }}</p>
                                         <hr>
                                         <div class="mb-3">
                                             <label class="form-label">Empresa Pagadora *</label>
@@ -169,7 +169,7 @@
                                                     <option value="{{ empresa.id }}">
                                                         {{ empresa.empresa }}
                                                         {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
-                                                        - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                                        - Saldo: R$ {{ empresa.saldo|valor_br }}
                                                     </option>
                                                     {% endfor %}
                                                 {% endif %}

@@ -76,9 +76,9 @@
                         <!-- Coluna 5: Valor -->
                         <td>
                             {% if cd.tipo_comissao == 'FIXA_EXCEDENTE' %}
-                            <strong>R$ {{ "%.2f"|format(cd.valor_comissao_fixa or 0) }}</strong>
+                            <strong>R$ {{ cd.valor_comissao_fixa or 0|valor_br }}</strong>
                             {% elif cd.tipo_comissao == 'PERCENTUAL' %}
-                            <strong>{{ "%.2f"|format(cd.percentual_comissao or 0) }}%</strong>
+                            <strong>{{ cd.percentual_comissao or 0|valor_br }}%</strong>
                             {% else %}
                             <span class="text-muted">-</span>
                             {% endif %}

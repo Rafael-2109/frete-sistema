@@ -54,15 +54,15 @@
                     <table class="table table-sm">
                         <tr>
                             <th width="60%">Comissão Fixa:</th>
-                            <td class="text-right">R$ {{ "%.2f"|format(comissao.valor_comissao_fixa|float) }}</td>
+                            <td class="text-right">R$ {{ comissao.valor_comissao_fixa|float|valor_br }}</td>
                         </tr>
                         <tr>
                             <th>Excedente (acima tabela):</th>
-                            <td class="text-right text-success">+ R$ {{ "%.2f"|format(comissao.valor_excedente|float) }}</td>
+                            <td class="text-right text-success">+ R$ {{ comissao.valor_excedente|float|valor_br }}</td>
                         </tr>
                         <tr class="font-weight-bold">
                             <th>Valor Total Comissão:</th>
-                            <td class="text-right">R$ {{ "%.2f"|format(comissao.valor_total_comissao|float) }}</td>
+                            <td class="text-right">R$ {{ comissao.valor_total_comissao|float|valor_br }}</td>
                         </tr>
                         <tr>
                             <th>Qtd Vendedores na Equipe:</th>
@@ -71,7 +71,7 @@
                         <tr class="table-success font-weight-bold">
                             <th>Valor Rateado (este vendedor):</th>
                             <td class="text-right">
-                                <h4 class="mb-0">R$ {{ "%.2f"|format(comissao.valor_rateado|float) }}</h4>
+                                <h4 class="mb-0">R$ {{ comissao.valor_rateado|float|valor_br }}</h4>
                             </td>
                         </tr>
                     </table>
@@ -98,7 +98,7 @@
                         </tr>
                         <tr>
                             <th>Valor Pago:</th>
-                            <td><h4 class="text-success mb-0">R$ {{ "%.2f"|format(comissao.valor_rateado|float) }}</h4></td>
+                            <td><h4 class="text-success mb-0">R$ {{ comissao.valor_rateado|float|valor_br }}</h4></td>
                         </tr>
                         {% if comissao.atualizado_por %}
                         <tr>
@@ -138,7 +138,7 @@
                         </tr>
                         <tr>
                             <th>Valor Total Pedido:</th>
-                            <td><h5 class="mb-0">R$ {{ "%.2f"|format(comissao.pedido.valor_total_pedido|float) }}</h5></td>
+                            <td><h5 class="mb-0">R$ {{ comissao.pedido.valor_total_pedido|float|valor_br }}</h5></td>
                         </tr>
                         <tr>
                             <th>NF:</th>
@@ -185,11 +185,11 @@
                             <tr>
                                 <td><small>{{ item.numero_chassi }}</small></td>
                                 <td>{{ item.moto.modelo.nome_modelo }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(item.moto.modelo.preco_tabela|float) }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(item.preco_venda|float) }}</td>
+                                <td class="text-right">R$ {{ item.moto.modelo.preco_tabela|float|valor_br }}</td>
+                                <td class="text-right">R$ {{ item.preco_venda|float|valor_br }}</td>
                                 <td class="text-right {% if item.excedente_tabela > 0 %}text-success font-weight-bold{% endif %}">
                                     {% if item.excedente_tabela > 0 %}
-                                        + R$ {{ "%.2f"|format(item.excedente_tabela|float) }}
+                                        + R$ {{ item.excedente_tabela|float|valor_br }}
                                     {% else %}
                                         -
                                     {% endif %}
@@ -201,7 +201,7 @@
                             <tr>
                                 <td colspan="4" class="text-right">TOTAL EXCEDENTE:</td>
                                 <td class="text-right text-success">
-                                    R$ {{ "%.2f"|format(comissao.pedido.itens|sum(attribute='excedente_tabela')|float) }}
+                                    R$ {{ (comissao.pedido.itens|sum(attribute='excedente_tabela'))|valor_br }}
                                 </td>
                             </tr>
                         </tfoot>
@@ -235,9 +235,9 @@
                             {% for c in comissao.pedido.comissoes %}
                             <tr {% if c.id == comissao.id %}class="table-active font-weight-bold"{% endif %}>
                                 <td>{{ c.vendedor.vendedor }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_comissao_fixa|float) }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_excedente|float) }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_rateado|float) }}</td>
+                                <td class="text-right">R$ {{ c.valor_comissao_fixa|float|valor_br }}</td>
+                                <td class="text-right">R$ {{ c.valor_excedente|float|valor_br }}</td>
+                                <td class="text-right">R$ {{ c.valor_rateado|float|valor_br }}</td>
                                 <td>
                                     {% if c.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>

@@ -56,7 +56,7 @@
                                 <option value="{{ empresa.id }}">
                                     {{ empresa.empresa }}
                                     {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
-                                    - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                    - Saldo: R$ {{ empresa.saldo|valor_br }}
                                 </option>
                                 {% endfor %}
                             {% endif %}
@@ -110,11 +110,11 @@
                             </td>
                             <td>{{ c.vendedor.vendedor if c.vendedor else '-' }}</td>
                             <td>{{ c.vendedor.equipe.equipe_vendas if c.vendedor and c.vendedor.equipe else '-' }}</td>
-                            <td>R$ {{ "%.2f"|format(c.valor_comissao_fixa) }}</td>
-                            <td>R$ {{ "%.2f"|format(c.valor_excedente) }}</td>
-                            <td>R$ {{ "%.2f"|format(c.valor_total_comissao) }}</td>
+                            <td>R$ {{ c.valor_comissao_fixa|valor_br }}</td>
+                            <td>R$ {{ c.valor_excedente|valor_br }}</td>
+                            <td>R$ {{ c.valor_total_comissao|valor_br }}</td>
                             <td>{{ c.qtd_vendedores_equipe }}</td>
-                            <td><strong>R$ {{ "%.2f"|format(c.valor_rateado) }}</strong></td>
+                            <td><strong>R$ {{ c.valor_rateado|valor_br }}</strong></td>
                             <td>
                                 {% if c.status == 'PAGO' %}
                                 <span class="badge bg-success">{{ c.status }}</span><br>
@@ -147,7 +147,7 @@
                                         <div class="modal-body">
                                             <p><strong>Pedido:</strong> {{ c.pedido.numero_pedido }}</p>
                                             <p><strong>Vendedor:</strong> {{ c.vendedor.vendedor }}</p>
-                                            <p><strong>Valor Rateado:</strong> R$ {{ "%.2f"|format(c.valor_rateado) }}</p>
+                                            <p><strong>Valor Rateado:</strong> R$ {{ c.valor_rateado|valor_br }}</p>
                                             <hr>
                                             <div class="mb-3">
                                                 <label class="form-label">Empresa Pagadora *</label>
@@ -158,7 +158,7 @@
                                                         <option value="{{ empresa.id }}">
                                                             {{ empresa.empresa }}
                                                             {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
-                                                            - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                                            - Saldo: R$ {{ empresa.saldo|valor_br }}
                                                         </option>
                                                         {% endfor %}
                                                     {% endif %}

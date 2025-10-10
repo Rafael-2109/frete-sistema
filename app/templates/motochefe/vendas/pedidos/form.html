@@ -117,7 +117,7 @@
                                     <option value="">Selecione...</option>
                                     {% for m in modelos %}
                                     <option value="{{ m.id }}" data-preco="{{ m.preco_tabela }}">
-                                        {{ m.nome_modelo }} - {{ m.potencia_motor }} (R$ {{ "%.2f"|format(m.preco_tabela) }})
+                                        {{ m.nome_modelo }} - {{ m.potencia_motor }} (R$ {{ m.preco_tabela|valor_br }})
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -231,6 +231,18 @@
 </div>
 
 <script>
+// Função helper para formatar valores monetários no padrão brasileiro
+function formatarValorBR(valor, decimais = 2) {
+    if (valor === null || valor === undefined) return '0,00';
+    const numero = parseFloat(valor);
+    if (isNaN(numero)) return '0,00';
+
+    // Formatar com decimais e substituir separadores
+    return numero.toFixed(decimais)
+        .replace(/\d(?=(\d{3})+\.)/g, '$&.')  // Adiciona ponto a cada 3 dígitos
+        .replace('.', ',');  // Troca ponto por vírgula no decimal
+}
+
 let itens = [];
 let parcelas = [];
 let cliente_crossdocking = false;
@@ -444,9 +456,9 @@ function atualizarTabelaItens() {
                 <td>${item.modelo_nome}</td>
                 <td>${item.cor}</td>
                 <td>${item.quantidade}</td>
-                <td>R$ ${item.preco_venda.toFixed(2)}</td>
-                <td>${item.montagem ? 'R$ ' + item.valor_montagem.toFixed(2) : '-'}</td>
-                <td>R$ ${item.total.toFixed(2)}</td>
+                <td>R$ ${formatarValorBR(item.preco_venda)}</td>
+                <td>${item.montagem ? 'R$ ' + formatarValorBR(item.valor_montagem) : '-'}</td>
+                <td>R$ ${formatarValorBR(item.total)}</td>
                 <td>
                     <button type="button" class="btn btn-sm btn-danger" onclick="removerItem(${index})">
                         <i class="fas fa-trash"></i>
@@ -460,7 +472,7 @@ function atualizarTabelaItens() {
     const frete = parseFloat(document.getElementById('input_frete')?.value || 0);
     const totalComFrete = totalItens + frete;
 
-    document.getElementById('td_total').textContent = 'R$ ' + totalComFrete.toFixed(2);
+    document.getElementById('td_total').textContent = 'R$ ' + formatarValorBR(totalComFrete);
     document.getElementById('valor_total_pedido').value = totalComFrete.toFixed(2);
 }
 
@@ -560,9 +572,9 @@ document.getElementById('formPedido').addEventListener('submit', function(e) {
         if (diferenca > 0.02) {
             e.preventDefault();
             alert(
-                `ERRO: Soma das parcelas (R$ ${totalParcelas.toFixed(2)}) ` +
-                `difere do total do pedido (R$ ${totalPedido.toFixed(2)}).\n\n` +
-                `Diferença: R$ ${diferenca.toFixed(2)}\n\n` +
+                `ERRO: Soma das parcelas (R$ ${formatarValorBR(totalParcelas)}) ` +
+                `difere do total do pedido (R$ ${formatarValorBR(totalPedido)}).\n\n` +
+                `Diferença: R$ ${formatarValorBR(diferenca)}\n\n` +
                 `Ajuste os valores das parcelas.`
             );
             return;

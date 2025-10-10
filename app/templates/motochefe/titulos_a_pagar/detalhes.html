@@ -36,15 +36,15 @@
                         </tr>
                         <tr>
                             <th>Valor Original:</th>
-                            <td><h4 class="mb-0">R$ {{ "%.2f"|format(titulo.valor_original|float) }}</h4></td>
+                            <td><h4 class="mb-0">R$ {{ titulo.valor_original|float|valor_br }}</h4></td>
                         </tr>
                         <tr>
                             <th>Valor Pago:</th>
-                            <td><h5 class="text-success mb-0">R$ {{ "%.2f"|format(titulo.valor_pago_total|float) }}</h5></td>
+                            <td><h5 class="text-success mb-0">R$ {{ titulo.valor_pago_total|float|valor_br }}</h5></td>
                         </tr>
                         <tr>
                             <th>Saldo Devedor:</th>
-                            <td><h5 class="text-danger mb-0">R$ {{ "%.2f"|format(titulo.valor_saldo|float) }}</h5></td>
+                            <td><h5 class="text-danger mb-0">R$ {{ titulo.valor_saldo|float|valor_br }}</h5></td>
                         </tr>
                         <tr>
                             <th>Data Criação:</th>
@@ -223,7 +223,7 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ mov.categoria }}</td>
-                                <td class="text-end">R$ {{ "%.2f"|format(mov.valor|abs|float) }}</td>
+                                <td class="text-end">R$ {{ mov.valor|abs|float|valor_br }}</td>
                                 <td>
                                     {% if mov.empresa_origem %}
                                         {{ mov.empresa_origem.empresa }}
@@ -279,7 +279,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
-                        <strong>Saldo Devedor:</strong> R$ {{ "%.2f"|format(titulo.valor_saldo|float) }}
+                        <strong>Saldo Devedor:</strong> R$ {{ titulo.valor_saldo|float|valor_br }}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Empresa Pagadora: *</label>

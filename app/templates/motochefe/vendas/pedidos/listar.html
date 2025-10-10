@@ -70,11 +70,11 @@
                             <td>{{ p.cliente.cliente if p.cliente else '-' }}</td>
                             <td>{{ p.vendedor.vendedor if p.vendedor else '-' }}</td>
                             <td>{{ p.quantidade_motos }}</td>
-                            <td>R$ {{ "%.2f"|format(p.valor_total_pedido) }}</td>
+                            <td>R$ {{ p.valor_total_pedido|valor_br }}</td>
                             <td>
                                 {% if p.saldo_a_receber %}
                                 <span class="badge {% if p.saldo_a_receber > 0 %}bg-danger{% else %}bg-success{% endif %}">
-                                    R$ {{ "%.2f"|format(p.saldo_a_receber) }}
+                                    R$ {{ p.saldo_a_receber|valor_br }}
                                 </span>
                                 {% else %}
                                 <span class="badge bg-secondary">R$ 0,00</span>
@@ -141,7 +141,7 @@
                                         <div class="modal-body">
                                             <div class="alert alert-info">
                                                 <strong>Cliente:</strong> {{ p.cliente.cliente }}<br>
-                                                <strong>Valor Total:</strong> R$ {{ "%.2f"|format(p.valor_total_pedido) }}<br>
+                                                <strong>Valor Total:</strong> R$ {{ p.valor_total_pedido|valor_br }}<br>
                                                 <strong>Qtd Motos:</strong> {{ p.quantidade_motos }}
                                             </div>
 
@@ -252,8 +252,8 @@
                                         <div class="modal-body">
                                             <div class="alert alert-info">
                                                 <strong>Cliente:</strong> {{ p.cliente.cliente }}<br>
-                                                <strong>Valor Total Pedido:</strong> R$ {{ "%.2f"|format(p.valor_total_pedido) }}<br>
-                                                <strong>Saldo a Receber:</strong> <span class="text-danger fw-bold">R$ {{ "%.2f"|format(p.saldo_a_receber) }}</span>
+                                                <strong>Valor Total Pedido:</strong> R$ {{ p.valor_total_pedido|valor_br }}<br>
+                                                <strong>Saldo a Receber:</strong> <span class="text-danger fw-bold">R$ {{ p.saldo_a_receber|valor_br }}</span>
                                             </div>
 
                                             <div class="alert alert-warning">

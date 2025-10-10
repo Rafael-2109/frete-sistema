@@ -58,7 +58,7 @@
                                 <td class="text-center">
                                     <span class="badge bg-primary">{{ e.total_motos }}</span>
                                 </td>
-                                <td>R$ {{ "%.2f"|format(e.valor_frete_contratado) }}</td>
+                                <td>R$ {{ e.valor_frete_contratado|valor_br }}</td>
                                 <td>
                                     {% if e.status == 'PLANEJADO' %}
                                         <span class="badge bg-secondary">Planejado</span>

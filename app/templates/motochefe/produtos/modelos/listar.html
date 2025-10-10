@@ -48,7 +48,7 @@
                             <span class="badge bg-secondary">Não</span>
                             {% endif %}
                         </td>
-                        <td>R$ {{ "%.2f"|format(modelo.preco_tabela) }}</td>
+                        <td>R$ {{ modelo.preco_tabela|valor_br }}</td>
                         <td>
                             <a href="{{ url_for('motochefe.editar_modelo', id=modelo.id) }}" class="btn btn-sm btn-warning">
                                 <i class="fas fa-edit"></i>

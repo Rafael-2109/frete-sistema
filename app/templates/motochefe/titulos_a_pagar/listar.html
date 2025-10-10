@@ -47,17 +47,17 @@
             <div class="row text-center">
                 <div class="col-md-4">
                     <small>Pendentes</small><br>
-                    <strong class="text-secondary">R$ {{ "%.2f"|format(total_pendente) }}</strong>
+                    <strong class="text-secondary">R$ {{ total_pendente|valor_br }}</strong>
                     <span class="badge bg-secondary">{{ pendentes|length }}</span>
                 </div>
                 <div class="col-md-4">
                     <small>Abertos</small><br>
-                    <strong class="text-warning">R$ {{ "%.2f"|format(total_aberto) }}</strong>
+                    <strong class="text-warning">R$ {{ total_aberto|valor_br }}</strong>
                     <span class="badge bg-warning text-dark">{{ abertos|length }}</span>
                 </div>
                 <div class="col-md-4">
                     <small>Parciais</small><br>
-                    <strong class="text-info">R$ {{ "%.2f"|format(total_parcial) }}</strong>
+                    <strong class="text-info">R$ {{ total_parcial|valor_br }}</strong>
                     <span class="badge bg-info">{{ parciais|length }}</span>
                 </div>
             </div>
@@ -130,7 +130,7 @@
                                 <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
                                 <td><span class="badge bg-info">{{ t.tipo }}</span></td>
                                 <td>{{ t.fornecedor_nome or '-' }}</td>
-                                <td class="text-end">R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
+                                <td class="text-end">R$ {{ t.valor_saldo|valor_br }}</td>
                                 <td>
                                     {% if t.titulo_recebimento %}
                                     <small>#{{ t.titulo_recebimento.id }} - {{ t.titulo_recebimento.status }}</small>
@@ -195,7 +195,7 @@
                                 <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
                                 <td><span class="badge bg-info">{{ t.tipo }}</span></td>
                                 <td>{{ t.fornecedor_nome or '-' }}</td>
-                                <td class="text-end">R$ {{ "%.2f"|format(t.valor_saldo) }}</td>
+                                <td class="text-end">R$ {{ t.valor_saldo|valor_br }}</td>
                                 <td><small>{{ t.criado_em.strftime('%d/%m/%Y') if t.criado_em else '-' }}</small></td>
                                 <td><span class="badge bg-warning text-dark">{{ t.status }}</span></td>
                                 <td>
@@ -250,8 +250,8 @@
                                 <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
                                 <td><span class="badge bg-info">{{ t.tipo }}</span></td>
                                 <td>{{ t.fornecedor_nome or '-' }}</td>
-                                <td class="text-end text-muted"><s>R$ {{ "%.2f"|format(t.valor_original) }}</s></td>
-                                <td class="text-end"><strong>R$ {{ "%.2f"|format(t.valor_saldo) }}</strong></td>
+                                <td class="text-end text-muted"><s>R$ {{ t.valor_original|valor_br }}</s></td>
+                                <td class="text-end"><strong>R$ {{ t.valor_saldo|valor_br }}</strong></td>
                                 <td><span class="badge bg-info">{{ t.status }}</span></td>
                                 <td>
                                     <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
@@ -302,7 +302,7 @@
                                     <td><small>{{ t.numero_chassi[:10] if t.numero_chassi else '-' }}</small></td>
                                     <td><span class="badge bg-info">{{ t.tipo }}</span></td>
                                     <td>{{ t.fornecedor_nome or '-' }}</td>
-                                    <td class="text-end">R$ {{ "%.2f"|format(t.valor_original) }}</td>
+                                    <td class="text-end">R$ {{ t.valor_original|valor_br }}</td>
                                     <td><small>{{ t.data_ultimo_pagamento.strftime('%d/%m/%Y') if t.data_ultimo_pagamento else '-' }}</small></td>
                                     <td><span class="badge bg-success">{{ t.status }}</span></td>
                                     <td>
@@ -329,6 +329,18 @@
 </div>
 
 <script>
+// Função helper para formatar valores monetários no padrão brasileiro
+function formatarValorBR(valor, decimais = 2) {
+    if (valor === null || valor === undefined) return '0,00';
+    const numero = parseFloat(valor);
+    if (isNaN(numero)) return '0,00';
+
+    // Formatar com decimais e substituir separadores
+    return numero.toFixed(decimais)
+        .replace(/\d(?=(\d{3})+\.)/g, '$&.')  // Adiciona ponto a cada 3 dígitos
+        .replace('.', ',');  // Troca ponto por vírgula no decimal
+}
+
 // Toggle grupos colapsáveis
 function toggleGrupo(id) {
     const elem = document.getElementById(id);
@@ -376,7 +388,7 @@ function atualizarTotal() {
     });
 
     document.getElementById('total-selecionados').innerHTML =
-        `R$ ${total.toFixed(2).replace('.', ',')} <small class="text-muted">(${count} títulos)</small>`;
+        `R$ ${formatarValorBR(total)} <small class="text-muted">(${count} títulos)</small>`;
 
     document.getElementById('btnPagar').disabled = (count === 0);
     document.getElementById('itens_pagamento').value = JSON.stringify(itens);

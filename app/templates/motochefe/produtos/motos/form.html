@@ -47,7 +47,7 @@
                             <option value="{{ m.id }}"
                                     {% if moto and moto.modelo_id == m.id %}selected{% endif %}>
                                 {{ m.nome_modelo }} - {{ m.potencia_motor }}
-                                (R$ {{ "%.2f"|format(m.preco_tabela) }})
+                                (R$ {{ m.preco_tabela|valor_br }})
                             </option>
                             {% endfor %}
                         </select>

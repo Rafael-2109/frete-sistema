@@ -40,15 +40,15 @@
                         </tr>
                         <tr>
                             <th>Valor Original:</th>
-                            <td><h4 class="mb-0">R$ {{ "%.2f"|format(titulo.valor_original|float) }}</h4></td>
+                            <td><h4 class="mb-0">R$ {{ titulo.valor_original|float|valor_br }}</h4></td>
                         </tr>
                         <tr>
                             <th>Valor Pago:</th>
-                            <td><h5 class="text-success mb-0">R$ {{ "%.2f"|format(titulo.valor_pago_total|float) }}</h5></td>
+                            <td><h5 class="text-success mb-0">R$ {{ titulo.valor_pago_total|float|valor_br }}</h5></td>
                         </tr>
                         <tr>
                             <th>Saldo Devedor:</th>
-                            <td><h5 class="text-danger mb-0">R$ {{ "%.2f"|format(titulo.valor_saldo|float) }}</h5></td>
+                            <td><h5 class="text-danger mb-0">R$ {{ titulo.valor_saldo|float|valor_br }}</h5></td>
                         </tr>
                         <tr>
                             <th>Data Emissão:</th>
@@ -183,7 +183,7 @@
                             <tr {% if t.id == titulo.id %}class="table-active fw-bold"{% endif %}>
                                 <td>{{ t.tipo_titulo }}</td>
                                 <td>{{ t.ordem_pagamento }}º</td>
-                                <td class="text-end">R$ {{ "%.2f"|format(t.valor_saldo|float) }}</td>
+                                <td class="text-end">R$ {{ t.valor_saldo|float|valor_br }}</td>
                                 <td>
                                     {% if t.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
@@ -236,7 +236,7 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ mov.categoria }}</td>
-                                <td class="text-end">R$ {{ "%.2f"|format(mov.valor|float) }}</td>
+                                <td class="text-end">R$ {{ mov.valor|float|valor_br }}</td>
                                 <td>
                                     {% if mov.empresa_destino %}
                                         {{ mov.empresa_destino.empresa }}

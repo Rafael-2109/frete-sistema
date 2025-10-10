@@ -29,7 +29,7 @@
                             <option value="">Selecione...</option>
                             {% for modelo in modelos %}
                             <option value="{{ modelo.id }}">
-                                {{ modelo.nome_modelo }} - {{ modelo.potencia_motor }} (Padrão: R$ {{ "%.2f"|format(modelo.preco_tabela) }})
+                                {{ modelo.nome_modelo }} - {{ modelo.potencia_motor }} (Padrão: R$ {{ modelo.preco_tabela|valor_br }})
                             </option>
                             {% endfor %}
                         </select>
@@ -71,8 +71,8 @@
                         <td><small class="text-muted">#{{ preco.modelo.id }}</small></td>
                         <td><strong>{{ preco.modelo.nome_modelo }}</strong></td>
                         <td>{{ preco.modelo.potencia_motor }}</td>
-                        <td class="text-muted">R$ {{ "%.2f"|format(preco.modelo.preco_tabela) }}</td>
-                        <td><strong class="text-success">R$ {{ "%.2f"|format(preco.preco_venda) }}</strong></td>
+                        <td class="text-muted">R$ {{ preco.modelo.preco_tabela|valor_br }}</td>
+                        <td><strong class="text-success">R$ {{ preco.preco_venda|valor_br }}</strong></td>
                         <td>
                             <form method="POST" action="{{ url_for('motochefe.remover_preco_crossdocking', id=preco.id) }}" style="display: inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

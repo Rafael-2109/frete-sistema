@@ -94,11 +94,11 @@
                                 -
                             {% endif %}
                         </td>
-                        <td>R$ {{ "%.2f"|format(tit.valor_original) }}</td>
-                        <td>R$ {{ "%.2f"|format(tit.valor_pago_total) }}</td>
+                        <td>R$ {{ tit.valor_original|valor_br }}</td>
+                        <td>R$ {{ tit.valor_pago_total|valor_br }}</td>
                         <td>
                             {% if tit.valor_saldo > 0 %}
-                                <strong class="text-danger">R$ {{ "%.2f"|format(tit.valor_saldo) }}</strong>
+                                <strong class="text-danger">R$ {{ tit.valor_saldo|valor_br }}</strong>
                             {% else %}
                                 <span class="text-muted">R$ 0,00</span>
                             {% endif %}
@@ -129,9 +129,9 @@
                 <tfoot class="table-dark">
                     <tr>
                         <th colspan="4" class="text-end">TOTAIS:</th>
-                        <th>R$ {{ "%.2f"|format(titulos_moto|sum(attribute='valor_original')) }}</th>
-                        <th>R$ {{ "%.2f"|format(titulos_moto|sum(attribute='valor_pago_total')) }}</th>
-                        <th>R$ {{ "%.2f"|format(titulos_moto|sum(attribute='valor_saldo')) }}</th>
+                        <th>R$ {{ (titulos_moto|sum(attribute='valor_original'))|valor_br }}</th>
+                        <th>R$ {{ (titulos_moto|sum(attribute='valor_pago_total'))|valor_br }}</th>
+                        <th>R$ {{ (titulos_moto|sum(attribute='valor_saldo'))|valor_br }}</th>
                         <th colspan="2"></th>
                     </tr>
                 </tfoot>
@@ -161,7 +161,7 @@
                     <tr>
                         <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
                         <td>{{ mov.categoria }}</td>
-                        <td><strong class="text-success">R$ {{ "%.2f"|format(mov.valor) }}</strong></td>
+                        <td><strong class="text-success">R$ {{ mov.valor|valor_br }}</strong></td>
                         <td>{{ mov.empresa_destino.empresa if mov.empresa_destino else '-' }}</td>
                         <td><small>{{ mov.descricao }}</small></td>
                     </tr>
@@ -170,7 +170,7 @@
                 <tfoot class="table-dark">
                     <tr>
                         <th colspan="2" class="text-end">TOTAL RECEBIDO:</th>
-                        <th><h5 class="text-success mb-0">R$ {{ "%.2f"|format(movimentacoes|sum(attribute='valor')) }}</h5></th>
+                        <th><h5 class="text-success mb-0">R$ {{ (movimentacoes|sum(attribute='valor'))|valor_br }}</h5></th>
                         <th colspan="2"></th>
                     </tr>
                 </tfoot>

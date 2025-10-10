@@ -11,19 +11,19 @@
             <div class="row text-center">
                 <div class="col-md-3">
                     <h5>Total a Receber</h5>
-                    <h3 class="text-success">R$ {{ "%.2f"|format(total_geral) }}</h3>
+                    <h3 class="text-success">R$ {{ total_geral|valor_br }}</h3>
                 </div>
                 <div class="col-md-3">
                     <small>Vencidos</small><br>
-                    <strong class="text-danger">R$ {{ "%.2f"|format(total_vencidos) }}</strong>
+                    <strong class="text-danger">R$ {{ total_vencidos|valor_br }}</strong>
                 </div>
                 <div class="col-md-3">
                     <small>Vencendo Hoje</small><br>
-                    <strong class="text-warning">R$ {{ "%.2f"|format(total_hoje) }}</strong>
+                    <strong class="text-warning">R$ {{ total_hoje|valor_br }}</strong>
                 </div>
                 <div class="col-md-3">
                     <small>A Vencer</small><br>
-                    <strong class="text-success">R$ {{ "%.2f"|format(total_a_vencer) }}</strong>
+                    <strong class="text-success">R$ {{ total_a_vencer|valor_br }}</strong>
                 </div>
             </div>
         </div>
@@ -48,7 +48,7 @@
                             {{ dados_pedido.parcelas|length }} parcela(s)
                         </span>
                         <span class="badge bg-success ms-2">
-                            Total: R$ {{ "%.2f"|format(dados_pedido.pedido.saldo_a_receber) }}
+                            Total: R$ {{ dados_pedido.pedido.saldo_a_receber|valor_br }}
                         </span>
                     </button>
                     {% if dados_pedido.pedido.saldo_a_receber > 0 %}
@@ -81,7 +81,7 @@
                                             {% endfor %}
                                         {% endfor %}
                                         <span class="badge bg-success ms-2">
-                                            Total: R$ {{ "%.2f"|format(total_parcela.valor) }}
+                                            Total: R$ {{ total_parcela.valor|valor_br }}
                                         </span>
                                     </button>
                                 </h2>
@@ -103,7 +103,7 @@
                                                             {% set total_moto.valor = total_moto.valor + titulo.valor_saldo %}
                                                         {% endfor %}
                                                         <span class="badge bg-success ms-2">
-                                                            Total: R$ {{ "%.2f"|format(total_moto.valor) }}
+                                                            Total: R$ {{ total_moto.valor|valor_br }}
                                                         </span>
                                                     </button>
                                                     {% if total_moto.valor > 0 %}
@@ -144,7 +144,7 @@
                                                                     </td>
                                                                     <td>{{ titulo.tipo_titulo }}</td>
                                                                     <td>{{ titulo.data_vencimento.strftime('%d/%m/%Y') if titulo.data_vencimento else 'Sem vencimento' }}</td>
-                                                                    <td><strong>R$ {{ "%.2f"|format(titulo.valor_saldo) }}</strong></td>
+                                                                    <td><strong>R$ {{ titulo.valor_saldo|valor_br }}</strong></td>
                                                                     <td>
                                                                         <input type="number"
                                                                                class="form-control form-control-sm valor-input"
@@ -236,7 +236,7 @@
                         <div class="modal-body p-3">
                             <div class="mb-2 pb-2 border-bottom">
                                 <small class="text-muted">Saldo Total:</small><br>
-                                <h5 class="text-success mb-0">R$ {{ "%.2f"|format(dados_pedido.pedido.saldo_a_receber) }}</h5>
+                                <h5 class="text-success mb-0">R$ {{ dados_pedido.pedido.saldo_a_receber|valor_br }}</h5>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small mb-1">Empresa Recebedora *</label>
@@ -289,7 +289,7 @@
                                     <div class="mb-2 pb-2 border-bottom">
                                         <small class="text-muted">Pedido:</small> <strong>{{ dados_pedido.pedido.numero_pedido }}</strong><br>
                                         <small class="text-muted">Saldo Moto:</small><br>
-                                        <h5 class="text-warning mb-0">R$ {{ "%.2f"|format(total_moto_modal.valor) }}</h5>
+                                        <h5 class="text-warning mb-0">R$ {{ total_moto_modal.valor|valor_br }}</h5>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label small mb-1">Empresa Recebedora *</label>
@@ -325,6 +325,18 @@
 </div>
 
 <script>
+// Função helper para formatar valores monetários no padrão brasileiro
+function formatarValorBR(valor, decimais = 2) {
+    if (valor === null || valor === undefined) return '0,00';
+    const numero = parseFloat(valor);
+    if (isNaN(numero)) return '0,00';
+
+    // Formatar com decimais e substituir separadores
+    return numero.toFixed(decimais)
+        .replace(/\d(?=(\d{3})+\.)/g, '$&.')  // Adiciona ponto a cada 3 dígitos
+        .replace('.', ',');  // Troca ponto por vírgula no decimal
+}
+
 // Função para habilitar/desabilitar campo valor quando checkbox é marcado
 function handleCheckboxChange(checkbox) {
     const tituloId = checkbox.dataset.id;
@@ -354,7 +366,7 @@ function atualizarTotal() {
     });
 
     document.getElementById('qtd-selecionados').textContent = checks.length;
-    document.getElementById('total-selecionados').textContent = total.toFixed(2).replace('.', ',');
+    document.getElementById('total-selecionados').textContent = formatarValorBR(total);
 }
 
 // Atualizar total quando valor input mudar
@@ -399,7 +411,7 @@ document.getElementById('formRecebimento').addEventListener('submit', function(e
         }
 
         if (valorReceber > valorSaldo) {
-            alert(`Valor a receber (R$ ${valorReceber.toFixed(2)}) não pode ser maior que o saldo (R$ ${valorSaldo.toFixed(2)}) - Título #${tituloId}`);
+            alert(`Valor a receber (R$ ${formatarValorBR(valorReceber)}) não pode ser maior que o saldo (R$ ${formatarValorBR(valorSaldo)}) - Título #${tituloId}`);
             erro = true;
             return;
         }

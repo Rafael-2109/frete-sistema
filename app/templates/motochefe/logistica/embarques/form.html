@@ -144,7 +144,7 @@
                                 <td class="text-center">{{ ep.qtd_motos_pedido }}</td>
                                 <td>
                                     {% if ep.enviado %}
-                                        R$ {{ "%.2f"|format(ep.valor_frete_rateado) }}
+                                        R$ {{ ep.valor_frete_rateado|valor_br }}
                                     {% else %}
                                         <span class="text-muted">Não calculado</span>
                                     {% endif %}

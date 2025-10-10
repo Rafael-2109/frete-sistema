@@ -42,7 +42,7 @@
                         </td>
                         <td>
                             <strong class="{% if emp.saldo < 0 %}text-danger{% elif emp.saldo > 0 %}text-success{% else %}text-muted{% endif %}">
-                                R$ {{ "%.2f"|format(emp.saldo) }}
+                                R$ {{ emp.saldo|valor_br }}
                             </strong>
                         </td>
                         <td>{{ emp.banco or '-' }}</td>

@@ -11,31 +11,31 @@
             <div class="row text-center">
                 <div class="col-md-2">
                     <h5>Total a Pagar</h5>
-                    <h3 class="text-danger">R$ {{ "%.2f"|format(total_geral) }}</h3>
+                    <h3 class="text-danger">R$ {{ total_geral|valor_br }}</h3>
                 </div>
                 <div class="col-md-2">
                     <small>Títulos a Pagar</small><br>
-                    <strong class="text-warning">R$ {{ "%.2f"|format(total_titulos_a_pagar) }}</strong>
+                    <strong class="text-warning">R$ {{ total_titulos_a_pagar|valor_br }}</strong>
                 </div>
                 <div class="col-md-2">
                     <small>Motos</small><br>
-                    <strong>R$ {{ "%.2f"|format(total_motos) }}</strong>
+                    <strong>R$ {{ total_motos|valor_br }}</strong>
                 </div>
                 <div class="col-md-1">
                     <small>Fretes</small><br>
-                    <strong>R$ {{ "%.2f"|format(total_fretes) }}</strong>
+                    <strong>R$ {{ total_fretes|valor_br }}</strong>
                 </div>
                 <div class="col-md-2">
                     <small>Comissões</small><br>
-                    <strong>R$ {{ "%.2f"|format(total_comissoes) }}</strong>
+                    <strong>R$ {{ total_comissoes|valor_br }}</strong>
                 </div>
                 <div class="col-md-1">
                     <small>Montagens</small><br>
-                    <strong>R$ {{ "%.2f"|format(total_montagens) }}</strong>
+                    <strong>R$ {{ total_montagens|valor_br }}</strong>
                 </div>
                 <div class="col-md-2">
                     <small>Despesas</small><br>
-                    <strong>R$ {{ "%.2f"|format(total_despesas) }}</strong>
+                    <strong>R$ {{ total_despesas|valor_br }}</strong>
                 </div>
             </div>
         </div>
@@ -64,7 +64,7 @@
                                 <option value="{{ empresa.id }}">
                                     {{ empresa.empresa }}
                                     {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
-                                    - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                    - Saldo: R$ {{ empresa.saldo|valor_br }}
                                 </option>
                                 {% endfor %}
                             {% endif %}
@@ -83,7 +83,7 @@
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-motorcycle"></i> Motos (Custo Aquisição)
-                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_motos) }}</span>
+                    <span class="badge bg-light text-dark float-end">R$ {{ total_motos|valor_br }}</span>
                 </h5>
             </div>
             <div class="card-body">
@@ -93,7 +93,7 @@
                         <input type="checkbox" class="form-check-input me-2 grupo-check" data-tipo="moto-grupo" data-grupo="nf-{{ loop.index }}">
                         <strong>NF {{ grupo.nf }}</strong> - {{ grupo.fornecedor }} -
                         {{ grupo.motos|length }} motos -
-                        <span class="text-danger">R$ {{ "%.2f"|format(grupo.total_custo - grupo.total_pago) }}</span>
+                        <span class="text-danger">R$ {{ grupo.total_custo - grupo.total_pago|valor_br }}</span>
                         <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('nf-{{ loop.index }}')">
                             <i class="fas fa-chevron-down" id="icon-nf-{{ loop.index }}"></i>
                         </button>
@@ -109,7 +109,7 @@
                                    id="moto-{{ moto.numero_chassi }}">
                             <label class="form-check-label" for="moto-{{ moto.numero_chassi }}">
                                 Chassi: {{ moto.numero_chassi }} | {{ moto.modelo.nome_modelo if moto.modelo else '-' }} |
-                                R$ {{ "%.2f"|format(moto.custo_aquisicao) }}
+                                R$ {{ moto.custo_aquisicao|valor_br }}
                             </label>
                         </div>
                         {% endfor %}
@@ -127,7 +127,7 @@
             <div class="card-header bg-warning text-dark">
                 <h5 class="mb-0">
                     <i class="fas fa-file-invoice"></i> Títulos a Pagar - {{ item.dados.tipo }}
-                    <span class="badge bg-dark float-end">R$ {{ "%.2f"|format(item.dados.total) }}</span>
+                    <span class="badge bg-dark float-end">R$ {{ item.dados.total|valor_br }}</span>
                     <small class="ms-2">({{ item.dados.titulos|length }} título(s))</small>
                 </h5>
             </div>
@@ -145,7 +145,7 @@
                         </span>
                         Pedido {{ titulo.pedido.numero_pedido if titulo.pedido else '-' }} |
                         Chassi {{ titulo.numero_chassi }} |
-                        R$ {{ "%.2f"|format(titulo.valor_saldo) }}
+                        R$ {{ titulo.valor_saldo|valor_br }}
                         {% if titulo.status == 'PENDENTE' %}
                         <small class="text-muted">(Aguardando pagamento do cliente)</small>
                         {% endif %}
@@ -163,7 +163,7 @@
             <div class="card-header bg-info text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-truck"></i> Fretes de Embarques
-                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_fretes) }}</span>
+                    <span class="badge bg-light text-dark float-end">R$ {{ total_fretes|valor_br }}</span>
                 </h5>
             </div>
             <div class="card-body">
@@ -173,7 +173,7 @@
                         <input type="checkbox" class="form-check-input me-2 grupo-check" data-tipo="frete-grupo">
                         <strong>{{ grupo.transportadora }}</strong> -
                         {{ grupo.embarques|length }} embarques -
-                        <span class="text-danger">R$ {{ "%.2f"|format(grupo.total) }}</span>
+                        <span class="text-danger">R$ {{ grupo.total|valor_br }}</span>
                         <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('transp-{{ loop.index }}')">
                             <i class="fas fa-chevron-down" id="icon-transp-{{ loop.index }}"></i>
                         </button>
@@ -187,7 +187,7 @@
                                    data-valor="{{ emb.valor_frete_contratado }}"
                                    id="frete-{{ emb.id }}">
                             <label class="form-check-label" for="frete-{{ emb.id }}">
-                                {{ emb.numero_embarque }} | R$ {{ "%.2f"|format(emb.valor_frete_contratado) }}
+                                {{ emb.numero_embarque }} | R$ {{ emb.valor_frete_contratado|valor_br }}
                             </label>
                         </div>
                         {% endfor %}
@@ -204,14 +204,14 @@
             <div class="card-header bg-warning text-dark">
                 <h5 class="mb-0">
                     <i class="fas fa-percent"></i> Comissões de Vendedores
-                    <span class="badge bg-dark float-end">R$ {{ "%.2f"|format(total_comissoes) }}</span>
+                    <span class="badge bg-dark float-end">R$ {{ total_comissoes|valor_br }}</span>
                 </h5>
             </div>
             <div class="card-body">
                 {% for grupo in comissoes_agrupadas %}
                 <div class="mb-2">
                     <strong>{{ grupo.vendedor }}</strong> - {{ grupo.comissoes|length }} comissões -
-                    R$ {{ "%.2f"|format(grupo.total) }}
+                    R$ {{ grupo.total|valor_br }}
                     <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('vend-{{ loop.index }}')">
                         <i class="fas fa-chevron-down" id="icon-vend-{{ loop.index }}"></i>
                     </button>
@@ -224,7 +224,7 @@
                                    data-valor="{{ com.valor_rateado }}"
                                    id="com-{{ com.id }}">
                             <label class="form-check-label" for="com-{{ com.id }}">
-                                Pedido {{ com.pedido.numero_pedido if com.pedido else '-' }} | R$ {{ "%.2f"|format(com.valor_rateado) }}
+                                Pedido {{ com.pedido.numero_pedido if com.pedido else '-' }} | R$ {{ com.valor_rateado|valor_br }}
                             </label>
                         </div>
                         {% endfor %}
@@ -241,14 +241,14 @@
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-tools"></i> Montagens de Motos
-                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_montagens) }}</span>
+                    <span class="badge bg-light text-dark float-end">R$ {{ total_montagens|valor_br }}</span>
                 </h5>
             </div>
             <div class="card-body">
                 {% for grupo in montagens_agrupadas %}
                 <div class="mb-2">
                     <strong>{{ grupo.fornecedor }}</strong> - {{ grupo.montagens|length }} montagens -
-                    R$ {{ "%.2f"|format(grupo.total) }}
+                    R$ {{ grupo.total|valor_br }}
                     <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('mont-{{ loop.index }}')">
                         <i class="fas fa-chevron-down" id="icon-mont-{{ loop.index }}"></i>
                     </button>
@@ -263,7 +263,7 @@
                             <label class="form-check-label" for="mont-{{ mont.id }}">
                                 Pedido {{ mont.pedido.numero_pedido if mont.pedido else '-' }} |
                                 Chassi {{ mont.numero_chassi }} |
-                                R$ {{ "%.2f"|format(mont.valor_montagem) }}
+                                R$ {{ mont.valor_montagem|valor_br }}
                             </label>
                         </div>
                         {% endfor %}
@@ -280,13 +280,13 @@
             <div class="card-header bg-secondary text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-wallet"></i> Despesas Mensais
-                    <span class="badge bg-light text-dark float-end">R$ {{ "%.2f"|format(total_despesas) }}</span>
+                    <span class="badge bg-light text-dark float-end">R$ {{ total_despesas|valor_br }}</span>
                 </h5>
             </div>
             <div class="card-body">
                 {% for grupo in despesas_agrupadas %}
                 <div class="mb-2">
-                    <strong>{{ grupo.tipo }}</strong> - R$ {{ "%.2f"|format(grupo.total) }}
+                    <strong>{{ grupo.tipo }}</strong> - R$ {{ grupo.total|valor_br }}
                     <a href="{{ url_for('motochefe.listar_despesas') }}" class="btn btn-sm btn-link">Ver Todas</a>
                 </div>
                 {% endfor %}
@@ -324,6 +324,18 @@
 </div>
 
 <script>
+// Função helper para formatar valores monetários no padrão brasileiro
+function formatarValorBR(valor, decimais = 2) {
+    if (valor === null || valor === undefined) return '0,00';
+    const numero = parseFloat(valor);
+    if (isNaN(numero)) return '0,00';
+
+    // Formatar com decimais e substituir separadores
+    return numero.toFixed(decimais)
+        .replace(/\d(?=(\d{3})+\.)/g, '$&.')  // Adiciona ponto a cada 3 dígitos
+        .replace('.', ',');  // Troca ponto por vírgula no decimal
+}
+
 function toggleGrupo(id) {
     const elem = document.getElementById(id);
     const icon = document.getElementById('icon-' + id);
@@ -345,7 +357,7 @@ function atualizarTotal() {
         total += parseFloat(c.dataset.valor || 0);
     });
     document.getElementById('qtd-selecionados').textContent = checks.length;
-    document.getElementById('total-selecionados').textContent = total.toFixed(2).replace('.', ',');
+    document.getElementById('total-selecionados').textContent = formatarValorBR(total);
 }
 
 document.querySelectorAll('.item-check').forEach(check => {

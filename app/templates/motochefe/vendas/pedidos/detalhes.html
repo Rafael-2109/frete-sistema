@@ -56,9 +56,9 @@ TODO: Atualizar para novo sistema
             <div class="card border-primary">
                 <div class="card-body text-center">
                     <h6>Valor Total</h6>
-                    <h3 class="text-primary mb-0">R$ {{ "%.2f"|format(pedido.valor_total_pedido|float) }}</h3>
+                    <h3 class="text-primary mb-0">R$ {{ pedido.valor_total_pedido|float|valor_br }}</h3>
                     {% if pedido.valor_frete_cliente > 0 %}
-                        <small class="text-muted">+ Frete: R$ {{ "%.2f"|format(pedido.valor_frete_cliente|float) }}</small>
+                        <small class="text-muted">+ Frete: R$ {{ pedido.valor_frete_cliente|float|valor_br }}</small>
                     {% endif %}
                 </div>
             </div>
@@ -204,7 +204,7 @@ TODO: Atualizar para novo sistema
                                 <td><small>{{ item.numero_chassi }}</small></td>
                                 <td>{{ item.moto.modelo.nome_modelo }}</td>
                                 <td>{{ item.moto.cor }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(item.preco_venda|float) }}</td>
+                                <td class="text-right">R$ {{ item.preco_venda|float|valor_br }}</td>
                                 <td>
                                     <button type="button" class="btn btn-sm btn-primary"
                                         data-chassi="{{ item.numero_chassi }}"
@@ -231,7 +231,7 @@ TODO: Atualizar para novo sistema
                                         {% endif %}
                                     </small>
                                 </td>
-                                <td class="text-right"><small>+ R$ {{ "%.2f"|format(item.valor_montagem|float) }}</small></td>
+                                <td class="text-right"><small>+ R$ {{ item.valor_montagem|float|valor_br }}</small></td>
                             </tr>
                             {% endif %}
                             {% endfor %}
@@ -239,7 +239,7 @@ TODO: Atualizar para novo sistema
                         <tfoot class="font-weight-bold bg-light">
                             <tr>
                                 <td colspan="3" class="text-right">TOTAL:</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(pedido.valor_total_pedido|float) }}</td>
+                                <td class="text-right">R$ {{ pedido.valor_total_pedido|float|valor_br }}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -285,7 +285,7 @@ TODO: Atualizar para novo sistema
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-right">R$ {{ "%.2f"|format(t.valor_saldo|float) }}</td>
+                                <td class="text-right">R$ {{ t.valor_saldo|float|valor_br }}</td>
                                 <td>
                                     {% if t.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
@@ -328,7 +328,7 @@ TODO: Atualizar para novo sistema
                             {% for c in pedido.comissoes %}
                             <tr>
                                 <td>{{ c.vendedor.vendedor }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(c.valor_rateado|float) }}</td>
+                                <td class="text-right">R$ {{ c.valor_rateado|float|valor_br }}</td>
                                 <td>
                                     {% if c.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
@@ -376,7 +376,7 @@ TODO: Atualizar para novo sistema
                             <tr>
                                 <td><small>{{ item.numero_chassi }}</small></td>
                                 <td>{{ item.fornecedor_montagem or 'Não informado' }}</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(item.valor_montagem|float) }}</td>
+                                <td class="text-right">R$ {{ item.valor_montagem|float|valor_br }}</td>
                                 <td>
                                     {% if item.data_pagamento_montagem %}
                                         {{ item.data_pagamento_montagem.strftime('%d/%m/%Y') }}
@@ -397,7 +397,7 @@ TODO: Atualizar para novo sistema
                         <tfoot class="font-weight-bold">
                             <tr>
                                 <td colspan="2" class="text-right">TOTAL MONTAGENS:</td>
-                                <td class="text-right">R$ {{ "%.2f"|format(montagens|sum(attribute='valor_montagem')|float) }}</td>
+                                <td class="text-right">R$ {{ (montagens|sum(attribute='valor_montagem'))|valor_br }}</td>
                                 <td colspan="2"></td>
                             </tr>
                         </tfoot>
@@ -531,6 +531,18 @@ TODO: Atualizar para novo sistema
 </div>
 
 <script>
+// Função helper para formatar valores monetários no padrão brasileiro
+function formatarValorBR(valor, decimais = 2) {
+    if (valor === null || valor === undefined) return '0,00';
+    const numero = parseFloat(valor);
+    if (isNaN(numero)) return '0,00';
+
+    // Formatar com decimais e substituir separadores
+    return numero.toFixed(decimais)
+        .replace(/\d(?=(\d{3})+\.)/g, '$&.')  // Adiciona ponto a cada 3 dígitos
+        .replace('.', ',');  // Troca ponto por vírgula no decimal
+}
+
 let chassiAtualGlobal = '';
 let precoAtualGlobal = 0;
 
@@ -548,7 +560,7 @@ function abrirModalSubstituicao(button) {
     document.getElementById('chassiAtual').textContent = chassi;
     document.getElementById('modeloAtual').textContent = modelo;
     document.getElementById('corAtual').textContent = cor;
-    document.getElementById('precoAtual').textContent = preco.toFixed(2);
+    document.getElementById('precoAtual').textContent = formatarValorBR(preco);
 
     // Carregar motos disponíveis
     carregarMotosDisponiveis(chassi);
@@ -651,7 +663,7 @@ function criarGrupoAccordion(id, titulo, motos, cor) {
                 <td><code>${moto.chassi}</code></td>
                 <td>${moto.modelo}<br><small class="text-muted">${moto.potencia}</small></td>
                 <td>${moto.cor}</td>
-                <td>R$ ${moto.preco_tabela.toFixed(2)}</td>
+                <td>R$ ${formatarValorBR(moto.preco_tabela)}</td>
                 <td>${moto.ano || '-'}</td>
                 <td>
                     <button type="button" class="btn btn-sm btn-success" onclick="selecionarMoto('${moto.chassi}', ${moto.preco_tabela})">
@@ -681,7 +693,7 @@ function selecionarMoto(chassiNovo, precoNovo) {
     // Preencher formulário de confirmação
     document.getElementById('chassiAntigoForm').value = chassiAtualGlobal;
     document.getElementById('chassiNovoForm').value = chassiNovo;
-    document.getElementById('precoAntigoForm').value = `R$ ${precoAtualGlobal.toFixed(2)}`;
+    document.getElementById('precoAntigoForm').value = `R$ ${formatarValorBR(precoAtualGlobal)}`;
     // Campo editável - preencher apenas o valor numérico
     document.getElementById('precoNovoForm').value = precoNovo.toFixed(2);
 
