@@ -36,6 +36,46 @@
         </div>
     </div>
 
+    <!-- Pagamento em Lote -->
+    <div class="card mb-3 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <i class="fas fa-coins"></i> <strong>Pagamento em Lote</strong>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('motochefe.pagar_comissoes_lote') }}" id="formPagamentoLote">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="comissoes_selecionadas" id="comissoes_selecionadas"/>
+
+                <div class="row">
+                    <div class="col-md-5">
+                        <label class="form-label">Empresa Pagadora *</label>
+                        <select name="empresa_pagadora_id" class="form-select" required>
+                            <option value="">-- Selecione a Empresa --</option>
+                            {% if empresas %}
+                                {% for empresa in empresas %}
+                                <option value="{{ empresa.id }}">
+                                    {{ empresa.empresa }}
+                                    {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
+                                    - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Data Pagamento *</label>
+                        <input type="date" name="data_pagamento" class="form-control" required>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success w-100" id="btnPagarLote" disabled>
+                            <i class="fas fa-dollar-sign"></i> Pagar Selecionadas (<span id="countSelecionadas">0</span>)
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Tabela -->
     <div class="card">
         <div class="card-body">
@@ -43,6 +83,7 @@
                 <table class="table table-hover table-sm">
                     <thead>
                         <tr>
+                            <th><input type="checkbox" id="checkAll"></th>
                             <th>Pedido/NF</th>
                             <th>Vendedor</th>
                             <th>Equipe</th>
@@ -58,6 +99,11 @@
                     <tbody>
                         {% for c in comissoes %}
                         <tr>
+                            <td>
+                                {% if c.status != 'PAGO' %}
+                                <input type="checkbox" class="comissao-check" data-id="{{ c.id }}" data-valor="{{ c.valor_rateado }}">
+                                {% endif %}
+                            </td>
                             <td>
                                 <strong>{{ c.pedido.numero_pedido }}</strong><br>
                                 <small class="text-muted">NF: {{ c.pedido.numero_nf }}</small>
@@ -104,6 +150,22 @@
                                             <p><strong>Valor Rateado:</strong> R$ {{ "%.2f"|format(c.valor_rateado) }}</p>
                                             <hr>
                                             <div class="mb-3">
+                                                <label class="form-label">Empresa Pagadora *</label>
+                                                <select name="empresa_pagadora_id" class="form-select" required>
+                                                    <option value="">-- Selecione a Empresa Pagadora --</option>
+                                                    {% if empresas %}
+                                                        {% for empresa in empresas %}
+                                                        <option value="{{ empresa.id }}">
+                                                            {{ empresa.empresa }}
+                                                            {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
+                                                            - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                                        </option>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                </select>
+                                                <small class="text-muted">O saldo desta empresa será atualizado automaticamente.</small>
+                                            </div>
+                                            <div class="mb-3">
                                                 <label class="form-label">Data Pagamento *</label>
                                                 <input type="date" name="data_pagamento"
                                                        class="form-control"
@@ -135,4 +197,54 @@
         </div>
     </div>
 </div>
+
+<script>
+// Controle de seleção de comissões para pagamento em lote
+document.addEventListener('DOMContentLoaded', function() {
+    const checkAll = document.getElementById('checkAll');
+    const checkboxes = document.querySelectorAll('.comissao-check');
+    const btnPagarLote = document.getElementById('btnPagarLote');
+    const countSelecionadas = document.getElementById('countSelecionadas');
+    const inputComissoes = document.getElementById('comissoes_selecionadas');
+    const formLote = document.getElementById('formPagamentoLote');
+
+    // Selecionar/desselecionar todos
+    if (checkAll) {
+        checkAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => {
+                cb.checked = this.checked;
+            });
+            atualizarContador();
+        });
+    }
+
+    // Atualizar contador quando checkbox individual muda
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', atualizarContador);
+    });
+
+    function atualizarContador() {
+        const selecionadas = document.querySelectorAll('.comissao-check:checked');
+        const count = selecionadas.length;
+
+        countSelecionadas.textContent = count;
+        btnPagarLote.disabled = count === 0;
+
+        // Atualizar o campo hidden com IDs selecionados
+        const ids = Array.from(selecionadas).map(cb => cb.dataset.id);
+        inputComissoes.value = JSON.stringify(ids);
+    }
+
+    // Validar antes de enviar
+    formLote.addEventListener('submit', function(e) {
+        const selecionadas = document.querySelectorAll('.comissao-check:checked');
+        if (selecionadas.length === 0) {
+            e.preventDefault();
+            alert('Selecione pelo menos uma comissão para pagar');
+            return false;
+        }
+    });
+});
+</script>
+
 {% endblock %}

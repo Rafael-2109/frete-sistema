@@ -46,6 +46,37 @@
         <input type="hidden" name="itens_pagamento" id="itens_pagamento"/>
         <input type="hidden" name="data_pagamento" id="data_pagamento_hidden"/>
 
+        <!-- 🆕 SELEÇÃO DE EMPRESA PAGADORA (OBRIGATÓRIO) -->
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-building"></i> <strong>Empresa Pagadora (Obrigatório)</strong>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <label for="empresa_pagadora_id" class="form-label">
+                            Selecione a empresa que irá realizar o pagamento:
+                        </label>
+                        <select name="empresa_pagadora_id" id="empresa_pagadora_id" class="form-control" required>
+                            <option value="">-- Selecione a Empresa Pagadora --</option>
+                            {% if empresas %}
+                                {% for empresa in empresas %}
+                                <option value="{{ empresa.id }}">
+                                    {{ empresa.empresa }}
+                                    {% if empresa.tipo_conta %}({{ empresa.tipo_conta }}){% endif %}
+                                    - Saldo: R$ {{ "%.2f"|format(empresa.saldo) }}
+                                </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <small class="text-muted">
+                            O saldo desta empresa será atualizado automaticamente após o pagamento.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 1. MOTOS -->
         {% if motos_agrupados %}
         <div class="card mb-3">

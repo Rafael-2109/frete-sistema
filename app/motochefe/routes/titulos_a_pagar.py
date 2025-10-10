@@ -5,7 +5,6 @@ Gerencia pagamento de Movimentação e Montagem
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from decimal import Decimal
-from datetime import datetime
 
 from app import db
 from app.motochefe.routes import motochefe_bp

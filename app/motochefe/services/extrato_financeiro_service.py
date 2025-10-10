@@ -8,8 +8,8 @@ from app import db
 
 
 def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
-                                     cliente_id=None, fornecedor=None, vendedor_id=None, #type: ignore
-                                     transportadora_id=None, tipo_movimentacao=None): #type: ignore
+                                    cliente_id=None, fornecedor=None, vendedor_id=None, #type: ignore
+                                    transportadora_id=None, tipo_movimentacao=None): #type: ignore
     """
     Retorna TODAS as movimentações financeiras consolidadas
 
@@ -49,6 +49,8 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
     # ==================== RECEBIMENTOS ====================
 
     # 1. MOVIMENTAÇÕES FINANCEIRAS DE RECEBIMENTO (da tabela movimentacao_financeira)
+    # 🆕 FILTRO: Exclui movimentações FILHAS (movimentacao_origem_id IS NULL)
+    # Mostra apenas PAI (lotes) e recebimentos individuais
     sql_recebimento = """
     SELECT
         'RECEBIMENTO' AS tipo,
@@ -68,12 +70,11 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
         NULL AS numero_nf,
         mf.numero_chassi AS numero_chassi,
         NULL AS numero_embarque,
-        CASE WHEN mf.titulo_financeiro_id IS NOT NULL
-             THEN CONCAT('/motochefe/titulos/', mf.titulo_financeiro_id, '/detalhes')
-             ELSE NULL END AS rota_detalhes,
+        CONCAT('/motochefe/recebimentos/', mf.id, '/detalhes') AS rota_detalhes,
         CAST(mf.id AS TEXT) AS id_original
     FROM movimentacao_financeira mf
     WHERE mf.tipo = 'RECEBIMENTO'
+      AND mf.movimentacao_origem_id IS NULL
     """
 
     # Filtros para recebimentos
@@ -94,113 +95,46 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
 
     if tipo_movimentacao != 'RECEBIMENTO':
 
-        # 2. CUSTO DE MOTOS (Pagamento a Fornecedores)
-        sql_moto = """
+        # 2. PAGAMENTOS - USAR MOVIMENTACAOFINANCEIRA PAI E INDIVIDUAIS
+        # 🆕 Mostra lotes (movimentacao_origem_id IS NULL) E pagamentos individuais
+        # Categorias:
+        #   - Lotes: 'Lote Custo Moto', 'Lote Comissão', 'Lote Montagem', 'Lote Despesa'
+        #   - Individuais: 'Custo Moto', 'Comissão', 'Montagem', 'Despesa', 'Frete'
+        sql_pagamentos_lote = """
         SELECT
             'PAGAMENTO' AS tipo,
-            'Custo Moto' AS categoria,
-            m.data_pagamento_custo AS data_movimentacao,
-            CONCAT(
-                'Custo Moto Chassi ', m.numero_chassi,
-                ' - NF ', m.nf_entrada,
-                ' - Fornecedor: ', m.fornecedor
-            ) AS descricao,
-            -m.custo_pago AS valor,
-            m.fornecedor AS cliente_fornecedor,
+            mf.categoria AS categoria,
+            mf.data_movimentacao AS data_movimentacao,
+            mf.descricao AS descricao,
+            -mf.valor AS valor,
+            COALESCE(
+                mf.destino_identificacao,
+                (SELECT empresa FROM empresa_venda_moto WHERE id = mf.empresa_destino_id),
+                'Fornecedor'
+            ) AS cliente_fornecedor,
             NULL AS numero_pedido,
-            m.nf_entrada AS numero_nf,
-            m.numero_chassi AS numero_chassi,
+            mf.numero_nf AS numero_nf,
+            mf.numero_chassi AS numero_chassi,
             NULL AS numero_embarque,
-            CONCAT('/motochefe/motos/', m.numero_chassi, '/editar') AS rota_detalhes,
-            m.numero_chassi AS id_original
-        FROM moto m
-        WHERE m.status_pagamento_custo = 'PAGO'
-          AND m.data_pagamento_custo IS NOT NULL
-          AND m.ativo = TRUE
+            CONCAT('/motochefe/pagamentos/', mf.id, '/detalhes') AS rota_detalhes,
+            CAST(mf.id AS TEXT) AS id_original
+        FROM movimentacao_financeira mf
+        WHERE mf.tipo = 'PAGAMENTO'
+          AND mf.movimentacao_origem_id IS NULL
+          AND mf.categoria IN ('Lote Custo Moto', 'Lote Comissão', 'Lote Montagem', 'Lote Despesa',
+                               'Custo Moto', 'Comissão', 'Montagem', 'Despesa', 'Frete')
         """
 
-        filtros_moto = []
+        filtros_pagamentos = []
         if data_inicial and data_final:
-            filtros_moto.append(f"AND m.data_pagamento_custo BETWEEN '{data_inicial}' AND '{data_final}'")
-        if fornecedor:
-            filtros_moto.append(f"AND m.fornecedor ILIKE '%{fornecedor}%'")
+            filtros_pagamentos.append(f"AND mf.data_movimentacao BETWEEN '{data_inicial}' AND '{data_final}'")
 
-        sql_moto += " " + " ".join(filtros_moto)
-        sql_parts.append(sql_moto)
+        sql_pagamentos_lote += " " + " ".join(filtros_pagamentos)
+        sql_parts.append(sql_pagamentos_lote)
 
 
-        # 3. MONTAGEM (Pagamento a Fornecedores de Montagem)
-        sql_montagem = """
-        SELECT
-            'PAGAMENTO' AS tipo,
-            'Montagem' AS categoria,
-            pvmi.data_pagamento_montagem AS data_movimentacao,
-            CONCAT(
-                'Montagem Moto Chassi ', pvmi.numero_chassi,
-                ' - Pedido ', pvm.numero_pedido,
-                ' - Fornecedor: ', pvmi.fornecedor_montagem
-            ) AS descricao,
-            -pvmi.valor_montagem AS valor,
-            pvmi.fornecedor_montagem AS cliente_fornecedor,
-            pvm.numero_pedido AS numero_pedido,
-            pvm.numero_nf AS numero_nf,
-            pvmi.numero_chassi AS numero_chassi,
-            NULL AS numero_embarque,
-            CONCAT('/motochefe/pedidos/', pvm.id, '/detalhes') AS rota_detalhes,
-            CAST(pvmi.id AS TEXT) AS id_original
-        FROM pedido_venda_moto_item pvmi
-        JOIN pedido_venda_moto pvm ON pvmi.pedido_id = pvm.id
-        WHERE pvmi.montagem_paga = TRUE
-          AND pvmi.data_pagamento_montagem IS NOT NULL
-          AND pvmi.ativo = TRUE
-        """
-
-        filtros_montagem = []
-        if data_inicial and data_final:
-            filtros_montagem.append(f"AND pvmi.data_pagamento_montagem BETWEEN '{data_inicial}' AND '{data_final}'")
-        if fornecedor:
-            filtros_montagem.append(f"AND pvmi.fornecedor_montagem ILIKE '%{fornecedor}%'")
-
-        sql_montagem += " " + " ".join(filtros_montagem)
-        sql_parts.append(sql_montagem)
-
-
-        # 4. COMISSÕES (Pagamento a Vendedores)
-        sql_comissao = """
-        SELECT
-            'PAGAMENTO' AS tipo,
-            'Comissão' AS categoria,
-            cv.data_pagamento AS data_movimentacao,
-            CONCAT(
-                'Comissão Pedido ', pvm.numero_pedido,
-                ' - Vendedor: ', vm.vendedor
-            ) AS descricao,
-            -cv.valor_rateado AS valor,
-            vm.vendedor AS cliente_fornecedor,
-            pvm.numero_pedido AS numero_pedido,
-            pvm.numero_nf AS numero_nf,
-            NULL AS numero_chassi,
-            NULL AS numero_embarque,
-            CONCAT('/motochefe/comissoes/', cv.id, '/detalhes') AS rota_detalhes,
-            CAST(cv.id AS TEXT) AS id_original
-        FROM comissao_vendedor cv
-        JOIN pedido_venda_moto pvm ON cv.pedido_id = pvm.id
-        JOIN vendedor_moto vm ON cv.vendedor_id = vm.id
-        WHERE cv.status = 'PAGO'
-          AND cv.data_pagamento IS NOT NULL
-        """
-
-        filtros_comissao = []
-        if data_inicial and data_final:
-            filtros_comissao.append(f"AND cv.data_pagamento BETWEEN '{data_inicial}' AND '{data_final}'")
-        if vendedor_id:
-            filtros_comissao.append(f"AND cv.vendedor_id = {vendedor_id}")
-
-        sql_comissao += " " + " ".join(filtros_comissao)
-        sql_parts.append(sql_comissao)
-
-
-        # 5. FRETES (Pagamento a Transportadoras)
+        # 3. FRETES (Pagamento a Transportadoras - ainda individual, não em lote)
+        # ⚠️ Frete ainda usa tabela embarque_moto diretamente
         sql_frete = """
         SELECT
             'PAGAMENTO' AS tipo,
@@ -233,41 +167,6 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
 
         sql_frete += " " + " ".join(filtros_frete)
         sql_parts.append(sql_frete)
-
-
-        # 6. DESPESAS OPERACIONAIS (Pagamentos Diversos)
-        sql_despesa = """
-        SELECT
-            'PAGAMENTO' AS tipo,
-            'Despesa' AS categoria,
-            dm.data_pagamento AS data_movimentacao,
-            CONCAT(
-                'Despesa: ', dm.tipo_despesa,
-                CASE WHEN dm.descricao IS NOT NULL
-                     THEN CONCAT(' - ', dm.descricao)
-                     ELSE '' END,
-                ' - Competência: ', LPAD(CAST(dm.mes_competencia AS TEXT), 2, '0'), '/', dm.ano_competencia
-            ) AS descricao,
-            -dm.valor_pago AS valor,
-            dm.tipo_despesa AS cliente_fornecedor,
-            NULL AS numero_pedido,
-            NULL AS numero_nf,
-            NULL AS numero_chassi,
-            NULL AS numero_embarque,
-            CONCAT('/motochefe/despesas/', dm.id, '/editar') AS rota_detalhes,
-            CAST(dm.id AS TEXT) AS id_original
-        FROM despesa_mensal dm
-        WHERE dm.status = 'PAGO'
-          AND dm.data_pagamento IS NOT NULL
-          AND dm.ativo = TRUE
-        """
-
-        filtros_despesa = []
-        if data_inicial and data_final:
-            filtros_despesa.append(f"AND dm.data_pagamento BETWEEN '{data_inicial}' AND '{data_final}'")
-
-        sql_despesa += " " + " ".join(filtros_despesa)
-        sql_parts.append(sql_despesa)
 
 
     # ==================== EXECUTAR UNION ====================

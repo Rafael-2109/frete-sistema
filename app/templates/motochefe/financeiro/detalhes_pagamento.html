@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- HEADER -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}
+                    <h2><i class="fas fa-receipt"></i> Detalhes do Recebimento do Pedido {{ movimentacao_pai.pedido.numero_pedido if movimentacao_pai.pedido else '' }}</h2>
+                    {% else %}
+                    <h2><i class="fas fa-receipt"></i> Detalhes do Pagamento</h2>
+                    <p class="text-muted">Breakdown do lote de pagamento #{{ movimentacao_pai.id if movimentacao_pai.id else '' }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <a href="{{ url_for('motochefe.extrato_financeiro') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar ao Extrato
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESUMO DO LOTE -->
+    <div class="card mb-4 {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}border-success{% else %}border-danger{% endif %}">
+        <div class="card-header {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}bg-success{% else %}bg-danger{% endif %} text-white">
+            <i class="fas fa-info-circle"></i> Resumo do {{ movimentacao_pai.tipo|title }}
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Tipo:</strong><br>
+                    <span class="badge {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}bg-success{% else %}bg-danger{% endif %}">
+                        {{ movimentacao_pai.categoria }}
+                    </span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Data:</strong><br>
+                    {{ movimentacao_pai.data_movimentacao.strftime('%d/%m/%Y') }}
+                </div>
+                <div class="col-md-3">
+                    {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}
+                        <strong>Cliente (Pagador):</strong><br>
+                        {{ movimentacao_pai.origem_identificacao or 'Cliente' }}
+                    {% else %}
+                        <strong>Empresa Pagadora:</strong><br>
+                        {{ movimentacao_pai.empresa_origem.empresa if movimentacao_pai.empresa_origem else '-' }}
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    <strong>Valor Total:</strong><br>
+                    <h4 class="{% if movimentacao_pai.tipo == 'RECEBIMENTO' %}text-success{% else %}text-danger{% endif %}">
+                        R$ {{ "%.2f"|format(movimentacao_pai.valor) }}
+                    </h4>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <strong>Beneficiário:</strong><br>
+                    {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}
+                        {{ movimentacao_pai.empresa_destino.empresa if movimentacao_pai.empresa_destino else '-' }}
+                    {% else %}
+                        {{ movimentacao_pai.destino_identificacao or (movimentacao_pai.empresa_destino.empresa if movimentacao_pai.empresa_destino else '-') }}
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <strong>Descrição:</strong><br>
+                    {{ movimentacao_pai.descricao }}
+                </div>
+            </div>
+            {% if movimentacao_pai.observacoes %}
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <strong>Observações:</strong><br>
+                    <div class="alert alert-info">{{ movimentacao_pai.observacoes }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 🆕 Para pagamentos individuais, mostrar info adicional relevante -->
+            {% if eh_pagamento_individual and itens_relacionados %}
+                {% set item = itens_relacionados[0] %}
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <hr>
+                        <h5 class="text-muted">Detalhes do Pagamento</h5>
+                    </div>
+                </div>
+                <div class="row">
+                    {% if item.tipo_item == 'COMISSAO' and item.item_objeto %}
+                    <div class="col-md-4">
+                        <strong>Vendedor:</strong><br>
+                        {{ item.item_objeto.vendedor.vendedor if item.item_objeto.vendedor else '-' }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Pedido:</strong><br>
+                        {{ item.item_objeto.pedido.numero_pedido if item.item_objeto.pedido else '-' }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Chassi:</strong><br>
+                        {{ item.item_objeto.numero_chassi }}
+                    </div>
+                    {% elif item.tipo_item == 'DESPESA' and item.item_objeto %}
+                    <div class="col-md-4">
+                        <strong>Tipo Despesa:</strong><br>
+                        {{ item.item_objeto.tipo_despesa }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Competência:</strong><br>
+                        {{ "%02d"|format(item.item_objeto.mes_competencia) }}/{{ item.item_objeto.ano_competencia }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Valor Total Despesa:</strong><br>
+                        R$ {{ "%.2f"|format(item.item_objeto.valor) }}
+                    </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- BREAKDOWN DOS ITENS DESTA MOVIMENTAÇÃO -->
+    <!-- 🆕 Ocultar tabela se for pagamento individual (sem filhos) -->
+    {% if not eh_pagamento_individual %}
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-list"></i> Itens Desta Movimentação ({{ itens_relacionados|length }})
+        </div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Documento</th>
+                        <th class="text-end">Saldo Anterior</th>
+                        <th class="text-end">Pagamento</th>
+                        <th class="text-end">Saldo Após</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens_relacionados %}
+                    <tr class="table-warning">
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            {% if item.tipo_item == 'MOTO' %}
+                                <span class="badge bg-primary">Moto</span>
+                            {% elif item.tipo_item == 'COMISSAO' %}
+                                <span class="badge bg-success">Comissão</span>
+                            {% elif item.tipo_item == 'MONTAGEM' %}
+                                <span class="badge bg-warning text-dark">Montagem</span>
+                            {% elif item.tipo_item == 'DESPESA' %}
+                                <span class="badge bg-secondary">Despesa</span>
+                            {% elif item.tipo_item == 'TITULO' %}
+                                <span class="badge bg-success">Título</span>
+                            {% else %}
+                                <span class="badge bg-info">Outro</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.tipo_item == 'MOTO' and item.item_objeto %}
+                                <strong>Chassi:</strong> {{ item.item_objeto.numero_chassi }}<br>
+                                <small class="text-muted">{{ item.item_objeto.modelo.nome_modelo if item.item_objeto.modelo else '-' }}</small>
+                            {% elif item.tipo_item == 'COMISSAO' and item.item_objeto %}
+                                <strong>Pedido:</strong> {{ item.item_objeto.pedido.numero_pedido if item.item_objeto.pedido else '-' }}<br>
+                                <small class="text-muted">Chassi: {{ item.item_objeto.numero_chassi }}</small>
+                            {% elif item.tipo_item == 'MONTAGEM' and item.item_objeto %}
+                                <strong>Pedido:</strong> {{ item.item_objeto.pedido.numero_pedido if item.item_objeto.pedido else '-' }}<br>
+                                <small class="text-muted">Chassi: {{ item.item_objeto.numero_chassi }}</small>
+                            {% elif item.tipo_item == 'DESPESA' and item.item_objeto %}
+                                <strong>{{ item.item_objeto.tipo_despesa }}</strong><br>
+                                <small class="text-muted">{{ "%02d"|format(item.item_objeto.mes_competencia) }}/{{ item.item_objeto.ano_competencia }}</small>
+                            {% elif item.tipo_item == 'TITULO' and item.item_objeto %}
+                                <strong>Título {{ item.item_objeto.tipo_titulo }}</strong><br>
+                                <small class="text-muted">Chassi: {{ item.item_objeto.numero_chassi }} | Parcela {{ item.item_objeto.numero_parcela }}/{{ item.item_objeto.total_parcelas }}</small>
+                            {% else %}
+                                {{ item.descricao_completa }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.movimentacao.numero_nf %}
+                                NF: {{ item.movimentacao.numero_nf }}
+                            {% elif item.movimentacao.numero_chassi %}
+                                Chassi: {{ item.movimentacao.numero_chassi }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <!-- Saldos (para TODOS os tipos) -->
+                        {% if 'saldo_anterior' in item %}
+                            <td class="text-end">
+                                <span class="text-muted">R$ {{ "%.2f"|format(item.saldo_anterior) }}</span>
+                            </td>
+                            <td class="text-end">
+                                <strong class="{% if movimentacao_pai.tipo == 'RECEBIMENTO' %}text-success{% else %}text-danger{% endif %}">
+                                    R$ {{ "%.2f"|format(item.valor_pagamento) }}
+                                </strong>
+                            </td>
+                            <td class="text-end">
+                                <strong class="{% if item.saldo_apos > 0 %}text-dark{% else %}text-success{% endif %}">
+                                    R$ {{ "%.2f"|format(item.saldo_apos) }}
+                                </strong>
+                            </td>
+                        {% else %}
+                            <!-- Fallback para itens sem estrutura de saldo -->
+                            <td class="text-end">
+                                <span class="text-muted">-</span>
+                            </td>
+                            <td class="text-end">
+                                <strong class="{% if movimentacao_pai.tipo == 'RECEBIMENTO' %}text-success{% else %}text-danger{% endif %}">
+                                    R$ {{ "%.2f"|format(item.movimentacao.valor) }}
+                                </strong>
+                            </td>
+                            <td class="text-end">
+                                <span class="text-muted">-</span>
+                            </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th colspan="4" class="text-end">TOTAIS DESTA MOVIMENTAÇÃO:</th>
+                        <th class="text-end">
+                            <h6 class="text-white mb-0">R$ {{ "%.2f"|format(total_saldo_anterior) }}</h6>
+                        </th>
+                        <th class="text-end">
+                            <h5 class="text-white mb-0">
+                                R$ {{ "%.2f"|format(movimentacao_pai.valor) }}
+                            </h5>
+                        </th>
+                        <th class="text-end">
+                            <h6 class="text-white mb-0">R$ {{ "%.2f"|format(total_saldo_apos) }}</h6>
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- PANORAMA GERAL - TODOS OS TÍTULOS DO PEDIDO -->
+    {% if todos_titulos_pedido %}
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <i class="fas fa-file-invoice"></i> Panorama Geral - Todos os Títulos do Pedido {{ movimentacao_pai.pedido.numero_pedido if movimentacao_pai.pedido else '' }}
+        </div>
+        <div class="card-body">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Chassi</th>
+                        <th>Tipo</th>
+                        <th>Parcela</th>
+                        <th>Vencimento</th>
+                        <th>Status</th>
+                        <th class="text-end">Valor Original</th>
+                        <th class="text-end">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for titulo in todos_titulos_pedido %}
+                    <tr {% if titulo.id in titulos_com_movimentacao %}class="table-warning fw-bold"{% endif %}>
+                        <td>
+                            {{ loop.index }}
+                            {% if titulo.id in titulos_com_movimentacao %}
+                                <i class="fas fa-star text-warning" title="Título contemplado nesta movimentação"></i>
+                            {% endif %}
+                        </td>
+                        <td>{{ titulo.numero_chassi }}</td>
+                        <td><span class="badge bg-secondary">{{ titulo.tipo_titulo }}</span></td>
+                        <td>{{ titulo.numero_parcela }}/{{ titulo.total_parcelas }}</td>
+                        <td>{{ titulo.data_vencimento.strftime('%d/%m/%Y') if titulo.data_vencimento else '-' }}</td>
+                        <td>
+                            {% if titulo.status == 'PAGO' %}
+                                <span class="badge bg-success">PAGO</span>
+                            {% elif titulo.status == 'ABERTO' %}
+                                <span class="badge bg-warning">ABERTO</span>
+                            {% elif titulo.status == 'RASCUNHO' %}
+                                <span class="badge bg-secondary">RASCUNHO</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ titulo.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">R$ {{ "%.2f"|format(titulo.valor_original) }}</td>
+                        <td class="text-end">
+                            <strong class="{% if titulo.valor_saldo > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ "%.2f"|format(titulo.valor_saldo) }}
+                            </strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th colspan="6" class="text-end">TOTAIS DO PEDIDO:</th>
+                        <th class="text-end">
+                            R$ {{ "%.2f"|format(todos_titulos_pedido|sum(attribute='valor_original')) }}
+                        </th>
+                        <th class="text-end">
+                            <strong class="{% if todos_titulos_pedido|sum(attribute='valor_saldo') > 0 %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ "%.2f"|format(todos_titulos_pedido|sum(attribute='valor_saldo')) }}
+                            </strong>
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i>
+                    Linhas destacadas em <span class="badge bg-warning text-dark">amarelo</span> com <i class="fas fa-star text-warning"></i> indicam títulos contemplados nesta movimentação.
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- AUDITORIA -->
+    <div class="card mt-4">
+        <div class="card-header bg-secondary text-white">
+            <i class="fas fa-info"></i> Informações de Auditoria
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Criado em:</strong> {{ movimentacao_pai.criado_em.strftime('%d/%m/%Y %H:%M:%S') if movimentacao_pai.criado_em else '-' }}
+                </div>
+                <div class="col-md-6">
+                    <strong>Criado por:</strong> {{ movimentacao_pai.criado_por or '-' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

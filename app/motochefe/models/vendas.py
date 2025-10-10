@@ -112,7 +112,7 @@ class PedidoVendaMotoItem(db.Model):
 
     # FK
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_venda_moto.id'), nullable=False, index=True)
-    numero_chassi = db.Column(db.String(17), db.ForeignKey('moto.numero_chassi'), nullable=False, index=True)
+    numero_chassi = db.Column(db.String(30), db.ForeignKey('moto.numero_chassi'), nullable=False, index=True)
 
     # Valores
     preco_venda = db.Column(db.Numeric(15, 2), nullable=False)
@@ -126,8 +126,15 @@ class PedidoVendaMotoItem(db.Model):
     montagem_paga = db.Column(db.Boolean, default=False, nullable=False)
     data_pagamento_montagem = db.Column(db.Date, nullable=True)
 
+    # 🆕 CONTROLE DE PAGAMENTO DE MONTAGEM EM LOTE
+    empresa_pagadora_montagem_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True, index=True)
+    # Empresa que pagou a montagem
+    lote_pagamento_montagem_id = db.Column(db.Integer, nullable=True, index=True)
+    # ID da MovimentacaoFinanceira PAI que agrupa este pagamento em lote
+
     # Relacionamentos
     moto = db.relationship('Moto', backref='vendas')
+    empresa_pagadora_montagem = db.relationship('EmpresaVendaMoto', foreign_keys=[empresa_pagadora_montagem_id], backref='montagens_pagas')
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

@@ -515,10 +515,18 @@ def listar_comissoes():
 
     vendedores = VendedorMoto.query.filter_by(ativo=True).order_by(VendedorMoto.vendedor).all()
 
+    # Buscar empresas para pagamento
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+    empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
+        EmpresaVendaMoto.tipo_conta,
+        EmpresaVendaMoto.empresa
+    ).all()
+
     return render_template('motochefe/vendas/comissoes/listar.html',
                          comissoes=paginacao.items,
                          paginacao=paginacao,
-                         vendedores=vendedores)
+                         vendedores=vendedores,
+                         empresas=empresas)
 
 
 @motochefe_bp.route('/comissoes/<int:id>/detalhes')
@@ -534,7 +542,10 @@ def detalhes_comissao(id):
 @login_required
 @requer_motochefe
 def pagar_comissao(id):
-    """Marca comissão como paga"""
+    """
+    Registra pagamento de comissão com MovimentacaoFinanceira
+    Similar ao pagamento de despesa
+    """
     comissao = ComissaoVendedor.query.get_or_404(id)
 
     if comissao.status == 'PAGO':
@@ -542,9 +553,48 @@ def pagar_comissao(id):
         return redirect(url_for('motochefe.listar_comissoes'))
 
     try:
-        data_pagamento = request.form.get('data_pagamento') or date.today()
+        from app.motochefe.models.cadastro import EmpresaVendaMoto
+        from app.motochefe.models.financeiro import MovimentacaoFinanceira
+        from app.motochefe.services.empresa_service import atualizar_saldo
 
-        comissao.data_pagamento = datetime.strptime(data_pagamento, '%Y-%m-%d').date() if isinstance(data_pagamento, str) else data_pagamento
+        data_pagamento = request.form.get('data_pagamento')
+        empresa_pagadora_id = request.form.get('empresa_pagadora_id')
+
+        if not empresa_pagadora_id:
+            raise Exception('Selecione a empresa pagadora')
+
+        empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+        if not empresa_pagadora:
+            raise Exception('Empresa pagadora não encontrada')
+
+        data_pag = datetime.strptime(data_pagamento, '%Y-%m-%d').date() if isinstance(data_pagamento, str) else (data_pagamento or date.today())
+
+        # 1. CRIAR MOVIMENTAÇÃO FINANCEIRA
+        movimentacao = MovimentacaoFinanceira(
+            tipo='PAGAMENTO',
+            categoria='Comissão',
+            valor=comissao.valor_rateado,
+            data_movimentacao=data_pag,
+            empresa_origem_id=empresa_pagadora.id,
+            origem_tipo='Empresa',
+            origem_identificacao=empresa_pagadora.empresa,
+            empresa_destino_id=None,
+            destino_tipo='Vendedor',
+            destino_identificacao=comissao.vendedor.vendedor if comissao.vendedor else 'Vendedor',
+            comissao_vendedor_id=comissao.id,
+            pedido_id=comissao.pedido_id,
+            numero_chassi=comissao.numero_chassi,
+            descricao=f'Pagamento Comissão Vendedor {comissao.vendedor.vendedor if comissao.vendedor else "-"} - Pedido {comissao.pedido.numero_pedido if comissao.pedido else "-"} - Chassi {comissao.numero_chassi}',
+            criado_por=current_user.nome
+        )
+        db.session.add(movimentacao)
+
+        # 2. ATUALIZAR SALDO DA EMPRESA
+        atualizar_saldo(empresa_pagadora.id, comissao.valor_rateado, 'SUBTRAIR')
+
+        # 3. ATUALIZAR COMISSÃO
+        comissao.data_pagamento = data_pag
+        comissao.empresa_pagadora_id = empresa_pagadora.id
         comissao.status = 'PAGO'
         comissao.atualizado_por = current_user.nome
 
@@ -554,6 +604,121 @@ def pagar_comissao(id):
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao pagar comissão: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_comissoes'))
+
+
+@motochefe_bp.route('/comissoes/pagar-lote', methods=['POST'])
+@login_required
+@requer_motochefe
+def pagar_comissoes_lote():
+    """
+    Pagamento em lote de comissões
+    Cria 1 MovimentacaoFinanceira PAI + N FILHOS (um para cada comissão)
+    Similar ao pagamento de títulos em lote
+    """
+    try:
+        import json
+        from app.motochefe.models.cadastro import EmpresaVendaMoto
+        from app.motochefe.models.financeiro import MovimentacaoFinanceira
+        from app.motochefe.services.empresa_service import atualizar_saldo
+
+        # Receber dados do form
+        comissoes_json = request.form.get('comissoes_selecionadas')
+        empresa_pagadora_id = request.form.get('empresa_pagadora_id')
+        data_pagamento = request.form.get('data_pagamento')
+
+        if not comissoes_json:
+            raise Exception('Nenhuma comissão selecionada')
+
+        if not empresa_pagadora_id:
+            raise Exception('Selecione a empresa pagadora')
+
+        # Parse IDs
+        comissao_ids = json.loads(comissoes_json)
+        if not comissao_ids:
+            raise Exception('Lista de comissões vazia')
+
+        # Buscar empresa
+        empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+        if not empresa_pagadora:
+            raise Exception('Empresa pagadora não encontrada')
+
+        data_pag = datetime.strptime(data_pagamento, '%Y-%m-%d').date() if isinstance(data_pagamento, str) else (data_pagamento or date.today())
+
+        # Buscar comissões
+        comissoes = ComissaoVendedor.query.filter(ComissaoVendedor.id.in_(comissao_ids)).all()
+
+        if not comissoes:
+            raise Exception('Comissões não encontradas')
+
+        # Calcular total
+        valor_total = sum(c.valor_rateado for c in comissoes)
+
+        # 1. CRIAR MOVIMENTAÇÃO PAI
+        descricao_pai = f'Pagamento Lote {len(comissoes)} comissão(ões)'
+
+        movimentacao_pai = MovimentacaoFinanceira(
+            tipo='PAGAMENTO',
+            categoria='Lote Comissão',
+            valor=valor_total,
+            data_movimentacao=data_pag,
+            empresa_origem_id=empresa_pagadora.id,
+            origem_tipo='Empresa',
+            origem_identificacao=empresa_pagadora.empresa,
+            empresa_destino_id=None,
+            destino_tipo='Vendedores',
+            destino_identificacao='Comissões',
+            descricao=descricao_pai,
+            observacoes=f'Lote com {len(comissoes)} comissão(ões)',
+            criado_por=current_user.nome
+        )
+        db.session.add(movimentacao_pai)
+        db.session.flush()
+
+        # 2. CRIAR MOVIMENTAÇÕES FILHAS + ATUALIZAR COMISSÕES
+        for comissao in comissoes:
+            # Validar se já foi paga
+            if comissao.status == 'PAGO':
+                raise Exception(f'Comissão ID {comissao.id} já foi paga')
+
+            # Movimentação filha
+            movimentacao_filha = MovimentacaoFinanceira(
+                tipo='PAGAMENTO',
+                categoria='Comissão',
+                valor=comissao.valor_rateado,
+                data_movimentacao=data_pag,
+                empresa_origem_id=empresa_pagadora.id,
+                origem_tipo='Empresa',
+                origem_identificacao=empresa_pagadora.empresa,
+                empresa_destino_id=None,
+                destino_tipo='Vendedor',
+                destino_identificacao=comissao.vendedor.vendedor if comissao.vendedor else 'Vendedor',
+                comissao_vendedor_id=comissao.id,
+                pedido_id=comissao.pedido_id,
+                numero_chassi=comissao.numero_chassi,
+                descricao=f'Comissão Vendedor {comissao.vendedor.vendedor if comissao.vendedor else "-"} - Pedido {comissao.pedido.numero_pedido if comissao.pedido else "-"}',
+                movimentacao_origem_id=movimentacao_pai.id,
+                criado_por=current_user.nome
+            )
+            db.session.add(movimentacao_filha)
+
+            # Atualizar comissão
+            comissao.data_pagamento = data_pag
+            comissao.empresa_pagadora_id = empresa_pagadora.id
+            comissao.lote_pagamento_id = movimentacao_pai.id
+            comissao.status = 'PAGO'
+            comissao.atualizado_por = current_user.nome
+
+        # 3. ATUALIZAR SALDO DA EMPRESA
+        atualizar_saldo(empresa_pagadora.id, valor_total, 'SUBTRAIR')
+
+        db.session.commit()
+        flash(f'{len(comissoes)} comissão(ões) paga(s) com sucesso! Total: R$ {valor_total:.2f}', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao pagar comissões em lote: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_comissoes'))
 

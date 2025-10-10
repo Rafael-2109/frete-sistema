@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- HEADER -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="fas fa-file-invoice-dollar"></i> Detalhes do Recebimento</h2>
+                    <p class="text-muted">Breakdown dos títulos da moto {{ titulo.numero_chassi }}</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('motochefe.extrato_financeiro') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar ao Extrato
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESUMO DA MOTO -->
+    <div class="card mb-4 border-success">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-motorcycle"></i> Resumo da Moto
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Chassi:</strong><br>
+                    <h5>{{ titulo.numero_chassi }}</h5>
+                </div>
+                <div class="col-md-3">
+                    <strong>Pedido:</strong><br>
+                    {{ titulo.pedido.numero_pedido if titulo.pedido else '-' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Cliente:</strong><br>
+                    {{ titulo.pedido.cliente.cliente if titulo.pedido and titulo.pedido.cliente else '-' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>NF:</strong><br>
+                    {{ titulo.pedido.numero_nf if titulo.pedido and titulo.pedido.numero_nf else 'Não faturado' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TÍTULOS DA MOTO (4 tipos) -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-list"></i> Títulos da Moto (Ordem de Pagamento)
+        </div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Ordem</th>
+                        <th>Tipo</th>
+                        <th>Parcela</th>
+                        <th>Vencimento</th>
+                        <th>Valor Original</th>
+                        <th>Pago</th>
+                        <th>Saldo</th>
+                        <th>Status</th>
+                        <th>Empresa Recebedora</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tit in titulos_moto %}
+                    <tr class="{% if tit.id == titulo.id %}table-warning{% endif %}">
+                        <td><span class="badge bg-secondary">{{ tit.ordem_pagamento }}</span></td>
+                        <td>
+                            {% if tit.tipo_titulo == 'MOVIMENTACAO' %}
+                                <span class="badge bg-info">Movimentação</span>
+                            {% elif tit.tipo_titulo == 'MONTAGEM' %}
+                                <span class="badge bg-warning text-dark">Montagem</span>
+                            {% elif tit.tipo_titulo == 'FRETE' %}
+                                <span class="badge bg-primary">Frete</span>
+                            {% elif tit.tipo_titulo == 'VENDA' %}
+                                <span class="badge bg-success">Venda</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ tit.tipo_titulo }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ tit.numero_parcela }}/{{ tit.total_parcelas }}</td>
+                        <td>
+                            {% if tit.data_vencimento %}
+                                {{ tit.data_vencimento.strftime('%d/%m/%Y') }}
+                                {% if tit.atrasado %}
+                                    <span class="badge bg-danger">VENCIDO</span>
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>R$ {{ "%.2f"|format(tit.valor_original) }}</td>
+                        <td>R$ {{ "%.2f"|format(tit.valor_pago_total) }}</td>
+                        <td>
+                            {% if tit.valor_saldo > 0 %}
+                                <strong class="text-danger">R$ {{ "%.2f"|format(tit.valor_saldo) }}</strong>
+                            {% else %}
+                                <span class="text-muted">R$ 0,00</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if tit.status == 'PAGO' %}
+                                <span class="badge bg-success">PAGO</span>
+                            {% elif tit.status == 'ABERTO' %}
+                                <span class="badge bg-warning text-dark">ABERTO</span>
+                            {% elif tit.status == 'CANCELADO' %}
+                                <span class="badge bg-secondary">CANCELADO</span>
+                            {% elif tit.status == 'RASCUNHO' %}
+                                <span class="badge bg-info">RASCUNHO</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ tit.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if tit.empresa_recebedora %}
+                                {{ tit.empresa_recebedora.empresa }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th colspan="4" class="text-end">TOTAIS:</th>
+                        <th>R$ {{ "%.2f"|format(titulos_moto|sum(attribute='valor_original')) }}</th>
+                        <th>R$ {{ "%.2f"|format(titulos_moto|sum(attribute='valor_pago_total')) }}</th>
+                        <th>R$ {{ "%.2f"|format(titulos_moto|sum(attribute='valor_saldo')) }}</th>
+                        <th colspan="2"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- HISTÓRICO DE RECEBIMENTOS -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-history"></i> Histórico de Recebimentos
+        </div>
+        <div class="card-body">
+            {% if movimentacoes %}
+            <table class="table table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Data</th>
+                        <th>Categoria</th>
+                        <th>Valor</th>
+                        <th>Empresa Recebedora</th>
+                        <th>Descrição</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mov in movimentacoes %}
+                    <tr>
+                        <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
+                        <td>{{ mov.categoria }}</td>
+                        <td><strong class="text-success">R$ {{ "%.2f"|format(mov.valor) }}</strong></td>
+                        <td>{{ mov.empresa_destino.empresa if mov.empresa_destino else '-' }}</td>
+                        <td><small>{{ mov.descricao }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th colspan="2" class="text-end">TOTAL RECEBIDO:</th>
+                        <th><h5 class="text-success mb-0">R$ {{ "%.2f"|format(movimentacoes|sum(attribute='valor')) }}</h5></th>
+                        <th colspan="2"></th>
+                    </tr>
+                </tfoot>
+            </table>
+            {% else %}
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i> Nenhum recebimento registrado ainda para esta moto.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

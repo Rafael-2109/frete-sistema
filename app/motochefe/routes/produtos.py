@@ -585,20 +585,20 @@ def importar_motos():
 
             # Validar tamanho máximo (VARCHAR(30) no banco)
             if len(chassi) > 30:
-                erros.append(f'Linha {idx+2}: Chassi "{chassi}" muito longo ({len(chassi)} caracteres, máximo 30).')
+                erros.append(f'Linha {idx+2}: Chassi "{chassi}" muito longo ({len(chassi)} caracteres, máximo 30).') # type: ignore
                 continue
 
             # Verificar duplicidade de chassi
             existe = Moto.query.filter_by(numero_chassi=chassi).first()
             if existe:
-                erros.append(f'Linha {idx+2}: Chassi {chassi} já existe')
+                erros.append(f'Linha {idx+2}: Chassi {chassi} já existe') # type: ignore
                 continue
 
             # Verificar duplicidade de motor (se preenchido)
             if not pd.isna(motor):
                 motor_existe = Moto.query.filter_by(numero_motor=str(motor)).first()
                 if motor_existe:
-                    erros.append(f'Linha {idx+2}: Motor {motor} já existe')
+                    erros.append(f'Linha {idx+2}: Motor {motor} já existe') # type: ignore
                     continue
 
             # Buscar modelo (case-insensitive)
@@ -784,7 +784,6 @@ def api_motos_agrupamento():
 @requer_motochefe
 def api_opcoes_filtros():
     """API: Retorna opções disponíveis para os filtros (modelos, cores, potências)"""
-    from sqlalchemy import distinct
 
     # Buscar apenas de motos ativas
     motos_ativas = Moto.query.filter_by(ativo=True).all()

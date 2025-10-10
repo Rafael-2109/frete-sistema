@@ -11,7 +11,7 @@ from datetime import datetime, date
 from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
-from app.motochefe.models import CustosOperacionais, DespesaMensal
+from app.motochefe.models import CustosOperacionais, DespesaMensal, EmpresaVendaMoto
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 
 @motochefe_bp.route('/custos')
@@ -88,6 +88,12 @@ def listar_despesas():
         DespesaMensal.tipo_despesa
     ).paginate(page=page, per_page=per_page, error_out=False)
 
+    # Buscar empresas para pagamento
+    empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
+        EmpresaVendaMoto.tipo_conta,
+        EmpresaVendaMoto.empresa
+    ).all()
+
     return render_template('motochefe/operacional/despesas/listar.html',
                          despesas=paginacao.items,
                          paginacao=paginacao,
@@ -95,7 +101,8 @@ def listar_despesas():
                          total_pago=total_pago,
                          total_aberto=total_aberto,
                          mes_filtro=mes,
-                         ano_filtro=ano)
+                         ano_filtro=ano,
+                         empresas=empresas)
 
 @motochefe_bp.route('/despesas/adicionar', methods=['GET', 'POST'])
 @login_required

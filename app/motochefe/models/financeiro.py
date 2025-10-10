@@ -170,10 +170,17 @@ class ComissaoVendedor(db.Model):
     status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
     # Valores: PENDENTE, PAGO, CANCELADO
 
+    # 🆕 CONTROLE DE PAGAMENTO EM LOTE
+    empresa_pagadora_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True, index=True)
+    # Empresa que pagou a comissão
+    lote_pagamento_id = db.Column(db.Integer, nullable=True, index=True)
+    # ID da MovimentacaoFinanceira PAI que agrupa este pagamento em lote
+
     # Relacionamentos
     pedido = db.relationship('PedidoVendaMoto', backref='comissoes')
     vendedor = db.relationship('VendedorMoto', backref='comissoes')
     moto = db.relationship('Moto', backref='comissoes')
+    empresa_pagadora = db.relationship('EmpresaVendaMoto', foreign_keys=[empresa_pagadora_id], backref='comissoes_pagas')
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

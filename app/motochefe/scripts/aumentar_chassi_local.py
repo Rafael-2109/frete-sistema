@@ -55,7 +55,7 @@ def verificar_estado_atual():
                 MAX(LENGTH(numero_chassi)) as tamanho_maximo,
                 MIN(LENGTH(numero_chassi)) as tamanho_minimo,
                 COUNT(*) as total
-            FROM moto
+            FROM pedido_venda_moto_item
         """))
 
         row = result.fetchone()
@@ -68,7 +68,7 @@ def verificar_estado_atual():
             # Verificar se há chassi com mais de 17 caracteres
             result2 = db.session.execute(text("""
                 SELECT numero_chassi, LENGTH(numero_chassi) as tamanho
-                FROM moto
+                FROM pedido_venda_moto_item
                 WHERE LENGTH(numero_chassi) > 17
                 ORDER BY LENGTH(numero_chassi) DESC
                 LIMIT 5
@@ -102,7 +102,7 @@ def executar_alteracao():
 
         if engine_name == 'postgresql':
             # PostgreSQL
-            sql = "ALTER TABLE transportadora_moto ALTER COLUMN telefone TYPE VARCHAR(50);"
+            sql = "ALTER TABLE pedido_venda_moto_item ALTER COLUMN numero_chassi TYPE VARCHAR(30);"
             print(f"\n📝 SQL a executar (PostgreSQL):")
             print(f"   {sql}")
 
@@ -163,7 +163,7 @@ def verificar_resultado():
 
         # Verificar integridade dos dados
         result = db.session.execute(text("SELECT COUNT(*) FROM moto"))
-        total = result.fetchone()[0]
+        total = result.fetchone()[0] # type: ignore
         print(f"\n📊 Integridade dos dados:")
         print(f"   - Total de motos: {total}")
         print(f"   - ✅ Todos os registros acessíveis")

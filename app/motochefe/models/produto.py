@@ -70,6 +70,12 @@ class Moto(db.Model):
     status_pagamento_custo = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
     # Valores: PENDENTE, PAGO, PARCIAL
 
+    # 🆕 CONTROLE DE PAGAMENTO EM LOTE
+    empresa_pagadora_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True, index=True)
+    # Empresa que pagou o custo da moto
+    lote_pagamento_id = db.Column(db.Integer, nullable=True, index=True)
+    # ID da MovimentacaoFinanceira PAI que agrupa este pagamento em lote
+
     # Status e controle (para FIFO e reserva)
     reservado = db.Column(db.Boolean, default=False, nullable=False, index=True)
     status = db.Column(db.String(20), default='DISPONIVEL', nullable=False, index=True)
@@ -83,6 +89,7 @@ class Moto(db.Model):
 
     # Relacionamentos
     modelo = db.relationship('ModeloMoto', backref='motos')
+    empresa_pagadora = db.relationship('EmpresaVendaMoto', foreign_keys=[empresa_pagadora_id], backref='motos_pagas')
 
     # Controle de motos rejeitadas (modelo não encontrado na importação)
     modelo_rejeitado = db.Column(db.String(100), nullable=True)  # Nome do modelo não encontrado (quando ativo=False)

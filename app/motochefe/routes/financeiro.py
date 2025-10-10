@@ -11,8 +11,8 @@ from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import (
-    Moto, PedidoVendaMotoItem, EmbarqueMoto, 
-    ComissaoVendedor, DespesaMensal, TituloFinanceiro
+    Moto, PedidoVendaMotoItem, EmbarqueMoto,
+    ComissaoVendedor, DespesaMensal
 )
 
 
@@ -220,9 +220,22 @@ def listar_contas_a_pagar():
     # Vencidos (hoje)
     hoje = date.today()
 
+    # Buscar empresas ativas para o select de empresa pagadora
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+    empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
+        EmpresaVendaMoto.tipo_conta,
+        EmpresaVendaMoto.empresa
+    ).all()
+
     return render_template('motochefe/financeiro/contas_a_pagar.html',
                          itens=paginacao.items,
                          paginacao=paginacao,
+                         motos_agrupados=motos_agrupados,
+                         fretes_agrupados=fretes_agrupados,
+                         comissoes_agrupadas=comissoes_agrupadas,
+                         montagens_agrupadas=montagens_agrupadas,
+                         despesas_agrupadas=despesas_agrupadas,
+                         titulos_agrupados=titulos_agrupados,
                          total_motos=total_motos,
                          total_fretes=total_fretes,
                          total_comissoes=total_comissoes,
@@ -230,6 +243,7 @@ def listar_contas_a_pagar():
                          total_despesas=total_despesas,
                          total_titulos_a_pagar=total_titulos_a_pagar,
                          total_geral=total_geral,
+                         empresas=empresas,
                          hoje=hoje)
 
 
@@ -238,95 +252,141 @@ def listar_contas_a_pagar():
 @requer_motochefe
 def pagar_lote():
     """
-    Pagamento em lote
-    Recebe JSON com array de itens: {tipo, id}
+    Pagamento em lote - REFATORADO
+    Usa novo sistema com MovimentacaoFinanceira PAI + FILHOS
+    Agrupa itens por tipo e cria um lote para cada tipo
     """
     try:
         import json
+        from app.motochefe.models.cadastro import EmpresaVendaMoto
+        from app.motochefe.services.lote_pagamento_service import (
+            processar_pagamento_lote_motos,
+            processar_pagamento_lote_comissoes,
+            processar_pagamento_lote_montagens,
+            processar_pagamento_lote_despesas
+        )
+        from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
+        from app.motochefe.services.empresa_service import atualizar_saldo
+
         itens_json = request.form.get('itens_pagamento')
         data_pagamento = request.form.get('data_pagamento')
+        empresa_pagadora_id = request.form.get('empresa_pagadora_id')
 
         if not itens_json:
             flash('Nenhum item selecionado para pagamento', 'warning')
             return redirect(url_for('motochefe.listar_contas_a_pagar'))
 
+        if not empresa_pagadora_id:
+            flash('Selecione a empresa pagadora', 'warning')
+            return redirect(url_for('motochefe.listar_contas_a_pagar'))
+
         itens = json.loads(itens_json)
         data_pag = datetime.strptime(data_pagamento, '%Y-%m-%d').date() if data_pagamento else date.today()
+        empresa_pagadora = EmpresaVendaMoto.query.get_or_404(int(empresa_pagadora_id))
 
-        contador = 0
+        # Agrupar itens por tipo
+        itens_por_tipo = {
+            'moto': [],
+            'comissao': [],
+            'montagem': [],
+            'despesa': [],
+            'frete': []
+        }
 
         for item in itens:
             tipo = item['tipo']
-            item_id = int(item['id'])
-            valor_pago = Decimal(item.get('valor', '0'))
+            if tipo in itens_por_tipo:
+                itens_por_tipo[tipo].append(item)
 
-            if tipo == 'moto':
-                moto = Moto.query.get(item_id)  # PK é chassi (string), precisamos ajustar
-                # Usar chassi como chave
-                moto = Moto.query.filter_by(numero_chassi=item['id']).first()
-                if moto:
-                    moto.custo_pago = valor_pago
-                    moto.data_pagamento_custo = data_pag
-                    moto.status_pagamento_custo = 'PAGO' if valor_pago >= moto.custo_aquisicao else 'PARCIAL'
-                    contador += 1
+        total_lotes = 0
+        total_itens = 0
+        valor_total_geral = Decimal('0')
 
-            elif tipo == 'frete':
-                from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
-                from app.motochefe.services.empresa_service import atualizar_saldo
-                from app.motochefe.models.cadastro import EmpresaVendaMoto
+        # Processar MOTOS em lote
+        if itens_por_tipo['moto']:
+            chassi_list = [item['id'] for item in itens_por_tipo['moto']]
+            resultado = processar_pagamento_lote_motos(
+                chassi_list=chassi_list,
+                empresa_pagadora=empresa_pagadora,
+                data_pagamento=data_pag,
+                usuario=current_user.nome
+            )
+            total_lotes += 1
+            total_itens += len(resultado['motos_atualizadas'])
+            valor_total_geral += resultado['valor_total']
 
-                embarque = EmbarqueMoto.query.get(item_id)
-                empresa_pagadora_id = request.form.get('empresa_pagadora_id')
+        # Processar COMISSÕES em lote
+        if itens_por_tipo['comissao']:
+            comissao_ids = [int(item['id']) for item in itens_por_tipo['comissao']]
+            resultado = processar_pagamento_lote_comissoes(
+                comissao_ids=comissao_ids,
+                empresa_pagadora=empresa_pagadora,
+                data_pagamento=data_pag,
+                usuario=current_user.nome
+            )
+            total_lotes += 1
+            total_itens += len(resultado['comissoes_atualizadas'])
+            valor_total_geral += resultado['valor_total']
 
-                if not empresa_pagadora_id:
-                    raise Exception('Selecione a empresa pagadora para o frete')
+        # Processar MONTAGENS em lote
+        if itens_por_tipo['montagem']:
+            item_ids = [int(item['id']) for item in itens_por_tipo['montagem']]
+            resultado = processar_pagamento_lote_montagens(
+                item_ids=item_ids,
+                empresa_pagadora=empresa_pagadora,
+                data_pagamento=data_pag,
+                usuario=current_user.nome
+            )
+            total_lotes += 1
+            total_itens += len(resultado['itens_atualizados'])
+            valor_total_geral += resultado['valor_total']
 
-                empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+        # Processar DESPESAS em lote
+        if itens_por_tipo['despesa']:
+            despesa_ids = [int(item['id']) for item in itens_por_tipo['despesa']]
+            resultado = processar_pagamento_lote_despesas(
+                despesa_ids=despesa_ids,
+                empresa_pagadora=empresa_pagadora,
+                data_pagamento=data_pag,
+                usuario=current_user.nome
+            )
+            total_lotes += 1
+            total_itens += len(resultado['despesas_atualizadas'])
+            valor_total_geral += resultado['valor_total']
 
-                if embarque and empresa_pagadora:
-                    # 1. REGISTRAR MOVIMENTAÇÃO
-                    movimentacao = registrar_pagamento_frete_embarque(
+        # Processar FRETES individualmente (não agrupa em lote por enquanto)
+        if itens_por_tipo['frete']:
+            for item in itens_por_tipo['frete']:
+                embarque = EmbarqueMoto.query.get(int(item['id']))
+                valor_pago = Decimal(item.get('valor', '0'))
+
+                if embarque:
+                    # Registrar movimentação
+                    registrar_pagamento_frete_embarque(
                         embarque,
                         valor_pago,
                         empresa_pagadora,
                         current_user.nome
                     )
-
-                    # 2. ATUALIZAR SALDO DA EMPRESA
+                    # Atualizar saldo
                     atualizar_saldo(empresa_pagadora.id, valor_pago, 'SUBTRAIR')
-
-                    # 3. ATUALIZAR EMBARQUE
+                    # Atualizar embarque
                     embarque.valor_frete_pago = valor_pago
                     embarque.data_pagamento_frete = data_pag
                     embarque.empresa_pagadora_id = empresa_pagadora.id
                     embarque.status_pagamento_frete = 'PAGO'
 
-                    contador += 1
-
-            elif tipo == 'comissao':
-                comissao = ComissaoVendedor.query.get(item_id)
-                if comissao:
-                    comissao.data_pagamento = data_pag
-                    comissao.status = 'PAGO'
-                    contador += 1
-
-            elif tipo == 'montagem':
-                montagem = PedidoVendaMotoItem.query.get(item_id)
-                if montagem:
-                    montagem.montagem_paga = True
-                    montagem.data_pagamento_montagem = data_pag
-                    contador += 1
-
-            elif tipo == 'despesa':
-                despesa = DespesaMensal.query.get(item_id)
-                if despesa:
-                    despesa.valor_pago = valor_pago
-                    despesa.data_pagamento = data_pag
-                    despesa.status = 'PAGO'
-                    contador += 1
+                    total_itens += 1
+                    valor_total_geral += valor_pago
 
         db.session.commit()
-        flash(f'{contador} pagamentos realizados com sucesso!', 'success')
+
+        flash(
+            f'Pagamento realizado com sucesso! '
+            f'{total_lotes} lote(s) criado(s), {total_itens} item(ns) processado(s). '
+            f'Total: R$ {valor_total_geral:,.2f}',
+            'success'
+        )
 
     except Exception as e:
         db.session.rollback()
@@ -392,11 +452,11 @@ def listar_contas_a_receber():
 @requer_motochefe
 def receber_lote():
     """
-    Recebimento em lote de títulos (novo sistema)
-    Cria MovimentacaoFinanceira, atualiza saldo, dispara triggers
+    Recebimento em lote de títulos - REFATORADO
+    Cria 1 MovimentacaoFinanceira PAI + N FILHOS
     """
-    from app.motochefe.services.titulo_service import receber_titulo
     from app.motochefe.models.cadastro import EmpresaVendaMoto
+    from app.motochefe.services.lote_pagamento_service import processar_recebimento_lote_titulos
 
     try:
         import json
@@ -414,37 +474,39 @@ def receber_lote():
         itens = json.loads(itens_json)
         empresa = EmpresaVendaMoto.query.get_or_404(int(empresa_recebedora_id))
 
-        contador = 0
-        total_recebido = Decimal('0')
+        # Montar dicionário de valores por título
+        titulo_ids = []
+        valores_recebidos = {}
 
         for item in itens:
             titulo_id = int(item['id'])
-            valor_recebido = Decimal(item.get('valor', '0'))
+            valor = Decimal(item.get('valor', '0'))
 
-            titulo = TituloFinanceiro.query.get(titulo_id)
-            if titulo and valor_recebido > 0:
-                # USAR NOVO SISTEMA DE RECEBIMENTO
-                # Cria MovimentacaoFinanceira, atualiza saldo, dispara triggers:
-                # - Libera TituloAPagar
-                # - Baixa automática de motos (se empresa.baixa_compra_auto=True)
-                # - Gera comissão por moto (se título de VENDA)
-                resultado = receber_titulo(
-                    titulo=titulo,
-                    valor_recebido=valor_recebido,
-                    empresa_recebedora=empresa,
-                    usuario=current_user.nome
-                )
+            if valor > 0:
+                titulo_ids.append(titulo_id)
+                valores_recebidos[titulo_id] = valor
 
-                contador += 1
-                total_recebido += valor_recebido
+        if not titulo_ids:
+            flash('Nenhum título com valor válido', 'warning')
+            return redirect(url_for('motochefe.listar_contas_a_receber'))
+
+        # PROCESSAR LOTE (cria PAI + FILHOS)
+        resultado = processar_recebimento_lote_titulos(
+            titulo_ids=titulo_ids,
+            valores_recebidos=valores_recebidos,
+            empresa_recebedora=empresa,
+            data_recebimento=date.today(),
+            usuario=current_user.nome
+        )
 
         db.session.commit()
 
-        if contador > 0:
-            flash(
-                f'{contador} título(s) recebido(s) com sucesso! Total: R$ {total_recebido:,.2f}',
-                'success'
-            )
+        flash(
+            f'Recebimento registrado com sucesso! '
+            f'{len(resultado["titulos_recebidos"])} título(s) atualizado(s). '
+            f'Total: R$ {resultado["valor_total"]:,.2f}',
+            'success'
+        )
 
     except Exception as e:
         db.session.rollback()
@@ -553,3 +615,63 @@ def receber_moto_contas(pedido_id, chassi):
         flash(f'Erro ao processar recebimento: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_contas_a_receber'))
+
+
+# ===== DETALHES DE PAGAMENTOS E RECEBIMENTOS =====
+
+@motochefe_bp.route('/pagamentos/<int:movimentacao_id>/detalhes')
+@login_required
+@requer_motochefe
+def detalhes_pagamento(movimentacao_id):
+    """
+    Tela de detalhes de um pagamento em lote
+    Mostra MovimentacaoFinanceira PAI + breakdown dos FILHOS
+    """
+    from app.motochefe.services.lote_pagamento_service import obter_detalhes_lote_pagamento
+
+    try:
+        detalhes = obter_detalhes_lote_pagamento(movimentacao_id)
+
+        return render_template('motochefe/financeiro/detalhes_pagamento.html',
+                             movimentacao_pai=detalhes['movimentacao_pai'],
+                             movimentacoes_filhas=detalhes['movimentacoes_filhas'],
+                             itens_relacionados=detalhes['itens_relacionados'],
+                             todos_titulos_pedido=detalhes.get('todos_titulos_pedido', []),
+                             titulos_com_movimentacao=detalhes.get('titulos_com_movimentacao', set()),
+                             total_saldo_anterior=detalhes.get('total_saldo_anterior', 0),
+                             total_saldo_apos=detalhes.get('total_saldo_apos', 0),
+                             eh_pagamento_individual=detalhes.get('eh_pagamento_individual', False))
+
+    except Exception as e:
+        flash(f'Erro ao carregar detalhes do pagamento: {str(e)}', 'danger')
+        return redirect(url_for('motochefe.extrato_financeiro'))
+
+
+@motochefe_bp.route('/recebimentos/<int:movimentacao_id>/detalhes')
+@login_required
+@requer_motochefe
+def detalhes_recebimento(movimentacao_id):
+    """
+    Tela de detalhes de um recebimento em lote
+    Usa a mesma função genérica de pagamentos
+    """
+    from app.motochefe.services.lote_pagamento_service import obter_detalhes_lote_pagamento
+
+    try:
+        detalhes = obter_detalhes_lote_pagamento(movimentacao_id)
+
+        # Reutilizar o mesmo template de pagamentos
+        # O template já suporta TITULO como tipo_item
+        return render_template('motochefe/financeiro/detalhes_pagamento.html',
+                             movimentacao_pai=detalhes['movimentacao_pai'],
+                             movimentacoes_filhas=detalhes['movimentacoes_filhas'],
+                             itens_relacionados=detalhes['itens_relacionados'],
+                             todos_titulos_pedido=detalhes.get('todos_titulos_pedido', []),
+                             titulos_com_movimentacao=detalhes.get('titulos_com_movimentacao', set()),
+                             total_saldo_anterior=detalhes.get('total_saldo_anterior', 0),
+                             total_saldo_apos=detalhes.get('total_saldo_apos', 0),
+                             eh_pagamento_individual=detalhes.get('eh_pagamento_individual', False))
+
+    except Exception as e:
+        flash(f'Erro ao carregar detalhes do recebimento: {str(e)}', 'danger')
+        return redirect(url_for('motochefe.extrato_financeiro'))
