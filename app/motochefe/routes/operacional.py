@@ -126,7 +126,7 @@ def adicionar_despesa():
             mes_competencia=int(mes),
             ano_competencia=int(ano),
             data_vencimento=request.form.get('data_vencimento') or None,
-            status=request.form.get('status', 'PENDENTE'),
+            status='PENDENTE',  # Status inicial sempre PENDENTE (será calculado dinamicamente)
             criado_por=current_user.nome
         )
 
@@ -157,7 +157,7 @@ def editar_despesa(id):
         despesa.mes_competencia = int(request.form.get('mes_competencia'))
         despesa.ano_competencia = int(request.form.get('ano_competencia'))
         despesa.data_vencimento = request.form.get('data_vencimento') or None
-        despesa.status = request.form.get('status')
+        # Status não é mais editável - será calculado dinamicamente via property status_dinamico
         despesa.atualizado_por = current_user.nome
 
         db.session.commit()
@@ -208,6 +208,8 @@ def pagar_despesa(id):
         despesa.valor_pago = Decimal(valor_pago)
         despesa.data_pagamento = data_pagamento
         despesa.empresa_pagadora_id = empresa_pagadora.id
+        # Status será atualizado automaticamente baseado no saldo via property status_dinamico
+        # Aqui sincronizamos o campo status com o cálculo dinâmico para manter consistência
         despesa.status = 'PAGO' if despesa.saldo_aberto <= 0 else 'PENDENTE'
         despesa.atualizado_por = current_user.nome
 
@@ -328,7 +330,7 @@ def importar_despesas():
                 valor=Decimal(str(valor_convertido)),
                 mes_competencia=int(mes),
                 ano_competencia=int(ano),
-                status=row.get('Status', 'PENDENTE') if 'Status' in df.columns else 'PENDENTE',
+                status='PENDENTE',  # Status sempre PENDENTE na importação (será calculado dinamicamente)
                 criado_por=current_user.nome
             )
             db.session.add(despesa)

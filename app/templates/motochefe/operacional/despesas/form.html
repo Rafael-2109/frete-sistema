@@ -73,30 +73,26 @@
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="status" class="form-label">Status *</label>
-                        <select class="form-select" id="status" name="status" required>
-                            <option value="PENDENTE" {% if not despesa or despesa.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
-                            <option value="PAGO" {% if despesa and despesa.status == 'PAGO' %}selected{% endif %}>Pago</option>
-                            <option value="ATRASADO" {% if despesa and despesa.status == 'ATRASADO' %}selected{% endif %}>Atrasado</option>
-                            <option value="CANCELADO" {% if despesa and despesa.status == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
-                        </select>
-                    </div>
-                </div>
-
                 {% if despesa %}
                 <div class="card bg-light mb-3">
                     <div class="card-body">
                         <h6><i class="fas fa-info-circle"></i> Informações Adicionais</h6>
                         <small class="text-muted">
+                            <strong>Status:</strong>
+                            {% if despesa.status_dinamico == 'PAGO' %}
+                            <span class="badge bg-success">{{ despesa.status_dinamico }}</span>
+                            {% elif despesa.status_dinamico == 'ATRASADO' %}
+                            <span class="badge bg-danger">{{ despesa.status_dinamico }}</span>
+                            {% elif despesa.status_dinamico == 'CANCELADO' %}
+                            <span class="badge bg-secondary">{{ despesa.status_dinamico }}</span>
+                            {% else %}
+                            <span class="badge bg-warning">{{ despesa.status_dinamico }}</span>
+                            {% endif %}
+                            <small class="text-muted">(calculado automaticamente)</small><br>
                             <strong>Valor Pago:</strong> R$ {{ despesa.valor_pago or 0|valor_br }}<br>
                             <strong>Saldo Aberto:</strong> R$ {{ despesa.saldo_aberto|valor_br }}<br>
                             {% if despesa.data_pagamento %}
                             <strong>Data Pagamento:</strong> {{ despesa.data_pagamento.strftime('%d/%m/%Y') }}<br>
-                            {% endif %}
-                            {% if despesa.atrasada %}
-                            <span class="badge bg-danger">ATRASADA</span>
                             {% endif %}
                         </small>
                     </div>

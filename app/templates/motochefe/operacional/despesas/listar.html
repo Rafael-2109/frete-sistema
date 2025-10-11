@@ -105,7 +105,7 @@
                 </thead>
                 <tbody>
                     {% for d in despesas %}
-                    <tr {% if d.atrasada %}class="table-danger"{% endif %}>
+                    <tr {% if d.status_dinamico == 'ATRASADO' %}class="table-danger"{% endif %}>
                         <td>{{ d.id }}</td>
                         <td><strong>{{ d.tipo_despesa }}</strong></td>
                         <td>{{ d.descricao or '-' }}</td>
@@ -114,14 +114,14 @@
                         <td>R$ {{ d.valor_pago or 0|valor_br }}</td>
                         <td>R$ {{ d.saldo_aberto|valor_br }}</td>
                         <td>
-                            {% if d.status == 'PAGO' %}
-                            <span class="badge bg-success">{{ d.status }}</span>
-                            {% elif d.status == 'ATRASADO' or d.atrasada %}
-                            <span class="badge bg-danger">ATRASADO</span>
-                            {% elif d.status == 'CANCELADO' %}
-                            <span class="badge bg-secondary">{{ d.status }}</span>
+                            {% if d.status_dinamico == 'PAGO' %}
+                            <span class="badge bg-success">{{ d.status_dinamico }}</span>
+                            {% elif d.status_dinamico == 'ATRASADO' %}
+                            <span class="badge bg-danger">{{ d.status_dinamico }}</span>
+                            {% elif d.status_dinamico == 'CANCELADO' %}
+                            <span class="badge bg-secondary">{{ d.status_dinamico }}</span>
                             {% else %}
-                            <span class="badge bg-warning">{{ d.status }}</span>
+                            <span class="badge bg-warning">{{ d.status_dinamico }}</span>
                             {% endif %}
                         </td>
                         <td>{{ d.data_vencimento.strftime('%d/%m/%Y') if d.data_vencimento else '-' }}</td>
@@ -130,7 +130,7 @@
                                 <a href="{{ url_for('motochefe.editar_despesa', id=d.id) }}" class="btn btn-warning">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                {% if d.status != 'PAGO' %}
+                                {% if d.status_dinamico != 'PAGO' and d.status_dinamico != 'CANCELADO' %}
                                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalPagar{{ d.id }}">
                                     <i class="fas fa-dollar-sign"></i>
                                 </button>
@@ -226,8 +226,9 @@
                     <input type="file" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
                     <div class="alert alert-info mt-2">
                         <small>
-                            Colunas obrigatórias: <code>Tipo</code>, <code>Valor</code>, <code>Mês</code>, <code>Ano</code><br>
-                            Colunas opcionais: <code>Descrição</code>, <code>Status</code>
+                            <strong>Colunas obrigatórias:</strong> <code>Tipo</code>, <code>Valor</code>, <code>Mês</code>, <code>Ano</code><br>
+                            <strong>Colunas opcionais:</strong> <code>Descrição</code><br>
+                            <em class="text-muted">Nota: A coluna Status é ignorada - o status é calculado automaticamente.</em>
                         </small>
                     </div>
                 </div>

@@ -105,6 +105,27 @@ class DespesaMensal(db.Model):
         """Retorna saldo ainda não pago"""
         return self.valor - (self.valor_pago or 0)
 
+    @property
+    def status_dinamico(self):
+        """
+        Calcula status dinamicamente baseado em regras de negócio
+        EXCEÇÃO: Se status manual for CANCELADO, mantém CANCELADO
+        """
+        # Exceção: status CANCELADO é manual e permanece
+        if self.status == 'CANCELADO':
+            return 'CANCELADO'
+
+        # Regra 1: Se saldo zerado, está PAGO
+        if self.saldo_aberto <= 0:
+            return 'PAGO'
+
+        # Regra 2: Se tem vencimento e está vencido, está ATRASADO
+        if self.data_vencimento and self.data_vencimento < date.today():
+            return 'ATRASADO'
+
+        # Regra 3: Caso contrário, está PENDENTE
+        return 'PENDENTE'
+
     @classmethod
     def total_mes(cls, mes, ano):
         """Retorna total de despesas de um mês"""
