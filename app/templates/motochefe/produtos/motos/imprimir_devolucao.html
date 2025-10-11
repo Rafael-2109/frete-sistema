@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documento de Devolução {{ documento_devolucao }}</title>
+    <style>
+        /* Reset e configurações base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+        }
+
+        /* Configurações de impressão A4 */
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* Container principal */
+        .container {
+            max-width: 21cm;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }
+
+        /* Botões de ação */
+        .btn-print {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        /* Cabeçalho com logo */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header-logo {
+            flex: 0 0 auto;
+        }
+
+        .header-logo img {
+            max-width: 150px;
+            max-height: 80px;
+            object-fit: contain;
+        }
+
+        .header-info {
+            flex: 1;
+            text-align: right;
+        }
+
+        .header-info h1 {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 5px;
+        }
+
+        .header-info .numero-documento {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .header-info .data-devolucao {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Info section */
+        .info-section {
+            margin-bottom: 20px;
+            padding: 12px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .info-section p {
+            margin: 5px 0;
+            font-size: 11pt;
+        }
+
+        /* Tabela */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        table th {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-size: 10pt;
+        }
+
+        table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            font-size: 10pt;
+            vertical-align: top;
+        }
+
+        /* Linha de observação (abaixo da moto) */
+        .observacao-row {
+            background-color: #fffbea !important;
+            border-left: 3px solid #ff9800;
+        }
+
+        .observacao-row td {
+            padding: 10px;
+            font-size: 9pt;
+            color: #555;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .observacao-label {
+            font-weight: bold;
+            color: #ff9800;
+        }
+
+        /* Totais */
+        .totals {
+            font-weight: bold;
+            background-color: #f0f0f0 !important;
+            font-size: 11pt;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 9pt;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="margin-bottom: 20px;">
+        <button onclick="window.print()" class="btn-print btn-primary">
+            🖨️ Imprimir Documento
+        </button>
+        <button onclick="window.close()" class="btn-print btn-secondary">
+            ← Voltar
+        </button>
+        <hr>
+    </div>
+
+    <div class="container">
+        <!-- Cabeçalho com Logo -->
+        <div class="header">
+            <div class="header-logo">
+                <!-- Logo: mesma lógica do pedido -->
+                <img src="{{ url_for('static', filename='motochefe/logo.png') }}"
+                     alt="MotoCHEFE Logo"
+                     onerror="this.style.display='none'">
+            </div>
+            <div class="header-info">
+                <h1>DOCUMENTO DE DEVOLUÇÃO</h1>
+                <div class="numero-documento">{{ documento_devolucao }}</div>
+                <div class="data-devolucao">
+                    <strong>Data de Devolução:</strong> {{ data_devolucao }}<br>
+                    <strong>Emitido em:</strong> {{ data_emissao }} às {{ hora_emissao }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações Gerais -->
+        <div class="info-section">
+            <p><strong>Total de Motos:</strong> {{ motos|length }}</p>
+            <p><strong>Valor Total de Custo:</strong> R$ {{ valor_total_formatado }}</p>
+        </div>
+
+        <!-- Tabela de Motos -->
+        <table>
+            <thead>
+                <tr>
+                    <th>Chassi</th>
+                    <th>Motor</th>
+                    <th>Modelo</th>
+                    <th>Cor</th>
+                    <th>Custo</th>
+                    <th>NF Entrada</th>
+                    <th>Fornecedor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for moto in motos %}
+                <!-- Linha da moto -->
+                <tr>
+                    <td><code>{{ moto.numero_chassi }}</code></td>
+                    <td><code>{{ moto.numero_motor or 'N/A' }}</code></td>
+                    <td>
+                        <strong>{{ moto.modelo.nome_modelo }}</strong><br>
+                        <small>{{ moto.modelo.potencia_motor }}</small>
+                    </td>
+                    <td>{{ moto.cor }}</td>
+                    <td>R$ {{ "%.2f"|format(moto.custo_aquisicao) }}</td>
+                    <td>{{ moto.nf_entrada }}</td>
+                    <td>{{ moto.fornecedor }}</td>
+                </tr>
+                <!-- Linha de observação (se houver) -->
+                {% if moto.observacao_impressao %}
+                <tr class="observacao-row">
+                    <td colspan="7">
+                        <span class="observacao-label">📝 Observação:</span> {{ moto.observacao_impressao }}
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="totals">
+                    <td colspan="4" style="text-align: right;"><strong>TOTAL:</strong></td>
+                    <td><strong>R$ {{ valor_total_formatado }}</strong></td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Documento gerado automaticamente pelo Sistema MotoChefe</strong></p>
+            <p>Emitido em {{ data_emissao }} às {{ hora_emissao }}</p>
+        </div>
+    </div>
+</body>
+</html>

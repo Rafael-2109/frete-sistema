@@ -61,6 +61,8 @@ def criar_pedido_completo(dados_pedido, itens_json):
         }
     """
     # 1. CRIAR PEDIDO
+    # 🆕 Novos pedidos são criados com ativo=False e status='PENDENTE'
+    # Aguardam aprovação na tela "Confirmação de Pedidos"
     pedido = PedidoVendaMoto(
         numero_pedido=dados_pedido['numero_pedido'],
         cliente_id=dados_pedido['cliente_id'],
@@ -77,7 +79,10 @@ def criar_pedido_completo(dados_pedido, itens_json):
         transportadora_id=dados_pedido.get('transportadora_id'),
         tipo_frete=dados_pedido.get('tipo_frete'),
         observacoes=dados_pedido.get('observacoes'),
-        criado_por=dados_pedido.get('criado_por', 'SISTEMA')
+        criado_por=dados_pedido.get('criado_por', 'SISTEMA'),
+        # 🆕 NOVOS CAMPOS
+        ativo=False,            # Não aparece na lista até aprovação
+        status='PENDENTE'       # Aguardando aprovação
     )
 
     db.session.add(pedido)
@@ -178,8 +183,15 @@ def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf):
     """
     from datetime import timedelta
 
+    # 🆕 VALIDAÇÕES DE STATUS
     if pedido.faturado:
         raise Exception('Pedido já foi faturado')
+
+    if pedido.status != 'APROVADO':
+        raise Exception(f'Apenas pedidos aprovados podem ser faturados. Status atual: {pedido.status}')
+
+    if not pedido.ativo:
+        raise Exception('Pedido inativo não pode ser faturado')
 
     # Atualizar pedido
     pedido.faturado = True

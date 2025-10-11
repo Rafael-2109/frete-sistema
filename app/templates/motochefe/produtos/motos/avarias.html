@@ -122,7 +122,61 @@
     </div>
 </div>
 
+<!-- Modal Escolher Devolução -->
+<div class="modal fade" id="modalDevolucao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-undo"></i> Devolver Moto(s)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Chassi(s):</strong> <span id="chassisDevolucao"></span></p>
+                <hr>
+                <div class="mb-3">
+                    <label class="form-label"><strong>Escolha uma opção:</strong></label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="tipoDevolucao" id="novaDevolucao" value="nova" checked>
+                        <label class="form-check-label" for="novaDevolucao">
+                            <i class="fas fa-plus-circle text-success"></i> Criar Nova Devolução
+                            <br><small class="text-muted">Será gerado um novo número (DEV-###)</small>
+                        </label>
+                    </div>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="radio" name="tipoDevolucao" id="devolucaoExistente" value="existente">
+                        <label class="form-check-label" for="devolucaoExistente">
+                            <i class="fas fa-folder-open text-primary"></i> Incluir em Devolução Existente
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Select de devoluções existentes (aparece apenas se escolher "existente") -->
+                <div class="mb-3" id="divDevolucaoExistente" style="display: none;">
+                    <label for="selectDevolucao" class="form-label">Selecione a devolução:</label>
+                    <select class="form-select" id="selectDevolucao" name="documento_devolucao_existente">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+
+                <!-- Observação adicional -->
+                <div class="mb-3">
+                    <label for="observacaoDevolucao" class="form-label">Observação Adicional (opcional):</label>
+                    <textarea class="form-control" id="observacaoDevolucao" name="observacao_adicional" rows="3" placeholder="Ex: Defeito na bateria, trinca no chassi..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarDevolucao()">
+                    <i class="fas fa-check"></i> Confirmar Devolução
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let chassisSelecionados = [];  // Armazena chassis selecionados para devolução
+
 function toggleSelectAll() {
     const checkboxes = document.querySelectorAll('.checkbox-moto');
     const selectAll = document.getElementById('checkboxSelectAll').checked;
@@ -158,26 +212,12 @@ function reverterMoto(chassi) {
 }
 
 function devolverMoto(chassi) {
-    if (confirm('Confirma devolução da moto ao fornecedor?')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `/motochefe/motos/${chassi}/devolver`;
-
-        const csrf = document.createElement('input');
-        csrf.type = 'hidden';
-        csrf.name = 'csrf_token';
-        csrf.value = '{{ csrf_token() }}';
-        form.appendChild(csrf);
-
-        const origem = document.createElement('input');
-        origem.type = 'hidden';
-        origem.name = 'origem';
-        origem.value = 'avarias';
-        form.appendChild(origem);
-
-        document.body.appendChild(form);
-        form.submit();
-    }
+    // Abre modal para escolher tipo de devolução
+    chassisSelecionados = [chassi];
+    document.getElementById('chassisDevolucao').textContent = chassi;
+    carregarDevolucoesAbertas();
+    const modal = new bootstrap.Modal(document.getElementById('modalDevolucao'));
+    modal.show();
 }
 
 function reverterSelecionadas() {
@@ -187,6 +227,7 @@ function reverterSelecionadas() {
         return;
     }
     if (confirm(`Confirma reverter ${selecionadas.length} moto(s) para DISPONÍVEL?`)) {
+        // Reverter uma por vez (mantém comportamento atual)
         selecionadas.forEach(chassi => {
             reverterMoto(chassi);
         });
@@ -199,11 +240,129 @@ function devolverSelecionadas() {
         alert('Selecione pelo menos uma moto');
         return;
     }
-    if (confirm(`Confirma devolução de ${selecionadas.length} moto(s) ao fornecedor?`)) {
-        selecionadas.forEach(chassi => {
-            devolverMoto(chassi);
+
+    // Abre modal com múltiplos chassis
+    chassisSelecionados = selecionadas;
+    document.getElementById('chassisDevolucao').textContent = `${selecionadas.length} moto(s): ${selecionadas.join(', ')}`;
+    carregarDevolucoesAbertas();
+    const modal = new bootstrap.Modal(document.getElementById('modalDevolucao'));
+    modal.show();
+}
+
+function carregarDevolucoesAbertas() {
+    // Buscar devoluções abertas via API
+    fetch('/motochefe/motos/api/devolucoes-abertas')
+        .then(res => res.json())
+        .then(data => {
+            const select = document.getElementById('selectDevolucao');
+            select.innerHTML = '<option value="">-- Selecione uma devolução --</option>';
+
+            data.forEach(dev => {
+                const option = document.createElement('option');
+                option.value = dev.documento_devolucao;
+                option.textContent = `${dev.documento_devolucao} (${dev.qtd_motos} moto(s))`;
+                select.appendChild(option);
+            });
+
+            if (data.length === 0) {
+                select.innerHTML = '<option value="">Nenhuma devolução aberta</option>';
+                // Forçar seleção de "nova devolução"
+                document.getElementById('novaDevolucao').checked = true;
+                document.getElementById('devolucaoExistente').disabled = true;
+            }
+        })
+        .catch(err => {
+            console.error('Erro ao carregar devoluções:', err);
+            document.getElementById('selectDevolucao').innerHTML = '<option value="">Erro ao carregar</option>';
+        });
+}
+
+// Toggle do select de devoluções existentes
+document.addEventListener('DOMContentLoaded', function() {
+    const radioNova = document.getElementById('novaDevolucao');
+    const radioExistente = document.getElementById('devolucaoExistente');
+    const divSelect = document.getElementById('divDevolucaoExistente');
+
+    if (radioNova && radioExistente && divSelect) {
+        radioNova.addEventListener('change', () => {
+            divSelect.style.display = 'none';
+        });
+
+        radioExistente.addEventListener('change', () => {
+            divSelect.style.display = 'block';
         });
     }
+});
+
+function confirmarDevolucao() {
+    const tipoDevolucao = document.querySelector('input[name="tipoDevolucao"]:checked').value;
+    const observacao = document.getElementById('observacaoDevolucao').value;
+
+    let documentoDevolucao = null;
+
+    if (tipoDevolucao === 'existente') {
+        documentoDevolucao = document.getElementById('selectDevolucao').value;
+        if (!documentoDevolucao) {
+            alert('Selecione uma devolução existente');
+            return;
+        }
+    }
+
+    // Criar form e enviar
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/motochefe/motos/devolver-lote';
+
+    // CSRF
+    const csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrf_token';
+    csrf.value = '{{ csrf_token() }}';
+    form.appendChild(csrf);
+
+    // Chassis (múltiplos)
+    chassisSelecionados.forEach(chassi => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'chassis[]';
+        input.value = chassi;
+        form.appendChild(input);
+    });
+
+    // Tipo de devolução
+    const inputTipo = document.createElement('input');
+    inputTipo.type = 'hidden';
+    inputTipo.name = 'tipo_devolucao';
+    inputTipo.value = tipoDevolucao;
+    form.appendChild(inputTipo);
+
+    // Documento (se existente)
+    if (documentoDevolucao) {
+        const inputDoc = document.createElement('input');
+        inputDoc.type = 'hidden';
+        inputDoc.name = 'documento_devolucao';
+        inputDoc.value = documentoDevolucao;
+        form.appendChild(inputDoc);
+    }
+
+    // Observação
+    if (observacao) {
+        const inputObs = document.createElement('input');
+        inputObs.type = 'hidden';
+        inputObs.name = 'observacao_adicional';
+        inputObs.value = observacao;
+        form.appendChild(inputObs);
+    }
+
+    // Origem
+    const inputOrigem = document.createElement('input');
+    inputOrigem.type = 'hidden';
+    inputOrigem.name = 'origem';
+    inputOrigem.value = 'avarias';
+    form.appendChild(inputOrigem);
+
+    document.body.appendChild(form);
+    form.submit();
 }
 
 function mostrarObservacao(chassi, observacao) {

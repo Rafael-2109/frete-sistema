@@ -934,7 +934,7 @@ def listar_avarias():
 @login_required
 @requer_motochefe
 def devolver_moto(chassi):
-    """Marca moto como DEVOLVIDO (devolução ao fornecedor)"""
+    """[DEPRECATED] Marca moto como DEVOLVIDO - Use /motos/devolver-lote para nova lógica"""
     moto = Moto.query.get_or_404(chassi)
 
     try:
@@ -976,8 +976,12 @@ def reverter_avaria(chassi):
         if moto.status not in ['AVARIADO', 'DEVOLVIDO']:
             raise Exception('Apenas motos avariadas ou devolvidas podem ser revertidas')
 
-        # Registrar reversão na observação
-        moto.observacao += f"\n\nRevertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+        # Registrar reversão na observação (tratar caso seja None)
+        log_msg = f"\n\nRevertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+        if moto.observacao:
+            moto.observacao += log_msg
+        else:
+            moto.observacao = log_msg.strip()
 
         moto.status = 'DISPONIVEL'
         moto.atualizado_por = current_user.nome
@@ -1000,6 +1004,77 @@ def reverter_avaria(chassi):
         return redirect(url_for('motochefe.listar_avarias'))
 
 
+@motochefe_bp.route('/motos/api/devolucoes-abertas')
+@login_required
+@requer_motochefe
+def api_devolucoes_abertas():
+    """API: Retorna devoluções abertas (que podem receber mais motos)"""
+    from app.motochefe.services.devolucao_service import listar_devolucoes_abertas
+
+    devolucoes = listar_devolucoes_abertas()
+    return jsonify(devolucoes)
+
+
+@motochefe_bp.route('/motos/devolver-lote', methods=['POST'])
+@login_required
+@requer_motochefe
+def devolver_lote():
+    """Devolve múltiplas motos em lote (substitui devolver_moto individual)"""
+    from app.motochefe.services.devolucao_service import (
+        gerar_proximo_documento_devolucao,
+        devolver_motos_lote
+    )
+
+    try:
+        # Receber dados do form
+        chassis_list = request.form.getlist('chassis[]')
+        tipo_devolucao = request.form.get('tipo_devolucao')  # 'nova' ou 'existente'
+        observacao_adicional = request.form.get('observacao_adicional', '').strip()
+
+        if not chassis_list:
+            raise Exception('Nenhuma moto selecionada')
+
+        # Determinar documento de devolução
+        if tipo_devolucao == 'nova':
+            documento_devolucao = gerar_proximo_documento_devolucao()
+        elif tipo_devolucao == 'existente':
+            documento_devolucao = request.form.get('documento_devolucao')
+            if not documento_devolucao:
+                raise Exception('Documento de devolução não informado')
+        else:
+            raise Exception('Tipo de devolução inválido')
+
+        # Processar em lote
+        resultado = devolver_motos_lote(
+            chassis_list=chassis_list,
+            documento_devolucao=documento_devolucao,
+            observacao_adicional=observacao_adicional,
+            usuario=current_user.nome
+        )
+
+        # Mensagem de retorno
+        if resultado['sucesso'] > 0:
+            msg = f"{resultado['sucesso']} moto(s) devolvida(s) com sucesso no documento {documento_devolucao}"
+            if resultado['erros']:
+                msg += f" | {len(resultado['erros'])} erro(s): {'; '.join(resultado['erros'][:3])}"
+                flash(msg, 'warning')
+            else:
+                flash(msg, 'success')
+        else:
+            flash(f"Erro ao devolver motos: {'; '.join(resultado['erros'])}", 'danger')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar devolução: {str(e)}', 'danger')
+
+    # Redirecionar para onde veio
+    origem = request.form.get('origem', 'avarias')
+    if origem == 'estoque':
+        return redirect(url_for('motochefe.listar_motos'))
+    else:
+        return redirect(url_for('motochefe.listar_avarias'))
+
+
 @motochefe_bp.route('/motos/devolucoes')
 @login_required
 @requer_motochefe
@@ -1017,6 +1092,49 @@ def listar_devolucoes():
                          paginacao=paginacao)
 
 
+@motochefe_bp.route('/motos/devolucoes/<string:documento_devolucao>/imprimir')
+@login_required
+@requer_motochefe
+def imprimir_devolucao(documento_devolucao):
+    """Imprime documento de devolução agrupado"""
+    from app.motochefe.services.devolucao_service import obter_motos_por_documento_devolucao
+    import re
+
+    motos = obter_motos_por_documento_devolucao(documento_devolucao)
+
+    if not motos:
+        flash(f'Documento {documento_devolucao} não encontrado', 'warning')
+        return redirect(url_for('motochefe.listar_devolucoes'))
+
+    # Limpar observações para impressão (remover logs automáticos)
+    for moto in motos:
+        if moto.observacao:
+            # Remover logs de "Retornado para AVARIADO" e "Revertido para DISPONIVEL"
+            obs_limpa = moto.observacao
+            obs_limpa = re.sub(r'\n\nRetornado para AVARIADO em \d{2}/\d{2}/\d{4} \d{2}:\d{2} por .*?(?=\n|$)', '', obs_limpa)
+            obs_limpa = re.sub(r'\n\nRevertido para DISPONIVEL em \d{2}/\d{2}/\d{4} \d{2}:\d{2} por .*?(?=\n|$)', '', obs_limpa)
+            obs_limpa = re.sub(r'Retornado para AVARIADO em \d{2}/\d{2}/\d{4} \d{2}:\d{2} por .*?\n\n', '', obs_limpa)
+            obs_limpa = re.sub(r'Revertido para DISPONIVEL em \d{2}/\d{2}/\d{4} \d{2}:\d{2} por .*?\n\n', '', obs_limpa)
+            moto.observacao_impressao = obs_limpa.strip()
+        else:
+            moto.observacao_impressao = None
+
+    # Calcular valor total
+    valor_total = sum(moto.custo_aquisicao for moto in motos)
+
+    # Pegar data da primeira moto devolvida (quando foi marcada como DEVOLVIDO)
+    # Usar atualizado_em da primeira moto como data de devolução
+    data_devolucao = motos[0].atualizado_em.strftime('%d/%m/%Y') if motos[0].atualizado_em else date.today().strftime('%d/%m/%Y')
+
+    return render_template('motochefe/produtos/motos/imprimir_devolucao.html',
+                         documento_devolucao=documento_devolucao,
+                         motos=motos,
+                         valor_total_formatado=f'{valor_total:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+                         data_devolucao=data_devolucao,
+                         data_emissao=date.today().strftime('%d/%m/%Y'),
+                         hora_emissao=datetime.now().strftime('%H:%M:%S'))
+
+
 @motochefe_bp.route('/motos/<string:chassi>/voltar-avaria', methods=['POST'])
 @login_required
 @requer_motochefe
@@ -1028,8 +1146,12 @@ def voltar_avaria(chassi):
         if moto.status != 'DEVOLVIDO':
             raise Exception('Apenas motos devolvidas podem voltar para avaria')
 
-        # Registrar na observação
-        moto.observacao += f"\n\nRetornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+        # Registrar na observação (tratar caso seja None)
+        log_msg = f"\n\nRetornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+        if moto.observacao:
+            moto.observacao += log_msg
+        else:
+            moto.observacao = log_msg.strip()
 
         moto.status = 'AVARIADO'
         moto.atualizado_por = current_user.nome
@@ -1041,5 +1163,125 @@ def voltar_avaria(chassi):
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao retornar moto para avaria: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_devolucoes'))
+
+
+@motochefe_bp.route('/motos/reverter-avaria-lote', methods=['POST'])
+@login_required
+@requer_motochefe
+def reverter_avaria_lote():
+    """Reverte múltiplas motos de AVARIADO/DEVOLVIDO para DISPONIVEL em lote"""
+    try:
+        chassis_list = request.form.getlist('chassis[]')
+
+        if not chassis_list:
+            raise Exception('Nenhuma moto selecionada')
+
+        sucesso = 0
+        erros = []
+
+        for chassi in chassis_list:
+            try:
+                moto = Moto.query.get(chassi)
+                if not moto:
+                    erros.append(f'{chassi}: Não encontrada')
+                    continue
+
+                if moto.status not in ['AVARIADO', 'DEVOLVIDO']:
+                    erros.append(f'{chassi}: Status inválido ({moto.status})')
+                    continue
+
+                # Registrar reversão
+                if moto.observacao:
+                    moto.observacao += f"\n\nRevertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+                else:
+                    moto.observacao = f"Revertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+
+                moto.status = 'DISPONIVEL'
+                moto.atualizado_por = current_user.nome
+                sucesso += 1
+
+            except Exception as e:
+                erros.append(f'{chassi}: {str(e)}')
+
+        # Commit apenas se houver sucesso
+        if sucesso > 0:
+            db.session.commit()
+
+        # Mensagem de retorno
+        if sucesso > 0:
+            msg = f"{sucesso} moto(s) revertida(s) para DISPONIVEL com sucesso"
+            if erros:
+                msg += f" | {len(erros)} erro(s): {'; '.join(erros[:3])}"
+                flash(msg, 'warning')
+            else:
+                flash(msg, 'success')
+        else:
+            flash(f"Erro ao reverter motos: {'; '.join(erros)}", 'danger')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar reversão: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_devolucoes'))
+
+
+@motochefe_bp.route('/motos/voltar-avaria-lote', methods=['POST'])
+@login_required
+@requer_motochefe
+def voltar_avaria_lote():
+    """Volta múltiplas motos de DEVOLVIDO para AVARIADO em lote"""
+    try:
+        chassis_list = request.form.getlist('chassis[]')
+
+        if not chassis_list:
+            raise Exception('Nenhuma moto selecionada')
+
+        sucesso = 0
+        erros = []
+
+        for chassi in chassis_list:
+            try:
+                moto = Moto.query.get(chassi)
+                if not moto:
+                    erros.append(f'{chassi}: Não encontrada')
+                    continue
+
+                if moto.status != 'DEVOLVIDO':
+                    erros.append(f'{chassi}: Não está devolvida (status: {moto.status})')
+                    continue
+
+                # Registrar na observação
+                if moto.observacao:
+                    moto.observacao += f"\n\nRetornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+                else:
+                    moto.observacao = f"Retornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+
+                moto.status = 'AVARIADO'
+                moto.atualizado_por = current_user.nome
+                sucesso += 1
+
+            except Exception as e:
+                erros.append(f'{chassi}: {str(e)}')
+
+        # Commit apenas se houver sucesso
+        if sucesso > 0:
+            db.session.commit()
+
+        # Mensagem de retorno
+        if sucesso > 0:
+            msg = f"{sucesso} moto(s) retornada(s) para AVARIADO com sucesso"
+            if erros:
+                msg += f" | {len(erros)} erro(s): {'; '.join(erros[:3])}"
+                flash(msg, 'warning')
+            else:
+                flash(msg, 'success')
+        else:
+            flash(f"Erro ao voltar motos para avaria: {'; '.join(erros)}", 'danger')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar retorno: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_devolucoes'))

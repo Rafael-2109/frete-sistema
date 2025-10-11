@@ -124,9 +124,18 @@
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    {% if not p.faturado %}
-
-                                    {% endif %}
+                                    {# 🆕 Botão Imprimir - Verde se impresso, Amarelo se não #}
+                                    <a href="{{ url_for('motochefe.imprimir_pedido', id=p.id) }}"
+                                       class="btn {% if p.impresso %}btn-success{% else %}btn-warning{% endif %}"
+                                       target="_blank"
+                                       {% if p.impresso %}
+                                       title="Impresso em {{ p.impresso_em.strftime('%d/%m/%Y às %H:%M') if p.impresso_em else '-' }} por {{ p.impresso_por or 'N/A' }}"
+                                       {% else %}
+                                       title="Imprimir Pedido"
+                                       {% endif %}
+                                       style="color: #000; font-size: 1.1rem;">
+                                        <i class="fas fa-print"></i>
+                                    </a>
                                     <a href="{{ url_for('motochefe.detalhes_pedido', id=p.id) }}" class="btn btn-info">
                                         <i class="fas fa-eye"></i> Ver
                                     </a>
@@ -137,9 +146,58 @@
                                         <i class="fas fa-dollar-sign"></i> Receber
                                     </button>
                                     {% endif %}
+                                    {# 🆕 Botão Cancelar (apenas se não faturado) #}
+                                    {% if not p.faturado and p.status != 'CANCELADO' %}
+                                    <button type="button" class="btn btn-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalCancelar{{ p.id }}"
+                                            title="Solicitar Cancelamento">
+                                        <i class="fas fa-ban"></i> Cancelar
+                                    </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
+
+                        {# 🆕 Modal de Cancelamento #}
+                        <div class="modal fade" id="modalCancelar{{ p.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-dialog-centered modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-danger text-white">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-ban"></i> Solicitar Cancelamento
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('motochefe.solicitar_cancelamento_pedido', id=p.id) }}">
+                                        <div class="modal-body" style="overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; hyphens: auto;">
+                                            <p><strong>Pedido:</strong> {{ p.numero_pedido }}</p>
+                                            <p style="word-break: break-all;"><strong>Cliente:</strong> {{ p.cliente.cliente if p.cliente else '-' }}</p>
+                                            <p><strong>Valor:</strong> R$ {{ p.valor_total_pedido|valor_br }}</p>
+
+                                            <div class="alert alert-warning" style="white-space: normal; word-wrap: break-word; overflow-wrap: break-word;">
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                <strong>Atenção!</strong><br>
+                                                O pedido será <strong>imediatamente</strong> cancelado e removido da lista, mas precisará de aprovação na tela "Confirmação de Pedidos".
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label text-danger"><strong>Motivo do Cancelamento *</strong></label>
+                                                <textarea name="observacao" class="form-control" rows="3" required
+                                                          placeholder="Digite o motivo do cancelamento..."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="fas fa-ban"></i> Confirmar Cancelamento
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {# Fim Modal Cancelamento #}
 
                         <!-- Modal de Faturamento -->
                         <div class="modal fade" id="modalFaturar{{ p.id }}" tabindex="-1">

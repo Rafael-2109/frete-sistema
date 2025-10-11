@@ -724,6 +724,18 @@ def create_app(config_name=None):
                 is_comercial_only = current_user.perfil == "vendedor"
                 is_admin_comercial = current_user.perfil in ["administrador", "gerente_comercial"]
 
+            # 🆕 Contador de pendências do MotoChefe (para navbar)
+            count_pendentes_motochefe = 0
+            if current_user.is_authenticated and hasattr(current_user, 'pode_acessar_motochefe'):
+                try:
+                    if current_user.pode_acessar_motochefe():
+                        from app.motochefe.models import PedidoVendaAuditoria
+                        count_pendentes_motochefe = PedidoVendaAuditoria.query\
+                            .filter_by(confirmado=False, rejeitado=False)\
+                            .count()
+                except Exception:
+                    count_pendentes_motochefe = 0
+
             return {
                 # 'user_can_access': user_can_access,
                 # 'user_is_admin': user_is_admin,
@@ -732,6 +744,7 @@ def create_app(config_name=None):
                 "is_comercial_only": is_comercial_only,
                 "is_admin_comercial": is_admin_comercial,
                 "user_perfil": current_user.perfil if current_user.is_authenticated else None,
+                "count_pendentes_motochefe": count_pendentes_motochefe,  # 🆕 Contador global
             }
         except Exception as e:
             app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
@@ -743,6 +756,7 @@ def create_app(config_name=None):
                 "is_comercial_only": False,
                 "is_admin_comercial": False,
                 "user_perfil": None,
+                "count_pendentes_motochefe": 0,  # 🆕 Fallback
             }
 
     # 📦 Módulos de Carteira de Pedidos

@@ -2,6 +2,7 @@
 Modelos de Vendas - Sistema MotoCHEFE
 PedidoVendaMoto: Pedido que vira Venda quando faturado
 PedidoVendaMotoItem: Itens do pedido (chassi alocado via FIFO)
+PedidoVendaAuditoria: Auditoria de ações sobre pedidos (inserção e cancelamento)
 """
 from app import db
 from datetime import datetime, date
@@ -33,6 +34,10 @@ class PedidoVendaMoto(db.Model):
     faturado = db.Column(db.Boolean, default=False, nullable=False, index=True)
     enviado = db.Column(db.Boolean, default=False, nullable=False, index=True)
 
+    # 🆕 Status de aprovação do pedido
+    status = db.Column(db.String(20), default='APROVADO', nullable=False, index=True)
+    # Valores: 'PENDENTE', 'APROVADO', 'REJEITADO', 'CANCELADO'
+
     # Nota Fiscal (preenche quando faturado=True)
     numero_nf = db.Column(db.String(20), unique=True, nullable=True, index=True)
     data_nf = db.Column(db.Date, nullable=True)
@@ -57,6 +62,11 @@ class PedidoVendaMoto(db.Model):
 
     # Observações
     observacoes = db.Column(db.Text, nullable=True)
+
+    # Controle de impressão
+    impresso = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    impresso_por = db.Column(db.String(100), nullable=True)
+    impresso_em = db.Column(db.DateTime, nullable=True)
 
     # Relacionamentos
     cliente = db.relationship('ClienteMoto', backref='pedidos')
@@ -158,3 +168,66 @@ class PedidoVendaMotoItem(db.Model):
         preco_tabela = self.moto.modelo.preco_tabela
         excedente = self.preco_venda - preco_tabela
         return excedente if excedente > 0 else 0
+
+
+class PedidoVendaAuditoria(db.Model):
+    """
+    Auditoria de ações sobre pedidos (inserção e cancelamento)
+    Registra solicitações e confirmações/rejeições de mudanças
+
+    Fluxos:
+    1. INSERÇÃO: Novo pedido criado com ativo=False, status='PENDENTE'
+       - Aprovação: ativo=True, status='APROVADO'
+       - Rejeição: mantém ativo=False, status='REJEITADO'
+
+    2. CANCELAMENTO: Pedido existente alterado para ativo=False, status='CANCELADO'
+       - Aprovação: mantém ativo=False, status='CANCELADO'
+       - Rejeição: REVERTE para ativo=True, status='APROVADO'
+    """
+    __tablename__ = 'pedido_venda_auditoria'
+
+    # PK
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_venda_moto.id'), nullable=False, index=True)
+
+    # Ação
+    acao = db.Column(db.String(20), nullable=False, index=True)
+    # Valores: 'INSERCAO', 'CANCELAMENTO'
+
+    # Solicitação
+    observacao = db.Column(db.Text, nullable=True)  # Motivo/justificativa
+    solicitado_por = db.Column(db.String(100), nullable=False)
+    solicitado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Confirmação/Rejeição (mutuamente exclusivas)
+    confirmado = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    rejeitado = db.Column(db.Boolean, default=False, nullable=False, index=True)
+
+    motivo_rejeicao = db.Column(db.Text, nullable=True)  # Obrigatório se rejeitado=True
+
+    confirmado_por = db.Column(db.String(100), nullable=True)
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+
+    # Relacionamento
+    pedido = db.relationship('PedidoVendaMoto', backref='auditorias')
+
+    # Índices compostos para queries eficientes
+    __table_args__ = (
+        db.Index('idx_auditoria_pendente', 'confirmado', 'rejeitado'),
+        db.Index('idx_auditoria_acao_status', 'acao', 'confirmado', 'rejeitado'),
+    )
+
+    def __repr__(self):
+        return f'<PedidoVendaAuditoria Pedido:{self.pedido_id} Acao:{self.acao} Confirmado:{self.confirmado}>'
+
+    @property
+    def status_atual(self):
+        """Retorna status da ação"""
+        if self.confirmado:
+            return 'APROVADO'
+        elif self.rejeitado:
+            return 'REJEITADO'
+        else:
+            return 'PENDENTE'

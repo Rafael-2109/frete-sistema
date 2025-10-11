@@ -70,6 +70,13 @@
                         <a href="{{ url_for('motochefe.listar_pedidos') }}" class="list-group-item list-group-item-action">
                             <i class="fas fa-file-invoice text-danger"></i> Pedidos de Venda
                         </a>
+                        {# 🆕 Link para Confirmação de Pedidos com badge #}
+                        <a href="{{ url_for('motochefe.confirmacao_pedidos') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-tasks text-warning"></i> Confirmação de Pedidos
+                            {% if count_pendentes_motochefe > 0 %}
+                            <span class="badge bg-danger float-end">{{ count_pendentes_motochefe }}</span>
+                            {% endif %}
+                        </a>
                         <a href="{{ url_for('motochefe.listar_titulos') }}" class="list-group-item list-group-item-action">
                             <i class="fas fa-receipt text-danger"></i> Títulos a Receber
                         </a>

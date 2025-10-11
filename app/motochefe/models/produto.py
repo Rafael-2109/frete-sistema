@@ -84,6 +84,10 @@ class Moto(db.Model):
     # Observações (avarias, substituições, etc)
     observacao = db.Column(db.Text, nullable=True)
 
+    # 🆕 CONTROLE DE DEVOLUÇÃO
+    documento_devolucao = db.Column(db.String(20), nullable=True, index=True)
+    # Formato: DEV-001, DEV-002... Agrupa múltiplas motos em uma devolução
+
     # Localização física (estoque)
     pallet = db.Column(db.String(20), nullable=True)
 

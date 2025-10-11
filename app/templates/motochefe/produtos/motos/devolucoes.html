@@ -34,6 +34,7 @@
                     <thead>
                         <tr>
                             <th><input type="checkbox" id="checkboxSelectAll" onclick="toggleSelectAll()"></th>
+                            <th>Doc. Devolução</th>
                             <th>Chassi</th>
                             <th>Motor</th>
                             <th>Modelo</th>
@@ -48,6 +49,20 @@
                         {% for moto in motos %}
                         <tr>
                             <td><input type="checkbox" class="checkbox-moto" value="{{ moto.numero_chassi }}"></td>
+                            <td>
+                                {% if moto.documento_devolucao %}
+                                <strong class="text-danger">{{ moto.documento_devolucao }}</strong>
+                                <br>
+                                <a href="{{ url_for('motochefe.imprimir_devolucao', documento_devolucao=moto.documento_devolucao) }}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   target="_blank"
+                                   title="Imprimir Documento">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td><code>{{ moto.numero_chassi }}</code></td>
                             <td><code>{{ moto.numero_motor }}</code></td>
                             <td>
@@ -76,7 +91,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted">Nenhuma moto devolvida</td>
+                            <td colspan="10" class="text-center text-muted">Nenhuma moto devolvida</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -181,9 +196,29 @@ function reverterSelecionadas() {
         return;
     }
     if (confirm(`Confirma reverter ${selecionadas.length} moto(s) para DISPONÍVEL?`)) {
+        // Criar form e enviar em lote
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/motochefe/motos/reverter-avaria-lote';
+
+        // CSRF
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrf_token';
+        csrf.value = '{{ csrf_token() }}';
+        form.appendChild(csrf);
+
+        // Chassis (múltiplos)
         selecionadas.forEach(chassi => {
-            setTimeout(() => reverterMoto(chassi), 100); // Pequeno delay para evitar sobrecarga
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'chassis[]';
+            input.value = chassi;
+            form.appendChild(input);
         });
+
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 
@@ -194,9 +229,29 @@ function voltarAvariaSelecionadas() {
         return;
     }
     if (confirm(`Confirma retornar ${selecionadas.length} moto(s) para AVARIADO?`)) {
+        // Criar form e enviar em lote
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/motochefe/motos/voltar-avaria-lote';
+
+        // CSRF
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrf_token';
+        csrf.value = '{{ csrf_token() }}';
+        form.appendChild(csrf);
+
+        // Chassis (múltiplos)
         selecionadas.forEach(chassi => {
-            setTimeout(() => voltarAvaria(chassi), 100); // Pequeno delay para evitar sobrecarga
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'chassis[]';
+            input.value = chassi;
+            form.appendChild(input);
         });
+
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 

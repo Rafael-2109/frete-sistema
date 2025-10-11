@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 
-{#
-⚠️ TEMPLATE DEPRECATED - Usa campos antigos de TituloFinanceiro na seção de títulos
-TODO: Atualizar para novo sistema
-#}
+
 
 {% block title %}Detalhes do Pedido {{ pedido.numero_pedido }} - MotoChefe{% endblock %}
 
@@ -12,19 +9,36 @@ TODO: Atualizar para novo sistema
     <!-- Cabeçalho -->
     <div class="row mb-4">
         <div class="col-md-12">
-            <h2><i class="fas fa-shopping-cart"></i> Pedido {{ pedido.numero_pedido }}</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_pedidos') }}">Pedidos</a></li>
-                    <li class="breadcrumb-item active">{{ pedido.numero_pedido }}</li>
-                </ol>
-            </nav>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="fas fa-shopping-cart"></i> Pedido {{ pedido.numero_pedido }}</h2>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ url_for('motochefe.listar_pedidos') }}">Pedidos</a></li>
+                            <li class="breadcrumb-item active">{{ pedido.numero_pedido }}</li>
+                        </ol>
+                    </nav>
+                </div>
+                <div>
+                    {# 🆕 Botão Imprimir Pedido #}
+                    <a href="{{ url_for('motochefe.imprimir_pedido', id=pedido.id) }}"
+                       class="btn btn-secondary btn-lg"
+                       target="_blank">
+                        <i class="fas fa-print"></i> Imprimir Pedido
+                        {% if pedido.impresso %}
+                        <span class="badge bg-success ms-2">
+                            <i class="fas fa-check"></i> Impresso
+                        </span>
+                        {% endif %}
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Status Cards -->
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card {% if pedido.faturado %}border-success{% else %}border-warning{% endif %}">
                 <div class="card-body text-center">
                     <h6>Status Faturamento</h6>
@@ -40,7 +54,7 @@ TODO: Atualizar para novo sistema
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card {% if pedido.enviado %}border-success{% else %}border-secondary{% endif %}">
                 <div class="card-body text-center">
                     <h6>Status Envio</h6>
@@ -52,7 +66,23 @@ TODO: Atualizar para novo sistema
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <div class="card {% if pedido.impresso %}border-success{% else %}border-warning{% endif %}">
+                <div class="card-body text-center">
+                    <h6>Status Impressão</h6>
+                    {% if pedido.impresso %}
+                        <h4 class="text-success"><i class="fas fa-print"></i> IMPRESSO</h4>
+                        <p class="mb-0" style="font-size: 0.85rem;">
+                            {{ pedido.impresso_em.strftime('%d/%m/%Y às %H:%M') if pedido.impresso_em else '-' }}
+                        </p>
+                        <small class="text-muted">por {{ pedido.impresso_por or 'N/A' }}</small>
+                    {% else %}
+                        <h4 class="text-warning"><i class="fas fa-clock"></i> NÃO IMPRESSO</h4>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
             <div class="card border-primary">
                 <div class="card-body text-center">
                     <h6>Valor Total</h6>

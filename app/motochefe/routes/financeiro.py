@@ -866,22 +866,33 @@ def detalhes_pagamento(movimentacao_id):
             # Tentar obter pedido_id do item ou do objeto relacionado
             pedido_id = None
             numero_pedido = None
+            valor_pedido = None
 
             if hasattr(item.get('movimentacao'), 'pedido_id'):
                 pedido_id = item.get('movimentacao').pedido_id
+                # Buscar objeto pedido completo
+                if pedido_id and item.get('movimentacao').pedido:
+                    numero_pedido = item.get('movimentacao').pedido.numero_pedido
+                    valor_pedido = item.get('movimentacao').pedido.valor_total_pedido
             elif hasattr(item.get('item_objeto'), 'pedido_id'):
                 pedido_id = item.get('item_objeto').pedido_id
+                # Buscar objeto pedido completo
+                if pedido_id and hasattr(item.get('item_objeto'), 'pedido') and item.get('item_objeto').pedido:
+                    numero_pedido = item.get('item_objeto').pedido.numero_pedido
+                    valor_pedido = item.get('item_objeto').pedido.valor_total_pedido
             elif hasattr(item.get('item_objeto'), 'pedido'):
                 pedido_obj = item.get('item_objeto').pedido
                 if pedido_obj:
                     pedido_id = pedido_obj.id
                     numero_pedido = pedido_obj.numero_pedido
+                    valor_pedido = pedido_obj.valor_total_pedido
 
             # Separar itens COM pedido vs SEM pedido
             if pedido_id:
                 if pedido_id not in itens_por_pedido:
                     itens_por_pedido[pedido_id] = {
                         'numero_pedido': numero_pedido or f'Pedido #{pedido_id}',
+                        'valor_pedido': valor_pedido or 0,
                         'itens': []
                     }
                 itens_por_pedido[pedido_id]['itens'].append(item)

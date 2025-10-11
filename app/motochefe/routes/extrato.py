@@ -2,10 +2,10 @@
 Rotas de Extrato Financeiro - MotoChefe
 Movimentações consolidadas (recebimentos e pagamentos)
 """
-from flask import render_template, redirect, url_for, flash, request, send_file
-from flask_login import login_required, current_user
-from decimal import Decimal
+from flask import render_template, request, send_file
+from flask_login import login_required
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from io import BytesIO
 import pandas as pd
 
@@ -67,7 +67,6 @@ def extrato_financeiro():
     movimentacoes_paginadas = movimentacoes[inicio:fim]
 
     # Totais (IMPORTANTE: inicializar com Decimal para preservar casas decimais)
-    from decimal import Decimal
     total_recebimentos = sum(
         (m['valor'] for m in movimentacoes if m['tipo'] == 'RECEBIMENTO'),
         Decimal('0')

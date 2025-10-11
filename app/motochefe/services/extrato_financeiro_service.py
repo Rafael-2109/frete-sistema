@@ -57,7 +57,7 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
         mf.categoria AS categoria,
         mf.data_movimentacao AS data_movimentacao,
         CONCAT(
-            mf.categoria, ' - ', mf.descricao,
+            mf.descricao,
             CASE WHEN mf.origem_identificacao IS NOT NULL
                  THEN CONCAT(' - ', mf.origem_identificacao)
                  ELSE '' END
@@ -71,7 +71,8 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
         mf.numero_chassi AS numero_chassi,
         NULL AS numero_embarque,
         CONCAT('/motochefe/recebimentos/', mf.id, '/detalhes') AS rota_detalhes,
-        CAST(mf.id AS TEXT) AS id_original
+        CAST(mf.id AS TEXT) AS id_original,
+        mf.criado_em AS criado_em
     FROM movimentacao_financeira mf
     WHERE mf.tipo = 'RECEBIMENTO'
       AND mf.movimentacao_origem_id IS NULL
@@ -84,9 +85,9 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
     if cliente_id:
         # Filtrar por cliente através do pedido relacionado
         filtros_recebimento.append(f"AND mf.pedido_id IN (SELECT id FROM pedido_venda_moto WHERE cliente_id = {cliente_id})")
-    if tipo_movimentacao == 'PAGAMENTO':
-        sql_parts.append("SELECT NULL LIMIT 0")  # Não incluir recebimentos
-    else:
+
+    # Só incluir recebimentos se não estiver filtrando apenas pagamentos
+    if tipo_movimentacao != 'PAGAMENTO':
         sql_recebimento += " " + " ".join(filtros_recebimento)
         sql_parts.append(sql_recebimento)
 
@@ -117,7 +118,8 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
             mf.numero_chassi AS numero_chassi,
             NULL AS numero_embarque,
             CONCAT('/motochefe/pagamentos/', mf.id, '/detalhes') AS rota_detalhes,
-            CAST(mf.id AS TEXT) AS id_original
+            CAST(mf.id AS TEXT) AS id_original,
+            mf.criado_em AS criado_em
         FROM movimentacao_financeira mf
         WHERE mf.tipo = 'PAGAMENTO'
           AND mf.movimentacao_origem_id IS NULL
@@ -151,7 +153,8 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
             NULL AS numero_chassi,
             em.numero_embarque AS numero_embarque,
             CONCAT('/motochefe/embarques/', em.id, '/editar') AS rota_detalhes,
-            CAST(em.id AS TEXT) AS id_original
+            CAST(em.id AS TEXT) AS id_original,
+            em.criado_em AS criado_em
         FROM embarque_moto em
         JOIN transportadora_moto tm ON em.transportadora_id = tm.id
         WHERE em.status_pagamento_frete = 'PAGO'
@@ -175,7 +178,7 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
         return []
 
     sql_final = " UNION ALL ".join(sql_parts)
-    sql_final += " ORDER BY data_movimentacao DESC, id_original DESC"
+    sql_final += " ORDER BY criado_em DESC, id_original DESC"
 
     resultado = db.session.execute(text(sql_final))
 
@@ -194,7 +197,8 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
             'numero_chassi': row[8],
             'numero_embarque': row[9],
             'rota_detalhes': row[10],
-            'id_original': row[11]
+            'id_original': row[11],
+            'criado_em': row[12]
         })
 
     return movimentacoes

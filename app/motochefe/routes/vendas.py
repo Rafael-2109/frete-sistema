@@ -13,7 +13,7 @@ from app.motochefe.models import (
     PedidoVendaMoto, TituloFinanceiro,
     ClienteMoto, VendedorMoto, EquipeVendasMoto,
     TransportadoraMoto, EmpresaVendaMoto, ModeloMoto, Moto,
-    ComissaoVendedor
+    ComissaoVendedor, PedidoVendaAuditoria
 )
 
 # ===== EMPRESA VENDA (FATURAMENTO) =====
@@ -240,17 +240,30 @@ def adicionar_pedido():
             # 4. CRIAR PEDIDO COMPLETO (novo sistema FIFO)
             # Cria: Pedido + Itens + Reserva Motos + Títulos com FIFO entre parcelas + Títulos a Pagar
             resultado = criar_pedido_completo(dados_pedido, itens)
+            pedido = resultado['pedido']
+
+            # 🆕 5. CRIAR REGISTRO DE AUDITORIA
+            # Pedido foi criado com ativo=False e status='PENDENTE'
+            # Registra ação de INSERÇÃO aguardando confirmação
+            auditoria = PedidoVendaAuditoria(
+                pedido_id=pedido.id,
+                acao='INSERCAO',
+                observacao=f'Novo pedido criado via sistema',
+                solicitado_por=current_user.nome,
+                solicitado_em=datetime.now()
+            )
+            db.session.add(auditoria)
 
             db.session.commit()
 
-            # 4. Mensagem de sucesso detalhada
-            pedido = resultado['pedido']
+            # 6. Mensagem de sucesso detalhada
             total_titulos = len(resultado['titulos_financeiros'])
             total_titulos_pagar = len(resultado['titulos_a_pagar'])
 
             flash(
                 f'Pedido "{pedido.numero_pedido}" criado com sucesso! '
-                f'{total_titulos} títulos a receber e {total_titulos_pagar} títulos a pagar gerados.',
+                f'{total_titulos} títulos a receber e {total_titulos_pagar} títulos a pagar gerados. '
+                f'Aguardando aprovação na tela "Confirmação de Pedidos".',
                 'success'
             )
             return redirect(url_for('motochefe.listar_pedidos'))
@@ -895,3 +908,286 @@ def substituir_moto(pedido_id):
         flash(f'Erro ao substituir moto: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.detalhes_pedido', id=pedido_id))
+
+
+# ===== CONFIRMAÇÃO DE PEDIDOS (APROVAÇÃO/REJEIÇÃO) =====
+
+@motochefe_bp.route('/confirmacao-pedidos')
+@login_required
+@requer_motochefe
+def confirmacao_pedidos():
+    """
+    Lista todas as ações pendentes de confirmação
+    - INSERÇÃO: Novos pedidos aguardando aprovação
+    - CANCELAMENTO: Pedidos solicitados para cancelamento
+    """
+    # Buscar todas as auditorias pendentes
+    pendentes = PedidoVendaAuditoria.query\
+        .filter_by(confirmado=False, rejeitado=False)\
+        .join(PedidoVendaMoto)\
+        .order_by(PedidoVendaAuditoria.solicitado_em.desc())\
+        .all()
+
+    return render_template('motochefe/vendas/pedidos/confirmacao_pedidos.html',
+                         pendentes=pendentes)
+
+
+@motochefe_bp.route('/pedidos/<int:id>/solicitar-cancelamento', methods=['POST'])
+@login_required
+@requer_motochefe
+def solicitar_cancelamento_pedido(id):
+    """
+    Solicita cancelamento de um pedido
+    IMEDIATAMENTE altera: ativo=False, status='CANCELADO'
+    Gestor pode aprovar (confirma) ou rejeitar (reverte)
+    """
+    pedido = PedidoVendaMoto.query.get_or_404(id)
+
+    try:
+        observacao = request.form.get('observacao', '').strip()
+
+        if not observacao:
+            raise Exception('Motivo do cancelamento é obrigatório')
+
+        # Validações
+        if pedido.status == 'CANCELADO':
+            raise Exception('Pedido já está cancelado')
+
+        if pedido.faturado:
+            raise Exception('Pedido faturado não pode ser cancelado. Entre em contato com financeiro.')
+
+        # 🆕 CANCELAMENTO IMEDIATO
+        # Altera AGORA para não aparecer na lista
+        pedido.ativo = False
+        pedido.status = 'CANCELADO'
+        pedido.atualizado_por = current_user.nome
+
+        # Criar registro de auditoria PENDENTE
+        auditoria = PedidoVendaAuditoria(
+            pedido_id=pedido.id,
+            acao='CANCELAMENTO',
+            observacao=observacao,
+            solicitado_por=current_user.nome,
+            solicitado_em=datetime.now()
+        )
+        db.session.add(auditoria)
+
+        db.session.commit()
+
+        flash(
+            f'Cancelamento do pedido "{pedido.numero_pedido}" solicitado com sucesso! '
+            f'Aguardando confirmação na tela "Confirmação de Pedidos".',
+            'warning'
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao solicitar cancelamento: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_pedidos'))
+
+
+@motochefe_bp.route('/pedidos/auditoria/<int:auditoria_id>/aprovar', methods=['POST'])
+@login_required
+@requer_motochefe
+def aprovar_acao_pedido(auditoria_id):
+    """
+    Aprova uma ação pendente (INSERÇÃO ou CANCELAMENTO)
+
+    INSERÇÃO: ativo=False → ativo=True, status='PENDENTE' → status='APROVADO'
+    CANCELAMENTO: mantém ativo=False, status='CANCELADO' (já aplicado)
+    """
+    auditoria = PedidoVendaAuditoria.query.get_or_404(auditoria_id)
+
+    try:
+        # Validações
+        if auditoria.confirmado:
+            raise Exception('Ação já foi aprovada')
+
+        if auditoria.rejeitado:
+            raise Exception('Ação já foi rejeitada')
+
+        pedido = auditoria.pedido
+
+        # Processar aprovação conforme tipo de ação
+        if auditoria.acao == 'INSERCAO':
+            # APROVAR INSERÇÃO: Ativar pedido
+            pedido.ativo = True
+            pedido.status = 'APROVADO'
+            pedido.atualizado_por = current_user.nome
+
+            mensagem = f'Pedido "{pedido.numero_pedido}" aprovado com sucesso! Agora aparece na lista de pedidos.'
+
+        elif auditoria.acao == 'CANCELAMENTO':
+            # APROVAR CANCELAMENTO: Pedido já está ativo=False, status='CANCELADO'
+            # Apenas confirma a auditoria
+            mensagem = f'Cancelamento do pedido "{pedido.numero_pedido}" aprovado com sucesso!'
+
+        else:
+            raise Exception(f'Ação desconhecida: {auditoria.acao}')
+
+        # Confirmar auditoria
+        auditoria.confirmado = True
+        auditoria.confirmado_por = current_user.nome
+        auditoria.confirmado_em = datetime.now()
+
+        db.session.commit()
+
+        flash(mensagem, 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao aprovar ação: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.confirmacao_pedidos'))
+
+
+@motochefe_bp.route('/pedidos/auditoria/<int:auditoria_id>/rejeitar', methods=['POST'])
+@login_required
+@requer_motochefe
+def rejeitar_acao_pedido(auditoria_id):
+    """
+    Rejeita uma ação pendente (INSERÇÃO ou CANCELAMENTO)
+
+    INSERÇÃO: mantém ativo=False, status='PENDENTE' → status='REJEITADO'
+    CANCELAMENTO: REVERTE para ativo=True, status='APROVADO' (volta ao normal)
+    """
+    auditoria = PedidoVendaAuditoria.query.get_or_404(auditoria_id)
+
+    try:
+        motivo_rejeicao = request.form.get('motivo_rejeicao', '').strip()
+
+        if not motivo_rejeicao:
+            raise Exception('Motivo da rejeição é obrigatório')
+
+        # Validações
+        if auditoria.confirmado:
+            raise Exception('Ação já foi aprovada')
+
+        if auditoria.rejeitado:
+            raise Exception('Ação já foi rejeitada')
+
+        pedido = auditoria.pedido
+
+        # Processar rejeição conforme tipo de ação
+        if auditoria.acao == 'INSERCAO':
+            # REJEITAR INSERÇÃO: Mantém inativo e muda status para REJEITADO
+            pedido.status = 'REJEITADO'
+            pedido.atualizado_por = current_user.nome
+
+            mensagem = f'Pedido "{pedido.numero_pedido}" rejeitado. Permanece inativo no sistema.'
+
+        elif auditoria.acao == 'CANCELAMENTO':
+            # REJEITAR CANCELAMENTO: REVERTE para estado ativo
+            pedido.ativo = True
+            pedido.status = 'APROVADO'
+            pedido.atualizado_por = current_user.nome
+
+            mensagem = f'Cancelamento do pedido "{pedido.numero_pedido}" rejeitado. Pedido voltou ao normal!'
+
+        else:
+            raise Exception(f'Ação desconhecida: {auditoria.acao}')
+
+        # Registrar rejeição
+        auditoria.rejeitado = True
+        auditoria.motivo_rejeicao = motivo_rejeicao
+        auditoria.confirmado_por = current_user.nome
+        auditoria.confirmado_em = datetime.now()
+
+        db.session.commit()
+
+        flash(mensagem, 'warning')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao rejeitar ação: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.confirmacao_pedidos'))
+
+
+@motochefe_bp.route('/confirmacao-pedidos/historico')
+@login_required
+@requer_motochefe
+def historico_confirmacoes():
+    """
+    Lista histórico completo de confirmações/rejeições
+    Mostra todas as auditorias processadas (confirmadas ou rejeitadas)
+    com campos completos de auditoria
+    """
+    from sqlalchemy import desc, or_
+
+    # Filtros
+    acao_filtro = request.args.get('acao', '')
+    status_filtro = request.args.get('status', '')
+    data_inicio = request.args.get('data_inicio', '')
+    data_fim = request.args.get('data_fim', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+
+    # Query base: apenas auditorias processadas (confirmadas ou rejeitadas)
+    query = PedidoVendaAuditoria.query.filter(
+        or_(
+            PedidoVendaAuditoria.confirmado == True,
+            PedidoVendaAuditoria.rejeitado == True
+        )
+    ).join(PedidoVendaMoto)
+
+    # Aplicar filtros
+    if acao_filtro:
+        query = query.filter(PedidoVendaAuditoria.acao == acao_filtro)
+
+    if status_filtro == 'APROVADO':
+        query = query.filter(PedidoVendaAuditoria.confirmado == True)
+    elif status_filtro == 'REJEITADO':
+        query = query.filter(PedidoVendaAuditoria.rejeitado == True)
+
+    if data_inicio:
+        try:
+            data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d')
+            query = query.filter(PedidoVendaAuditoria.confirmado_em >= data_inicio_dt)
+        except ValueError:
+            pass
+
+    if data_fim:
+        try:
+            from datetime import timedelta
+            data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(PedidoVendaAuditoria.confirmado_em < data_fim_dt)
+        except ValueError:
+            pass
+
+    # Ordenar por data de confirmação (mais recentes primeiro)
+    query = query.order_by(desc(PedidoVendaAuditoria.confirmado_em))
+
+    # Paginar
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('motochefe/vendas/pedidos/historico_confirmacoes.html',
+                         historico=paginacao.items,
+                         paginacao=paginacao,
+                         acao_filtro=acao_filtro,
+                         status_filtro=status_filtro,
+                         data_inicio=data_inicio,
+                         data_fim=data_fim)
+
+
+# ===== IMPRESSÃO DE PEDIDOS =====
+
+@motochefe_bp.route('/pedidos/<int:id>/imprimir')
+@login_required
+@requer_motochefe
+def imprimir_pedido(id):
+    """
+    Exibe pedido formatado para impressão A4
+    Marca pedido como impresso no primeiro acesso
+    """
+    pedido = PedidoVendaMoto.query.get_or_404(id)
+
+    # Marcar como impresso na primeira impressão
+    if not pedido.impresso:
+        pedido.impresso = True
+        pedido.impresso_por = current_user.nome
+        pedido.impresso_em = datetime.now()
+        db.session.commit()
+
+    return render_template('motochefe/vendas/pedidos/imprimir.html', pedido=pedido)

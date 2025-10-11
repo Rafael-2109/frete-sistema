@@ -24,7 +24,8 @@ from .produto import (
 # Vendas
 from .vendas import (
     PedidoVendaMoto,
-    PedidoVendaMotoItem
+    PedidoVendaMotoItem,
+    PedidoVendaAuditoria
 )
 
 # Financeiro
@@ -63,6 +64,7 @@ __all__ = [
     # Vendas
     'PedidoVendaMoto',
     'PedidoVendaMotoItem',
+    'PedidoVendaAuditoria',
     # Financeiro
     'TituloFinanceiro',
     'ComissaoVendedor',

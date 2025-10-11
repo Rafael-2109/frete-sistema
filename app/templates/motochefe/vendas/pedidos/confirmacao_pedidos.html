@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-tasks"></i> Confirmação de Pedidos</h2>
+        <div>
+            <a href="{{ url_for('motochefe.historico_confirmacoes') }}" class="btn btn-info me-2">
+                <i class="fas fa-history"></i> Ver Histórico
+            </a>
+            <a href="{{ url_for('motochefe.listar_pedidos') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar para Pedidos
+            </a>
+        </div>
+    </div>
+
+    {% if pendentes|length == 0 %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Não há ações pendentes de confirmação.
+    </div>
+    {% else %}
+    <!-- Tabela de Pendências -->
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                <i class="fas fa-exclamation-triangle"></i>
+                {{ pendentes|length }} ação(ões) aguardando confirmação
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Ação</th>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Valor Total</th>
+                            <th>Solicitado</th>
+                            <th>Observação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aud in pendentes %}
+                        <tr>
+                            {# Coluna 1: Tipo de Ação #}
+                            <td>
+                                {% if aud.acao == 'INSERCAO' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-plus"></i> INSERÇÃO
+                                </span>
+                                {% elif aud.acao == 'CANCELAMENTO' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times"></i> CANCELAMENTO
+                                </span>
+                                {% endif %}
+                            </td>
+
+                            {# Coluna 2: Número do Pedido #}
+                            <td>
+                                <strong>{{ aud.pedido.numero_pedido }}</strong><br>
+                                <small class="text-muted">
+                                    {{ aud.pedido.data_pedido.strftime('%d/%m/%Y') if aud.pedido.data_pedido else '-' }}
+                                </small>
+                            </td>
+
+                            {# Coluna 3: Cliente #}
+                            <td>
+                                {{ aud.pedido.cliente.cliente if aud.pedido.cliente else '-' }}
+                            </td>
+
+                            {# Coluna 4: Valor Total #}
+                            <td>
+                                {{ aud.pedido.quantidade_motos }} Motos<br>
+                                <small class="text-success fw-bold">
+                                    R$ {{ aud.pedido.valor_total_pedido|valor_br }}
+                                </small>
+                            </td>
+
+                            {# Coluna 5: Solicitado por/em #}
+                            <td>
+                                <small>
+                                    <strong>{{ aud.solicitado_por }}</strong><br>
+                                    {{ aud.solicitado_em.strftime('%d/%m/%Y %H:%M') if aud.solicitado_em else '-' }}
+                                </small>
+                            </td>
+
+                            {# Coluna 6: Observação #}
+                            <td>
+                                <small>{{ aud.observacao or '-' }}</small>
+                            </td>
+
+                            {# Coluna 7: Botões de Ação #}
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <!-- Botão Aprovar -->
+                                    <button type="button" class="btn btn-success"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalAprovar{{ aud.id }}"
+                                            title="Aprovar ação">
+                                        <i class="fas fa-check"></i> Aprovar
+                                    </button>
+
+                                    <!-- Botão Rejeitar -->
+                                    <button type="button" class="btn btn-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalRejeitar{{ aud.id }}"
+                                            title="Rejeitar ação">
+                                        <i class="fas fa-times"></i> Rejeitar
+                                    </button>
+
+                                    <!-- Botão Ver Detalhes do Pedido -->
+                                    <a href="{{ url_for('motochefe.detalhes_pedido', id=aud.pedido.id) }}"
+                                       class="btn btn-info"
+                                       target="_blank"
+                                       title="Ver detalhes do pedido">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Modal de Aprovação -->
+                        <div class="modal fade" id="modalAprovar{{ aud.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
+                                <div class="modal-content" style="word-wrap: break-word;">
+                                    <div class="modal-header bg-success text-white">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-check-circle"></i> Aprovar Ação
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('motochefe.aprovar_acao_pedido', auditoria_id=aud.id) }}">
+                                        <div class="modal-body">
+                                            <p><strong>Pedido:</strong> {{ aud.pedido.numero_pedido }}</p>
+                                            <p><strong>Cliente:</strong> {{ aud.pedido.cliente.cliente if aud.pedido.cliente else '-' }}</p>
+                                            <p><strong>Ação:</strong>
+                                                {% if aud.acao == 'INSERCAO' %}
+                                                    <span class="badge bg-primary">INSERÇÃO</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">CANCELAMENTO</span>
+                                                {% endif %}
+                                            </p>
+
+                                            <div class="alert alert-info">
+                                                {% if aud.acao == 'INSERCAO' %}
+                                                <i class="fas fa-info-circle"></i>
+                                                Ao aprovar, o pedido será <strong>ATIVADO</strong> e aparecerá na lista de pedidos.
+                                                {% else %}
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                Ao aprovar, o cancelamento será <strong>CONFIRMADO</strong> e o pedido permanecerá inativo.
+                                                {% endif %}
+                                            </div>
+
+                                            <p class="text-danger">
+                                                <strong>Tem certeza que deseja aprovar esta ação?</strong>
+                                            </p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="fas fa-check"></i> Confirmar Aprovação
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal de Rejeição -->
+                        <div class="modal fade" id="modalRejeitar{{ aud.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
+                                <div class="modal-content" style="word-wrap: break-word;">
+                                    <div class="modal-header bg-danger text-white">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-times-circle"></i> Rejeitar Ação
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('motochefe.rejeitar_acao_pedido', auditoria_id=aud.id) }}">
+                                        <div class="modal-body">
+                                            <p><strong>Pedido:</strong> {{ aud.pedido.numero_pedido }}</p>
+                                            <p><strong>Cliente:</strong> {{ aud.pedido.cliente.cliente if aud.pedido.cliente else '-' }}</p>
+                                            <p><strong>Ação:</strong>
+                                                {% if aud.acao == 'INSERCAO' %}
+                                                    <span class="badge bg-primary">INSERÇÃO</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">CANCELAMENTO</span>
+                                                {% endif %}
+                                            </p>
+
+                                            <div class="alert alert-warning">
+                                                {% if aud.acao == 'INSERCAO' %}
+                                                <i class="fas fa-info-circle"></i>
+                                                Ao rejeitar, o pedido será marcado como <strong>REJEITADO</strong> e permanecerá inativo.
+                                                {% else %}
+                                                <i class="fas fa-undo"></i>
+                                                Ao rejeitar, o cancelamento será <strong>REVERTIDO</strong> e o pedido voltará ao normal!
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label text-danger"><strong>Motivo da Rejeição *</strong></label>
+                                                <textarea name="motivo_rejeicao" class="form-control" rows="3" required
+                                                          placeholder="Digite o motivo da rejeição..."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="fas fa-times"></i> Confirmar Rejeição
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

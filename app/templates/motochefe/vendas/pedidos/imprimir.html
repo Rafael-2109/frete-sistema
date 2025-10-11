@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedido {{ pedido.numero_pedido }} - MotoChefe</title>
+    <style>
+        /* Reset e configurações base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+        }
+
+        /* Configurações de impressão A4 */
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .page-break {
+                page-break-after: always;
+            }
+        }
+
+        /* Container principal */
+        .pedido-container {
+            max-width: 21cm;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }
+
+        /* Cabeçalho com logo */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header-logo {
+            flex: 0 0 auto;
+        }
+
+        .header-logo img {
+            max-width: 150px;
+            max-height: 80px;
+            object-fit: contain;
+        }
+
+        .header-info {
+            flex: 1;
+            text-align: right;
+        }
+
+        .header-info h1 {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 5px;
+        }
+
+        .header-info .numero-pedido {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .header-info .data-pedido {
+            font-size: 10pt;
+            color: #666;
+        }
+
+        /* Seções */
+        .secao {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .secao-titulo {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #d32f2f;
+        }
+
+        /* Informações em grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-item.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .info-label {
+            font-weight: bold;
+            font-size: 9pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            font-size: 11pt;
+            color: #000;
+            margin-top: 2px;
+        }
+
+        /* Tabela de itens */
+        .tabela-itens {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .tabela-itens thead {
+            background: #333;
+            color: white;
+        }
+
+        .tabela-itens th {
+            padding: 8px;
+            text-align: left;
+            font-size: 10pt;
+            font-weight: bold;
+        }
+
+        .tabela-itens td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+            font-size: 10pt;
+        }
+
+        .tabela-itens tbody tr:hover {
+            background: #f5f5f5;
+        }
+
+        .tabela-itens .text-right {
+            text-align: right;
+        }
+
+        .tabela-itens .text-center {
+            text-align: center;
+        }
+
+        /* Totais */
+        .totais {
+            margin-top: 15px;
+            float: right;
+            width: 40%;
+        }
+
+        .totais-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .totais-item.total-geral {
+            font-weight: bold;
+            font-size: 13pt;
+            border-bottom: 3px double #333;
+            margin-top: 5px;
+        }
+
+        .totais-label {
+            font-weight: bold;
+        }
+
+        .totais-valor {
+            text-align: right;
+        }
+
+        /* Observações */
+        .observacoes {
+            background: #fff9e6;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin-top: 20px;
+            clear: both;
+        }
+
+        .observacoes-titulo {
+            font-weight: bold;
+            color: #f57c00;
+            margin-bottom: 5px;
+        }
+
+        .observacoes-texto {
+            white-space: pre-wrap;
+            font-size: 10pt;
+        }
+
+        /* Rodapé */
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 2px solid #333;
+            text-align: center;
+            font-size: 9pt;
+            color: #666;
+        }
+
+        /* Status badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .badge-success {
+            background: #4caf50;
+            color: white;
+        }
+
+        .badge-warning {
+            background: #ff9800;
+            color: white;
+        }
+
+        .badge-info {
+            background: #2196f3;
+            color: white;
+        }
+
+        /* Botão de impressão (não imprime) */
+        .btn-imprimir {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #d32f2f;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-size: 14pt;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+        }
+
+        .btn-imprimir:hover {
+            background: #b71c1c;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        /* Marcação de impresso */
+        .impresso-info {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 9pt;
+        }
+    </style>
+</head>
+<body>
+    <div class="pedido-container">
+        <!-- Cabeçalho -->
+        <div class="header">
+            <div class="header-logo">
+                <!-- Logo: coloque uma imagem em /static/motochefe/logo.png -->
+                <img src="{{ url_for('static', filename='motochefe/logo.png') }}"
+                     alt="MotoCHEFE Logo"
+                     onerror="this.style.display='none'">
+            </div>
+            <div class="header-info">
+                <h1>PEDIDO DE VENDA</h1>
+                <div class="numero-pedido">Nº {{ pedido.numero_pedido }}</div>
+                <div class="data-pedido">
+                    Data: {{ pedido.data_pedido.strftime('%d/%m/%Y') if pedido.data_pedido else '-' }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Dados da Venda (com Cliente + CNPJ) -->
+        <div class="secao">
+            <div class="secao-titulo">DADOS DA VENDA</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">CNPJ/CPF</span>
+                    <span class="info-value">{{ pedido.cliente.cnpj_cliente if pedido.cliente else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Cliente</span>
+                    <span class="info-value">{{ pedido.cliente.cliente if pedido.cliente else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Vendedor</span>
+                    <span class="info-value">{{ pedido.vendedor.vendedor if pedido.vendedor else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Equipe</span>
+                    <span class="info-value">{{ pedido.equipe.equipe_vendas if pedido.equipe else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data de Entrega</span>
+                    <span class="info-value">{{ pedido.data_expedicao.strftime('%d/%m/%Y') if pedido.data_expedicao else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status</span>
+                    <span class="info-value">
+                        {% if pedido.faturado %}
+                            <span class="badge badge-success">FATURADO</span>
+                        {% else %}
+                            <span class="badge badge-warning">PENDENTE</span>
+                        {% endif %}
+                        {% if pedido.enviado %}
+                            <span class="badge badge-info">ENVIADO</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dados de Logística (com Endereço + Telefone) -->
+        <div class="secao">
+            <div class="secao-titulo">DADOS DE LOGÍSTICA</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Transportadora</span>
+                    <span class="info-value">{{ pedido.transportadora.transportadora if pedido.transportadora else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Tipo de Frete</span>
+                    <span class="info-value">{{ pedido.tipo_frete or '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Telefone</span>
+                    <span class="info-value">{{ pedido.cliente.telefone_cliente if pedido.cliente and pedido.cliente.telefone_cliente else '-' }}</span>
+                </div>
+                <div class="info-item full-width">
+                    <span class="info-label">Endereço de Entrega</span>
+                    <span class="info-value">
+                        {% if pedido.cliente %}
+                            {{ pedido.cliente.endereco_cliente or '' }}
+                            {% if pedido.cliente.numero_cliente %}, {{ pedido.cliente.numero_cliente }}{% endif %}
+                            {% if pedido.cliente.complemento_cliente %} - {{ pedido.cliente.complemento_cliente }}{% endif %}
+                            {% if pedido.cliente.bairro_cliente %} - {{ pedido.cliente.bairro_cliente }}{% endif %}
+                            {% if pedido.cliente.cidade_cliente %}, {{ pedido.cliente.cidade_cliente }}{% endif %}
+                            {% if pedido.cliente.estado_cliente %}/{{ pedido.cliente.estado_cliente }}{% endif %}
+                            {% if pedido.cliente.cep_cliente %} - CEP: {{ pedido.cliente.cep_cliente }}{% endif %}
+                            {% if not pedido.cliente.endereco_cliente and not pedido.cliente.cidade_cliente %}-{% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Itens do Pedido (Motos) -->
+        <div class="secao">
+            <div class="secao-titulo">MOTOS DO PEDIDO</div>
+            <table class="tabela-itens">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Modelo</th>
+                        <th>Cor</th>
+                        <th>Chassi</th>
+                        <th class="text-center">Pallet</th>
+                        <th class="text-right">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in pedido.itens.all() %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '-' }}</td>
+                        <td>{{ item.moto.cor if item.moto else '-' }}</td>
+                        <td style="font-family: 'Courier New', monospace; font-size: 11pt; font-weight: 600; letter-spacing: 0.5px;">{{ item.numero_chassi }}</td>
+                        <td class="text-center">
+                            {% if item.moto and item.moto.pallet %}
+                                {{ item.moto.pallet }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <strong>R$ {{ "%.2f"|format(item.valor_total_item) }}</strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Totais -->
+            <div class="totais">
+                <div class="totais-item">
+                    <span class="totais-label">Quantidade de Motos:</span>
+                    <span class="totais-valor">{{ pedido.quantidade_motos }} un</span>
+                </div>
+                <div class="totais-item total-geral">
+                    <span class="totais-label">VALOR TOTAL:</span>
+                    <span class="totais-valor">R$ {{ "%.2f"|format(pedido.valor_total_pedido) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observações -->
+        {% if pedido.observacoes %}
+        <div class="observacoes">
+            <div class="observacoes-titulo">OBSERVAÇÕES:</div>
+            <div class="observacoes-texto">{{ pedido.observacoes }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Dados de Faturamento (se faturado) -->
+        {% if pedido.faturado %}
+        <div class="secao">
+            <div class="secao-titulo">DADOS DE FATURAMENTO</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Nota Fiscal</span>
+                    <span class="info-value">{{ pedido.numero_nf or '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data da NF</span>
+                    <span class="info-value">{{ pedido.data_nf.strftime('%d/%m/%Y') if pedido.data_nf else '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Tipo de NF</span>
+                    <span class="info-value">{{ pedido.tipo_nf or '-' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Empresa Emissora</span>
+                    <span class="info-value">{{ pedido.empresa_venda.empresa if pedido.empresa_venda else '-' }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Rodapé -->
+        <div class="footer">
+            <p>Documento gerado eletronicamente pelo sistema MotoCHEFE</p>
+            <p>Pedido: {{ pedido.numero_pedido }} | Criado em {{ pedido.criado_em.strftime('%d/%m/%Y') if pedido.criado_em else '-' }} por {{ pedido.criado_por or 'Sistema' }}</p>
+        </div>
+    </div>
+
+    <!-- Botão de impressão (não aparece na impressão) -->
+    <button class="btn-imprimir no-print" onclick="window.print()">
+        🖨️ IMPRIMIR
+    </button>
+
+    <script>
+        // Auto-abrir diálogo de impressão ao carregar (opcional)
+        // window.onload = function() {
+        //     window.print();
+        // }
+    </script>
+</body>
+</html>

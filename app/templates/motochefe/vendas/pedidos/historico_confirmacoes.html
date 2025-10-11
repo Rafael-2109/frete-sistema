@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-history"></i> Histórico de Confirmações</h2>
+        <a href="{{ url_for('motochefe.confirmacao_pedidos') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar para Pendentes
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Ação</label>
+                    <select name="acao" class="form-select">
+                        <option value="">Todas</option>
+                        <option value="INSERCAO" {% if acao_filtro == 'INSERCAO' %}selected{% endif %}>Inserção</option>
+                        <option value="CANCELAMENTO" {% if acao_filtro == 'CANCELAMENTO' %}selected{% endif %}>Cancelamento</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="APROVADO" {% if status_filtro == 'APROVADO' %}selected{% endif %}>Aprovado</option>
+                        <option value="REJEITADO" {% if status_filtro == 'REJEITADO' %}selected{% endif %}>Rejeitado</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Data Início</label>
+                    <input type="date" name="data_inicio" class="form-control" value="{{ data_inicio }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Data Fim</label>
+                    <input type="date" name="data_fim" class="form-control" value="{{ data_fim }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('motochefe.historico_confirmacoes') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Histórico -->
+    {% if historico|length == 0 %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Nenhum registro encontrado no histórico.
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i>
+                {{ paginacao.total }} registro(s) encontrado(s)
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Ação</th>
+                            <th>Resultado</th>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Valor</th>
+                            <th>Solicitação</th>
+                            <th>Confirmação</th>
+                            <th>Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aud in historico %}
+                        <tr>
+                            {# Coluna 1: Tipo de Ação #}
+                            <td>
+                                {% if aud.acao == 'INSERCAO' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-plus"></i> INSERÇÃO
+                                </span>
+                                {% elif aud.acao == 'CANCELAMENTO' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times"></i> CANCELAMENTO
+                                </span>
+                                {% endif %}
+                            </td>
+
+                            {# Coluna 2: Resultado (Aprovado/Rejeitado) #}
+                            <td>
+                                {% if aud.confirmado %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check"></i> APROVADO
+                                </span>
+                                {% elif aud.rejeitado %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-times"></i> REJEITADO
+                                </span>
+                                {% endif %}
+                            </td>
+
+                            {# Coluna 3: Pedido #}
+                            <td>
+                                <strong>{{ aud.pedido.numero_pedido }}</strong><br>
+                                <small class="text-muted">
+                                    {{ aud.pedido.data_pedido.strftime('%d/%m/%Y') if aud.pedido.data_pedido else '-' }}
+                                </small>
+                            </td>
+
+                            {# Coluna 4: Cliente #}
+                            <td>
+                                <small>{{ aud.pedido.cliente.cliente if aud.pedido.cliente else '-' }}</small>
+                            </td>
+
+                            {# Coluna 5: Valor #}
+                            <td>
+                                <small class="text-success">
+                                    R$ {{ aud.pedido.valor_total_pedido|valor_br }}
+                                </small>
+                            </td>
+
+                            {# Coluna 6: Solicitação #}
+                            <td>
+                                <small>
+                                    <strong>{{ aud.solicitado_por }}</strong><br>
+                                    {{ aud.solicitado_em.strftime('%d/%m/%Y %H:%M') if aud.solicitado_em else '-' }}
+                                </small>
+                            </td>
+
+                            {# Coluna 7: Confirmação #}
+                            <td>
+                                <small>
+                                    <strong>{{ aud.confirmado_por or '-' }}</strong><br>
+                                    {{ aud.confirmado_em.strftime('%d/%m/%Y %H:%M') if aud.confirmado_em else '-' }}
+                                </small>
+                            </td>
+
+                            {# Coluna 8: Botão Ver Detalhes #}
+                            <td>
+                                <button type="button" class="btn btn-info btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalDetalhes{{ aud.id }}"
+                                        title="Ver detalhes completos">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- Modal de Detalhes Completos -->
+                        <div class="modal fade" id="modalDetalhes{{ aud.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+                                <div class="modal-content" style="word-wrap: break-word;">
+                                    <div class="modal-header {% if aud.confirmado %}bg-success{% else %}bg-warning{% endif %} text-white">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-info-circle"></i> Detalhes da Auditoria #{{ aud.id }}
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <!-- Dados do Pedido -->
+                                        <h6 class="border-bottom pb-2 mb-3">
+                                            <i class="fas fa-file-invoice"></i> Dados do Pedido
+                                        </h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <strong>Número:</strong> {{ aud.pedido.numero_pedido }}<br>
+                                                <strong>Data:</strong> {{ aud.pedido.data_pedido.strftime('%d/%m/%Y') if aud.pedido.data_pedido else '-' }}<br>
+                                                <strong>Cliente:</strong> {{ aud.pedido.cliente.cliente if aud.pedido.cliente else '-' }}
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>Valor Total:</strong> R$ {{ aud.pedido.valor_total_pedido|valor_br }}<br>
+                                                <strong>Qtd Motos:</strong> {{ aud.pedido.quantidade_motos }}<br>
+                                                <strong>Status Atual:</strong>
+                                                <span class="badge bg-secondary">{{ aud.pedido.status }}</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Dados da Ação -->
+                                        <h6 class="border-bottom pb-2 mb-3">
+                                            <i class="fas fa-cog"></i> Dados da Ação
+                                        </h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <strong>Tipo de Ação:</strong>
+                                                {% if aud.acao == 'INSERCAO' %}
+                                                    <span class="badge bg-primary">INSERÇÃO</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">CANCELAMENTO</span>
+                                                {% endif %}
+                                                <br><br>
+                                                <strong>Resultado:</strong>
+                                                {% if aud.confirmado %}
+                                                    <span class="badge bg-success">APROVADO</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning text-dark">REJEITADO</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>ID Auditoria:</strong> #{{ aud.id }}<br>
+                                                <strong>Pedido Ativo:</strong>
+                                                <span class="badge {% if aud.pedido.ativo %}bg-success{% else %}bg-secondary{% endif %}">
+                                                    {{ 'SIM' if aud.pedido.ativo else 'NÃO' }}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Solicitação -->
+                                        <h6 class="border-bottom pb-2 mb-3">
+                                            <i class="fas fa-user"></i> Solicitação
+                                        </h6>
+                                        <div class="mb-3">
+                                            <strong>Solicitado por:</strong> {{ aud.solicitado_por }}<br>
+                                            <strong>Data/Hora:</strong> {{ aud.solicitado_em.strftime('%d/%m/%Y às %H:%M:%S') if aud.solicitado_em else '-' }}<br>
+                                            <strong>Observação:</strong>
+                                            <div class="alert alert-secondary mt-2">
+                                                {{ aud.observacao or 'Sem observação' }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Confirmação/Rejeição -->
+                                        <h6 class="border-bottom pb-2 mb-3">
+                                            <i class="fas fa-check-circle"></i> Confirmação/Rejeição
+                                        </h6>
+                                        <div class="mb-3">
+                                            <strong>Confirmado por:</strong> {{ aud.confirmado_por or '-' }}<br>
+                                            <strong>Data/Hora:</strong> {{ aud.confirmado_em.strftime('%d/%m/%Y às %H:%M:%S') if aud.confirmado_em else '-' }}<br>
+
+                                            {% if aud.rejeitado %}
+                                            <strong>Motivo da Rejeição:</strong>
+                                            <div class="alert alert-warning mt-2">
+                                                {{ aud.motivo_rejeicao or 'Não informado' }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Link para Pedido -->
+                                        <div class="text-center mt-4">
+                                            <a href="{{ url_for('motochefe.detalhes_pedido', id=aud.pedido.id) }}"
+                                               class="btn btn-primary"
+                                               target="_blank">
+                                                <i class="fas fa-external-link-alt"></i> Ver Pedido Completo
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Fim Modal Detalhes -->
+
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if paginacao.pages > 1 %}
+            <nav aria-label="Navegação de páginas">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('motochefe.historico_confirmacoes', page=paginacao.prev_num, acao=acao_filtro, status=status_filtro, data_inicio=data_inicio, data_fim=data_fim) }}">
+                            Anterior
+                        </a>
+                    </li>
+
+                    {% for page_num in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('motochefe.historico_confirmacoes', page=page_num, acao=acao_filtro, status=status_filtro, data_inicio=data_inicio, data_fim=data_fim) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('motochefe.historico_confirmacoes', page=paginacao.next_num, acao=acao_filtro, status=status_filtro, data_inicio=data_inicio, data_fim=data_fim) }}">
+                            Próxima
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
