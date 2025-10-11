@@ -17,7 +17,6 @@ from wtforms.validators import Optional
 from wtforms.validators import ValidationError
 from wtforms.validators import Regexp
 
-from app.utils.ufs import UF_LIST
 
 def coerce_int_or_none(value):
     """Converte para int ou retorna None se vazio"""

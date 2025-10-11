@@ -649,25 +649,33 @@ def tela_cotacao():
     # ✅ BUSCAR EMBARQUES COMPATÍVEIS
     embarques_compativeis_direta = []
     embarques_compativeis_fracionada = []
-    
+
+    print(f"[DEBUG EMBARQUES] ============== INICIANDO BUSCA DE EMBARQUES ==============")
+    print(f"[DEBUG EMBARQUES] todos_mesmo_uf: {todos_mesmo_uf}")
+    print(f"[DEBUG EMBARQUES] ufs_normalizados: {ufs_normalizados}")
+    print(f"[DEBUG EMBARQUES] opcoes_transporte.get('direta'): {opcoes_transporte.get('direta') is not None}")
+
     try:
         from app.embarques.models import Embarque
         from app.veiculos.models import Veiculo
         from sqlalchemy.orm import joinedload
-        
+
         # ✅ OTIMIZAÇÃO: Para CARGA DIRETA - buscar embarques compatíveis com melhor performance
         if todos_mesmo_uf and len(ufs_normalizados) == 1 and opcoes_transporte.get('direta'):
             uf_destino = list(ufs_normalizados)[0]
-            
+            print(f"[DEBUG EMBARQUES] 🔍 Iniciando busca de embarques DIRETA - UF destino: {uf_destino}")
+
             # ✅ NOVA LÓGICA: Busca embarques da mesma transportadora/modalidade das cotações
             for opcao_direta in opcoes_transporte['direta']:
                 transportadora_id = opcao_direta.get('transportadora_id')
                 modalidade = opcao_direta.get('modalidade')
-                
+                print(f"[DEBUG EMBARQUES] 🚛 Buscando embarques - Transportadora ID: {transportadora_id}, Modalidade: {modalidade}")
+
                 if transportadora_id and modalidade:
                     # Buscar embarques ativos da mesma transportadora, modalidade e sem data de embarque
+                    # ⚠️ NOTA: Não usamos joinedload(Embarque._itens) porque lazy='dynamic' não suporta eager loading
+                    # A propriedade embarque.itens já faz a query automaticamente
                     embarques_query = Embarque.query.options(
-                        joinedload(Embarque.itens),
                         joinedload(Embarque.transportadora)
                     ).filter(
                         Embarque.status == 'ativo',
@@ -676,15 +684,27 @@ def tela_cotacao():
                         Embarque.modalidade == modalidade,
                         Embarque.data_embarque.is_(None)  # ✅ Sem data de embarque
                     ).limit(200)  # ✅ Aumentado de 50 para 200 embarques
-                    
+
+                    print(f"[DEBUG EMBARQUES] 📦 Embarques encontrados na query: {embarques_query.count()}")
+
                     for embarque in embarques_query:
+                        print(f"[DEBUG EMBARQUES] 🔎 Processando embarque #{embarque.numero}")
+                        print(f"[DEBUG EMBARQUES]   - Tipo _itens: {type(embarque._itens)}")
+                        print(f"[DEBUG EMBARQUES]   - Tipo itens: {type(embarque.itens)}")
+                        print(f"[DEBUG EMBARQUES]   - Quantidade itens: {len(embarque.itens)}")
+                        print(f"[DEBUG EMBARQUES]   - Quantidade itens_ativos: {len(embarque.itens_ativos)}")
                         if embarque.itens_ativos:
+                            print(f"[DEBUG EMBARQUES] ✅ Embarque #{embarque.numero} TEM itens ativos!")
                             # Verificar se é mesmo UF
                             uf_embarque = embarque.itens_ativos[0].uf_destino
+                            print(f"[DEBUG EMBARQUES]   - UF embarque: {uf_embarque}, UF destino: {uf_destino}")
                             if uf_embarque == uf_destino:
+                                print(f"[DEBUG EMBARQUES] ✅ UF compatível!")
                                 # Verificar capacidade do veículo
                                 veiculo = Veiculo.query.filter_by(nome=modalidade).first()
+                                print(f"[DEBUG EMBARQUES]   - Veículo encontrado: {veiculo.nome if veiculo else 'None'}")
                                 if veiculo and veiculo.peso_maximo:
+                                    print(f"[DEBUG EMBARQUES]   - Peso máximo veículo: {veiculo.peso_maximo}kg")
                                     peso_atual = embarque.total_peso_pedidos()
                                     capacidade_restante = veiculo.peso_maximo - peso_atual
                                     
@@ -704,6 +724,7 @@ def tela_cotacao():
                                     cnpjs_embarque = set(item.cnpj_cliente for item in embarque.itens_ativos if item.cnpj_cliente)
                                     
                                     if capacidade_restante >= peso_total:
+                                        print(f"[DEBUG EMBARQUES] ✅ ADICIONANDO embarque #{embarque.numero} - TEM capacidade")
                                         embarques_compativeis_direta.append({
                                             'embarque': embarque,
                                             'capacidade_restante': capacidade_restante,
@@ -714,6 +735,7 @@ def tela_cotacao():
                                         })
                                     else:
                                         # ✅ MOSTRA TAMBÉM OS SEM CAPACIDADE
+                                        print(f"[DEBUG EMBARQUES] ⚠️ ADICIONANDO embarque #{embarque.numero} - SEM capacidade")
                                         embarques_compativeis_direta.append({
                                             'embarque': embarque,
                                             'capacidade_restante': capacidade_restante,
@@ -722,17 +744,27 @@ def tela_cotacao():
                                             'qtd_cnpjs': len(cnpjs_embarque),
                                             'tem_capacidade': False
                                         })
+                                else:
+                                    print(f"[DEBUG EMBARQUES] ❌ Embarque #{embarque.numero} - Veículo sem peso_maximo ou não encontrado")
+                            else:
+                                print(f"[DEBUG EMBARQUES] ❌ Embarque #{embarque.numero} - UF incompatível ({uf_embarque} != {uf_destino})")
+                        else:
+                            print(f"[DEBUG EMBARQUES] ❌ Embarque #{embarque.numero} - SEM itens ativos")
         
         # ✅ OTIMIZAÇÃO: Para CARGA FRACIONADA - buscar embarques compatíveis com melhor performance
+        print(f"[DEBUG EMBARQUES] 🔍 Iniciando busca de embarques FRACIONADA")
         transportadoras_fracionada = set()
         for cnpj, pedidos_cnpj in pedidos_por_cnpj.items():
             if pedidos_cnpj and cnpj in opcoes_por_cnpj:
                 for opcao in opcoes_por_cnpj[cnpj][:10]:  # ✅ Aumentado de 3 para 10 opções por CNPJ
                     transportadoras_fracionada.add(opcao.get('transportadora_id'))
-        
+
+        print(f"[DEBUG EMBARQUES] 🚛 Transportadoras fracionada: {transportadoras_fracionada}")
+
         if transportadoras_fracionada:
+            # ⚠️ NOTA: Não usamos joinedload(Embarque._itens) porque lazy='dynamic' não suporta eager loading
+            # A propriedade embarque.itens já faz a query automaticamente
             embarques_frac_query = Embarque.query.options(
-                joinedload(Embarque.itens),
                 joinedload(Embarque.transportadora)
             ).filter(
                 Embarque.status == 'ativo',
@@ -740,9 +772,14 @@ def tela_cotacao():
                 Embarque.transportadora_id.in_(list(transportadoras_fracionada)),
                 Embarque.data_embarque.is_(None)  # ✅ Sem data de embarque
             ).limit(100)  # ✅ Aumentado de 20 para 100 embarques
-            
+
+            print(f"[DEBUG EMBARQUES] 📦 Embarques FRACIONADA encontrados: {embarques_frac_query.count()}")
+
             for embarque in embarques_frac_query:
+                print(f"[DEBUG EMBARQUES] 🔎 Processando embarque FRACIONADA #{embarque.numero}")
+                print(f"[DEBUG EMBARQUES]   - Quantidade itens_ativos: {len(embarque.itens_ativos)}")
                 if embarque.itens_ativos:
+                    print(f"[DEBUG EMBARQUES] ✅ ADICIONANDO embarque FRACIONADA #{embarque.numero}")
                     # ✅ CONTA CNPJs ÚNICOS NO EMBARQUE
                     cnpjs_embarque = set(item.cnpj_cliente for item in embarque.itens_ativos if item.cnpj_cliente)
                     
@@ -750,11 +787,17 @@ def tela_cotacao():
                         'embarque': embarque,
                         'qtd_cnpjs': len(cnpjs_embarque)
                     })
-        
-        print(f"[DEBUG] 🚛 Embarques compatíveis - Direta: {len(embarques_compativeis_direta)}, Fracionada: {len(embarques_compativeis_fracionada)}")
-        
+                else:
+                    print(f"[DEBUG EMBARQUES] ❌ Embarque FRACIONADA #{embarque.numero} - SEM itens ativos")
+
+        print(f"[DEBUG EMBARQUES] ============== RESULTADO FINAL ==============")
+        print(f"[DEBUG EMBARQUES] 🚛 Embarques compatíveis DIRETA: {len(embarques_compativeis_direta)}")
+        print(f"[DEBUG EMBARQUES] 🚛 Embarques compatíveis FRACIONADA: {len(embarques_compativeis_fracionada)}")
+
     except Exception as e:
-        print(f"[DEBUG] ❌ Erro ao buscar embarques compatíveis: {str(e)}")
+        print(f"[DEBUG EMBARQUES] ❌ ERRO ao buscar embarques compatíveis: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
     return render_template(
         "cotacao/cotacao.html",

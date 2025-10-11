@@ -421,7 +421,6 @@ def pagar_grupo():
             processar_pagamento_lote_montagens,
             processar_pagamento_lote_despesas
         )
-        from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
         from app.motochefe.services.empresa_service import atualizar_saldo
 
         itens_ids_str = request.form.get('itens_ids')
