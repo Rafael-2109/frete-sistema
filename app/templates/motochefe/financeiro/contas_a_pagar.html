@@ -82,18 +82,25 @@
         <div class="card mb-3">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
+                    <button type="button" class="btn btn-sm btn-light me-2"
+                            onclick="abrirModalPagamentoGrupo('motos')">
+                        <i class="fas fa-hand-holding-usd"></i> Pagar
+                    </button>
                     <i class="fas fa-motorcycle"></i> Motos (Custo Aquisição)
                     <span class="badge bg-light text-dark float-end">R$ {{ total_motos|valor_br }}</span>
+                    <button type="button" class="btn btn-sm btn-link text-white float-end me-2" onclick="toggleGrupo('motos-accordion')">
+                        <i class="fas fa-chevron-down" id="icon-motos-accordion"></i>
+                    </button>
                 </h5>
             </div>
-            <div class="card-body">
+            <div class="card-body collapse" id="motos-accordion">
                 {% for grupo in motos_agrupados %}
                 <div class="mb-3">
                     <div class="d-flex align-items-center">
                         <input type="checkbox" class="form-check-input me-2 grupo-check" data-tipo="moto-grupo" data-grupo="nf-{{ loop.index }}">
                         <strong>NF {{ grupo.nf }}</strong> - {{ grupo.fornecedor }} -
                         {{ grupo.motos|length }} motos -
-                        <span class="text-danger">R$ {{ grupo.total_custo - grupo.total_pago|valor_br }}</span>
+                        <span class="text-danger">R$ {{ (grupo.total_custo - grupo.total_pago)|valor_br }}</span>
                         <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('nf-{{ loop.index }}')">
                             <i class="fas fa-chevron-down" id="icon-nf-{{ loop.index }}"></i>
                         </button>
@@ -170,6 +177,10 @@
                 {% for grupo in fretes_agrupados %}
                 <div class="mb-3">
                     <div class="d-flex align-items-center">
+                        <button type="button" class="btn btn-sm btn-info me-2"
+                                onclick="abrirModalPagamentoGrupo('frete-{{ loop.index }}')">
+                            <i class="fas fa-hand-holding-usd"></i> Pagar
+                        </button>
                         <input type="checkbox" class="form-check-input me-2 grupo-check" data-tipo="frete-grupo">
                         <strong>{{ grupo.transportadora }}</strong> -
                         {{ grupo.embarques|length }} embarques -
@@ -210,6 +221,10 @@
             <div class="card-body">
                 {% for grupo in comissoes_agrupadas %}
                 <div class="mb-2">
+                    <button type="button" class="btn btn-sm btn-warning me-2"
+                            onclick="abrirModalPagamentoGrupo('comissao-{{ loop.index }}')">
+                        <i class="fas fa-hand-holding-usd"></i> Pagar
+                    </button>
                     <strong>{{ grupo.vendedor }}</strong> - {{ grupo.comissoes|length }} comissões -
                     R$ {{ grupo.total|valor_br }}
                     <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('vend-{{ loop.index }}')">
@@ -247,6 +262,10 @@
             <div class="card-body">
                 {% for grupo in montagens_agrupadas %}
                 <div class="mb-2">
+                    <button type="button" class="btn btn-sm btn-primary me-2"
+                            onclick="abrirModalPagamentoGrupo('montagem-{{ loop.index }}')">
+                        <i class="fas fa-hand-holding-usd"></i> Pagar
+                    </button>
                     <strong>{{ grupo.fornecedor }}</strong> - {{ grupo.montagens|length }} montagens -
                     R$ {{ grupo.total|valor_br }}
                     <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('mont-{{ loop.index }}')">
@@ -258,12 +277,12 @@
                             <input class="form-check-input item-check" type="checkbox"
                                    data-tipo="montagem"
                                    data-id="{{ mont.id }}"
-                                   data-valor="{{ mont.valor_montagem }}"
+                                   data-valor="{{ custo_montagem_real }}"
                                    id="mont-{{ mont.id }}">
                             <label class="form-check-label" for="mont-{{ mont.id }}">
                                 Pedido {{ mont.pedido.numero_pedido if mont.pedido else '-' }} |
                                 Chassi {{ mont.numero_chassi }} |
-                                R$ {{ mont.valor_montagem|valor_br }}
+                                R$ {{ custo_montagem_real|valor_br }}
                             </label>
                         </div>
                         {% endfor %}
@@ -285,9 +304,25 @@
             </div>
             <div class="card-body">
                 {% for grupo in despesas_agrupadas %}
-                <div class="mb-2">
+                <div class="mb-2" id="despesa-grupo-{{ loop.index }}">
+                    <button type="button" class="btn btn-sm btn-secondary me-2"
+                            onclick="abrirModalPagamentoGrupo('despesa-{{ loop.index }}')">
+                        <i class="fas fa-hand-holding-usd"></i> Pagar
+                    </button>
                     <strong>{{ grupo.tipo }}</strong> - R$ {{ grupo.total|valor_br }}
                     <a href="{{ url_for('motochefe.listar_despesas') }}" class="btn btn-sm btn-link">Ver Todas</a>
+
+                    <!-- Checkboxes ocultos para coleta de dados -->
+                    <div class="d-none">
+                        {% set grupo_index = loop.index %}
+                        {% for desp in grupo.despesas %}
+                        <input class="item-check despesa-check" type="checkbox"
+                               data-tipo="despesa"
+                               data-id="{{ desp.id }}"
+                               data-valor="{{ desp.valor - (desp.valor_pago or 0) }}"
+                               data-grupo="despesa-{{ grupo_index }}">
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -321,6 +356,57 @@
             {% include 'motochefe/_pagination.html' %}
         </div>
     {% endif %}
+</div>
+
+<!-- MODAL DE PAGAMENTO EM LOTE POR GRUPO -->
+<div class="modal fade" id="modalPagamentoGrupo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pagar Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formPagamentoGrupo" method="POST" action="{{ url_for('motochefe.pagar_grupo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="itens_ids" id="itens_pagamento_grupo"/>
+                <input type="hidden" name="tipo_grupo" id="tipo_grupo_hidden"/>
+                <input type="hidden" name="data_pagamento" id="data_pagamento_grupo_hidden"/>
+                <input type="hidden" name="valor_pagar" id="valor_pagar_hidden"/>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Empresa Pagadora</strong></label>
+                        <select name="empresa_pagadora_id" id="empresa_pagadora_grupo" class="form-control" required>
+                            <option value="">-- Selecione --</option>
+                            {% for empresa in empresas %}
+                            <option value="{{ empresa.id }}">
+                                {{ empresa.empresa }} - Saldo: R$ {{ empresa.saldo|valor_br }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Valor a Pagar</strong></label>
+                        <input type="number" step="0.01" class="form-control" id="valor_pagar_grupo" value="0" required>
+                        <small class="text-muted">Valor total do grupo: R$ <span id="valor_total_grupo">0,00</span></small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Data de Pagamento</strong></label>
+                        <input type="date" class="form-control" id="data_pagamento_grupo" required>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check-circle"></i> Confirmar Pagamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -383,6 +469,100 @@ document.getElementById('formPagamento').addEventListener('submit', function(e) 
 
     document.getElementById('itens_pagamento').value = JSON.stringify(itens);
     document.getElementById('data_pagamento_hidden').value = document.getElementById('data_pagamento_input').value;
+    this.submit();
+});
+
+// ===== FUNÇÕES DO MODAL DE PAGAMENTO POR GRUPO =====
+
+function abrirModalPagamentoGrupo(grupoId) {
+    const itens = [];
+    let total = 0;
+    let tipo_grupo = '';
+
+    // Coletar todos os itens do grupo baseado no ID
+    if (grupoId === 'motos') {
+        tipo_grupo = 'moto';
+        // Todas as motos (todos os checkboxes de moto)
+        document.querySelectorAll('.item-check[data-tipo="moto"]').forEach(check => {
+            itens.push(check.dataset.id); // Apenas ID
+            total += parseFloat(check.dataset.valor || 0);
+        });
+    } else if (grupoId.startsWith('frete-')) {
+        tipo_grupo = 'frete';
+        // Fretes de uma transportadora específica
+        const grupoIndex = grupoId.split('-')[1];
+        document.querySelectorAll(`#transp-${grupoIndex} .item-check`).forEach(check => {
+            itens.push(check.dataset.id);
+            total += parseFloat(check.dataset.valor || 0);
+        });
+    } else if (grupoId.startsWith('comissao-')) {
+        tipo_grupo = 'comissao';
+        // Comissões de um vendedor específico
+        const grupoIndex = grupoId.split('-')[1];
+        document.querySelectorAll(`#vend-${grupoIndex} .item-check`).forEach(check => {
+            itens.push(check.dataset.id);
+            total += parseFloat(check.dataset.valor || 0);
+        });
+    } else if (grupoId.startsWith('montagem-')) {
+        tipo_grupo = 'montagem';
+        // Montagens de um fornecedor específico
+        const grupoIndex = grupoId.split('-')[1];
+        document.querySelectorAll(`#mont-${grupoIndex} .item-check`).forEach(check => {
+            itens.push(check.dataset.id);
+            total += parseFloat(check.dataset.valor || 0);
+        });
+    } else if (grupoId.startsWith('despesa-')) {
+        tipo_grupo = 'despesa';
+        // Despesas de um tipo específico
+        const grupoIndex = grupoId.split('-')[1];
+        document.querySelectorAll(`#despesa-grupo-${grupoIndex} .despesa-check`).forEach(check => {
+            itens.push(check.dataset.id);
+            total += parseFloat(check.dataset.valor || 0);
+        });
+    }
+
+    if (itens.length === 0) {
+        alert('Nenhum item encontrado para pagamento');
+        return;
+    }
+
+    // Preencher modal - enviar apenas IDs separados por vírgula
+    document.getElementById('valor_total_grupo').textContent = formatarValorBR(total);
+    document.getElementById('valor_pagar_grupo').value = 0; // Valor ZERADO
+    document.getElementById('itens_pagamento_grupo').value = itens.join(','); // IDs separados por vírgula
+    document.getElementById('tipo_grupo_hidden').value = tipo_grupo;
+
+    // Preencher data com hoje
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('data_pagamento_grupo').value = hoje;
+
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalPagamentoGrupo'));
+    modal.show();
+}
+
+// Submeter form do modal
+document.getElementById('formPagamentoGrupo').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const empresa = document.getElementById('empresa_pagadora_grupo').value;
+    const valorPagarStr = document.getElementById('valor_pagar_grupo').value;
+    const valorPagar = parseFloat(valorPagarStr);
+
+    if (!empresa) {
+        alert('Selecione a empresa pagadora');
+        return;
+    }
+
+    if (!valorPagar || valorPagar <= 0) {
+        alert('Informe um valor válido maior que zero');
+        return;
+    }
+
+    // Copiar valores para hidden fields - enviar como STRING para evitar perda de precisão
+    document.getElementById('data_pagamento_grupo_hidden').value = document.getElementById('data_pagamento_grupo').value;
+    document.getElementById('valor_pagar_hidden').value = valorPagarStr; // String original
+
     this.submit();
 });
 </script>

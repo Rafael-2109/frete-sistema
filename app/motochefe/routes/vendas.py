@@ -4,16 +4,16 @@ Rotas de Vendas - MotoChefe
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from decimal import Decimal
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 
 from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import (
-    PedidoVendaMoto, PedidoVendaMotoItem, TituloFinanceiro,
+    PedidoVendaMoto, TituloFinanceiro,
     ClienteMoto, VendedorMoto, EquipeVendasMoto,
     TransportadoraMoto, EmpresaVendaMoto, ModeloMoto, Moto,
-    CustosOperacionais, ComissaoVendedor
+    ComissaoVendedor
 )
 
 # ===== EMPRESA VENDA (FATURAMENTO) =====
@@ -207,16 +207,23 @@ def adicionar_pedido():
                         )
             else:
                 # Sem parcelamento: usar prazo simples
-                prazo_dias = int(request.form.get('prazo_dias', 0))
+                prazo_dias_form = request.form.get('prazo_dias', '0')
+                # Garantir que seja 0 se vier vazio, None ou string vazia
+                prazo_dias = int(prazo_dias_form) if prazo_dias_form and prazo_dias_form.strip() else 0
 
             # 3. PREPARAR DADOS DO PEDIDO
+            # Validar data_expedicao obrigatória
+            data_expedicao = request.form.get('data_expedicao')
+            if not data_expedicao:
+                raise Exception('Data de Expedição é obrigatória')
+
             dados_pedido = {
                 'numero_pedido': numero_pedido,
                 'cliente_id': int(request.form.get('cliente_id')),
                 'vendedor_id': int(request.form.get('vendedor_id')),
                 'equipe_vendas_id': int(request.form.get('equipe_vendas_id')) if request.form.get('equipe_vendas_id') else None,
                 'data_pedido': request.form.get('data_pedido') or date.today(),
-                'data_expedicao': request.form.get('data_expedicao') or None,
+                'data_expedicao': data_expedicao,
                 'valor_total_pedido': Decimal(request.form.get('valor_total_pedido', 0)),
                 'valor_frete_cliente': Decimal(request.form.get('valor_frete_cliente', 0)),
                 'forma_pagamento': request.form.get('forma_pagamento'),
@@ -260,13 +267,17 @@ def adicionar_pedido():
     transportadoras = TransportadoraMoto.query.filter_by(ativo=True).order_by(TransportadoraMoto.transportadora).all()
     modelos = ModeloMoto.query.filter_by(ativo=True).order_by(ModeloMoto.nome_modelo).all()
 
+    # ✅ TAREFA 1: Data de hoje para campo de data do pedido
+    today = date.today().strftime('%Y-%m-%d')
+
     return render_template('motochefe/vendas/pedidos/form.html',
                          pedido=None,
                          clientes=clientes,
                          vendedores=vendedores,
                          equipes=equipes,
                          transportadoras=transportadoras,
-                         modelos=modelos)
+                         modelos=modelos,
+                         today=today)
 
 
 @motochefe_bp.route('/pedidos/api/estoque-modelo')
@@ -653,7 +664,7 @@ def pagar_comissoes_lote():
             raise Exception('Comissões não encontradas')
 
         # Calcular total
-        valor_total = sum(c.valor_rateado for c in comissoes)
+        valor_total = sum((c.valor_rateado for c in comissoes), Decimal("0"))
 
         # 1. CRIAR MOVIMENTAÇÃO PAI
         descricao_pai = f'Pagamento Lote {len(comissoes)} comissão(ões)'
@@ -856,8 +867,8 @@ def substituir_moto(pedido_id):
         # Converter preço para Decimal
         try:
             preco_novo = Decimal(str(preco_novo_str))
-        except:
-            raise Exception('Preço da moto nova inválido')
+        except Exception as e:
+            raise Exception(f'Preço da moto nova inválido: {e}')
 
         # Executar substituição
         resultado = substituir_moto_pedido(

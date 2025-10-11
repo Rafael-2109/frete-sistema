@@ -12,7 +12,7 @@ from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import (
     Moto, PedidoVendaMotoItem, EmbarqueMoto,
-    ComissaoVendedor, DespesaMensal
+    ComissaoVendedor, DespesaMensal, CustosOperacionais, MovimentacaoFinanceira
 )
 
 
@@ -53,7 +53,7 @@ def listar_contas_a_pagar():
         motos_por_nf[moto.nf_entrada]['total_pago'] += (moto.custo_pago or Decimal('0'))
 
     motos_agrupados = list(motos_por_nf.values())
-    total_motos = sum(g['total_custo'] - g['total_pago'] for g in motos_agrupados)
+    total_motos = sum((g['total_custo'] - g['total_pago'] for g in motos_agrupados), Decimal("0"))
 
     # 2. FRETES - Pendentes por Transportadora
     embarques_pendentes = EmbarqueMoto.query.filter(
@@ -76,7 +76,7 @@ def listar_contas_a_pagar():
         fretes_por_transp[transp_nome]['total'] += emb.valor_frete_contratado
 
     fretes_agrupados = list(fretes_por_transp.values())
-    total_fretes = sum(g['total'] for g in fretes_agrupados)
+    total_fretes = sum((g['total'] for g in fretes_agrupados), Decimal("0"))
 
     # 3. COMISSÕES - Pendentes por Vendedor
     comissoes_pendentes = ComissaoVendedor.query.filter(
@@ -98,7 +98,7 @@ def listar_contas_a_pagar():
         comissoes_por_vend[vend_nome]['total'] += com.valor_rateado
 
     comissoes_agrupadas = list(comissoes_por_vend.values())
-    total_comissoes = sum(g['total'] for g in comissoes_agrupadas)
+    total_comissoes = sum((g['total'] for g in comissoes_agrupadas), Decimal("0"))
 
     # 4. MONTAGENS - Pendentes por Fornecedor
     montagens_pendentes = PedidoVendaMotoItem.query.filter(
@@ -106,6 +106,10 @@ def listar_contas_a_pagar():
         PedidoVendaMotoItem.montagem_paga == False,
         PedidoVendaMotoItem.ativo == True
     ).all()
+
+    # Buscar custo REAL da montagem de CustosOperacionais
+    custos_vigentes = CustosOperacionais.get_custos_vigentes()
+    custo_montagem_real = custos_vigentes.custo_montagem if custos_vigentes else Decimal('0')
 
     # Agrupar por fornecedor
     montagens_por_forn = {}
@@ -119,10 +123,15 @@ def listar_contas_a_pagar():
             }
 
         montagens_por_forn[forn_nome]['montagens'].append(mont)
-        montagens_por_forn[forn_nome]['total'] += mont.valor_montagem
+        # ✅ CORRIGIDO: Usar custo real de CustosOperacionais, não valor cobrado do cliente
+        montagens_por_forn[forn_nome]['total'] += custo_montagem_real
 
     montagens_agrupadas = list(montagens_por_forn.values())
-    total_montagens = sum(g['total'] for g in montagens_agrupadas)
+    total_montagens = sum((g['total'] for g in montagens_agrupadas), Decimal("0"))
+
+    # 🆕 PASSAR custo_montagem_real para o template
+    # Para ser usado na exibição dos detalhes de cada montagem
+    custo_montagem_para_template = custo_montagem_real
 
     # 5. DESPESAS - Pendentes por Tipo
     despesas_pendentes = DespesaMensal.query.filter(
@@ -145,7 +154,7 @@ def listar_contas_a_pagar():
         despesas_por_tipo[tipo]['total'] += (desp.valor - (desp.valor_pago or Decimal('0')))
 
     despesas_agrupadas = list(despesas_por_tipo.values())
-    total_despesas = sum(g['total'] for g in despesas_agrupadas)
+    total_despesas = sum((g['total'] for g in despesas_agrupadas), Decimal("0"))
 
     # 6. TÍTULOS A PAGAR - Movimentação e Montagem (Pendentes e Abertos)
     from app.motochefe.models.financeiro import TituloAPagar
@@ -169,7 +178,7 @@ def listar_contas_a_pagar():
         titulos_por_tipo[tipo]['total'] += titulo.valor_saldo
 
     titulos_agrupados = list(titulos_por_tipo.values())
-    total_titulos_a_pagar = sum(g['total'] for g in titulos_agrupados)
+    total_titulos_a_pagar = sum((g['total'] for g in titulos_agrupados), Decimal("0"))
 
     # TOTAIS GERAIS
     total_geral = total_motos + total_fretes + total_comissoes + total_montagens + total_despesas + total_titulos_a_pagar
@@ -244,7 +253,8 @@ def listar_contas_a_pagar():
                          total_titulos_a_pagar=total_titulos_a_pagar,
                          total_geral=total_geral,
                          empresas=empresas,
-                         hoje=hoje)
+                         hoje=hoje,
+                         custo_montagem_real=custo_montagem_para_template)
 
 
 @motochefe_bp.route('/contas-a-pagar/pagar-lote', methods=['POST'])
@@ -391,6 +401,222 @@ def pagar_lote():
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao processar pagamentos: {str(e)}', 'danger')
+
+    return redirect(url_for('motochefe.listar_contas_a_pagar'))
+
+
+@motochefe_bp.route('/contas-a-pagar/pagar-grupo', methods=['POST'])
+@login_required
+@requer_motochefe
+def pagar_grupo():
+    """
+    Pagamento de um grupo com valor editável
+    Paga sequencialmente (quita item por item até acabar o valor)
+    """
+    try:
+        from app.motochefe.models.cadastro import EmpresaVendaMoto
+        from app.motochefe.services.lote_pagamento_service import (
+            processar_pagamento_lote_motos,
+            processar_pagamento_lote_comissoes,
+            processar_pagamento_lote_montagens,
+            processar_pagamento_lote_despesas
+        )
+        from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
+        from app.motochefe.services.empresa_service import atualizar_saldo
+
+        itens_ids_str = request.form.get('itens_ids')
+        tipo_grupo = request.form.get('tipo_grupo')
+        data_pagamento = request.form.get('data_pagamento')
+        empresa_pagadora_id = request.form.get('empresa_pagadora_id')
+        valor_pagar = request.form.get('valor_pagar', '0')
+
+        if not itens_ids_str or not empresa_pagadora_id or not tipo_grupo:
+            flash('Dados inválidos para pagamento', 'warning')
+            return redirect(url_for('motochefe.listar_contas_a_pagar'))
+
+        # Converter IDs de string para lista
+        itens_ids = itens_ids_str.split(',')
+        data_pag = datetime.strptime(data_pagamento, '%Y-%m-%d').date() if data_pagamento else date.today()
+        empresa_pagadora = EmpresaVendaMoto.query.get_or_404(int(empresa_pagadora_id))
+        valor_disponivel = Decimal(valor_pagar)
+
+        if valor_disponivel <= 0:
+            flash('Valor deve ser maior que zero', 'warning')
+            return redirect(url_for('motochefe.listar_contas_a_pagar'))
+
+        total_pago = Decimal('0')
+        total_itens = 0
+
+        # PROCESSAR MOTOS COM PAGAMENTO PARCIAL (USA FUNÇÃO DE LOTE)
+        if tipo_grupo == 'moto':
+            resultado = processar_pagamento_lote_motos(
+                chassi_list=itens_ids,
+                empresa_pagadora=empresa_pagadora,
+                data_pagamento=data_pag,
+                usuario=current_user.nome,
+                valor_limite=valor_disponivel
+            )
+            total_pago = resultado['valor_total']
+            total_itens = len(resultado['motos_atualizadas'])
+
+        # PROCESSAR FRETES COM PAGAMENTO PARCIAL (LÓGICA INLINE - SEM FUNÇÃO AINDA)
+        elif tipo_grupo == 'frete':
+
+            embarques_para_pagar = []
+            for emb_id in itens_ids:
+                if valor_disponivel <= 0:
+                    break
+
+                embarque = EmbarqueMoto.query.get(int(emb_id))
+                if embarque:
+                    valor_saldo_frete = embarque.valor_frete_contratado - (embarque.valor_frete_pago or Decimal('0'))
+                    if valor_saldo_frete <= 0:
+                        continue
+
+                    valor_pagar_frete = min(valor_disponivel, valor_saldo_frete)
+                    if valor_pagar_frete > 0:
+                        embarques_para_pagar.append({'embarque': embarque, 'valor': valor_pagar_frete})
+                        valor_disponivel -= valor_pagar_frete
+                        total_pago += valor_pagar_frete
+
+            if embarques_para_pagar:
+                transportadora = embarques_para_pagar[0]['embarque'].transportadora.transportadora if embarques_para_pagar[0]['embarque'].transportadora else 'Sem Transportadora'
+                if len(embarques_para_pagar) > 1:
+                    transportadora = f'{transportadora} ({len(embarques_para_pagar)} embarques)'
+
+                movimentacao_pai = MovimentacaoFinanceira(
+                    tipo='PAGAMENTO',
+                    categoria='Lote Frete',
+                    valor=total_pago,
+                    data_movimentacao=data_pag,
+                    empresa_origem_id=empresa_pagadora.id,
+                    empresa_destino_id=None,
+                    destino_tipo='Transportadora',
+                    destino_identificacao=transportadora,
+                    descricao=f'Pagamento Lote {len(embarques_para_pagar)} frete(s)',
+                    observacoes=f'Valor informado: R$ {valor_pagar}',
+                    criado_por=current_user.nome
+                )
+                db.session.add(movimentacao_pai)
+                db.session.flush()
+
+                for item in embarques_para_pagar:
+                    embarque = item['embarque']
+                    valor_pagar_frete = item['valor']
+
+                    movimentacao_filha = MovimentacaoFinanceira(
+                        tipo='PAGAMENTO',
+                        categoria='Frete',
+                        valor=valor_pagar_frete,
+                        data_movimentacao=data_pag,
+                        empresa_origem_id=empresa_pagadora.id,
+                        empresa_destino_id=None,
+                        destino_tipo='Transportadora',
+                        destino_identificacao=embarque.transportadora.transportadora if embarque.transportadora else 'Sem Transportadora',
+                        descricao=f'Frete Embarque #{embarque.id}',
+                        movimentacao_origem_id=movimentacao_pai.id,
+                        eh_baixa_automatica=False,
+                        criado_por=current_user.nome
+                    )
+                    db.session.add(movimentacao_filha)
+
+                    embarque.valor_frete_pago = (embarque.valor_frete_pago or Decimal('0')) + valor_pagar_frete
+                    embarque.data_pagamento_frete = data_pag
+                    embarque.empresa_pagadora_id = empresa_pagadora.id
+
+                    if embarque.valor_frete_pago >= embarque.valor_frete_contratado:
+                        embarque.status_pagamento_frete = 'PAGO'
+                    else:
+                        embarque.status_pagamento_frete = 'PARCIAL'
+
+                    total_itens += 1
+
+                atualizar_saldo(empresa_pagadora.id, total_pago, 'SUBTRAIR')
+
+        # PROCESSAR COMISSÕES SEQUENCIALMENTE
+        elif tipo_grupo == 'comissao':
+            comissao_selecionadas = []
+            for com_id in itens_ids:
+                if valor_disponivel <= 0:
+                    break
+
+                comissao = ComissaoVendedor.query.get(int(com_id))
+                if comissao:
+                    valor_item = comissao.valor_rateado
+                    if valor_disponivel >= valor_item:
+                        comissao_selecionadas.append(int(com_id))
+                        valor_disponivel -= valor_item
+                        total_pago += valor_item
+
+            if comissao_selecionadas:
+                resultado = processar_pagamento_lote_comissoes(
+                    comissao_ids=comissao_selecionadas,
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome
+                )
+                total_itens += len(resultado['comissoes_atualizadas'])
+
+        # PROCESSAR MONTAGENS SEQUENCIALMENTE
+        elif tipo_grupo == 'montagem':
+            # Buscar custo REAL da montagem
+            custos_vigentes = CustosOperacionais.get_custos_vigentes()
+            custo_montagem_real = custos_vigentes.custo_montagem if custos_vigentes else Decimal('0')
+
+            montagem_selecionadas = []
+            for mont_id in itens_ids:
+                if valor_disponivel <= 0:
+                    break
+
+                if valor_disponivel >= custo_montagem_real:
+                    montagem_selecionadas.append(int(mont_id))
+                    valor_disponivel -= custo_montagem_real
+                    total_pago += custo_montagem_real
+
+            if montagem_selecionadas:
+                resultado = processar_pagamento_lote_montagens(
+                    item_ids=montagem_selecionadas,
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome
+                )
+                total_itens += len(resultado['itens_atualizados'])
+
+        # PROCESSAR DESPESAS SEQUENCIALMENTE
+        elif tipo_grupo == 'despesa':
+            despesa_selecionadas = []
+            for desp_id in itens_ids:
+                if valor_disponivel <= 0:
+                    break
+
+                despesa = DespesaMensal.query.get(int(desp_id))
+                if despesa:
+                    valor_item = despesa.valor - (despesa.valor_pago or Decimal('0'))
+                    if valor_disponivel >= valor_item:
+                        despesa_selecionadas.append(int(desp_id))
+                        valor_disponivel -= valor_item
+                        total_pago += valor_item
+
+            if despesa_selecionadas:
+                resultado = processar_pagamento_lote_despesas(
+                    despesa_ids=despesa_selecionadas,
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome
+                )
+                total_itens += len(resultado['despesas_atualizadas'])
+
+        db.session.commit()
+
+        flash(
+            f'Pagamento realizado com sucesso! '
+            f'{total_itens} item(ns) quitado(s). Total pago: R$ {total_pago:,.2f}',
+            'success'
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar pagamento: {str(e)}', 'danger')
 
     return redirect(url_for('motochefe.listar_contas_a_pagar'))
 
@@ -632,10 +858,43 @@ def detalhes_pagamento(movimentacao_id):
     try:
         detalhes = obter_detalhes_lote_pagamento(movimentacao_id)
 
+        # ✅ TAREFA 4: Agrupar itens por pedido para accordion
+        itens_relacionados = detalhes['itens_relacionados']
+        itens_por_pedido = {}
+        itens_sem_pedido = []
+
+        for item in itens_relacionados:
+            # Tentar obter pedido_id do item ou do objeto relacionado
+            pedido_id = None
+            numero_pedido = None
+
+            if hasattr(item.get('movimentacao'), 'pedido_id'):
+                pedido_id = item.get('movimentacao').pedido_id
+            elif hasattr(item.get('item_objeto'), 'pedido_id'):
+                pedido_id = item.get('item_objeto').pedido_id
+            elif hasattr(item.get('item_objeto'), 'pedido'):
+                pedido_obj = item.get('item_objeto').pedido
+                if pedido_obj:
+                    pedido_id = pedido_obj.id
+                    numero_pedido = pedido_obj.numero_pedido
+
+            # Separar itens COM pedido vs SEM pedido
+            if pedido_id:
+                if pedido_id not in itens_por_pedido:
+                    itens_por_pedido[pedido_id] = {
+                        'numero_pedido': numero_pedido or f'Pedido #{pedido_id}',
+                        'itens': []
+                    }
+                itens_por_pedido[pedido_id]['itens'].append(item)
+            else:
+                itens_sem_pedido.append(item)
+
         return render_template('motochefe/financeiro/detalhes_pagamento.html',
                              movimentacao_pai=detalhes['movimentacao_pai'],
                              movimentacoes_filhas=detalhes['movimentacoes_filhas'],
                              itens_relacionados=detalhes['itens_relacionados'],
+                             itens_por_pedido=itens_por_pedido,
+                             itens_sem_pedido=itens_sem_pedido,
                              todos_titulos_pedido=detalhes.get('todos_titulos_pedido', []),
                              titulos_com_movimentacao=detalhes.get('titulos_com_movimentacao', set()),
                              total_saldo_anterior=detalhes.get('total_saldo_anterior', 0),
@@ -660,12 +919,41 @@ def detalhes_recebimento(movimentacao_id):
     try:
         detalhes = obter_detalhes_lote_pagamento(movimentacao_id)
 
-        # Reutilizar o mesmo template de pagamentos
-        # O template já suporta TITULO como tipo_item
+        # ✅ Agrupar itens por pedido (igual em detalhes_pagamento)
+        itens_relacionados = detalhes['itens_relacionados']
+        itens_por_pedido = {}
+        itens_sem_pedido = []
+
+        for item in itens_relacionados:
+            pedido_id = None
+            numero_pedido = None
+
+            if hasattr(item.get('movimentacao'), 'pedido_id'):
+                pedido_id = item.get('movimentacao').pedido_id
+            elif hasattr(item.get('item_objeto'), 'pedido_id'):
+                pedido_id = item.get('item_objeto').pedido_id
+            elif hasattr(item.get('item_objeto'), 'pedido'):
+                pedido_obj = item.get('item_objeto').pedido
+                if pedido_obj:
+                    pedido_id = pedido_obj.id
+                    numero_pedido = pedido_obj.numero_pedido
+
+            if pedido_id:
+                if pedido_id not in itens_por_pedido:
+                    itens_por_pedido[pedido_id] = {
+                        'numero_pedido': numero_pedido or f'Pedido #{pedido_id}',
+                        'itens': []
+                    }
+                itens_por_pedido[pedido_id]['itens'].append(item)
+            else:
+                itens_sem_pedido.append(item)
+
         return render_template('motochefe/financeiro/detalhes_pagamento.html',
                              movimentacao_pai=detalhes['movimentacao_pai'],
                              movimentacoes_filhas=detalhes['movimentacoes_filhas'],
                              itens_relacionados=detalhes['itens_relacionados'],
+                             itens_por_pedido=itens_por_pedido,
+                             itens_sem_pedido=itens_sem_pedido,
                              todos_titulos_pedido=detalhes.get('todos_titulos_pedido', []),
                              titulos_com_movimentacao=detalhes.get('titulos_com_movimentacao', set()),
                              total_saldo_anterior=detalhes.get('total_saldo_anterior', 0),

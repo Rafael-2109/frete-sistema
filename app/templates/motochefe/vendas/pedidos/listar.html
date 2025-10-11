@@ -50,49 +50,54 @@
                 <table class="table table-hover table-sm">
                     <thead>
                         <tr>
-                            <th>Nº Pedido</th>
-                            <th>Data</th>
-                            <th>Cliente</th>
                             <th>Vendedor</th>
-                            <th>Qtd Motos</th>
-                            <th>Total Pedido</th>
-                            <th>Saldo a Receber</th>
+                            <th>Pedido - Data<br><small>Cliente</small></th>
+                            <th>Entrega</th>
+                            <th>Total</th>
+                            <th>Vencimento<br><small>Saldo</small></th>
                             <th>NF</th>
-                            <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for p in pedidos %}
                         <tr>
-                            <td><strong>{{ p.numero_pedido }}</strong></td>
-                            <td>{{ p.data_pedido.strftime('%d/%m/%Y') if p.data_pedido else '-' }}</td>
-                            <td>{{ p.cliente.cliente if p.cliente else '-' }}</td>
+                            {# Coluna 1: Vendedor #}
                             <td>{{ p.vendedor.vendedor if p.vendedor else '-' }}</td>
-                            <td>{{ p.quantidade_motos }}</td>
-                            <td>R$ {{ p.valor_total_pedido|valor_br }}</td>
+
+                            {# Coluna 2: Pedido - Data + Cliente #}
                             <td>
-                                {% if p.saldo_a_receber %}
-                                <span class="badge {% if p.saldo_a_receber > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                                <strong>{{ p.numero_pedido }}</strong> - {{ p.data_pedido.strftime('%d/%m/%Y') if p.data_pedido else '-' }}<br>
+                                <small class="text-muted">{{ p.cliente.cliente if p.cliente else '-' }}</small>
+                            </td>
+
+                            {# Coluna 3: Entrega (data_expedicao) #}
+                            <td>{{ p.data_expedicao.strftime('%d/%m/%Y') if p.data_expedicao else '-' }}</td>
+
+                            {# Coluna 4: Qtd Motos + Total #}
+                            <td>
+                                {{ p.quantidade_motos }} Motos<br>
+                                <small class="text-success fw-bold">R$ {{ p.valor_total_pedido|valor_br }}</small>
+                            </td>
+
+                            {# Coluna 5: Vencimento + Saldo #}
+                            <td>
+                                {% set primeiro_titulo = p.titulos|selectattr('numero_parcela', 'equalto', 1)|selectattr('status', 'ne', 'CANCELADO')|first %}
+                                {% if primeiro_titulo and primeiro_titulo.data_vencimento %}
+                                    {{ primeiro_titulo.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {% if primeiro_titulo.atrasado %}
+                                        <br><span class="badge bg-danger">VENCIDO</span>
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                                <br>
+                                <small {% if p.saldo_a_receber > 0 %}class="text-danger fw-bold"{% else %}class="text-success"{% endif %}>
                                     R$ {{ p.saldo_a_receber|valor_br }}
-                                </span>
-                                {% else %}
-                                <span class="badge bg-secondary">R$ 0,00</span>
-                                {% endif %}
+                                </small>
                             </td>
-                            <td>
-                                {% if p.faturado %}
-                                <span class="badge bg-success">{{ p.numero_nf }}</span>
-                                <button type="button" class="btn btn-sm btn-outline-primary ms-1"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#modalEditarNF{{ p.id }}"
-                                        title="Editar NF">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                {% else %}
-                                <span class="badge bg-secondary">-</span>
-                                {% endif %}
-                            </td>
+
+                            {# Coluna 6: Status + NF #}
                             <td>
                                 {% if p.enviado %}
                                 <span class="badge bg-primary">Enviado</span>
@@ -101,15 +106,26 @@
                                 {% else %}
                                 <span class="badge bg-warning">Aberto</span>
                                 {% endif %}
+                                <br>
+                                {% if p.faturado %}
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEditarNF{{ p.id }}"
+                                            title="Editar NF">
+                                        <i class="fas fa-file-invoice"></i> {{ p.numero_nf }}
+                                    </button>
+                                {% else %}
+                                <button type="button" class="btn btn-success btn-sm" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#modalFaturar{{ p.id }}">
+                            <i class="fas fa-file-invoice-dollar"></i> Faturar
+                        </button>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     {% if not p.faturado %}
-                                    <button type="button" class="btn btn-success" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#modalFaturar{{ p.id }}">
-                                        <i class="fas fa-file-invoice-dollar"></i> Faturar
-                                    </button>
+
                                     {% endif %}
                                     <a href="{{ url_for('motochefe.detalhes_pedido', id=p.id) }}" class="btn btn-info">
                                         <i class="fas fa-eye"></i> Ver
@@ -297,7 +313,7 @@
                         {% endif %}
                         {% else %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted">Nenhum pedido encontrado</td>
+                            <td colspan="7" class="text-center text-muted">Nenhum pedido encontrado</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -391,5 +407,324 @@ document.getElementById('formNovaEmpresa')?.addEventListener('submit', function(
         alert('Erro ao cadastrar empresa: ' + error);
     });
 });
+</script>
+
+<!-- Modal Visualizar Estoque -->
+<div class="modal fade" id="modalEstoqueAgrupamento" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-layer-group"></i> Visualizar Estoque de Motos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- FILTROS -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <strong><i class="fas fa-filter"></i> Filtros</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Status:</label>
+                                <select id="filtro_status_estoque" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                    <option value="DISPONIVEL" selected>Disponível</option>
+                                    <option value="RESERVADA">Reservada</option>
+                                    <option value="VENDIDA">Vendida</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Modelo:</label>
+                                <select id="filtro_modelo_estoque" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Cor:</label>
+                                <select id="filtro_cor_estoque" class="form-select form-select-sm">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Potência:</label>
+                                <select id="filtro_potencia_estoque" class="form-select form-select-sm">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOADING -->
+                <div id="loading_estoque" class="text-center py-5" style="display:none;">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Carregando dados...</p>
+                </div>
+
+                <!-- ACCORDIONS -->
+                <div id="accordion_estoque">
+                    <!-- Conteúdo gerado por JavaScript -->
+                </div>
+
+                <!-- Mensagem vazia -->
+                <div id="mensagem_vazio_estoque" class="alert alert-warning text-center" style="display:none;">
+                    <i class="fas fa-exclamation-triangle"></i> Nenhuma moto encontrada com os filtros selecionados.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// JAVASCRIPT - MODAL DE ESTOQUE AGRUPADO
+// ============================================================================
+(function() {
+    'use strict';
+
+    const modal = document.getElementById('modalEstoqueAgrupamento');
+    const accordionContainer = document.getElementById('accordion_estoque');
+    const loadingDiv = document.getElementById('loading_estoque');
+    const mensagemVazio = document.getElementById('mensagem_vazio_estoque');
+
+    // Elementos de filtro
+    const filtroStatus = document.getElementById('filtro_status_estoque');
+    const filtroModelo = document.getElementById('filtro_modelo_estoque');
+    const filtroCor = document.getElementById('filtro_cor_estoque');
+    const filtroPotencia = document.getElementById('filtro_potencia_estoque');
+
+    // Carregar ao abrir modal
+    modal.addEventListener('show.bs.modal', function() {
+        carregarOpcoesFiltros();
+        carregarDados();
+    });
+
+    // Aplicar filtros em tempo real
+    [filtroStatus, filtroModelo, filtroCor, filtroPotencia].forEach(elem => {
+        elem.addEventListener('change', carregarDados);
+    });
+
+    // Carregar opções dos filtros
+    function carregarOpcoesFiltros() {
+        fetch("{{ url_for('motochefe.api_opcoes_filtros') }}")
+            .then(res => res.json())
+            .then(data => {
+                filtroModelo.innerHTML = '<option value="">Todos</option>';
+                data.modelos.forEach(modelo => {
+                    filtroModelo.innerHTML += `<option value="${modelo}">${modelo}</option>`;
+                });
+
+                filtroCor.innerHTML = '<option value="">Todas</option>';
+                data.cores.forEach(cor => {
+                    filtroCor.innerHTML += `<option value="${cor}">${cor}</option>`;
+                });
+
+                filtroPotencia.innerHTML = '<option value="">Todas</option>';
+                data.potencias.forEach(pot => {
+                    filtroPotencia.innerHTML += `<option value="${pot}">${pot}</option>`;
+                });
+            })
+            .catch(err => console.error('Erro ao carregar opções:', err));
+    }
+
+    // Carregar dados agrupados
+    function carregarDados() {
+        loadingDiv.style.display = 'block';
+        accordionContainer.style.display = 'none';
+        mensagemVazio.style.display = 'none';
+
+        const params = new URLSearchParams({
+            autopropelido_sim: 'true',
+            autopropelido_nao: 'true',
+            status: filtroStatus.value,
+            modelo: filtroModelo.value,
+            cor: filtroCor.value,
+            potencia: filtroPotencia.value
+        });
+
+        fetch(`{{ url_for('motochefe.api_motos_agrupamento') }}?${params}`)
+            .then(res => res.json())
+            .then(dados => {
+                loadingDiv.style.display = 'none';
+
+                if (dados.length === 0) {
+                    mensagemVazio.style.display = 'block';
+                    return;
+                }
+
+                renderizarAccordions(dados);
+                accordionContainer.style.display = 'block';
+            })
+            .catch(err => {
+                console.error('Erro ao carregar dados:', err);
+                loadingDiv.style.display = 'none';
+                mensagemVazio.style.display = 'block';
+            });
+    }
+
+    // Renderizar accordions
+    function renderizarAccordions(dados) {
+        let html = '<div class="accordion" id="accordionModelos">';
+
+        dados.forEach((modelo, idxModelo) => {
+            const modeloId = `modelo_est_${idxModelo}`;
+
+            html += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${modeloId}">
+                            <strong>${modelo.modelo}</strong>
+                            <span class="badge bg-info ms-2">${modelo.quantidade} motos</span>
+                            <span class="badge bg-success ms-2">R$ ${formatarValorBR(modelo.preco_tabela || 0)}</span>
+                            ${modelo.autopropelido ? '<span class="badge bg-warning text-dark ms-1">Autopropelida</span>' : ''}
+                        </button>
+                    </h2>
+                    <div id="${modeloId}" class="accordion-collapse collapse" data-bs-parent="#accordionModelos">
+                        <div class="accordion-body">
+                            ${renderizarCores(modelo.cores, modeloId)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        accordionContainer.innerHTML = html;
+    }
+
+    // Renderizar Cores
+    function renderizarCores(cores, parentId) {
+        let html = '<div class="accordion" id="accordion_' + parentId + '">';
+
+        cores.forEach((cor, idxCor) => {
+            const corId = `${parentId}_cor_${idxCor}`;
+
+            html += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${corId}">
+                            <i class="fas fa-square" style="color:${getCorHex(cor.cor)}"></i>
+                            <strong class="ms-2">${cor.cor}</strong>
+                            <span class="badge bg-secondary ms-2">${cor.quantidade} motos</span>
+                        </button>
+                    </h2>
+                    <div id="${corId}" class="accordion-collapse collapse">
+                        <div class="accordion-body">
+                            <ul class="list-group">
+            `;
+
+            cor.potencias.forEach(pot => {
+                html += `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <strong>${pot.potencia}</strong>
+                        <span class="badge bg-info">${pot.quantidade} motos</span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="mostrarMotosEstoque(${JSON.stringify(pot.motos).replace(/"/g, '&quot;')}, '${pot.potencia}', '${cor.cor}')">
+                            <i class="fas fa-eye"></i> Ver Chassi
+                        </button>
+                    </li>
+                `;
+            });
+
+            html += `
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        return html;
+    }
+
+    function getCorHex(cor) {
+        const cores = {
+            'Preta': '#000000',
+            'Branca': '#FFFFFF',
+            'Vermelha': '#DC3545',
+            'Azul': '#0D6EFD',
+            'Verde': '#198754',
+            'Amarela': '#FFC107',
+            'Laranja': '#FD7E14',
+            'Cinza': '#6C757D',
+            'Prata': '#ADB5BD'
+        };
+        return cores[cor] || '#6C757D';
+    }
+
+    function formatarValorBR(valor) {
+        return parseFloat(valor).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&.').replace('.', ',');
+    }
+
+    window.mostrarMotosEstoque = function(motos, potencia, cor) {
+        let html = `
+            <div class="modal fade" id="modalListaMotosEstoque" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-motorcycle"></i> Lista de Motos - ${cor} ${potencia}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Chassi</th>
+                                        <th>Motor</th>
+                                        <th>Ano</th>
+                                        <th>NF</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+        `;
+
+        motos.forEach(moto => {
+            const statusClass = moto.status === 'DISPONIVEL' ? 'success' : moto.status === 'RESERVADA' ? 'warning' : 'danger';
+
+            html += `
+                <tr>
+                    <td><code>${moto.chassi}</code></td>
+                    <td><code>${moto.motor}</code></td>
+                    <td>${moto.ano || '-'}</td>
+                    <td>${moto.nf}</td>
+                    <td><span class="badge bg-${statusClass}">${moto.status}</span></td>
+                </tr>
+            `;
+        });
+
+        html += `
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const oldModal = document.getElementById('modalListaMotosEstoque');
+        if (oldModal) oldModal.remove();
+
+        document.body.insertAdjacentHTML('beforeend', html);
+
+        const modalInstance = new bootstrap.Modal(document.getElementById('modalListaMotosEstoque'));
+        modalInstance.show();
+
+        document.getElementById('modalListaMotosEstoque').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    };
+})();
 </script>
 {% endblock %}

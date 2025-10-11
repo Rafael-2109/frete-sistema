@@ -37,8 +37,17 @@
         <!-- ACCORDION POR PEDIDO -->
         <div class="accordion" id="accordionPedidos">
             {% for pedido_id, dados_pedido in pedidos_agrupados.items() %}
+
             <div class="accordion-item">
                 <h2 class="accordion-header d-flex align-items-center" id="heading-pedido-{{ pedido_id }}">
+                    {% if dados_pedido.pedido.saldo_a_receber > 0 %}
+                    <button type="button" class="btn btn-sm btn-success ms-2"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalReceberPedido{{ pedido_id }}"
+                            style="white-space: nowrap;">
+                        <i class="fas fa-dollar-sign"></i> Receber
+                    </button>
+                    {% endif %}      
                     <button class="accordion-button collapsed flex-grow-1" type="button" data-bs-toggle="collapse"
                             data-bs-target="#collapse-pedido-{{ pedido_id }}" aria-expanded="false">
                         <strong>Pedido {{ dados_pedido.pedido.numero_pedido }}</strong>
@@ -47,18 +56,13 @@
                         <span class="badge bg-primary ms-2">
                             {{ dados_pedido.parcelas|length }} parcela(s)
                         </span>
+                        <span class="badge bg-dark ms-2">
+                            Total: R$ {{ dados_pedido.pedido.valor_total_pedido|valor_br }}
+                        </span>
                         <span class="badge bg-success ms-2">
-                            Total: R$ {{ dados_pedido.pedido.saldo_a_receber|valor_br }}
+                            Saldo: R$ {{ dados_pedido.pedido.saldo_a_receber|valor_br }}
                         </span>
                     </button>
-                    {% if dados_pedido.pedido.saldo_a_receber > 0 %}
-                    <button type="button" class="btn btn-sm btn-success ms-2"
-                            data-bs-toggle="modal"
-                            data-bs-target="#modalReceberPedido{{ pedido_id }}"
-                            style="white-space: nowrap;">
-                        <i class="fas fa-dollar-sign"></i> Receber
-                    </button>
-                    {% endif %}
                 </h2>
                 <div id="collapse-pedido-{{ pedido_id }}" class="accordion-collapse collapse"
                      aria-labelledby="heading-pedido-{{ pedido_id }}">
@@ -106,14 +110,6 @@
                                                             Total: R$ {{ total_moto.valor|valor_br }}
                                                         </span>
                                                     </button>
-                                                    {% if total_moto.valor > 0 %}
-                                                    <button type="button" class="btn btn-sm btn-warning ms-2"
-                                                            data-bs-toggle="modal"
-                                                            data-bs-target="#modalReceberMoto{{ pedido_id }}-{{ chassi|replace('.', '-') }}"
-                                                            style="white-space: nowrap;">
-                                                        <i class="fas fa-motorcycle"></i> Receber
-                                                    </button>
-                                                    {% endif %}
                                                 </h2>
                                                 <div id="collapse-moto-{{ pedido_id }}-{{ parcela_num }}-{{ loop.index }}"
                                                      class="accordion-collapse collapse"
@@ -223,48 +219,69 @@
     {% for pedido_id, dados_pedido in pedidos_agrupados.items() %}
         <!-- Modal Receber Pedido -->
         <div class="modal fade" id="modalReceberPedido{{ pedido_id }}" tabindex="-1">
-            <div class="modal-dialog modal-sm">
+            <div class="modal-dialog modal-md">
                 <div class="modal-content">
                     <div class="modal-header bg-success text-white">
-                        <h6 class="modal-title m-0">
+                        <h4 class="modal-title m-0">
                             <i class="fas fa-dollar-sign"></i> Receber - Pedido {{ dados_pedido.pedido.numero_pedido }}
-                        </h6>
+                        </h4>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <form method="POST" action="{{ url_for('motochefe.receber_pedido_contas', pedido_id=pedido_id) }}">
+                    <form method="POST" action="{{ url_for('motochefe.receber_pedido_contas', pedido_id=pedido_id) }}" id="formRecebimentoPedido{{ pedido_id }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <div class="modal-body p-3">
-                            <div class="mb-2 pb-2 border-bottom">
-                                <small class="text-muted">Saldo Total:</small><br>
-                                <h5 class="text-success mb-0">R$ {{ dados_pedido.pedido.saldo_a_receber|valor_br }}</h5>
+                        <div class="modal-body p-4">
+                            <div class="mb-4 pb-3 border-bottom">
+                                <p class="text-muted mb-2 fs-6">Saldo Total:</p>
+                                <h3 class="text-success mb-0">R$ {{ dados_pedido.pedido.saldo_a_receber|valor_br }}</h3>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label small mb-1">Empresa Recebedora *</label>
-                                <select name="empresa_recebedora_id" class="form-select form-select-sm" required>
+                            <div class="mb-4">
+                                <label class="form-label fs-5 mb-2">Empresa Recebedora *</label>
+                                <select name="empresa_recebedora_id" class="form-select form-select-md" required>
                                     <option value="">Selecione...</option>
                                     {% for emp in empresas %}
                                     <option value="{{ emp.id }}">{{ emp.empresa }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label small mb-1">Valor Recebido *</label>
+                            <div class="mb-3">
+                                <label class="form-label fs-5 mb-2">Valor Recebido *</label>
                                 <input type="number" step="0.01" name="valor_recebido"
-                                       class="form-control form-control-sm"
+                                       class="form-control form-control-md"
                                        value="{{ dados_pedido.pedido.saldo_a_receber }}"
                                        required>
                             </div>
                         </div>
-                        <div class="modal-footer p-2">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-sm btn-success">
-                                <i class="fas fa-check"></i> Confirmar
+                        <div class="modal-footer p-3">
+                            <button type="button" class="btn btn-md btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-md btn-success">
+                                <i class="fas fa-check"></i> Confirmar Recebimento
                             </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
+
+        <script>
+        document.getElementById('formRecebimentoPedido{{ pedido_id }}').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const form = event.target;
+            const valorRecebido = form.querySelector('input[name="valor_recebido"]').value;
+            const empresaSelect = form.querySelector('select[name="empresa_recebedora_id"]');
+            const empresaNome = empresaSelect.options[empresaSelect.selectedIndex].text;
+
+            const confirmacao = confirm(
+                'Confirmar recebimento do Pedido {{ dados_pedido.pedido.numero_pedido }}?\n\n' +
+                'Valor: R$ ' + parseFloat(valorRecebido).toFixed(2).replace('.', ',') + '\n' +
+                'Empresa: ' + empresaNome + '\n\n' +
+                'Esta ação não poderá ser desfeita.'
+            );
+
+            if (confirmacao) {
+                form.submit();
+            }
+        });
+        </script>
 
         <!-- Modais Receber Moto -->
         {% for parcela_num, dados_parcela in dados_pedido.parcelas.items() %}

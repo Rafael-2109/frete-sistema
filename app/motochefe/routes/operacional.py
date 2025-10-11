@@ -77,8 +77,8 @@ def listar_despesas():
 
     # Buscar todas para totalizadores (antes da paginação)
     despesas_todas = query.all()
-    total_geral = sum(d.valor for d in despesas_todas)
-    total_pago = sum(d.valor_pago or 0 for d in despesas_todas)
+    total_geral = sum((d.valor for d in despesas_todas), Decimal("0"))
+    total_pago = sum((d.valor_pago or 0 for d in despesas_todas), Decimal("0"))
     total_aberto = total_geral - total_pago
 
     # Aplicar paginação

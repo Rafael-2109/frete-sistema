@@ -207,12 +207,16 @@ def importar_modelos():
         atualizados = 0
 
         for _, row in df.iterrows():
-            nome = row['Modelo']
-            potencia = row['Potência']
+            nome_raw = row['Modelo']
+            potencia_raw = row['Potência']
             preco = row['Preço Tabela']
 
-            if pd.isna(nome) or pd.isna(potencia) or pd.isna(preco):
+            if pd.isna(nome_raw) or pd.isna(potencia_raw) or pd.isna(preco):
                 continue
+
+            # ✅ UPPERCASE: Converter para maiúsculas
+            nome = str(nome_raw).strip().upper()
+            potencia = str(potencia_raw).strip().upper()
 
             # Processar autopropelido
             autopropelido = False
@@ -222,8 +226,10 @@ def importar_modelos():
             # Converter preço brasileiro (vírgula como decimal)
             preco_convertido = converter_valor_brasileiro(str(preco))
             descricao = row.get('Descrição') if 'Descrição' in df.columns else None
+            if descricao and not pd.isna(descricao):
+                descricao = str(descricao).strip().upper()  # ✅ UPPERCASE na descrição também
 
-            # Verificar se já existe
+            # Verificar se já existe (busca case-insensitive já que agora está tudo em uppercase)
             existe = ModeloMoto.query.filter_by(nome_modelo=nome, ativo=True).first()
 
             if existe:
@@ -568,96 +574,145 @@ def importar_motos():
             db.session.flush()
 
         importados = 0
+        atualizados = 0
         rejeitados = 0
         erros = []
 
         for idx, row in df.iterrows():
             chassi_raw = row['Chassi']
-            motor = row.get('Motor')  # Agora é opcional
-            modelo_nome = row['Modelo']
+            motor_raw = row.get('Motor')  # Agora é opcional
+            modelo_nome_raw = row['Modelo']
+            cor_raw = row['Cor']
+            fornecedor_raw = row['Fornecedor']
 
             # Chassi e Modelo são obrigatórios, Motor é opcional
-            if pd.isna(chassi_raw) or pd.isna(modelo_nome):
+            if pd.isna(chassi_raw) or pd.isna(modelo_nome_raw):
                 continue
 
-            # ✅ LIMPAR E VALIDAR CHASSI
-            chassi = str(chassi_raw).strip().upper()  # Remove espaços e converte para maiúscula
+            # ✅ UPPERCASE: Converter todos os campos de texto para maiúsculas
+            chassi = str(chassi_raw).strip().upper()
+            motor = str(motor_raw).strip().upper() if not pd.isna(motor_raw) else None
+            modelo_nome = str(modelo_nome_raw).strip().upper()
+            cor = str(cor_raw).strip().upper()
+            fornecedor = str(fornecedor_raw).strip().upper()
 
             # Validar tamanho máximo (VARCHAR(30) no banco)
             if len(chassi) > 30:
                 erros.append(f'Linha {idx+2}: Chassi "{chassi}" muito longo ({len(chassi)} caracteres, máximo 30).') # type: ignore
                 continue
 
-            # Verificar duplicidade de chassi
+            # ✅ UPSERT: Verificar se chassi já existe
             existe = Moto.query.filter_by(numero_chassi=chassi).first()
-            if existe:
-                erros.append(f'Linha {idx+2}: Chassi {chassi} já existe') # type: ignore
-                continue
 
-            # Verificar duplicidade de motor (se preenchido)
-            if not pd.isna(motor):
-                motor_existe = Moto.query.filter_by(numero_motor=str(motor)).first()
+            # Verificar duplicidade de motor (apenas se for uma nova moto ou se o motor mudou)
+            if motor and (not existe or (existe and existe.numero_motor != motor)):
+                motor_existe = Moto.query.filter(
+                    Moto.numero_motor == motor,
+                    Moto.numero_chassi != chassi  # Excluir o próprio chassi
+                ).first()
                 if motor_existe:
-                    erros.append(f'Linha {idx+2}: Motor {motor} já existe') # type: ignore
+                    erros.append(f'Linha {idx+2}: Motor {motor} já existe em outro chassi') # type: ignore
                     continue
 
-            # Buscar modelo (case-insensitive)
-            from sqlalchemy import func
+            # Buscar modelo (agora já em uppercase)
             modelo = ModeloMoto.query.filter(
-                func.upper(ModeloMoto.nome_modelo) == str(modelo_nome).strip().upper(),
+                ModeloMoto.nome_modelo == modelo_nome,  # Já está em uppercase
                 ModeloMoto.ativo == True
             ).first()
 
             # Converter custo brasileiro (vírgula como decimal)
             custo_convertido = converter_valor_brasileiro(str(row['Custo']))
 
-            if not modelo:
-                # MODELO NÃO ENCONTRADO: Salvar moto como INATIVA
-                moto = Moto(
-                    numero_chassi=chassi,  # ✅ Já limpo e validado
-                    numero_motor=str(motor).strip() if not pd.isna(motor) else None,  # Nullable
-                    modelo_id=modelo_placeholder.id,  # Usa placeholder
-                    modelo_rejeitado=str(modelo_nome),  # Guarda nome do modelo não encontrado
-                    cor=str(row['Cor']),
-                    ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,
-                    nf_entrada=str(row['NF Entrada']),
-                    data_nf_entrada=pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today(),
-                    data_entrada=pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today(),
-                    fornecedor=str(row['Fornecedor']),
-                    custo_aquisicao=Decimal(str(custo_convertido)),
-                    pallet=str(row['Pallet']) if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None,
-                    ativo=False,  # MARCA COMO INATIVA
-                    criado_por=current_user.nome
-                )
-                db.session.add(moto)
-                rejeitados += 1
+            # Campos comuns para INSERT e UPDATE
+            ano = int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None
+            nf_entrada = str(row['NF Entrada']).strip().upper()
+            data_nf_entrada = pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today()
+            data_entrada = pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today()
+            custo_aquisicao = Decimal(str(custo_convertido))
+            pallet = str(row['Pallet']).strip().upper() if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None
+
+            if existe:
+                # ✅ UPSERT: ATUALIZAR moto existente
+                existe.numero_motor = motor
+                existe.cor = cor
+                existe.ano_fabricacao = ano
+                existe.nf_entrada = nf_entrada
+                existe.data_nf_entrada = data_nf_entrada
+                existe.data_entrada = data_entrada
+                existe.fornecedor = fornecedor
+                existe.custo_aquisicao = custo_aquisicao
+                existe.pallet = pallet
+                existe.atualizado_por = current_user.nome
+
+                # Se modelo foi encontrado, atualizar e ativar
+                if modelo:
+                    existe.modelo_id = modelo.id
+                    existe.modelo_rejeitado = None
+                    existe.ativo = True
+                else:
+                    existe.modelo_id = modelo_placeholder.id
+                    existe.modelo_rejeitado = modelo_nome
+                    existe.ativo = False
+
+                atualizados += 1
             else:
-                # MODELO ENCONTRADO: Salvar moto normalmente
-                moto = Moto(
-                    numero_chassi=chassi,  # ✅ Já limpo e validado
-                    numero_motor=str(motor).strip() if not pd.isna(motor) else None,  # Nullable
-                    modelo_id=modelo.id,
-                    cor=str(row['Cor']),
-                    ano_fabricacao=int(row['Ano']) if 'Ano' in df.columns and not pd.isna(row['Ano']) else None,
-                    nf_entrada=str(row['NF Entrada']),
-                    data_nf_entrada=pd.to_datetime(row['Data NF']).date() if 'Data NF' in df.columns and not pd.isna(row['Data NF']) else date.today(),
-                    data_entrada=pd.to_datetime(row['Data Entrada']).date() if 'Data Entrada' in df.columns and not pd.isna(row['Data Entrada']) else date.today(),
-                    fornecedor=str(row['Fornecedor']),
-                    custo_aquisicao=Decimal(str(custo_convertido)),
-                    pallet=str(row['Pallet']) if 'Pallet' in df.columns and not pd.isna(row['Pallet']) else None,
-                    criado_por=current_user.nome
-                )
-                db.session.add(moto)
-                importados += 1
+                # ✅ UPSERT: INSERIR nova moto
+                if not modelo:
+                    # MODELO NÃO ENCONTRADO: Salvar moto como INATIVA
+                    moto = Moto(
+                        numero_chassi=chassi,
+                        numero_motor=motor,
+                        modelo_id=modelo_placeholder.id,
+                        modelo_rejeitado=modelo_nome,
+                        cor=cor,
+                        ano_fabricacao=ano,
+                        nf_entrada=nf_entrada,
+                        data_nf_entrada=data_nf_entrada,
+                        data_entrada=data_entrada,
+                        fornecedor=fornecedor,
+                        custo_aquisicao=custo_aquisicao,
+                        pallet=pallet,
+                        ativo=False,
+                        criado_por=current_user.nome
+                    )
+                    db.session.add(moto)
+                    rejeitados += 1
+                else:
+                    # MODELO ENCONTRADO: Salvar moto ativa
+                    moto = Moto(
+                        numero_chassi=chassi,
+                        numero_motor=motor,
+                        modelo_id=modelo.id,
+                        cor=cor,
+                        ano_fabricacao=ano,
+                        nf_entrada=nf_entrada,
+                        data_nf_entrada=data_nf_entrada,
+                        data_entrada=data_entrada,
+                        fornecedor=fornecedor,
+                        custo_aquisicao=custo_aquisicao,
+                        pallet=pallet,
+                        criado_por=current_user.nome
+                    )
+                    db.session.add(moto)
+                    importados += 1
 
         db.session.commit()
 
         # Mensagem de retorno
-        mensagem = f'{importados} motos importadas com sucesso'
+        partes_mensagem = []
+        if importados > 0:
+            partes_mensagem.append(f'{importados} moto(s) nova(s) importada(s)')
+        if atualizados > 0:
+            partes_mensagem.append(f'{atualizados} moto(s) atualizada(s)')
         if rejeitados > 0:
-            mensagem += f' | {rejeitados} motos salvas como INATIVAS (modelo não encontrado)'
+            partes_mensagem.append(f'{rejeitados} moto(s) salva(s) como INATIVA (modelo não encontrado)')
+
+        mensagem = ' | '.join(partes_mensagem) if partes_mensagem else 'Nenhuma moto foi processada'
+
         if erros:
             mensagem += f' | Erros: {"; ".join(erros[:5])}'
+            if len(erros) > 5:
+                mensagem += f' (e mais {len(erros)-5} erros)'
             flash(mensagem, 'warning')
         else:
             flash(mensagem, 'success')
@@ -773,6 +828,7 @@ def api_motos_agrupamento():
         resultado.append({
             'modelo': modelo,
             'autopropelido': modelo_obj.autopropelido if modelo_obj else False,
+            'preco_tabela': float(modelo_obj.preco_tabela) if modelo_obj and modelo_obj.preco_tabela else 0,
             'quantidade': total_modelo,
             'cores': cores_data
         })

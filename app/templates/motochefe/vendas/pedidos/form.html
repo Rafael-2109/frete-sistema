@@ -38,9 +38,10 @@
                         <small class="text-muted">Data de criação do pedido (automática)</small>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Data Expedição</label>
+                        <label class="form-label">Data Expedição *</label>
                         <input type="date" name="data_expedicao" class="form-control"
-                               value="{{ pedido.data_expedicao.strftime('%Y-%m-%d') if pedido and pedido.data_expedicao else '' }}">
+                               value="{{ pedido.data_expedicao.strftime('%Y-%m-%d') if pedido and pedido.data_expedicao else '' }}" required>
+                        <small class="text-muted">Data prevista de envio (obrigatória)</small>
                     </div>
                 </div>
 
@@ -107,7 +108,12 @@
                 <hr class="my-4">
 
                 <!-- Adicionar Item -->
-                <h5 class="mb-3"><i class="fas fa-motorcycle"></i> Itens do Pedido</h5>
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <button type="button" class="btn btn-info" id="btnVisualizarEstoque" data-bs-toggle="modal" data-bs-target="#modalEstoqueAgrupamento" style="display:none;">
+                        <i class="fas fa-layer-group"></i> Visualizar Estoque
+                    </button>
+                    <h5 class="mb-0"><i class="fas fa-motorcycle"></i> Itens do Pedido</h5>
+                </div>
                 <div class="card mb-3">
                     <div class="card-body">
                         <div class="row">
@@ -116,8 +122,11 @@
                                 <select id="sel_modelo" class="form-select">
                                     <option value="">Selecione...</option>
                                     {% for m in modelos %}
-                                    <option value="{{ m.id }}" data-preco="{{ m.preco_tabela }}">
-                                        {{ m.nome_modelo }} - {{ m.potencia_motor }} (R$ {{ m.preco_tabela|valor_br }})
+                                    <option value="{{ m.id }}"
+                                            data-preco="{{ m.preco_tabela }}"
+                                            data-nome="{{ m.nome_modelo }}"
+                                            data-potencia="{{ m.potencia_motor }}">
+                                        {{ m.nome_modelo }} (R$ {{ m.preco_tabela|valor_br }})
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -317,14 +326,20 @@ document.getElementById('sel_equipe').addEventListener('change', async function(
 document.getElementById('sel_vendedor').addEventListener('change', async function() {
     const vendedorId = this.value;
     const selCliente = document.getElementById('sel_cliente');
+    const btnEstoque = document.getElementById('btnVisualizarEstoque');
 
     selCliente.innerHTML = '<option value="">Carregando...</option>';
     selCliente.disabled = true;
 
     if (!vendedorId) {
         selCliente.innerHTML = '<option value="">Selecione vendedor primeiro...</option>';
+        // Esconder botão de visualizar estoque
+        if (btnEstoque) btnEstoque.style.display = 'none';
         return;
     }
+
+    // Mostrar botão de visualizar estoque
+    if (btnEstoque) btnEstoque.style.display = 'inline-block';
 
     const response = await fetch(`/motochefe/api/clientes-por-vendedor?vendedor_id=${vendedorId}`);
     const clientes = await response.json();
@@ -409,7 +424,8 @@ document.getElementById('chk_montagem').addEventListener('change', function() {
 function adicionarItem() {
     const selModelo = document.getElementById('sel_modelo');
     const modelo_id = selModelo.value;
-    const modelo_nome = selModelo.options[selModelo.selectedIndex]?.text || '';
+    const selectedOption = selModelo.options[selModelo.selectedIndex];
+    const modelo_nome = selectedOption?.dataset.nome || selectedOption?.text || '';
     const selCor = document.getElementById('sel_cor');
     const cor = selCor.value;
     const quantidade = parseInt(document.getElementById('txt_qtd').value);
@@ -424,7 +440,7 @@ function adicionarItem() {
 
     const item = {
         modelo_id: parseInt(modelo_id),
-        modelo_nome: modelo_nome.split(' (')[0],
+        modelo_nome: modelo_nome,
         cor: cor,
         quantidade: quantidade,
         preco_venda: preco_venda,
@@ -605,5 +621,325 @@ async function buscarProximoNumero() {
         alert('Erro ao gerar próximo número');
     }
 }
+</script>
+
+<!-- Modal Visualizar Estoque -->
+<div class="modal fade" id="modalEstoqueAgrupamento" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-layer-group"></i> Visualizar Estoque de Motos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- FILTROS -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <strong><i class="fas fa-filter"></i> Filtros</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Status:</label>
+                                <select id="filtro_status_form" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                    <option value="DISPONIVEL" selected>Disponível</option>
+                                    <option value="RESERVADA">Reservada</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Modelo:</label>
+                                <select id="filtro_modelo_form" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Cor:</label>
+                                <select id="filtro_cor_form" class="form-select form-select-sm">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Potência:</label>
+                                <select id="filtro_potencia_form" class="form-select form-select-sm">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOADING -->
+                <div id="loading_form" class="text-center py-5" style="display:none;">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Carregando dados...</p>
+                </div>
+
+                <!-- ACCORDIONS -->
+                <div id="accordion_form">
+                    <!-- Conteúdo gerado por JavaScript -->
+                </div>
+
+                <!-- Mensagem vazia -->
+                <div id="mensagem_vazio_form" class="alert alert-warning text-center" style="display:none;">
+                    <i class="fas fa-exclamation-triangle"></i> Nenhuma moto encontrada com os filtros selecionados.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// JAVASCRIPT - MODAL DE ESTOQUE AGRUPADO (FORMULÁRIO)
+// ============================================================================
+(function() {
+    'use strict';
+
+    const modal = document.getElementById('modalEstoqueAgrupamento');
+    if (!modal) return; // Sair se modal não existir
+
+    const accordionContainer = document.getElementById('accordion_form');
+    const loadingDiv = document.getElementById('loading_form');
+    const mensagemVazio = document.getElementById('mensagem_vazio_form');
+
+    // Elementos de filtro
+    const filtroStatus = document.getElementById('filtro_status_form');
+    const filtroModelo = document.getElementById('filtro_modelo_form');
+    const filtroCor = document.getElementById('filtro_cor_form');
+    const filtroPotencia = document.getElementById('filtro_potencia_form');
+
+    // Carregar ao abrir modal
+    modal.addEventListener('show.bs.modal', function() {
+        carregarOpcoesFiltros();
+        carregarDados();
+    });
+
+    // Aplicar filtros em tempo real
+    [filtroStatus, filtroModelo, filtroCor, filtroPotencia].forEach(elem => {
+        if (elem) elem.addEventListener('change', carregarDados);
+    });
+
+    // Carregar opções dos filtros
+    function carregarOpcoesFiltros() {
+        fetch("{{ url_for('motochefe.api_opcoes_filtros') }}")
+            .then(res => res.json())
+            .then(data => {
+                filtroModelo.innerHTML = '<option value="">Todos</option>';
+                data.modelos.forEach(modelo => {
+                    filtroModelo.innerHTML += `<option value="${modelo}">${modelo}</option>`;
+                });
+
+                filtroCor.innerHTML = '<option value="">Todas</option>';
+                data.cores.forEach(cor => {
+                    filtroCor.innerHTML += `<option value="${cor}">${cor}</option>`;
+                });
+
+                filtroPotencia.innerHTML = '<option value="">Todas</option>';
+                data.potencias.forEach(pot => {
+                    filtroPotencia.innerHTML += `<option value="${pot}">${pot}</option>`;
+                });
+            })
+            .catch(err => console.error('Erro ao carregar opções:', err));
+    }
+
+    // Carregar dados agrupados
+    function carregarDados() {
+        loadingDiv.style.display = 'block';
+        accordionContainer.style.display = 'none';
+        mensagemVazio.style.display = 'none';
+
+        const params = new URLSearchParams({
+            autopropelido_sim: 'true',
+            autopropelido_nao: 'true',
+            status: filtroStatus.value,
+            modelo: filtroModelo.value,
+            cor: filtroCor.value,
+            potencia: filtroPotencia.value
+        });
+
+        fetch(`{{ url_for('motochefe.api_motos_agrupamento') }}?${params}`)
+            .then(res => res.json())
+            .then(dados => {
+                loadingDiv.style.display = 'none';
+
+                if (dados.length === 0) {
+                    mensagemVazio.style.display = 'block';
+                    return;
+                }
+
+                renderizarAccordions(dados);
+                accordionContainer.style.display = 'block';
+            })
+            .catch(err => {
+                console.error('Erro ao carregar dados:', err);
+                loadingDiv.style.display = 'none';
+                mensagemVazio.style.display = 'block';
+            });
+    }
+
+    // Renderizar accordions
+    function renderizarAccordions(dados) {
+        let html = '<div class="accordion" id="accordionModelosForm">';
+
+        dados.forEach((modelo, idxModelo) => {
+            const modeloId = `modelo_form_${idxModelo}`;
+
+            html += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${modeloId}">
+                            <strong>${modelo.modelo}</strong>
+                            <span class="badge bg-info ms-2">${modelo.quantidade} motos</span>
+                            <span class="badge bg-success ms-2">R$ ${formatarValorBR(modelo.preco_tabela || 0)}</span>
+                            ${modelo.autopropelido ? '<span class="badge bg-warning text-dark ms-1">Autopropelida</span>' : ''}
+                        </button>
+                    </h2>
+                    <div id="${modeloId}" class="accordion-collapse collapse" data-bs-parent="#accordionModelosForm">
+                        <div class="accordion-body">
+                            ${renderizarCores(modelo.cores, modeloId)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        accordionContainer.innerHTML = html;
+    }
+
+    // Renderizar Cores
+    function renderizarCores(cores, parentId) {
+        let html = '<div class="accordion" id="accordion_' + parentId + '">';
+
+        cores.forEach((cor, idxCor) => {
+            const corId = `${parentId}_cor_${idxCor}`;
+
+            html += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${corId}">
+                            <i class="fas fa-square" style="color:${getCorHex(cor.cor)}"></i>
+                            <strong class="ms-2">${cor.cor}</strong>
+                            <span class="badge bg-secondary ms-2">${cor.quantidade} motos</span>
+                        </button>
+                    </h2>
+                    <div id="${corId}" class="accordion-collapse collapse">
+                        <div class="accordion-body">
+                            <ul class="list-group">
+            `;
+
+            cor.potencias.forEach(pot => {
+                html += `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <strong>${pot.potencia}</strong>
+                        <span class="badge bg-info">${pot.quantidade} motos</span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="mostrarMotosForm(${JSON.stringify(pot.motos).replace(/"/g, '&quot;')}, '${pot.potencia}', '${cor.cor}')">
+                            <i class="fas fa-eye"></i> Ver Chassi
+                        </button>
+                    </li>
+                `;
+            });
+
+            html += `
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        return html;
+    }
+
+    function getCorHex(cor) {
+        const cores = {
+            'Preta': '#000000',
+            'Branca': '#FFFFFF',
+            'Vermelha': '#DC3545',
+            'Azul': '#0D6EFD',
+            'Verde': '#198754',
+            'Amarela': '#FFC107',
+            'Laranja': '#FD7E14',
+            'Cinza': '#6C757D',
+            'Prata': '#ADB5BD'
+        };
+        return cores[cor] || '#6C757D';
+    }
+
+    function formatarValorBR(valor) {
+        return parseFloat(valor).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&.').replace('.', ',');
+    }
+
+    window.mostrarMotosForm = function(motos, potencia, cor) {
+        let html = `
+            <div class="modal fade" id="modalListaMotosForm" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-motorcycle"></i> Lista de Motos - ${cor} ${potencia}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Chassi</th>
+                                        <th>Motor</th>
+                                        <th>Ano</th>
+                                        <th>NF</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+        `;
+
+        motos.forEach(moto => {
+            const statusClass = moto.status === 'DISPONIVEL' ? 'success' : moto.status === 'RESERVADA' ? 'warning' : 'danger';
+
+            html += `
+                <tr>
+                    <td><code>${moto.chassi}</code></td>
+                    <td><code>${moto.motor}</code></td>
+                    <td>${moto.ano || '-'}</td>
+                    <td>${moto.nf}</td>
+                    <td><span class="badge bg-${statusClass}">${moto.status}</span></td>
+                </tr>
+            `;
+        });
+
+        html += `
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const oldModal = document.getElementById('modalListaMotosForm');
+        if (oldModal) oldModal.remove();
+
+        document.body.insertAdjacentHTML('beforeend', html);
+
+        const modalInstance = new bootstrap.Modal(document.getElementById('modalListaMotosForm'));
+        modalInstance.show();
+
+        document.getElementById('modalListaMotosForm').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    };
+})();
 </script>
 {% endblock %}

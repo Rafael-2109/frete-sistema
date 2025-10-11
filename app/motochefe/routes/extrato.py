@@ -66,9 +66,16 @@ def extrato_financeiro():
     fim = inicio + per_page
     movimentacoes_paginadas = movimentacoes[inicio:fim]
 
-    # Totais
-    total_recebimentos = sum(m['valor'] for m in movimentacoes if m['tipo'] == 'RECEBIMENTO')
-    total_pagamentos = abs(sum(m['valor'] for m in movimentacoes if m['tipo'] == 'PAGAMENTO'))
+    # Totais (IMPORTANTE: inicializar com Decimal para preservar casas decimais)
+    from decimal import Decimal
+    total_recebimentos = sum(
+        (m['valor'] for m in movimentacoes if m['tipo'] == 'RECEBIMENTO'),
+        Decimal('0')
+    )
+    total_pagamentos = abs(sum(
+        (m['valor'] for m in movimentacoes if m['tipo'] == 'PAGAMENTO'),
+        Decimal('0')
+    ))
     saldo_periodo = total_recebimentos - total_pagamentos
 
     # Entidades para filtros

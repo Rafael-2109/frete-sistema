@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DEBUG - Formatação de Valores</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .test { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        .ok { background: #d4edda; }
+        .erro { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>🔍 DEBUG - Formatação de Valores MotoChefe</h1>
+
+    <h2>1. Teste Direto do Filtro valor_br</h2>
+    <div class="test">
+        <strong>182301 com valor_br:</strong>
+        <span id="teste1">{{ 182301|valor_br }}</span>
+    </div>
+
+    <div class="test">
+        <strong>74 com valor_br:</strong>
+        <span id="teste2">{{ 74|valor_br }}</span>
+    </div>
+
+    <div class="test">
+        <strong>8000.00 com valor_br:</strong>
+        <span id="teste3">{{ 8000.00|valor_br }}</span>
+    </div>
+
+    <h2>2. Teste com Variáveis do Backend</h2>
+    <div class="test">
+        <strong>valor_teste ({{ valor_teste }}) formatado:</strong>
+        <span id="teste4">{{ valor_teste|valor_br }}</span>
+    </div>
+
+    <h2>3. Inspeção do HTML Renderizado</h2>
+    <div class="test">
+        <p>Abra o DevTools (F12) e inspecione os elementos acima.</p>
+        <p>Verifique se o HTML contém ",00" ou se está sendo cortado.</p>
+    </div>
+
+    <h2>4. Teste JavaScript (não deve alterar nada)</h2>
+    <div class="test">
+        <strong>Valor após JavaScript:</strong>
+        <span id="teste_js">Aguardando...</span>
+    </div>
+
+    <script>
+        // NÃO deve alterar os valores acima
+        console.log("=== DEBUG FORMATAÇÃO ===");
+        console.log("teste1:", document.getElementById('teste1').textContent);
+        console.log("teste2:", document.getElementById('teste2').textContent);
+        console.log("teste3:", document.getElementById('teste3').textContent);
+        console.log("teste4:", document.getElementById('teste4').textContent);
+
+        // Testar se tem ",00"
+        const teste1 = document.getElementById('teste1').textContent;
+        if (teste1.includes(',00')) {
+            document.getElementById('teste_js').textContent = '✅ Decimais presentes: ' + teste1;
+            document.getElementById('teste_js').parentElement.classList.add('ok');
+        } else {
+            document.getElementById('teste_js').textContent = '❌ Decimais AUSENTES: ' + teste1;
+            document.getElementById('teste_js').parentElement.classList.add('erro');
+        }
+    </script>
+
+    <h2>5. Resultado Esperado</h2>
+    <div class="test ok">
+        <ul>
+            <li>182301 → <strong>182.301,00</strong></li>
+            <li>74 → <strong>74,00</strong></li>
+            <li>8000.00 → <strong>8.000,00</strong></li>
+        </ul>
+    </div>
+</body>
+</html>

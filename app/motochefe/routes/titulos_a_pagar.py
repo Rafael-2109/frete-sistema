@@ -37,9 +37,9 @@ def listar_titulos_a_pagar_route():
     pagos = [t for t in titulos if t.status == 'PAGO']
 
     # Totais
-    total_pendente = sum(t.valor_saldo for t in pendentes)
-    total_aberto = sum(t.valor_saldo for t in abertos)
-    total_parcial = sum(t.valor_saldo for t in parciais)
+    total_pendente = sum((t.valor_saldo for t in pendentes), Decimal("0"))
+    total_aberto = sum((t.valor_saldo for t in abertos), Decimal("0"))
+    total_parcial = sum((t.valor_saldo for t in parciais), Decimal("0"))
 
     # Paginação manual da lista consolidada
     total_items = len(titulos)

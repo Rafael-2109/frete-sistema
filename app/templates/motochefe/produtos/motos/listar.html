@@ -148,7 +148,12 @@
                     </thead>
                     <tbody>
                         {% for moto in motos %}
-                        <tr>
+                        {# ✅ TAREFA 2: CSS colorido por status - Avaria=Amarelo, Vendida=Verde, Reservada=Azul, Devolvida=Vermelho #}
+                        <tr {% if moto.status == 'AVARIADO' %}class="table-warning"
+                            {% elif moto.status == 'VENDIDA' %}class="table-success"
+                            {% elif moto.status == 'RESERVADA' %}class="table-info"
+                            {% elif moto.status == 'DEVOLVIDO' %}class="table-danger"
+                            {% endif %}>
                             <td><code>{{ moto.numero_chassi }}</code></td>
                             <td><code>{{ moto.numero_motor }}</code></td>
                             <td>

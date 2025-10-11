@@ -8,21 +8,23 @@ from app.motochefe.models.produto import Moto
 from app.motochefe.models.vendas import PedidoVendaMotoItem
 from app.motochefe.models.financeiro import ComissaoVendedor
 from app.motochefe.models.operacional import DespesaMensal
-from app.motochefe.models.logistica import EmbarqueMoto
 from datetime import date
 from decimal import Decimal
 
 
-def processar_pagamento_lote_motos(chassi_list, empresa_pagadora, data_pagamento=None, usuario=None):
+def processar_pagamento_lote_motos(chassi_list, empresa_pagadora, data_pagamento=None, usuario=None, valor_limite=None):
     """
     Processa pagamento em lote de custos de motos
     Cria 1 MovimentacaoFinanceira PAI + N FILHOS (um para cada chassi)
+
+    ✨ SUPORTA PAGAMENTO PARCIAL quando valor_limite é informado
 
     Args:
         chassi_list: list[str] - Lista de números de chassi
         empresa_pagadora: EmpresaVendaMoto - Empresa que está pagando
         data_pagamento: date - Data do pagamento (default: hoje)
         usuario: str - Nome do usuário
+        valor_limite: Decimal - Valor máximo a pagar (opcional, se None paga tudo)
 
     Returns:
         dict {
@@ -35,30 +37,54 @@ def processar_pagamento_lote_motos(chassi_list, empresa_pagadora, data_pagamento
     from app.motochefe.services.empresa_service import atualizar_saldo
 
     data_pag = data_pagamento or date.today()
-    motos = []
+    motos_para_pagar = []
     movimentacoes_filhas = []
-    valor_total = Decimal('0')
+    valor_total_pago = Decimal('0')
+    valor_disponivel = Decimal(str(valor_limite)) if valor_limite else None
 
-    # 1. BUSCAR MOTOS E VALIDAR
+    # 1. BUSCAR MOTOS E CALCULAR VALORES
     for chassi in chassi_list:
+        # Se tem limite e já acabou o valor, para
+        if valor_disponivel is not None and valor_disponivel <= 0:
+            break
+
         moto = Moto.query.filter_by(numero_chassi=chassi).first()
         if not moto:
             raise Exception(f'Moto com chassi {chassi} não encontrada')
 
-        if moto.status_pagamento_custo == 'PAGO':
-            raise Exception(f'Moto {chassi} já está totalmente paga')
+        valor_saldo_moto = moto.custo_aquisicao - (moto.custo_pago or Decimal('0'))
 
-        motos.append(moto)
-        valor_total += (moto.custo_aquisicao - (moto.custo_pago or Decimal('0')))
+        # Se já está paga, pular
+        if valor_saldo_moto <= 0:
+            continue
+
+        # Calcular quanto pagar nesta moto
+        if valor_disponivel is not None:
+            # COM LIMITE: Pagar o MENOR entre disponível e saldo
+            valor_pagar_moto = min(valor_disponivel, valor_saldo_moto)
+            valor_disponivel -= valor_pagar_moto
+        else:
+            # SEM LIMITE: Pagar o saldo completo
+            valor_pagar_moto = valor_saldo_moto
+
+        motos_para_pagar.append({
+            'moto': moto,
+            'valor_pagar': valor_pagar_moto,
+            'saldo_anterior': moto.custo_pago or Decimal('0')
+        })
+        valor_total_pago += valor_pagar_moto
+
+    if not motos_para_pagar:
+        raise Exception('Nenhuma moto disponível para pagamento')
 
     # 2. CRIAR MOVIMENTAÇÃO PAI
-    nf_entrada = motos[0].nf_entrada if len(motos) == 1 else f'Múltiplas NFs'
-    fornecedor = motos[0].fornecedor if len(motos) == 1 else f'{len(motos)} fornecedor(es)'
+    nf_entrada = motos_para_pagar[0]['moto'].nf_entrada if len(motos_para_pagar) == 1 else 'Múltiplas NFs'
+    fornecedor = motos_para_pagar[0]['moto'].fornecedor if len(motos_para_pagar) == 1 else f'{len(motos_para_pagar)} fornecedor(es)'
 
     movimentacao_pai = MovimentacaoFinanceira(
         tipo='PAGAMENTO',
         categoria='Lote Custo Moto',
-        valor=valor_total,
+        valor=valor_total_pago,
         data_movimentacao=data_pag,
 
         # Origem (Empresa)
@@ -70,9 +96,9 @@ def processar_pagamento_lote_motos(chassi_list, empresa_pagadora, data_pagamento
         destino_identificacao=fornecedor,
 
         # Informações
-        numero_nf=nf_entrada if len(motos) == 1 else None,
-        descricao=f'Pagamento Lote {len(motos)} moto(s) - NF {nf_entrada}',
-        observacoes=f'Lote com {len(motos)} moto(s): {", ".join([m.numero_chassi for m in motos])}',
+        numero_nf=nf_entrada if len(motos_para_pagar) == 1 else None,
+        descricao=f'Pagamento Lote {len(motos_para_pagar)} moto(s) - NF {nf_entrada}',
+        observacoes=f'Lote com {len(motos_para_pagar)} moto(s): {", ".join([m["moto"].numero_chassi for m in motos_para_pagar])}',
 
         # Auditoria
         criado_por=usuario
@@ -81,14 +107,16 @@ def processar_pagamento_lote_motos(chassi_list, empresa_pagadora, data_pagamento
     db.session.flush()
 
     # 3. CRIAR MOVIMENTAÇÕES FILHAS + ATUALIZAR MOTOS
-    for moto in motos:
-        valor_saldo = moto.custo_aquisicao - (moto.custo_pago or Decimal('0'))
+    motos_atualizadas = []
+    for item in motos_para_pagar:
+        moto = item['moto']
+        valor_pagar = item['valor_pagar']
 
         # Criar movimentação FILHA
         movimentacao_filha = MovimentacaoFinanceira(
             tipo='PAGAMENTO',
             categoria='Custo Moto',
-            valor=valor_saldo,
+            valor=valor_pagar,  # Usar valor calculado (pode ser parcial)
             data_movimentacao=data_pag,
 
             empresa_origem_id=empresa_pagadora.id,
@@ -110,23 +138,30 @@ def processar_pagamento_lote_motos(chassi_list, empresa_pagadora, data_pagamento
         movimentacoes_filhas.append(movimentacao_filha)
 
         # Atualizar MOTO
-        moto.custo_pago = moto.custo_aquisicao
+        moto.custo_pago = (moto.custo_pago or Decimal('0')) + valor_pagar
         moto.data_pagamento_custo = data_pag
-        moto.status_pagamento_custo = 'PAGO'
         moto.empresa_pagadora_id = empresa_pagadora.id
         moto.lote_pagamento_id = movimentacao_pai.id
         moto.atualizado_por = usuario
 
+        # Atualizar STATUS
+        if moto.custo_pago >= moto.custo_aquisicao:
+            moto.status_pagamento_custo = 'PAGO'
+        else:
+            moto.status_pagamento_custo = 'PARCIAL'
+
+        motos_atualizadas.append(moto)
+
     # 4. ATUALIZAR SALDO DA EMPRESA
-    atualizar_saldo(empresa_pagadora.id, valor_total, 'SUBTRAIR')
+    atualizar_saldo(empresa_pagadora.id, valor_total_pago, 'SUBTRAIR')
 
     db.session.flush()
 
     return {
         'movimentacao_pai': movimentacao_pai,
         'movimentacoes_filhas': movimentacoes_filhas,
-        'motos_atualizadas': motos,
-        'valor_total': valor_total
+        'motos_atualizadas': motos_atualizadas,
+        'valor_total': valor_total_pago
     }
 
 
@@ -247,6 +282,14 @@ def processar_pagamento_lote_montagens(item_ids, empresa_pagadora, data_pagament
         dict similar a processar_pagamento_lote_motos
     """
     from app.motochefe.services.empresa_service import atualizar_saldo
+    from app.motochefe.models.operacional import CustosOperacionais
+
+    # ✅ CORREÇÃO TAREFA 3: Buscar custo REAL da montagem de CustosOperacionais
+    custos_vigentes = CustosOperacionais.get_custos_vigentes()
+    if not custos_vigentes:
+        raise Exception('Custos operacionais vigentes não encontrados')
+
+    custo_montagem_real = custos_vigentes.custo_montagem
 
     data_pag = data_pagamento or date.today()
     itens = []
@@ -266,7 +309,8 @@ def processar_pagamento_lote_montagens(item_ids, empresa_pagadora, data_pagament
             raise Exception(f'Montagem do item ID {item_id} já está paga')
 
         itens.append(item)
-        valor_total += item.valor_montagem
+        # ✅ CORRIGIDO: Usar custo real de CustosOperacionais, não valor cobrado do cliente
+        valor_total += custo_montagem_real
 
     # 2. CRIAR MOVIMENTAÇÃO PAI
     fornecedores_set = set([i.fornecedor_montagem for i in itens if i.fornecedor_montagem])
@@ -296,7 +340,7 @@ def processar_pagamento_lote_montagens(item_ids, empresa_pagadora, data_pagament
         movimentacao_filha = MovimentacaoFinanceira(
             tipo='PAGAMENTO',
             categoria='Montagem',
-            valor=item.valor_montagem,
+            valor=custo_montagem_real,  # ✅ CORRIGIDO: Usar custo real
             data_movimentacao=data_pag,
 
             empresa_origem_id=empresa_pagadora.id,
@@ -499,10 +543,25 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
             item_detalhe['tipo_item'] = 'MOTO'
             item_detalhe['item_objeto'] = moto
 
-            # Para Custo Moto: saldo anterior = valor devido, após = 0 (quitado)
-            item_detalhe['saldo_anterior'] = mov_filha.valor
-            item_detalhe['valor_pagamento'] = mov_filha.valor
-            item_detalhe['saldo_apos'] = Decimal('0')
+            if moto:
+                # Calcular saldo ANTES e DEPOIS baseado no estado atual da moto
+                # Saldo atual da moto
+                saldo_atual = moto.custo_aquisicao - (moto.custo_pago or Decimal('0'))
+
+                # Saldo ANTES = saldo atual + valor que foi pago nesta movimentação
+                saldo_anterior = saldo_atual + mov_filha.valor
+
+                # Saldo DEPOIS = saldo atual
+                saldo_apos = saldo_atual
+
+                item_detalhe['saldo_anterior'] = saldo_anterior
+                item_detalhe['valor_pagamento'] = mov_filha.valor
+                item_detalhe['saldo_apos'] = saldo_apos
+            else:
+                # Fallback se moto não encontrada
+                item_detalhe['saldo_anterior'] = mov_filha.valor
+                item_detalhe['valor_pagamento'] = mov_filha.valor
+                item_detalhe['saldo_apos'] = Decimal('0')
 
         elif mov_filha.categoria == 'Comissão' and mov_filha.comissao_vendedor_id:
             comissao = ComissaoVendedor.query.get(mov_filha.comissao_vendedor_id)
