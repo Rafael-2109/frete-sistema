@@ -61,15 +61,17 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
             if tipo == 'MONTAGEM' and not item.montagem_contratada:
                 continue
 
-            # Pular se valor zerado
-            if valor <= 0:
+            # ✅ CORRIGIDO: MOVIMENTACAO sempre cria título (mesmo R$ 0)
+            # Outros tipos pulam se valor zerado
+            if tipo != 'MOVIMENTACAO' and valor <= 0:
                 continue
 
             titulos_pendentes.append({
                 'tipo': tipo,
                 'ordem': ordem,
                 'valor': Decimal(str(valor)),
-                'chassi': item.numero_chassi
+                'chassi': item.numero_chassi,
+                'custo_real': valores.get('movimentacao_custo') if tipo == 'MOVIMENTACAO' else None
             })
 
     # 2. APLICAR FIFO - Distribuir títulos entre parcelas
@@ -206,8 +208,12 @@ def calcular_valores_titulos_moto(item_pedido, equipe, pedido=None, total_motos=
     Returns:
         dict com valores
     """
-    # MOVIMENTAÇÃO: Conforme configuração da equipe
-    valor_movimentacao = equipe.custo_movimentacao if equipe.incluir_custo_movimentacao else Decimal('0')
+    # MOVIMENTAÇÃO - Lógica CORRIGIDA:
+    # - incluir_custo_movimentacao=True: Cliente PAGA R$ 50 → cria TituloFinanceiro R$ 50
+    # - incluir_custo_movimentacao=False: Cliente paga R$ 0 → cria TituloFinanceiro R$ 0
+    # - MAS: Empresa SEMPRE paga MargemSogima R$ 50 → SEMPRE cria TituloAPagar R$ 50
+    valor_movimentacao_cliente = equipe.custo_movimentacao if equipe.incluir_custo_movimentacao else Decimal('0')
+    valor_movimentacao_custo = equipe.custo_movimentacao  # SEMPRE tem custo para empresa
 
     # MONTAGEM: Valor cobrado do cliente (custo real será usado no título a pagar)
     valor_montagem = item_pedido.valor_montagem if item_pedido.montagem_contratada else Decimal('0')
@@ -223,7 +229,8 @@ def calcular_valores_titulos_moto(item_pedido, equipe, pedido=None, total_motos=
     valor_venda = item_pedido.preco_venda
 
     return {
-        'movimentacao': valor_movimentacao,
+        'movimentacao': valor_movimentacao_cliente,  # O que cliente paga (pode ser R$ 0)
+        'movimentacao_custo': valor_movimentacao_custo,  # O que empresa paga (sempre > 0)
         'montagem': valor_montagem,
         'frete': valor_frete,
         'venda': valor_venda

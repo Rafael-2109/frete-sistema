@@ -266,23 +266,23 @@
                             onclick="abrirModalPagamentoGrupo('montagem-{{ loop.index }}')">
                         <i class="fas fa-hand-holding-usd"></i> Pagar
                     </button>
-                    <strong>{{ grupo.fornecedor }}</strong> - {{ grupo.montagens|length }} montagens -
+                    <strong>{{ grupo.fornecedor }}</strong> - {{ grupo.titulos|length }} montagens -
                     R$ {{ grupo.total|valor_br }}
                     <button type="button" class="btn btn-sm btn-link" onclick="toggleGrupo('mont-{{ loop.index }}')">
                         <i class="fas fa-chevron-down" id="icon-mont-{{ loop.index }}"></i>
                     </button>
                     <div id="mont-{{ loop.index }}" class="collapse ms-4">
-                        {% for mont in grupo.montagens %}
+                        {% for titulo in grupo.titulos %}
                         <div class="form-check">
                             <input class="form-check-input item-check" type="checkbox"
                                    data-tipo="montagem"
-                                   data-id="{{ mont.id }}"
-                                   data-valor="{{ custo_montagem_real }}"
-                                   id="mont-{{ mont.id }}">
-                            <label class="form-check-label" for="mont-{{ mont.id }}">
-                                Pedido {{ mont.pedido.numero_pedido if mont.pedido else '-' }} |
-                                Chassi {{ mont.numero_chassi }} |
-                                R$ {{ custo_montagem_real|valor_br }}
+                                   data-id="{{ titulo.id }}"
+                                   data-valor="{{ titulo.valor_saldo }}"
+                                   id="mont-{{ titulo.id }}">
+                            <label class="form-check-label" for="mont-{{ titulo.id }}">
+                                Pedido {{ titulo.pedido.numero_pedido if titulo.pedido else '-' }} |
+                                Chassi {{ titulo.numero_chassi }} |
+                                R$ {{ titulo.valor_saldo|valor_br }}
                             </label>
                         </div>
                         {% endfor %}

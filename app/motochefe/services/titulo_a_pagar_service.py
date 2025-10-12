@@ -9,12 +9,17 @@ from app.motochefe.services.empresa_service import garantir_margem_sogima
 from datetime import date
 
 
-def criar_titulo_a_pagar_movimentacao(titulo_financeiro):
+def criar_titulo_a_pagar_movimentacao(titulo_financeiro, custo_real_movimentacao):
     """
     Cria título a pagar para Movimentação → MargemSogima
 
+    ✅ LÓGICA CORRIGIDA:
+    - titulo_financeiro.valor_original = o que CLIENTE paga (R$ 0 ou R$ 50)
+    - custo_real_movimentacao = o que EMPRESA paga MargemSogima (SEMPRE R$ 50)
+
     Args:
         titulo_financeiro: TituloFinanceiro (tipo MOVIMENTACAO)
+        custo_real_movimentacao: Decimal - Custo REAL que empresa paga (sempre > 0)
 
     Returns:
         TituloAPagar criado
@@ -34,8 +39,9 @@ def criar_titulo_a_pagar_movimentacao(titulo_financeiro):
         empresa_destino_id=margem_sogima.id,
         fornecedor_montagem=None,
 
-        valor_original=titulo_financeiro.valor_original,
-        valor_saldo=titulo_financeiro.valor_original,
+        # ✅ CORRIGIDO: Usa custo REAL, não valor que cliente paga
+        valor_original=custo_real_movimentacao,
+        valor_saldo=custo_real_movimentacao,
         valor_pago=0,
 
         data_criacao=date.today(),
@@ -176,6 +182,17 @@ def pagar_titulo_a_pagar(titulo_pagar, valor_pago, empresa_pagadora, usuario=Non
     if titulo_pagar.valor_saldo <= 0:
         titulo_pagar.status = 'PAGO'
         titulo_pagar.data_pagamento = date.today()
+
+        # ✅ SINCRONIZAÇÃO: Atualizar PedidoVendaMotoItem.montagem_paga
+        if titulo_pagar.tipo == 'MONTAGEM':
+            from app.motochefe.models.vendas import PedidoVendaMotoItem
+            item = PedidoVendaMotoItem.query.filter_by(
+                pedido_id=titulo_pagar.pedido_id,
+                numero_chassi=titulo_pagar.numero_chassi
+            ).first()
+            if item:
+                item.montagem_paga = True
+                item.data_pagamento_montagem = date.today()
     else:
         titulo_pagar.status = 'PARCIAL'
 

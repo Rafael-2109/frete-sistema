@@ -236,7 +236,7 @@ class EmpresaVendaMoto(db.Model):
     __tablename__ = 'empresa_venda_moto'
 
     id = db.Column(db.Integer, primary_key=True)
-    cnpj_empresa = db.Column(db.String(20), unique=True, nullable=True)  # Nullable para MargemSogima
+    cnpj_empresa = db.Column(db.String(20), unique=True, nullable=True)
     empresa = db.Column(db.String(255), nullable=False)
 
     # Dados bancários

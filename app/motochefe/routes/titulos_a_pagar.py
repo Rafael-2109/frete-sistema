@@ -30,16 +30,17 @@ def listar_titulos_a_pagar_route():
         tipo=tipo_filtro
     )
 
-    # Agrupar por status (para totalizadores)
+    # Agrupar por status (para totalizadores e template)
     pendentes = [t for t in titulos if t.status == 'PENDENTE']
     abertos = [t for t in titulos if t.status == 'ABERTO']
     parciais = [t for t in titulos if t.status == 'PARCIAL']
     pagos = [t for t in titulos if t.status == 'PAGO']
 
-    # Totais
+    # Totais (para cards de resumo)
     total_pendente = sum((t.valor_saldo for t in pendentes), Decimal("0"))
     total_aberto = sum((t.valor_saldo for t in abertos), Decimal("0"))
     total_parcial = sum((t.valor_saldo for t in parciais), Decimal("0"))
+    total_pago = sum((t.valor_original for t in pagos), Decimal("0"))  # ✅ Total de pagos (histórico)
 
     # Paginação manual da lista consolidada
     total_items = len(titulos)
@@ -71,6 +72,11 @@ def listar_titulos_a_pagar_route():
                          total_pendente=total_pendente,
                          total_aberto=total_aberto,
                          total_parcial=total_parcial,
+                         total_pago=total_pago,
+                         pendentes=pendentes,  # ✅ CORRIGIDO: Passar lista completa
+                         abertos=abertos,      # ✅ CORRIGIDO: Passar lista completa
+                         parciais=parciais,    # ✅ CORRIGIDO: Passar lista completa
+                         pagos=pagos,          # ✅ CORRIGIDO: Passar lista completa
                          empresas=empresas,
                          status_filtro=status_filtro,
                          tipo_filtro=tipo_filtro)

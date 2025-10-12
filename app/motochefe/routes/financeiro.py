@@ -100,38 +100,34 @@ def listar_contas_a_pagar():
     comissoes_agrupadas = list(comissoes_por_vend.values())
     total_comissoes = sum((g['total'] for g in comissoes_agrupadas), Decimal("0"))
 
-    # 4. MONTAGENS - Pendentes por Fornecedor
-    montagens_pendentes = PedidoVendaMotoItem.query.filter(
-        PedidoVendaMotoItem.montagem_contratada == True,
-        PedidoVendaMotoItem.montagem_paga == False,
-        PedidoVendaMotoItem.ativo == True
-    ).all()
+    # 4. MONTAGENS - ✅ REFATORADO: Usar TituloAPagar como ÚNICA fonte da verdade
+    # NÃO usa mais PedidoVendaMotoItem.montagem_paga
+    # NÃO usa mais CustosOperacionais.custo_montagem
+    # ✅ EXIBE APENAS: ABERTO e PARCIAL (PENDENTE = aguardando cliente pagar)
+    from app.motochefe.models.financeiro import TituloAPagar
 
-    # Buscar custo REAL da montagem de CustosOperacionais
-    custos_vigentes = CustosOperacionais.get_custos_vigentes()
-    custo_montagem_real = custos_vigentes.custo_montagem if custos_vigentes else Decimal('0')
+    titulos_montagem_pendentes = TituloAPagar.query.filter(
+        TituloAPagar.tipo == 'MONTAGEM',
+        TituloAPagar.status.in_(['ABERTO', 'PARCIAL'])
+    ).all()
 
     # Agrupar por fornecedor
     montagens_por_forn = {}
-    for mont in montagens_pendentes:
-        forn_nome = mont.fornecedor_montagem or 'Sem Fornecedor'
+    for titulo in titulos_montagem_pendentes:
+        forn_nome = titulo.fornecedor_montagem or 'Equipe Montagem'
         if forn_nome not in montagens_por_forn:
             montagens_por_forn[forn_nome] = {
                 'fornecedor': forn_nome,
-                'montagens': [],
+                'titulos': [],  # ✅ Agora são títulos, não itens
                 'total': Decimal('0')
             }
 
-        montagens_por_forn[forn_nome]['montagens'].append(mont)
-        # ✅ CORRIGIDO: Usar custo real de CustosOperacionais, não valor cobrado do cliente
-        montagens_por_forn[forn_nome]['total'] += custo_montagem_real
+        montagens_por_forn[forn_nome]['titulos'].append(titulo)
+        # ✅ CORRETO: Usa valor_saldo do TituloAPagar (fonte da verdade)
+        montagens_por_forn[forn_nome]['total'] += titulo.valor_saldo
 
     montagens_agrupadas = list(montagens_por_forn.values())
     total_montagens = sum((g['total'] for g in montagens_agrupadas), Decimal("0"))
-
-    # 🆕 PASSAR custo_montagem_real para o template
-    # Para ser usado na exibição dos detalhes de cada montagem
-    custo_montagem_para_template = custo_montagem_real
 
     # 5. DESPESAS - Pendentes por Tipo
     despesas_pendentes = DespesaMensal.query.filter(
@@ -253,8 +249,7 @@ def listar_contas_a_pagar():
                          total_titulos_a_pagar=total_titulos_a_pagar,
                          total_geral=total_geral,
                          empresas=empresas,
-                         hoje=hoje,
-                         custo_montagem_real=custo_montagem_para_template)
+                         hoje=hoje)
 
 
 @motochefe_bp.route('/contas-a-pagar/pagar-lote', methods=['POST'])
@@ -338,18 +333,30 @@ def pagar_lote():
             total_itens += len(resultado['comissoes_atualizadas'])
             valor_total_geral += resultado['valor_total']
 
-        # Processar MONTAGENS em lote
+        # Processar MONTAGENS em lote - ✅ REFATORADO: Usa TituloAPagar diretamente
         if itens_por_tipo['montagem']:
-            item_ids = [int(item['id']) for item in itens_por_tipo['montagem']]
-            resultado = processar_pagamento_lote_montagens(
-                item_ids=item_ids,
-                empresa_pagadora=empresa_pagadora,
-                data_pagamento=data_pag,
-                usuario=current_user.nome
-            )
-            total_lotes += 1
-            total_itens += len(resultado['itens_atualizados'])
-            valor_total_geral += resultado['valor_total']
+            from app.motochefe.services.titulo_a_pagar_service import pagar_titulo_a_pagar
+            from app.motochefe.models.financeiro import TituloAPagar
+
+            titulo_ids = [int(item['id']) for item in itens_por_tipo['montagem']]
+            montagens_pagas = []
+            valor_total_montagens = Decimal('0')
+
+            for titulo_id in titulo_ids:
+                titulo_pagar = TituloAPagar.query.get(titulo_id)
+                if titulo_pagar:
+                    resultado = pagar_titulo_a_pagar(
+                        titulo_pagar,
+                        titulo_pagar.valor_saldo,  # Pagar total
+                        empresa_pagadora,
+                        current_user.nome
+                    )
+                    montagens_pagas.append(titulo_pagar)
+                    valor_total_montagens += titulo_pagar.valor_original
+
+            total_lotes += 1 if montagens_pagas else 0
+            total_itens += len(montagens_pagas)
+            valor_total_geral += valor_total_montagens
 
         # Processar DESPESAS em lote
         if itens_por_tipo['despesa']:
@@ -556,30 +563,33 @@ def pagar_grupo():
                 )
                 total_itens += len(resultado['comissoes_atualizadas'])
 
-        # PROCESSAR MONTAGENS SEQUENCIALMENTE
+        # PROCESSAR MONTAGENS SEQUENCIALMENTE - ✅ REFATORADO: Usa TituloAPagar
         elif tipo_grupo == 'montagem':
-            # Buscar custo REAL da montagem
-            custos_vigentes = CustosOperacionais.get_custos_vigentes()
-            custo_montagem_real = custos_vigentes.custo_montagem if custos_vigentes else Decimal('0')
+            from app.motochefe.services.titulo_a_pagar_service import pagar_titulo_a_pagar
+            from app.motochefe.models.financeiro import TituloAPagar
 
-            montagem_selecionadas = []
-            for mont_id in itens_ids:
+            for titulo_id in itens_ids:
                 if valor_disponivel <= 0:
                     break
 
-                if valor_disponivel >= custo_montagem_real:
-                    montagem_selecionadas.append(int(mont_id))
-                    valor_disponivel -= custo_montagem_real
-                    total_pago += custo_montagem_real
+                titulo_pagar = TituloAPagar.query.get(int(titulo_id))
+                if not titulo_pagar:
+                    continue
 
-            if montagem_selecionadas:
-                resultado = processar_pagamento_lote_montagens(
-                    item_ids=montagem_selecionadas,
-                    empresa_pagadora=empresa_pagadora,
-                    data_pagamento=data_pag,
-                    usuario=current_user.nome
-                )
-                total_itens += len(resultado['itens_atualizados'])
+                # Usa valor_saldo do título (fonte da verdade)
+                valor_titulo = titulo_pagar.valor_saldo
+
+                if valor_disponivel >= valor_titulo:
+                    # Pagar título
+                    pagar_titulo_a_pagar(
+                        titulo_pagar,
+                        valor_titulo,
+                        empresa_pagadora,
+                        current_user.nome
+                    )
+                    valor_disponivel -= valor_titulo
+                    total_pago += valor_titulo
+                    total_itens += 1
 
         # PROCESSAR DESPESAS SEQUENCIALMENTE
         elif tipo_grupo == 'despesa':

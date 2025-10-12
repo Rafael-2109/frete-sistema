@@ -348,10 +348,15 @@ def faturar_pedido(id):
     try:
         empresa_id = request.form.get('empresa_venda_id')
         numero_nf = request.form.get('numero_nf')
+        numero_nf_importada = request.form.get('numero_nf_importada')
         data_nf = request.form.get('data_nf')
 
-        if not all([empresa_id, numero_nf, data_nf]):
-            raise Exception('Empresa, Número NF e Data NF são obrigatórios')
+        # Validar: precisa ter pelo menos UMA NF (normal ou importada)
+        if not (numero_nf or numero_nf_importada):
+            raise Exception('Informe pelo menos uma NF (Normal ou Importada)')
+
+        if not all([empresa_id, data_nf]):
+            raise Exception('Empresa e Data NF são obrigatórios')
 
         # Converter data
         data_nf_obj = datetime.strptime(data_nf, '%Y-%m-%d').date()
@@ -364,15 +369,24 @@ def faturar_pedido(id):
         resultado = faturar_pedido_completo(
             pedido=pedido,
             empresa_id=int(empresa_id),
-            numero_nf=numero_nf,
-            data_nf=data_nf_obj
+            numero_nf=numero_nf if numero_nf else None,
+            data_nf=data_nf_obj,
+            numero_nf_importada=numero_nf_importada if numero_nf_importada else None
         )
 
         db.session.commit()
 
         total_titulos = resultado['total_titulos']
+
+        # Mensagem diferenciada dependendo das NFs informadas
+        nf_msg = []
+        if numero_nf:
+            nf_msg.append(f'NF: {numero_nf}')
+        if numero_nf_importada:
+            nf_msg.append(f'NF Importada: {numero_nf_importada}')
+
         flash(
-            f'Pedido faturado com sucesso! NF: {numero_nf} - {total_titulos} títulos liberados para recebimento.',
+            f'Pedido faturado com sucesso! {" | ".join(nf_msg)} - {total_titulos} títulos liberados para recebimento.',
             'success'
         )
 
@@ -396,19 +410,25 @@ def editar_nf_pedido(id):
 
     try:
         numero_nf = request.form.get('numero_nf')
+        numero_nf_importada = request.form.get('numero_nf_importada')
         data_nf = request.form.get('data_nf')
 
-        if not all([numero_nf, data_nf]):
-            raise Exception('Número NF e Data NF são obrigatórios')
+        # Precisa ter pelo menos UMA NF
+        if not (numero_nf or numero_nf_importada):
+            raise Exception('Informe pelo menos uma NF (Normal ou Importada)')
+
+        if not data_nf:
+            raise Exception('Data NF é obrigatória')
 
         # Validar se novo número de NF já existe (exceto se for o mesmo)
-        if numero_nf != pedido.numero_nf:
+        if numero_nf and numero_nf != pedido.numero_nf:
             nf_existente = PedidoVendaMoto.query.filter_by(numero_nf=numero_nf, ativo=True).first()
             if nf_existente:
                 raise Exception(f'Número de NF "{numero_nf}" já está em uso no pedido {nf_existente.numero_pedido}')
 
         # Atualizar NF
-        pedido.numero_nf = numero_nf
+        pedido.numero_nf = numero_nf if numero_nf else None
+        pedido.numero_nf_importada = numero_nf_importada if numero_nf_importada else None
         pedido.data_nf = datetime.strptime(data_nf, '%Y-%m-%d').date()
         pedido.atualizado_por = current_user.nome
 

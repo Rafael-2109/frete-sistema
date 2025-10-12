@@ -365,6 +365,21 @@ def processar_pagamento_lote_montagens(item_ids, empresa_pagadora, data_pagament
         item.empresa_pagadora_montagem_id = empresa_pagadora.id
         item.lote_pagamento_montagem_id = movimentacao_pai.id
 
+        # ✅ SINCRONIZAÇÃO: Atualizar TituloAPagar correspondente
+        from app.motochefe.models.financeiro import TituloAPagar
+        titulo_pagar = TituloAPagar.query.filter_by(
+            pedido_id=item.pedido_id,
+            numero_chassi=item.numero_chassi,
+            tipo='MONTAGEM'
+        ).first()
+
+        if titulo_pagar and titulo_pagar.status != 'PAGO':
+            titulo_pagar.valor_pago = titulo_pagar.valor_original
+            titulo_pagar.valor_saldo = 0
+            titulo_pagar.status = 'PAGO'
+            titulo_pagar.data_pagamento = data_pag
+            titulo_pagar.atualizado_por = usuario
+
     # 4. ATUALIZAR SALDO
     atualizar_saldo(empresa_pagadora.id, valor_total, 'SUBTRAIR')
 

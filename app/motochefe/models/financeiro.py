@@ -245,7 +245,6 @@ class MovimentacaoFinanceira(db.Model):
     # ====================
     empresa_destino_id = db.Column(db.Integer, db.ForeignKey('empresa_venda_moto.id'), nullable=True, index=True)
     # PREENCHIDO para RECEBIMENTOS (qual conta recebeu)
-    # PREENCHIDO para PAGAMENTOS entre contas (ex: Movimentação → MargemSogima)
     # NULL para PAGAMENTOS externos
 
     destino_tipo = db.Column(db.String(50), nullable=True)
@@ -395,6 +394,14 @@ class TituloAPagar(db.Model):
         elif self.tipo == 'MONTAGEM':
             return self.fornecedor_montagem or 'Equipe Montagem'
         return 'Desconhecido'
+
+    @property
+    def fornecedor_nome(self):
+        """
+        Alias para beneficiario - compatibilidade com template
+        Retorna nome do fornecedor/beneficiário dinamicamente
+        """
+        return self.beneficiario
 
     @property
     def pode_pagar(self):

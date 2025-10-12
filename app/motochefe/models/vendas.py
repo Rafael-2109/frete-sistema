@@ -40,6 +40,7 @@ class PedidoVendaMoto(db.Model):
 
     # Nota Fiscal (preenche quando faturado=True)
     numero_nf = db.Column(db.String(20), unique=True, nullable=True, index=True)
+    numero_nf_importada = db.Column(db.String(20), nullable=True, index=True)  # NF importada (sem vínculo)
     data_nf = db.Column(db.Date, nullable=True)
     tipo_nf = db.Column(db.String(50), nullable=True)  # 'VENDA', 'REMESSA'
 
@@ -109,6 +110,11 @@ class PedidoVendaMoto(db.Model):
 
         return saldo or 0
 
+    @property
+    def tem_nf(self):
+        """Verifica se pedido tem NF (normal ou importada)"""
+        return bool(self.numero_nf or self.numero_nf_importada)
+
 
 class PedidoVendaMotoItem(db.Model):
     """
@@ -168,6 +174,32 @@ class PedidoVendaMotoItem(db.Model):
         preco_tabela = self.moto.modelo.preco_tabela
         excedente = self.preco_venda - preco_tabela
         return excedente if excedente > 0 else 0
+
+    @property
+    def montagem_paga_calculado(self):
+        """
+        ✅ FONTE DA VERDADE: TituloAPagar
+        Verifica se montagem está paga baseado em TituloAPagar.status
+
+        Returns:
+            bool: True se título está PAGO, False caso contrário
+        """
+        from app.motochefe.models.financeiro import TituloAPagar
+
+        if not self.montagem_contratada:
+            return False
+
+        # Buscar TituloAPagar MONTAGEM deste item
+        titulo = TituloAPagar.query.filter_by(
+            pedido_id=self.pedido_id,
+            numero_chassi=self.numero_chassi,
+            tipo='MONTAGEM'
+        ).first()
+
+        if not titulo:
+            return False  # Título não criado ainda
+
+        return titulo.status == 'PAGO'
 
 
 class PedidoVendaAuditoria(db.Model):

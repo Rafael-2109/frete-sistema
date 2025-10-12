@@ -144,11 +144,17 @@ def criar_pedido_completo(dados_pedido, itens_json):
     )
 
     # 4. CRIAR TÍTULOS A PAGAR (PENDENTES)
+    # Obter equipe para buscar custo real de movimentação
+    equipe = pedido.equipe if pedido.equipe else (pedido.vendedor.equipe if pedido.vendedor else None)
+
     for titulo in titulos_financeiros_criados:
         if titulo.tipo_titulo == 'MOVIMENTACAO':
-            titulo_pagar = criar_titulo_a_pagar_movimentacao(titulo)
-            if titulo_pagar:
-                titulos_a_pagar_criados.append(titulo_pagar)
+            # ✅ CORRIGIDO: Passar custo REAL da equipe (não valor que cliente paga)
+            custo_real = equipe.custo_movimentacao if equipe else Decimal('0')
+            if custo_real > 0:  # Só cria se houver custo
+                titulo_pagar = criar_titulo_a_pagar_movimentacao(titulo, custo_real)
+                if titulo_pagar:
+                    titulos_a_pagar_criados.append(titulo_pagar)
 
         elif titulo.tipo_titulo == 'MONTAGEM':
             # Buscar item correspondente
@@ -168,15 +174,16 @@ def criar_pedido_completo(dados_pedido, itens_json):
     }
 
 
-def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf):
+def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf, numero_nf_importada=None):
     """
     Fatura pedido: atualiza NF, calcula vencimentos baseado em prazo_dias, muda status
 
     Args:
         pedido: PedidoVendaMoto
         empresa_id: int
-        numero_nf: str
+        numero_nf: str (NF normal - opcional se tiver NF importada)
         data_nf: date (ou data_expedicao do pedido)
+        numero_nf_importada: str (NF importada - opcional)
 
     Returns:
         dict com resultado
@@ -193,9 +200,14 @@ def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf):
     if not pedido.ativo:
         raise Exception('Pedido inativo não pode ser faturado')
 
+    # Validar: precisa ter pelo menos UMA NF
+    if not (numero_nf or numero_nf_importada):
+        raise Exception('Informe pelo menos uma NF (Normal ou Importada)')
+
     # Atualizar pedido
     pedido.faturado = True
-    pedido.numero_nf = numero_nf
+    pedido.numero_nf = numero_nf if numero_nf else None
+    pedido.numero_nf_importada = numero_nf_importada if numero_nf_importada else None
     pedido.data_nf = data_nf
     pedido.empresa_venda_id = empresa_id
 

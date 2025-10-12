@@ -112,7 +112,10 @@
                                             data-bs-toggle="modal"
                                             data-bs-target="#modalEditarNF{{ p.id }}"
                                             title="Editar NF">
-                                        <i class="fas fa-file-invoice"></i> {{ p.numero_nf }}
+                                        <i class="fas fa-file-invoice"></i>
+                                        {% if p.numero_nf %}{{ p.numero_nf }}{% endif %}
+                                        {% if p.numero_nf and p.numero_nf_importada %}<br>{% endif %}
+                                        {% if p.numero_nf_importada %}<small class="text-muted">IMP: {{ p.numero_nf_importada }}</small>{% endif %}
                                     </button>
                                 {% else %}
                                 <button type="button" class="btn btn-success btn-sm" 
@@ -236,16 +239,28 @@
                                                 </div>
                                             </div>
 
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle"></i>
+                                                <strong>Nota:</strong> Informe pelo menos uma NF (Normal ou Importada).
+                                            </div>
+
                                             <div class="row">
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label">Número NF *</label>
-                                                    <input type="text" name="numero_nf" class="form-control" required>
+                                                    <label class="form-label">Número NF</label>
+                                                    <input type="text" name="numero_nf" class="form-control"
+                                                           placeholder="NF Normal (opcional)">
                                                 </div>
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label">Data NF *</label>
-                                                    <input type="date" name="data_nf" class="form-control" 
-                                                           value="{{ today if today else '' }}" required>
+                                                    <label class="form-label">Número NF Importada</label>
+                                                    <input type="text" name="numero_nf_importada" class="form-control"
+                                                           placeholder="NF Importada (opcional)">
                                                 </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label">Data NF *</label>
+                                                <input type="date" name="data_nf" class="form-control"
+                                                       value="{{ today if today else '' }}" required>
                                             </div>
                                         </div>
                                         <div class="modal-footer">
@@ -279,22 +294,32 @@
                                                 <strong>Atenção:</strong> A alteração da NF não afeta os títulos financeiros já criados.
                                             </div>
 
-                                            <div class="mb-3">
-                                                <label class="form-label">Número NF Atual</label>
-                                                <input type="text" class="form-control" value="{{ p.numero_nf }}" disabled>
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle"></i>
+                                                <strong>Valores Atuais:</strong><br>
+                                                NF: {{ p.numero_nf or '(não informada)' }}<br>
+                                                NF Importada: {{ p.numero_nf_importada or '(não informada)' }}
                                             </div>
 
                                             <div class="row">
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label">Novo Número NF *</label>
+                                                    <label class="form-label">Número NF</label>
                                                     <input type="text" name="numero_nf" class="form-control"
-                                                           value="{{ p.numero_nf }}" required>
+                                                           value="{{ p.numero_nf or '' }}"
+                                                           placeholder="NF Normal (opcional)">
                                                 </div>
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label">Nova Data NF *</label>
-                                                    <input type="date" name="data_nf" class="form-control"
-                                                           value="{{ p.data_nf.strftime('%Y-%m-%d') if p.data_nf else '' }}" required>
+                                                    <label class="form-label">Número NF Importada</label>
+                                                    <input type="text" name="numero_nf_importada" class="form-control"
+                                                           value="{{ p.numero_nf_importada or '' }}"
+                                                           placeholder="NF Importada (opcional)">
                                                 </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label">Data NF *</label>
+                                                <input type="date" name="data_nf" class="form-control"
+                                                       value="{{ p.data_nf.strftime('%Y-%m-%d') if p.data_nf else '' }}" required>
                                             </div>
                                         </div>
                                         <div class="modal-footer">

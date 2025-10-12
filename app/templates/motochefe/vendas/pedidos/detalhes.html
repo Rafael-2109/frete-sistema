@@ -45,8 +45,13 @@
                     {% if pedido.faturado %}
                         <h4 class="text-success"><i class="fas fa-check-circle"></i> FATURADO</h4>
                         {% if pedido.numero_nf %}
-                            <p class="mb-0">NF: {{ pedido.numero_nf }}</p>
-                            <small>{{ pedido.data_nf.strftime('%d/%m/%Y') if pedido.data_nf else '' }}</small>
+                            <p class="mb-0"><strong>NF:</strong> {{ pedido.numero_nf }}</p>
+                        {% endif %}
+                        {% if pedido.numero_nf_importada %}
+                            <p class="mb-0"><strong>NF IMP:</strong> {{ pedido.numero_nf_importada }}</p>
+                        {% endif %}
+                        {% if pedido.data_nf %}
+                            <small>{{ pedido.data_nf.strftime('%d/%m/%Y') }}</small>
                         {% endif %}
                     {% else %}
                         <h4 class="text-warning"><i class="fas fa-clock"></i> PENDENTE</h4>
