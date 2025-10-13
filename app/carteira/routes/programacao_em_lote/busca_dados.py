@@ -40,15 +40,19 @@ def buscar_dados_completos_cnpj(cnpj: str, data_agendamento: date = None,
     """
     logger.info(f"📊 Buscando dados completos para CNPJ: {cnpj}")
 
-    # Usar protocolo fornecido ou gerar novo
+    # ✅ CORREÇÃO CRÍTICA: SEMPRE usar protocolo fornecido, NUNCA gerar novo
+    # Isso evita divergência de horário entre FilaAgendamentoSendas e Separacao
+    # O protocolo DEVE ser gerado uma única vez e propagado para todos os lugares
     if not protocolo:
-        protocolo = gerar_protocolo_sendas(cnpj, data_agendamento) if data_agendamento else None
+        logger.warning(f"⚠️ ATENÇÃO: buscar_dados_completos_cnpj chamado SEM protocolo para CNPJ {cnpj}. Não será gerado novo protocolo.")
+        # NÃO gerar novo protocolo aqui para evitar inconsistências
+        # protocolo = gerar_protocolo_sendas(cnpj, data_agendamento) if data_agendamento else None
 
     dados = {
         'cnpj': cnpj,
         'data_agendamento': data_agendamento,
         'data_expedicao': data_expedicao,
-        'protocolo': protocolo,
+        'protocolo': protocolo,  # Pode ser None se não foi fornecido
         'itens': [],
         'peso_total': Decimal('0'),
         'pallets_total': Decimal('0'),
@@ -242,9 +246,11 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
 
     logger.info(f"📦 Criando Separações do saldo para CNPJ: {cnpj}")
 
-    # Gerar protocolo se não fornecido
+    # ✅ CORREÇÃO CRÍTICA: SEMPRE usar protocolo fornecido, NUNCA gerar novo
+    # Isso evita divergência de horário entre FilaAgendamentoSendas e Separacao
     if not protocolo:
-        protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
+        logger.error(f"❌ ERRO CRÍTICO: criar_separacoes_do_saldo chamado SEM protocolo para CNPJ {cnpj}!")
+        raise ValueError(f"Protocolo é obrigatório para criar_separacoes_do_saldo. CNPJ: {cnpj}")
 
     contador_criadas = 0
     contador_atualizadas = 0
