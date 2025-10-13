@@ -17,7 +17,7 @@
 - `data_hora_entrega_realizada` = `Embarque.data_embarque` (preenchimento automático)
 - `data_entrega_prevista` = `Embarque.data_prevista_embarque`
 - `entregue` = `True` (quando tem `data_embarque`)
-- `status_finalizacao` = `'FOB - Embarcado no CD'`
+- `status_finalizacao` = `'Entregue'` (padronizado com o resto do sistema)
 
 ---
 
@@ -59,7 +59,7 @@ if 'FOB' in incoterm.upper():
                 datetime.min.time()
             )
             entrega.entregue = True
-            entrega.status_finalizacao = 'FOB - Embarcado no CD'
+            entrega.status_finalizacao = 'Entregue'
             print(f"[SYNC] 🚚 FOB: NF {numero_nf} marcada como entregue em {embarque.data_embarque}")
 ```
 
@@ -114,7 +114,7 @@ python scripts/sincronizar_nfs_fob_retroativo.py
 | `data_entrega_prevista` | `Embarque.data_prevista_embarque` |
 | `data_hora_entrega_realizada` | `Embarque.data_embarque` (automático) |
 | `entregue` | `True` (se tem `data_embarque`) |
-| `status_finalizacao` | `'FOB - Embarcado no CD'` |
+| `status_finalizacao` | `'Entregue'` |
 | `transportadora` | Do embarque (se houver) |
 
 ### Por que marcar como "entregue" automaticamente?
@@ -144,12 +144,14 @@ SELECT
     data_entrega_prevista,          -- De Embarque.data_prevista_embarque
     data_hora_entrega_realizada,    -- De Embarque.data_embarque (automático)
     entregue,                       -- TRUE (automático se tem data_embarque)
-    status_finalizacao,             -- 'FOB - Embarcado no CD' (automático)
+    status_finalizacao,             -- 'Entregue' (automático)
     transportadora,                 -- De Embarque.transportadora
     separacao_lote_id               -- De EmbarqueItem
 FROM entregas_monitoradas;
 ```
-
+UPDATE entregas_monitoradas
+SET status_finalizacao = 'Entregue'
+WHERE status_finalizacao = 'FOB - Embarcado no CD';
 ---
 
 ## ✅ CHECKLIST DE VALIDAÇÃO
@@ -168,7 +170,7 @@ FROM entregas_monitoradas;
   - [ ] Verificar quantas EntregaMonitorada FOB foram criadas
   - [ ] Conferir se `data_hora_entrega_realizada` está preenchida
   - [ ] Conferir se `entregue = TRUE` para FOB com embarque
-  - [ ] Conferir se `status_finalizacao = 'FOB - Embarcado no CD'`
+  - [ ] Conferir se `status_finalizacao = 'Entregue'`
 
 - [ ] **4. Teste com NF FOB nova**
   - [ ] Importar uma NF FOB nova via Odoo

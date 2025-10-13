@@ -1504,6 +1504,7 @@ def embarque_fob():
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
+                nota_fiscal=pedido.nf,
                 protocolo_agendamento=str(pedido.protocolo) if pedido.protocolo else '',
                 data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 peso=pedido.peso_total or 0,

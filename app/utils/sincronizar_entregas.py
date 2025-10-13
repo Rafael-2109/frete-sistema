@@ -14,6 +14,20 @@ from app.pedidos.models import Pedido
 from app.separacao.models import Separacao
 from app.localidades.models import Cidade
 
+
+def get_usuario_nome():
+    """
+    Retorna o nome do usuário atual ou um fallback se não houver usuário logado.
+    Útil para scripts que rodam fora do contexto de requisição HTTP.
+    """
+    try:
+        if current_user and current_user.is_authenticated:
+            return current_user.nome
+    except (AttributeError, RuntimeError):
+        pass
+    return "Sistema - Sincronização Automática"
+
+
 def adicionar_dias_uteis(data_inicio, dias_uteis):
     """
     Adiciona dias úteis (excluindo sábados e domingos) a uma data usando numpy ou pandas.
@@ -76,10 +90,7 @@ def sincronizar_entrega_por_nf(numero_nf):
             db.session.delete(entrega_existente)
             db.session.commit()
         return
-    
-
-
-
+ 
     entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
     if not entrega:
         entrega = EntregaMonitorada(numero_nf=numero_nf)
@@ -89,13 +100,13 @@ def sincronizar_entrega_por_nf(numero_nf):
     embarque = None
     
     # Campos básicos do Faturamento
-    entrega.cliente          = fat.nome_cliente
-    entrega.cnpj_cliente     = fat.cnpj_cliente
-    entrega.municipio        = fat.municipio
-    entrega.uf               = fat.estado
-    entrega.valor_nf         = fat.valor_total
+    entrega.cliente = fat.nome_cliente
+    entrega.cnpj_cliente = fat.cnpj_cliente
+    entrega.municipio = fat.municipio
+    entrega.uf = fat.estado
+    entrega.valor_nf = fat.valor_total
     entrega.data_faturamento = fat.data_fatura
-    entrega.vendedor         = getattr(fat, 'vendedor', None)
+    entrega.vendedor = getattr(fat, 'vendedor', None)
 
     # Transportadora será ajustada a seguir (se encontrarmos Embarque)
     entrega.transportadora = "-"
@@ -147,9 +158,9 @@ def sincronizar_entrega_por_nf(numero_nf):
             entrega_id=entrega.id,
             data_agendada=data_agenda_embarque,
             forma_agendamento="Embarque Automático",
-            autor=current_user.nome,
+            autor=get_usuario_nome(),
             status="confirmado",  # ✅ Se está no embarque, já foi confirmado
-            confirmado_por=current_user.nome,
+            confirmado_por=get_usuario_nome(),
             confirmado_em=datetime.utcnow()
         )
         db.session.add(novo_ag)
@@ -170,9 +181,9 @@ def sincronizar_entrega_por_nf(numero_nf):
                     entrega_id=entrega.id,
                     protocolo_agendamento=protocolo_embarque,
                     forma_agendamento="Embarque Automático",
-                    autor=current_user.nome,
+                    autor=get_usuario_nome(),
                     status="confirmado",  # ✅ Se está no embarque, já foi confirmado
-                    confirmado_por=current_user.nome,
+                    confirmado_por=get_usuario_nome(),
                     confirmado_em=datetime.utcnow()
                 )
                 db.session.add(novo_ag)
@@ -234,7 +245,7 @@ def sincronizar_entrega_por_nf(numero_nf):
                     datetime.min.time()
                 )
                 entrega.entregue = True
-                entrega.status_finalizacao = 'FOB - Embarcado no CD'
+                entrega.status_finalizacao = 'Entregue'
                 print(f"[SYNC] 🚚 FOB: NF {numero_nf} marcada como entregue em {embarque.data_embarque}")
 
     # ✅ NOVA FUNCIONALIDADE: Preencher separacao_lote_id se vazio
@@ -256,10 +267,10 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
         return
 
     # Reset
-    entrega.nf_cd                      = False
-    entrega.status_finalizacao         = None
-    entrega.entregue                   = False
-    entrega.data_hora_entrega_realizada= None
+    entrega.nf_cd = False
+    entrega.status_finalizacao = None
+    entrega.entregue = False
+    entrega.data_hora_entrega_realizada = None
     # Atualiza nf_cd em Separacao se houver lote
     if pedido and pedido.separacao_lote_id:
         Separacao.query.filter_by(
@@ -279,13 +290,13 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
     if data_agenda_item:
         novo_ag = AgendamentoEntrega(
             entrega_id=entrega.id,
-            protocolo_agendamento = item_embarque.protocolo_agendamento,
-            data_agendada         = data_agenda_item,
-            forma_agendamento     = "Reenvio do CD",
-            autor=current_user.nome,
+            protocolo_agendamento=item_embarque.protocolo_agendamento,
+            data_agendada=data_agenda_item,
+            forma_agendamento="Reenvio do CD",
+            autor=get_usuario_nome(),
             criado_em=datetime.utcnow(),
             status="confirmado",  # ✅ Se está no embarque/reenvio, já foi confirmado
-            confirmado_por=current_user.nome,
+            confirmado_por=get_usuario_nome(),
             confirmado_em=datetime.utcnow()
         )
         db.session.add(novo_ag)
@@ -298,8 +309,8 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
         # Tenta lead_time
         if embarque.transportadora and embarque.data_embarque:
             cnpj_transp = embarque.transportadora.cnpj
-            uf_dest     = item_embarque.uf_destino
-            cid_dest    = item_embarque.cidade_destino
+            uf_dest = item_embarque.uf_destino
+            cid_dest = item_embarque.cidade_destino
 
             # ✅ CORREÇÃO: Busca case-insensitive usando UPPER() em ambos os lados
             assoc = (
@@ -308,7 +319,7 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
                 .join(Cidade, CidadeAtendida.cidade_id == Cidade.id)
                 .filter(
                     Transportadora.cnpj == cnpj_transp,
-                    CidadeAtendida.uf   == uf_dest,
+                    CidadeAtendida.uf == uf_dest,
                     func.upper(Cidade.nome) == func.upper(cid_dest)
                 )
                 .first()
