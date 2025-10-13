@@ -11,8 +11,8 @@ from app import db
 from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import (
-    Moto, PedidoVendaMotoItem, EmbarqueMoto,
-    ComissaoVendedor, DespesaMensal, CustosOperacionais, MovimentacaoFinanceira
+    Moto, EmbarqueMoto,
+    ComissaoVendedor, DespesaMensal, MovimentacaoFinanceira
 )
 
 

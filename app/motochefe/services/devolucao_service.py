@@ -153,8 +153,8 @@ def devolver_motos_lote(chassis_list, documento_devolucao, observacao_adicional=
 def processar_recebimento_devolucao(documento_devolucao, usuario=None):
     """
     Processa recebimento automático de devolução
-    - Cria/busca EmpresaVendaMoto "DevolucaoMoto"
-    - Gera TituloFinanceiro a receber (por moto)
+    - Cria/busca EmpresaVendaMoto "Movimentação Devolução"
+    - Gera TituloFinanceiro tipo DEVOLUCAO a receber (por moto)
     - Efetua recebimento automaticamente
     - Se >1 moto: usa lote (PAI + FILHOS)
 
@@ -165,20 +165,21 @@ def processar_recebimento_devolucao(documento_devolucao, usuario=None):
     Returns:
         dict com resultado
     """
-    from app.motochefe.models.cadastro import EmpresaVendaMoto
+    from app.motochefe.models.cadastro import EmpresaVendaMoto, ClienteMoto, VendedorMoto, EquipeVendasMoto
+    from app.motochefe.models.vendas import PedidoVendaMoto
     from app.motochefe.models.operacional import CustosOperacionais
     from app.motochefe.models.financeiro import TituloFinanceiro, MovimentacaoFinanceira
     from app.motochefe.services.empresa_service import atualizar_saldo
 
-    # 1. Garantir empresa DevolucaoMoto existe
+    # 1. Garantir empresa "Movimentação Devolução" existe
     empresa_devolucao = EmpresaVendaMoto.query.filter_by(
-        empresa='DevolucaoMoto'
+        empresa='Movimentação Devolução'
     ).first()
 
     if not empresa_devolucao:
         empresa_devolucao = EmpresaVendaMoto(
             cnpj_empresa=None,
-            empresa='DevolucaoMoto',
+            empresa='Movimentação Devolução',
             tipo_conta='OPERACIONAL',
             saldo=Decimal('0'),
             baixa_compra_auto=False,
@@ -188,26 +189,80 @@ def processar_recebimento_devolucao(documento_devolucao, usuario=None):
         db.session.add(empresa_devolucao)
         db.session.flush()
 
-    # 2. Buscar motos do documento
+    # 2. Criar/Buscar PedidoVendaMoto para a devolução
+    pedido_devolucao = PedidoVendaMoto.query.filter_by(
+        numero_pedido=documento_devolucao
+    ).first()
+
+    if not pedido_devolucao:
+        # Buscar cliente e vendedor genéricos ou criar
+        cliente_devolucao = ClienteMoto.query.filter_by(cnpj_cliente='00000000000000').first()
+        if not cliente_devolucao:
+            cliente_devolucao = ClienteMoto(
+                cnpj_cliente='00000000000000',  # CNPJ genérico para devoluções
+                cliente='DEVOLUÇÃO',
+                ativo=True,
+                criado_por=usuario or 'SISTEMA'
+            )
+            db.session.add(cliente_devolucao)
+            db.session.flush()
+
+        # Buscar/criar equipe de vendas genérica
+        equipe_sistema = EquipeVendasMoto.query.filter_by(equipe_vendas='SISTEMA').first()
+        if not equipe_sistema:
+            equipe_sistema = EquipeVendasMoto(
+                equipe_vendas='SISTEMA',  # ✅ CAMPO CORRETO
+                ativo=True,
+                criado_por=usuario or 'SISTEMA'
+            )
+            db.session.add(equipe_sistema)
+            db.session.flush()
+
+        vendedor_devolucao = VendedorMoto.query.filter_by(vendedor='SISTEMA').first()
+        if not vendedor_devolucao:
+            vendedor_devolucao = VendedorMoto(
+                vendedor='SISTEMA',
+                equipe_vendas_id=equipe_sistema.id,  # ✅ Associar à equipe
+                ativo=True,
+                criado_por=usuario or 'SISTEMA'
+            )
+            db.session.add(vendedor_devolucao)
+            db.session.flush()
+
+        # Criar pedido de devolução
+        pedido_devolucao = PedidoVendaMoto(
+            numero_pedido=documento_devolucao,
+            cliente_id=cliente_devolucao.id,
+            vendedor_id=vendedor_devolucao.id,
+            data_pedido=date.today(),
+            valor_total_pedido=Decimal('0'),  # Será atualizado
+            status='APROVADO',
+            faturado=True,  # Já "faturado" (processado)
+            criado_por=usuario or 'SISTEMA'
+        )
+        db.session.add(pedido_devolucao)
+        db.session.flush()
+
+    # 3. Buscar motos do documento
     motos = obter_motos_por_documento_devolucao(documento_devolucao)
 
     if not motos:
         raise Exception(f'Nenhuma moto encontrada para documento {documento_devolucao}')
 
-    # 3. Buscar custo de devolução
+    # 4. Buscar custo de devolução
     custos = CustosOperacionais.get_custos_vigentes()
     if not custos or custos.custo_movimentacao_devolucao <= 0:
         raise Exception('Custo de movimentação de devolução não configurado em CustosOperacionais')
 
     custo_por_moto = custos.custo_movimentacao_devolucao
 
-    # 4. Criar títulos financeiros (um por moto)
+    # 5. Criar títulos financeiros (um por moto)
     titulos_criados = []
     valor_total = Decimal('0')
 
     for moto in motos:
         titulo = TituloFinanceiro(
-            pedido_id=None,  # Sem pedido
+            pedido_id=pedido_devolucao.id,  # ✅ Pedido de devolução
             numero_chassi=moto.numero_chassi,
             tipo_titulo='DEVOLUCAO',
             ordem_pagamento=99,  # Ordem alta (não segue FIFO)
@@ -229,7 +284,10 @@ def processar_recebimento_devolucao(documento_devolucao, usuario=None):
         titulos_criados.append(titulo)
         valor_total += custo_por_moto
 
-    # 5. Criar movimentações financeiras
+    # 6. Atualizar valor total do pedido de devolução
+    pedido_devolucao.valor_total_pedido = valor_total
+
+    # 7. Criar movimentações financeiras
     if len(motos) == 1:
         # INDIVIDUAL: Uma movimentação
         moto = motos[0]
@@ -302,7 +360,7 @@ def processar_recebimento_devolucao(documento_devolucao, usuario=None):
             db.session.add(movimentacao_filha)
             movimentacoes_criadas.append(movimentacao_filha)
 
-    # 6. Atualizar saldo da empresa DevolucaoMoto
+    # 8. Atualizar saldo da empresa "Movimentação Devolução"
     atualizar_saldo(empresa_devolucao.id, valor_total, 'SOMAR')
 
     db.session.flush()

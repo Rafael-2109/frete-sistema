@@ -1022,7 +1022,8 @@ def devolver_lote():
     """Devolve múltiplas motos em lote (substitui devolver_moto individual)"""
     from app.motochefe.services.devolucao_service import (
         gerar_proximo_documento_devolucao,
-        devolver_motos_lote
+        devolver_motos_lote,
+        processar_recebimento_devolucao
     )
 
     try:
@@ -1044,13 +1045,20 @@ def devolver_lote():
         else:
             raise Exception('Tipo de devolução inválido')
 
-        # Processar em lote
+        # 1. Processar devolução (marca motos como DEVOLVIDO)
         resultado = devolver_motos_lote(
             chassis_list=chassis_list,
             documento_devolucao=documento_devolucao,
             observacao_adicional=observacao_adicional,
             usuario=current_user.nome
         )
+
+        # 2. Processar recebimento financeiro (gera título e movimentação)
+        if resultado['sucesso'] > 0:
+            processar_recebimento_devolucao(
+                documento_devolucao=documento_devolucao,
+                usuario=current_user.nome
+            )
 
         # Mensagem de retorno
         if resultado['sucesso'] > 0:
