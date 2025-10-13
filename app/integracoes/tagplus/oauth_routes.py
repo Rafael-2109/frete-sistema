@@ -318,20 +318,6 @@ AUTH_PAGE_TEMPLATE = """
         </div>
     </div>
 
-    <div class="card">
-        <h2>🔧 Correção de Pedidos (NFs Pendentes)</h2>
-        <p>Visualizar e corrigir NFs que foram importadas sem número de pedido:</p>
-        <button class="btn btn-primary" onclick="carregarNFsPendentes()">
-            📋 Ver NFs Pendentes
-        </button>
-        <div id="nfsPendentesContainer" style="display: none; margin-top: 20px;">
-            <div id="loadingPendentes" style="display: none; text-align: center; padding: 20px;">
-                ⏳ Carregando NFs pendentes...
-            </div>
-            <div id="resultadoPendentes"></div>
-        </div>
-    </div>
-
     <script>
     // ========== IMPORTAÇÃO INDIVIDUAL DE NF ==========
     function buscarNFIndividual() {
@@ -430,7 +416,27 @@ AUTH_PAGE_TEMPLATE = """
         });
     }
     // ========== FIM IMPORTAÇÃO INDIVIDUAL ==========
+    </script>
+    {% endif %}
+    {% endif %}
 
+    <!-- Card de Correção de Pedidos - SEMPRE VISÍVEL -->
+    <div class="card">
+        <h2>🔧 Correção de Pedidos (NFs Pendentes)</h2>
+        <p>Visualizar e corrigir NFs que foram importadas sem número de pedido:</p>
+        <button class="btn btn-primary" onclick="carregarNFsPendentes()">
+            📋 Ver NFs Pendentes
+        </button>
+        <div id="nfsPendentesContainer" style="display: none; margin-top: 20px;">
+            <div id="loadingPendentes" style="display: none; text-align: center; padding: 20px;">
+                ⏳ Carregando NFs pendentes...
+            </div>
+            <div id="resultadoPendentes"></div>
+        </div>
+    </div>
+
+    <script>
+    // ========== FUNÇÃO PARA CARREGAR NFS PENDENTES (SEMPRE DISPONÍVEL) ==========
     function carregarNFsPendentes() {
         const container = document.getElementById('nfsPendentesContainer');
         const loading = document.getElementById('loadingPendentes');
@@ -489,8 +495,6 @@ AUTH_PAGE_TEMPLATE = """
             });
     }
     </script>
-    {% endif %}
-    {% endif %}
 
     <div class="card">
         <h2>📝 Tokens Manuais</h2>

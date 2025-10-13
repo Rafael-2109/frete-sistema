@@ -38,10 +38,10 @@
                         <small class="text-muted">Data de criação do pedido (automática)</small>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Data Expedição *</label>
+                        <label class="form-label">Data Entrega / Coleta</label>
                         <input type="date" name="data_expedicao" class="form-control"
                                value="{{ pedido.data_expedicao.strftime('%Y-%m-%d') if pedido and pedido.data_expedicao else '' }}" required>
-                        <small class="text-muted">Data prevista de envio (obrigatória)</small>
+                        <small class="text-muted">Data de entrega ou coleta (obrigatória)</small>
                     </div>
                 </div>
 
