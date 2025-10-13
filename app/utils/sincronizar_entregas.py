@@ -77,17 +77,6 @@ def sincronizar_entrega_por_nf(numero_nf):
             db.session.commit()
         return
     
-    # 🚫 FILTRO 1: NFs FOB (frete por conta do cliente)
-    if getattr(current_app.config, 'FILTRAR_FOB_MONITORAMENTO', True):
-        incoterm = getattr(fat, 'incoterm', '') or ''
-        if 'FOB' in incoterm.upper():
-            # Se a NF é FOB, remove do monitoramento se existir
-            entrega_existente = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
-            if entrega_existente:
-                db.session.delete(entrega_existente)
-                db.session.commit()
-            return
-    
 
 
 
@@ -228,7 +217,26 @@ def sincronizar_entrega_por_nf(numero_nf):
             data_final = adicionar_dias_uteis(embarque.data_embarque, assoc.lead_time)
 
     entrega.data_entrega_prevista = data_final
-    
+
+    # 🆕 TRATAMENTO ESPECIAL PARA FOB
+    # FOB = Frete por conta do cliente, entrega considerada realizada no embarque
+    incoterm = getattr(fat, 'incoterm', '') or ''
+    if 'FOB' in incoterm.upper():
+        if embarque:
+            # Para FOB, usar data_prevista_embarque como data_entrega_prevista
+            if embarque.data_prevista_embarque:
+                entrega.data_entrega_prevista = embarque.data_prevista_embarque
+
+            # Para FOB, data_hora_entrega_realizada = data_embarque (entrega ocorre no CD)
+            if embarque.data_embarque:
+                entrega.data_hora_entrega_realizada = datetime.combine(
+                    embarque.data_embarque,
+                    datetime.min.time()
+                )
+                entrega.entregue = True
+                entrega.status_finalizacao = 'FOB - Embarcado no CD'
+                print(f"[SYNC] 🚚 FOB: NF {numero_nf} marcada como entregue em {embarque.data_embarque}")
+
     # ✅ NOVA FUNCIONALIDADE: Preencher separacao_lote_id se vazio
     if not entrega.separacao_lote_id:
         pedido = Pedido.query.filter_by(nf=numero_nf).first()
