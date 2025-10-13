@@ -21,6 +21,8 @@ class CustosOperacionais(db.Model):
 
     # Custos fixos
     custo_montagem = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    custo_movimentacao_devolucao = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    # Custo cobrado do fabricante por cada moto devolvida
 
     # Vigência
     data_vigencia_inicio = db.Column(db.Date, nullable=False, default=date.today)

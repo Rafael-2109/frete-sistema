@@ -267,59 +267,85 @@ def processar_pagamento_lote_comissoes(comissao_ids, empresa_pagadora, data_paga
     }
 
 
-def processar_pagamento_lote_montagens(item_ids, empresa_pagadora, data_pagamento=None, usuario=None):
+def processar_pagamento_lote_montagens(titulo_ids, empresa_pagadora, data_pagamento=None, usuario=None, valor_limite=None):
     """
-    Processa pagamento em lote de montagens
+    ✅ REFATORADO: Processa pagamento em lote de montagens com suporte a pagamento PARCIAL
+    Comportamento IDÊNTICO a processar_pagamento_lote_motos
     Cria 1 MovimentacaoFinanceira PAI + N FILHOS
 
     Args:
-        item_ids: list[int] - Lista de IDs de PedidoVendaMotoItem
+        titulo_ids: list[int] - Lista de IDs de TituloAPagar (MONTAGEM)
         empresa_pagadora: EmpresaVendaMoto
         data_pagamento: date
         usuario: str
+        valor_limite: Decimal (opcional) - Valor máximo a pagar (pagamento parcial sequencial)
 
     Returns:
-        dict similar a processar_pagamento_lote_motos
+        dict {
+            'movimentacao_pai': MovimentacaoFinanceira,
+            'movimentacoes_filhas': list[MovimentacaoFinanceira],
+            'titulos_atualizados': list[TituloAPagar],
+            'valor_total': Decimal
+        }
     """
     from app.motochefe.services.empresa_service import atualizar_saldo
-    from app.motochefe.models.operacional import CustosOperacionais
-
-    # ✅ CORREÇÃO TAREFA 3: Buscar custo REAL da montagem de CustosOperacionais
-    custos_vigentes = CustosOperacionais.get_custos_vigentes()
-    if not custos_vigentes:
-        raise Exception('Custos operacionais vigentes não encontrados')
-
-    custo_montagem_real = custos_vigentes.custo_montagem
+    from app.motochefe.models.financeiro import TituloAPagar
 
     data_pag = data_pagamento or date.today()
-    itens = []
+    titulos_para_pagar = []
     movimentacoes_filhas = []
-    valor_total = Decimal('0')
+    valor_total_pago = Decimal('0')
+    valor_disponivel = Decimal(str(valor_limite)) if valor_limite else None
 
-    # 1. BUSCAR ITENS E VALIDAR
-    for item_id in item_ids:
-        item = PedidoVendaMotoItem.query.get(item_id)
-        if not item:
-            raise Exception(f'Item ID {item_id} não encontrado')
+    # 1. BUSCAR TÍTULOS E CALCULAR VALORES (COM PAGAMENTO PARCIAL)
+    for titulo_id in titulo_ids:
+        # Se tem limite e já acabou o valor, parar
+        if valor_disponivel is not None and valor_disponivel <= 0:
+            break
 
-        if not item.montagem_contratada:
-            raise Exception(f'Item ID {item_id} não tem montagem contratada')
+        titulo_pagar = TituloAPagar.query.get(titulo_id)
+        if not titulo_pagar:
+            continue  # Pular título não encontrado
 
-        if item.montagem_paga:
-            raise Exception(f'Montagem do item ID {item_id} já está paga')
+        if titulo_pagar.tipo != 'MONTAGEM':
+            continue  # Pular títulos que não são de montagem
 
-        itens.append(item)
-        # ✅ CORRIGIDO: Usar custo real de CustosOperacionais, não valor cobrado do cliente
-        valor_total += custo_montagem_real
+        if titulo_pagar.status not in ['ABERTO', 'PARCIAL']:
+            continue  # Pular títulos não liberados ou já pagos
+
+        valor_saldo_titulo = titulo_pagar.valor_saldo
+
+        # Se já está totalmente pago, pular
+        if valor_saldo_titulo <= 0:
+            continue
+
+        # ✅ PAGAMENTO PARCIAL: Calcular quanto pagar neste título
+        if valor_disponivel is not None:
+            # COM LIMITE: Pagar o MENOR entre disponível e saldo
+            valor_pagar_titulo = min(valor_disponivel, valor_saldo_titulo)
+            valor_disponivel -= valor_pagar_titulo
+        else:
+            # SEM LIMITE: Pagar o saldo completo
+            valor_pagar_titulo = valor_saldo_titulo
+
+        titulos_para_pagar.append({
+            'titulo': titulo_pagar,
+            'valor_pagar': valor_pagar_titulo,
+            'saldo_anterior': titulo_pagar.valor_pago
+        })
+        valor_total_pago += valor_pagar_titulo
+
+    if not titulos_para_pagar:
+        raise Exception('Nenhum título disponível para pagamento')
 
     # 2. CRIAR MOVIMENTAÇÃO PAI
-    fornecedores_set = set([i.fornecedor_montagem for i in itens if i.fornecedor_montagem])
+    fornecedores_set = set([t['titulo'].fornecedor_montagem for t in titulos_para_pagar if t['titulo'].fornecedor_montagem])
     fornecedores_str = ', '.join(sorted(fornecedores_set)) if fornecedores_set else 'Equipe Montagem'
 
     movimentacao_pai = MovimentacaoFinanceira(
         tipo='PAGAMENTO',
         categoria='Lote Montagem',
-        valor=valor_total,
+        valor=valor_total_pago,
         data_movimentacao=data_pag,
 
         empresa_origem_id=empresa_pagadora.id,
@@ -327,69 +353,81 @@ def processar_pagamento_lote_montagens(item_ids, empresa_pagadora, data_pagament
         destino_tipo='Equipe Montagem',
         destino_identificacao=fornecedores_str if len(fornecedores_set) <= 3 else f'{len(fornecedores_set)} fornecedor(es)',
 
-        descricao=f'Pagamento Lote {len(itens)} montagem(ns) - {fornecedores_str}',
-        observacoes=f'Lote com {len(itens)} montagem(ns)',
+        descricao=f'Pagamento Lote {len(titulos_para_pagar)} montagem(ns) - {fornecedores_str}',
+        observacoes=f'Lote com {len(titulos_para_pagar)} montagem(ns). Valor limite: R$ {valor_limite or "sem limite"}',
 
         criado_por=usuario
     )
     db.session.add(movimentacao_pai)
     db.session.flush()
 
-    # 3. CRIAR MOVIMENTAÇÕES FILHAS + ATUALIZAR ITENS
-    for item in itens:
+    # 3. CRIAR MOVIMENTAÇÕES FILHAS + ATUALIZAR TÍTULOS
+    titulos_atualizados = []
+    for item in titulos_para_pagar:
+        titulo_pagar = item['titulo']
+        valor_pagar = item['valor_pagar']
+
+        # Criar movimentação FILHA
         movimentacao_filha = MovimentacaoFinanceira(
             tipo='PAGAMENTO',
             categoria='Montagem',
-            valor=custo_montagem_real,  # ✅ CORRIGIDO: Usar custo real
+            valor=valor_pagar,  # ✅ USAR VALOR CALCULADO (pode ser parcial)
             data_movimentacao=data_pag,
 
             empresa_origem_id=empresa_pagadora.id,
             empresa_destino_id=None,
             destino_tipo='Equipe Montagem',
-            destino_identificacao=item.fornecedor_montagem or 'Equipe Montagem',
+            destino_identificacao=titulo_pagar.fornecedor_montagem or 'Equipe Montagem',
 
-            pedido_id=item.pedido_id,
-            numero_chassi=item.numero_chassi,
+            pedido_id=titulo_pagar.pedido_id,
+            numero_chassi=titulo_pagar.numero_chassi,
 
-            descricao=f'Montagem Moto {item.numero_chassi} - Pedido {item.pedido.numero_pedido} - {item.fornecedor_montagem or "Equipe"}',
+            descricao=f'Montagem Moto {titulo_pagar.numero_chassi} - Pedido {titulo_pagar.pedido.numero_pedido if titulo_pagar.pedido else titulo_pagar.pedido_id}',
 
+            # Relacionamento com PAI
             movimentacao_origem_id=movimentacao_pai.id,
+            eh_baixa_automatica=False,
+
             criado_por=usuario
         )
         db.session.add(movimentacao_filha)
         movimentacoes_filhas.append(movimentacao_filha)
 
-        # Atualizar ITEM
-        item.montagem_paga = True
-        item.data_pagamento_montagem = data_pag
-        item.empresa_pagadora_montagem_id = empresa_pagadora.id
-        item.lote_pagamento_montagem_id = movimentacao_pai.id
+        # ✅ ATUALIZAR TITULO A PAGAR (suporte a pagamento PARCIAL)
+        titulo_pagar.valor_pago += valor_pagar
+        titulo_pagar.valor_saldo -= valor_pagar
+        titulo_pagar.atualizado_por = usuario
 
-        # ✅ SINCRONIZAÇÃO: Atualizar TituloAPagar correspondente
-        from app.motochefe.models.financeiro import TituloAPagar
-        titulo_pagar = TituloAPagar.query.filter_by(
-            pedido_id=item.pedido_id,
-            numero_chassi=item.numero_chassi,
-            tipo='MONTAGEM'
-        ).first()
-
-        if titulo_pagar and titulo_pagar.status != 'PAGO':
-            titulo_pagar.valor_pago = titulo_pagar.valor_original
-            titulo_pagar.valor_saldo = 0
+        # ✅ ATUALIZAR STATUS
+        if titulo_pagar.valor_saldo <= 0:
             titulo_pagar.status = 'PAGO'
             titulo_pagar.data_pagamento = data_pag
-            titulo_pagar.atualizado_por = usuario
 
-    # 4. ATUALIZAR SALDO
-    atualizar_saldo(empresa_pagadora.id, valor_total, 'SUBTRAIR')
+            # ✅ SINCRONIZAÇÃO: Atualizar PedidoVendaMotoItem.montagem_paga
+            item_pedido = PedidoVendaMotoItem.query.filter_by(
+                pedido_id=titulo_pagar.pedido_id,
+                numero_chassi=titulo_pagar.numero_chassi
+            ).first()
+            if item_pedido:
+                item_pedido.montagem_paga = True
+                item_pedido.data_pagamento_montagem = data_pag
+                item_pedido.empresa_pagadora_montagem_id = empresa_pagadora.id
+                item_pedido.lote_pagamento_montagem_id = movimentacao_pai.id
+        else:
+            titulo_pagar.status = 'PARCIAL'
+
+        titulos_atualizados.append(titulo_pagar)
+
+    # 4. ATUALIZAR SALDO DA EMPRESA
+    atualizar_saldo(empresa_pagadora.id, valor_total_pago, 'SUBTRAIR')
 
     db.session.flush()
 
     return {
         'movimentacao_pai': movimentacao_pai,
         'movimentacoes_filhas': movimentacoes_filhas,
-        'itens_atualizados': itens,
-        'valor_total': valor_total
+        'titulos_atualizados': titulos_atualizados,
+        'valor_total': valor_total_pago
     }
 
 
@@ -491,6 +529,156 @@ def processar_pagamento_lote_despesas(despesa_ids, empresa_pagadora, data_pagame
         'movimentacoes_filhas': movimentacoes_filhas,
         'despesas_atualizadas': despesas,
         'valor_total': valor_total
+    }
+
+
+def processar_pagamento_lote_movimentacoes(titulo_ids, empresa_pagadora, data_pagamento=None, usuario=None, valor_limite=None):
+    """
+    Processa pagamento em lote de movimentações (TituloAPagar de MargemSogima)
+    Cria 1 MovimentacaoFinanceira PAI + N FILHOS
+
+    ✨ SUPORTA PAGAMENTO PARCIAL quando valor_limite é informado
+
+    Args:
+        titulo_ids: list[int] - Lista de IDs de TituloAPagar
+        empresa_pagadora: EmpresaVendaMoto
+        data_pagamento: date
+        usuario: str
+        valor_limite: Decimal - Valor máximo a pagar (opcional)
+
+    Returns:
+        dict {
+            'movimentacao_pai': MovimentacaoFinanceira,
+            'movimentacoes_filhas': list[MovimentacaoFinanceira],
+            'titulos_atualizados': list[TituloAPagar],
+            'valor_total': Decimal
+        }
+    """
+    from app.motochefe.models.financeiro import TituloAPagar, MovimentacaoFinanceira
+    from app.motochefe.services.empresa_service import atualizar_saldo
+
+    data_pag = data_pagamento or date.today()
+    titulos_para_pagar = []
+    movimentacoes_filhas = []
+    valor_total_pago = Decimal('0')
+    valor_disponivel = Decimal(str(valor_limite)) if valor_limite else None
+
+    # 1. BUSCAR TÍTULOS E CALCULAR VALORES
+    for titulo_id in titulo_ids:
+        # Se tem limite e já acabou o valor, para
+        if valor_disponivel is not None and valor_disponivel <= 0:
+            break
+
+        titulo_pagar = TituloAPagar.query.get(titulo_id)
+        if not titulo_pagar:
+            continue
+
+        # Validar status
+        if titulo_pagar.status not in ['ABERTO', 'PARCIAL']:
+            continue
+
+        valor_saldo_titulo = titulo_pagar.valor_saldo
+
+        # Se já está pago, pular
+        if valor_saldo_titulo <= 0:
+            continue
+
+        # Calcular quanto pagar neste título
+        if valor_disponivel is not None:
+            # COM LIMITE: Pagar o MENOR entre disponível e saldo
+            valor_pagar_titulo = min(valor_disponivel, valor_saldo_titulo)
+            valor_disponivel -= valor_pagar_titulo
+        else:
+            # SEM LIMITE: Pagar o saldo completo
+            valor_pagar_titulo = valor_saldo_titulo
+
+        titulos_para_pagar.append({
+            'titulo': titulo_pagar,
+            'valor_pagar': valor_pagar_titulo,
+            'saldo_anterior': titulo_pagar.valor_pago
+        })
+        valor_total_pago += valor_pagar_titulo
+
+    if not titulos_para_pagar:
+        raise Exception('Nenhum título de movimentação disponível para pagamento')
+
+    # 2. CRIAR MOVIMENTAÇÃO PAI
+    empresa_destino = titulos_para_pagar[0]['titulo'].empresa_destino
+    empresa_destino_nome = empresa_destino.empresa if empresa_destino else 'MargemSogima'
+
+    movimentacao_pai = MovimentacaoFinanceira(
+        tipo='PAGAMENTO',
+        categoria='Lote Movimentação',
+        valor=valor_total_pago,
+        data_movimentacao=data_pag,
+
+        empresa_origem_id=empresa_pagadora.id,
+        empresa_destino_id=titulos_para_pagar[0]['titulo'].empresa_destino_id,
+
+        descricao=f'Pagamento Lote {len(titulos_para_pagar)} movimentação(ões) - {empresa_destino_nome}',
+        observacoes=f'Lote com {len(titulos_para_pagar)} movimentação(ões)',
+
+        criado_por=usuario
+    )
+    db.session.add(movimentacao_pai)
+    db.session.flush()
+
+    # 3. CRIAR MOVIMENTAÇÕES FILHAS + ATUALIZAR TÍTULOS
+    titulos_atualizados = []
+    for item in titulos_para_pagar:
+        titulo_pagar = item['titulo']
+        valor_pagar = item['valor_pagar']
+
+        # Criar movimentação FILHA
+        movimentacao_filha = MovimentacaoFinanceira(
+            tipo='PAGAMENTO',
+            categoria='Movimentação',
+            valor=valor_pagar,
+            data_movimentacao=data_pag,
+
+            empresa_origem_id=empresa_pagadora.id,
+            empresa_destino_id=titulo_pagar.empresa_destino_id,
+
+            pedido_id=titulo_pagar.pedido_id,
+            numero_chassi=titulo_pagar.numero_chassi,
+
+            descricao=f'Movimentação Pedido {titulo_pagar.pedido.numero_pedido if titulo_pagar.pedido else "-"} - Chassi {titulo_pagar.numero_chassi}',
+
+            movimentacao_origem_id=movimentacao_pai.id,
+            criado_por=usuario
+        )
+        db.session.add(movimentacao_filha)
+        movimentacoes_filhas.append(movimentacao_filha)
+
+        # Atualizar TÍTULO A PAGAR
+        titulo_pagar.valor_pago += valor_pagar
+        titulo_pagar.valor_saldo -= valor_pagar
+        titulo_pagar.atualizado_por = usuario
+
+        # Atualizar STATUS
+        if titulo_pagar.valor_saldo <= 0:
+            titulo_pagar.status = 'PAGO'
+            titulo_pagar.data_pagamento = data_pag
+        else:
+            titulo_pagar.status = 'PARCIAL'
+
+        titulos_atualizados.append(titulo_pagar)
+
+    # 4. ATUALIZAR SALDOS
+    # Origem: sempre subtrai
+    atualizar_saldo(empresa_pagadora.id, valor_total_pago, 'SUBTRAIR')
+
+    # Destino: soma para MargemSogima (se for empresa)
+    if titulos_para_pagar[0]['titulo'].empresa_destino_id:
+        atualizar_saldo(titulos_para_pagar[0]['titulo'].empresa_destino_id, valor_total_pago, 'SOMAR')
+
+    db.session.flush()
+
+    return {
+        'movimentacao_pai': movimentacao_pai,
+        'movimentacoes_filhas': movimentacoes_filhas,
+        'titulos_atualizados': titulos_atualizados,
+        'valor_total': valor_total_pago
     }
 
 
@@ -607,6 +795,44 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
             item_detalhe['saldo_anterior'] = mov_filha.valor
             item_detalhe['valor_pagamento'] = mov_filha.valor
             item_detalhe['saldo_apos'] = Decimal('0')
+
+        elif mov_filha.categoria == 'Movimentação' and mov_filha.pedido_id and mov_filha.numero_chassi:
+            from app.motochefe.models.financeiro import TituloAPagar
+
+            # Buscar TituloAPagar de MOVIMENTACAO correspondente
+            titulo_pagar = TituloAPagar.query.filter_by(
+                pedido_id=mov_filha.pedido_id,
+                numero_chassi=mov_filha.numero_chassi,
+                tipo='MOVIMENTACAO'
+            ).first()
+
+            item_detalhe['tipo_item'] = 'MOVIMENTACAO'
+            item_detalhe['item_objeto'] = titulo_pagar
+
+            if titulo_pagar:
+                # Calcular saldo HISTORICAMENTE
+                # Buscar todas as movimentações POSTERIORES a esta para recalcular o saldo no momento
+                movimentacoes_posteriores = MovimentacaoFinanceira.query.filter(
+                    MovimentacaoFinanceira.pedido_id == mov_filha.pedido_id,
+                    MovimentacaoFinanceira.numero_chassi == mov_filha.numero_chassi,
+                    MovimentacaoFinanceira.categoria == 'Movimentação',
+                    MovimentacaoFinanceira.id > mov_filha.id,
+                    MovimentacaoFinanceira.tipo == 'PAGAMENTO'
+                ).all()
+
+                # Saldo atual + soma de todos os pagamentos posteriores = saldo ANTES deste pagamento
+                valor_pagamentos_posteriores = sum(m.valor for m in movimentacoes_posteriores)
+                saldo_anterior = titulo_pagar.valor_saldo + valor_pagamentos_posteriores + mov_filha.valor
+                saldo_apos = saldo_anterior - mov_filha.valor
+
+                item_detalhe['saldo_anterior'] = saldo_anterior
+                item_detalhe['valor_pagamento'] = mov_filha.valor
+                item_detalhe['saldo_apos'] = saldo_apos
+            else:
+                # Fallback se título não encontrado
+                item_detalhe['saldo_anterior'] = mov_filha.valor
+                item_detalhe['valor_pagamento'] = mov_filha.valor
+                item_detalhe['saldo_apos'] = Decimal('0')
 
         elif mov_filha.categoria and 'Título' in mov_filha.categoria and mov_filha.titulo_financeiro_id:
             from app.motochefe.models.financeiro import TituloFinanceiro
@@ -776,7 +1002,11 @@ def processar_recebimento_lote_titulos(titulo_ids, valores_recebidos, empresa_re
 
             if titulo.tipo_titulo == 'VENDA':
                 from app.motochefe.services.comissao_service import gerar_comissao_moto
+                from app.motochefe.services.titulo_a_pagar_service import quitar_titulo_movimentacao_ao_pagar_moto
+
                 gerar_comissao_moto(titulo)
+                # ✅ Liberar/Quitar TituloAPagar de movimentação se incluir_custo_movimentacao=False
+                quitar_titulo_movimentacao_ao_pagar_moto(titulo.numero_chassi, titulo.pedido_id, usuario)
 
     # 4. ATUALIZAR SALDO
     atualizar_saldo(empresa_recebedora.id, valor_total, 'SOMAR')

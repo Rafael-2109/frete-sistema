@@ -152,32 +152,32 @@ def listar_contas_a_pagar():
     despesas_agrupadas = list(despesas_por_tipo.values())
     total_despesas = sum((g['total'] for g in despesas_agrupadas), Decimal("0"))
 
-    # 6. TÍTULOS A PAGAR - Movimentação e Montagem (Pendentes e Abertos)
-    from app.motochefe.models.financeiro import TituloAPagar
+    # 6. MOVIMENTAÇÕES - ✅ Custos de movimentação MargemSogima (incluir_custo_movimentacao=False)
+    # Títulos MOVIMENTACAO que empresa deve pagar quando cliente NÃO paga movimentação
+    titulos_movimentacao_pendentes = TituloAPagar.query.filter(
+        TituloAPagar.tipo == 'MOVIMENTACAO',
+        TituloAPagar.status.in_(['ABERTO', 'PARCIAL'])  # PENDENTE = aguardando cliente pagar
+    ).all()
 
-    titulos_a_pagar = TituloAPagar.query.filter(
-        TituloAPagar.status.in_(['PENDENTE', 'ABERTO', 'PARCIAL'])
-    ).order_by(TituloAPagar.data_criacao.desc()).all()
-
-    # Agrupar por tipo
-    titulos_por_tipo = {}
-    for titulo in titulos_a_pagar:
-        tipo = titulo.tipo  # MOVIMENTACAO ou MONTAGEM
-        if tipo not in titulos_por_tipo:
-            titulos_por_tipo[tipo] = {
-                'tipo': tipo,
+    # Agrupar por empresa destino (MargemSogima)
+    movimentacoes_por_empresa = {}
+    for titulo in titulos_movimentacao_pendentes:
+        empresa_nome = titulo.empresa_destino.empresa if titulo.empresa_destino else 'MargemSogima'
+        if empresa_nome not in movimentacoes_por_empresa:
+            movimentacoes_por_empresa[empresa_nome] = {
+                'empresa': empresa_nome,
                 'titulos': [],
                 'total': Decimal('0')
             }
 
-        titulos_por_tipo[tipo]['titulos'].append(titulo)
-        titulos_por_tipo[tipo]['total'] += titulo.valor_saldo
+        movimentacoes_por_empresa[empresa_nome]['titulos'].append(titulo)
+        movimentacoes_por_empresa[empresa_nome]['total'] += titulo.valor_saldo
 
-    titulos_agrupados = list(titulos_por_tipo.values())
-    total_titulos_a_pagar = sum((g['total'] for g in titulos_agrupados), Decimal("0"))
+    movimentacoes_agrupadas = list(movimentacoes_por_empresa.values())
+    total_movimentacoes = sum((g['total'] for g in movimentacoes_agrupadas), Decimal("0"))
 
     # TOTAIS GERAIS
-    total_geral = total_motos + total_fretes + total_comissoes + total_montagens + total_despesas + total_titulos_a_pagar
+    total_geral = total_motos + total_fretes + total_comissoes + total_montagens + total_despesas + total_movimentacoes
 
     # Consolidar TODOS os itens em uma lista única para paginação
     # Cada item terá um 'tipo' para identificação no template
@@ -198,8 +198,8 @@ def listar_contas_a_pagar():
     for item in despesas_agrupadas:
         todos_itens.append({'tipo': 'DESPESA', 'dados': item})
 
-    for item in titulos_agrupados:
-        todos_itens.append({'tipo': 'TITULO_A_PAGAR', 'dados': item})
+    for item in movimentacoes_agrupadas:
+        todos_itens.append({'tipo': 'MOVIMENTACAO', 'dados': item})
 
     # Paginação manual
     total_items = len(todos_itens)
@@ -240,13 +240,13 @@ def listar_contas_a_pagar():
                          comissoes_agrupadas=comissoes_agrupadas,
                          montagens_agrupadas=montagens_agrupadas,
                          despesas_agrupadas=despesas_agrupadas,
-                         titulos_agrupados=titulos_agrupados,
+                         movimentacoes_agrupadas=movimentacoes_agrupadas,  # ✅ NOVO
                          total_motos=total_motos,
                          total_fretes=total_fretes,
                          total_comissoes=total_comissoes,
                          total_montagens=total_montagens,
                          total_despesas=total_despesas,
-                         total_titulos_a_pagar=total_titulos_a_pagar,
+                         total_movimentacoes=total_movimentacoes,  # ✅ NOVO
                          total_geral=total_geral,
                          empresas=empresas,
                          hoje=hoje)
@@ -268,7 +268,8 @@ def pagar_lote():
             processar_pagamento_lote_motos,
             processar_pagamento_lote_comissoes,
             processar_pagamento_lote_montagens,
-            processar_pagamento_lote_despesas
+            processar_pagamento_lote_despesas,
+            processar_pagamento_lote_movimentacoes
         )
         from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
         from app.motochefe.services.empresa_service import atualizar_saldo
@@ -295,7 +296,8 @@ def pagar_lote():
             'comissao': [],
             'montagem': [],
             'despesa': [],
-            'frete': []
+            'frete': [],
+            'movimentacao': []
         }
 
         for item in itens:
@@ -333,30 +335,40 @@ def pagar_lote():
             total_itens += len(resultado['comissoes_atualizadas'])
             valor_total_geral += resultado['valor_total']
 
-        # Processar MONTAGENS em lote - ✅ REFATORADO: Usa TituloAPagar diretamente
+        # Processar MONTAGENS em lote - ✅ REFATORADO: Passa titulo_ids diretamente
         if itens_por_tipo['montagem']:
-            from app.motochefe.services.titulo_a_pagar_service import pagar_titulo_a_pagar
             from app.motochefe.models.financeiro import TituloAPagar
 
             titulo_ids = [int(item['id']) for item in itens_por_tipo['montagem']]
-            montagens_pagas = []
-            valor_total_montagens = Decimal('0')
 
+            # ✅ VALIDAR: Filtrar apenas títulos válidos
+            titulo_ids_validos = []
             for titulo_id in titulo_ids:
                 titulo_pagar = TituloAPagar.query.get(titulo_id)
-                if titulo_pagar:
-                    resultado = pagar_titulo_a_pagar(
-                        titulo_pagar,
-                        titulo_pagar.valor_saldo,  # Pagar total
-                        empresa_pagadora,
-                        current_user.nome
-                    )
-                    montagens_pagas.append(titulo_pagar)
-                    valor_total_montagens += titulo_pagar.valor_original
+                if not titulo_pagar:
+                    continue
 
-            total_lotes += 1 if montagens_pagas else 0
-            total_itens += len(montagens_pagas)
-            valor_total_geral += valor_total_montagens
+                # ✅ VALIDAR: Somente ABERTO ou PARCIAL
+                if titulo_pagar.status not in ['ABERTO', 'PARCIAL']:
+                    continue
+
+                # ✅ VALIDAR: Somente com saldo > 0
+                if titulo_pagar.valor_saldo <= 0:
+                    continue
+
+                titulo_ids_validos.append(titulo_id)
+
+            if titulo_ids_validos:
+                resultado = processar_pagamento_lote_montagens(
+                    titulo_ids=titulo_ids_validos,  # ✅ CORRIGIDO: Passa titulo_ids
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome,
+                    valor_limite=None  # pagar_lote sempre paga tudo
+                )
+                total_lotes += 1
+                total_itens += len(resultado['titulos_atualizados'])  # ✅ CORRIGIDO: titulos_atualizados
+                valor_total_geral += resultado['valor_total']
 
         # Processar DESPESAS em lote
         if itens_por_tipo['despesa']:
@@ -370,6 +382,41 @@ def pagar_lote():
             total_lotes += 1
             total_itens += len(resultado['despesas_atualizadas'])
             valor_total_geral += resultado['valor_total']
+
+        # Processar MOVIMENTAÇÕES em lote
+        if itens_por_tipo['movimentacao']:
+            from app.motochefe.models.financeiro import TituloAPagar
+
+            titulo_ids = [int(item['id']) for item in itens_por_tipo['movimentacao']]
+
+            # ✅ VALIDAR: Filtrar apenas títulos válidos
+            titulo_ids_validos = []
+            for titulo_id in titulo_ids:
+                titulo_pagar = TituloAPagar.query.get(titulo_id)
+                if not titulo_pagar:
+                    continue
+
+                # ✅ VALIDAR: Somente ABERTO ou PARCIAL
+                if titulo_pagar.status not in ['ABERTO', 'PARCIAL']:
+                    continue
+
+                # ✅ VALIDAR: Somente com saldo > 0
+                if titulo_pagar.valor_saldo <= 0:
+                    continue
+
+                titulo_ids_validos.append(titulo_id)
+
+            if titulo_ids_validos:
+                resultado = processar_pagamento_lote_movimentacoes(
+                    titulo_ids=titulo_ids_validos,
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome,
+                    valor_limite=None  # pagar_lote sempre paga tudo
+                )
+                total_lotes += 1
+                total_itens += len(resultado['titulos_atualizados'])
+                valor_total_geral += resultado['valor_total']
 
         # Processar FRETES individualmente (não agrupa em lote por enquanto)
         if itens_por_tipo['frete']:
@@ -426,7 +473,8 @@ def pagar_grupo():
             processar_pagamento_lote_motos,
             processar_pagamento_lote_comissoes,
             processar_pagamento_lote_montagens,
-            processar_pagamento_lote_despesas
+            processar_pagamento_lote_despesas,
+            processar_pagamento_lote_movimentacoes
         )
         from app.motochefe.services.empresa_service import atualizar_saldo
 
@@ -563,33 +611,37 @@ def pagar_grupo():
                 )
                 total_itens += len(resultado['comissoes_atualizadas'])
 
-        # PROCESSAR MONTAGENS SEQUENCIALMENTE - ✅ REFATORADO: Usa TituloAPagar
+        # PROCESSAR MONTAGENS COM PAGAMENTO PARCIAL - ✅ USAR LÓGICA DA FUNÇÃO
         elif tipo_grupo == 'montagem':
-            from app.motochefe.services.titulo_a_pagar_service import pagar_titulo_a_pagar
             from app.motochefe.models.financeiro import TituloAPagar
 
+            # ✅ Validar apenas se títulos existem e são válidos, mas NÃO calcular valores aqui
+            titulo_ids_validos = []
             for titulo_id in itens_ids:
-                if valor_disponivel <= 0:
-                    break
-
                 titulo_pagar = TituloAPagar.query.get(int(titulo_id))
                 if not titulo_pagar:
                     continue
 
-                # Usa valor_saldo do título (fonte da verdade)
-                valor_titulo = titulo_pagar.valor_saldo
+                # ✅ VALIDAR: Somente ABERTO ou PARCIAL
+                if titulo_pagar.status not in ['ABERTO', 'PARCIAL']:
+                    continue
 
-                if valor_disponivel >= valor_titulo:
-                    # Pagar título
-                    pagar_titulo_a_pagar(
-                        titulo_pagar,
-                        valor_titulo,
-                        empresa_pagadora,
-                        current_user.nome
-                    )
-                    valor_disponivel -= valor_titulo
-                    total_pago += valor_titulo
-                    total_itens += 1
+                # ✅ VALIDAR: Somente com saldo > 0
+                if titulo_pagar.valor_saldo <= 0:
+                    continue
+
+                titulo_ids_validos.append(int(titulo_id))
+
+            if titulo_ids_validos:
+                resultado = processar_pagamento_lote_montagens(
+                    titulo_ids=titulo_ids_validos,
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome,
+                    valor_limite=valor_disponivel  # ✅ A função calcula tudo internamente
+                )
+                total_pago = resultado['valor_total']
+                total_itens = len(resultado['titulos_atualizados'])
 
         # PROCESSAR DESPESAS SEQUENCIALMENTE
         elif tipo_grupo == 'despesa':
@@ -614,6 +666,38 @@ def pagar_grupo():
                     usuario=current_user.nome
                 )
                 total_itens += len(resultado['despesas_atualizadas'])
+
+        # PROCESSAR MOVIMENTAÇÕES COM PAGAMENTO PARCIAL (USA FUNÇÃO DE LOTE)
+        elif tipo_grupo == 'movimentacao':
+            from app.motochefe.models.financeiro import TituloAPagar
+
+            # ✅ Validar apenas se títulos existem e são válidos
+            titulo_ids_validos = []
+            for titulo_id in itens_ids:
+                titulo_pagar = TituloAPagar.query.get(int(titulo_id))
+                if not titulo_pagar:
+                    continue
+
+                # ✅ VALIDAR: Somente ABERTO ou PARCIAL
+                if titulo_pagar.status not in ['ABERTO', 'PARCIAL']:
+                    continue
+
+                # ✅ VALIDAR: Somente com saldo > 0
+                if titulo_pagar.valor_saldo <= 0:
+                    continue
+
+                titulo_ids_validos.append(int(titulo_id))
+
+            if titulo_ids_validos:
+                resultado = processar_pagamento_lote_movimentacoes(
+                    titulo_ids=titulo_ids_validos,
+                    empresa_pagadora=empresa_pagadora,
+                    data_pagamento=data_pag,
+                    usuario=current_user.nome,
+                    valor_limite=valor_disponivel  # ✅ A função calcula tudo internamente
+                )
+                total_pago = resultado['valor_total']
+                total_itens = len(resultado['titulos_atualizados'])
 
         db.session.commit()
 
@@ -947,21 +1031,32 @@ def detalhes_recebimento(movimentacao_id):
         for item in itens_relacionados:
             pedido_id = None
             numero_pedido = None
+            valor_pedido = None
 
             if hasattr(item.get('movimentacao'), 'pedido_id'):
                 pedido_id = item.get('movimentacao').pedido_id
+                # Buscar objeto pedido completo
+                if pedido_id and item.get('movimentacao').pedido:
+                    numero_pedido = item.get('movimentacao').pedido.numero_pedido
+                    valor_pedido = item.get('movimentacao').pedido.valor_total_pedido
             elif hasattr(item.get('item_objeto'), 'pedido_id'):
                 pedido_id = item.get('item_objeto').pedido_id
+                # Buscar objeto pedido completo
+                if pedido_id and hasattr(item.get('item_objeto'), 'pedido') and item.get('item_objeto').pedido:
+                    numero_pedido = item.get('item_objeto').pedido.numero_pedido
+                    valor_pedido = item.get('item_objeto').pedido.valor_total_pedido
             elif hasattr(item.get('item_objeto'), 'pedido'):
                 pedido_obj = item.get('item_objeto').pedido
                 if pedido_obj:
                     pedido_id = pedido_obj.id
                     numero_pedido = pedido_obj.numero_pedido
+                    valor_pedido = pedido_obj.valor_total_pedido
 
             if pedido_id:
                 if pedido_id not in itens_por_pedido:
                     itens_por_pedido[pedido_id] = {
                         'numero_pedido': numero_pedido or f'Pedido #{pedido_id}',
+                        'valor_pedido': valor_pedido or 0,
                         'itens': []
                     }
                 itens_por_pedido[pedido_id]['itens'].append(item)

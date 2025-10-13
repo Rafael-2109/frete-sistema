@@ -5,6 +5,8 @@ Sistema MotoCHEFE
 from app import db
 from sqlalchemy import text
 from app.motochefe.models import Moto
+from decimal import Decimal
+from datetime import date
 
 
 def gerar_proximo_documento_devolucao():
@@ -145,4 +147,170 @@ def devolver_motos_lote(chassis_list, documento_devolucao, observacao_adicional=
     return {
         'sucesso': sucesso,
         'erros': erros
+    }
+
+
+def processar_recebimento_devolucao(documento_devolucao, usuario=None):
+    """
+    Processa recebimento automático de devolução
+    - Cria/busca EmpresaVendaMoto "DevolucaoMoto"
+    - Gera TituloFinanceiro a receber (por moto)
+    - Efetua recebimento automaticamente
+    - Se >1 moto: usa lote (PAI + FILHOS)
+
+    Args:
+        documento_devolucao: str - Número do documento (ex: "DEV-001")
+        usuario: str
+
+    Returns:
+        dict com resultado
+    """
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+    from app.motochefe.models.operacional import CustosOperacionais
+    from app.motochefe.models.financeiro import TituloFinanceiro, MovimentacaoFinanceira
+    from app.motochefe.services.empresa_service import atualizar_saldo
+
+    # 1. Garantir empresa DevolucaoMoto existe
+    empresa_devolucao = EmpresaVendaMoto.query.filter_by(
+        empresa='DevolucaoMoto'
+    ).first()
+
+    if not empresa_devolucao:
+        empresa_devolucao = EmpresaVendaMoto(
+            cnpj_empresa=None,
+            empresa='DevolucaoMoto',
+            tipo_conta='OPERACIONAL',
+            saldo=Decimal('0'),
+            baixa_compra_auto=False,
+            ativo=True,
+            criado_por=usuario or 'SISTEMA'
+        )
+        db.session.add(empresa_devolucao)
+        db.session.flush()
+
+    # 2. Buscar motos do documento
+    motos = obter_motos_por_documento_devolucao(documento_devolucao)
+
+    if not motos:
+        raise Exception(f'Nenhuma moto encontrada para documento {documento_devolucao}')
+
+    # 3. Buscar custo de devolução
+    custos = CustosOperacionais.get_custos_vigentes()
+    if not custos or custos.custo_movimentacao_devolucao <= 0:
+        raise Exception('Custo de movimentação de devolução não configurado em CustosOperacionais')
+
+    custo_por_moto = custos.custo_movimentacao_devolucao
+
+    # 4. Criar títulos financeiros (um por moto)
+    titulos_criados = []
+    valor_total = Decimal('0')
+
+    for moto in motos:
+        titulo = TituloFinanceiro(
+            pedido_id=None,  # Sem pedido
+            numero_chassi=moto.numero_chassi,
+            tipo_titulo='DEVOLUCAO',
+            ordem_pagamento=99,  # Ordem alta (não segue FIFO)
+            numero_parcela=1,
+            total_parcelas=1,
+            valor_parcela=Decimal('0'),
+            prazo_dias=0,
+            valor_original=custo_por_moto,
+            valor_saldo=Decimal('0'),  # Já será quitado
+            valor_pago_total=custo_por_moto,
+            data_emissao=date.today(),
+            empresa_recebedora_id=empresa_devolucao.id,
+            data_ultimo_pagamento=date.today(),
+            status='PAGO',  # Já criado como PAGO
+            criado_por=usuario or 'SISTEMA'
+        )
+        db.session.add(titulo)
+        db.session.flush()
+        titulos_criados.append(titulo)
+        valor_total += custo_por_moto
+
+    # 5. Criar movimentações financeiras
+    if len(motos) == 1:
+        # INDIVIDUAL: Uma movimentação
+        moto = motos[0]
+        titulo = titulos_criados[0]
+
+        movimentacao = MovimentacaoFinanceira(
+            tipo='RECEBIMENTO',
+            categoria='Devolução Moto',
+            valor=custo_por_moto,
+            data_movimentacao=date.today(),
+            empresa_origem_id=None,
+            origem_tipo='Fabricante',
+            origem_identificacao=moto.fornecedor,
+            empresa_destino_id=empresa_devolucao.id,
+            numero_chassi=moto.numero_chassi,
+            titulo_financeiro_id=titulo.id,
+            numero_documento=documento_devolucao,
+            descricao=f'Recebimento Devolução Moto {moto.numero_chassi} - {moto.fornecedor}',
+            observacoes=f'Documento: {documento_devolucao}',
+            criado_por=usuario or 'SISTEMA'
+        )
+        db.session.add(movimentacao)
+        movimentacoes_criadas = [movimentacao]
+
+    else:
+        # LOTE: MovimentacaoFinanceira PAI + FILHOS
+        # Agrupar fornecedores
+        fornecedores_set = set(m.fornecedor for m in motos if m.fornecedor)
+        fornecedores_str = ', '.join(sorted(fornecedores_set)) if fornecedores_set else 'Fornecedor'
+
+        # Criar PAI
+        movimentacao_pai = MovimentacaoFinanceira(
+            tipo='RECEBIMENTO',
+            categoria='Lote Devolução',
+            valor=valor_total,
+            data_movimentacao=date.today(),
+            empresa_origem_id=None,
+            origem_tipo='Fabricante',
+            origem_identificacao=fornecedores_str if len(fornecedores_set) <= 3 else f'{len(fornecedores_set)} fabricante(s)',
+            empresa_destino_id=empresa_devolucao.id,
+            numero_documento=documento_devolucao,
+            descricao=f'Recebimento Lote Devolução {len(motos)} moto(s) - Doc {documento_devolucao}',
+            observacoes=f'Lote com {len(motos)} moto(s): {", ".join([m.numero_chassi for m in motos])}',
+            criado_por=usuario or 'SISTEMA'
+        )
+        db.session.add(movimentacao_pai)
+        db.session.flush()
+
+        # Criar FILHOS
+        movimentacoes_criadas = []
+        for i, moto in enumerate(motos):
+            titulo = titulos_criados[i]
+
+            movimentacao_filha = MovimentacaoFinanceira(
+                tipo='RECEBIMENTO',
+                categoria='Devolução Moto',
+                valor=custo_por_moto,
+                data_movimentacao=date.today(),
+                empresa_origem_id=None,
+                origem_tipo='Fabricante',
+                origem_identificacao=moto.fornecedor,
+                empresa_destino_id=empresa_devolucao.id,
+                numero_chassi=moto.numero_chassi,
+                titulo_financeiro_id=titulo.id,
+                numero_documento=documento_devolucao,
+                descricao=f'Devolução Moto {moto.numero_chassi} - {moto.fornecedor}',
+                movimentacao_origem_id=movimentacao_pai.id,
+                criado_por=usuario or 'SISTEMA'
+            )
+            db.session.add(movimentacao_filha)
+            movimentacoes_criadas.append(movimentacao_filha)
+
+    # 6. Atualizar saldo da empresa DevolucaoMoto
+    atualizar_saldo(empresa_devolucao.id, valor_total, 'SOMAR')
+
+    db.session.flush()
+
+    return {
+        'empresa_devolucao': empresa_devolucao,
+        'titulos_criados': titulos_criados,
+        'movimentacoes_criadas': movimentacoes_criadas,
+        'valor_total': valor_total,
+        'quantidade_motos': len(motos)
     }

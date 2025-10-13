@@ -123,8 +123,8 @@ def obter_movimentacoes_financeiras(data_inicial=None, data_final=None,
         FROM movimentacao_financeira mf
         WHERE mf.tipo = 'PAGAMENTO'
           AND mf.movimentacao_origem_id IS NULL
-          AND mf.categoria IN ('Lote Custo Moto', 'Lote Comissão', 'Lote Montagem', 'Lote Despesa',
-                               'Custo Moto', 'Comissão', 'Montagem', 'Despesa', 'Frete')
+          AND mf.categoria IN ('Lote Custo Moto', 'Lote Comissão', 'Lote Montagem', 'Lote Despesa', 'Lote Frete', 'Lote Movimentação',
+                               'Custo Moto', 'Comissão', 'Montagem', 'Movimentação', 'Despesa', 'Frete')
         """
 
         filtros_pagamentos = []

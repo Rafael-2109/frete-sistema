@@ -7,6 +7,7 @@ from app.motochefe.models.financeiro import TituloAPagar
 from app.motochefe.models.operacional import CustosOperacionais
 from app.motochefe.services.empresa_service import garantir_margem_sogima
 from datetime import date
+from decimal import Decimal
 
 
 def criar_titulo_a_pagar_movimentacao(titulo_financeiro, custo_real_movimentacao):
@@ -128,6 +129,66 @@ def liberar_titulo_a_pagar(titulo_financeiro_id):
 
     titulo_pagar.status = 'ABERTO'
     titulo_pagar.data_liberacao = date.today()
+
+    db.session.flush()
+
+    return titulo_pagar
+
+
+def quitar_titulo_movimentacao_ao_pagar_moto(numero_chassi, pedido_id, usuario=None):
+    """
+    Quita automaticamente TituloAPagar de MOVIMENTACAO quando cliente quitar a moto (VENDA)
+    Usado quando incluir_custo_movimentacao=False (TituloFinanceiro MOVIMENTACAO tem valor=0)
+
+    Args:
+        numero_chassi: str
+        pedido_id: int
+        usuario: str
+
+    Returns:
+        TituloAPagar quitado ou None
+    """
+    from app.motochefe.models.financeiro import TituloFinanceiro
+
+    # Buscar TituloFinanceiro MOVIMENTACAO desta moto
+    titulo_mov = TituloFinanceiro.query.filter_by(
+        pedido_id=pedido_id,
+        numero_chassi=numero_chassi,
+        tipo_titulo='MOVIMENTACAO'
+    ).first()
+
+    if not titulo_mov:
+        return None
+
+    # ✅ Validação EXPLÍCITA: Só quita se valor_original = 0 (empresa absorveu custo)
+    if titulo_mov.valor_original != Decimal('0'):
+        return None
+
+    # ✅ Marcar TituloFinanceiro MOVIMENTACAO como PAGO automaticamente
+    if titulo_mov.status != 'PAGO':
+        titulo_mov.status = 'PAGO'
+        titulo_mov.valor_pago_total = Decimal('0')
+        titulo_mov.valor_saldo = Decimal('0')
+        titulo_mov.data_ultimo_pagamento = date.today()
+        titulo_mov.atualizado_por = usuario
+
+    # Buscar TituloAPagar correspondente
+    titulo_pagar = TituloAPagar.query.filter_by(
+        pedido_id=pedido_id,
+        numero_chassi=numero_chassi,
+        tipo='MOVIMENTACAO'
+    ).filter(
+        TituloAPagar.status.in_(['PENDENTE', 'ABERTO'])
+    ).first()
+
+    if not titulo_pagar:
+        return None
+
+    # Liberar TituloAPagar (mudar de PENDENTE para ABERTO)
+    if titulo_pagar.status == 'PENDENTE':
+        titulo_pagar.status = 'ABERTO'
+        titulo_pagar.data_liberacao = date.today()
+        titulo_pagar.atualizado_por = usuario
 
     db.session.flush()
 

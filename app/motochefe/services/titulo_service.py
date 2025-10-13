@@ -61,7 +61,7 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
             if tipo == 'MONTAGEM' and not item.montagem_contratada:
                 continue
 
-            # ✅ CORRIGIDO: MOVIMENTACAO sempre cria título (mesmo R$ 0)
+            # ✅ CORRIGIDO: MOVIMENTACAO sempre cria (mesmo R$ 0), mas será ocultado na exibição
             # Outros tipos pulam se valor zerado
             if tipo != 'MOVIMENTACAO' and valor <= 0:
                 continue
@@ -305,7 +305,11 @@ def processar_pagamento_fifo(pedido, valor_pago, empresa_recebedora, usuario=Non
 
             if titulo.tipo_titulo == 'VENDA':
                 from app.motochefe.services.comissao_service import gerar_comissao_moto
+                from app.motochefe.services.titulo_a_pagar_service import quitar_titulo_movimentacao_ao_pagar_moto
+
                 gerar_comissao_moto(titulo)
+                # Liberar TituloAPagar de movimentação se cliente não pagou movimentação
+                quitar_titulo_movimentacao_ao_pagar_moto(titulo.numero_chassi, titulo.pedido_id, usuario)
 
         else:
             # Pagamento parcial: SPLIT do título
@@ -503,8 +507,13 @@ def receber_titulo(titulo, valor_recebido, empresa_recebedora, usuario=None):
         # TRIGGER 3: Comissão (se título de VENDA)
         if titulo.tipo_titulo == 'VENDA':
             from app.motochefe.services.comissao_service import gerar_comissao_moto
+            from app.motochefe.services.titulo_a_pagar_service import quitar_titulo_movimentacao_ao_pagar_moto
+
             comissao = gerar_comissao_moto(titulo)
             resultado['comissao_gerada'] = comissao
+
+            # Liberar TituloAPagar de movimentação se cliente não pagou movimentação
+            quitar_titulo_movimentacao_ao_pagar_moto(titulo.numero_chassi, titulo.pedido_id, usuario)
 
     else:
         # PAGAMENTO PARCIAL - continua ABERTO
@@ -560,13 +569,16 @@ def obter_todos_titulos_agrupados():
     Retorna TODOS os títulos (em aberto) agrupados por Pedido > Parcela > Moto > Tipo
     Para exibir em accordion consolidado
 
+    ✅ FILTRO: Exclui títulos com valor_original = 0 (empresa absorveu custo, nada a receber)
+
     Returns:
         dict estruturado: {pedido_id: {pedido, parcelas: {numero: {motos: {chassi: [titulos]}}}}}
     """
 
-    # Buscar todos títulos em aberto
+    # Buscar todos títulos em aberto COM VALOR > 0
     titulos = TituloFinanceiro.query.filter(
-        TituloFinanceiro.status == 'ABERTO'
+        TituloFinanceiro.status == 'ABERTO',
+        TituloFinanceiro.valor_original > 0  # ✅ Apenas títulos com valor a receber
     ).order_by(
         TituloFinanceiro.pedido_id,
         TituloFinanceiro.numero_parcela,

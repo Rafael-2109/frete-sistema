@@ -44,7 +44,8 @@ def extrato_financeiro():
     if not data_inicial:
         data_inicial = (date.today() - timedelta(days=30)).strftime('%Y-%m-%d')
     if not data_final:
-        data_final = date.today().strftime('%Y-%m-%d')
+        # ✅ CORREÇÃO: Usar dia seguinte para incluir registros de hoje com timezone UTC
+        data_final = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
 
     # Buscar movimentações
     movimentacoes = obter_movimentacoes_financeiras(

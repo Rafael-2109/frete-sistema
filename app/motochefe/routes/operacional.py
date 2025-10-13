@@ -45,6 +45,7 @@ def atualizar_custos():
 
     try:
         custos.custo_montagem = Decimal(request.form.get('custo_montagem'))
+        custos.custo_movimentacao_devolucao = Decimal(request.form.get('custo_movimentacao_devolucao', '0'))
         custos.atualizado_por = current_user.nome
 
         db.session.commit()

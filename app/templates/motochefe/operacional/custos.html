@@ -29,6 +29,23 @@
                                required>
                         <small class="form-text text-muted">Custo pago ao montador por moto</small>
                     </div>
+
+                    <div class="col-md-12 mb-3">
+                        <label for="custo_movimentacao_devolucao" class="form-label">
+                            <i class="fas fa-undo"></i> Custo de Movimentação de Devolução (R$)
+                        </label>
+                        <input type="number"
+                               step="0.01"
+                               class="form-control"
+                               id="custo_movimentacao_devolucao"
+                               name="custo_movimentacao_devolucao"
+                               value="{{ custos.custo_movimentacao_devolucao or 0 }}"
+                               required>
+                        <small class="form-text text-muted">
+                            Custo cobrado do fabricante por moto devolvida (avaria/defeito).
+                            Este valor é automaticamente gerado como recebimento na conta <strong>DevolucaoMoto</strong>.
+                        </small>
+                    </div>
                 </div>
 
                 <div class="alert alert-warning">
