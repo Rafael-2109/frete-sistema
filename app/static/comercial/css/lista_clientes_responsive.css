@@ -5,20 +5,23 @@
 
 /* ===========================
    GLOBAL - PREVENIR OVERFLOW NO CONTAINER
+   APLICADO APENAS EM MOBILE para não interferir nos dropdowns do navbar
    =========================== */
-body {
-    overflow-x: hidden !important;
-}
+@media (max-width: 991px) {
+    body {
+        overflow-x: hidden !important;
+    }
 
-.comercial-container {
-    overflow-x: hidden !important;
-    width: 100%;
-    max-width: 100vw;
-}
+    .comercial-container {
+        overflow-x: hidden !important;
+        width: 100%;
+        max-width: 100vw;
+    }
 
-.container-fluid {
-    overflow-x: hidden !important;
-    max-width: 100%;
+    .container-fluid {
+        overflow-x: hidden !important;
+        max-width: 100%;
+    }
 }
 
 /* Permitir scroll apenas dentro da tabela */
