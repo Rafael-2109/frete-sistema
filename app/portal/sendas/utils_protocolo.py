@@ -11,12 +11,18 @@ logger = logging.getLogger(__name__)
 def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = None) -> str:
     """
     Gera o protocolo padrão do Sendas com a máscara:
-    AG_(cnpj posições 7 até 4)_ddmmyyyy_HHMM
+    AG_(cnpj posições 7 até 4)_ddmmyyyy_ddmmyyyy
+
+    Formato: AG_CNPJ_DataAgendamento_DataGeracao
+
+    ✅ NOTA: Mudança de máscara para evitar problemas com diferença de minutos
+    Antes: AG_CNPJ_DATA_HHMM (causava protocolos diferentes por minutos)
+    Agora: AG_CNPJ_DATA_DATA (mesmo protocolo se gerado no mesmo dia)
 
     Args:
         cnpj: CNPJ do cliente (será limpo automaticamente)
         data_agendamento: Data do agendamento (date ou datetime)
-        timestamp: Timestamp para usar na geração (opcional, usa datetime.now() se não fornecido)
+        timestamp: Timestamp para usar na geração (opcional, DEPRECATED - mantido para compatibilidade)
 
     Returns:
         String com o protocolo formatado
@@ -25,7 +31,8 @@ def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = No
         cnpj = "06.057.223/0001-95"
         data = date(2025, 1, 15)
         protocolo = gerar_protocolo_sendas(cnpj, data)
-        # Retorna: "AG_0001_15012025_1430"
+        # Retorna: "AG_0001_15012025_13012025"
+        #          AG_CNPJ_DataAgend_DataHoje
     """
     try:
         # ✅ PEGAR DIRETO DO CNPJ SEM LIMPAR
@@ -54,11 +61,11 @@ def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = No
         if timestamp is None:
             timestamp = datetime.now()
 
-        # Formatar hora como HHMM
-        hora_formatada = timestamp.strftime('%H%M')
+        # Formatar data de hoje como ddmmyyyy
+        data_hoje = datetime.now().strftime('%d%m%Y')
 
-        # Montar protocolo
-        protocolo = f"AG_{cnpj_parte}_{data_formatada}_{hora_formatada}"
+        # Montar protocolo: AG_CNPJ_DataAgendamento_DataGeracao
+        protocolo = f"AG_{cnpj_parte}_{data_formatada}_{data_hoje}"
 
         logger.debug(f"Protocolo gerado: {protocolo} para CNPJ {cnpj}")
 
@@ -76,37 +83,70 @@ def extrair_dados_protocolo(protocolo: str) -> dict:
     """
     Extrai os dados de um protocolo Sendas
 
+    ✅ COMPATÍVEL COM AMBOS OS FORMATOS:
+    - Novo formato: AG_xxxx_ddmmyyyy_ddmmyyyy (data agendamento + data geração)
+    - Formato antigo: AG_xxxx_ddmmyyyy_HHMM (data agendamento + hora)
+
     Args:
-        protocolo: String do protocolo no formato AG_xxxx_ddmmyyyy_HHMM
+        protocolo: String do protocolo no formato AG_xxxx_ddmmyyyy_ddmmyyyy ou AG_xxxx_ddmmyyyy_HHMM
 
     Returns:
         Dicionário com os dados extraídos ou None se formato inválido
     """
     try:
         if not protocolo or not protocolo.startswith('AG_'):
-            return None
+            return None # type: ignore
 
         partes = protocolo.split('_')
         if len(partes) != 4:
-            return None
+            return None # type: ignore
 
         cnpj_parte = partes[1]
-        data_str = partes[2]
-        hora_str = partes[3]
+        data_agend_str = partes[2]
+        quarto_campo = partes[3]
 
-        # Converter data de ddmmyyyy para datetime
-        data = datetime.strptime(data_str, '%d%m%Y').date()
+        # Converter data de agendamento de ddmmyyyy para datetime
+        data_agendamento = datetime.strptime(data_agend_str, '%d%m%Y').date()
 
-        # Converter hora de HHMM para time
-        hora = datetime.strptime(hora_str, '%H%M').time()
+        # ✅ DETECTAR FORMATO: tentar como data (8 dígitos) ou hora (4 dígitos)
+        if len(quarto_campo) == 8:
+            # Novo formato: data de geração (ddmmyyyy)
+            try:
+                data_geracao = datetime.strptime(quarto_campo, '%d%m%Y').date()
+                return {
+                    'cnpj_parte': cnpj_parte,
+                    'data_agendamento': data_agendamento,
+                    'data_geracao': data_geracao,
+                    'hora_geracao': None,  # Não tem hora no novo formato
+                    'formato': 'novo',
+                    'protocolo_completo': protocolo
+                }
+            except ValueError:
+                # Se falhar, tratar como formato desconhecido
+                logger.warning(f"Protocolo com formato desconhecido (4º campo com 8 dígitos mas não é data): {protocolo}")
+                return None # type: ignore
 
-        return {
-            'cnpj_parte': cnpj_parte,
-            'data_agendamento': data,
-            'hora_geracao': hora,
-            'protocolo_completo': protocolo
-        }
+        elif len(quarto_campo) == 4:
+            # Formato antigo: hora de geração (HHMM)
+            try:
+                hora = datetime.strptime(quarto_campo, '%H%M').time()
+                return {
+                    'cnpj_parte': cnpj_parte,
+                    'data_agendamento': data_agendamento,
+                    'data_geracao': None,  # Não tem data de geração no formato antigo
+                    'hora_geracao': hora,
+                    'formato': 'antigo',
+                    'protocolo_completo': protocolo
+                }
+            except ValueError:
+                # Se falhar, tratar como formato desconhecido
+                logger.warning(f"Protocolo com formato desconhecido (4º campo com 4 dígitos mas não é hora): {protocolo}")
+                return None # type: ignore
+        else:
+            # Formato desconhecido
+            logger.warning(f"Protocolo com formato desconhecido (4º campo com {len(quarto_campo)} dígitos): {protocolo}")
+            return None # type: ignore
 
     except Exception as e:
         logger.error(f"Erro ao extrair dados do protocolo {protocolo}: {e}")
-        return None
+        return None # type: ignore

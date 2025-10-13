@@ -75,7 +75,7 @@ class FilaAgendamentoSendas(db.Model):
         # Usar protocolo fornecido ou gerar novo
         if not protocolo:
             # Gerar protocolo provisório com nova máscara
-            # AG_[CNPJ posições 7-4]_[data ddmmyyyy]_[hora HHMM]
+            # AG_[CNPJ posições 7-4]_[data ddmmyyyy]_[data ddmmyyyy]
             protocolo = gerar_protocolo_sendas(cnpj, data_agendamento)
 
         # Verificar duplicata (mesmo documento + produto + num_pedido)
