@@ -8,7 +8,7 @@ from app import db
 from app.portal.models_fila_sendas import FilaAgendamentoSendas
 from datetime import datetime, date, timedelta
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 import logging
 from io import BytesIO
 
@@ -59,15 +59,18 @@ class VerificacaoSendasService:
                 id_sendas = str(row['ID']).strip() if pd.notna(row['ID']) else ''
                 obs_criacao = str(row['Obs. Criação']).strip() if pd.notna(row['Obs. Criação']) else ''
 
+                # Normalizar Obs. Criação: remover "- " do início que o portal Sendas adiciona
+                obs_criacao_normalizado = obs_criacao.lstrip('- ').strip() if obs_criacao else ''
+
                 # Indexar por ID
                 if id_sendas and id_sendas != 'nan':
                     if id_sendas not in planilha_por_protocolo:
                         planilha_por_protocolo[id_sendas] = row
 
-                # Indexar por Obs. Criação
-                if obs_criacao and obs_criacao != 'nan':
-                    if obs_criacao not in planilha_por_protocolo:
-                        planilha_por_protocolo[obs_criacao] = row
+                # Indexar por Obs. Criação (normalizado, sem "- ")
+                if obs_criacao_normalizado and obs_criacao_normalizado != 'nan':
+                    if obs_criacao_normalizado not in planilha_por_protocolo:
+                        planilha_por_protocolo[obs_criacao_normalizado] = row
 
             logger.info(f"Protocolos únicos na planilha: {len(planilha_por_protocolo)}")
 
@@ -258,6 +261,8 @@ class VerificacaoSendasService:
         id_sendas = str(row_planilha['ID']).strip() if pd.notna(row_planilha['ID']) else ''
         status_sendas = str(row_planilha['Status']).strip() if pd.notna(row_planilha['Status']) else ''
         obs_criacao = str(row_planilha['Obs. Criação']).strip() if pd.notna(row_planilha['Obs. Criação']) else ''
+        # Normalizar Obs. Criação: remover "- " do início que o portal Sendas adiciona
+        obs_criacao_normalizado = obs_criacao.lstrip('- ').strip() if obs_criacao else ''
         data_efetiva = row_planilha.get('Data Efetiva')
         data_hora_sugerida = row_planilha.get('Data/Hora Sugerida:')
 
@@ -281,7 +286,7 @@ class VerificacaoSendasService:
         }
 
         # A.1.1 - Se encontrou por Obs. Criação e tem ID diferente, atualizar protocolo
-        if id_sendas and id_sendas != protocolo and obs_criacao == protocolo:
+        if id_sendas and id_sendas != protocolo and obs_criacao_normalizado == protocolo:
             self._atualizar_protocolo_real(protocolo, id_sendas, tipo_origem)
             resultado['atualizado'] = True
             resultado['mensagem'] = f'Protocolo atualizado: {protocolo} → {id_sendas}'
@@ -347,6 +352,8 @@ class VerificacaoSendasService:
         id_sendas = str(row['ID']).strip() if pd.notna(row['ID']) else ''
         status_sendas = str(row['Status']).strip() if pd.notna(row['Status']) else ''
         obs_criacao = str(row['Obs. Criação']).strip() if pd.notna(row['Obs. Criação']) else ''
+        # Normalizar Obs. Criação: remover "- " do início que o portal Sendas adiciona
+        obs_criacao_normalizado = obs_criacao.lstrip('- ').strip() if obs_criacao else ''
         data_efetiva = row.get('Data Efetiva')
         data_hora_sugerida = row.get('Data/Hora Sugerida:')
 
@@ -379,20 +386,20 @@ class VerificacaoSendasService:
                 resultado['documento_origem'] = fila_item.documento_origem
 
         # A.1 - Não encontrando, procurar o protocolo através de "Obs. Criação"
-        if not protocolo_encontrado and obs_criacao:
-            fila_item = FilaAgendamentoSendas.query.filter_by(protocolo=obs_criacao).first()
+        if not protocolo_encontrado and obs_criacao_normalizado:
+            fila_item = FilaAgendamentoSendas.query.filter_by(protocolo=obs_criacao_normalizado).first()
             if fila_item:
-                protocolo_encontrado = obs_criacao
-                resultado['protocolo_nosso'] = obs_criacao
+                protocolo_encontrado = obs_criacao_normalizado
+                resultado['protocolo_nosso'] = obs_criacao_normalizado
                 resultado['tipo_origem'] = fila_item.tipo_origem
                 resultado['documento_origem'] = fila_item.documento_origem
 
                 # A.1.1 - Encontrando em "Obs. Criação", gravar o ID no campo de protocolo
-                if id_sendas and id_sendas != obs_criacao:
+                if id_sendas and id_sendas != obs_criacao_normalizado:
                     # Atualizar protocolo para o ID real do Sendas
-                    self._atualizar_protocolo_real(obs_criacao, id_sendas, fila_item.tipo_origem)
+                    self._atualizar_protocolo_real(obs_criacao_normalizado, id_sendas, fila_item.tipo_origem)
                     resultado['atualizado'] = True
-                    resultado['mensagem'] = f'Protocolo atualizado: {obs_criacao} → {id_sendas}'
+                    resultado['mensagem'] = f'Protocolo atualizado: {obs_criacao_normalizado} → {id_sendas}'
 
         # A.1.2 - Não encontrando em "Obs. Criação"
         if not protocolo_encontrado:
