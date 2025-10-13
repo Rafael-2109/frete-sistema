@@ -12,8 +12,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnProcessarLote = document.getElementById('btnProcessarLote');
     const btnAnalisarEstoques = document.getElementById('btnAnalisarEstoques');
     const btnSugerirDatas = document.getElementById('btnSugerirDatas');
-    const btnImportarAgendamentos = document.getElementById('btnImportarAgendamentos');
-    
+    // const btnImportarAgendamentos = document.getElementById('btnImportarAgendamentos'); // ⚠️ REMOVIDO
+
     // Estado
     let cnpjsSelecionados = new Set();
     let dadosRuptura = {};
@@ -45,12 +45,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnProcessarLote) {
             btnProcessarLote.addEventListener('click', handleProcessarLote);
         }
-        
-        if (btnImportarAgendamentos) {
-            btnImportarAgendamentos.addEventListener('click', handleImportarAgendamentos);
-            console.log('Botão importar agendamentos configurado');
-        }
-        
+
+        // ⚠️ REMOVIDO: btnImportarAgendamentos não existe mais
+        // if (btnImportarAgendamentos) {
+        //     btnImportarAgendamentos.addEventListener('click', handleImportarAgendamentos);
+        //     console.log('Botão importar agendamentos configurado');
+        // }
+
         // Checkboxes
         if (checkTodos) {
             checkTodos.addEventListener('change', handleCheckTodos);
@@ -1592,7 +1593,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ====== IMPORTAÇÃO DE AGENDAMENTOS ASSAI ======
-    
+    // ⚠️ REMOVIDO: Funcionalidade não é mais utilizada
+
+    /*
     // Handler para abrir modal de importação
     function handleImportarAgendamentos() {
         console.log('Abrindo modal de importação de agendamentos...');
@@ -1804,4 +1807,5 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+    */
 });

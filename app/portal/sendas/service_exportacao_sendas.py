@@ -103,7 +103,7 @@ class ExportacaoSendasService:
                 ).all()
 
             if not itens_fila:
-                return False, "Nenhum item pendente encontrado para exportação", None
+                return False, "Nenhum item pendente encontrado para exportação", None # type: ignore
 
             logger.info(f"Encontrados {len(itens_fila)} itens na fila para exportar")
 
@@ -141,7 +141,7 @@ class ExportacaoSendasService:
 
                 if not planilha_existe:
                     logger.error(f"Filial {filial_sendas} não tem dados na planilha modelo")
-                    return False, f"ERRO: Filial {filial_sendas} não tem dados cadastrados na planilha modelo Sendas. Por favor, solicite ao suporte o cadastro desta filial.", None
+                    return False, f"ERRO: Filial {filial_sendas} não tem dados cadastrados na planilha modelo Sendas. Por favor, solicite ao suporte o cadastro desta filial.", None # type: ignore
 
                 # ✅ CORREÇÃO: Processar cada item DO PROTOCOLO ATUAL
                 for item_fila in itens_protocolo:  # ✅ USAR itens_protocolo, não itens_fila!
@@ -164,7 +164,7 @@ class ExportacaoSendasService:
 
                         if not planilha_item:
                             logger.error(f"ERRO CRÍTICO: Nenhum item encontrado para filial {filial_sendas}")
-                            return False, f"ERRO: Filial {filial_sendas} não tem dados na planilha modelo", None
+                            return False, f"ERRO: Filial {filial_sendas} não tem dados na planilha modelo", None # type: ignore
 
                     # ✅ Criar linha usando dados da FILA (que já tem valores da planilha)
                     linha = {
@@ -183,7 +183,7 @@ class ExportacaoSendasService:
                         'Código Produto SKU Fornecedor': planilha_item_especifico.codigo_produto_sku_fornecedor if planilha_item_especifico and planilha_item_especifico.codigo_produto_sku_fornecedor and str(planilha_item_especifico.codigo_produto_sku_fornecedor).lower() != 'nan' else '',
                         'EAN': planilha_item_especifico.ean if planilha_item_especifico and planilha_item_especifico.ean and str(planilha_item_especifico.ean).lower() != 'nan' else '',
                         'Setor': planilha_item.setor if planilha_item.setor and str(planilha_item.setor).lower() != 'nan' else '',
-                        'Número do pedido Trizy': planilha_item_especifico.numero_pedido_trizy if planilha_item_especifico and planilha_item_especifico.numero_pedido_trizy and str(planilha_item_especifico.numero_pedido_trizy).lower() != 'nan' else '',
+                        # 'Número do pedido Trizy': planilha_item_especifico.numero_pedido_trizy if planilha_item_especifico and planilha_item_especifico.numero_pedido_trizy and str(planilha_item_especifico.numero_pedido_trizy).lower() != 'nan' else '',  # ⚠️ COMENTADO: Coluna não existe mais no layout do Sendas
                         'Descrição do Item': planilha_item_especifico.descricao_item if planilha_item_especifico and planilha_item_especifico.descricao_item and str(planilha_item_especifico.descricao_item).lower() != 'nan' else '',
                         'Quantidade total': float(planilha_item_especifico.quantidade_total or 0) if planilha_item_especifico and planilha_item_especifico.quantidade_total else 0,
                         'Saldo disponível': float(planilha_item_especifico.saldo_disponivel or 0) if planilha_item_especifico and planilha_item_especifico.saldo_disponivel else 0,
@@ -240,7 +240,7 @@ class ExportacaoSendasService:
                 'Código Produto SKU Fornecedor',
                 'EAN',
                 'Setor',
-                'Número do pedido Trizy',
+                # 'Número do pedido Trizy',  # ⚠️ COMENTADO: Coluna não existe mais no layout do Sendas
                 'Descrição do Item',
                 'Quantidade total',
                 'Saldo disponível',
@@ -311,7 +311,7 @@ class ExportacaoSendasService:
         except Exception as e:
             logger.error(f"Erro ao exportar planilha: {e}")
             db.session.rollback()
-            return False, f"Erro ao exportar: {str(e)}", None
+            return False, f"Erro ao exportar: {str(e)}", None # type: ignore
 
     def listar_exportacoes_disponiveis(self) -> List[Dict]:
         """

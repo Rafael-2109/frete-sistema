@@ -194,7 +194,8 @@ class ComparacaoSendasService:
                 'itens_nao_encontrados': len(produtos_nao_encontrados),
                 'itens': itens_resultado,
                 'alternativas_filial': alternativas_filial,
-                'pode_agendar_todos': True  # Sendas sempre permite agendamento
+                'pode_agendar_todos': True,  # Sendas sempre permite agendamento
+                'todos_tem_match_100': todos_tem_match  # Flag para auto-confirmação: True se TODOS os itens têm match exato
             }
 
         return resultados_por_cnpj

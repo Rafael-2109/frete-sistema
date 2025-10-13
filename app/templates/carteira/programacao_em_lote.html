@@ -62,21 +62,35 @@
         </div>
         <div>
             {% if rede == 'sendas' %}
-            <button class="btn btn-dark me-2" id="btnImportarAgendamentos">
-                <i class="fas fa-file-excel"></i> Importar Agendamentos Assai
-            </button>
-            <button class="btn btn-warning me-2" onclick="abrirModalImportarPlanilhaSendas()">
-                <i class="fas fa-file-import"></i> Importar Saldo Disp. Sendas
-            </button>
-            <button class="btn btn-success me-2" onclick="solicitarAgendamentoSendasLote()">
-                <i class="fas fa-calendar-check"></i> Solicitar Agendamento Sendas
-            </button>
-            <a href="/portal/sendas/exportacao" class="btn btn-info me-2" target="_blank">
-                <i class="fas fa-file-export"></i> Exportar Planilhas Sendas
-            </a>
-            <a href="/portal/sendas/verificacao" class="btn btn-success me-2" target="_blank">
-                <i class="fas fa-check-circle"></i> Verificar Agendamentos Sendas
-            </a>
+            <!-- Dropdown Agendamentos Sendas -->
+            <div class="btn-group me-2" role="group">
+                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-calendar-alt"></i> Agendamentos Sendas
+                </button>
+                <ul class="dropdown-menu">
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="abrirModalImportarPlanilhaSendas(); return false;">
+                            <i class="fas fa-file-import text-warning"></i> Importar Planilha Modelo
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="solicitarAgendamentoSendasLote(); return false;">
+                            <i class="fas fa-paper-plane text-success"></i> Solicitar Agendamento
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="/portal/sendas/exportacao" target="_blank">
+                            <i class="fas fa-file-export text-info"></i> Exportar Planilha Preenchida
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="/portal/sendas/verificacao" target="_blank">
+                            <i class="fas fa-check-circle text-success"></i> Importar Agendamentos
+                        </a>
+                    </li>
+                </ul>
+            </div>
             {% endif %}
             <button class="btn btn-info me-2" id="btnAnalisarEstoques">
                 <i class="fas fa-chart-line"></i> Analisar Estoques
@@ -416,122 +430,6 @@
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de Importação de Agendamentos Assai -->
-<div class="modal fade" id="modalImportarAgendamentos" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-file-excel"></i> Importar Agendamentos Assai
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Instruções -->
-                <div class="alert alert-info">
-                    <h6 class="alert-heading"><i class="fas fa-info-circle"></i> Formato do arquivo Excel:</h6>
-                    <ul class="mb-0">
-                        <li><strong>ID</strong> - Número do protocolo de agendamento</li>
-                        <li><strong>Status</strong> - "Aprovada" ou "Pendente"</li>
-                        <li><strong>CNPJ Terminal</strong> - CNPJ numérico sem formatação</li>
-                        <li><strong>Data Efetiva</strong> - Data/hora do agendamento (formato: DD/MM/AAAA HH:MM:SS)</li>
-                        <li><strong>Unidade Destino</strong> - Nome da filial (opcional)</li>
-                    </ul>
-                </div>
-                
-                <!-- Upload de arquivo -->
-                <div class="mb-3">
-                    <label class="form-label"><strong>Selecione o arquivo Excel:</strong></label>
-                    <input type="file" class="form-control" id="fileImportarAgendamentos" accept=".xlsx,.xls">
-                    <div class="form-text">Formatos aceitos: .xlsx, .xls</div>
-                </div>
-                
-                <!-- Área de progresso (inicialmente oculta) -->
-                <div id="progressoImportacao" class="d-none">
-                    <div class="progress mb-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%">
-                            Processando...
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Área de resultado (inicialmente oculta) -->
-                <div id="resultadoImportacao" class="d-none">
-                    <!-- Resumo -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="fas fa-chart-bar"></i> Resumo da Importação</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row text-center">
-                                <div class="col">
-                                    <div class="h5 mb-0 text-primary" id="totalProcessados">0</div>
-                                    <small class="text-muted">Processados</small>
-                                </div>
-                                <div class="col">
-                                    <div class="h5 mb-0 text-success" id="totalCriados">0</div>
-                                    <small class="text-muted">Criados</small>
-                                </div>
-                                <div class="col">
-                                    <div class="h5 mb-0 text-info" id="totalAtualizados">0</div>
-                                    <small class="text-muted">Atualizados</small>
-                                </div>
-                                <div class="col">
-                                    <div class="h5 mb-0 text-warning" id="totalNaoEncontrados">0</div>
-                                    <small class="text-muted">Não Encontrados</small>
-                                </div>
-                                <div class="col">
-                                    <div class="h5 mb-0 text-danger" id="totalErros">0</div>
-                                    <small class="text-muted">Erros</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- CNPJs não encontrados -->
-                    <div id="areaNaoEncontrados" class="card mb-3 d-none">
-                        <div class="card-header bg-warning text-dark">
-                            <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> CNPJs Não Encontrados no Sistema</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>CNPJ</th>
-                                            <th>Protocolo</th>
-                                            <th>Unidade</th>
-                                            <th>Status</th>
-                                            <th>Data</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tabelaNaoEncontrados"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Erros -->
-                    <div id="areaErros" class="card d-none">
-                        <div class="card-header bg-danger text-white">
-                            <h6 class="mb-0"><i class="fas fa-times-circle"></i> Erros Encontrados</h6>
-                        </div>
-                        <div class="card-body">
-                            <ul id="listaErros" class="mb-0" style="max-height: 150px; overflow-y: auto;"></ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-dark" id="btnConfirmarImportacao">
-                    <i class="fas fa-upload"></i> Importar
-                </button>
             </div>
         </div>
     </div>
@@ -1089,6 +987,26 @@
         // Mostrar botão de confirmar se tem pelo menos 1 item para agendar
         if (resultado.pode_agendar_todos) {
             document.getElementById('btn-confirmar-individual').style.display = 'inline-block';
+        }
+
+        // 🎯 AUTO-CONFIRMAÇÃO: Se todos os itens têm match 100%, confirmar automaticamente
+        if (resultado.todos_tem_match_100) {
+            console.log('✅ 100% de match detectado! Confirmando automaticamente...');
+
+            // Mostrar notificação ao usuário
+            const notificacao = document.createElement('div');
+            notificacao.className = 'alert alert-success alert-dismissible fade show mt-3';
+            notificacao.innerHTML = `
+                <strong><i class="fas fa-check-circle"></i> 100% de Match!</strong><br>
+                Todos os produtos foram encontrados na planilha. Confirmando agendamento automaticamente em 2 segundos...
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.insertBefore(notificacao, container.firstChild);
+
+            // Confirmar automaticamente após 2 segundos para dar tempo do usuário ver
+            setTimeout(() => {
+                confirmarCNPJIndividual();
+            }, 2000);
         }
     }
 

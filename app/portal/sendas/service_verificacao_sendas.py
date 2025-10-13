@@ -8,7 +8,7 @@ from app import db
 from app.portal.models_fila_sendas import FilaAgendamentoSendas
 from datetime import datetime, date, timedelta
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Dict, List
 import logging
 from io import BytesIO
 
@@ -343,133 +343,6 @@ class VerificacaoSendasService:
 
         return resultado
 
-    def _OLD_processar_linha_verificacao(self, row: pd.Series, numero_linha: int) -> Dict:
-        """
-        OBSOLETO - Mantido temporariamente para referência
-        Processa uma linha da planilha de verificação
-        """
-        # Extrair dados da linha
-        id_sendas = str(row['ID']).strip() if pd.notna(row['ID']) else ''
-        status_sendas = str(row['Status']).strip() if pd.notna(row['Status']) else ''
-        obs_criacao = str(row['Obs. Criação']).strip() if pd.notna(row['Obs. Criação']) else ''
-        # Normalizar Obs. Criação: remover "- " do início que o portal Sendas adiciona
-        obs_criacao_normalizado = obs_criacao.lstrip('- ').strip() if obs_criacao else ''
-        data_efetiva = row.get('Data Efetiva')
-        data_hora_sugerida = row.get('Data/Hora Sugerida:')
-
-        resultado = {
-            'linha': numero_linha,
-            'id_sendas': id_sendas,
-            'status_sendas': status_sendas,
-            'protocolo_nosso': '',
-            'encontrado': False,
-            'atualizado': False,
-            'confirmado': False,
-            'divergencia': False,
-            'erro': None,
-            'mensagem': '',
-            'tipo_origem': None,
-            'documento_origem': None
-        }
-
-        # A - Procurar o "ID" através do protocolo
-        protocolo_encontrado = None
-
-        # Tentar encontrar pelo ID primeiro
-        if id_sendas:
-            # Buscar em FilaAgendamentoSendas onde protocolo = ID
-            fila_item = FilaAgendamentoSendas.query.filter_by(protocolo=id_sendas).first()
-            if fila_item:
-                protocolo_encontrado = id_sendas
-                resultado['protocolo_nosso'] = id_sendas
-                resultado['tipo_origem'] = fila_item.tipo_origem
-                resultado['documento_origem'] = fila_item.documento_origem
-
-        # A.1 - Não encontrando, procurar o protocolo através de "Obs. Criação"
-        if not protocolo_encontrado and obs_criacao_normalizado:
-            fila_item = FilaAgendamentoSendas.query.filter_by(protocolo=obs_criacao_normalizado).first()
-            if fila_item:
-                protocolo_encontrado = obs_criacao_normalizado
-                resultado['protocolo_nosso'] = obs_criacao_normalizado
-                resultado['tipo_origem'] = fila_item.tipo_origem
-                resultado['documento_origem'] = fila_item.documento_origem
-
-                # A.1.1 - Encontrando em "Obs. Criação", gravar o ID no campo de protocolo
-                if id_sendas and id_sendas != obs_criacao_normalizado:
-                    # Atualizar protocolo para o ID real do Sendas
-                    self._atualizar_protocolo_real(obs_criacao_normalizado, id_sendas, fila_item.tipo_origem)
-                    resultado['atualizado'] = True
-                    resultado['mensagem'] = f'Protocolo atualizado: {obs_criacao_normalizado} → {id_sendas}'
-
-        # A.1.2 - Não encontrando em "Obs. Criação"
-        if not protocolo_encontrado:
-            resultado['encontrado'] = False
-            resultado['mensagem'] = 'Agendamento não encontrado no sistema'
-            return resultado
-
-        # Se chegou aqui, encontrou o protocolo
-        resultado['encontrado'] = True
-
-        # A.2 - Encontrando, deverá procurar em "Data Efetiva"
-        if pd.notna(data_efetiva):
-            # A.2.1 - Caso encontre Data Efetiva, gravar e confirmar agendamento
-            try:
-                data_agendamento = self._extrair_data(data_efetiva)
-
-                # Atualizar baseado no tipo de origem
-                if fila_item.tipo_origem in ['lote', 'separacao']:
-                    # Fluxos 1 e 2 - Atualizar Separacao
-                    self._confirmar_agendamento_separacao(
-                        protocolo_encontrado,
-                        data_agendamento,
-                        fila_item.cnpj
-                    )
-                    resultado['confirmado'] = True
-                    resultado['data_confirmada'] = data_agendamento.strftime('%d/%m/%Y')
-                    resultado['mensagem'] = f'Agendamento confirmado para {data_agendamento}'
-
-                elif fila_item.tipo_origem == 'nf':
-                    # Fluxo 3 - Atualizar AgendamentoEntrega
-                    self._confirmar_agendamento_entrega(
-                        protocolo_encontrado,
-                        data_agendamento
-                    )
-                    resultado['confirmado'] = True
-                    resultado['data_confirmada'] = data_agendamento.strftime('%d/%m/%Y')
-                    resultado['mensagem'] = f'Agendamento de NF confirmado para {data_agendamento}'
-
-            except Exception as e:
-                resultado['erro'] = f'Erro ao processar Data Efetiva: {e}'
-
-        else:
-            # A.2.2 - Caso não encontre Data Efetiva, verificar Data/Hora Sugerida
-            if pd.notna(data_hora_sugerida):
-                try:
-                    # Data/Hora Sugerida = data que NÓS solicitamos ao Sendas
-                    data_que_solicitamos = self._extrair_data(data_hora_sugerida)
-
-                    # Buscar data que está registrada em nosso sistema
-                    data_registrada_sistema = self._buscar_data_registrada(
-                        protocolo_encontrado,
-                        fila_item.tipo_origem
-                    )
-
-                    # Verificar se há divergência entre o que solicitamos e o que está registrado
-                    if data_registrada_sistema and data_que_solicitamos != data_registrada_sistema:
-                        resultado['divergencia'] = True
-                        resultado['mensagem'] = f'Data solicitada ao Sendas ({data_que_solicitamos}) diverge da registrada no sistema ({data_registrada_sistema})'
-                        # Adicionar campos para exibição no frontend
-                        resultado['data_sugerida'] = data_que_solicitamos.strftime('%d/%m/%Y')  # Data que solicitamos ao Sendas
-                        resultado['data_solicitada'] = data_registrada_sistema.strftime('%d/%m/%Y')  # Data registrada em nosso sistema
-                    else:
-                        resultado['mensagem'] = 'Agendamento pendente, aguardando confirmação do Sendas'
-
-                except Exception as e:
-                    resultado['erro'] = f'Erro ao processar Data/Hora Sugerida: {e}'
-            else:
-                resultado['mensagem'] = 'Agendamento sem data de confirmação'
-
-        return resultado
 
     def _extrair_data(self, valor_data) -> date:
         """
@@ -570,35 +443,6 @@ class VerificacaoSendasService:
 
         logger.info(f"Confirmados {len(agendamentos)} agendamentos de entrega com protocolo {protocolo}")
 
-    def _buscar_data_registrada(self, protocolo: str, tipo_origem: str) -> Optional[date]:
-        """
-        Busca a data de agendamento registrada em nosso sistema
-        Retorna a data que está gravada localmente para comparação
-        """
-        from app.separacao.models import Separacao
-        from app.monitoramento.models import AgendamentoEntrega
-
-        # Primeiro tentar buscar na FilaAgendamentoSendas
-        fila_item = FilaAgendamentoSendas.query.filter_by(protocolo=protocolo).first()
-        if fila_item and fila_item.data_agendamento:
-            return fila_item.data_agendamento
-
-        # Se não encontrou na fila, buscar no local específico do tipo
-        if tipo_origem in ['lote', 'separacao']:
-            # Buscar em Separacao (apenas não faturados)
-            separacao = Separacao.query.filter_by(
-                protocolo=protocolo,
-                sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
-            ).first()
-            if separacao and separacao.agendamento:
-                return separacao.agendamento
-        elif tipo_origem == 'nf':
-            # Buscar em AgendamentoEntrega
-            agendamento = AgendamentoEntrega.query.filter_by(protocolo_agendamento=protocolo).first()
-            if agendamento and agendamento.data_agendada:
-                return agendamento.data_agendada
-
-        return None
 
     def _subtrair_dia_util(self, data: date) -> date:
         """
