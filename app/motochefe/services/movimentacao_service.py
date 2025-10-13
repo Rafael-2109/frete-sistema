@@ -272,6 +272,17 @@ def registrar_pagamento_frete_embarque(embarque, valor_pago, empresa_pagadora, u
     Returns:
         MovimentacaoFinanceira criada
     """
+    # ✅ Buscar primeiro pedido do embarque para rastreabilidade
+    primeiro_ep = embarque.pedidos_rel.first()
+    pedido_id = primeiro_ep.pedido_id if primeiro_ep else None
+    numero_chassi = None
+
+    # Se o pedido tem itens, pegar primeiro chassi para referência
+    if primeiro_ep and primeiro_ep.pedido:
+        primeiro_item = primeiro_ep.pedido.itens.first() if hasattr(primeiro_ep.pedido, 'itens') else None
+        if primeiro_item:
+            numero_chassi = primeiro_item.numero_chassi
+
     movimentacao = MovimentacaoFinanceira(
         tipo='PAGAMENTO',
         categoria='Frete Embarque',
@@ -283,6 +294,8 @@ def registrar_pagamento_frete_embarque(embarque, valor_pago, empresa_pagadora, u
         destino_tipo='Transportadora',
         destino_identificacao=embarque.transportadora.transportadora if embarque.transportadora else 'Sem Transportadora',
 
+        pedido_id=pedido_id,  # ✅ ASSOCIAR ao primeiro pedido do embarque
+        numero_chassi=numero_chassi,  # ✅ Opcional: primeiro chassi para referência
         embarque_moto_id=embarque.id,
 
         descricao=f'Pagamento Frete Embarque #{embarque.numero_embarque} - {embarque.transportadora.transportadora if embarque.transportadora else "Sem Transp"}',

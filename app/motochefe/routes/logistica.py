@@ -32,7 +32,7 @@ def gerar_numero_embarque():
         numero = int(numero_str)
         proximo = numero + 1
         return f'EMB-{proximo:03d}'
-    except:
+    except (ValueError, AttributeError):
         return 'EMB-001'
 
 
@@ -110,14 +110,45 @@ def editar_embarque(id):
 
     if request.method == 'POST':
         try:
+            import json
+
+            # ✅ VALIDAÇÃO 1: Embarque DEVE ter pelo menos 1 pedido
+            if embarque.pedidos_rel.count() == 0:
+                raise Exception('Embarque deve ter pelo menos 1 pedido associado antes de salvar')
+
             embarque.transportadora_id = int(request.form.get('transportadora_id'))
             embarque.data_embarque = datetime.strptime(request.form.get('data_embarque'), '%Y-%m-%d').date()
             embarque.data_entrega_prevista = datetime.strptime(request.form.get('data_entrega_prevista'), '%Y-%m-%d').date() if request.form.get('data_entrega_prevista') else None
             embarque.valor_frete_contratado = Decimal(request.form.get('valor_frete_contratado'))
             embarque.tipo_veiculo = request.form.get('tipo_veiculo')
-            embarque.status = request.form.get('status')
             embarque.observacoes = request.form.get('observacoes')
+
+            # ✅ AUDITORIA 2: Registrar mudança de status
+            novo_status = request.form.get('status')
+            if novo_status != embarque.status:
+                # Carregar histórico existente
+                historico = []
+                if embarque.historico_status:
+                    try:
+                        historico = json.loads(embarque.historico_status)
+                    except:
+                        historico = []
+
+                # Adicionar nova entrada
+                historico.append({
+                    'data': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'de': embarque.status,
+                    'para': novo_status,
+                    'usuario': current_user.nome
+                })
+
+                embarque.historico_status = json.dumps(historico, ensure_ascii=False)
+                embarque.status = novo_status
+
             embarque.atualizado_por = current_user.nome
+
+            # ✅ VALIDAÇÃO 3: Recalcular saldo
+            embarque.valor_frete_saldo = embarque.valor_frete_contratado - (embarque.valor_frete_pago or Decimal('0'))
 
             db.session.commit()
             flash('Embarque atualizado com sucesso!', 'success')
@@ -275,17 +306,74 @@ def marcar_pedido_enviado(id, ep_id):
 @login_required
 @requer_motochefe
 def pagar_frete_embarque(id):
-    """Registra pagamento do frete (modal)"""
+    """Registra pagamento do frete (modal) - REFATORADO"""
+    from app.motochefe.models.cadastro import EmpresaVendaMoto
+    from app.motochefe.services.movimentacao_service import registrar_pagamento_frete_embarque
+    from app.motochefe.services.empresa_service import atualizar_saldo
+
     embarque = EmbarqueMoto.query.get_or_404(id)
 
     try:
-        embarque.valor_frete_pago = Decimal(request.form.get('valor_frete_pago'))
-        embarque.data_pagamento_frete = datetime.strptime(request.form.get('data_pagamento_frete'), '%Y-%m-%d').date()
-        embarque.status_pagamento_frete = 'PAGO'
+        # ✅ VALIDAÇÃO 1: Embarque DEVE ter pedidos
+        if embarque.pedidos_rel.count() == 0:
+            raise Exception('Embarque sem pedidos não pode ter frete pago')
+
+        valor_pago = Decimal(request.form.get('valor_frete_pago'))
+        data_pag = datetime.strptime(request.form.get('data_pagamento_frete'), '%Y-%m-%d').date()
+        empresa_pagadora_id = request.form.get('empresa_pagadora_id')
+
+        if not empresa_pagadora_id:
+            raise Exception('Selecione a empresa pagadora')
+
+        empresa_pagadora = EmpresaVendaMoto.query.get_or_404(int(empresa_pagadora_id))
+
+        # ✅ VALIDAÇÃO 2: Determinar status baseado no valor pago
+        valor_ja_pago = embarque.valor_frete_pago or Decimal('0')
+        valor_total_pago = valor_ja_pago + valor_pago
+
+        if valor_total_pago < embarque.valor_frete_contratado:
+            # Pagamento PARCIAL
+            novo_status = 'PARCIAL'
+            saldo_restante = embarque.valor_frete_contratado - valor_total_pago
+            msg_extra = f' | Saldo devedor: R$ {saldo_restante:,.2f}'
+        elif valor_total_pago == embarque.valor_frete_contratado:
+            # Pagamento TOTAL
+            novo_status = 'PAGO'
+            saldo_restante = Decimal('0')
+            msg_extra = ' | Frete quitado!'
+        else:
+            # Pagamento MAIOR que contratado
+            novo_status = 'PAGO'
+            saldo_restante = Decimal('0')
+            msg_extra = f' | ATENÇÃO: Pago a mais! Contratado: R$ {embarque.valor_frete_contratado:,.2f}'
+
+        # Atualizar embarque
+        embarque.valor_frete_pago = valor_total_pago
+        embarque.valor_frete_saldo = saldo_restante
+        embarque.data_pagamento_frete = data_pag
+        embarque.status_pagamento_frete = novo_status
+        embarque.empresa_pagadora_id = empresa_pagadora.id
         embarque.atualizado_por = current_user.nome
 
+        # ✅ CRIAR MOVIMENTAÇÃO FINANCEIRA com pedido_id
+        # Buscar primeiro pedido do embarque
+        primeiro_ep = embarque.pedidos_rel.first()
+        if not primeiro_ep:
+            raise Exception('Erro: Embarque sem pedidos associados')
+
+        # Registrar movimentação
+        registrar_pagamento_frete_embarque(
+            embarque=embarque,
+            valor_pago=valor_pago,
+            empresa_pagadora=empresa_pagadora,
+            usuario=current_user.nome
+        )
+
+        # Atualizar saldo da empresa
+        atualizar_saldo(empresa_pagadora.id, valor_pago, 'SUBTRAIR')
+
         db.session.commit()
-        flash('Frete pago com sucesso!', 'success')
+        flash(f'Frete pago: R$ {valor_pago:,.2f}{msg_extra}', 'success')
 
     except Exception as e:
         db.session.rollback()
