@@ -117,6 +117,8 @@ class ExportacaoSendasService:
             # 3. Processar cada protocolo
             linhas_exportacao = []
             numero_demanda = 1  # Começa em 1 e incrementa POR PROTOCOLO
+            filiais_puladas = []  # ✅ Rastrear filiais que foram puladas
+            protocolos_processados = []  # ✅ Rastrear protocolos que foram exportados
 
             for protocolo_atual, itens_protocolo in itens_por_protocolo.items():
                 logger.info(f"Processando protocolo {protocolo_atual} com {len(itens_protocolo)} itens")
@@ -131,17 +133,30 @@ class ExportacaoSendasService:
                 # 2. Converter CNPJ para filial Sendas
                 filial_sendas = FilialDeParaSendas.cnpj_to_filial(cnpj)
                 if not filial_sendas:
-                    logger.error(f"CNPJ {cnpj} não encontrado no DE-PARA de filiais")
-                    continue  # Pular este protocolo e continuar com os outros
+                    logger.warning(f"⚠️ CNPJ {cnpj} não encontrado no DE-PARA de filiais - PULANDO")
+                    filiais_puladas.append({
+                        'cnpj': cnpj,
+                        'protocolo': protocolo_atual,
+                        'motivo': 'CNPJ não encontrado no DE-PARA de filiais',
+                        'total_itens': len(itens_protocolo)
+                    })
+                    continue  # ✅ Pular e manter status='pendente'
 
-                # ✅ VALIDAÇÃO ANTECIPADA: Verificar se a filial TEM dados na planilha modelo
+                # ✅ VALIDAÇÃO: Verificar se a filial TEM dados na planilha modelo
                 planilha_existe = PlanilhaModeloSendas.query.filter_by(
                     unidade_destino=filial_sendas
                 ).first()
 
                 if not planilha_existe:
-                    logger.error(f"Filial {filial_sendas} não tem dados na planilha modelo")
-                    return False, f"ERRO: Filial {filial_sendas} não tem dados cadastrados na planilha modelo Sendas. Por favor, solicite ao suporte o cadastro desta filial.", None # type: ignore
+                    logger.warning(f"⚠️ Filial {filial_sendas} (CNPJ {cnpj}) não tem dados na planilha modelo - PULANDO")
+                    filiais_puladas.append({
+                        'cnpj': cnpj,
+                        'filial': filial_sendas,
+                        'protocolo': protocolo_atual,
+                        'motivo': 'Filial não cadastrada na planilha modelo Sendas',
+                        'total_itens': len(itens_protocolo)
+                    })
+                    continue  # ✅ Pular e manter status='pendente'
 
                 # ✅ CORREÇÃO: Processar cada item DO PROTOCOLO ATUAL
                 for item_fila in itens_protocolo:  # ✅ USAR itens_protocolo, não itens_fila!
@@ -218,11 +233,22 @@ class ExportacaoSendasService:
                 for i in range(inicio_protocolo, len(linhas_exportacao)):
                     linhas_exportacao[i]['Característica do veículo'] = veiculo_protocolo
 
+                # ✅ MARCAR protocolo como processado com sucesso
+                protocolos_processados.append(protocolo_atual)
+                logger.info(f"✅ Protocolo {protocolo_atual} exportado com sucesso")
+
                 # ✅ INCREMENTAR DEMANDA APENAS APÓS PROCESSAR TODOS OS ITENS DO PROTOCOLO
                 numero_demanda += 1
 
+            # ✅ VERIFICAÇÃO: Se não exportou NADA, verificar o motivo
             if not linhas_exportacao:
-                return False, "Nenhuma linha encontrada na planilha modelo para exportar", None # type: ignore
+                if filiais_puladas:
+                    # Todas as filiais foram puladas
+                    motivos_str = "\n".join([f"- CNPJ {fp['cnpj']}: {fp['motivo']}" for fp in filiais_puladas])
+                    mensagem_erro = f"⚠️ NENHUMA filial foi exportada. Todas foram puladas:\n{motivos_str}\n\nOs itens permaneceram como 'pendente' e podem ser exportados após corrigir os problemas."
+                    return False, mensagem_erro, None # type: ignore
+                else:
+                    return False, "Nenhuma linha encontrada na planilha modelo para exportar", None # type: ignore
 
             # 5. Criar DataFrame e exportar para Excel
             df = pd.DataFrame(linhas_exportacao)
@@ -295,16 +321,35 @@ class ExportacaoSendasService:
             output.seek(0)
             arquivo_bytes = output.read()
 
-            # 6. Marcar TODOS os itens como processados
+            # 6. ✅ CORREÇÃO: Marcar apenas os itens de protocolos EXPORTADOS como processados
+            itens_marcados = 0
             for item_fila in itens_fila:
-                item_fila.status = 'processado'  # ✅ Mudando para 'processado' após exportação
-                item_fila.processado_em = datetime.now()  # Usar datetime.now() ao invés de utcnow()
+                if item_fila.protocolo in protocolos_processados:
+                    item_fila.status = 'processado'
+                    item_fila.processado_em = datetime.now()
+                    itens_marcados += 1
+                # Se protocolo NÃO está em protocolos_processados, mantém status='pendente'
             db.session.commit()
 
             # Mensagem detalhada sobre a exportação
-            num_protocolos = len(itens_por_protocolo)
-            mensagem = f"Planilha exportada com {len(linhas_exportacao)} linhas de {num_protocolos} protocolo(s)"
+            num_protocolos_exportados = len(protocolos_processados)
+            num_protocolos_total = len(itens_por_protocolo)
+            num_filiais_puladas = len(filiais_puladas)
+
+            mensagem_partes = []
+            mensagem_partes.append(f"Planilha exportada com {len(linhas_exportacao)} linhas de {num_protocolos_exportados} protocolo(s)")
+
+            if num_filiais_puladas > 0:
+                mensagem_partes.append(f"⚠️ {num_filiais_puladas} filial(is) pulada(s) - mantidas como pendentes")
+
+            mensagem = " | ".join(mensagem_partes)
             logger.info(mensagem)
+
+            # Log detalhado das filiais puladas
+            if filiais_puladas:
+                logger.warning(f"Filiais puladas (mantidas pendentes):")
+                for fp in filiais_puladas:
+                    logger.warning(f"  - CNPJ: {fp['cnpj']}, Protocolo: {fp['protocolo']}, Motivo: {fp['motivo']}, Itens: {fp['total_itens']}")
 
             return True, mensagem, arquivo_bytes
 

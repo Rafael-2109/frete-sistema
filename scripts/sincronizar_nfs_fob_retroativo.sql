@@ -84,6 +84,25 @@ WHERE rfi.incoterm ILIKE '%FOB%'
   )
 ORDER BY rfi.data_fatura DESC;
 
+SELECT
+    em.numero_nf,
+    em.cliente,
+    em.data_faturamento,
+    em.data_embarque,
+    em.data_hora_entrega_realizada,
+    em.entregue,
+    em.status_finalizacao,
+    em.transportadora,
+    em.separacao_lote_id
+FROM entregas_monitoradas em
+WHERE status_finalizacao is NULL
+    AND EXISTS (
+        SELECT 1
+        FROM relatorio_faturamento_importado rfi
+        WHERE rfi.numero_nf = em.numero_nf
+        AND rfi.ativo = TRUE
+        AND rfi.incoterm ILIKE '%FOB%'
+    );
 -- ============================================================================
 -- ETAPA 2: INSERIR EntregaMonitorada para NFs FOB
 -- ============================================================================
@@ -144,9 +163,9 @@ SELECT DISTINCT
         WHEN e.data_embarque IS NOT NULL THEN TRUE
         ELSE FALSE
     END AS entregue,
-    -- ✅ Status de finalização: 'Entregue' se embarcado, NULL se não
+    -- ✅ Status de finalização para FOB
     CASE
-        WHEN e.data_embarque IS NOT NULL THEN 'Entregue'
+        WHEN e.data_embarque IS NOT NULL THEN 'FOB - Embarcado no CD'
         ELSE NULL
     END AS status_finalizacao,
     -- ✅ Transportadora (se houver)

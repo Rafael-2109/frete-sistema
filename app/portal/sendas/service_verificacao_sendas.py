@@ -184,6 +184,7 @@ class VerificacaoSendasService:
                 })
 
         # 2. Buscar em AgendamentoEntrega (status != 'confirmado')
+        # ✅ FILTRO: Excluir NFs com status_finalizacao='Entregue'
         from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
         agendamentos = db.session.query(
             AgendamentoEntrega.protocolo_agendamento,
@@ -198,7 +199,8 @@ class VerificacaoSendasService:
         ).filter(
             AgendamentoEntrega.protocolo_agendamento.isnot(None),
             AgendamentoEntrega.protocolo_agendamento != '',
-            AgendamentoEntrega.status != 'confirmado'
+            AgendamentoEntrega.status != 'confirmado',
+            EntregaMonitorada.status_finalizacao != 'Entregue'  # ✅ EXCLUIR entregas finalizadas
         ).all()
 
         for agend in agendamentos:

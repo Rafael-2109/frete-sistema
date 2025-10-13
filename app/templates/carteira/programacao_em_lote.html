@@ -1081,9 +1081,44 @@
         });
     }
 
-    // Pular CNPJ atual
-    function pularCNPJAtual() {
+    // Pular CNPJ atual - DELETAR separações criadas
+    async function pularCNPJAtual() {
         const modal = document.getElementById('modalComparacaoCNPJIndividual');
+        const dadosCnpj = modal.dadosCnpj;
+
+        // Buscar protocolo que foi gerado na preparação
+        const protocolo = dadosCnpj.pedidos && dadosCnpj.pedidos.length > 0
+            ? dadosCnpj.pedidos[0].protocolo
+            : null;
+
+        console.log(`Pulando CNPJ ${dadosCnpj.cnpj}, protocolo: ${protocolo}`);
+
+        // Chamar endpoint para deletar separações
+        try {
+            const response = await fetch('/portal/sendas/solicitar/lote/cancelar-cnpj', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    cnpj: dadosCnpj.cnpj,
+                    protocolo: protocolo
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.sucesso) {
+                console.log(`✅ ${result.total_deletado} separações deletadas para CNPJ ${dadosCnpj.cnpj}`);
+            } else {
+                console.warn(`⚠️ Erro ao deletar separações: ${result.erro}`);
+            }
+        } catch (error) {
+            console.error('Erro ao cancelar CNPJ:', error);
+        }
+
+        // Fechar modal e avançar
         const bsModal = bootstrap.Modal.getInstance(modal);
         bsModal.hide();
 

@@ -504,14 +504,12 @@ def processar_fila():
             integracao.job_id = job.id
             db.session.commit()
 
-            # Marcar itens da fila como processados
-            for chave, grupo in grupos.items():
-                FilaAgendamentoSendas.marcar_processados(
-                    grupo['cnpj'],
-                    grupo['data_agendamento']
-                )
+            # ❌ REMOVIDO: NÃO marcar como processado aqui!
+            # Quem deve marcar como processado é APENAS a exportação da planilha
+            # Este endpoint apenas cria o job de integração, mas os itens ficam pendentes
+            # até que o usuário baixe a planilha via exportar_planilha()
 
-            logger.info(f"✅ Fila processada - Job {job.id} criado com {len(dados_para_processar)} grupos")
+            logger.info(f"✅ Fila processada - Job {job.id} criado com {len(dados_para_processar)} grupos (itens permanecem pendentes até exportação)")
 
             return jsonify({
                 'success': True,

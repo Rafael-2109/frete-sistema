@@ -449,7 +449,7 @@ class ComparacaoSendasService:
             logger.error(f"Erro ao buscar CNPJ no backend para pedido {num_pedido}: {e}")
             return None
 
-    def gravar_fila_agendamento(self, itens_confirmados, tipo_origem, documento_origem):
+    def gravar_fila_agendamento(self, itens_confirmados, tipo_origem, documento_origem, protocolo_existente=None):
         """
         Grava os itens confirmados em FilaAgendamentoSendas com protocolo correto por fluxo
 
@@ -457,6 +457,7 @@ class ComparacaoSendasService:
             itens_confirmados: Lista de itens que o usuário confirmou para agendar
             tipo_origem: 'lote', 'separacao' ou 'nf'
             documento_origem: Identificador da origem (separacao_lote_id, numero_nf, etc)
+            protocolo_existente: Protocolo já gerado anteriormente (evita gerar novo)
 
         Returns:
             dict: Resultado com protocolos gerados conforme regras:
@@ -478,12 +479,17 @@ class ComparacaoSendasService:
                     cnpj_backend = self._buscar_cnpj_backend(item.get('num_pedido'))
                     cnpj = cnpj_backend if cnpj_backend else item['cnpj']  # Usar backend ou fallback para frontend
 
-                    # Gerar protocolo por CNPJ se ainda não existe
+                    # ✅ CRÍTICO: Usar protocolo existente se fornecido, senão gerar novo
                     if cnpj not in protocolos_por_cnpj:
-                        protocolos_por_cnpj[cnpj] = gerar_protocolo_sendas(
-                            cnpj,
-                            item['data_agendamento']
-                        )
+                        if protocolo_existente:
+                            protocolos_por_cnpj[cnpj] = protocolo_existente
+                            logger.info(f"✅ Usando protocolo existente para CNPJ {cnpj}: {protocolo_existente}")
+                        else:
+                            protocolos_por_cnpj[cnpj] = gerar_protocolo_sendas(
+                                cnpj,
+                                item['data_agendamento']
+                            )
+                            logger.info(f"⚠️ Gerando NOVO protocolo para CNPJ {cnpj}: {protocolos_por_cnpj[cnpj]}")
 
                     protocolo = protocolos_por_cnpj[cnpj]
 

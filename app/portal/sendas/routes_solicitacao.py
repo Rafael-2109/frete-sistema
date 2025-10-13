@@ -142,7 +142,7 @@ def preparar_lote_sendas():
                 protocolo=protocolo  # ✅ ADICIONADO para filtrar apenas as deste agendamento
             )
 
-            # 4. ✅ CORREÇÃO: Converter para formato esperado incluindo separacao_lote_id
+            # 4. ✅ CORREÇÃO: Converter para formato esperado incluindo separacao_lote_id E protocolo
             for item in dados['itens']:
                 resultado['solicitacoes'].append({
                     'cnpj': cnpj,
@@ -152,6 +152,7 @@ def preparar_lote_sendas():
                     'quantidade': item['quantidade'],
                     'num_pedido': item.get('num_pedido'),
                     'separacao_lote_id': item.get('separacao_lote_id'),  # ✅ ADICIONADO
+                    'protocolo': protocolo,  # ✅ CRÍTICO: Passar protocolo para frontend
                     'data_agendamento': str(data_agendamento),
                     'data_expedicao': str(data_expedicao)  # ✅ ADICIONADO
                 })
@@ -195,6 +196,76 @@ def comparar_lote():
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
 
+@bp_solicitacao_sendas.route('/solicitar/lote/cancelar-cnpj', methods=['POST'])
+@login_required
+def cancelar_cnpj_lote():
+    """
+    Cancela/pula um CNPJ removendo separações criadas automaticamente
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'cnpj' not in data:
+            return jsonify({'sucesso': False, 'erro': 'CNPJ é obrigatório'}), 400
+
+        cnpj = data['cnpj']
+        protocolo = data.get('protocolo')  # Protocolo que foi gerado na preparação
+
+        logger.info(f"Cancelando agendamento para CNPJ {cnpj}, protocolo: {protocolo}")
+
+        # Deletar separações criadas automaticamente com este protocolo
+        if protocolo:
+            # Buscar separações com este protocolo
+            separacoes = Separacao.query.filter_by(
+                cnpj_cpf=cnpj,
+                protocolo=protocolo,
+                status='PREVISAO'  # Apenas previsões criadas automaticamente
+            ).all()
+
+            logger.info(f"Encontradas {len(separacoes)} separações para deletar")
+
+            for sep in separacoes:
+                db.session.delete(sep)
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'{len(separacoes)} separações deletadas para CNPJ {cnpj}',
+                'total_deletado': len(separacoes)
+            })
+        else:
+            # Se não tem protocolo, buscar separações recentes sem protocolo confirmado
+            # (criadas nos últimos 5 minutos para segurança)
+            from datetime import timedelta
+            cinco_min_atras = datetime.now() - timedelta(minutes=5)
+
+            separacoes = Separacao.query.filter(
+                Separacao.cnpj_cpf == cnpj,
+                Separacao.status == 'PREVISAO',
+                Separacao.agendamento_confirmado == False,
+                Separacao.criado_em >= cinco_min_atras
+            ).all()
+
+            logger.info(f"Encontradas {len(separacoes)} separações recentes para deletar")
+
+            for sep in separacoes:
+                db.session.delete(sep)
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'{len(separacoes)} separações deletadas para CNPJ {cnpj}',
+                'total_deletado': len(separacoes)
+            })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao cancelar CNPJ: {e}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
 @bp_solicitacao_sendas.route('/solicitar/lote/confirmar', methods=['POST'])
 @login_required
 def confirmar_lote():
@@ -235,11 +306,15 @@ def confirmar_lote():
                 logger.warning(f"Filial {filial_sendas} não tem dados na planilha modelo, pulando CNPJ {cnpj}...")
                 continue
 
-            # Gravar na fila (1 protocolo por CNPJ)
+            # ✅ CRÍTICO: Usar protocolo que veio do frontend (gerado em preparar_lote_sendas)
+            protocolo_do_frontend = itens[0].get('protocolo') if itens else None
+
+            # Gravar na fila usando o protocolo que já existe
             resultado = comparacao_service.gravar_fila_agendamento(
                 itens_confirmados=itens,
                 tipo_origem='lote',
-                documento_origem=cnpj
+                documento_origem=cnpj,
+                protocolo_existente=protocolo_do_frontend  # ✅ Passar protocolo existente
             )
 
             if resultado['sucesso']:
@@ -280,6 +355,7 @@ def confirmar_lote():
 
 
 
+        # ✅ CORREÇÃO: Commit APÓS gravar_fila_agendamento (que adiciona FilaAgendamentoSendas)
         db.session.commit()
 
         return jsonify({
