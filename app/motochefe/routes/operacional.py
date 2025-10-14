@@ -193,20 +193,24 @@ def pagar_despesa(id):
         if not empresa_pagadora:
             raise Exception('Empresa pagadora não encontrada')
 
+        # Converter valor_pago para Decimal
+        valor_pago_decimal = Decimal(valor_pago)
+
         # 1. REGISTRAR MOVIMENTAÇÃO
         from app.motochefe.services.movimentacao_service import registrar_pagamento_despesa_mensal
         movimentacao = registrar_pagamento_despesa_mensal(
             despesa,
+            valor_pago_decimal,  # ✅ CORRIGIDO: Passar valor_pago para o service
             empresa_pagadora,
             current_user.nome
         )
 
         # 2. ATUALIZAR SALDO DA EMPRESA
         from app.motochefe.services.empresa_service import atualizar_saldo
-        atualizar_saldo(empresa_pagadora.id, Decimal(valor_pago), 'SUBTRAIR')
+        atualizar_saldo(empresa_pagadora.id, valor_pago_decimal, 'SUBTRAIR')
 
-        # 3. ATUALIZAR DESPESA
-        despesa.valor_pago = Decimal(valor_pago)
+        # 3. ATUALIZAR DESPESA (soma valor_pago ao total já pago)
+        despesa.valor_pago = (despesa.valor_pago or Decimal('0')) + valor_pago_decimal
         despesa.data_pagamento = data_pagamento
         despesa.empresa_pagadora_id = empresa_pagadora.id
         # Status será atualizado automaticamente baseado no saldo via property status_dinamico
