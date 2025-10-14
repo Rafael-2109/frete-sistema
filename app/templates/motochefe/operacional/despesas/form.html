@@ -30,6 +30,8 @@
                             <option value="IMPOSTOS" {% if despesa and despesa.tipo_despesa == 'IMPOSTOS' %}selected{% endif %}>Impostos</option>
                             <option value="MANUTENCAO" {% if despesa and despesa.tipo_despesa == 'MANUTENCAO' %}selected{% endif %}>Manutenção</option>
                             <option value="DIVERSOS" {% if despesa and despesa.tipo_despesa == 'DIVERSOS' %}selected{% endif %}>Diversos</option>
+                            <option value="DESCARGA" {% if despesa and despesa.tipo_despesa == 'DESCARGA' %}selected{% endif %}>Descarga</option>
+                            <option value="FRETE COMPRA" {% if despesa and despesa.tipo_despesa == 'FRETE COMPRA' %}selected{% endif %}>Frete Compra</option>
                             <option value="OUTROS" {% if despesa and despesa.tipo_despesa == 'OUTROS' %}selected{% endif %}>Outros</option>
                         </select>
                     </div>

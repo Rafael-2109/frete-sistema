@@ -639,29 +639,15 @@ async function buscarProximoNumero() {
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Status:</label>
-                                <select id="filtro_status_form" class="form-select form-select-sm">
-                                    <option value="">Todos</option>
-                                    <option value="DISPONIVEL" selected>Disponível</option>
-                                    <option value="RESERVADA">Reservada</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
+                            <div class="col-md-6">
                                 <label class="form-label">Modelo:</label>
                                 <select id="filtro_modelo_form" class="form-select form-select-sm">
                                     <option value="">Todos</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-6">
                                 <label class="form-label">Cor:</label>
                                 <select id="filtro_cor_form" class="form-select form-select-sm">
-                                    <option value="">Todas</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Potência:</label>
-                                <select id="filtro_potencia_form" class="form-select form-select-sm">
                                     <option value="">Todas</option>
                                 </select>
                             </div>
@@ -709,10 +695,8 @@ async function buscarProximoNumero() {
     const mensagemVazio = document.getElementById('mensagem_vazio_form');
 
     // Elementos de filtro
-    const filtroStatus = document.getElementById('filtro_status_form');
     const filtroModelo = document.getElementById('filtro_modelo_form');
     const filtroCor = document.getElementById('filtro_cor_form');
-    const filtroPotencia = document.getElementById('filtro_potencia_form');
 
     // Carregar ao abrir modal
     modal.addEventListener('show.bs.modal', function() {
@@ -721,7 +705,7 @@ async function buscarProximoNumero() {
     });
 
     // Aplicar filtros em tempo real
-    [filtroStatus, filtroModelo, filtroCor, filtroPotencia].forEach(elem => {
+    [filtroModelo, filtroCor].forEach(elem => {
         if (elem) elem.addEventListener('change', carregarDados);
     });
 
@@ -739,11 +723,6 @@ async function buscarProximoNumero() {
                 data.cores.forEach(cor => {
                     filtroCor.innerHTML += `<option value="${cor}">${cor}</option>`;
                 });
-
-                filtroPotencia.innerHTML = '<option value="">Todas</option>';
-                data.potencias.forEach(pot => {
-                    filtroPotencia.innerHTML += `<option value="${pot}">${pot}</option>`;
-                });
             })
             .catch(err => console.error('Erro ao carregar opções:', err));
     }
@@ -757,10 +736,10 @@ async function buscarProximoNumero() {
         const params = new URLSearchParams({
             autopropelido_sim: 'true',
             autopropelido_nao: 'true',
-            status: filtroStatus.value,
+            status: 'DISPONIVEL',  // Fixo: apenas disponíveis
             modelo: filtroModelo.value,
             cor: filtroCor.value,
-            potencia: filtroPotencia.value
+            potencia: ''  // Sem filtro de potência
         });
 
         fetch(`{{ url_for('motochefe.api_motos_agrupamento') }}?${params}`)
@@ -813,48 +792,23 @@ async function buscarProximoNumero() {
         accordionContainer.innerHTML = html;
     }
 
-    // Renderizar Cores
+    // Renderizar Cores (SEM accordion de potência)
     function renderizarCores(cores, parentId) {
-        let html = '<div class="accordion" id="accordion_' + parentId + '">';
+        let html = '<ul class="list-group">';
 
-        cores.forEach((cor, idxCor) => {
-            const corId = `${parentId}_cor_${idxCor}`;
-
+        cores.forEach((cor) => {
             html += `
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${corId}">
-                            <i class="fas fa-square" style="color:${getCorHex(cor.cor)}"></i>
-                            <strong class="ms-2">${cor.cor}</strong>
-                            <span class="badge bg-secondary ms-2">${cor.quantidade} motos</span>
-                        </button>
-                    </h2>
-                    <div id="${corId}" class="accordion-collapse collapse">
-                        <div class="accordion-body">
-                            <ul class="list-group">
-            `;
-
-            cor.potencias.forEach(pot => {
-                html += `
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <strong>${pot.potencia}</strong>
-                        <span class="badge bg-info">${pot.quantidade} motos</span>
-                        <button class="btn btn-sm btn-outline-primary" onclick="mostrarMotosForm(${JSON.stringify(pot.motos).replace(/"/g, '&quot;')}, '${pot.potencia}', '${cor.cor}')">
-                            <i class="fas fa-eye"></i> Ver Chassi
-                        </button>
-                    </li>
-                `;
-            });
-
-            html += `
-                            </ul>
-                        </div>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-square" style="color:${getCorHex(cor.cor)}"></i>
+                        <strong class="ms-2">${cor.cor}</strong>
                     </div>
-                </div>
+                    <span class="badge bg-secondary">${cor.quantidade} motos</span>
+                </li>
             `;
         });
 
-        html += '</div>';
+        html += '</ul>';
         return html;
     }
 
@@ -876,70 +830,6 @@ async function buscarProximoNumero() {
     function formatarValorBR(valor) {
         return parseFloat(valor).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&.').replace('.', ',');
     }
-
-    window.mostrarMotosForm = function(motos, potencia, cor) {
-        let html = `
-            <div class="modal fade" id="modalListaMotosForm" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
-                            <h5 class="modal-title">
-                                <i class="fas fa-motorcycle"></i> Lista de Motos - ${cor} ${potencia}
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Chassi</th>
-                                        <th>Motor</th>
-                                        <th>Ano</th>
-                                        <th>NF</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-        `;
-
-        motos.forEach(moto => {
-            const statusClass = moto.status === 'DISPONIVEL' ? 'success' : moto.status === 'RESERVADA' ? 'warning' : 'danger';
-
-            html += `
-                <tr>
-                    <td><code>${moto.chassi}</code></td>
-                    <td><code>${moto.motor}</code></td>
-                    <td>${moto.ano || '-'}</td>
-                    <td>${moto.nf}</td>
-                    <td><span class="badge bg-${statusClass}">${moto.status}</span></td>
-                </tr>
-            `;
-        });
-
-        html += `
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        const oldModal = document.getElementById('modalListaMotosForm');
-        if (oldModal) oldModal.remove();
-
-        document.body.insertAdjacentHTML('beforeend', html);
-
-        const modalInstance = new bootstrap.Modal(document.getElementById('modalListaMotosForm'));
-        modalInstance.show();
-
-        document.getElementById('modalListaMotosForm').addEventListener('hidden.bs.modal', function() {
-            this.remove();
-        });
-    };
 })();
 </script>
 {% endblock %}

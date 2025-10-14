@@ -116,6 +116,27 @@
             gap: 8px;
         }
 
+        /* Grid customizado para linha CNPJ/Cliente (30% + 70%) */
+        .info-grid-cnpj-cliente {
+            display: grid;
+            grid-template-columns: 30% 70%;
+            gap: 8px;
+        }
+
+        /* Grid customizado para linha Vendedor/Equipe/Status (35% + 35% + 30%) */
+        .info-grid-vendedor {
+            display: grid;
+            grid-template-columns: 35% 35% 30%;
+            gap: 8px;
+        }
+
+        /* Grid customizado para linha Tipo Frete/Telefone/Data Entrega (3 colunas) */
+        .info-grid-logistica {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
         .info-item {
             display: flex;
             flex-direction: column;
@@ -314,7 +335,9 @@
         <!-- Dados da Venda (com Cliente + CNPJ) -->
         <div class="secao">
             <div class="secao-titulo">DADOS DA VENDA</div>
-            <div class="info-grid">
+
+            <!-- Linha CNPJ (30%) + Cliente (70%) -->
+            <div class="info-grid-cnpj-cliente">
                 <div class="info-item">
                     <span class="info-label">CNPJ/CPF</span>
                     <span class="info-value">{{ pedido.cliente.cnpj_cliente if pedido.cliente else '-' }}</span>
@@ -323,6 +346,10 @@
                     <span class="info-label">Cliente</span>
                     <span class="info-value">{{ pedido.cliente.cliente if pedido.cliente else '-' }}</span>
                 </div>
+            </div>
+
+            <!-- Linha Vendedor (35%) + Equipe (35%) + Status (30%) -->
+            <div class="info-grid-vendedor" style="margin-top: 8px;">
                 <div class="info-item">
                     <span class="info-label">Vendedor</span>
                     <span class="info-value">{{ pedido.vendedor.vendedor if pedido.vendedor else '-' }}</span>
@@ -330,10 +357,6 @@
                 <div class="info-item">
                     <span class="info-label">Equipe</span>
                     <span class="info-value">{{ pedido.equipe.equipe_vendas if pedido.equipe else '-' }}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Data de Entrega</span>
-                    <span class="info-value">{{ pedido.data_expedicao.strftime('%d/%m/%Y') if pedido.data_expedicao else '-' }}</span>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Status</span>
@@ -354,11 +377,9 @@
         <!-- Dados de Logística (com Endereço + Telefone) -->
         <div class="secao">
             <div class="secao-titulo">DADOS DE LOGÍSTICA</div>
-            <div class="info-grid">
-                <div class="info-item">
-                    <span class="info-label">Transportadora</span>
-                    <span class="info-value">{{ pedido.transportadora.transportadora if pedido.transportadora else '-' }}</span>
-                </div>
+
+            <!-- Linha: Tipo Frete + Telefone + Data Entrega (33% cada) -->
+            <div class="info-grid-logistica">
                 <div class="info-item">
                     <span class="info-label">Tipo de Frete</span>
                     <span class="info-value">{{ pedido.tipo_frete or '-' }}</span>
@@ -367,7 +388,15 @@
                     <span class="info-label">Telefone</span>
                     <span class="info-value">{{ pedido.cliente.telefone_cliente if pedido.cliente and pedido.cliente.telefone_cliente else '-' }}</span>
                 </div>
-                <div class="info-item full-width">
+                <div class="info-item">
+                    <span class="info-label">Data de Entrega</span>
+                    <span class="info-value">{{ pedido.data_expedicao.strftime('%d/%m/%Y') if pedido.data_expedicao else '-' }}</span>
+                </div>
+            </div>
+
+            <!-- Linha: Endereço (100%) -->
+            <div style="margin-top: 8px;">
+                <div class="info-item">
                     <span class="info-label">Endereço de Entrega</span>
                     <span class="info-value">
                         {% if pedido.cliente %}
@@ -393,10 +422,10 @@
             <table class="tabela-itens">
                 <thead>
                     <tr>
-                        <th>#</th>
                         <th>Modelo</th>
                         <th>Cor</th>
                         <th>Chassi</th>
+                        <th class="text-center">Montagem</th>
                         <th class="text-center">Pallet</th>
                         <th class="text-right">Valor</th>
                     </tr>
@@ -404,10 +433,16 @@
                 <tbody>
                     {% for item in pedido.itens.all() %}
                     <tr>
-                        <td>{{ loop.index }}</td>
                         <td>{{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '-' }}</td>
                         <td>{{ item.moto.cor if item.moto else '-' }}</td>
                         <td style="font-family: 'Courier New', monospace; font-size: 11pt; font-weight: 600; letter-spacing: 0.5px;">{{ item.numero_chassi }}</td>
+                        <td class="text-center">
+                            {% if item.montagem_contratada %}
+                                <span style="background: #333; color: white; padding: 2px 6px; border-radius: 3px; font-size: 8pt; font-weight: bold;">✓ MONTADA</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
                         <td class="text-center">
                             {% if item.moto and item.moto.pallet %}
                                 {{ item.moto.pallet }}
@@ -425,12 +460,8 @@
 
             <!-- Totais -->
             <div class="totais">
-                <div class="totais-item">
-                    <span class="totais-label">Quantidade de Motos:</span>
-                    <span class="totais-valor">{{ pedido.quantidade_motos }} un</span>
-                </div>
                 <div class="totais-item total-geral">
-                    <span class="totais-label">VALOR TOTAL:</span>
+                    <span class="totais-label">Total {{ pedido.quantidade_motos }} Motos</span>
                     <span class="totais-valor">R$ {{ "%.2f"|format(pedido.valor_total_pedido) }}</span>
                 </div>
             </div>
@@ -448,22 +479,18 @@
         {% if pedido.faturado %}
         <div class="secao">
             <div class="secao-titulo">DADOS DE FATURAMENTO</div>
-            <div class="info-grid">
+            <div class="info-grid-logistica">
                 <div class="info-item">
                     <span class="info-label">Nota Fiscal</span>
                     <span class="info-value">{{ pedido.numero_nf or '-' }}</span>
                 </div>
                 <div class="info-item">
+                    <span class="info-label">NF Imp.</span>
+                    <span class="info-value">{{ pedido.numero_nf_importada or '-' }}</span>
+                </div>
+                <div class="info-item">
                     <span class="info-label">Data da NF</span>
                     <span class="info-value">{{ pedido.data_nf.strftime('%d/%m/%Y') if pedido.data_nf else '-' }}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Tipo de NF</span>
-                    <span class="info-value">{{ pedido.tipo_nf or '-' }}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Empresa Emissora</span>
-                    <span class="info-value">{{ pedido.empresa_venda.empresa if pedido.empresa_venda else '-' }}</span>
                 </div>
             </div>
         </div>

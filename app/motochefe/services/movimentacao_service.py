@@ -224,12 +224,13 @@ def obter_extrato(data_inicial, data_final, empresa_id=None):
     ).all()
 
 
-def registrar_pagamento_despesa_mensal(despesa, empresa_pagadora, usuario=None):
+def registrar_pagamento_despesa_mensal(despesa, valor_pago, empresa_pagadora, usuario=None):
     """
-    Registra pagamento de despesa mensal
+    Registra pagamento de despesa mensal (permite pagamento parcial)
 
     Args:
         despesa: DespesaMensal
+        valor_pago: Decimal - Valor efetivamente pago (pode ser parcial)
         empresa_pagadora: EmpresaVendaMoto
         usuario: str
 
@@ -239,7 +240,7 @@ def registrar_pagamento_despesa_mensal(despesa, empresa_pagadora, usuario=None):
     movimentacao = MovimentacaoFinanceira(
         tipo='PAGAMENTO',
         categoria='Despesa',
-        valor=despesa.valor,
+        valor=valor_pago,  # ✅ CORRIGIDO: Usar valor_pago em vez de despesa.valor
         data_movimentacao=despesa.data_pagamento or date.today(),
 
         empresa_origem_id=empresa_pagadora.id,

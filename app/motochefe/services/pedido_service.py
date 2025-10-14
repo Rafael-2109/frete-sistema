@@ -135,13 +135,23 @@ def criar_pedido_completo(dados_pedido, itens_json):
             moto.status = 'RESERVADA'
             moto.reservado = True
 
-    # 3. GERAR TÍTULOS COM FIFO ENTRE PARCELAS
+    # 3. GERAR TÍTULOS COM FIFO ENTRE PARCELAS E CALCULAR VENCIMENTOS
+    from datetime import timedelta
+
     parcelas_config = dados_pedido.get('parcelas', [])
     titulos_financeiros_criados = gerar_titulos_com_fifo_parcelas(
         pedido,
         itens_criados,
         parcelas_config
     )
+
+    # ✅ CALCULAR data_vencimento JÁ NA CRIAÇÃO DO PEDIDO
+    # data_vencimento = data_expedicao + prazo_dias
+    data_base = pedido.data_expedicao or pedido.data_pedido
+
+    for titulo in titulos_financeiros_criados:
+        if titulo.prazo_dias is not None:
+            titulo.data_vencimento = data_base + timedelta(days=titulo.prazo_dias)
 
     # 4. CRIAR TÍTULOS A PAGAR (PENDENTES)
     # Obter equipe para buscar custo real de movimentação
@@ -215,23 +225,12 @@ def faturar_pedido_completo(pedido, empresa_id, numero_nf, data_nf, numero_nf_im
     for item in pedido.itens:
         item.moto.status = 'VENDIDA'
 
-    # Atualizar títulos: calcular data_vencimento
-    # NOTA: Títulos já são criados com status='ABERTO' desde a criação do pedido
-    # Aqui apenas calculamos data_vencimento = data_expedicao (ou data_nf) + prazo_dias
-    titulos_atualizados = []
-    data_base = pedido.data_expedicao or data_nf
-
-    for titulo in pedido.titulos:
-        if titulo.prazo_dias is not None:
-            titulo.data_vencimento = data_base + timedelta(days=titulo.prazo_dias)
-        # Linha abaixo é redundante mas mantida por segurança (já criado como ABERTO)
-        titulo.status = 'ABERTO'
-        titulos_atualizados.append(titulo)
+    # ✅ data_vencimento JÁ FOI CALCULADA na criação do pedido
+    # Não há necessidade de recalcular aqui
 
     db.session.flush()
 
     return {
         'pedido': pedido,
-        'titulos_atualizados': titulos_atualizados,
-        'total_titulos': len(titulos_atualizados)
+        'total_titulos': len(pedido.titulos.all())
     }

@@ -145,25 +145,6 @@
             vertical-align: top;
         }
 
-        /* Linha de observação (abaixo da moto) */
-        .observacao-row {
-            background-color: #fffbea !important;
-            border-left: 3px solid #ff9800;
-        }
-
-        .observacao-row td {
-            padding: 10px;
-            font-size: 9pt;
-            color: #555;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .observacao-label {
-            font-weight: bold;
-            color: #ff9800;
-        }
-
         /* Totais */
         .totals {
             font-weight: bold;
@@ -246,14 +227,6 @@
                     <td>{{ moto.nf_entrada }}</td>
                     <td>{{ moto.fornecedor }}</td>
                 </tr>
-                <!-- Linha de observação (se houver) -->
-                {% if moto.observacao_impressao %}
-                <tr class="observacao-row">
-                    <td colspan="7">
-                        <span class="observacao-label">📝 Observação:</span> {{ moto.observacao_impressao }}
-                    </td>
-                </tr>
-                {% endif %}
                 {% endfor %}
             </tbody>
             <tfoot>

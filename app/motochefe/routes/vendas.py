@@ -346,7 +346,6 @@ def faturar_pedido(id):
         return redirect(url_for('motochefe.listar_pedidos'))
 
     try:
-        empresa_id = request.form.get('empresa_venda_id')
         numero_nf = request.form.get('numero_nf')
         numero_nf_importada = request.form.get('numero_nf_importada')
         data_nf = request.form.get('data_nf')
@@ -355,8 +354,8 @@ def faturar_pedido(id):
         if not (numero_nf or numero_nf_importada):
             raise Exception('Informe pelo menos uma NF (Normal ou Importada)')
 
-        if not all([empresa_id, data_nf]):
-            raise Exception('Empresa e Data NF são obrigatórios')
+        if not data_nf:
+            raise Exception('Data NF é obrigatória')
 
         # Converter data
         data_nf_obj = datetime.strptime(data_nf, '%Y-%m-%d').date()
@@ -365,10 +364,10 @@ def faturar_pedido(id):
         pedido.atualizado_por = current_user.nome
 
         # FATURAR PEDIDO (novo sistema)
-        # Atualiza: Pedido + Motos + Calcula data_vencimento dos títulos
+        # Atualiza: Pedido + Motos (vencimentos já calculados na criação)
         resultado = faturar_pedido_completo(
             pedido=pedido,
-            empresa_id=int(empresa_id),
+            empresa_id=None,  # Não exigir empresa
             numero_nf=numero_nf if numero_nf else None,
             data_nf=data_nf_obj,
             numero_nf_importada=numero_nf_importada if numero_nf_importada else None
