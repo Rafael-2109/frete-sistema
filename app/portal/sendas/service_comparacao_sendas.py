@@ -202,12 +202,16 @@ class ComparacaoSendasService:
 
     def _converter_cnpj_para_filial(self, cnpj, pedido_cliente=None):
         """Converte CNPJ para código de filial usando DE-PARA com fallback por números"""
+        logger.info(f"🔍 _converter_cnpj_para_filial: CNPJ={cnpj}, pedido_cliente={pedido_cliente}")
+
         if cnpj in self.filiais_cache:
+            logger.info(f"   ✅ CNPJ encontrado no cache: {self.filiais_cache[cnpj]}")
             return self.filiais_cache[cnpj]
 
         # Primeiro tentar buscar qual filial está na planilha para este pedido
         filial_planilha = None
         if pedido_cliente:
+            logger.info(f"   🔍 Buscando filial na planilha para pedido_cliente: {pedido_cliente}")
             # Buscar qualquer item deste pedido na planilha para obter o nome da filial
             item_planilha = PlanilhaModeloSendas.query.filter(
                 PlanilhaModeloSendas.codigo_pedido_cliente.like(f"{pedido_cliente}-%")
@@ -215,12 +219,26 @@ class ComparacaoSendasService:
 
             if item_planilha:
                 filial_planilha = item_planilha.unidade_destino
-                logger.info(f"Filial encontrada na planilha para pedido {pedido_cliente}: {filial_planilha}")
+                logger.info(f"   ✅ Filial encontrada na planilha para pedido {pedido_cliente}: {filial_planilha}")
+            else:
+                logger.warning(f"   ⚠️ Nenhum item encontrado na planilha para pedido_cliente: {pedido_cliente}")
+        else:
+            logger.warning(f"   ⚠️ pedido_cliente é None - tentando buscar filial apenas pelo CNPJ")
 
         # Usar o método com fallback passando a filial da planilha
+        logger.info(f"   🔄 Chamando FilialDeParaSendas.cnpj_to_filial(cnpj={cnpj}, filial_planilha={filial_planilha})")
         filial = FilialDeParaSendas.cnpj_to_filial(cnpj, filial_planilha)
+
         if filial:
+            logger.info(f"   ✅ Filial encontrada: {filial}")
             self.filiais_cache[cnpj] = filial
+        else:
+            logger.error(f"   ❌ FALHA: Filial NÃO encontrada para CNPJ {cnpj}")
+            logger.error(f"      - pedido_cliente fornecido: {pedido_cliente}")
+            logger.error(f"      - filial_planilha encontrada: {filial_planilha}")
+            logger.error(f"      - Verifique se o CNPJ está cadastrado em FilialDeParaSendas")
+            logger.error(f"      - Verifique se a planilha modelo foi importada corretamente")
+
         return filial
 
     def _converter_produto_para_sendas(self, cod_produto):

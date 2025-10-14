@@ -61,7 +61,102 @@ class CarteiraService:
         # Verificar prefixos Odoo
         prefixos_odoo = ('VSC', 'VCD', 'VFB')
         return numero_pedido.startswith(prefixos_odoo)
-    
+
+    def _processar_cancelamento_pedido(self, num_pedido: str) -> bool:
+        """
+        Processa o cancelamento de um pedido de forma atômica.
+
+        Ações executadas:
+        1. Busca separações vinculadas ao pedido
+        2. Para cada separação vinculada a EmbarqueItem:
+           - Cancela o EmbarqueItem (status='cancelado')
+        3. EXCLUI todas as Separacao do pedido
+        4. EXCLUI todos os itens da CarteiraPrincipal do pedido
+        5. Remove PreSeparacaoItem se existirem
+
+        Args:
+            num_pedido: Número do pedido a ser cancelado
+
+        Returns:
+            bool: True se processamento foi bem sucedido
+        """
+        try:
+            logger.info(f"🔄 Processando cancelamento do pedido {num_pedido}")
+
+            from app.carteira.models import CarteiraPrincipal
+            from app.separacao.models import Separacao
+            from app.embarques.models import EmbarqueItem
+
+            # 1. Buscar separações do pedido
+            separacoes = Separacao.query.filter_by(num_pedido=num_pedido).all()
+
+            logger.info(f"   📦 Encontradas {len(separacoes)} separações")
+
+            # 2. Para cada separação, verificar se está em EmbarqueItem
+            embarques_cancelados = 0
+
+            for separacao in separacoes:
+                if separacao.separacao_lote_id:
+                    # Buscar EmbarqueItem vinculado
+                    embarque_itens = EmbarqueItem.query.filter_by(
+                        separacao_lote_id=separacao.separacao_lote_id
+                    ).all()
+
+                    for embarque_item in embarque_itens:
+                        # Cancelar EmbarqueItem
+                        embarque_item.status = 'cancelado'
+                        embarques_cancelados += 1
+                        logger.info(f"      🚫 EmbarqueItem cancelado: embarque_id={embarque_item.embarque_id}, "
+                                  f"lote={separacao.separacao_lote_id}")
+
+            if embarques_cancelados > 0:
+                logger.info(f"   ✅ {embarques_cancelados} itens de embarque cancelados")
+
+            # 3. EXCLUIR todas as Separacao do pedido (incluindo faturadas)
+            separacoes_excluidas = Separacao.query.filter_by(
+                num_pedido=num_pedido
+            ).delete(synchronize_session=False)
+
+            if separacoes_excluidas > 0:
+                logger.info(f"   ✅ {separacoes_excluidas} separações EXCLUÍDAS")
+
+            # 4. EXCLUIR itens da CarteiraPrincipal
+            itens_excluidos = CarteiraPrincipal.query.filter_by(
+                num_pedido=num_pedido
+            ).delete(synchronize_session=False)
+
+            if itens_excluidos > 0:
+                logger.info(f"   ✅ {itens_excluidos} itens da carteira EXCLUÍDOS")
+
+            # 5. Remover PreSeparacaoItem se existirem (modelo deprecated mas pode ter dados antigos)
+            try:
+                from app.carteira.models import PreSeparacaoItem
+                presep_removidos = PreSeparacaoItem.query.filter_by(
+                    num_pedido=num_pedido
+                ).delete(synchronize_session=False)
+
+                if presep_removidos > 0:
+                    logger.info(f"   ✅ {presep_removidos} pré-separações EXCLUÍDAS")
+            except Exception as e:
+                # Se PreSeparacaoItem não existir, ignorar
+                pass
+
+            # 6. Log de auditoria
+            logger.info(f"✅ CANCELAMENTO COMPLETO: Pedido {num_pedido} EXCLUÍDO DO SISTEMA")
+            logger.info(f"   - EmbarqueItens cancelados: {embarques_cancelados}")
+            logger.info(f"   - Separações excluídas: {separacoes_excluidas}")
+            logger.info(f"   - Itens carteira excluídos: {itens_excluidos}")
+
+            # Commit das alterações
+            db.session.commit()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar cancelamento do pedido {num_pedido}: {e}")
+            db.session.rollback()
+            return False
+
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None,
                                modo_incremental=False, minutos_janela=40):
         """
@@ -123,6 +218,7 @@ class CarteiraService:
                     logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")
                 else:
                     # Modo incremental normal: usar write_date
+                    # 🆕 INCLUIR pedidos cancelados para detectar cancelamentos
                     data_corte = agora_utc() - timedelta(minutes=minutos_janela)
                     momento_atual = agora_utc()
 
@@ -130,7 +226,7 @@ class CarteiraService:
                         '&',  # AND entre todos os filtros
                         ('order_id.write_date', '>=', data_corte.isoformat()),
                         ('order_id.write_date', '<=', momento_atual.isoformat()),
-                        ('order_id.state', 'in', ['draft', 'sent', 'sale']),
+                        ('order_id.state', 'in', ['draft', 'sent', 'sale', 'cancel']),  # 🆕 INCLUIR 'cancel'
                         '|',  # OR entre tipos de pedido
                         ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
                         ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
@@ -138,6 +234,7 @@ class CarteiraService:
                     ]
                     logger.info(f"🔄 MODO INCREMENTAL: buscando alterações dos últimos {minutos_janela} minutos")
                     logger.info(f"📅 Data corte UTC: {data_corte.isoformat()}")
+                    logger.info("   🆕 INCLUINDO pedidos cancelados para detectar cancelamentos")
             elif pedidos_na_carteira:
                 # MODO TRADICIONAL com pedidos existentes: usar filtro OR
                 domain = [
@@ -1386,21 +1483,61 @@ class CarteiraService:
                     ).all()
                     separacoes_dict = {(s.num_pedido, s.cod_produto): float(s.qtd_em_separacao or 0) for s in separacoes}
             
+            # 🆕 FASE 2.5: DETECTAR E PROCESSAR CANCELAMENTOS
+            # Antes de aplicar filtros, separar pedidos cancelados para processamento
+            logger.info("🔍 Verificando pedidos cancelados...")
+
+            pedidos_cancelados = []
+            dados_ativos = []
+
+            for item in dados_novos:
+                status = item.get('status_pedido', '').lower()
+                num_pedido = item.get('num_pedido')
+
+                if status == 'cancelado':
+                    # Verificar se existe na carteira e não está cancelado
+                    chave = (num_pedido, item.get('cod_produto'))
+                    item_existente = carteira_atual.get(chave)
+
+                    if item_existente and item_existente.get('status_pedido', '').lower() != 'cancelado':
+                        # Mudou para cancelado - processar
+                        pedidos_cancelados.append(num_pedido)
+                        logger.info(f"🚨 Pedido {num_pedido} foi CANCELADO no Odoo")
+                    # Não incluir na lista de dados ativos
+                else:
+                    dados_ativos.append(item)
+
+            # Processar cancelamentos detectados
+            if pedidos_cancelados:
+                pedidos_cancelados_unicos = set(pedidos_cancelados)
+                logger.info(f"🚨 Processando {len(pedidos_cancelados_unicos)} pedidos cancelados...")
+
+                for num_pedido in pedidos_cancelados_unicos:
+                    try:
+                        self._processar_cancelamento_pedido(num_pedido)
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao processar cancelamento do pedido {num_pedido}: {e}")
+
+                logger.info(f"✅ {len(pedidos_cancelados_unicos)} pedidos cancelados processados")
+
+            # Substituir dados_novos apenas com dados ativos
+            dados_novos = dados_ativos
+
             # Aplicar filtro de pendente e status válidos
             if usar_filtro_pendente:
                 dados_novos = [
-                    item for item in dados_novos 
+                    item for item in dados_novos
                     if float(item.get('qtd_saldo_produto_pedido', 0)) > 0
                     and item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
                 ]
             else:
                 # Mesmo sem filtro de saldo, aplicar filtro de status
                 dados_novos = [
-                    item for item in dados_novos 
+                    item for item in dados_novos
                     if item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
                 ]
-            
-            logger.info(f"✅ {len(dados_novos)} registros obtidos do Odoo")
+
+            logger.info(f"✅ {len(dados_novos)} registros ativos obtidos do Odoo")
             
             # FASE 3: CALCULAR DIFERENÇAS COM SALDOS CALCULADOS
             logger.info("🔍 Fase 3: Calculando saldos e identificando diferenças...")

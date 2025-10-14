@@ -84,6 +84,10 @@ def preparar_lote_sendas():
     Prepara dados para comparação criando separações do saldo da carteira
     e buscando todas as separações relevantes (não faturadas + NF CD)
     """
+    print("=" * 80)
+    print("🚀 preparar_lote_sendas CHAMADO!")
+    print("=" * 80)
+    logger.info("🚀 preparar_lote_sendas: INICIANDO...")
     try:
         from app.carteira.routes.programacao_em_lote.busca_dados import (
             criar_separacoes_do_saldo,
@@ -92,14 +96,21 @@ def preparar_lote_sendas():
         from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 
         data = request.get_json()
+        logger.info(f"📥 Dados recebidos do frontend: {data}")
+
         cnpjs = data.get('cnpjs', [])
+        logger.info(f"📋 CNPJs extraídos: {len(cnpjs)} itens - {cnpjs}")
 
         if not cnpjs:
+            logger.error("❌ Lista de CNPJs está vazia!")
             return jsonify({'sucesso': False, 'erro': 'Nenhum CNPJ selecionado'}), 400
 
         resultado = {'solicitacoes': []}
 
+        logger.info(f"📋 preparar_lote_sendas: Processando {len(cnpjs)} CNPJs")
+
         for cnpj_info in cnpjs:
+            logger.info(f"   🔍 Processando: {cnpj_info}")
             # ✅ CORREÇÃO: cnpj_info pode ser string ou dict com {cnpj, data_agendamento, data_expedicao}
             if isinstance(cnpj_info, str):
                 cnpj = cnpj_info
@@ -113,11 +124,24 @@ def preparar_lote_sendas():
                 data_agendamento = cnpj_info.get('data_agendamento')
                 data_expedicao = cnpj_info.get('data_expedicao')
 
-                # Converter strings para date se necessário
-                if isinstance(data_agendamento, str):
+                # Converter strings para date se necessário (validar se não está vazia)
+                if isinstance(data_agendamento, str) and data_agendamento.strip():
                     data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
-                if isinstance(data_expedicao, str):
+                else:
+                    # Se data_agendamento estiver vazia, será None (obrigatório validar depois)
+                    data_agendamento = None
+
+                if isinstance(data_expedicao, str) and data_expedicao.strip():
                     data_expedicao = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
+                else:
+                    # Se data_expedicao estiver vazia, será None
+                    data_expedicao = None
+
+            # Validar se tem datas obrigatórias
+            if not data_agendamento or not data_expedicao:
+                logger.warning(f"⚠️ CNPJ {cnpj} ignorado: falta data de agendamento ou expedição")
+                logger.warning(f"   data_agendamento={data_agendamento}, data_expedicao={data_expedicao}")
+                continue
 
             if not cnpj:
                 continue
@@ -135,12 +159,15 @@ def preparar_lote_sendas():
             )
 
             # 3. ✅ CORREÇÃO: Buscar todos os dados COM data_expedicao e protocolo
+            logger.info(f"   📊 Buscando dados completos para CNPJ {cnpj} com protocolo {protocolo}")
             dados = buscar_dados_completos_cnpj(
                 cnpj=cnpj,
                 data_agendamento=data_agendamento,
                 data_expedicao=data_expedicao,  # ✅ ADICIONADO
                 protocolo=protocolo  # ✅ ADICIONADO para filtrar apenas as deste agendamento
             )
+
+            logger.info(f"   ✅ Retornados {len(dados.get('itens', []))} itens para CNPJ {cnpj}")
 
             # 4. ✅ CORREÇÃO: Converter para formato esperado incluindo separacao_lote_id E protocolo
             for item in dados['itens']:
@@ -156,6 +183,15 @@ def preparar_lote_sendas():
                     'data_agendamento': str(data_agendamento),
                     'data_expedicao': str(data_expedicao)  # ✅ ADICIONADO
                 })
+
+        logger.info(f"📦 Total de solicitações preparadas: {len(resultado['solicitacoes'])}")
+
+        if len(resultado['solicitacoes']) == 0:
+            logger.warning("⚠️ ATENÇÃO: Nenhuma solicitação foi preparada!")
+            logger.warning("   Verifique se:")
+            logger.warning("   1. As datas de expedição e agendamento estão preenchidas")
+            logger.warning("   2. Existem pedidos/separações para os CNPJs selecionados")
+            logger.warning("   3. Os CNPJs têm saldo na CarteiraPrincipal ou Separação")
 
         return jsonify({
             'sucesso': True,

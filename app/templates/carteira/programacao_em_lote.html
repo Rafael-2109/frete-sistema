@@ -594,6 +594,8 @@
 
         // Coletar dados dos CNPJs selecionados
         const cnpjsSelecionados = [];
+        const cnpjsSemData = [];
+
         checkboxes.forEach(checkbox => {
             const row = checkbox.closest('tr');
             const cnpj = checkbox.value;
@@ -602,13 +604,53 @@
             const dataExpedicao = row.querySelector('.data-expedicao').value;
             const dataAgendamento = row.querySelector('.data-agendamento').value;
 
+            // Validar se as datas estão preenchidas
+            if (!dataExpedicao || !dataExpedicao.trim()) {
+                cnpjsSemData.push(`${razSocial} (${cnpj}) - falta Data de Expedição`);
+                return; // Pula este CNPJ
+            }
+
+            if (!dataAgendamento || !dataAgendamento.trim()) {
+                cnpjsSemData.push(`${razSocial} (${cnpj}) - falta Data de Agendamento`);
+                return; // Pula este CNPJ
+            }
+
             cnpjsSelecionados.push({
                 cnpj: cnpj,
                 cliente: razSocial,
                 cidade: cidade,
                 data_expedicao: dataExpedicao,
-                data_agendamento: dataAgendamento || getProximoDiaUtil()
+                data_agendamento: dataAgendamento
             });
+        });
+
+        // Se há CNPJs sem data, mostrar alerta
+        if (cnpjsSemData.length > 0) {
+            let mensagem = 'Os seguintes CNPJs estão sem datas preenchidas:\n\n';
+            mensagem += cnpjsSemData.join('\n');
+            mensagem += '\n\nPor favor, preencha as datas de Expedição e Agendamento antes de solicitar o agendamento.';
+            alert(mensagem);
+            return;
+        }
+
+        // Se nenhum CNPJ válido foi selecionado
+        if (cnpjsSelecionados.length === 0) {
+            alert('Nenhum CNPJ com datas válidas foi selecionado');
+            return;
+        }
+
+        // Debug: Mostrar o que será enviado
+        const dadosEnviar = {
+            cnpjs: cnpjsSelecionados.map(c => ({
+                cnpj: c.cnpj,
+                data_agendamento: c.data_agendamento,
+                data_expedicao: c.data_expedicao
+            }))
+        };
+        console.log('📤 Enviando para /portal/sendas/solicitar/lote/preparar:', dadosEnviar);
+        console.log('   Total de CNPJs:', dadosEnviar.cnpjs.length);
+        dadosEnviar.cnpjs.forEach((item, i) => {
+            console.log(`   CNPJ ${i+1}:`, item.cnpj, '- Exp:', item.data_expedicao, '- Agend:', item.data_agendamento);
         });
 
         // Primeiro preparar dados (criar separações do saldo)
@@ -633,14 +675,7 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({
-                // ✅ CORREÇÃO: Enviar datas junto com CNPJs
-                cnpjs: cnpjsSelecionados.map(c => ({
-                    cnpj: c.cnpj,
-                    data_agendamento: c.data_agendamento,
-                    data_expedicao: c.data_expedicao
-                }))
-            })
+            body: JSON.stringify(dadosEnviar)
         })
         .then(response => response.json())
         .then(response => {

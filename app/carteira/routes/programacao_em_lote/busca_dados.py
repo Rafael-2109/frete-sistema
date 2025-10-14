@@ -302,7 +302,14 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
             )
         ).all()
 
-        logger.info(f"    Encontrados {len(itens_carteira)} itens com saldo")
+        logger.info(f"    ✅ Encontrados {len(itens_carteira)} itens na CarteiraPrincipal com saldo > 0")
+
+        if len(itens_carteira) == 0:
+            logger.warning(f"    ⚠️ ATENÇÃO: Nenhum item encontrado na CarteiraPrincipal para CNPJ {cnpj}")
+            logger.warning(f"       Verifique se:")
+            logger.warning(f"       1. O CNPJ está correto: {cnpj}")
+            logger.warning(f"       2. Existem pedidos com qtd_saldo_produto_pedido > 0")
+            logger.warning(f"       3. Os itens estão com ativo=True")
 
         # Agrupar itens por num_pedido para gerar um separacao_lote_id único por pedido
         pedidos_agrupados = {}
