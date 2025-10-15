@@ -419,11 +419,38 @@
     <div class="card mb-4">
         <div class="card-header">
             <div class="row align-items-center">
-                <!-- ▸ ESQUERDA: Título -->
+                <!-- ▸ ESQUERDA: Título + Filtros Especiais -->
                 <div class="col-md-6">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-tasks"></i> Seleção de Pedidos para Cotação
-                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <h5 class="card-title mb-0 me-3">
+                            <i class="fas fa-tasks"></i> Seleção de Pedidos para Cotação
+                        </h5>
+
+                        <!-- ✅ NOVOS: Botões de filtro Ag. Pagamento e Ag. Item -->
+                        <a href="{{ filtro_url(status='ag_pagamento') }}"
+                            class="btn btn-sm
+                            {% if filtro_status_ativo == 'ag_pagamento' %}
+                                {% if contadores_status.ag_pagamento > 0 %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}
+                            {% else %}
+                                {% if contadores_status.ag_pagamento > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}"
+                            title="Pedidos aguardando pagamento antecipado">
+                            <i class="fas fa-money-bill-wave"></i> Ag. Pagamento
+                            <span class="badge bg-light text-dark">{{ contadores_status.ag_pagamento }}</span>
+                        </a>
+
+                        <a href="{{ filtro_url(status='ag_item') }}"
+                            class="btn btn-sm
+                            {% if filtro_status_ativo == 'ag_item' %}
+                                {% if contadores_status.ag_item > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
+                            {% else %}
+                                {% if contadores_status.ag_item > 0 %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}"
+                            title="Pedidos aguardando item em estoque">
+                            <i class="fas fa-exclamation-triangle"></i> Ag. Item
+                            <span class="badge bg-light text-dark">{{ contadores_status.ag_item }}</span>
+                        </a>
+                    </div>
                 </div>
                 
                 <!-- ▸ DIREITA: Filtros de Status + Contador -->
@@ -734,22 +761,25 @@
                     {% if p.status_calculado == 'NF no CD' %}
                       <i class="fas fa-undo"></i> NF no CD
                     {% elif p.status_calculado == 'FATURADO' %}
-                      <i class="fas fa-check-circle"></i> Faturado
+                      Faturado
                     {% elif p.status_calculado == 'EMBARCADO' %}
                       <i class="fas fa-truck"></i> Embarcado
                     {% elif p.status_calculado == 'COTADO' %}
-                      <i class="fas fa-calculator"></i> Cotado
+                      Cotado
                     {% else %}
-                      <i class="fas fa-clock"></i> Aberto
+                      Aberto
                     {% endif %}
                   </span>
                   {% if p.ultimo_embarque %}
-                    <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}" 
-                           class="btn btn-xs btn-outline-primary" 
-                           title="Ver embarque #{{ p.ultimo_embarque.numero }}" 
+                    <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}"
+                           class="btn btn-xs btn-outline-primary"
+                           title="Ver embarque #{{ p.ultimo_embarque.numero }}"
                            style="font-size: 0.7rem; padding: 1px 4px;">
                       <i class="fas fa-truck"></i> {{ p.ultimo_embarque.numero }}
                     </a>
+                  {% endif %}
+                  {% if p.separacao_impressa %}
+                    <br><i class="fas fa-print" style="font-size: 1.1rem; color: #000000; margin-top: 6px; display: inline-block;" title="Separação impressa"></i>
                   {% endif %}
                 </td>
                 
@@ -764,6 +794,36 @@
                 
                 <td>
                   <small>{{ p.cnpj_cpf or '' }}</small>
+                  <br>
+                  {% if p.tem_falta_item and (p.eh_pagamento_antecipado and p.tem_falta_pagamento) %}
+                    {# Ambos: vermelho #}
+                    <button type="button" class="btn btn-sm btn-danger mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-exclamation-triangle"></i> Ag. Item e Pgto.
+                    </button>
+                  {% elif p.tem_falta_item %}
+                    {# Apenas item: vermelho #}
+                    <button type="button" class="btn btn-sm btn-danger mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-exclamation-triangle"></i> Ag. Item
+                    </button>
+                  {% elif p.eh_pagamento_antecipado and p.tem_falta_pagamento %}
+                    {# Apenas pagamento: amarelo com texto preto #}
+                    <button type="button" class="btn btn-sm btn-warning text-dark mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-money-bill-wave"></i> Ag. Pagamento
+                    </button>
+                  {% else %}
+                    {# Normal: azul #}
+                    <button type="button" class="btn btn-sm btn-outline-info mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-info-circle"></i> Info Separação
+                    </button>
+                  {% endif %}
                 </td>
                 
                 <td>
@@ -772,6 +832,11 @@
                     <br><small class="text-muted" title="{{ p.observ_ped_1 }}">
                       <i class="fas fa-comment"></i> {{ p.observ_ped_1[:60] }}{% if p.observ_ped_1|length > 60 %}...{% endif %}
                     </small>
+                  {% endif %}
+                  {% if p.obs_separacao %}
+                    <br><span class="badge bg-warning text-dark" title="{{ p.obs_separacao }}" style="font-size: 0.7rem;">
+                      <i class="fas fa-sticky-note"></i> {{ p.obs_separacao[:50] }}{% if p.obs_separacao|length > 50 %}...{% endif %}
+                    </span>
                   {% endif %}
                 </td>
                 
@@ -838,22 +903,22 @@
                     <strong class="text-success">{{ p.agendamento | formatar_data_brasil }}</strong>
                     <br>
                     {% if p.agendamento_confirmado %}
-                      <button class="btn btn-sm btn-primary" 
-                              onclick="reverterConfirmacaoAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}')" 
+                      <button type="button" class="btn btn-sm btn-primary"
+                              onclick="reverterConfirmacaoAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
                               title="Clique para reverter confirmação">
                         <i class="fas fa-check-circle"></i> Confirmado
                       </button>
                     {% else %}
-                      <button class="btn btn-sm btn-warning" 
-                              onclick="confirmarAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}')" 
+                      <button type="button" class="btn btn-sm btn-warning"
+                              onclick="confirmarAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
                               title="Clique para confirmar">
                         <i class="fas fa-hourglass-half"></i> Aguardando
                       </button>
                     {% endif %}
                   {% else %}
                     <span class="text-muted">-</span>
-                    <br><button class="btn btn-sm btn-outline-secondary" 
-                            onclick="abrirEdicaoPedido('{{ p.separacao_lote_id }}')" 
+                    <br><button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="abrirEdicaoPedido('{{ p.separacao_lote_id }}'); return false;"
                             title="Editar datas e agendamento">
                       <i class="fas fa-calendar-plus"></i> Agendar
                     </button>
@@ -1018,6 +1083,325 @@
   {{ paginacao.total }}
 </div>
 {% endif %}
+
+<!-- ✅ NOVO: Modal Info Separação -->
+<div class="modal fade" id="modalInfoSeparacao" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Informações da Separação
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Informações do Pedido -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Pedido:</strong> <span id="info_num_pedido"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Lote:</strong> <span id="info_lote_id"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Cliente:</strong> <span id="info_raz_social"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>CNPJ:</strong> <span id="info_cnpj"></span>
+                    </div>
+                </div>
+
+                <!-- Status Separado -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <strong>Status da Separação:</strong>
+                        <span id="info_status_separado" class="badge"></span>
+                    </div>
+                </div>
+
+                <!-- Badge Pagamento Antecipado -->
+                <div id="badge_antecipado_container" class="mb-3" style="display: none;">
+                    <span class="badge bg-warning text-dark fs-6">
+                        <i class="fas fa-money-bill-wave"></i> Pgto. Antecipado
+                    </span>
+                </div>
+
+                <!-- Totais -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Totais da Separação</h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Valor Total:</strong><br>
+                                <span id="info_valor_total" class="fs-5"></span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Quantidade:</strong><br>
+                                <span id="info_qtd_total"></span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Peso:</strong><br>
+                                <span id="info_peso_total"></span> kg
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Pallets:</strong><br>
+                                <span id="info_pallet_total"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de Itens -->
+                <h6>Itens da Separação</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">Código</th>
+                                <th>Produto</th>
+                                <th class="text-end" style="width: 80px;">Qtd</th>
+                                <th class="text-end" style="width: 100px;">Valor</th>
+                                <th class="text-end" style="width: 80px;">Peso</th>
+                                <th class="text-end" style="width: 80px;">Pallet</th>
+                                <th class="text-center" style="width: 100px;">Falta Item</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela_itens_separacao">
+                            <!-- Preenchido dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ✅ NOVO: Campo de Observações da Separação -->
+                <div class="mt-3">
+                    <label for="obs_separacao_input" class="form-label fw-bold">
+                        <i class="fas fa-sticky-note"></i> Observações da Separação:
+                    </label>
+                    <textarea class="form-control" id="obs_separacao_input" rows="3"
+                              placeholder="Digite observações sobre esta separação (opcional)..."></textarea>
+                    <small class="text-muted">Clique em "Salvar Observações" para gravar</small>
+                </div>
+
+                <!-- Botões para Pagamento Antecipado -->
+                <div id="botoes_antecipado_container" class="mt-3" style="display: none;">
+                    <button type="button" class="btn btn-success" id="btn_pagamento_realizado">
+                        <i class="fas fa-check-circle"></i> Pagamento Realizado
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btn_imprimir_separacao">
+                        <i class="fas fa-print"></i> Imprimir Separação
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarObsSeparacao(); return false;">
+                    <i class="fas fa-save"></i> Salvar Observações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ NOVO: Modal Motivo de Exclusão -->
+<div class="modal fade" id="modalMotivoExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Cancelar Separação
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="fw-bold">Informe o motivo do cancelamento:</p>
+                <textarea class="form-control" id="input_motivo_exclusao" rows="4"
+                          placeholder="Ex: Cliente cancelou o pedido, falta de estoque, erro na separação..."
+                          required></textarea>
+                <small class="text-muted">* Campo obrigatório</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn_confirmar_exclusao">
+                    <i class="fas fa-trash"></i> Confirmar Cancelamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ Script imediato para funções dos modais (deve carregar ANTES do DOMContentLoaded) -->
+<script>
+// ✅ Funções GLOBAIS para Modal Info Separação (necessário para onclick inline)
+var loteIdAtual = null;
+var loteParaCancelar = null;
+
+function abrirModalInfoSeparacao(loteId) {
+    loteIdAtual = loteId;
+
+    // Buscar informações da separação via API
+    fetch('/pedidos/api/info_separacao/' + loteId)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                // Preencher informações básicas
+                document.getElementById('info_num_pedido').textContent = data.num_pedido;
+                document.getElementById('info_lote_id').textContent = data.lote_id;
+                document.getElementById('info_raz_social').textContent = data.raz_social_red;
+                document.getElementById('info_cnpj').textContent = data.cnpj_cpf;
+
+                // Status da separação
+                var statusBadge = document.getElementById('info_status_separado');
+                if (data.pedido_separado) {
+                    statusBadge.textContent = 'Separação Impressa';
+                    statusBadge.className = 'badge bg-success';
+                } else {
+                    statusBadge.textContent = 'Não Impressa';
+                    statusBadge.className = 'badge bg-secondary';
+                }
+
+                // Totais
+                document.getElementById('info_valor_total').textContent = data.totais.valor.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+                document.getElementById('info_qtd_total').textContent = data.totais.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('info_peso_total').textContent = data.totais.peso.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('info_pallet_total').textContent = data.totais.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+                // ✅ NOVO: Preencher observações da separação
+                document.getElementById('obs_separacao_input').value = data.obs_separacao || '';
+
+                // Verificar se é pagamento antecipado
+                var isAntecipado = data.cond_pgto && data.cond_pgto.toUpperCase().indexOf('ANTECIPADO') !== -1;
+
+                if (isAntecipado) {
+                    document.getElementById('badge_antecipado_container').style.display = 'block';
+                    document.getElementById('botoes_antecipado_container').style.display = 'block';
+
+                    var btnPagamento = document.getElementById('btn_pagamento_realizado');
+                    if (data.falta_pagamento) {
+                        btnPagamento.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Pagamento Pendente';
+                        btnPagamento.className = 'btn btn-warning';
+                    } else {
+                        btnPagamento.innerHTML = '<i class="fas fa-check-circle"></i> Pagamento Realizado';
+                        btnPagamento.className = 'btn btn-success';
+                    }
+                } else {
+                    document.getElementById('badge_antecipado_container').style.display = 'none';
+                    document.getElementById('botoes_antecipado_container').style.display = 'none';
+                }
+
+                // Preencher tabela de itens
+                var tbody = document.getElementById('tabela_itens_separacao');
+                tbody.innerHTML = '';
+
+                data.itens.forEach(function(item) {
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td><small>' + item.cod_produto + '</small></td>' +
+                        '<td><small>' + item.nome_produto + '</small></td>' +
+                        '<td class="text-end">' + item.qtd_saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
+                        '<td class="text-end">' + item.valor_saldo.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) + '</td>' +
+                        '<td class="text-end">' + item.peso.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
+                        '<td class="text-end">' + item.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
+                        '<td class="text-center">' +
+                        '<button class="btn btn-sm ' + (item.falta_item ? 'btn-danger' : 'btn-outline-secondary') + '" ' +
+                        'onclick="toggleFaltaItem(' + item.id + ', this)" style="font-size: 0.7rem;">' +
+                        (item.falta_item ? 'Falta' : 'OK') +
+                        '</button></td>';
+                    tbody.appendChild(tr);
+                });
+
+                // Abrir modal
+                var modal = new bootstrap.Modal(document.getElementById('modalInfoSeparacao'));
+                modal.show();
+            } else {
+                alert('Erro ao buscar informações: ' + data.message);
+            }
+        })
+        .catch(function(error) {
+            console.error('Erro:', error);
+            alert('Erro ao buscar informações da separação');
+        });
+}
+
+function toggleFaltaItem(itemId, button) {
+    fetch('/pedidos/api/toggle_falta_item/' + itemId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            if (data.falta_item) {
+                button.className = 'btn btn-sm btn-danger';
+                button.textContent = 'Falta';
+            } else {
+                button.className = 'btn btn-sm btn-outline-secondary';
+                button.textContent = 'OK';
+            }
+        } else {
+            alert('Erro ao atualizar item: ' + data.message);
+        }
+    })
+    .catch(function(error) {
+        console.error('Erro:', error);
+        alert('Erro ao atualizar status do item');
+    });
+}
+
+function abrirModalMotivoExclusao(loteId) {
+    loteParaCancelar = loteId;
+    document.getElementById('input_motivo_exclusao').value = '';
+    var modal = new bootstrap.Modal(document.getElementById('modalMotivoExclusao'));
+    modal.show();
+}
+
+function salvarObsSeparacao() {
+    if (!loteIdAtual) {
+        alert('Erro: lote não identificado.');
+        return;
+    }
+
+    var obs = document.getElementById('obs_separacao_input').value.trim();
+
+    // Mostrar loading
+    var btn = event.target;
+    var textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    fetch('/pedidos/api/salvar_obs_separacao/' + loteIdAtual, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify({
+            obs_separacao: obs
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            alert('Observações salvas com sucesso!\n' + data.itens_atualizados + ' item(ns) atualizado(s).');
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        } else {
+            alert('Erro ao salvar observações: ' + data.message);
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    })
+    .catch(function(error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar observações: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    });
+}
+</script>
 
 <!-- 🚀 JavaScript aprimorado para funcionalidades da tabela -->
 <script>
@@ -1527,56 +1911,10 @@ function resetStatusPedido(loteId) {
     });
 }
 
-// ✅ NOVA FUNÇÃO: Cancelar Separação (Admin Only)
+// ✅ MODIFICADA: Cancelar Separação agora abre modal de motivo (Admin Only)
 function cancelarSeparacao(loteId) {
-    if (!confirm('⚠️ ATENÇÃO ADMIN!\n\nTem certeza que deseja CANCELAR esta separação?\n\nIsso irá:\n- Deletar TODOS os itens da separação\n- Remover o pedido da VIEW\n- Esta ação é IRREVERSÍVEL!\n\nConfirmar cancelamento?')) {
-        return;
-    }
-
-    // Segunda confirmação para ação crítica
-    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nRealmente deseja CANCELAR a separação ' + loteId + '?\n\nTodos os dados serão PERMANENTEMENTE REMOVIDOS!')) {
-        return;
-    }
-
-    // Mostrar loading
-    const btnCancelar = event.target;
-    const textoOriginal = btnCancelar.innerHTML;
-    btnCancelar.disabled = true;
-    btnCancelar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
-
-    fetch(`/pedidos/cancelar_separacao/${loteId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(`✅ ${data.message}`);
-
-            // Fechar modal se existir
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarPedido'));
-            if (modal) {
-                modal.hide();
-            }
-
-            // Recarregar página
-            window.location.reload();
-        } else {
-            alert(`❌ Erro ao cancelar separação: ${data.message}`);
-            btnCancelar.disabled = false;
-            btnCancelar.innerHTML = textoOriginal;
-        }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        alert('❌ Erro ao processar requisição');
-        btnCancelar.disabled = false;
-        btnCancelar.innerHTML = textoOriginal;
-    });
+    // ✅ NOVO: Em vez de cancelar direto, abre modal para pedir motivo
+    abrirModalMotivoExclusao(loteId);
 }
 
 // ✅ FUNÇÃO ATUALIZADA: Validar NF em FaturamentoProduto E GRAVAR em Separacao
@@ -2376,5 +2714,168 @@ function carregarAlertasSeparacoes() {
 }
 
 // Função global para reimpressão (já definida no HTML retornado)
+
+// ✅ Event listeners para botões dos modais (as funções principais estão declaradas antes)
+document.addEventListener('DOMContentLoaded', function() {
+    const btnPagamento = document.getElementById('btn_pagamento_realizado');
+    if (btnPagamento) {
+        btnPagamento.addEventListener('click', function() {
+            if (!loteIdAtual) return;
+
+            // Verificar status atual do botão
+            const isPendente = this.classList.contains('btn-warning');
+
+            fetch(`/pedidos/api/toggle_pagamento/${loteIdAtual}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({
+                    falta_pagamento: !isPendente  // Inverter o status atual
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Atualizar visual do botão
+                    if (data.falta_pagamento) {
+                        this.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Pagamento Pendente';
+                        this.className = 'btn btn-warning';
+                    } else {
+                        this.innerHTML = '<i class="fas fa-check-circle"></i> Pagamento Realizado';
+                        this.className = 'btn btn-success';
+                    }
+                } else {
+                    alert('Erro ao atualizar pagamento: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao atualizar status do pagamento');
+            });
+        });
+    }
+
+    // Evento para botão de imprimir separação
+    const btnImprimir = document.getElementById('btn_imprimir_separacao');
+    if (btnImprimir) {
+        btnImprimir.addEventListener('click', function() {
+            if (!loteIdAtual) return;
+            // Abrir página de impressão em nova aba
+            window.open(`/pedidos/imprimir_separacao/${loteIdAtual}`, '_blank');
+        });
+    }
+
+    // ✅ NOVO: Event listener para botão de salvar observações
+    const btnSalvarObs = document.getElementById('btn_salvar_obs_separacao');
+    if (btnSalvarObs) {
+        btnSalvarObs.addEventListener('click', function() {
+            if (!loteIdAtual) {
+                alert('Erro: lote não identificado.');
+                return;
+            }
+
+            const obs = document.getElementById('obs_separacao_input').value.trim();
+
+            // Desabilitar botão durante processamento
+            const btnOriginal = this.innerHTML;
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+            fetch(`/pedidos/api/salvar_obs_separacao/${loteIdAtual}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({
+                    obs_separacao: obs
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Observações salvas com sucesso!\n${data.itens_atualizados} item(ns) atualizado(s).`);
+                    this.disabled = false;
+                    this.innerHTML = btnOriginal;
+                } else {
+                    alert('Erro ao salvar observações: ' + data.message);
+                    this.disabled = false;
+                    this.innerHTML = btnOriginal;
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao salvar observações: ' + error.message);
+                this.disabled = false;
+                this.innerHTML = btnOriginal;
+            });
+        });
+    }
+
+    // ✅ Event listener para botão de confirmar exclusão com motivo
+    const btnConfirmarExclusao = document.getElementById('btn_confirmar_exclusao');
+    if (btnConfirmarExclusao) {
+        btnConfirmarExclusao.addEventListener('click', function() {
+            const motivo = document.getElementById('input_motivo_exclusao').value.trim();
+
+            if (!motivo) {
+                alert('Por favor, informe o motivo do cancelamento.');
+                return;
+            }
+
+            if (!loteParaCancelar) {
+                alert('Erro: lote não identificado.');
+                return;
+            }
+
+            if (!confirm(`Confirma o cancelamento da separação ${loteParaCancelar}?\n\nMotivo: ${motivo}`)) {
+                return;
+            }
+
+            // Desabilitar botão durante processamento
+            const btnOriginal = this.innerHTML;
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+            fetch(`/pedidos/cancelar_separacao/${loteParaCancelar}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({
+                    motivo_exclusao: motivo
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Separação cancelada com sucesso!');
+
+                    // Fechar modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalMotivoExclusao'));
+                    if (modal) {
+                        modal.hide();
+                    }
+
+                    // Recarregar página
+                    window.location.reload();
+                } else {
+                    alert('Erro ao cancelar separação: ' + data.message);
+                    this.disabled = false;
+                    this.innerHTML = btnOriginal;
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao cancelar separação: ' + error.message);
+                this.disabled = false;
+                this.innerHTML = btnOriginal;
+            });
+        });
+    }
+});
 </script>
 {% endblock %}

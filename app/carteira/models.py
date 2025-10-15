@@ -149,6 +149,9 @@ class CarteiraPrincipal(db.Model):
     odoo_write_date = db.Column(db.DateTime, nullable=True, index=True)  # write_date do Odoo
     ultima_sync = db.Column(db.DateTime, nullable=True)  # momento da última sincronização
 
+    # 🗑️ CONTROLE DE EXCLUSÃO
+    motivo_exclusao = db.Column(db.Text, nullable=True)  # Motivo do cancelamento/exclusão da separação
+
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)

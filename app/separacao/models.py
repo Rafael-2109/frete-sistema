@@ -57,7 +57,12 @@ class Separacao(db.Model):
     separacao_impressa = db.Column(db.Boolean, default=False, nullable=False)
     separacao_impressa_em = db.Column(db.DateTime, nullable=True)
     separacao_impressa_por = db.Column(db.String(100), nullable=True)
-    
+
+    # 📝 CAMPOS DE CONTROLE DE SEPARAÇÃO (NOVOS)
+    obs_separacao = db.Column(db.Text, nullable=True)  # Observações sobre a separação
+    falta_item = db.Column(db.Boolean, default=False, nullable=False)  # Indica se falta item no estoque
+    falta_pagamento = db.Column(db.Boolean, default=False, nullable=False)  # Indica se pagamento está pendente
+
     # Relacionamento com cotação (para manter compatibilidade com Pedido)
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=True)
 

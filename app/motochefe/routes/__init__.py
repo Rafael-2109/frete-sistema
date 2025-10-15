@@ -8,7 +8,7 @@ from flask import Blueprint
 motochefe_bp = Blueprint('motochefe', __name__, url_prefix='/motochefe')
 
 # Importar rotas depois de criar blueprint para evitar imports circulares
-from . import cadastros, produtos, operacional, logistica, vendas, financeiro, extrato, titulos_a_pagar, crossdocking #type: ignore
+from . import cadastros, produtos, operacional, logistica, vendas, financeiro, extrato, titulos_a_pagar, crossdocking, carga_inicial #type: ignore # noqa: E402
 
 
 # ===== CONTEXT PROCESSOR =====

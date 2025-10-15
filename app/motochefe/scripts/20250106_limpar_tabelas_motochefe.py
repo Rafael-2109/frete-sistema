@@ -22,7 +22,7 @@ from app.motochefe.models import (
     # Produtos
     ModeloMoto, Moto,
     # Vendas
-    PedidoVendaMoto, PedidoVendaMotoItem,
+    PedidoVendaMoto, PedidoVendaAuditoria, PedidoVendaMotoItem,
     # Financeiro
     TituloFinanceiro, ComissaoVendedor, MovimentacaoFinanceira, TituloAPagar,
     # Logística
@@ -79,8 +79,12 @@ def limpar_tabelas():
         count = EmbarqueMoto.query.delete()
         print(f"   ✅ {count} registros removidos")
 
+        print("7️⃣  Limpando PedidoVendaAuditoria...")
+        count = PedidoVendaAuditoria.query.delete()
+        print(f"   ✅ {count} registros removidos")
+
         # 3. Vendas (depende de Cliente, Vendedor, Moto)
-        print("7️⃣  Limpando PedidoVendaMotoItem...")
+        print("8️⃣  Limpando PedidoVendaMotoItem...")
         count = PedidoVendaMotoItem.query.delete()
         print(f"   ✅ {count} registros removidos")
 
@@ -175,6 +179,7 @@ def verificar_limpeza():
         ('TituloFinanceiro', TituloFinanceiro),
         ('EmbarquePedido', EmbarquePedido),
         ('EmbarqueMoto', EmbarqueMoto),
+        ('PedidoVendaAuditoria', PedidoVendaAuditoria),
         ('PedidoVendaMotoItem', PedidoVendaMotoItem),
         ('PedidoVendaMoto', PedidoVendaMoto),
         ('Moto', Moto),

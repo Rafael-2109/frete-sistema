@@ -410,6 +410,11 @@
                                         {% if pedido.cnpj_cpf %}
                                         <br><small class="text-muted">{{ pedido.cnpj_cpf }}</small>
                                         {% endif %}
+                                        {% if pedido.motivo_exclusao %}
+                                        <br><small class="text-danger" title="Motivo de exclusão">
+                                            <i class="fas fa-exclamation-triangle"></i> {{ pedido.motivo_exclusao[:50] }}{% if pedido.motivo_exclusao|length > 50 %}...{% endif %}
+                                        </small>
+                                        {% endif %}
                                     </div>
                                 </td>
 

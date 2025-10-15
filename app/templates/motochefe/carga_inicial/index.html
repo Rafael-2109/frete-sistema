@@ -1,0 +1,508 @@
+{% extends "base.html" %}
+
+{% block title %}Carga Inicial - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-upload"></i> Carga Inicial de Dados - Sistema MotoChefe</h2>
+            <p class="text-muted">Importação passo-a-passo de dados históricos. Siga a ordem das fases para garantir integridade referencial.</p>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div id="alertContainer"></div>
+
+    <!-- INSTRUÇÕES -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h5><i class="fas fa-info-circle"></i> Instruções Importantes</h5>
+                <ol class="mb-0">
+                    <li><strong>Baixe os templates</strong> de cada fase e preencha com seus dados</li>
+                    <li><strong>Siga a ordem das fases</strong> (1 → 2 → 3) para evitar erros de FK</li>
+                    <li><strong>Campos obrigatórios</strong> estão marcados com (*) nas descrições</li>
+                    <li><strong>Sistema para na primeira falha</strong> crítica e informa o erro</li>
+                    <li><strong>UPSERT ativado</strong>: pode re-executar sem duplicar dados</li>
+                    <li><strong>Backup recomendado</strong> antes de iniciar</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROGRESSO GERAL -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-tasks"></i> Progresso Geral</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress" style="height: 30px;">
+                        <div id="progressoGeral" class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            0%
+                        </div>
+                    </div>
+                    <p class="text-center mt-2 mb-0" id="textoProgresso">Aguardando início...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 1: CONFIGURAÇÕES BASE -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <span class="badge badge-light mr-2">1</span>
+                        FASE 1: Configurações Base (sem dependências)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        <strong>Tabelas:</strong> Equipes de Vendas, Transportadoras, Empresas, CrossDocking, Custos Operacionais
+                    </p>
+
+                    <!-- Botão Download Template -->
+                    <div class="mb-3">
+                        <a href="{{ url_for('motochefe.download_template', fase='fase1') }}"
+                           class="btn btn-success">
+                            <i class="fas fa-download"></i> Baixar Template Fase 1
+                        </a>
+                    </div>
+
+                    <!-- Formulário de Upload -->
+                    <form id="formFase1" enctype="multipart/form-data">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">1. Equipes de Vendas (*)</label>
+                                <input type="file" class="form-control" name="equipes" accept=".xlsx,.xls">
+                                <small class="text-muted">Aba: 1_Equipes</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">2. Transportadoras</label>
+                                <input type="file" class="form-control" name="transportadoras" accept=".xlsx,.xls">
+                                <small class="text-muted">Aba: 2_Transportadoras</small>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">3. Empresas (*)</label>
+                                <input type="file" class="form-control" name="empresas" accept=".xlsx,.xls">
+                                <small class="text-muted">Aba: 3_Empresas</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">4. CrossDocking</label>
+                                <input type="file" class="form-control" name="crossdocking" accept=".xlsx,.xls">
+                                <small class="text-muted">Aba: 4_CrossDocking (apenas 1 registro)</small>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">5. Custos Operacionais (*)</label>
+                                <input type="file" class="form-control" name="custos" accept=".xlsx,.xls">
+                                <small class="text-muted">Aba: 5_Custos (apenas 1 registro)</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg" id="btnFase1">
+                            <i class="fas fa-upload"></i> Importar Fase 1
+                        </button>
+                    </form>
+
+                    <!-- Resultado Fase 1 -->
+                    <div id="resultadoFase1" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 2: CADASTROS DEPENDENTES -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-white">
+                    <h5 class="mb-0">
+                        <span class="badge badge-light mr-2">2</span>
+                        FASE 2: Cadastros Dependentes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        <strong>Tabelas:</strong> Vendedores (→ Equipes), Modelos de Motos
+                    </p>
+
+                    <!-- Botão Download Template -->
+                    <div class="mb-3">
+                        <a href="{{ url_for('motochefe.download_template', fase='fase2') }}"
+                           class="btn btn-success">
+                            <i class="fas fa-download"></i> Baixar Template Fase 2
+                        </a>
+                    </div>
+
+                    <!-- Formulário de Upload -->
+                    <form id="formFase2" enctype="multipart/form-data">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">1. Vendedores (*)</label>
+                                <input type="file" class="form-control" name="vendedores" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Aba: 1_Vendedores</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">2. Modelos de Motos (*)</label>
+                                <input type="file" class="form-control" name="modelos" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Aba: 2_Modelos</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-warning btn-lg" id="btnFase2">
+                            <i class="fas fa-upload"></i> Importar Fase 2
+                        </button>
+                        <small class="text-muted d-block mt-2">⚠️ Requer que a Fase 1 tenha sido executada previamente</small>
+                    </form>
+
+                    <!-- Resultado Fase 2 -->
+                    <div id="resultadoFase2" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 3: PRODUTOS E CLIENTES -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <span class="badge badge-light mr-2">3</span>
+                        FASE 3: Produtos e Clientes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        <strong>Tabelas:</strong> Clientes (→ Vendedores), Motos (→ Modelos)
+                    </p>
+
+                    <!-- Botão Download Template -->
+                    <div class="mb-3">
+                        <a href="{{ url_for('motochefe.download_template', fase='fase3') }}"
+                           class="btn btn-success">
+                            <i class="fas fa-download"></i> Baixar Template Fase 3
+                        </a>
+                    </div>
+
+                    <!-- Formulário de Upload -->
+                    <form id="formFase3" enctype="multipart/form-data">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">1. Clientes (*)</label>
+                                <input type="file" class="form-control" name="clientes" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Aba: 1_Clientes</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">2. Motos (*)</label>
+                                <input type="file" class="form-control" name="motos" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Aba: 2_Motos</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-lg" id="btnFase3">
+                            <i class="fas fa-upload"></i> Importar Fase 3
+                        </button>
+                        <small class="text-muted d-block mt-2">⚠️ Requer que as Fases 1 e 2 tenham sido executadas previamente</small>
+                    </form>
+
+                    <!-- Resultado Fase 3 -->
+                    <div id="resultadoFase3" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONCLUSÃO -->
+    <div class="row mb-4" id="divConclusao" style="display: none;">
+        <div class="col-12">
+            <div class="alert alert-success">
+                <h4><i class="fas fa-check-circle"></i> Carga Inicial Concluída!</h4>
+                <p class="mb-2">Todas as 3 fases foram importadas com sucesso. O sistema MotoChefe está pronto para operação.</p>
+                <hr>
+                <p class="mb-0">
+                    <strong>Próximos passos:</strong>
+                </p>
+                <ol class="mb-0">
+                    <li>Revisar cadastros importados</li>
+                    <li>Configurar tabelas de preço por equipe (se necessário)</li>
+                    <li>Iniciar operação do sistema</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card-header {
+        font-weight: 600;
+    }
+    .badge {
+        font-size: 1rem;
+    }
+    input[type="file"] {
+        cursor: pointer;
+    }
+    .result-box {
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 10px;
+    }
+    .result-success {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    .result-error {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+</style>
+
+<script>
+// Estado das fases
+let fasesCompletas = {
+    fase1: false,
+    fase2: false,
+    fase3: false
+};
+
+// Atualizar progresso geral
+function atualizarProgresso() {
+    let total = 0;
+    if (fasesCompletas.fase1) total += 33;
+    if (fasesCompletas.fase2) total += 33;
+    if (fasesCompletas.fase3) total += 34;
+
+    $('#progressoGeral').css('width', total + '%').attr('aria-valuenow', total).text(total + '%');
+
+    if (total === 0) {
+        $('#textoProgresso').text('Aguardando início...');
+    } else if (total === 100) {
+        $('#textoProgresso').text('✅ Carga inicial completa!');
+        $('#divConclusao').show();
+    } else {
+        $('#textoProgresso').text(`Progresso: ${total}% concluído`);
+    }
+}
+
+// Exibir alerta
+function exibirAlerta(mensagem, tipo) {
+    const classeTipo = tipo === 'success' ? 'alert-success' : 'alert-danger';
+    const icone = tipo === 'success' ? 'check-circle' : 'exclamation-circle';
+
+    const html = `
+        <div class="alert ${classeTipo} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${icone}"></i> ${mensagem}
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+        </div>
+    `;
+    $('#alertContainer').html(html);
+
+    // Scroll para o topo
+    $('html, body').animate({ scrollTop: 0 }, 300);
+}
+
+// Exibir resultado detalhado
+function exibirResultado(containerId, data) {
+    let html = '';
+
+    if (data.sucesso) {
+        html += '<div class="result-box result-success">';
+        html += `<h5><i class="fas fa-check-circle"></i> ${data.mensagem}</h5>`;
+    } else {
+        html += '<div class="result-box result-error">';
+        html += `<h5><i class="fas fa-times-circle"></i> ${data.mensagem}</h5>`;
+    }
+
+    // Resultados individuais
+    if (data.resultados) {
+        html += '<ul class="mt-2 mb-0">';
+        for (const [chave, resultado] of Object.entries(data.resultados)) {
+            if (resultado.sucesso) {
+                html += `<li><strong>${chave}:</strong> ${resultado.mensagem} (${resultado.inseridos} novos, ${resultado.atualizados} atualizados)</li>`;
+            } else {
+                html += `<li class="text-danger"><strong>${chave}:</strong> ${resultado.mensagem}</li>`;
+            }
+        }
+        html += '</ul>';
+    }
+
+    // Erros detalhados
+    if (data.erros && data.erros.length > 0) {
+        html += '<div class="mt-2"><strong>Erros:</strong><ul>';
+        data.erros.forEach(erro => {
+            html += `<li>${erro}</li>`;
+        });
+        html += '</ul></div>';
+    }
+
+    html += '</div>';
+
+    $(`#${containerId}`).html(html).show();
+}
+
+// CSRF Token (obter do meta tag ou cookie)
+function getCSRFToken() {
+    // Tenta pegar do meta tag
+    let token = $('meta[name="csrf-token"]').attr('content');
+    if (token) return token;
+
+    // Tenta pegar do cookie
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrf_token') return value;
+    }
+    return null;
+}
+
+// FASE 1
+$('#formFase1').on('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const btn = $('#btnFase1');
+
+    // Adicionar CSRF token ao FormData
+    const csrfToken = getCSRFToken();
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
+    }
+
+    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+
+    $.ajax({
+        url: '{{ url_for("motochefe.importar_fase1") }}',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(data) {
+            if (data.sucesso) {
+                fasesCompletas.fase1 = true;
+                exibirAlerta(data.mensagem, 'success');
+            } else {
+                exibirAlerta(data.mensagem, 'error');
+            }
+            exibirResultado('resultadoFase1', data);
+            atualizarProgresso();
+        },
+        error: function(xhr) {
+            const data = xhr.responseJSON || { mensagem: 'Erro desconhecido', sucesso: false };
+            exibirAlerta(data.mensagem, 'error');
+            exibirResultado('resultadoFase1', data);
+        },
+        complete: function() {
+            btn.prop('disabled', false).html('<i class="fas fa-upload"></i> Importar Fase 1');
+        }
+    });
+});
+
+// FASE 2
+$('#formFase2').on('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const btn = $('#btnFase2');
+
+    // Adicionar CSRF token ao FormData
+    const csrfToken = getCSRFToken();
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
+    }
+
+    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+
+    $.ajax({
+        url: '{{ url_for("motochefe.importar_fase2") }}',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(data) {
+            if (data.sucesso) {
+                fasesCompletas.fase2 = true;
+                exibirAlerta(data.mensagem, 'success');
+            } else {
+                exibirAlerta(data.mensagem, 'error');
+            }
+            exibirResultado('resultadoFase2', data);
+            atualizarProgresso();
+        },
+        error: function(xhr) {
+            const data = xhr.responseJSON || { mensagem: 'Erro desconhecido', sucesso: false };
+            exibirAlerta(data.mensagem, 'error');
+            exibirResultado('resultadoFase2', data);
+        },
+        complete: function() {
+            btn.prop('disabled', false).html('<i class="fas fa-upload"></i> Importar Fase 2');
+        }
+    });
+});
+
+// FASE 3
+$('#formFase3').on('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const btn = $('#btnFase3');
+
+    // Adicionar CSRF token ao FormData
+    const csrfToken = getCSRFToken();
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
+    }
+
+    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+
+    $.ajax({
+        url: '{{ url_for("motochefe.importar_fase3") }}',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(data) {
+            if (data.sucesso) {
+                fasesCompletas.fase3 = true;
+                exibirAlerta(data.mensagem, 'success');
+            } else {
+                exibirAlerta(data.mensagem, 'error');
+            }
+            exibirResultado('resultadoFase3', data);
+            atualizarProgresso();
+        },
+        error: function(xhr) {
+            const data = xhr.responseJSON || { mensagem: 'Erro desconhecido', sucesso: false };
+            exibirAlerta(data.mensagem, 'error');
+            exibirResultado('resultadoFase3', data);
+        },
+        complete: function() {
+            btn.prop('disabled', false).html('<i class="fas fa-upload"></i> Importar Fase 3');
+        }
+    });
+});
+</script>
+{% endblock %}

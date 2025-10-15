@@ -4,6 +4,7 @@ from app import db
 from app.pedidos.models import Pedido
 from app.pedidos.forms import FiltroPedidosForm, CotarFreteForm, EditarPedidoForm
 from app.separacao.models import Separacao
+from app.carteira.models import CarteiraPrincipal
 from app.transportadoras.models import Transportadora
 from app.veiculos.models import Veiculo
 from sqlalchemy import func, distinct
@@ -143,6 +144,66 @@ def lista_pedidos():
     else:
         contadores_status['agend_pendente'] = 0
 
+    # ✅ NOVO: Contadores para aguardando pagamento e aguardando item
+    # Estes serão calculados corretamente consultando as tabelas diretamente
+
+    # 1. Ag. Item: Contar lotes com falta_item=True na Separacao
+    try:
+        lotes_falta_item = db.session.query(Separacao.separacao_lote_id).filter(
+            Separacao.falta_item == True,
+            Separacao.sincronizado_nf == False
+        ).distinct().subquery()
+
+        contadores_status['ag_item'] = db.session.query(func.count(distinct(Pedido.separacao_lote_id))).filter(
+            Pedido.separacao_lote_id.in_(db.session.query(lotes_falta_item)),
+            Pedido.nf_cd == False,
+            (Pedido.nf.is_(None)) | (Pedido.nf == "")
+        ).scalar() or 0
+
+        lotes_falta_item_ids = [r[0] for r in db.session.query(Separacao.separacao_lote_id).filter(
+            Separacao.falta_item == True,
+            Separacao.sincronizado_nf == False
+        ).distinct().all()]
+    except Exception as e:
+        print(f"[ERRO Contador ag_item] {e}")
+        contadores_status['ag_item'] = 0
+        lotes_falta_item_ids = []
+
+    # 2. Ag. Pagamento: Contar pedidos ANTECIPADOS com falta_pagamento=True
+    try:
+        # Buscar pedidos com ANTECIPADO
+        num_pedidos_antecipados = [r[0] for r in db.session.query(
+            distinct(CarteiraPrincipal.num_pedido)
+        ).filter(
+            CarteiraPrincipal.cond_pgto_pedido.ilike('%ANTECIPADO%')
+        ).all() if r[0]]
+
+        if num_pedidos_antecipados:
+            lotes_falta_pgto = db.session.query(Separacao.separacao_lote_id).filter(
+                Separacao.num_pedido.in_(num_pedidos_antecipados),
+                Separacao.falta_pagamento == True,
+                Separacao.sincronizado_nf == False
+            ).distinct().subquery()
+
+            contadores_status['ag_pagamento'] = db.session.query(func.count(distinct(Pedido.separacao_lote_id))).filter(
+                Pedido.separacao_lote_id.in_(db.session.query(lotes_falta_pgto)),
+                Pedido.nf_cd == False,
+                (Pedido.nf.is_(None)) | (Pedido.nf == "")
+            ).scalar() or 0
+
+            lotes_falta_pagamento_ids = [r[0] for r in db.session.query(Separacao.separacao_lote_id).filter(
+                Separacao.num_pedido.in_(num_pedidos_antecipados),
+                Separacao.falta_pagamento == True,
+                Separacao.sincronizado_nf == False
+            ).distinct().all()]
+        else:
+            contadores_status['ag_pagamento'] = 0
+            lotes_falta_pagamento_ids = []
+    except Exception as e:
+        print(f"[ERRO Contador ag_pagamento] {e}")
+        contadores_status['ag_pagamento'] = 0
+        lotes_falta_pagamento_ids = []
+
     # ✅ APLICAR FILTROS DE ATALHO (botões) - SEMPRE PRIMEIRO
     filtros_botao_aplicados = False
     
@@ -204,6 +265,26 @@ def lista_pedidos():
                 (Pedido.nf.is_(None)) | (Pedido.nf == ""),
                 Pedido.data_embarque.is_(None)
             )
+        elif filtro_status == 'ag_pagamento':
+            # ✅ NOVO: Filtro para pedidos aguardando pagamento
+            if lotes_falta_pagamento_ids:
+                query = query.filter(
+                    Pedido.separacao_lote_id.in_(lotes_falta_pagamento_ids),
+                    Pedido.nf_cd == False,
+                    (Pedido.nf.is_(None)) | (Pedido.nf == "")
+                )
+            else:
+                query = query.filter(Pedido.separacao_lote_id == 'IMPOSSIVEL')
+        elif filtro_status == 'ag_item':
+            # ✅ NOVO: Filtro para pedidos aguardando item
+            if lotes_falta_item_ids:
+                query = query.filter(
+                    Pedido.separacao_lote_id.in_(lotes_falta_item_ids),
+                    Pedido.nf_cd == False,
+                    (Pedido.nf.is_(None)) | (Pedido.nf == "")
+                )
+            else:
+                query = query.filter(Pedido.separacao_lote_id == 'IMPOSSIVEL')
         # 'todos' não aplica filtro
     
     if filtro_data:
@@ -217,13 +298,20 @@ def lista_pedidos():
     # ✅ PRESERVA filtros GET quando for POST do formulário
     form_preservar_status = filtro_status
     form_preservar_data = filtro_data
-    
-    # ✅ APLICAR FILTROS DO FORMULÁRIO (quando POST) OU PRESERVAR FILTROS DE BOTÃO
-    # Se for POST do filtro_form, rodamos 'validate_on_submit' nele.
-    # Se há filtros de botão mas não é POST, não aplica filtros do formulário
-    aplicar_filtros_formulario = filtro_form.validate_on_submit() or not filtros_botao_aplicados
-    
-    if aplicar_filtros_formulario and request.method == 'POST':
+
+    # ✅ CORRIGIDO: SEMPRE aplicar filtros do formulário quando houver dados
+    # Os filtros de botão (GET) e formulário (POST/GET) agora trabalham JUNTOS
+    aplicar_filtros_formulario = filtro_form.validate_on_submit() or (request.method == 'GET' and any([
+        request.args.get('numero_pedido'),
+        request.args.get('cnpj_cpf'),
+        request.args.get('cliente'),
+        request.args.get('status_form'),  # Renomeado para não conflitar com filtro de botão
+        request.args.get('uf'),
+        request.args.get('rota'),
+        request.args.get('sub_rota')
+    ]))
+
+    if aplicar_filtros_formulario:
         # Filtros básicos
         if filtro_form.numero_pedido.data:
             query = query.filter(
@@ -320,15 +408,31 @@ def lista_pedidos():
         'data_embarque': Pedido.data_embarque
     }
     
-    # Aplicar ordenação
-    if sort_by in campos_ordenacao:
+    # ✅ CORRIGIDO: Aplicar SEMPRE a ordenação hierárquica
+    # A ordenação hierárquica SEMPRE é aplicada para manter a consistência visual
+    # Mesmo quando usuário clica em uma coluna para ordenar, mantemos a hierarquia como critério secundário
+    if sort_by in campos_ordenacao and sort_by != 'expedicao':
+        # Se usuário ordenou por uma coluna específica, usa como critério primário
+        # mas mantém a hierarquia como critérios secundários
         campo_ordenacao = campos_ordenacao[sort_by]
         if sort_order == 'desc':
-            query = query.order_by(campo_ordenacao.desc())
+            query = query.order_by(
+                campo_ordenacao.desc(),
+                Pedido.rota.asc().nullslast(),
+                Pedido.sub_rota.asc().nullslast(),
+                Pedido.cnpj_cpf.asc().nullslast(),
+                Pedido.expedicao.asc().nullslast()
+            )
         else:
-            query = query.order_by(campo_ordenacao.asc())
+            query = query.order_by(
+                campo_ordenacao.asc(),
+                Pedido.rota.asc().nullslast(),
+                Pedido.sub_rota.asc().nullslast(),
+                Pedido.cnpj_cpf.asc().nullslast(),
+                Pedido.expedicao.asc().nullslast()
+            )
     else:
-        # Ordenação padrão: mesma hierarquia da carteira agrupada
+        # Ordenação padrão hierárquica: SEMPRE aplicada
         query = query.order_by(
             Pedido.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
             Pedido.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
@@ -385,7 +489,68 @@ def lista_pedidos():
     for pedido in pedidos:
         pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
         pedido.contato_agendamento = contatos_por_cnpj.get(pedido.cnpj_cpf)
-    
+
+    # ✅ NOVO: Buscar informações de pagamento antecipado e falta de item
+    info_separacao_por_lote = {}
+
+    if lotes_ids:
+        # Buscar na Separacao os flags de falta_item e falta_pagamento
+        itens_separacao = Separacao.query.filter(
+            Separacao.separacao_lote_id.in_(lotes_ids)
+        ).all()
+
+        for item in itens_separacao:
+            lote_id = item.separacao_lote_id
+            if lote_id not in info_separacao_por_lote:
+                info_separacao_por_lote[lote_id] = {
+                    'tem_falta_item': False,
+                    'tem_falta_pagamento': False,
+                    'num_pedido': item.num_pedido,
+                    'obs_separacao': item.obs_separacao,  # ✅ NOVO
+                    'separacao_impressa': False  # ✅ NOVO
+                }
+
+            # Marcar se tem algum item com falta
+            if item.falta_item:
+                info_separacao_por_lote[lote_id]['tem_falta_item'] = True
+
+            if item.falta_pagamento:
+                info_separacao_por_lote[lote_id]['tem_falta_pagamento'] = True
+
+            # Marcar se separação foi impressa
+            if item.separacao_impressa:
+                info_separacao_por_lote[lote_id]['separacao_impressa'] = True
+
+    # Buscar condição de pagamento da CarteiraPrincipal para verificar ANTECIPADO
+    num_pedidos = list(set([info['num_pedido'] for info in info_separacao_por_lote.values() if info.get('num_pedido')]))
+
+    if num_pedidos:
+        itens_carteira = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.num_pedido.in_(num_pedidos)
+        ).all()
+
+        # Criar dicionário de condições de pagamento por pedido
+        cond_pgto_por_pedido = {}
+        for item in itens_carteira:
+            if item.num_pedido not in cond_pgto_por_pedido:
+                cond_pgto_por_pedido[item.num_pedido] = item.cond_pgto_pedido
+
+        # Atualizar info_separacao com informação de pagamento antecipado
+        for lote_id, info in info_separacao_por_lote.items():
+            num_pedido = info.get('num_pedido')
+            if num_pedido:
+                cond_pgto = cond_pgto_por_pedido.get(num_pedido, '')
+                info['eh_antecipado'] = cond_pgto and 'ANTECIPADO' in cond_pgto.upper()
+
+    # Adicionar flags aos pedidos
+    for pedido in pedidos:
+        info = info_separacao_por_lote.get(pedido.separacao_lote_id, {})
+        pedido.tem_falta_item = info.get('tem_falta_item', False)
+        pedido.tem_falta_pagamento = info.get('tem_falta_pagamento', False)
+        pedido.eh_pagamento_antecipado = info.get('eh_antecipado', False)
+        pedido.obs_separacao = info.get('obs_separacao')  # ✅ NOVO
+        pedido.separacao_impressa = info.get('separacao_impressa', False)  # ✅ NOVO
+
     # ✅ CORRIGIDO: Funções auxiliares para URLs com preservação completa de filtros
     def sort_url(campo):
         """Gera URL para ordenação mantendo TODOS os filtros atuais"""
@@ -767,6 +932,7 @@ def cancelar_separacao(lote_id):
     """
     Cancela uma separação (Admin Only)
     Remove todos os itens da separação independente do status
+    ✅ NOVO: Aceita motivo_exclusao e grava na CarteiraPrincipal
     """
     from flask_login import current_user
 
@@ -792,6 +958,27 @@ def cancelar_separacao(lote_id):
         status_atual = itens_separacao[0].status if itens_separacao else 'N/A'
         qtd_itens = len(itens_separacao)
 
+        # ✅ NOVO: Obter motivo de exclusão do corpo da requisição
+        data = request.get_json() or {}
+        motivo_exclusao = data.get('motivo_exclusao', '').strip()
+
+        # Validar motivo obrigatório
+        if not motivo_exclusao:
+            return jsonify({
+                'success': False,
+                'message': 'O motivo da exclusão é obrigatório.'
+            }), 400
+
+        # ✅ NOVO: Atualizar motivo_exclusao na CarteiraPrincipal
+        if num_pedido and num_pedido != 'N/A':
+            itens_carteira = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido).all()
+            for item_carteira in itens_carteira:
+                item_carteira.motivo_exclusao = motivo_exclusao
+                item_carteira.updated_by = current_user.nome
+
+            if itens_carteira:
+                print(f"[CANCELAR SEPARAÇÃO] Motivo gravado em {len(itens_carteira)} item(ns) da carteira")
+
         # Deletar todos os itens da separação
         for item in itens_separacao:
             db.session.delete(item)
@@ -805,6 +992,7 @@ def cancelar_separacao(lote_id):
         print(f"  - Pedido: {num_pedido}")
         print(f"  - Status anterior: {status_atual}")
         print(f"  - Itens removidos: {qtd_itens}")
+        print(f"  - Motivo: {motivo_exclusao}")
 
         return jsonify({
             'success': True,
@@ -817,6 +1005,191 @@ def cancelar_separacao(lote_id):
         return jsonify({
             'success': False,
             'message': f'Erro ao cancelar separação: {str(e)}'
+        }), 500
+
+@pedidos_bp.route('/api/info_separacao/<string:lote_id>', methods=['GET'])
+@login_required
+def info_separacao(lote_id):
+    """
+    API para buscar informações detalhadas de uma separação para exibir no modal
+    Retorna todos os itens da separação com suas quantidades, valores, e status
+    """
+    try:
+        # Buscar todos os itens da separação
+        itens = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+
+        if not itens:
+            return jsonify({
+                'success': False,
+                'message': f'Separação {lote_id} não encontrada.'
+            }), 404
+
+        # Buscar condição de pagamento da CarteiraPrincipal
+        num_pedido = itens[0].num_pedido
+        carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido).first()
+        cond_pgto = carteira_item.cond_pgto_pedido if carteira_item else None
+
+        # Verificar se pedido está separado (tem separacao_impressa)
+        pedido_separado = any(item.separacao_impressa for item in itens)
+
+        # Calcular totais
+        qtd_total = sum(float(item.qtd_saldo or 0) for item in itens)
+        valor_total = sum(float(item.valor_saldo or 0) for item in itens)
+        peso_total = sum(float(item.peso or 0) for item in itens)
+        pallet_total = sum(float(item.pallet or 0) for item in itens)
+
+        # Preparar lista de itens
+        itens_list = []
+        for item in itens:
+            itens_list.append({
+                'id': item.id,
+                'cod_produto': item.cod_produto,
+                'nome_produto': item.nome_produto,
+                'qtd_saldo': float(item.qtd_saldo or 0),
+                'valor_saldo': float(item.valor_saldo or 0),
+                'peso': float(item.peso or 0),
+                'pallet': float(item.pallet or 0),
+                'falta_item': item.falta_item,
+                'obs_separacao': item.obs_separacao
+            })
+
+        return jsonify({
+            'success': True,
+            'lote_id': lote_id,
+            'num_pedido': num_pedido,
+            'cnpj_cpf': itens[0].cnpj_cpf,
+            'raz_social_red': itens[0].raz_social_red,
+            'cond_pgto': cond_pgto,
+            'pedido_separado': pedido_separado,
+            'falta_pagamento': itens[0].falta_pagamento,
+            'obs_separacao': itens[0].obs_separacao or '',  # ✅ NOVO: Observação geral do lote
+            'totais': {
+                'qtd': qtd_total,
+                'valor': valor_total,
+                'peso': peso_total,
+                'pallet': pallet_total
+            },
+            'itens': itens_list
+        })
+
+    except Exception as e:
+        print(f"[ERRO INFO SEPARAÇÃO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar informações: {str(e)}'
+        }), 500
+
+@pedidos_bp.route('/api/toggle_falta_item/<int:item_id>', methods=['POST'])
+@login_required
+def toggle_falta_item(item_id):
+    """
+    API para alternar o status de falta_item de um item da separação
+    """
+    try:
+        item = Separacao.query.get(item_id)
+
+        if not item:
+            return jsonify({
+                'success': False,
+                'message': f'Item {item_id} não encontrado.'
+            }), 404
+
+        # Alternar o status
+        item.falta_item = not item.falta_item
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'item_id': item_id,
+            'falta_item': item.falta_item
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO TOGGLE FALTA ITEM] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao atualizar item: {str(e)}'
+        }), 500
+
+@pedidos_bp.route('/api/toggle_pagamento/<string:lote_id>', methods=['POST'])
+@login_required
+def toggle_pagamento(lote_id):
+    """
+    API para marcar/desmarcar pagamento realizado para todos os itens de uma separação
+    """
+    try:
+        itens = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+
+        if not itens:
+            return jsonify({
+                'success': False,
+                'message': f'Separação {lote_id} não encontrada.'
+            }), 404
+
+        # Obter o novo valor do corpo da requisição
+        data = request.get_json()
+        falta_pagamento = data.get('falta_pagamento', False)
+
+        # Atualizar todos os itens
+        for item in itens:
+            item.falta_pagamento = falta_pagamento
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'lote_id': lote_id,
+            'falta_pagamento': falta_pagamento
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO TOGGLE PAGAMENTO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao atualizar pagamento: {str(e)}'
+        }), 500
+
+@pedidos_bp.route('/api/salvar_obs_separacao/<string:lote_id>', methods=['POST'])
+@login_required
+def salvar_obs_separacao(lote_id):
+    """
+    API para salvar observações da separação
+    Atualiza todos os itens do lote com a mesma observação
+    """
+    try:
+        data = request.get_json()
+        obs_separacao = data.get('obs_separacao', '').strip()
+
+        # Buscar todos os itens da separação
+        itens = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+
+        if not itens:
+            return jsonify({
+                'success': False,
+                'message': f'Separação {lote_id} não encontrada.'
+            }), 404
+
+        # Atualizar observação em todos os itens do lote
+        for item in itens:
+            item.obs_separacao = obs_separacao if obs_separacao else None
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'lote_id': lote_id,
+            'obs_separacao': obs_separacao,
+            'itens_atualizados': len(itens)
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO SALVAR OBS SEPARAÇÃO] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao salvar observações: {str(e)}'
         }), 500
 
 @pedidos_bp.route('/excluir/<string:lote_id>', methods=['POST'])
