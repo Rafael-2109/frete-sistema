@@ -2197,3 +2197,110 @@ def sincronizar_item_faturamento(item_id):
             'success': False,
             'message': f'Erro ao sincronizar: {str(e)}'
         }), 500
+
+
+@embarques_bp.route('/api/gerar-pdf-protocolo-atacadao/<int:item_id>', methods=['POST'])
+@login_required
+def gerar_pdf_protocolo_atacadao_route(item_id):
+    """
+    API para gerar PDF do protocolo do Atacadão via Playwright (headless)
+
+    Fluxo:
+    1. Verifica se é Atacadão
+    2. Abre navegador headless com Playwright
+    3. Clica em "Imprimir Senha" e abre modal
+    4. Captura modal como PDF
+    5. Salva PDF em /tmp e retorna caminho para download
+    """
+    try:
+        from app.portal.utils.grupo_empresarial import GrupoEmpresarial
+        from app.portal.atacadao.impressao_protocolo import gerar_pdf_protocolo_atacadao
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Buscar EmbarqueItem
+        item = EmbarqueItem.query.get_or_404(item_id)
+
+        # Verificar se tem protocolo
+        if not item.protocolo_agendamento:
+            return jsonify({
+                'success': False,
+                'message': 'Item sem protocolo de agendamento'
+            })
+
+        # Verificar se tem CNPJ
+        if not item.cnpj_cliente:
+            return jsonify({
+                'success': False,
+                'message': 'Item sem CNPJ associado'
+            })
+
+        # Verificar se é Atacadão
+        eh_atacadao = GrupoEmpresarial.eh_cliente_atacadao(item.cnpj_cliente)
+
+        if not eh_atacadao:
+            return jsonify({
+                'success': False,
+                'message': 'Cliente não é Atacadão'
+            })
+
+        # Gerar PDF via Playwright (headless)
+        logger.info(f"Gerando PDF do protocolo {item.protocolo_agendamento} via Playwright")
+
+        resultado = gerar_pdf_protocolo_atacadao(item.protocolo_agendamento)
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar PDF: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao processar PDF: {str(e)}'
+        }), 500
+
+
+@embarques_bp.route('/api/download-pdf-protocolo/<protocolo>/<filename>', methods=['GET'])
+@login_required
+def download_pdf_protocolo(protocolo, filename):
+    """
+    Endpoint para download do PDF gerado
+
+    Args:
+        protocolo: Número do protocolo
+        filename: Nome do arquivo PDF
+    """
+    try:
+        from flask import send_file
+        from pathlib import Path
+
+        # Validar filename para segurança
+        if not filename.startswith(f'protocolo_{protocolo}_') or not filename.endswith('.pdf'):
+            return jsonify({
+                'success': False,
+                'message': 'Nome de arquivo inválido'
+            }), 400
+
+        # Caminho do PDF
+        pdf_path = Path(f"/tmp/protocolos_atacadao/{filename}")
+
+        if not pdf_path.exists():
+            return jsonify({
+                'success': False,
+                'message': 'PDF não encontrado. Talvez tenha expirado.'
+            }), 404
+
+        # Retornar arquivo para download
+        return send_file(
+            pdf_path,
+            as_attachment=False,  # Abre no navegador ao invés de baixar
+            download_name=filename,
+            mimetype='application/pdf'
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao fazer download do PDF: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao baixar PDF: {str(e)}'
+        }), 500

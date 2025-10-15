@@ -477,7 +477,18 @@
                   {{ item_form.nota_fiscal(class="form-control form-control-sm") }}
                 </td>
                 <td>
-                  {{ item_form.protocolo_agendamento(class="form-control form-control-sm") }}
+                  <div style="display: flex; align-items: center; gap: 0.3rem;">
+                    {{ item_form.protocolo_agendamento(class="form-control form-control-sm", style="flex: 1;") }}
+                    {% if item and item.protocolo_agendamento %}
+                      <button type="button"
+                              class="btn btn-sm btn-outline-primary btn-imprimir-protocolo"
+                              data-item-id="{{ item.id }}"
+                              title="Imprimir protocolo (Atacadão)"
+                              style="padding: 0.25rem 0.4rem;">
+                        <i class="fas fa-print"></i>
+                      </button>
+                    {% endif %}
+                  </div>
                 </td>
                 <td>
                   <div class="agendamento-cell">
@@ -1022,5 +1033,121 @@ function salvarConfirmacaoAgendamento() {
         </div>
     </div>
 </div>
+
+<script>
+/**
+ * 🖨️ GERAÇÃO DE PDF DE PROTOCOLOS DO ATACADÃO VIA PLAYWRIGHT
+ *
+ * Funcionalidade:
+ * 1. Detecta cliques nos botões de impressão de protocolo
+ * 2. Chama backend que executa Playwright (headless)
+ * 3. Playwright gera PDF do modal
+ * 4. Abre PDF em nova aba para impressão
+ */
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Selecionar todos os botões de impressão de protocolo
+    const botoesImprimir = document.querySelectorAll('.btn-imprimir-protocolo');
+
+    botoesImprimir.forEach(botao => {
+        botao.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            const itemId = this.getAttribute('data-item-id');
+            const botaoOriginal = this;
+            const iconOriginal = botaoOriginal.innerHTML;
+
+            // Confirmar com usuário
+            if (!confirm('🖨️ Deseja gerar PDF do protocolo do Atacadão?\n\nO PDF será aberto para impressão.')) {
+                return;
+            }
+
+            // Mostrar loading
+            botaoOriginal.disabled = true;
+            botaoOriginal.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+
+            // Obter CSRF token
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+            // Chamar API para gerar PDF via Playwright
+            fetch(`/embarques/api/gerar-pdf-protocolo-atacadao/${itemId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                botaoOriginal.disabled = false;
+                botaoOriginal.innerHTML = iconOriginal;
+
+                if (data.success) {
+                    // PDF gerado com sucesso - abrir diálogo de impressão
+                    const urlDownload = `/embarques/api/download-pdf-protocolo/${data.protocolo}/${data.pdf_filename}`;
+
+                    // Criar iframe oculto para carregar o PDF
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.src = urlDownload;
+                    document.body.appendChild(iframe);
+
+                    // Aguardar PDF carregar e acionar impressão
+                    iframe.onload = function() {
+                        try {
+                            // Aguardar um pouco para garantir que PDF está renderizado
+                            setTimeout(() => {
+                                // Acionar impressão do iframe
+                                iframe.contentWindow.print();
+                            }, 500);
+
+                            // Listener para detectar quando usuário fechar janela de impressão
+                            // Remove iframe após usuário imprimir ou cancelar
+                            window.addEventListener('focus', function limparIframe() {
+                                setTimeout(() => {
+                                    try {
+                                        if (iframe && iframe.parentNode) {
+                                            document.body.removeChild(iframe);
+                                        }
+                                    } catch (e) {
+                                        console.log('Iframe já foi removido');
+                                    }
+                                    window.removeEventListener('focus', limparIframe);
+                                }, 500);
+                            }, { once: true });
+
+                        } catch (e) {
+                            console.error('Erro ao acionar impressão:', e);
+                            // Fallback: abrir em nova aba
+                            window.open(urlDownload, '_blank');
+                            if (iframe && iframe.parentNode) {
+                                document.body.removeChild(iframe);
+                            }
+                        }
+                    };
+
+                    // Mostrar mensagem de sucesso (SEM bloquear com alert)
+                    console.log('✅ PDF gerado:', data.protocolo, '-', data.pdf_size_kb, 'KB');
+                } else {
+                    // Verificar se precisa de login
+                    if (data.requer_login) {
+                        if (confirm('⚠️ Sessão expirada no portal do Atacadão.\n\nDeseja abrir o portal para fazer login?')) {
+                            window.open('https://atacadao.hodiebooking.com.br/', '_blank');
+                        }
+                    } else {
+                        alert(`❌ ${data.message}`);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao gerar PDF:', error);
+                alert('❌ Erro ao gerar PDF. Tente novamente.');
+                botaoOriginal.disabled = false;
+                botaoOriginal.innerHTML = iconOriginal;
+            });
+        });
+    });
+});
+</script>
 
 {% endblock %}
