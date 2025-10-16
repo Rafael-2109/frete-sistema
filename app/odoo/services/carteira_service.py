@@ -2026,35 +2026,71 @@ class CarteiraService:
             logger.info("🔍 Fase 10: Verificação pós-sincronização...")
             alertas_pos_sync = self._verificar_alertas_pos_sincronizacao(dados_novos, alertas_pre_sync)
             
-            # FASE 10.5: LIMPEZA DE SALDO STANDBY
-            logger.info("🧹 Fase 10.5: Limpeza de SaldoStandby...")
+            # FASE 10.5: LIMPEZA AUTOMÁTICA DE SALDO STANDBY
+            logger.info("🧹 Fase 10.5: Limpeza automática de SaldoStandby...")
             try:
                 from app.carteira.models import SaldoStandby
-                
-                # Buscar todos os pedidos ativos na CarteiraPrincipal
-                pedidos_ativos = set(CarteiraPrincipal.query.with_entities(
-                    CarteiraPrincipal.num_pedido
-                ).distinct().all())
-                pedidos_ativos = {p[0] for p in pedidos_ativos}
-                
-                # Buscar pedidos em SaldoStandby que não existem mais na CarteiraPrincipal
-                standby_para_deletar = SaldoStandby.query.filter(
-                    ~SaldoStandby.num_pedido.in_(pedidos_ativos)
+
+                # 🎯 OBJETIVO: Remover automaticamente itens de Standby quando:
+                # 1. O produto foi zerado no Odoo (qtd_saldo_produto_pedido = 0)
+                # 2. O pedido foi cancelado/removido completamente do Odoo
+                # 3. Apenas itens com status ATIVO, BLOQ. COML., SALDO (não mexer em CONFIRMADO)
+
+                # Buscar todos os itens em SaldoStandby que estão ativos
+                itens_standby_ativos = SaldoStandby.query.filter(
+                    SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
                 ).all()
-                
-                contador_standby_deletados = 0
-                for standby in standby_para_deletar:
-                    db.session.delete(standby)
-                    contador_standby_deletados += 1
-                
-                if contador_standby_deletados > 0:
+
+                logger.info(f"   📊 Verificando {len(itens_standby_ativos)} itens em SaldoStandby...")
+
+                contador_itens_zerados = 0
+                contador_pedidos_cancelados = 0
+                itens_removidos = []
+
+                for item_standby in itens_standby_ativos:
+                    # Verificar se o item ainda existe na CarteiraPrincipal com saldo > 0
+                    item_carteira = CarteiraPrincipal.query.filter_by(
+                        num_pedido=item_standby.num_pedido,
+                        cod_produto=item_standby.cod_produto
+                    ).first()
+
+                    if not item_carteira:
+                        # CASO 1: Item não existe mais na CarteiraPrincipal (pedido cancelado/produto removido)
+                        logger.info(f"   ❌ Removendo do Standby: {item_standby.num_pedido}/{item_standby.cod_produto} "
+                                  f"(não existe mais na CarteiraPrincipal)")
+                        db.session.delete(item_standby)
+                        contador_pedidos_cancelados += 1
+                        itens_removidos.append({
+                            'pedido': item_standby.num_pedido,
+                            'produto': item_standby.cod_produto,
+                            'motivo': 'PEDIDO_CANCELADO_OU_PRODUTO_REMOVIDO'
+                        })
+
+                    elif float(item_carteira.qtd_saldo_produto_pedido or 0) <= 0.001:
+                        # CASO 2: Item existe mas saldo foi zerado no Odoo
+                        logger.info(f"   🔄 Removendo do Standby: {item_standby.num_pedido}/{item_standby.cod_produto} "
+                                  f"(saldo zerado no Odoo: {item_carteira.qtd_saldo_produto_pedido})")
+                        db.session.delete(item_standby)
+                        contador_itens_zerados += 1
+                        itens_removidos.append({
+                            'pedido': item_standby.num_pedido,
+                            'produto': item_standby.cod_produto,
+                            'motivo': 'SALDO_ZERADO_ODOO',
+                            'qtd_saldo': float(item_carteira.qtd_saldo_produto_pedido)
+                        })
+
+                # Commit das exclusões
+                if contador_itens_zerados > 0 or contador_pedidos_cancelados > 0:
                     db.session.commit()
-                    logger.info(f"   🗑️ {contador_standby_deletados} registros removidos de SaldoStandby")
+                    logger.info(f"   ✅ Limpeza concluída:")
+                    logger.info(f"      🔄 {contador_itens_zerados} itens zerados removidos")
+                    logger.info(f"      ❌ {contador_pedidos_cancelados} itens de pedidos cancelados removidos")
+                    logger.info(f"      📊 Total: {len(itens_removidos)} itens removidos do SaldoStandby")
                 else:
-                    logger.info("   ✅ Nenhum registro para remover de SaldoStandby")
-                    
+                    logger.info("   ✅ Nenhum item para remover de SaldoStandby")
+
             except Exception as e:
-                logger.warning(f"   ⚠️ Erro ao limpar SaldoStandby: {e}")
+                logger.error(f"   ❌ Erro ao limpar SaldoStandby: {e}")
                 db.session.rollback()
             
             # FASE 10.6: VERIFICAÇÃO E ATUALIZAÇÃO DE CONTATOS AGENDAMENTO

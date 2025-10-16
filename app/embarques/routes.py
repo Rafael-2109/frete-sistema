@@ -15,6 +15,9 @@ from app.separacao.models import Separacao
 from app.cotacao.models import Cotacao
 from app.utils.embarque_numero import obter_proximo_numero_embarque
 from app.rastreamento.services.qrcode_service import QRCodeService  # 🚚 QR Code rastreamento
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
