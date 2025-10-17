@@ -85,7 +85,8 @@ class AgrupamentoService:
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.forma_agendamento,
-            
+            CarteiraPrincipal.importante,  # ⭐ Campo importante
+
             # Agregações conforme especificação
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
                     CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
@@ -137,7 +138,8 @@ class AgrupamentoService:
             CarteiraPrincipal.protocolo,
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.agendamento_confirmado,
-            CarteiraPrincipal.forma_agendamento
+            CarteiraPrincipal.forma_agendamento,
+            CarteiraPrincipal.importante  # ⭐ Campo importante no GROUP BY
         ).order_by(
             CarteiraPrincipal.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
             CarteiraPrincipal.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
@@ -154,6 +156,9 @@ class AgrupamentoService:
             
             # Calcular informações de separação
             qtd_separacoes, valor_separacoes, dados_separacao = self._calcular_separacoes(pedido.num_pedido)
+
+            # Buscar dados da 1ª separação (menor id com sincronizado_nf=False)
+            primeira_separacao = self._buscar_primeira_separacao(pedido.num_pedido)
 
             # Calcular valor do saldo restante
             valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
@@ -221,7 +226,10 @@ class AgrupamentoService:
                 'totalmente_separado': totalmente_separado,
                 'tem_protocolo_separacao': dados_separacao.get('tem_protocolo', False),  # Se tem protocolo na Separacao
                 'separacao_lote_id': dados_separacao.get('separacao_lote_id'),  # Passar lote_id
-                'grupo_cliente': grupo_cliente  # Adicionar grupo do cliente
+                'grupo_cliente': grupo_cliente,  # Adicionar grupo do cliente
+                # ⭐ Campos novos para funcionalidade de importante
+                'importante': pedido.importante,  # Marcador de pedido importante
+                'agendamento_primeira_separacao': primeira_separacao  # Agendamento da 1ª separação
             }
             
         except Exception as e:
@@ -272,11 +280,34 @@ class AgrupamentoService:
                         dados_separacao['agendamento_confirmado'] = True
 
             return qtd_separacoes, valor_separacoes, dados_separacao
-            
+
         except Exception as e:
             logger.warning(f"Erro ao calcular separações para {num_pedido}: {e}")
             return 0, 0, {'tem_protocolo': False, 'agendamento_confirmado': False, 'separacao_lote_id': None}
-    
+
+    def _buscar_primeira_separacao(self, num_pedido):
+        """
+        Busca o agendamento da 1ª separação (menor id com sincronizado_nf=False)
+
+        Returns:
+            Date | None: Data do agendamento da 1ª separação ou None se não houver
+        """
+        try:
+            # Buscar a separação com menor id e sincronizado_nf=False
+            primeira_sep = db.session.query(Separacao.agendamento).filter(
+                Separacao.num_pedido == num_pedido,
+                Separacao.sincronizado_nf == False
+            ).order_by(
+                Separacao.id.asc()  # Menor id = 1ª separação
+            ).first()
+
+            # Retornar o agendamento se existir
+            return primeira_sep[0] if primeira_sep and primeira_sep[0] else None
+
+        except Exception as e:
+            logger.warning(f"Erro ao buscar 1ª separação para {num_pedido}: {e}")
+            return None
+
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""
         from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
@@ -327,5 +358,8 @@ class AgrupamentoService:
             'totalmente_separado': False,
             'tem_protocolo_separacao': False,  # Se tem protocolo na Separacao
             'separacao_lote_id': None,
-            'grupo_cliente': grupo_cliente
+            'grupo_cliente': grupo_cliente,
+            # ⭐ Campos novos para funcionalidade de importante
+            'importante': pedido.importante if hasattr(pedido, 'importante') else False,
+            'agendamento_primeira_separacao': None  # Não tem separação no modo básico
         }

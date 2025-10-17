@@ -39,9 +39,10 @@ class RupturaEstoqueManager {
             const target = e.target;
             const isButton = target.closest('button, .btn, a[href], [onclick]');
             const isRupturaInicial = target.closest('.btn-analisar-ruptura');
+            const isImportante = target.closest('.btn-importante'); // ⭐ Nova exceção
 
-            // Se clicar em qualquer botão que NÃO seja de ruptura inicial
-            if (isButton && !isRupturaInicial) {
+            // Se clicar em qualquer botão que NÃO seja de ruptura inicial OU importante
+            if (isButton && !isRupturaInicial && !isImportante) {
                 console.log('🛑 Pausando análises - Usuário clicou em:', target.textContent?.trim());
 
                 // Pausar TUDO imediatamente

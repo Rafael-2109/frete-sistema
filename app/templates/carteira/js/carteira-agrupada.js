@@ -11,7 +11,8 @@ class CarteiraAgrupada {
             subrotas: new Set(),
             agendamento: null,  // null, 'com', 'sem', 'sep-aguardando', 'sep-confirmado'
             cliente: null,  // null, 'atacadao', 'sendas', 'outros'
-            atendimento: null  // null, 'programar', 'revisar-data'
+            atendimento: null,  // null, 'programar', 'revisar-data'
+            importante: false  // ⭐ Filtro de pedidos importantes
         };
         this.maxFiltrosAtivos = 3; // Máximo de badges selecionados simultaneamente
 
@@ -40,6 +41,9 @@ class CarteiraAgrupada {
         // Carregar separações para todos os pedidos visíveis
         console.log(`📦 Carregando separações para ${this.pedidosVisiveis.size} pedidos iniciais...`);
         this.carregarSeparacoesCompactasVisiveis();
+
+        // ⭐ Atualizar contadores de importante no carregamento inicial
+        this.atualizarContadoresImportante();
 
         // Aguardar um pouco para as separações carregarem antes de atualizar contadores
         setTimeout(() => {
@@ -85,6 +89,41 @@ class CarteiraAgrupada {
 
         // Botões de expansão de detalhes
         this.setupDetalhesExpansao();
+
+        // ⭐ Event listener para botões de importante (event delegation)
+        this.setupBotoesImportante();
+    }
+
+    setupBotoesImportante() {
+        console.log('🔧 Configurando listener de botões importante...');
+
+        // Usar event delegation no document para garantir prioridade
+        document.addEventListener('click', (e) => {
+            // Verificar se clicou no botão de importante ou na estrela dentro dele
+            const btnImportante = e.target.closest('.btn-importante');
+
+            if (btnImportante) {
+                console.log('✅ Detectado clique em botão importante!');
+                e.preventDefault();
+                e.stopPropagation();
+
+                const numPedido = btnImportante.dataset.pedido;
+                console.log('📋 Dados do botão:', {
+                    numPedido: numPedido,
+                    importante: btnImportante.dataset.importante,
+                    classes: btnImportante.className
+                });
+
+                if (numPedido) {
+                    console.log('⭐ Chamando toggleImportante para:', numPedido);
+                    this.toggleImportante(numPedido);
+                } else {
+                    console.error('❌ Botão importante sem data-pedido:', btnImportante);
+                }
+            }
+        }, true); // ⚠️ CAPTURE PHASE - executa antes de outros listeners
+
+        console.log('✅ Event delegation para botões importante configurado (capture phase)');
     }
 
     setupFiltros() {
@@ -167,6 +206,12 @@ class CarteiraAgrupada {
             limparAtendimento.addEventListener('click', () => this.limparFiltrosAtendimento());
         }
 
+        // ⭐ Botão limpar importante
+        const limparImportante = document.getElementById('limpar-importante');
+        if (limparImportante) {
+            limparImportante.addEventListener('click', () => this.limparFiltroImportante());
+        }
+
         console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.bg-filtro').length);
     }
 
@@ -189,6 +234,12 @@ class CarteiraAgrupada {
         // Tratamento especial para atendimento (exclusivo mútuo)
         if (tipo === 'atendimento') {
             this.toggleAtendimento(badge, valor);
+            return;
+        }
+
+        // ⭐ Tratamento especial para importante (exclusivo mútuo)
+        if (tipo === 'importante') {
+            this.toggleImportanteFiltro(badge);
             return;
         }
 
@@ -691,15 +742,18 @@ class CarteiraAgrupada {
                 matchCliente = grupoCliente === this.filtrosAtivos.cliente;
             }
 
-            // Filtro de atendimento (Programar, Revisar Data)
+            // ⭐ Filtro de atendimento (Programar, Revisar Data) - REVISADO
             let matchAtendimento = true;
             if (this.filtrosAtivos.atendimento) {
+                const agendamentoPrimeiraSep = linha.dataset.agendamentoPrimeiraSep || '';
+                const qtdSeparacoes = parseInt(linha.querySelector('.contador-separacoes')?.textContent || '0');
+
                 if (this.filtrosAtivos.atendimento === 'programar') {
-                    // Pedidos com data_entrega_pedido sem agendamento
-                    matchAtendimento = dataEntregaPedido && !agendamentoData;
+                    // Pedidos com data_entrega_pedido E sem separações (qtd_separacoes == 0)
+                    matchAtendimento = dataEntregaPedido && qtdSeparacoes === 0;
                 } else if (this.filtrosAtivos.atendimento === 'revisar-data') {
-                    // Pedidos com agendamento posterior à data de entrega
-                    matchAtendimento = dataEntregaPedido && agendamentoData && agendamentoData > dataEntregaPedido;
+                    // Pedidos com data_entrega_pedido diferente do agendamento da 1ª separação
+                    matchAtendimento = dataEntregaPedido && agendamentoPrimeiraSep && agendamentoPrimeiraSep !== dataEntregaPedido;
                 }
             }
 
@@ -770,7 +824,13 @@ class CarteiraAgrupada {
                 }
             }
 
-            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchAtendimento && matchDataPedido && matchDataEntrega && matchBadges && matchSubrotas;
+            // ⭐ Filtro de importante
+            let matchImportante = true;
+            if (this.filtrosAtivos.importante) {
+                matchImportante = linha.dataset.importante === 'true';
+            }
+
+            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchAtendimento && matchDataPedido && matchDataEntrega && matchImportante && matchBadges && matchSubrotas;
 
             linha.style.display = mostrar ? '' : 'none';
 
@@ -2302,6 +2362,146 @@ class CarteiraAgrupada {
             );
         }
     }
+
+    // ⭐ MÉTODOS PARA FUNCIONALIDADE DE IMPORTANTE
+
+    // Toggle do estado importante de um pedido
+    async toggleImportante(numPedido) {
+        try {
+            // Buscar botão da estrela
+            const btnEstrela = document.querySelector(`.btn-importante[data-pedido="${numPedido}"]`);
+            if (!btnEstrela) {
+                console.error(`Botão de importante não encontrado para pedido ${numPedido}`);
+                return;
+            }
+
+            // Estado atual
+            const estadoAtual = btnEstrela.dataset.importante === 'true';
+
+            // Fazer requisição para API
+            const response = await fetch('/carteira/api/toggle-importante', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    num_pedido: numPedido
+                })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao alterar estado importante');
+            }
+
+            // Atualizar estado do botão
+            btnEstrela.dataset.importante = data.importante ? 'true' : 'false';
+
+            // Atualizar classe da estrela
+            const estrela = btnEstrela.querySelector('i.fa-star');
+            if (estrela) {
+                if (data.importante) {
+                    estrela.classList.remove('text-muted');
+                    estrela.classList.add('text-warning');
+                    btnEstrela.title = 'Remover marcação de importante';
+                } else {
+                    estrela.classList.remove('text-warning');
+                    estrela.classList.add('text-muted');
+                    btnEstrela.title = 'Marcar como importante';
+                }
+            }
+
+            // Atualizar data-attribute da linha do pedido
+            const linha = document.querySelector(`.pedido-row[data-pedido="${numPedido}"]`);
+            if (linha) {
+                linha.dataset.importante = data.importante ? 'true' : 'false';
+            }
+
+            // Atualizar contadores
+            this.atualizarContadoresImportante();
+
+            // Notificar sucesso
+            if (window.Notifications && window.Notifications.success) {
+                window.Notifications.success(data.message);
+            }
+
+            console.log(`✅ Importante atualizado: ${numPedido} -> ${data.importante}`);
+
+        } catch (error) {
+            console.error('Erro ao toggle importante:', error);
+            if (window.Notifications && window.Notifications.error) {
+                window.Notifications.error('Erro ao alterar estado importante');
+            } else {
+                alert('Erro ao alterar estado importante');
+            }
+        }
+    }
+
+    // Atualiza os contadores de pedidos importantes
+    atualizarContadoresImportante() {
+        const linhas = document.querySelectorAll('.pedido-row');
+        let totalImportantes = 0;
+        let importantesSemSeparacao = 0;
+
+        linhas.forEach(linha => {
+            const importante = linha.dataset.importante === 'true';
+            const qtdSeparacoes = parseInt(linha.querySelector('.contador-separacoes')?.textContent || '0');
+
+            if (importante) {
+                totalImportantes++;
+                if (qtdSeparacoes === 0) {
+                    importantesSemSeparacao++;
+                }
+            }
+        });
+
+        // Atualizar contadores no badge
+        const contadorTotal = document.getElementById('contador-importantes-total');
+        const contadorSemSep = document.getElementById('contador-importantes-sem-sep');
+
+        if (contadorTotal) contadorTotal.textContent = totalImportantes;
+        if (contadorSemSep) contadorSemSep.textContent = importantesSemSeparacao;
+
+        console.log(`📊 Contadores importantes: ${importantesSemSeparacao} / ${totalImportantes}`);
+    }
+
+    // Toggle do filtro importante (exclusivo mútuo)
+    toggleImportanteFiltro(badge) {
+        // Se já está ativo, desativar
+        if (this.filtrosAtivos.importante) {
+            this.filtrosAtivos.importante = false;
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            badge.style.color = '#ff6b00';
+            badge.style.borderColor = '#ff6b00';
+            document.getElementById('limpar-importante').style.display = 'none';
+        } else {
+            // Ativar
+            this.filtrosAtivos.importante = true;
+            badge.classList.add('ativo');
+            badge.style.backgroundColor = '#ff6b00';
+            badge.style.color = 'white';
+            badge.style.borderColor = '#ff6b00';
+            document.getElementById('limpar-importante').style.display = 'inline-block';
+        }
+
+        this.aplicarFiltros();
+    }
+
+    // Limpa o filtro de importante
+    limparFiltroImportante() {
+        const badge = document.querySelector('.badge-importante');
+        if (badge) {
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            badge.style.color = '#ff6b00';
+            badge.style.borderColor = '#ff6b00';
+        }
+        this.filtrosAtivos.importante = false;
+        document.getElementById('limpar-importante').style.display = 'none';
+        this.aplicarFiltros();
+    }
 }
 
 function avaliarEstoques(numPedido) {
@@ -2349,6 +2549,8 @@ function abrirModalEndereco(numPedido) {
     } else {
         console.error('❌ Modal de endereço não inicializado');
     }
-}// 🎯 INICIALIZAÇÃO GLOBAL
+}
+
+// 🎯 INICIALIZAÇÃO GLOBAL
 window.CarteiraAgrupada = CarteiraAgrupada;
 

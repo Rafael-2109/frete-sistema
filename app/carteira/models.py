@@ -152,6 +152,9 @@ class CarteiraPrincipal(db.Model):
     # 🗑️ CONTROLE DE EXCLUSÃO
     motivo_exclusao = db.Column(db.Text, nullable=True)  # Motivo do cancelamento/exclusão da separação
 
+    # ⭐ MARCADOR DE IMPORTÂNCIA
+    importante = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Marcador de pedido importante
+
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)

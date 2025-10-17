@@ -30,6 +30,9 @@ from .views_nao_odoo import views_nao_odoo_bp
 # API de Standby
 from .standby_api import standby_bp
 
+# API de Importante
+from .importante_api import importante_bp
+
 # API de Relatórios
 from .relatorios_api import *
 
@@ -48,6 +51,9 @@ carteira_bp.register_blueprint(views_nao_odoo_bp)
 
 # Registrar blueprint de Standby
 carteira_bp.register_blueprint(standby_bp)
+
+# Registrar blueprint de Importante
+carteira_bp.register_blueprint(importante_bp)
 
 # Registrar blueprints de Alertas
 carteira_bp.register_blueprint(alertas_separacao_api)

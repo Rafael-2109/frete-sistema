@@ -191,12 +191,25 @@
                             <span class="badge bg-filtro badge-atendimento ms-2"
                                 style="background-color: transparent; color: #e83e8c; border: 2px solid #e83e8c;"
                                 data-tipo="atendimento" data-valor="revisar-data"
-                                title="Pedidos com agendamento posterior à data de entrega">
+                                title="Pedidos com agendamento da 1ª separação diferente da data de entrega">
                                 <i class="fas fa-exclamation-triangle me-1"></i>
                                 Revisar Data
                             </span>
+
+                            <!-- ⭐ FILTRO DE IMPORTANTE -->
+                            <span class="badge bg-filtro badge-importante ms-3"
+                                style="background-color: transparent; color: #ff6b00; border: 2px solid #ff6b00;"
+                                data-tipo="importante" data-valor="importante"
+                                title="Pedidos marcados como importantes">
+                                <i class="fas fa-star me-1"></i>
+                                Importante! (<span id="contador-importantes-sem-sep">0</span> / <span id="contador-importantes-total">0</span>)
+                            </span>
                         </div>
                         <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-atendimento"
+                            style="display:none;">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-importante"
                             style="display:none;">
                             <i class="fas fa-times"></i> Limpar
                         </button>
@@ -395,6 +408,8 @@
                                 data-grupo-cliente="{{ pedido.grupo_cliente or 'outros' }}"
                                 data-data-pedido="{{ pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else '' }}"
                                 data-data-entrega="{{ pedido.data_entrega_pedido.strftime('%Y-%m-%d') if pedido.data_entrega_pedido else '' }}"
+                                data-importante="{{ 'true' if pedido.importante else 'false' }}"
+                                data-agendamento-primeira-sep="{{ pedido.agendamento_primeira_separacao.strftime('%Y-%m-%d') if pedido.agendamento_primeira_separacao else '' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
 
                                 <!-- Botão Expandir -->
@@ -439,6 +454,15 @@
                                         {% if pedido.cnpj_cpf %}
                                         <br><small class="text-muted">{{ pedido.cnpj_cpf }}</small>
                                         {% endif %}
+                                        <!-- ⭐ Estrela de Importante -->
+                                        <br>
+                                        <button type="button" class="btn btn-link p-0 btn-importante"
+                                                data-pedido="{{ pedido.num_pedido }}"
+                                                data-importante="{{ 'true' if pedido.importante else 'false' }}"
+                                                title="{{ 'Remover marcação de importante' if pedido.importante else 'Marcar como importante' }}"
+                                                style="font-size: 1.2rem; text-decoration: none;">
+                                            <i class="fas fa-star {{ 'text-warning' if pedido.importante else 'text-muted' }}"></i>
+                                        </button>
                                         {% if pedido.motivo_exclusao %}
                                         <br><small class="text-danger" title="Motivo de exclusão">
                                             <i class="fas fa-exclamation-triangle"></i> {{ pedido.motivo_exclusao[:50] }}{% if pedido.motivo_exclusao|length > 50 %}...{% endif %}
