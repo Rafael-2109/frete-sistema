@@ -1,0 +1,405 @@
+/**
+ * Carteira Simplificada - Estilos Compactos
+ * Foco em densidade visual e performance
+ */
+
+/* ==============================================
+   VARIÁVEIS CSS
+   ============================================== */
+:root {
+    --font-size-base: 10px;
+    --padding-cell: 2px 4px;
+    --input-height: 22px;
+    --btn-height: 20px;
+}
+
+/* ==============================================
+   CONTAINER PRINCIPAL
+   ============================================== */
+.carteira-simples-container {
+    font-size: var(--font-size-base);
+    font-family: 'Arial', 'Helvetica', sans-serif;
+    line-height: 1.2;
+}
+
+/* ==============================================
+   TABELA
+   ============================================== */
+.table-carteira-simples {
+    font-size: var(--font-size-base);
+    margin-bottom: 0 !important;
+}
+
+.table-carteira-simples thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 10;
+    font-weight: 600;
+    padding: 4px 4px !important;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.table-carteira-simples tbody td {
+    padding: var(--padding-cell) !important;
+    vertical-align: middle;
+    border-bottom: 1px solid #e9ecef;
+    font-size: var(--font-size-base);
+}
+
+.table-carteira-simples tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* ==============================================
+   INPUTS E CAMPOS EDITÁVEIS
+   ============================================== */
+.table-carteira-simples input[type="number"],
+.table-carteira-simples input[type="date"],
+.table-carteira-simples input[type="text"] {
+    font-size: var(--font-size-base);
+    padding: 1px 3px;
+    height: var(--input-height);
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.table-carteira-simples input[type="number"]:focus,
+.table-carteira-simples input[type="date"]:focus,
+.table-carteira-simples input[type="text"]:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+}
+
+.table-carteira-simples input[type="number"] {
+    text-align: right;
+}
+
+/* Inputs inválidos */
+.table-carteira-simples input:invalid {
+    border-color: #dc3545;
+}
+
+/* ==============================================
+   BOTÕES
+   ============================================== */
+.table-carteira-simples .btn-sm-custom {
+    font-size: 9px;
+    padding: 1px 4px;
+    line-height: 1.2;
+    border-radius: 2px;
+    height: var(--btn-height);
+    min-width: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease-in-out;
+}
+
+.table-carteira-simples .btn-sm-custom:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.table-carteira-simples .btn-sm-custom:active {
+    transform: translateY(0);
+}
+
+.table-carteira-simples .btn-sm-custom:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Botões específicos */
+.btn-ok {
+    background-color: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.btn-ok:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.btn-add-qtd {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.btn-add-qtd:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.btn-add-all {
+    background-color: #17a2b8;
+    color: white;
+    border-color: #17a2b8;
+}
+
+.btn-add-all:hover:not(:disabled) {
+    background-color: #138496;
+}
+
+.btn-d1 {
+    background-color: #ffc107;
+    color: #212529;
+    border-color: #ffc107;
+}
+
+.btn-d1:hover:not(:disabled) {
+    background-color: #e0a800;
+}
+
+.btn-confirmar {
+    background-color: #28a745;
+    color: white;
+    border-color: #28a745;
+    font-weight: bold;
+}
+
+.btn-confirmar:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.btn-confirmar:disabled {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+/* ==============================================
+   TOOLTIPS E TEXTOS TRUNCADOS
+   ============================================== */
+.truncate-tooltip {
+    cursor: help;
+    text-decoration: underline dotted #6c757d;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+.truncate-tooltip:hover {
+    text-decoration-color: #0d6efd;
+}
+
+/* ==============================================
+   ESTOQUE PROJETADO
+   ============================================== */
+.estoque-projecao-container {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+}
+
+.estoque-dia {
+    font-size: 8px;
+    padding: 1px 2px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    min-width: 35px;
+    max-width: 45px;
+    text-align: center;
+    display: inline-block;
+    line-height: 1.1;
+}
+
+.estoque-dia.negativo {
+    background-color: #f8d7da;
+    color: #842029;
+    font-weight: 600;
+    border-color: #f5c2c7;
+}
+
+.estoque-dia.baixo {
+    background-color: #fff3cd;
+    color: #856404;
+    border-color: #ffecb5;
+}
+
+/* Botões de navegação de estoque */
+.btn-paginacao-estoque {
+    font-size: 9px;
+    padding: 0 3px;
+    cursor: pointer;
+    background-color: #e9ecef;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    height: var(--btn-height);
+    min-width: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease;
+}
+
+.btn-paginacao-estoque:hover {
+    background-color: #dee2e6;
+}
+
+.btn-paginacao-estoque:active {
+    background-color: #cbd3da;
+}
+
+/* ==============================================
+   CORES E ESTADOS
+   ============================================== */
+.text-danger {
+    color: #dc3545 !important;
+}
+
+.text-warning {
+    color: #ffc107 !important;
+}
+
+.text-success {
+    color: #28a745 !important;
+}
+
+.fw-bold {
+    font-weight: 600 !important;
+}
+
+/* ==============================================
+   RESPONSIVIDADE
+   ============================================== */
+@media (max-width: 1366px) {
+    .carteira-simples-container {
+        font-size: 9px;
+    }
+
+    .table-carteira-simples {
+        font-size: 9px;
+    }
+
+    .table-carteira-simples input {
+        font-size: 9px;
+    }
+
+    .btn-sm-custom {
+        font-size: 8px;
+        padding: 1px 3px;
+    }
+
+    .estoque-dia {
+        font-size: 7px;
+        min-width: 30px;
+        max-width: 38px;
+    }
+}
+
+/* ==============================================
+   SCROLLBAR CUSTOMIZADA
+   ============================================== */
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ==============================================
+   LOADING E STATES
+   ============================================== */
+.skeleton-loading {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ==============================================
+   FILTROS
+   ============================================== */
+.filters-section .form-control-sm,
+.filters-section .form-select-sm {
+    font-size: var(--font-size-base);
+    height: 28px;
+}
+
+.filters-section .input-group-text {
+    font-size: var(--font-size-base);
+    padding: 4px 8px;
+}
+
+/* ==============================================
+   PAGINAÇÃO
+   ============================================== */
+.pagination-sm .page-link {
+    font-size: var(--font-size-base);
+    padding: 4px 8px;
+}
+
+/* ==============================================
+   UTILITÁRIOS
+   ============================================== */
+.text-end {
+    text-align: right !important;
+}
+
+.text-center {
+    text-align: center !important;
+}
+
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.d-flex {
+    display: flex !important;
+}
+
+.gap-1 {
+    gap: 0.25rem !important;
+}
+
+.gap-2 {
+    gap: 0.5rem !important;
+}
+
+.align-items-center {
+    align-items: center !important;
+}
+
+.justify-content-center {
+    justify-content: center !important;
+}
+
+.flex-wrap {
+    flex-wrap: wrap !important;
+}
+
+.flex-nowrap {
+    flex-wrap: nowrap !important;
+}

@@ -33,6 +33,9 @@ from .standby_api import standby_bp
 # API de Importante
 from .importante_api import importante_bp
 
+# API de Carteira Simplificada
+from .carteira_simples_api import carteira_simples_bp
+
 # API de Relatórios
 from .relatorios_api import *
 
@@ -54,6 +57,9 @@ carteira_bp.register_blueprint(standby_bp)
 
 # Registrar blueprint de Importante
 carteira_bp.register_blueprint(importante_bp)
+
+# Registrar blueprint de Carteira Simplificada
+carteira_bp.register_blueprint(carteira_simples_bp)
 
 # Registrar blueprints de Alertas
 carteira_bp.register_blueprint(alertas_separacao_api)

@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Simplificada{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/carteira-simples.css') }}">
+<style>
+    /* Estilos inline críticos para performance */
+    .carteira-simples-container {
+        font-size: 10px;
+        font-family: 'Arial', sans-serif;
+    }
+
+    .table-carteira-simples {
+        font-size: 10px;
+        line-height: 1.2;
+    }
+
+    .table-carteira-simples th,
+    .table-carteira-simples td {
+        padding: 2px 4px !important;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .table-carteira-simples input[type="number"],
+    .table-carteira-simples input[type="date"],
+    .table-carteira-simples input[type="text"] {
+        font-size: 10px;
+        padding: 1px 3px;
+        height: 22px;
+        border: 1px solid #ced4da;
+        border-radius: 2px;
+    }
+
+    .table-carteira-simples .btn-sm-custom {
+        font-size: 9px;
+        padding: 1px 4px;
+        line-height: 1.2;
+        border-radius: 2px;
+    }
+
+    .truncate-tooltip {
+        cursor: help;
+        text-decoration: underline dotted;
+    }
+
+    .estoque-projecao-container {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .estoque-dia {
+        font-size: 9px;
+        padding: 1px 2px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 2px;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    .estoque-dia.negativo {
+        background-color: #f8d7da;
+        color: #842029;
+    }
+
+    .estoque-dia.baixo {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .btn-paginacao-estoque {
+        font-size: 9px;
+        padding: 0 3px;
+        cursor: pointer;
+        background: #e9ecef;
+        border: 1px solid #dee2e6;
+        border-radius: 2px;
+    }
+
+    .btn-paginacao-estoque:hover {
+        background: #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid carteira-simples-container">
+    <!-- Header da Página -->
+    <header class="page-header mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h4 mb-0 text-gray-800">
+                    <i class="fas fa-list text-primary me-2"></i>
+                    Carteira Simplificada
+                </h1>
+                <small class="text-muted">
+                    <span id="contador-pedidos">0</span> itens encontrados
+                    <span class="ms-2">|</span>
+                    <span class="ms-2 text-success fw-bold">
+                        R$ <span id="valor-total-filtro">0,00</span>
+                    </span>
+                </small>
+            </div>
+
+            <div class="btn-toolbar" role="toolbar">
+                <div class="btn-group me-2" role="group">
+                    <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-success btn-sm">
+                        <i class="fas fa-sync me-1"></i> Sincronizar
+                    </a>
+                </div>
+                <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-arrow-left me-1"></i> Voltar
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filtros -->
+    <section class="filters-section mb-2">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="row align-items-center g-2">
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" class="form-control" id="filtro-busca"
+                                placeholder="Buscar pedido, cliente, CNPJ...">
+                        </div>
+                    </div>
+
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm" id="filtro-estado">
+                            <option value="">Todos os estados</option>
+                            {% for uf in ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <input type="text" class="form-control form-control-sm" id="filtro-municipio"
+                            placeholder="Município">
+                    </div>
+
+                    <div class="col-md-5">
+                        <div class="row g-1">
+                            <div class="col-6">
+                                <label class="form-label mb-0" style="font-size: 9px;">Data Pedido</label>
+                                <div class="d-flex gap-1">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-de">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-ate">
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-0" style="font-size: 9px;">Data Entrega</label>
+                                <div class="d-flex gap-1">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-de">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-ate">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-2">
+                    <div class="col-12 text-end">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-aplicar-filtros">
+                            <i class="fas fa-filter me-1"></i> Aplicar Filtros
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-limpar-filtros">
+                            <i class="fas fa-times me-1"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabela da Carteira -->
+    <section class="table-section">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+                    <table class="table table-sm table-hover table-bordered table-carteira-simples mb-0" id="table-carteira">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="min-width: 72px;">Pedido</th>
+                                <th style="min-width: 64px;">PC Cliente</th>
+                                <th style="min-width: 68px;">Dt Pedido</th>
+                                <th style="min-width: 72px;">Dt Entrega</th>
+                                <th style="min-width: 100px;">CNPJ</th>
+                                <th style="min-width: 150px;">Cliente</th>
+                                <th style="min-width: 24px;">UF</th>
+                                <th style="min-width: 85px;">Município</th>
+                                <th style="min-width: 64px;">Cód</th>
+                                <th style="min-width: 250px;">Nome Produto</th>
+                                <th style="min-width: 42px;">Qtd</th>
+                                <th style="min-width: 60px;">Valor</th>
+                                <th style="min-width: 50px;">Pallets</th>
+                                <th style="min-width: 50px;">Peso</th>
+                                <th style="min-width: 60px;">Rota</th>
+                                <th style="min-width: 60px;">Sub-Rota</th>
+                                <th style="min-width: 60px;">Est. Data</th>
+                                <th style="min-width: 60px;">Menor 7d</th>
+                                <th style="min-width: 30px;">OK</th>
+                                <th style="min-width: 60px;">Ações</th>
+                                <th style="min-width: 60px;">Qtd Edit.</th>
+                                <th style="min-width: 30px;">D1</th>
+                                <th style="min-width: 77px;">Dt Exped.</th>
+                                <th style="min-width: 77px;">Dt Agend.</th>
+                                <th style="min-width: 80px;">Protocolo</th>
+                                <th style="min-width: 30px;">✓</th>
+                                <th style="min-width: 60px;">Est. Atual</th>
+                                <th style="min-width: 60px;">Qtd Cart.</th>
+                                <th style="min-width: 400px;">Estoque D0-D28</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-carteira">
+                            <tr>
+                                <td colspan="29" class="text-center py-3">
+                                    <i class="fas fa-spinner fa-spin me-2"></i> Carregando dados...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Paginação -->
+    <section class="pagination-section mt-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <small class="text-muted">
+                    Exibindo <span id="info-exibindo-de">0</span> a <span id="info-exibindo-ate">0</span> de <span id="info-total">0</span> itens
+                </small>
+            </div>
+            <nav>
+                <ul class="pagination pagination-sm mb-0" id="paginacao">
+                    <!-- Será gerado via JavaScript -->
+                </ul>
+            </nav>
+        </div>
+    </section>
+</div>
+
+<!-- Modals -->
+<!-- Modal de Carregamento -->
+<div class="modal fade" id="modalLoading" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-primary mb-2"></i>
+                <p class="mb-0">Processando...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Sucesso/Erro -->
+<div class="modal fade" id="modalMensagem" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalMensagemTitulo">Mensagem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalMensagemConteudo">
+                <!-- Conteúdo dinâmico -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/carteira-simples.js') }}"></script>
+{% endblock %}
