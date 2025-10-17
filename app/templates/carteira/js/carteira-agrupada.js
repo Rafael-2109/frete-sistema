@@ -92,6 +92,12 @@ class CarteiraAgrupada {
         const filtroStatus = document.getElementById('filtro-status');
         const filtroEquipe = document.getElementById('filtro-equipe');
 
+        // 🆕 Filtros de data
+        const filtroDataPedidoDe = document.getElementById('filtro-data-pedido-de');
+        const filtroDataPedidoAte = document.getElementById('filtro-data-pedido-ate');
+        const filtroDataEntregaDe = document.getElementById('filtro-data-entrega-de');
+        const filtroDataEntregaAte = document.getElementById('filtro-data-entrega-ate');
+
         if (filtroBusca) {
             filtroBusca.addEventListener('input', () => this.aplicarFiltros());
         }
@@ -103,6 +109,20 @@ class CarteiraAgrupada {
         if (filtroEquipe) {
             filtroEquipe.addEventListener('change', () => this.aplicarFiltros());
             this.popularFiltroEquipes();
+        }
+
+        // 🆕 Event listeners para filtros de data
+        if (filtroDataPedidoDe) {
+            filtroDataPedidoDe.addEventListener('change', () => this.aplicarFiltros());
+        }
+        if (filtroDataPedidoAte) {
+            filtroDataPedidoAte.addEventListener('change', () => this.aplicarFiltros());
+        }
+        if (filtroDataEntregaDe) {
+            filtroDataEntregaDe.addEventListener('change', () => this.aplicarFiltros());
+        }
+        if (filtroDataEntregaAte) {
+            filtroDataEntregaAte.addEventListener('change', () => this.aplicarFiltros());
         }
     }
 
@@ -611,6 +631,16 @@ class CarteiraAgrupada {
         const statusSelecionado = document.getElementById('filtro-status')?.value || '';
         const equipeSelecionada = document.getElementById('filtro-equipe')?.value || '';
 
+        // 🆕 Filtros de data
+        const datasPedido = {
+            de: document.getElementById('filtro-data-pedido-de')?.value || '',
+            ate: document.getElementById('filtro-data-pedido-ate')?.value || ''
+        };
+        const datasEntrega = {
+            de: document.getElementById('filtro-data-entrega-de')?.value || '',
+            ate: document.getElementById('filtro-data-entrega-ate')?.value || ''
+        };
+
         // 🆕 Cancelar todas as requisições assíncronas pendentes
         this.cancelarTodasRequisicoes();
 
@@ -673,6 +703,41 @@ class CarteiraAgrupada {
                 }
             }
 
+            // 🆕 Filtros de data (inclusivo)
+            let matchDataPedido = true;
+            const dataPedido = linha.dataset.dataPedido || '';
+            if (datasPedido.de || datasPedido.ate) {
+                if (dataPedido) {
+                    // Verificar range de data (inclusivo)
+                    if (datasPedido.de && dataPedido < datasPedido.de) {
+                        matchDataPedido = false;
+                    }
+                    if (datasPedido.ate && dataPedido > datasPedido.ate) {
+                        matchDataPedido = false;
+                    }
+                } else {
+                    // Se não tem data do pedido e filtro está ativo, não mostrar
+                    matchDataPedido = false;
+                }
+            }
+
+            let matchDataEntrega = true;
+            const dataEntrega = linha.dataset.dataEntrega || '';
+            if (datasEntrega.de || datasEntrega.ate) {
+                if (dataEntrega) {
+                    // Verificar range de data (inclusivo)
+                    if (datasEntrega.de && dataEntrega < datasEntrega.de) {
+                        matchDataEntrega = false;
+                    }
+                    if (datasEntrega.ate && dataEntrega > datasEntrega.ate) {
+                        matchDataEntrega = false;
+                    }
+                } else {
+                    // Se não tem data de entrega e filtro está ativo, não mostrar
+                    matchDataEntrega = false;
+                }
+            }
+
             let matchBadges = true;
 
             // Filtros de badges (rotas/incoterms)
@@ -705,7 +770,7 @@ class CarteiraAgrupada {
                 }
             }
 
-            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchAtendimento && matchBadges && matchSubrotas;
+            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchCliente && matchAtendimento && matchDataPedido && matchDataEntrega && matchBadges && matchSubrotas;
 
             linha.style.display = mostrar ? '' : 'none';
 

@@ -143,97 +143,109 @@ def atualizar_crossdocking_clientes(modo='normal', delay_segundos=5):
 
         print('3. Processando clientes...')
         print('-'*80)
+        print('💡 DICA: Pressione Ctrl+C a qualquer momento para parar e salvar o progresso!')
+        print()
 
-        for idx, cliente in enumerate(clientes, 1):
-            cnpj_limpo = limpar_cnpj(cliente.cnpj_cliente)
-
-            # Barra de progresso
-            percentual = int((idx / total_clientes) * 100)
-            print(f'\n[{idx}/{total_clientes}] ({percentual}%) Cliente: {cliente.cliente[:40]}...')
-            print(f'   CNPJ: {cnpj_limpo}')
-
-            # Consultar Receita Federal (exceto modo rápido)
-            dados_receita = None
-            if modo != 'rapido':
-                # Verificar se cliente já tem dados completos
-                if cliente_tem_dados_completos(cliente):
-                    print(f'   ⏩ Cliente já tem dados completos - pulando consulta Receita')
-                    total_pulados += 1
-                elif cnpj_limpo and len(cnpj_limpo) == 14:
-                    total_receita_consultada += 1
-                    dados_receita = consultar_receita_federal(cnpj_limpo)
-
-                    if dados_receita:
-                        total_receita_sucesso += 1
-                        # Atualizar dados do cliente
-                        cliente.cliente = dados_receita.get('nome', cliente.cliente)
-                        cliente.endereco_cliente = dados_receita.get('logradouro', cliente.endereco_cliente)
-                        cliente.numero_cliente = dados_receita.get('numero', cliente.numero_cliente)
-                        cliente.complemento_cliente = dados_receita.get('complemento', cliente.complemento_cliente)
-                        cliente.bairro_cliente = dados_receita.get('bairro', cliente.bairro_cliente)
-                        cliente.cidade_cliente = dados_receita.get('municipio', cliente.cidade_cliente)
-                        cliente.estado_cliente = dados_receita.get('uf', cliente.estado_cliente)
-                        cliente.cep_cliente = dados_receita.get('cep', cliente.cep_cliente)
-                        cliente.telefone_cliente = dados_receita.get('telefone', cliente.telefone_cliente)
-                        cliente.email_cliente = dados_receita.get('email', cliente.email_cliente)
-
-                        print(f'   📝 Dados atualizados pela Receita Federal')
-
-                    # Delay entre requisições (exceto modo sem-delay)
-                    if modo != 'sem-delay' and idx < total_clientes:
-                        print(f'   ⏳ Aguardando {delay_segundos}s...', end='', flush=True)
-                        time.sleep(delay_segundos)
-                        print(' ✅')
-
-            # Aplicar regra de CrossDocking
-            crossdocking_anterior = cliente.crossdocking
-            deve_marcar_crossdocking = True
-
-            # Condição 1: É do vendedor DANI?
-            if vendedor_dani_id and cliente.vendedor_id == vendedor_dani_id:
-                deve_marcar_crossdocking = False
-                print(f'   ❌ É do vendedor DANI - NÃO marcar crossdocking')
-
-            # Condição 2: É de São Paulo?
-            elif cliente.estado_cliente and cliente.estado_cliente.upper() == 'SP':
-                deve_marcar_crossdocking = False
-                print(f'   ❌ É de São Paulo - NÃO marcar crossdocking')
-
-            # Condição 3: É o CNPJ exceção?
-            elif cnpj_limpo == '62009696000174':
-                deve_marcar_crossdocking = False
-                print(f'   ❌ É o CNPJ exceção 62.009.696/0001-74 - NÃO marcar crossdocking')
-
-            # Aplicar CrossDocking
-            if deve_marcar_crossdocking:
-                cliente.crossdocking = True
-                total_crossdocking_marcado += 1
-                print(f'   ✅ MARCADO como CrossDocking=True')
-            else:
-                cliente.crossdocking = False
-                print(f'   ℹ️  Mantido como CrossDocking=False')
-
-            # Marcar como atualizado
-            cliente.atualizado_em = datetime.utcnow()
-            cliente.atualizado_por = 'Script Migração CrossDocking'
-
-            if crossdocking_anterior != cliente.crossdocking:
-                total_atualizados += 1
-                print(f'   📊 Status alterado: {crossdocking_anterior} → {cliente.crossdocking}')
-
-            total_processados += 1
-
-        # Commit final
         try:
-            print()
-            print('-'*80)
-            print('4. Salvando alterações no banco de dados...')
-            db.session.commit()
-            print('   ✅ Alterações salvas com sucesso!')
-        except Exception as e:
-            db.session.rollback()
-            print(f'   ❌ ERRO ao salvar: {str(e)}')
-            erros.append(f'Erro ao salvar no banco: {str(e)}')
+            for idx, cliente in enumerate(clientes, 1):
+                cnpj_limpo = limpar_cnpj(cliente.cnpj_cliente)
+
+                # Barra de progresso
+                percentual = int((idx / total_clientes) * 100)
+                print(f'\n[{idx}/{total_clientes}] ({percentual}%) Cliente: {cliente.cliente[:40]}...')
+                print(f'   CNPJ: {cnpj_limpo}')
+
+                # Consultar Receita Federal (exceto modo rápido)
+                dados_receita = None
+                if modo != 'rapido':
+                    # Verificar se cliente já tem dados completos
+                    if cliente_tem_dados_completos(cliente):
+                        print(f'   ⏩ Cliente já tem dados completos - pulando consulta Receita')
+                        total_pulados += 1
+                    elif cnpj_limpo and len(cnpj_limpo) == 14:
+                        total_receita_consultada += 1
+                        dados_receita = consultar_receita_federal(cnpj_limpo)
+
+                        if dados_receita:
+                            total_receita_sucesso += 1
+                            # Atualizar dados do cliente
+                            cliente.cliente = dados_receita.get('nome', cliente.cliente)
+                            cliente.endereco_cliente = dados_receita.get('logradouro', cliente.endereco_cliente)
+                            cliente.numero_cliente = dados_receita.get('numero', cliente.numero_cliente)
+                            cliente.complemento_cliente = dados_receita.get('complemento', cliente.complemento_cliente)
+                            cliente.bairro_cliente = dados_receita.get('bairro', cliente.bairro_cliente)
+                            cliente.cidade_cliente = dados_receita.get('municipio', cliente.cidade_cliente)
+                            cliente.estado_cliente = dados_receita.get('uf', cliente.estado_cliente)
+                            cliente.cep_cliente = dados_receita.get('cep', cliente.cep_cliente)
+                            cliente.telefone_cliente = dados_receita.get('telefone', cliente.telefone_cliente)
+                            cliente.email_cliente = dados_receita.get('email', cliente.email_cliente)
+
+                            print(f'   📝 Dados atualizados pela Receita Federal')
+
+                        # Delay entre requisições (exceto modo sem-delay)
+                        if modo != 'sem-delay' and idx < total_clientes:
+                            print(f'   ⏳ Aguardando {delay_segundos}s...', end='', flush=True)
+                            time.sleep(delay_segundos)
+                            print(' ✅')
+
+                # Aplicar regra de CrossDocking
+                crossdocking_anterior = cliente.crossdocking
+                deve_marcar_crossdocking = True
+
+                # Condição 1: É do vendedor DANI?
+                if vendedor_dani_id and cliente.vendedor_id == vendedor_dani_id:
+                    deve_marcar_crossdocking = False
+                    print(f'   ❌ É do vendedor DANI - NÃO marcar crossdocking')
+
+                # Condição 2: É de São Paulo?
+                elif cliente.estado_cliente and cliente.estado_cliente.upper() == 'SP':
+                    deve_marcar_crossdocking = False
+                    print(f'   ❌ É de São Paulo - NÃO marcar crossdocking')
+
+                # Condição 3: É o CNPJ exceção?
+                elif cnpj_limpo == '62009696000174':
+                    deve_marcar_crossdocking = False
+                    print(f'   ❌ É o CNPJ exceção 62.009.696/0001-74 - NÃO marcar crossdocking')
+
+                # Aplicar CrossDocking
+                if deve_marcar_crossdocking:
+                    cliente.crossdocking = True
+                    total_crossdocking_marcado += 1
+                    print(f'   ✅ MARCADO como CrossDocking=True')
+                else:
+                    cliente.crossdocking = False
+                    print(f'   ℹ️  Mantido como CrossDocking=False')
+
+                # Marcar como atualizado
+                cliente.atualizado_em = datetime.utcnow()
+                cliente.atualizado_por = 'Script Migração CrossDocking'
+
+                if crossdocking_anterior != cliente.crossdocking:
+                    total_atualizados += 1
+                    print(f'   📊 Status alterado: {crossdocking_anterior} → {cliente.crossdocking}')
+
+                total_processados += 1
+
+                # ✅ COMMIT INCREMENTAL A CADA CLIENTE
+                try:
+                    db.session.commit()
+                    print(f'   💾 Salvo no banco')
+                except Exception as e:
+                    db.session.rollback()
+                    erro_msg = f'Cliente {cliente.cliente} (CNPJ: {cnpj_limpo}): {str(e)}'
+                    erros.append(erro_msg)
+                    print(f'   ❌ ERRO ao salvar: {str(e)}')
+
+        except KeyboardInterrupt:
+            # ✅ USUÁRIO APERTOU CTRL+C - SALVAR O QUE JÁ FOI FEITO
+            print('\n\n🛑 INTERROMPIDO PELO USUÁRIO (Ctrl+C)')
+            print('📦 Salvando progresso até aqui...')
+            try:
+                db.session.commit()
+                print('✅ Progresso salvo com sucesso!')
+            except Exception as e:
+                print(f'❌ Erro ao salvar progresso: {str(e)}')
+                db.session.rollback()
 
         # Relatório final
         print()
@@ -287,8 +299,6 @@ if __name__ == '__main__':
 
     try:
         atualizar_crossdocking_clientes(modo=modo, delay_segundos=delay)
-    except KeyboardInterrupt:
-        print('\n\n⚠️  Script interrompido pelo usuário!')
     except Exception as e:
         print(f'\n\n❌ ERRO FATAL: {str(e)}')
         import traceback

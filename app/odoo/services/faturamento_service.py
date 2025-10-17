@@ -1290,8 +1290,10 @@ class FaturamentoService:
                 # Não filtrar por estado para pegar canceladas também
                 domain.extend([
                     '|',
+                    '|',
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
-                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'industrializacao')
                 ])
 
                 horas_status = minutos_status / 60
@@ -1335,14 +1337,18 @@ class FaturamentoService:
                 domain.extend([
                     ('move_id.state', '=', 'posted'),  # Faturas postadas
                     '|',  # Operador OR em domain Odoo
+                    '|',
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
-                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'industrializacao')
                 ])
             else:
                 domain.extend([
                     '|',  # Operador OR em domain Odoo
+                    '|',
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
-                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                    ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'industrializacao')
                 ])
             
             campos_basicos = [
@@ -1734,8 +1740,10 @@ class FaturamentoService:
                     ('state', '=', 'cancel'),
                     ('l10n_br_numero_nota_fiscal', '!=', False),
                     '|',
+                    '|',
                     ('l10n_br_tipo_pedido', '=', 'venda'),
-                    ('l10n_br_tipo_pedido', '=', 'bonificacao')
+                    ('l10n_br_tipo_pedido', '=', 'bonificacao'),
+                    ('l10n_br_tipo_pedido', '=', 'industrializacao')
                 ],
                 ['id', 'l10n_br_numero_nota_fiscal', 'state', 'date', 'partner_id'],
                 limit=1000  # Limitar para evitar timeout

@@ -80,7 +80,34 @@
                         </div>
                     </div>
 
-                    <div class="col-md-4 text-end">
+                    <div class="col-md-4">
+                        <!-- Filtros de Data -->
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-1">Data Pedido</label>
+                                <div class="d-flex gap-1">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-de"
+                                           placeholder="De" title="Data do pedido (De)">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-ate"
+                                           placeholder="Até" title="Data do pedido (Até)">
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-1">Data Entrega</label>
+                                <div class="d-flex gap-1">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-de"
+                                           placeholder="De" title="Data de entrega (De)">
+                                    <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-ate"
+                                           placeholder="Até" title="Data de entrega (Até)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Linha inferior com botões de ação -->
+                <div class="row align-items-center mt-2">
+                    <div class="col-md-12 text-end">
                         <!-- Botão de Verificar TODOS os Protocolos Pendentes -->
                         <button type="button" class="btn btn-warning btn-sm me-2" id="btn-verificar-todos-pendentes"
                             onclick="carteiraAgrupada.verificarTodosProtocolosPendentes()"
@@ -366,6 +393,8 @@
                                 data-agendamento-data="{{ pedido.agendamento.strftime('%Y-%m-%d') if pedido.agendamento else '' }}"
                                 data-separacao-lote-id="{{ pedido.separacao_lote_id or '' }}"
                                 data-grupo-cliente="{{ pedido.grupo_cliente or 'outros' }}"
+                                data-data-pedido="{{ pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else '' }}"
+                                data-data-entrega="{{ pedido.data_entrega_pedido.strftime('%Y-%m-%d') if pedido.data_entrega_pedido else '' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
 
                                 <!-- Botão Expandir -->

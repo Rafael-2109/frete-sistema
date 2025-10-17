@@ -210,8 +210,10 @@ class CarteiraService:
                         '&',  # AND entre os filtros
                         ('order_id.state', 'in', ['draft', 'sent', 'sale', 'done']),
                         '|',  # OR entre tipos de pedido
+                        '|',
                         ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
-                        ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                        ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                        ('order_id.l10n_br_tipo_pedido', '=', 'industrializacao')
                         # NÃO filtrar por qty_saldo > 0!
                     ]
                     logger.info("🔄 MODO INCREMENTAL COM DATAS: usando create_date para importação histórica")
@@ -228,8 +230,10 @@ class CarteiraService:
                         ('order_id.write_date', '<=', momento_atual.isoformat()),
                         ('order_id.state', 'in', ['draft', 'sent', 'sale', 'cancel']),  # 🆕 INCLUIR 'cancel'
                         '|',  # OR entre tipos de pedido
+                        '|',
                         ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
-                        ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                        ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                        ('order_id.l10n_br_tipo_pedido', '=', 'industrializacao')
                         # NÃO filtrar por qty_saldo > 0!
                     ]
                     logger.info(f"🔄 MODO INCREMENTAL: buscando alterações dos últimos {minutos_janela} minutos")
@@ -241,8 +245,10 @@ class CarteiraService:
                     '&',  # AND entre TODOS os filtros
                     ('order_id.state', 'in', ['draft', 'sent', 'sale', 'invoiced']),  # Status válido sempre
                     '|',  # OR entre tipos de pedido
+                    '|',
                     ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
                     ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                    ('order_id.l10n_br_tipo_pedido', '=', 'industrializacao'),
                     '|',  # OR entre as duas condições abaixo
                     ('qty_saldo', '>', 0),  # Novos pedidos com saldo
                     ('order_id.name', 'in', list(pedidos_na_carteira))  # OU pedidos já existentes
@@ -256,8 +262,10 @@ class CarteiraService:
                     ('qty_saldo', '>', 0),  # Carteira pendente
                     ('order_id.state', 'in', ['draft', 'sent', 'sale']),  # Status válido
                     '|',  # OR entre tipos de pedido
+                    '|',
                     ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
-                    ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao')
+                    ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                    ('order_id.l10n_br_tipo_pedido', '=', 'industrializacao')
                 ]
                 logger.info("🔍 Carteira vazia - usando apenas filtro qty_saldo > 0")
                 logger.info("   ✅ Filtrando apenas pedidos de Venda e Bonificação")

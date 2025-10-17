@@ -23,6 +23,7 @@ class ExtratorCNPJ:
         'cnpj', 'cnpj:', 'c.n.p.j', 'c.n.p.j.', 'c.n.p.j:',
         'cadastro nacional', 'cadastro de pessoa jurídica'
     ]
+    PALAVRAS_CHAVE_CLIENTE = ['cliente', 'cliente:', 'razão social', 'razao social']
 
     def __init__(self):
         self.debug = False
@@ -151,19 +152,76 @@ class ExtratorCNPJ:
                         }
         return None
 
+    def buscar_nome_cliente(self, df: pd.DataFrame, nome_aba: str) -> Optional[str]:
+        """Busca o nome do cliente após palavras-chave como 'Cliente:'"""
+        self._log(f"[Nome Cliente] Buscando em aba '{nome_aba}'...")
+
+        for i, row in df.iterrows():
+            for j, valor in enumerate(row):
+                if pd.isna(valor):
+                    continue
+
+                valor_str = str(valor).strip()
+                valor_lower = valor_str.lower()
+
+                # Procurar por palavra-chave de cliente
+                for palavra in self.PALAVRAS_CHAVE_CLIENTE:
+                    if palavra in valor_lower:
+                        self._log(f"  Palavra-chave '{palavra}' encontrada em ({i}, {j})")
+
+                        # Tentar extrair nome da mesma célula (após "Cliente:")
+                        idx = valor_lower.index(palavra) + len(palavra)
+                        nome_candidato = valor_str[idx:].strip()
+
+                        # Se tem conteúdo após a palavra-chave
+                        if nome_candidato and len(nome_candidato) > 3:
+                            # Remover pontuação inicial
+                            nome_candidato = nome_candidato.lstrip(':').strip()
+                            if nome_candidato and len(nome_candidato) > 3:
+                                self._log(f"  Nome encontrado na mesma célula: '{nome_candidato}'")
+                                return nome_candidato
+
+                        # Buscar na célula à direita
+                        if j + 1 < len(row):
+                            nome_candidato = str(row.iloc[j + 1]).strip()
+                            if nome_candidato and nome_candidato.lower() not in ['nan', 'none', ''] and len(nome_candidato) > 3:
+                                self._log(f"  Nome encontrado à direita: '{nome_candidato}'")
+                                return nome_candidato
+
+                        # Buscar na célula abaixo
+                        if i + 1 < len(df):
+                            nome_candidato = str(df.iloc[i + 1, j]).strip()
+                            if nome_candidato and nome_candidato.lower() not in ['nan', 'none', ''] and len(nome_candidato) > 3:
+                                self._log(f"  Nome encontrado abaixo: '{nome_candidato}'")
+                                return nome_candidato
+
+        return None
+
     def buscar_cnpj_em_aba(self, df: pd.DataFrame, nome_aba: str) -> Optional[Dict]:
         self._log(f"\n=== Processando aba: {nome_aba} ===")
 
         resultado = self.buscar_padrao1_celula_ao_lado(df, nome_aba)
         if resultado:
+            # Buscar nome do cliente também
+            nome_cliente = self.buscar_nome_cliente(df, nome_aba)
+            if nome_cliente:
+                resultado['nome_cliente'] = nome_cliente
             return resultado
 
         resultado = self.buscar_padrao2_cnpj_colado(df, nome_aba)
         if resultado:
+            # Buscar nome do cliente também
+            nome_cliente = self.buscar_nome_cliente(df, nome_aba)
+            if nome_cliente:
+                resultado['nome_cliente'] = nome_cliente
             return resultado
 
         resultado = self.buscar_padrao3_regex_mascara(df, nome_aba)
         if resultado:
+            # Buscar nome do cliente também
+            nome_cliente = self.buscar_nome_cliente(df, nome_aba)
+            if nome_cliente:
+                resultado['nome_cliente'] = nome_cliente
             return resultado
 
         return None
@@ -176,6 +234,7 @@ class ExtratorCNPJ:
             'caminho_completo': str(caminho.absolute()),
             'cnpj': None,
             'cnpj_formatado': None,
+            'nome_cliente': None,
             'padrao': None,
             'aba': None,
             'celula': None,
@@ -199,6 +258,7 @@ class ExtratorCNPJ:
                     resultado_arquivo.update({
                         'cnpj': resultado_aba['cnpj'],
                         'cnpj_formatado': resultado_aba['cnpj_formatado'],
+                        'nome_cliente': resultado_aba.get('nome_cliente'),
                         'padrao': resultado_aba['padrao'],
                         'aba': resultado_aba['aba'],
                         'celula': resultado_aba['celula'],
@@ -231,7 +291,10 @@ class ExtratorCNPJ:
             resultados.append(resultado)
 
             if resultado['sucesso']:
-                print(f"✅ {resultado['cnpj_formatado']}")
+                msg = f"✅ {resultado['cnpj_formatado']}"
+                if resultado.get('nome_cliente'):
+                    msg += f" | {resultado['nome_cliente'][:40]}"
+                print(msg)
             else:
                 print(f"❌ {resultado['erro']}")
 
