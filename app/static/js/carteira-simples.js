@@ -168,13 +168,12 @@
         inicializarTooltips();
 
         // 🚀 OTIMIZAÇÃO: Renderizar estoques pré-calculados (sem chamadas assíncronas)
+        // 🔧 CORREÇÃO: Renderizar SEMPRE, mesmo sem projecoes_estoque (usa saídas adicionais)
         state.dados.forEach((item, index) => {
-            if (item.projecoes_estoque && item.projecoes_estoque.length > 0) {
-                try {
-                    renderizarEstoquePrecalculado(index, item);
-                } catch (erro) {
-                    console.error(`Erro ao renderizar estoque para índice ${index}:`, erro);
-                }
+            try {
+                renderizarEstoquePrecalculado(index, item);
+            } catch (erro) {
+                console.error(`Erro ao renderizar estoque para índice ${index}:`, erro);
             }
         });
     }
@@ -553,15 +552,29 @@
         }
     }
 
-    function handleTableChange(e) {
+    async function handleTableChange(e) {
         const target = e.target;
 
         // Mudança na data de expedição
         if (target.classList.contains('dt-expedicao')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
+            const novoValor = target.value;
+            const colunaEditada = 'expedicao';
 
-            // Recalcular TODAS as linhas do mesmo produto
+            // 🆕 DETECTAR SE É SEPARAÇÃO OU CARTEIRA
+            const isSeparacao = item.tipo === 'separacao';
+            const separacaoLoteId = item.separacao_lote_id;
+
+            // 🆕 Se mudou data de uma separação com lote, atualizar todo o lote NO BACKEND
+            if (isSeparacao && separacaoLoteId && colunaEditada === 'expedicao') {
+                await atualizarDataSeparacaoLote(separacaoLoteId, novoValor);
+            } else if (!isSeparacao && colunaEditada === 'expedicao') {
+                // Se mudou data de um item da CarteiraPrincipal, atualizar NO BACKEND
+                await atualizarItemCarteira(item.id, colunaEditada, novoValor);
+            }
+
+            // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
             recalcularTodasLinhasProduto(item.cod_produto);
         }
     }
@@ -651,8 +664,9 @@
             // Atualizar qtd do pedido correspondente (deduzir)
             atualizarQtdPedidoAposEdicaoSeparacao(item.num_pedido, item.cod_produto);
 
-            // Recalcular estoque de TODAS as linhas do mesmo produto
-            recalcularTodasLinhasProduto(item.cod_produto);
+            // 🔧 CORREÇÃO: Recarregar dados do backend para atualizar saidas_previstas
+            // Isso garante que ESTOQUE D0-D28 seja recalculado com as novas separações
+            carregarDados();
 
             console.log(`✅ Quantidade da separação ${separacaoId} atualizada para ${novaQtd}`);
 
@@ -672,9 +686,9 @@
                     .filter(d => d.tipo === 'separacao' && d.num_pedido === numPedido && d.cod_produto === codProduto)
                     .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
 
-                // Recalcular qtd_saldo do pedido
-                const qtdCarteira = item.qtd_carteira;
-                const novaQtdSaldo = qtdCarteira - totalSeparado;
+                // 🔧 CORREÇÃO: Usar qtd_original_pedido (QTD DESTE PEDIDO, não soma de todos)
+                const qtdOriginal = item.qtd_original_pedido;
+                const novaQtdSaldo = qtdOriginal - totalSeparado;
 
                 // Atualizar estado
                 item.qtd_saldo = novaQtdSaldo;
@@ -734,8 +748,10 @@
         mostrarMensagem('Sucesso', `Todas as quantidades do pedido ${numPedido} foram adicionadas`, 'success');
     }
 
-    function adicionarDiaUtil(rowIndex) {
-        const inputData = document.getElementById(`dt-exped-${rowIndex}`);
+    async function adicionarDiaUtil(rowIndex) {
+        const item = state.dados[rowIndex];
+        const inputId = item.tipo === 'separacao' ? `dt-exped-sep-${rowIndex}` : `dt-exped-${rowIndex}`;
+        const inputData = document.getElementById(inputId);
         const dataAtual = inputData.value ? new Date(inputData.value + 'T00:00:00') : new Date();
 
         // Adicionar 1 dia
@@ -749,11 +765,124 @@
             dataAtual.setDate(dataAtual.getDate() + 2);
         }
 
-        inputData.value = dataAtual.toISOString().split('T')[0];
+        const novaData = dataAtual.toISOString().split('T')[0];
+        inputData.value = novaData;
 
-        // Recalcular TODAS as linhas do mesmo produto
-        const item = state.dados[rowIndex];
-        recalcularTodasLinhasProduto(item.cod_produto);
+        // 🆕 Se for separação, atualizar TODOS os produtos do mesmo lote NO BACKEND
+        if (item.tipo === 'separacao' && item.separacao_lote_id) {
+            await atualizarDataSeparacaoLote(item.separacao_lote_id, novaData);
+        } else {
+            // 🆕 Se for item da CarteiraPrincipal, atualizar NO BACKEND
+            await atualizarItemCarteira(item.id, 'expedicao', novaData);
+
+            // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
+            recalcularTodasLinhasProduto(item.cod_produto);
+        }
+    }
+
+    // 🆕 FUNÇÃO PARA ATUALIZAR DATA DE TODOS OS PRODUTOS DE UM LOTE DE SEPARAÇÃO
+    async function atualizarDataSeparacaoLote(separacaoLoteId, novaData) {
+        try {
+            // 🔴 CHAMAR BACKEND PARA ATUALIZAR BANCO DE DADOS E RECALCULAR ESTOQUE
+            const response = await fetch('/carteira/simples/api/atualizar-separacao-lote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    separacao_lote_id: separacaoLoteId,
+                    expedicao: novaData
+                })
+            });
+
+            const resultado = await response.json();
+
+            if (!resultado.success) {
+                throw new Error(resultado.error || 'Erro ao atualizar data do lote');
+            }
+
+            console.log(`✅ Backend: ${resultado.message}`);
+
+            // 🔄 ATUALIZAR FRONTEND (UI e estado local)
+            const produtosAfetados = new Set();
+
+            state.dados.forEach((d, idx) => {
+                if (d.tipo === 'separacao' && d.separacao_lote_id === separacaoLoteId) {
+                    // Atualizar input de data
+                    const inputDataId = `dt-exped-sep-${idx}`;
+                    const inputData = document.getElementById(inputDataId);
+                    if (inputData) {
+                        inputData.value = novaData;
+                    }
+
+                    // Atualizar estado
+                    d.expedicao = novaData;
+
+                    // 🆕 Atualizar estoque se veio do backend
+                    if (resultado.estoque_atualizado && resultado.estoque_atualizado[d.cod_produto]) {
+                        const estoqueNovo = resultado.estoque_atualizado[d.cod_produto];
+                        d.estoque_atual = estoqueNovo.estoque_atual;
+                        d.menor_estoque_d7 = estoqueNovo.menor_estoque_d7;
+                        d.projecoes_estoque = estoqueNovo.projecoes;
+                    }
+
+                    // Adicionar produto à lista de afetados
+                    produtosAfetados.add(d.cod_produto);
+                }
+            });
+
+            // Recalcular estoques para cada produto afetado (atualiza UI)
+            produtosAfetados.forEach(codProduto => {
+                recalcularTodasLinhasProduto(codProduto);
+            });
+
+            console.log(`✅ Frontend: Data atualizada para ${produtosAfetados.size} produtos do lote ${separacaoLoteId}`);
+
+        } catch (erro) {
+            console.error('Erro ao atualizar data do lote:', erro);
+            mostrarMensagem('Erro', erro.message, 'danger');
+        }
+    }
+
+    // 🆕 FUNÇÃO PARA ATUALIZAR ITEM DA CARTEIRAPRINCIPAL
+    async function atualizarItemCarteira(itemId, campo, valor) {
+        try {
+            // 🔴 CHAMAR BACKEND PARA ATUALIZAR BANCO DE DADOS E RECALCULAR ESTOQUE
+            const response = await fetch('/carteira/simples/api/atualizar-item-carteira', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: itemId,
+                    campo: campo,
+                    valor: valor
+                })
+            });
+
+            const resultado = await response.json();
+
+            if (!resultado.success) {
+                throw new Error(resultado.error || 'Erro ao atualizar item da carteira');
+            }
+
+            console.log(`✅ Backend: ${resultado.message}`);
+
+            // 🆕 Atualizar estoque no estado local se veio do backend
+            if (resultado.estoque_atualizado) {
+                state.dados.forEach(d => {
+                    if (d.id === itemId && d.tipo === 'pedido') {
+                        d.estoque_atual = resultado.estoque_atualizado.estoque_atual;
+                        d.menor_estoque_d7 = resultado.estoque_atualizado.menor_estoque_d7;
+                        d.projecoes_estoque = resultado.estoque_atualizado.projecoes;
+                    }
+                });
+            }
+
+        } catch (erro) {
+            console.error('Erro ao atualizar item da carteira:', erro);
+            mostrarMensagem('Erro', erro.message, 'danger');
+        }
     }
 
     async function confirmarAgendamento(rowIndex) {
@@ -914,9 +1043,8 @@
             // Para separações, usar qtd_saldo do item (já atualizado pela API)
             qtdEditavel = parseFloat(item.qtd_saldo) || 0;
         } else {
-            // Para pedidos, buscar input
-            const input = document.getElementById(`qtd-edit-${rowIndex}`);
-            qtdEditavel = input ? parseFloat(input.value) || 0 : parseFloat(item.qtd_saldo) || 0;
+            // 🔧 CORREÇÃO: Para pedidos, SEMPRE usar qtd_saldo atualizado (não input)
+            qtdEditavel = parseFloat(item.qtd_saldo) || 0;
         }
 
         // Obter dados do row
@@ -981,10 +1109,8 @@
 
             // 🔧 CORREÇÃO: Detectar tipo e buscar inputs corretos
             if (item.tipo === 'separacao') {
-                // Para separações: usar qtd_saldo já atualizada e data de expedição
-                qtd = parseFloat(item.qtd_saldo) || 0;
-                const dataInput = document.getElementById(`dt-exped-sep-${index}`);
-                data = dataInput ? dataInput.value : (item.expedicao || null);
+                // ✅ IGNORAR separações (já vêm em saidas_previstas do backend)
+                return;
             } else {
                 // Para pedidos: buscar inputs
                 const qtdInput = document.getElementById(`qtd-edit-${index}`);
@@ -1013,11 +1139,37 @@
      *
      * @param {Array} projecaoBase - Array de projeção do backend (28 dias)
      * @param {Array} saidasAdicionais - Array [{data, qtd}, ...]
+     * @param {Number} estoqueAtual - Estoque atual do produto
      * @returns {Object} {projecao: [...], menor_estoque_d7: number}
      */
-    function recalcularProjecaoComSaidas(projecaoBase, saidasAdicionais) {
+    function recalcularProjecaoComSaidas(projecaoBase, saidasAdicionais, estoqueAtual = 0) {
+        // 🔧 CORREÇÃO: Se projecaoBase está vazia, criar projeção manual
         if (!projecaoBase || projecaoBase.length === 0) {
-            return { projecao: [], menor_estoque_d7: 0 };
+            // 🔧 CORREÇÃO: Criar projeção manual SEMPRE (mesmo sem saídas adicionais)
+            // Isso garante renderização quando backend não envia projecoes_estoque
+
+            // Criar projeção de 28 dias baseada em estoque_atual e saídas adicionais
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            const projecaoManual = [];
+            for (let dia = 0; dia <= 28; dia++) {
+                const data = new Date(hoje);
+                data.setDate(data.getDate() + dia);
+                const dataStr = data.toISOString().split('T')[0];
+
+                projecaoManual.push({
+                    dia: dia,
+                    data: dataStr,
+                    saldo_inicial: dia === 0 ? estoqueAtual : 0,  // D0 = estoque_atual
+                    entrada: 0,
+                    saida: 0,  // Será preenchido com saidasAdicionais
+                    saldo: 0,
+                    saldo_final: 0
+                });
+            }
+
+            projecaoBase = projecaoManual;
         }
 
         // Criar cópia da projeção base
@@ -1082,13 +1234,15 @@
      * 🚀 NOVA FUNÇÃO: Renderiza estoque pré-calculado considerando saídas adicionais
      */
     function renderizarEstoquePrecalculado(rowIndex, item) {
-        if (!item.projecoes_estoque || item.projecoes_estoque.length === 0) return;
+        // 🔧 CORREÇÃO: Permitir renderizar mesmo sem projecoes_estoque (usando apenas saídas adicionais)
+        const projecoesBase = item.projecoes_estoque || [];
 
         // 1. Coletar saídas adicionais (qtds/datas editáveis na tela)
         const saidasAdicionais = coletarSaidasAdicionais(item.cod_produto);
 
         // 2. Recalcular projeção com saídas adicionais
-        const resultado = recalcularProjecaoComSaidas(item.projecoes_estoque, saidasAdicionais);
+        const estoqueAtual = item.estoque_atual || 0;
+        const resultado = recalcularProjecaoComSaidas(projecoesBase, saidasAdicionais, estoqueAtual);
 
         // 3. Converter formato para exibição
         const projecoesFormatadas = resultado.projecao.map(p => ({
@@ -1127,8 +1281,10 @@
     /**
      * Atualiza o estoque na data de expedição editável
      */
-    function atualizarEstoqueNaData(rowIndex, _item, projecoes) {
-        const inputData = document.querySelector(`#row-${rowIndex} input[type="date"].dt-expedicao`);
+    function atualizarEstoqueNaData(rowIndex, item, projecoes) {
+        // 🔧 CORREÇÃO: Buscar input correto baseado no tipo (pedido ou separação)
+        const rowId = item.tipo === 'separacao' ? `row-sep-${rowIndex}` : `row-${rowIndex}`;
+        const inputData = document.querySelector(`#${rowId} input[type="date"].dt-expedicao`);
         const estDataEl = document.getElementById(`est-data-${rowIndex}`);
 
         if (!inputData || !estDataEl) return;
@@ -1221,7 +1377,8 @@
             if (item.projecoes_estoque && item.projecoes_estoque.length > 0) {
                 // Recalcular com saídas adicionais
                 const saidasAdicionais = coletarSaidasAdicionais(item.cod_produto);
-                const resultado = recalcularProjecaoComSaidas(item.projecoes_estoque, saidasAdicionais);
+                const estoqueAtual = item.estoque_atual || 0;
+                const resultado = recalcularProjecaoComSaidas(item.projecoes_estoque, saidasAdicionais, estoqueAtual);
 
                 const projecoesFormatadas = resultado.projecao.map(p => ({
                     data: p.data,

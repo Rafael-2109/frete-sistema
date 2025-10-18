@@ -128,6 +128,21 @@ def obter_dados():
         # Criar mapa de palletização
         pallet_map = {p.cod_produto: p for p in palletizacoes}
 
+        # 🆕 CALCULAR QTD_CARTEIRA TOTAL POR PRODUTO (de TODOS os pedidos)
+        qtd_carteira_por_produto = {}
+        resultados_soma = db.session.query(
+            CarteiraPrincipal.cod_produto,
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
+        ).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.cod_produto.in_(codigos_produtos)
+        ).group_by(
+            CarteiraPrincipal.cod_produto
+        ).all()
+
+        for cod_prod, qtd_total in resultados_soma:
+            qtd_carteira_por_produto[cod_prod] = float(qtd_total or 0)
+
         # Buscar separações não sincronizadas (batch)
         separacoes = db.session.query(
             Separacao.num_pedido,
@@ -148,18 +163,19 @@ def obter_dados():
         sep_map = {(s.num_pedido, s.cod_produto): float(s.qtd_separada or 0) for s in separacoes}
 
         # 🚀 OTIMIZAÇÃO: Calcular estoque em BATCH para produtos únicos
-        # Coletar produtos únicos com qtd_saldo > 0
+        # 🔧 CORREÇÃO: Coletar TODOS os produtos (não só os com qtd_saldo > 0)
         produtos_unicos = {}
         for item in items:
+            if item.cod_produto not in produtos_unicos:
+                produtos_unicos[item.cod_produto] = {
+                    'qtd_total_carteira': 0,
+                    'expedicao': item.expedicao  # Usar primeira data de expedição encontrada
+                }
+
             qtd_separada = sep_map.get((item.num_pedido, item.cod_produto), 0)
             qtd_saldo = float(item.qtd_saldo_produto_pedido or 0) - qtd_separada
 
             if qtd_saldo > 0:
-                if item.cod_produto not in produtos_unicos:
-                    produtos_unicos[item.cod_produto] = {
-                        'qtd_total_carteira': 0,
-                        'expedicao': item.expedicao  # Usar primeira data de expedição encontrada
-                    }
                 produtos_unicos[item.cod_produto]['qtd_total_carteira'] += qtd_saldo
 
         # Calcular estoque para todos os produtos de uma vez
@@ -225,140 +241,161 @@ def obter_dados():
         # Montar resposta - ESTRUTURA HIERÁRQUICA PLANA
         dados = []
 
-        # 🔧 CORREÇÃO: Agrupar separações por (num_pedido, cod_produto)
-        separacoes_por_pedido_produto = {}
-        for sep in separacoes_query:
-            chave = (sep.num_pedido, sep.cod_produto)
-            if chave not in separacoes_por_pedido_produto:
-                separacoes_por_pedido_produto[chave] = []
-            separacoes_por_pedido_produto[chave].append(sep)
-
-        # Renderizar pedidos + separações hierarquicamente
+        # 🔧 NOVO: Agrupar produtos por pedido
+        produtos_por_pedido = {}
         for item in items:
-            # Calcular qtd_saldo (carteira - separações não sincronizadas)
-            qtd_separada = sep_map.get((item.num_pedido, item.cod_produto), 0)
-            qtd_saldo = float(item.qtd_saldo_produto_pedido or 0) - qtd_separada
+            if item.num_pedido not in produtos_por_pedido:
+                produtos_por_pedido[item.num_pedido] = []
+            produtos_por_pedido[item.num_pedido].append(item)
 
-            # Dados de palletização
-            pallet_info = pallet_map.get(item.cod_produto)
-            palletizacao = float(pallet_info.palletizacao) if pallet_info else 100.0
-            peso_bruto = float(pallet_info.peso_bruto) if pallet_info else 1.0
+        # 🔧 NOVO: Agrupar separações por pedido e depois por lote
+        separacoes_por_pedido_lote = {}
+        for sep in separacoes_query:
+            if sep.num_pedido not in separacoes_por_pedido_lote:
+                separacoes_por_pedido_lote[sep.num_pedido] = {}
 
-            # Calcular valores
-            preco_unitario = float(item.preco_produto_pedido or 0)
-            valor_total = qtd_saldo * preco_unitario
-            pallets = qtd_saldo / palletizacao if palletizacao > 0 else 0
-            peso = qtd_saldo * peso_bruto
+            if sep.separacao_lote_id not in separacoes_por_pedido_lote[sep.num_pedido]:
+                separacoes_por_pedido_lote[sep.num_pedido][sep.separacao_lote_id] = []
 
-            # Buscar dados de estoque pré-calculados
-            estoque_info = estoque_map.get(item.cod_produto, {
-                'estoque_atual': 0,
-                'menor_estoque_d7': 0,
-                'projecoes': []
-            })
+            separacoes_por_pedido_lote[sep.num_pedido][sep.separacao_lote_id].append(sep)
 
-            # ✅ LINHA DO PEDIDO
-            dados.append({
-                'tipo': 'pedido',  # 🆕 FLAG DE TIPO
-                'id': item.id,
-                'num_pedido': item.num_pedido,
-                'pedido_cliente': item.pedido_cliente,
-                'data_pedido': item.data_pedido.strftime('%Y-%m-%d') if item.data_pedido else None,
-                'data_entrega_pedido': item.data_entrega_pedido.strftime('%Y-%m-%d') if item.data_entrega_pedido else None,
-                'cnpj_cpf': item.cnpj_cpf,
-                'raz_social_red': item.raz_social_red,
-                'estado': item.estado,
-                'municipio': item.municipio,
-                'cod_produto': item.cod_produto,
-                'nome_produto': item.nome_produto,
-                'qtd_saldo': qtd_saldo,
-                'qtd_carteira': float(item.qtd_saldo_produto_pedido or 0),
-                'preco_produto_pedido': preco_unitario,
-                'valor_total': valor_total,
-                'pallets': pallets,
-                'peso': peso,
-                'rota': item.rota,
-                'sub_rota': item.sub_rota,
-                'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else None,
-                'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else None,
-                'protocolo': item.protocolo,
-                'agendamento_confirmado': item.agendamento_confirmado,
-                # Dados para cálculo de estoque
-                'palletizacao': palletizacao,
-                'peso_bruto': peso_bruto,
-                # 🚀 ESTOQUE PRÉ-CALCULADO (1x por produto)
-                'estoque_atual': estoque_info['estoque_atual'],
-                'menor_estoque_d7': estoque_info['menor_estoque_d7'],
-                'projecoes_estoque': estoque_info['projecoes']  # Array com 28 dias
-            })
+        # 🔧 NOVO: Renderizar hierarquicamente - PRIMEIRO PRODUTOS, DEPOIS SEPARAÇÕES
+        pedidos_processados = set()
 
-            # ✅ LINHAS DAS SEPARAÇÕES (se houver) - FILTRADAS POR PRODUTO
-            chave_pedido_produto = (item.num_pedido, item.cod_produto)
-            separacoes_do_item = separacoes_por_pedido_produto.get(chave_pedido_produto, [])
+        for item in items:
+            num_pedido = item.num_pedido
 
-            for sep in separacoes_do_item:
-                # Dados de palletização para separação
-                pallet_info_sep = pallet_map.get(sep.cod_produto)
-                palletizacao_sep = float(pallet_info_sep.palletizacao) if pallet_info_sep else 100.0
-                peso_bruto_sep = float(pallet_info_sep.peso_bruto) if pallet_info_sep else 1.0
+            # Se ainda não processamos este pedido, processar TUDO dele
+            if num_pedido not in pedidos_processados:
+                pedidos_processados.add(num_pedido)
 
-                # Buscar embarque + transportadora
-                embarque_info = embarques_map.get(sep.separacao_lote_id, {})
-                cliente_texto = ''
-                if embarque_info:
-                    cliente_texto = f"Embarque #{embarque_info['numero']} - {embarque_info['transportadora']}"
+                # 1️⃣ ADICIONAR TODOS OS PRODUTOS DO PEDIDO
+                produtos_do_pedido = produtos_por_pedido.get(num_pedido, [])
 
-                # Calcular valores da separação
-                qtd_sep = float(sep.qtd_saldo or 0)
-                preco_sep = float(item.preco_produto_pedido or 0)  # Usar preço do pedido
-                valor_sep = qtd_sep * preco_sep
-                pallets_sep = qtd_sep / palletizacao_sep if palletizacao_sep > 0 else 0
-                peso_sep = qtd_sep * peso_bruto_sep
+                for produto in produtos_do_pedido:
+                    # Calcular qtd_saldo (carteira - separações não sincronizadas)
+                    qtd_separada = sep_map.get((produto.num_pedido, produto.cod_produto), 0)
+                    qtd_saldo = float(produto.qtd_saldo_produto_pedido or 0) - qtd_separada
 
-                # Buscar estoque (mesmo do produto do pedido)
-                estoque_info_sep = estoque_map.get(sep.cod_produto, {
-                    'estoque_atual': 0,
-                    'menor_estoque_d7': 0,
-                    'projecoes': []
-                })
+                    # Dados de palletização
+                    pallet_info = pallet_map.get(produto.cod_produto)
+                    palletizacao = float(pallet_info.palletizacao) if pallet_info else 100.0
+                    peso_bruto = float(pallet_info.peso_bruto) if pallet_info else 1.0
 
-                dados.append({
-                    'tipo': 'separacao',  # 🆕 FLAG DE TIPO
-                    'id': sep.id,
-                    'separacao_id': sep.id,  # ID único da separação
-                    'separacao_lote_id': sep.separacao_lote_id,
-                    'num_pedido': sep.num_pedido,
-                    'pedido_cliente': sep.pedido_cliente,
-                    # 🆕 CAMPOS CUSTOMIZADOS PARA SEPARAÇÃO
-                    'data_pedido': sep.criado_em.strftime('%Y-%m-%d') if sep.criado_em else None,  # criado_em
-                    'data_entrega_pedido': item.data_entrega_pedido.strftime('%Y-%m-%d') if item.data_entrega_pedido else None,
-                    'cnpj_cpf': sep.separacao_lote_id,  # separacao_lote_id na coluna CNPJ
-                    'raz_social_red': cliente_texto,  # "Embarque #X - Transportadora"
-                    'estado': item.estado,
-                    'municipio': sep.status_calculado,  # status_calculado na coluna Município
-                    'status_calculado': sep.status_calculado,  # Campo extra para cores
-                    'cod_produto': sep.cod_produto,
-                    'nome_produto': sep.nome_produto,
-                    'qtd_saldo': qtd_sep,
-                    'qtd_carteira': float(item.qtd_saldo_produto_pedido or 0),
-                    'preco_produto_pedido': preco_sep,
-                    'valor_total': valor_sep,
-                    'pallets': pallets_sep,
-                    'peso': peso_sep,
-                    'rota': sep.rota,
-                    'sub_rota': sep.sub_rota,
-                    'expedicao': sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else None,
-                    'agendamento': sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else None,
-                    'protocolo': sep.protocolo,
-                    'agendamento_confirmado': sep.agendamento_confirmado,
-                    # Dados para cálculo de estoque
-                    'palletizacao': palletizacao_sep,
-                    'peso_bruto': peso_bruto_sep,
-                    # 🚀 ESTOQUE PRÉ-CALCULADO (mesmo do produto)
-                    'estoque_atual': estoque_info_sep['estoque_atual'],
-                    'menor_estoque_d7': estoque_info_sep['menor_estoque_d7'],
-                    'projecoes_estoque': estoque_info_sep['projecoes']
-                })
+                    # Calcular valores
+                    preco_unitario = float(produto.preco_produto_pedido or 0)
+                    valor_total = qtd_saldo * preco_unitario
+                    pallets = qtd_saldo / palletizacao if palletizacao > 0 else 0
+                    peso = qtd_saldo * peso_bruto
+
+                    # Buscar dados de estoque pré-calculados
+                    estoque_info = estoque_map.get(produto.cod_produto, {
+                        'estoque_atual': 0,
+                        'menor_estoque_d7': 0,
+                        'projecoes': []
+                    })
+
+                    # ✅ LINHA DO PEDIDO
+                    dados.append({
+                        'tipo': 'pedido',
+                        'id': produto.id,
+                        'num_pedido': produto.num_pedido,
+                        'pedido_cliente': produto.pedido_cliente,
+                        'data_pedido': produto.data_pedido.strftime('%Y-%m-%d') if produto.data_pedido else None,
+                        'data_entrega_pedido': produto.data_entrega_pedido.strftime('%Y-%m-%d') if produto.data_entrega_pedido else None,
+                        'cnpj_cpf': produto.cnpj_cpf,
+                        'raz_social_red': produto.raz_social_red,
+                        'estado': produto.estado,
+                        'municipio': produto.municipio,
+                        'cod_produto': produto.cod_produto,
+                        'nome_produto': produto.nome_produto,
+                        'qtd_saldo': qtd_saldo,
+                        'qtd_original_pedido': float(produto.qtd_saldo_produto_pedido or 0),  # 🆕 QTD ORIGINAL DESTE PEDIDO
+                        'qtd_carteira': qtd_carteira_por_produto.get(produto.cod_produto, 0),  # 🆕 SOMA DE TODOS OS PEDIDOS
+                        'preco_produto_pedido': preco_unitario,
+                        'valor_total': valor_total,
+                        'pallets': pallets,
+                        'peso': peso,
+                        'rota': produto.rota,
+                        'sub_rota': produto.sub_rota,
+                        'expedicao': produto.expedicao.strftime('%Y-%m-%d') if produto.expedicao else None,
+                        'agendamento': produto.agendamento.strftime('%Y-%m-%d') if produto.agendamento else None,
+                        'protocolo': produto.protocolo,
+                        'agendamento_confirmado': produto.agendamento_confirmado,
+                        'palletizacao': palletizacao,
+                        'peso_bruto': peso_bruto,
+                        'estoque_atual': estoque_info['estoque_atual'],
+                        'menor_estoque_d7': estoque_info['menor_estoque_d7'],
+                        'projecoes_estoque': estoque_info['projecoes']
+                    })
+
+                # 2️⃣ ADICIONAR TODAS AS SEPARAÇÕES DO PEDIDO, AGRUPADAS POR LOTE
+                separacoes_do_pedido = separacoes_por_pedido_lote.get(num_pedido, {})
+
+                for separacao_lote_id, seps in separacoes_do_pedido.items():
+                    for sep in seps:
+                        # Buscar produto original para pegar preço e estado
+                        produto_ref = next((p for p in produtos_do_pedido if p.cod_produto == sep.cod_produto), None)
+
+                        # Dados de palletização para separação
+                        pallet_info_sep = pallet_map.get(sep.cod_produto)
+                        palletizacao_sep = float(pallet_info_sep.palletizacao) if pallet_info_sep else 100.0
+                        peso_bruto_sep = float(pallet_info_sep.peso_bruto) if pallet_info_sep else 1.0
+
+                        # Buscar embarque + transportadora
+                        embarque_info = embarques_map.get(sep.separacao_lote_id, {})
+                        cliente_texto = ''
+                        if embarque_info:
+                            cliente_texto = f"Embarque #{embarque_info['numero']} - {embarque_info['transportadora']}"
+
+                        # Calcular valores da separação
+                        qtd_sep = float(sep.qtd_saldo or 0)
+                        preco_sep = float(produto_ref.preco_produto_pedido or 0) if produto_ref else 0
+                        valor_sep = qtd_sep * preco_sep
+                        pallets_sep = qtd_sep / palletizacao_sep if palletizacao_sep > 0 else 0
+                        peso_sep = qtd_sep * peso_bruto_sep
+
+                        # Buscar estoque (mesmo do produto do pedido)
+                        estoque_info_sep = estoque_map.get(sep.cod_produto, {
+                            'estoque_atual': 0,
+                            'menor_estoque_d7': 0,
+                            'projecoes': []
+                        })
+
+                        dados.append({
+                            'tipo': 'separacao',
+                            'id': sep.id,
+                            'separacao_id': sep.id,
+                            'separacao_lote_id': sep.separacao_lote_id,
+                            'num_pedido': sep.num_pedido,
+                            'pedido_cliente': sep.pedido_cliente,
+                            'data_pedido': sep.criado_em.strftime('%Y-%m-%d') if sep.criado_em else None,
+                            'data_entrega_pedido': produto_ref.data_entrega_pedido.strftime('%Y-%m-%d') if produto_ref and produto_ref.data_entrega_pedido else None,
+                            'cnpj_cpf': sep.separacao_lote_id,
+                            'raz_social_red': cliente_texto,
+                            'estado': produto_ref.estado if produto_ref else '',
+                            'municipio': sep.status_calculado,
+                            'status_calculado': sep.status_calculado,
+                            'cod_produto': sep.cod_produto,
+                            'nome_produto': sep.nome_produto,
+                            'qtd_saldo': qtd_sep,
+                            'qtd_carteira': qtd_carteira_por_produto.get(sep.cod_produto, 0),  # 🆕 SOMA DE TODOS OS PEDIDOS
+                            'preco_produto_pedido': preco_sep,
+                            'valor_total': valor_sep,
+                            'pallets': pallets_sep,
+                            'peso': peso_sep,
+                            'rota': sep.rota,
+                            'sub_rota': sep.sub_rota,
+                            'expedicao': sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else None,
+                            'agendamento': sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else None,
+                            'protocolo': sep.protocolo,
+                            'agendamento_confirmado': sep.agendamento_confirmado,
+                            'palletizacao': palletizacao_sep,
+                            'peso_bruto': peso_bruto_sep,
+                            'estoque_atual': estoque_info_sep['estoque_atual'],
+                            'menor_estoque_d7': estoque_info_sep['menor_estoque_d7'],
+                            'projecoes_estoque': estoque_info_sep['projecoes']
+                        })
 
         return jsonify({
             'success': True,
@@ -819,6 +856,185 @@ def confirmar_agendamento():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao confirmar agendamento: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_simples_bp.route('/api/atualizar-separacao-lote', methods=['POST'])
+def atualizar_separacao_lote():
+    """
+    Atualiza data de expedição de TODAS as separações de um lote
+    e recalcula estoque projetado
+
+    Body JSON:
+    {
+        "separacao_lote_id": "ABC123",
+        "expedicao": "2025-01-20"
+    }
+    """
+    try:
+        dados = request.get_json()
+
+        if not dados or 'separacao_lote_id' not in dados or 'expedicao' not in dados:
+            return jsonify({
+                'success': False,
+                'error': 'Dados inválidos. Esperado: {separacao_lote_id, expedicao}'
+            }), 400
+
+        separacao_lote_id = dados['separacao_lote_id']
+        expedicao_str = dados['expedicao']
+
+        # Converter data
+        try:
+            expedicao = datetime.strptime(expedicao_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return jsonify({
+                'success': False,
+                'error': 'Data de expedição inválida. Use formato YYYY-MM-DD'
+            }), 400
+
+        # Buscar TODAS as separações do lote
+        separacoes = Separacao.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).all()
+
+        if not separacoes:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma separação encontrada para este lote'
+            }), 404
+
+        # Atualizar data de TODAS as separações do lote
+        for sep in separacoes:
+            sep.expedicao = expedicao
+
+        db.session.commit()
+
+        # 🆕 RECALCULAR ESTOQUE PROJETADO
+        # Obter códigos de produtos afetados (únicos)
+        codigos_afetados = list(set([sep.cod_produto for sep in separacoes]))
+
+        # Calcular novo estoque projetado
+        estoque_atualizado = {}
+        for cod_produto in codigos_afetados:
+            try:
+                estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+                projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+
+                estoque_atualizado[cod_produto] = {
+                    'estoque_atual': estoque_atual,
+                    'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
+                    'projecoes': projecao.get('projecao', [])[:28]
+                }
+            except Exception as e:
+                logger.error(f"Erro ao recalcular estoque de {cod_produto}: {e}")
+
+        return jsonify({
+            'success': True,
+            'message': f'{len(separacoes)} separação(ões) atualizada(s) com sucesso',
+            'qtd_atualizada': len(separacoes),
+            'separacao_lote_id': separacao_lote_id,
+            'expedicao': expedicao_str,
+            'estoque_atualizado': estoque_atualizado
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar separação em lote: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_simples_bp.route('/api/atualizar-item-carteira', methods=['POST'])
+def atualizar_item_carteira():
+    """
+    Atualiza um item da CarteiraPrincipal (data de expedição, agendamento, etc)
+    e recalcula estoque projetado
+
+    Body JSON:
+    {
+        "id": 123,
+        "campo": "expedicao",  // expedicao, agendamento, protocolo
+        "valor": "2025-01-20"
+    }
+    """
+    try:
+        dados = request.get_json()
+
+        if not dados or 'id' not in dados or 'campo' not in dados or 'valor' not in dados:
+            return jsonify({
+                'success': False,
+                'error': 'Dados inválidos. Esperado: {id, campo, valor}'
+            }), 400
+
+        item_id = int(dados['id'])
+        campo = dados['campo']
+        valor = dados['valor']
+
+        # Campos permitidos
+        campos_permitidos = ['expedicao', 'agendamento', 'protocolo']
+        if campo not in campos_permitidos:
+            return jsonify({
+                'success': False,
+                'error': f'Campo não permitido. Use: {", ".join(campos_permitidos)}'
+            }), 400
+
+        # Buscar item
+        item = CarteiraPrincipal.query.get(item_id)
+
+        if not item:
+            return jsonify({
+                'success': False,
+                'error': 'Item não encontrado'
+            }), 404
+
+        # Atualizar campo
+        if campo in ['expedicao', 'agendamento']:
+            try:
+                valor_data = datetime.strptime(valor, '%Y-%m-%d').date() if valor else None
+                setattr(item, campo, valor_data)
+            except (ValueError, TypeError):
+                return jsonify({
+                    'success': False,
+                    'error': 'Data inválida. Use formato YYYY-MM-DD'
+                }), 400
+        else:  # protocolo
+            setattr(item, campo, valor)
+
+        db.session.commit()
+
+        # 🆕 RECALCULAR ESTOQUE se alterou data de expedição
+        estoque_atualizado = None
+        if campo == 'expedicao':
+            try:
+                estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(item.cod_produto)
+                projecao = ServicoEstoqueSimples.calcular_projecao(item.cod_produto, 28)
+
+                estoque_atualizado = {
+                    'estoque_atual': estoque_atual,
+                    'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
+                    'projecoes': projecao.get('projecao', [])[:28]
+                }
+            except Exception as e:
+                logger.error(f"Erro ao recalcular estoque de {item.cod_produto}: {e}")
+
+        return jsonify({
+            'success': True,
+            'message': f'{campo.capitalize()} atualizado com sucesso',
+            'item': {
+                'id': item.id,
+                campo: valor
+            },
+            'estoque_atualizado': estoque_atualizado
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar item da carteira: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
