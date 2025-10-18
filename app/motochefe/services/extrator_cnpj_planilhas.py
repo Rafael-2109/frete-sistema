@@ -106,8 +106,8 @@ class ExtratorCNPJ:
                     self._log(f"  Palavra-chave encontrada em ({i}, {j}): '{valor}'")
 
                     # Buscar CNPJ na célula à direita
-                    if j + 1 < len(row):
-                        cnpj_candidato = str(row.iloc[j + 1]).strip()
+                    if j + 1 < len(row): # type: ignore
+                        cnpj_candidato = str(row.iloc[j + 1]).strip() # type: ignore
 
                         if self.validar_cnpj(cnpj_candidato):
                             return {
@@ -115,13 +115,13 @@ class ExtratorCNPJ:
                                 'cnpj_formatado': self.formatar_cnpj(cnpj_candidato),
                                 'padrao': 'Padrão 1: Célula ao lado de "CNPJ"',
                                 'aba': nome_aba,
-                                'celula': f'{self._get_column_letter(j+1)}{i+2}',  # +2 porque Excel começa em 1 e tem header 
+                                'celula': f'{self._get_column_letter(j+1)}{i+2}',  # +2 porque Excel começa em 1 e tem header # type: ignore
                                 'valor_original': cnpj_candidato
                             }
 
                     # Buscar CNPJ na célula abaixo
-                    if i + 1 < len(df):
-                        cnpj_candidato = str(df.iloc[i + 1, j]).strip()
+                    if i + 1 < len(df): # type: ignore
+                        cnpj_candidato = str(df.iloc[i + 1, j]).strip() # type: ignore
 
                         if self.validar_cnpj(cnpj_candidato):
                             return {
@@ -129,7 +129,7 @@ class ExtratorCNPJ:
                                 'cnpj_formatado': self.formatar_cnpj(cnpj_candidato),
                                 'padrao': 'Padrão 1: Célula abaixo de "CNPJ"',
                                 'aba': nome_aba,
-                                'celula': f'{self._get_column_letter(j)}{i+3}',
+                                'celula': f'{self._get_column_letter(j)}{i+3}', # type: ignore
                                 'valor_original': cnpj_candidato
                             }
 
@@ -173,7 +173,7 @@ class ExtratorCNPJ:
                                     'cnpj_formatado': self.formatar_cnpj(cnpj_candidato),
                                     'padrao': 'Padrão 2: CNPJ colado (ex: "CNPJ12345678000190")',
                                     'aba': nome_aba,
-                                    'celula': f'{self._get_column_letter(j)}{i+2}',
+                                    'celula': f'{self._get_column_letter(j)}{i+2}', # type: ignore
                                     'valor_original': valor_str
                                 }
 
@@ -208,7 +208,7 @@ class ExtratorCNPJ:
                             'cnpj_formatado': cnpj_encontrado,
                             'padrao': 'Padrão 3: Máscara ##.###.###/####-##',
                             'aba': nome_aba,
-                            'celula': f'{self._get_column_letter(j)}{i+2}',
+                            'celula': f'{self._get_column_letter(j)}{i+2}', # type: ignore
                             'valor_original': valor_str
                         }
 

@@ -723,14 +723,20 @@ def listar_contas_a_receber():
     """
     Tela consolidada de contas a receber (novo sistema com accordion)
     Mostra: Pedidos > Parcelas > Motos > Títulos
+    Com paginação para performance
     """
     from app.motochefe.models.cadastro import EmpresaVendaMoto
     from app.motochefe.services.titulo_service import obter_todos_titulos_agrupados
 
+    # Parâmetros de paginação
+    page = request.args.get('page', 1, type=int)
+    per_page = 50  # 50 pedidos por página
+    status_filtro = request.args.get('status')  # Filtro por status
+
     # Buscar títulos agrupados por Pedido > Parcela > Moto
     pedidos_agrupados = obter_todos_titulos_agrupados()
 
-    # Calcular totais
+    # Calcular totais (sempre usar todos os dados para totalizadores)
     hoje = date.today()
     total_vencidos = Decimal('0')
     total_hoje = Decimal('0')
@@ -750,6 +756,54 @@ def listar_contas_a_receber():
 
     total_geral = total_vencidos + total_hoje + total_a_vencer
 
+    # Aplicar filtro por status se especificado
+    if status_filtro:
+        pedidos_filtrados = {}
+        for pedido_id, dados_pedido in pedidos_agrupados.items():
+            # Verificar se algum título do pedido tem o status filtrado
+            tem_status = False
+            for parcela_num, dados_parcela in dados_pedido['parcelas'].items():
+                for chassi, titulos in dados_parcela['motos'].items():
+                    for titulo in titulos:
+                        if titulo.status == status_filtro:
+                            tem_status = True
+                            break
+                    if tem_status:
+                        break
+                if tem_status:
+                    break
+
+            if tem_status:
+                pedidos_filtrados[pedido_id] = dados_pedido
+
+        pedidos_agrupados = pedidos_filtrados
+
+    # Converter para lista ordenada para paginação
+    pedidos_lista = list(pedidos_agrupados.items())
+    total_pedidos = len(pedidos_lista)
+
+    # Aplicar paginação
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    pedidos_paginados = pedidos_lista[start_idx:end_idx]
+
+    # Converter de volta para dict para o template
+    pedidos_agrupados_paginados = dict(pedidos_paginados)
+
+    # Criar objeto de paginação manual
+    class PaginacaoManual:
+        def __init__(self, page, per_page, total):
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1 if self.has_prev else None
+            self.next_num = page + 1 if self.has_next else None
+
+    paginacao = PaginacaoManual(page, per_page, total_pedidos)
+
     # Buscar empresas ativas para o select
     empresas = EmpresaVendaMoto.query.filter_by(ativo=True).order_by(
         EmpresaVendaMoto.tipo_conta,
@@ -757,12 +811,14 @@ def listar_contas_a_receber():
     ).all()
 
     return render_template('motochefe/financeiro/contas_a_receber.html',
-                         pedidos_agrupados=pedidos_agrupados,
+                         pedidos_agrupados=pedidos_agrupados_paginados,
+                         paginacao=paginacao,
                          total_vencidos=total_vencidos,
                          total_hoje=total_hoje,
                          total_a_vencer=total_a_vencer,
                          total_geral=total_geral,
                          empresas=empresas,
+                         status_filtro=status_filtro,
                          hoje=hoje)
 
 

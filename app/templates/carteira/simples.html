@@ -7,18 +7,19 @@
 <style>
     /* Estilos inline críticos para performance */
     .carteira-simples-container {
-        font-size: 10px;
-        font-family: 'Arial', sans-serif;
+        font-size: 11px; /* 🔧 Aumentado de 10px para 11px */
+        /* 🆕 5. FONTE MAIS LEGÍVEL */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
     .table-carteira-simples {
-        font-size: 10px;
-        line-height: 1.2;
+        font-size: 11px; /* 🔧 Aumentado de 10px para 11px */
+        line-height: 1.1; /* 🔧 4. Linha mais compacta (mantido) */
     }
 
     .table-carteira-simples th,
     .table-carteira-simples td {
-        padding: 2px 4px !important;
+        padding: 1px 3px !important; /* 🔧 4. ALTURA REDUZIDA (era 2px 4px) */
         vertical-align: middle;
         white-space: nowrap;
     }
@@ -27,16 +28,39 @@
     .table-carteira-simples input[type="date"],
     .table-carteira-simples input[type="text"] {
         font-size: 10px;
-        padding: 1px 3px;
-        height: 22px;
+        padding: 0px 2px; /* 🔧 Padding ainda mais reduzido */
+        height: 18px; /* 🔧 3. Altura ainda mais reduzida (era 20px) */
         border: 1px solid #ced4da;
         border-radius: 2px;
+        line-height: 1;
+    }
+
+    /* Específico para inputs de data - altura extra reduzida */
+    .table-carteira-simples input[type="date"] {
+        height: 17px;
+        font-size: 9px;
+    }
+
+    /* 🆕 Específico para inputs de quantidade editável - mesma altura dos inputs de data */
+    .table-carteira-simples input.qtd-editavel,
+    .table-carteira-simples input.qtd-separacao-editavel,
+    .table-carteira-simples input.qtd-separacao-editavel-2 {
+        height: 17px;
+        font-size: 9px;
+        padding: 0px 2px;
+    }
+
+    /* 🆕 Específico para inputs de protocolo - mesma altura dos inputs de data */
+    .table-carteira-simples input.protocolo {
+        height: 17px;
+        font-size: 9px;
+        padding: 0px 2px;
     }
 
     .table-carteira-simples .btn-sm-custom {
-        font-size: 9px;
-        padding: 1px 4px;
-        line-height: 1.2;
+        font-size: 10px; /* 🔧 Aumentado de 9px para 10px */
+        padding: 0px 3px; /* 🔧 4. Padding reduzido */
+        line-height: 1.1;
         border-radius: 2px;
     }
 
@@ -83,46 +107,57 @@
     .btn-paginacao-estoque:hover {
         background: #dee2e6;
     }
+
+    /* 🆕 1. SEPARAÇÃO ATRASADA (expedicao < hoje) */
+    /* ⚠️ PRIORIDADE MÁXIMA - usa apenas classe separacao-atrasada */
+    .table-carteira-simples tr.separacao-atrasada {
+        background-color: #f8d7da !important; /* Vermelho suave */
+        border-left: 4px solid #dc3545 !important; /* Borda vermelha grossa */
+    }
+
+    /* Sobrescrever cores do Bootstrap quando necessário */
+    .table-carteira-simples tr.separacao-atrasada td {
+        background-color: inherit !important;
+    }
+
+    /* 🆕 2. SEPARADORES VISUAIS */
+    /* Linha GROSSA ao mudar de pedido */
+    .table-carteira-simples tr.border-pedido-top {
+        border-top: 3px solid #495057 !important;
+    }
+
+    /* Linha MÉDIA ao mudar de separacao_lote_id */
+    .table-carteira-simples tr.border-lote-top {
+        border-top: 2px solid #adb5bd !important;
+    }
+
+    /* 🆕 3. CABEÇALHO ESTOQUE COM DATAS */
+    /* ✅ Agora usa mesma estrutura das células (.estoque-projecao-container) */
+    .estoque-header-dia {
+        font-size: 8px;
+        color: #6c757d;
+        min-width: 40px; /* ✅ Mesma largura dos .estoque-dia */
+        text-align: center;
+        font-weight: 600;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 2px;
+        padding: 1px 2px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid carteira-simples-container">
-    <!-- Header da Página -->
-    <header class="page-header mb-3">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h1 class="h4 mb-0 text-gray-800">
-                    <i class="fas fa-list text-primary me-2"></i>
-                    Carteira Simplificada
-                </h1>
-                <small class="text-muted">
-                    <span id="contador-pedidos">0</span> itens encontrados
-                    <span class="ms-2">|</span>
-                    <span class="ms-2 text-success fw-bold">
-                        R$ <span id="valor-total-filtro">0,00</span>
-                    </span>
-                </small>
-            </div>
-
-            <div class="btn-toolbar" role="toolbar">
-                <div class="btn-group me-2" role="group">
-                    <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-success btn-sm">
-                        <i class="fas fa-sync me-1"></i> Sincronizar
-                    </a>
-                </div>
-                <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
-                    <i class="fas fa-arrow-left me-1"></i> Voltar
-                </a>
-            </div>
-        </div>
-    </header>
-
-    <!-- Filtros -->
+    <!-- Filtros em uma linha única -->
     <section class="filters-section mb-2">
         <div class="card">
-            <div class="card-body py-2">
-                <div class="row align-items-center g-2">
+            <div class="card-body py-1">
+                <div class="row align-items-center g-1">
                     <div class="col-md-3">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">
@@ -133,9 +168,9 @@
                         </div>
                     </div>
 
-                    <div class="col-md-2">
+                    <div class="col-md-1" style="max-width: 70px;">
                         <select class="form-select form-select-sm" id="filtro-estado">
-                            <option value="">Todos os estados</option>
+                            <option value="">UF</option>
                             {% for uf in ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] %}
                             <option value="{{ uf }}">{{ uf }}</option>
                             {% endfor %}
@@ -147,34 +182,44 @@
                             placeholder="Município">
                     </div>
 
-                    <div class="col-md-5">
-                        <div class="row g-1">
-                            <div class="col-6">
-                                <label class="form-label mb-0" style="font-size: 9px;">Data Pedido</label>
-                                <div class="d-flex gap-1">
-                                    <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-de">
-                                    <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-ate">
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label mb-0" style="font-size: 9px;">Data Entrega</label>
-                                <div class="d-flex gap-1">
-                                    <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-de">
-                                    <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-ate">
-                                </div>
-                            </div>
-                        </div>
+                    <div class="col-md-1" style="max-width: 110px;">
+                        <select class="form-select form-select-sm" id="filtro-rota">
+                            <option value="">Rota</option>
+                        </select>
                     </div>
-                </div>
 
-                <div class="row mt-2">
-                    <div class="col-12 text-end">
+                    <div class="col-md-1" style="max-width: 110px;">
+                        <select class="form-select form-select-sm" id="filtro-sub-rota">
+                            <option value="">Sub-rota</option>
+                        </select>
+                    </div>
+
+                    <div class="col-auto" style="max-width: 90px;">
+                        <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-de" placeholder="Pedido De" title="Data Pedido De">
+                    </div>
+
+                    <div class="col-auto" style="max-width: 90px;">
+                        <input type="date" class="form-control form-control-sm" id="filtro-data-pedido-ate" placeholder="Pedido Até" title="Data Pedido Até">
+                    </div>
+
+                    <div class="col-auto" style="max-width: 90px;">
+                        <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-de" placeholder="Entrega De" title="Data Entrega De">
+                    </div>
+
+                    <div class="col-auto" style="max-width: 90px;">
+                        <input type="date" class="form-control form-control-sm" id="filtro-data-entrega-ate" placeholder="Entrega Até" title="Data Entrega Até">
+                    </div>
+
+                    <div class="col-auto">
                         <button type="button" class="btn btn-primary btn-sm" id="btn-aplicar-filtros">
-                            <i class="fas fa-filter me-1"></i> Aplicar Filtros
+                            <i class="fas fa-filter"></i>
                         </button>
                         <button type="button" class="btn btn-secondary btn-sm" id="btn-limpar-filtros">
-                            <i class="fas fa-times me-1"></i> Limpar
+                            <i class="fas fa-times"></i>
                         </button>
+                        <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -217,7 +262,14 @@
                                 <th style="min-width: 30px;">✓</th>
                                 <th style="min-width: 60px;">Est. Atual</th>
                                 <th style="min-width: 60px;">Qtd Cart.</th>
-                                <th style="min-width: 400px;">Estoque D0-D28</th>
+                                <th style="min-width: 1200px; padding: 2px 4px !important;">
+                                    <!-- 🆕 3. CABEÇALHO COM DATAS D0-D28 -->
+                                    <div style="font-size: 9px; margin-bottom: 2px;">Estoque Projetado (28 dias)</div>
+                                    <!-- ✅ MESMA ESTRUTURA DAS CÉLULAS - SEM flex-wrap -->
+                                    <div class="d-flex gap-1 flex-nowrap" id="estoque-header-datas" style="min-width: 1200px; overflow-x: visible;">
+                                        <!-- Será preenchido via JavaScript com 28 dias -->
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="tbody-carteira">
@@ -233,21 +285,6 @@
         </div>
     </section>
 
-    <!-- Paginação -->
-    <section class="pagination-section mt-2">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <small class="text-muted">
-                    Exibindo <span id="info-exibindo-de">0</span> a <span id="info-exibindo-ate">0</span> de <span id="info-total">0</span> itens
-                </small>
-            </div>
-            <nav>
-                <ul class="pagination pagination-sm mb-0" id="paginacao">
-                    <!-- Será gerado via JavaScript -->
-                </ul>
-            </nav>
-        </div>
-    </section>
 </div>
 
 <!-- Modals -->

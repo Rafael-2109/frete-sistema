@@ -26,9 +26,11 @@
                 <thead>
                     <tr>
                         <th>ID</th>
+                        <th>Vendedor</th>
                         <th>Cliente</th>
                         <th>CNPJ</th>
                         <th>Cidade/UF</th>
+                        <th>Endereço</th>
                         <th>Telefone</th>
                         <th>Ações</th>
                     </tr>
@@ -37,9 +39,11 @@
                     {% for cliente in clientes %}
                     <tr>
                         <td>{{ cliente.id }}</td>
+                        <td>{{ cliente.vendedor.vendedor if cliente.vendedor else '-' }}</td>
                         <td>{{ cliente.cliente }}</td>
                         <td>{{ cliente.cnpj_cliente }}</td>
                         <td>{{ cliente.cidade_cliente or '-' }}/{{ cliente.estado_cliente or '-' }}</td>
+                        <td>{{ cliente.endereco_cliente or '-' }}</td>
                         <td>{{ cliente.telefone_cliente or '-' }}</td>
                         <td>
                             <a href="{{ url_for('motochefe.editar_cliente', id=cliente.id) }}" class="btn btn-sm btn-warning">

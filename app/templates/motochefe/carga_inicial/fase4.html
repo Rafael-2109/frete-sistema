@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Fase 4: Pedidos e Vendas - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-file-invoice"></i> Fase 4: Importação de Pedidos e Vendas</h2>
+            <p class="text-muted">Importação de pedidos com itens (chassis vinculados) e geração automática de títulos</p>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div id="alertContainer"></div>
+
+    <!-- INSTRUÇÕES -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h5><i class="fas fa-info-circle"></i> Instruções Importantes</h5>
+                <ol class="mb-0">
+                    <li><strong>PRÉ-REQUISITO:</strong> Fases 1, 2 e 3 devem ter sido executadas (cadastros base)</li>
+                    <li><strong>Modo COMPLETO:</strong> Gera TODOS os títulos (VENDA + FRETE + MONTAGEM + MOVIMENTACAO)</li>
+                    <li><strong>Modo HISTORICO:</strong> Gera apenas VENDA + FRETE (use para importação histórica)</li>
+                    <li><strong>UPSERT ativado:</strong> Pode re-executar sem duplicar pedidos</li>
+                    <li><strong>Backup recomendado</strong> antes de executar</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- SELETOR DE MODO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Modo de Operação</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">Selecione o modo de importação conforme seu objetivo:</p>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card h-100" id="cardCompleto" style="cursor: pointer; border: 3px solid #28a745;">
+                                <div class="card-body">
+                                    <h5 class="text-success"><i class="fas fa-check-circle"></i> COMPLETO (Padrão)</h5>
+                                    <p class="mb-2"><strong>Quando usar:</strong> Pedidos NOVOS criados pelo sistema</p>
+                                    <p class="mb-2"><strong>Títulos gerados:</strong></p>
+                                    <ul class="small">
+                                        <li>✅ VENDA</li>
+                                        <li>✅ FRETE</li>
+                                        <li>✅ MONTAGEM (se contratada)</li>
+                                        <li>✅ MOVIMENTACAO</li>
+                                    </ul>
+                                    <p class="mb-0"><strong>Títulos A Pagar:</strong> ✅ SIM (MONTAGEM + MOVIMENTACAO)</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100" id="cardHistorico" style="cursor: pointer; border: 1px solid #dee2e6;">
+                                <div class="card-body">
+                                    <h5 class="text-muted"><i class="fas fa-history"></i> HISTORICO</h5>
+                                    <p class="mb-2"><strong>Quando usar:</strong> Importação de dados históricos</p>
+                                    <p class="mb-2"><strong>Títulos gerados:</strong></p>
+                                    <ul class="small">
+                                        <li>✅ VENDA</li>
+                                        <li>✅ FRETE</li>
+                                        <li>❌ MONTAGEM (virá da Fase 6)</li>
+                                        <li>❌ MOVIMENTACAO (virá da Fase 7)</li>
+                                    </ul>
+                                    <p class="mb-0"><strong>Títulos A Pagar:</strong> ❌ NÃO (virão das Fases 5/6/7)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="modoSelecionado" value="COMPLETO">
+
+                    <div class="alert alert-success mt-3" id="alertModo">
+                        <strong>Modo selecionado:</strong> <span id="textoModo">COMPLETO</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ÁREA DE UPLOAD -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file-upload"></i> Upload dos Arquivos Excel</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Botão Download Template -->
+                    <div class="mb-4">
+                        <a href="{{ url_for('motochefe.download_template', fase='fase4') }}"
+                           class="btn btn-success btn-lg">
+                            <i class="fas fa-download"></i> Baixar Template Excel
+                        </a>
+                        <p class="text-muted mt-2 mb-0">
+                            <small>O template contém 2 abas: Pedidos + Itens com instruções detalhadas</small>
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <!-- Formulário de Upload -->
+                    <form id="formUpload" enctype="multipart/form-data">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">Arquivo de Pedidos (*):</label>
+                                <input type="file" class="form-control-file" id="inputPedidos" name="pedidos" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Aba: Pedidos</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="font-weight-bold">Arquivo de Itens (*):</label>
+                                <input type="file" class="form-control-file" id="inputItens" name="itens" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Aba: Itens</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg" id="btnImportar">
+                            <i class="fas fa-play"></i> Executar Importação
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULTADO DA IMPORTAÇÃO -->
+    <div class="row mb-4" id="areaResultado" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header" id="resultadoHeader">
+                    <h5 class="mb-0" id="resultadoTitulo"></h5>
+                </div>
+                <div class="card-body" id="resultadoBody">
+                    <!-- Conteúdo dinâmico -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+#cardCompleto.selected {
+    border: 3px solid #28a745 !important;
+}
+
+#cardHistorico.selected {
+    border: 3px solid #ffc107 !important;
+}
+
+.small {
+    font-size: 0.9rem;
+}
+</style>
+
+<script>
+let modoAtual = 'COMPLETO';
+
+// ============================================================
+// SELEÇÃO DE MODO
+// ============================================================
+
+document.getElementById('cardCompleto').addEventListener('click', function() {
+    selecionarModo('COMPLETO');
+});
+
+document.getElementById('cardHistorico').addEventListener('click', function() {
+    selecionarModo('HISTORICO');
+});
+
+function selecionarModo(modo) {
+    modoAtual = modo;
+    document.getElementById('modoSelecionado').value = modo;
+
+    // Atualizar visual dos cards
+    if (modo === 'COMPLETO') {
+        document.getElementById('cardCompleto').style.border = '3px solid #28a745';
+        document.getElementById('cardHistorico').style.border = '1px solid #dee2e6';
+
+        document.getElementById('alertModo').className = 'alert alert-success mt-3';
+        document.getElementById('textoModo').textContent = 'COMPLETO - Gera todos os títulos automaticamente';
+    } else {
+        document.getElementById('cardCompleto').style.border = '1px solid #dee2e6';
+        document.getElementById('cardHistorico').style.border = '3px solid #ffc107';
+
+        document.getElementById('alertModo').className = 'alert alert-warning mt-3';
+        document.getElementById('textoModo').textContent = 'HISTORICO - Gera apenas VENDA + FRETE (complementar com Fases 5/6/7)';
+    }
+}
+
+// ============================================================
+// EXECUTAR IMPORTAÇÃO
+// ============================================================
+
+document.getElementById('formUpload').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData();
+    formData.append('pedidos', document.getElementById('inputPedidos').files[0]);
+    formData.append('itens', document.getElementById('inputItens').files[0]);
+    formData.append('modo', modoAtual);
+
+    const btnImportar = document.getElementById('btnImportar');
+    btnImportar.disabled = true;
+    btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+
+    try {
+        const response = await fetch('{{ url_for("motochefe.importar_fase4") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            mostrarResultadoSucesso(data);
+            mostrarAlerta(data.mensagem, 'success');
+
+            // Limpar formulário
+            document.getElementById('formUpload').reset();
+        } else {
+            mostrarResultadoErro(data);
+            mostrarAlerta(data.mensagem, 'danger');
+        }
+    } catch (error) {
+        mostrarAlerta('Erro fatal: ' + error.message, 'danger');
+    } finally {
+        btnImportar.disabled = false;
+        btnImportar.innerHTML = '<i class="fas fa-play"></i> Executar Importação';
+    }
+});
+
+function mostrarResultadoSucesso(data) {
+    const resultadoHeader = document.getElementById('resultadoHeader');
+    const resultadoTitulo = document.getElementById('resultadoTitulo');
+    const resultadoBody = document.getElementById('resultadoBody');
+
+    resultadoHeader.className = 'card-header bg-success text-white';
+    resultadoTitulo.innerHTML = '<i class="fas fa-check-circle"></i> Importação Concluída com Sucesso!';
+
+    const detalhes = data.detalhes || {};
+
+    let html = '<div class="row">';
+    html += '<div class="col-md-6">';
+    html += '<h6>📊 Estatísticas da Importação</h6>';
+    html += '<ul>';
+    html += `<li>Pedidos processados: ${detalhes.total_pedidos || 0}</li>`;
+    html += `<li>Pedidos inseridos: ${detalhes.pedidos_inseridos || 0}</li>`;
+    html += `<li>Pedidos atualizados: ${detalhes.pedidos_atualizados || 0}</li>`;
+    html += `<li>Itens inseridos: ${detalhes.itens_inseridos || 0}</li>`;
+    html += `<li>Motos atualizadas: ${detalhes.motos_atualizadas || 0}</li>`;
+    html += '</ul></div>';
+
+    html += '<div class="col-md-6">';
+    html += '<h6>💰 Títulos Criados</h6>';
+    html += '<ul>';
+    html += `<li>Títulos A Receber: ${detalhes.total_titulos_financeiros || 0}</li>`;
+    html += `<li>Títulos A Pagar: ${detalhes.total_titulos_a_pagar || 0}</li>`;
+    html += '</ul>';
+
+    if (modoAtual === 'HISTORICO') {
+        html += '<div class="alert alert-warning mt-2">';
+        html += '<small><strong>⚠️ Modo HISTORICO:</strong> Execute as Fases 5, 6 e 7 para complementar com Comissões, Montagens e Movimentações.</small>';
+        html += '</div>';
+    }
+
+    html += '</div></div>';
+
+    if (detalhes.avisos && detalhes.avisos.length > 0) {
+        html += '<hr><h6>⚠️ Avisos:</h6><ul class="text-warning small">';
+        detalhes.avisos.forEach(aviso => {
+            html += `<li>${aviso}</li>`;
+        });
+        html += '</ul>';
+    }
+
+    resultadoBody.innerHTML = html;
+    document.getElementById('areaResultado').style.display = 'block';
+    document.getElementById('areaResultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+function mostrarResultadoErro(data) {
+    const resultadoHeader = document.getElementById('resultadoHeader');
+    const resultadoTitulo = document.getElementById('resultadoTitulo');
+    const resultadoBody = document.getElementById('resultadoBody');
+
+    resultadoHeader.className = 'card-header bg-danger text-white';
+    resultadoTitulo.innerHTML = '<i class="fas fa-times-circle"></i> Erro na Importação';
+
+    let html = `<p class="text-danger"><strong>${data.mensagem}</strong></p>`;
+
+    if (data.erros && data.erros.length > 0) {
+        html += '<hr><h6>Erros encontrados:</h6><ul class="text-danger small">';
+        data.erros.forEach(erro => {
+            html += `<li>${erro}</li>`;
+        });
+        html += '</ul>';
+    }
+
+    resultadoBody.innerHTML = html;
+    document.getElementById('areaResultado').style.display = 'block';
+    document.getElementById('areaResultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============================================================
+// HELPER: ALERTA
+// ============================================================
+
+function mostrarAlerta(mensagem, tipo) {
+    const alertContainer = document.getElementById('alertContainer');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${tipo} alert-dismissible fade show`;
+    alert.role = 'alert';
+    alert.innerHTML = `
+        ${mensagem}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    `;
+    alertContainer.appendChild(alert);
+
+    // Auto-remover após 10 segundos
+    setTimeout(() => {
+        alert.remove();
+    }, 10000);
+}
+</script>
+{% endblock %}

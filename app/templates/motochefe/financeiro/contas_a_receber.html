@@ -339,6 +339,13 @@
             {% endfor %}
         {% endfor %}
     {% endfor %}
+
+    <!-- Paginação -->
+    {% if paginacao %}
+        <div class="mt-3">
+            {% include 'motochefe/_pagination.html' %}
+        </div>
+    {% endif %}
 </div>
 
 <script>

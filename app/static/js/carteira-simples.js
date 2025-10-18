@@ -15,7 +15,7 @@
         dados: [],
         filtrosAplicados: {},
         paginaAtual: 1,
-        itensPorPagina: 100,
+        itensPorPagina: 10000, // ✅ SEM PAGINAÇÃO - pegar todos os itens
         totalItens: 0,
         estoqueProjetadoCache: {}, // Cache {cod_produto_data: {estoque_atual, projecoes}}
         projecaoEstoqueOffset: 0, // 🆕 OFFSET GLOBAL para paginação D0-D28 (não mais por linha)
@@ -85,8 +85,7 @@
             state.totalItens = resultado.total;
 
             renderizarTabela();
-            atualizarContadores();
-            atualizarPaginacao();
+            popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
 
         } catch (erro) {
             console.error('Erro ao carregar dados:', erro);
@@ -103,6 +102,8 @@
                 num_pedido: document.getElementById('filtro-busca')?.value.trim() || '',
                 estado: document.getElementById('filtro-estado')?.value.trim() || '',
                 municipio: document.getElementById('filtro-municipio')?.value.trim() || '',
+                rota: document.getElementById('filtro-rota')?.value.trim() || '',
+                sub_rota: document.getElementById('filtro-sub-rota')?.value.trim() || '',
                 data_pedido_de: document.getElementById('filtro-data-pedido-de')?.value.trim() || '',
                 data_pedido_ate: document.getElementById('filtro-data-pedido-ate')?.value.trim() || '',
                 data_entrega_de: document.getElementById('filtro-data-entrega-de')?.value.trim() || '',
@@ -121,7 +122,7 @@
     function limparFiltros() {
         try {
             const filtroIds = [
-                'filtro-busca', 'filtro-estado', 'filtro-municipio',
+                'filtro-busca', 'filtro-estado', 'filtro-municipio', 'filtro-rota', 'filtro-sub-rota',
                 'filtro-data-pedido-de', 'filtro-data-pedido-ate',
                 'filtro-data-entrega-de', 'filtro-data-entrega-ate'
             ];
@@ -138,6 +139,38 @@
         } catch (erro) {
             console.error('Erro ao limpar filtros:', erro);
             mostrarMensagem('Erro', 'Erro ao limpar filtros. Verifique o console.', 'danger');
+        }
+    }
+
+    // 🆕 POPULAR FILTROS DE ROTA E SUB-ROTA DINAMICAMENTE
+    function popularFiltrosRotas() {
+        try {
+            const rotas = new Set();
+            const subRotas = new Set();
+
+            // Coletar todas as rotas e sub-rotas únicas dos dados
+            state.dados.forEach(item => {
+                if (item.rota) rotas.add(item.rota);
+                if (item.sub_rota) subRotas.add(item.sub_rota);
+            });
+
+            // Popular select de Rota
+            const selectRota = document.getElementById('filtro-rota');
+            if (selectRota) {
+                const rotasOrdenadas = Array.from(rotas).sort();
+                selectRota.innerHTML = '<option value="">Rota</option>' +
+                    rotasOrdenadas.map(r => `<option value="${r}">${r}</option>`).join('');
+            }
+
+            // Popular select de Sub-rota
+            const selectSubRota = document.getElementById('filtro-sub-rota');
+            if (selectSubRota) {
+                const subRotasOrdenadas = Array.from(subRotas).sort();
+                selectSubRota.innerHTML = '<option value="">Sub-rota</option>' +
+                    subRotasOrdenadas.map(sr => `<option value="${sr}">${sr}</option>`).join('');
+            }
+        } catch (erro) {
+            console.error('Erro ao popular filtros de rotas:', erro);
         }
     }
 
@@ -164,8 +197,14 @@
 
         tbody.innerHTML = html;
 
+        // 🆕 APLICAR CLASSES CSS PARA SEPARADORES E DESTAQUES
+        aplicarClassesVisuais();
+
         // Inicializar tooltips
         inicializarTooltips();
+
+        // 🆕 ATUALIZAR CABEÇALHO DE ESTOQUE COM DATAS DINÂMICAS
+        atualizarCabecalhoEstoque();
 
         // 🚀 OTIMIZAÇÃO: Renderizar estoques pré-calculados (sem chamadas assíncronas)
         // 🔧 CORREÇÃO: Renderizar SEMPRE, mesmo sem projecoes_estoque (usa saídas adicionais)
@@ -176,6 +215,63 @@
                 console.error(`Erro ao renderizar estoque para índice ${index}:`, erro);
             }
         });
+    }
+
+    // 🆕 FUNÇÃO PARA APLICAR CLASSES VISUAIS (bordas - cor já aplicada na renderização)
+    function aplicarClassesVisuais() {
+        let pedidoAnterior = null;
+        let loteAnterior = null;
+
+        state.dados.forEach((item, index) => {
+            const row = document.getElementById(item.tipo === 'separacao' ? `row-sep-${index}` : `row-${index}`);
+            if (!row) return;
+
+            // 🆕 SEPARADORES VISUAIS
+            // Linha GROSSA ao mudar de num_pedido
+            if (pedidoAnterior !== null && item.num_pedido !== pedidoAnterior) {
+                row.classList.add('border-pedido-top');
+            }
+
+            // Linha MÉDIA ao mudar de separacao_lote_id (dentro do mesmo pedido)
+            if (item.tipo === 'separacao' &&
+                item.num_pedido === pedidoAnterior &&
+                loteAnterior !== null &&
+                item.separacao_lote_id !== loteAnterior) {
+                row.classList.add('border-lote-top');
+            }
+
+            // Atualizar rastreamento
+            pedidoAnterior = item.num_pedido;
+            loteAnterior = item.separacao_lote_id || null;
+        });
+    }
+
+    // 🆕 FUNÇÃO PARA ATUALIZAR CABEÇALHO DE ESTOQUE COM DATAS DINÂMICAS (28 DIAS)
+    function atualizarCabecalhoEstoque() {
+        const headerDatas = document.getElementById('estoque-header-datas');
+        if (!headerDatas) return;
+
+        const hoje = new Date();
+        const diasHTML = [];
+
+        // ✅ MOSTRAR TODOS OS 28 DIAS (sem offset - remoção de navegação)
+        for (let i = 0; i < 28; i++) {
+            const dia = new Date(hoje);
+            dia.setDate(hoje.getDate() + i);
+
+            const diaMes = String(dia.getDate()).padStart(2, '0');
+            const mes = String(dia.getMonth() + 1).padStart(2, '0');
+            const diaSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dia.getDay()];
+
+            diasHTML.push(`
+                <span class="estoque-header-dia" title="${diaSemana} ${diaMes}/${mes}">
+                    <div style="font-size: 9px; font-weight: 700;">D${i}</div>
+                    <div style="font-size: 7px;">${diaMes}/${mes}</div>
+                </span>
+            `);
+        }
+
+        headerDatas.innerHTML = diasHTML.join('');
     }
 
     // 🆕 FUNÇÃO PARA RENDERIZAR LINHA DE SEPARAÇÃO
@@ -193,7 +289,16 @@
 
         // 🆕 CORES BASEADAS EM STATUS - USANDO CLASSES BOOTSTRAP
         let classesCor = '';
-        if (item.status_calculado === 'ABERTO') {
+
+        // 🔴 1. PRIORIZAR SEPARAÇÃO ATRASADA (verificar PRIMEIRO)
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const dataExpedicao = item.expedicao ? new Date(item.expedicao + 'T00:00:00') : null;
+        const isAtrasada = dataExpedicao && dataExpedicao < hoje;
+
+        if (isAtrasada) {
+            classesCor = 'separacao-atrasada'; // ✅ VERMELHO - PRIORIDADE MÁXIMA
+        } else if (item.status_calculado === 'ABERTO') {
             classesCor = 'table-warning'; // Amarelo Bootstrap
         } else if (item.status_calculado === 'COTADO') {
             classesCor = 'table-info'; // Azul Bootstrap
@@ -328,20 +433,8 @@
 
                 <!-- Projeção D0-D28 -->
                 <td class="estoque-projecao" id="projecao-${index}">
-                    <div class="estoque-projecao-container">
-                        <button type="button" class="btn-paginacao-estoque btn-prev-dia"
-                            data-row-index="${index}">◄</button>
-                        <div class="d-flex gap-1" id="projecao-dias-${index}">
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                        </div>
-                        <button type="button" class="btn-paginacao-estoque btn-next-dia"
-                            data-row-index="${index}">►</button>
+                    <div class="d-flex gap-1 flex-nowrap" id="projecao-dias-${index}" style="min-width: 1200px; overflow-x: visible;">
+                        ${Array(28).fill('<span class="estoque-dia">-</span>').join('')}
                     </div>
                 </td>
             </tr>
@@ -485,20 +578,8 @@
 
                 <!-- Projeção D0-D28 -->
                 <td class="estoque-projecao" id="projecao-${index}">
-                    <div class="estoque-projecao-container">
-                        <button type="button" class="btn-paginacao-estoque btn-prev-dia"
-                            data-row-index="${index}">◄</button>
-                        <div class="d-flex gap-1" id="projecao-dias-${index}">
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                            <span class="estoque-dia">-</span>
-                        </div>
-                        <button type="button" class="btn-paginacao-estoque btn-next-dia"
-                            data-row-index="${index}">►</button>
+                    <div class="d-flex gap-1 flex-nowrap" id="projecao-dias-${index}" style="min-width: 1200px; overflow-x: visible;">
+                        ${Array(28).fill('<span class="estoque-dia">-</span>').join('')}
                     </div>
                 </td>
             </tr>
@@ -1337,28 +1418,24 @@
     function renderizarProjecaoDias(rowIndex, projecoes) {
         if (!projecoes || projecoes.length === 0) return;
 
-        // 🆕 USAR OFFSET GLOBAL (não mais por linha)
-        const offset = state.projecaoEstoqueOffset;
         const container = document.getElementById(`projecao-dias-${rowIndex}`);
 
-        // Pegar 7 dias a partir do offset
-        const diasVisiveis = projecoes.slice(offset, offset + 7);
+        // ✅ MOSTRAR TODOS OS 28 DIAS (sem offset - sem navegação)
+        const diasVisiveis = projecoes.slice(0, 28);
 
         const html = diasVisiveis.map(dia => {
             let classe = 'estoque-dia';
             if (dia.estoque < 0) classe += ' negativo';
             else if (dia.estoque < 100) classe += ' baixo';
 
-            // Extrair dia/mês da data (formato: DD/MM)
-            const dataObj = new Date(dia.data + 'T00:00:00');
-            const diaDoMes = String(dataObj.getDate()).padStart(2, '0');
-            const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+            // 🔧 4. REMOVER DATAS - Apenas mostrar número do estoque
+            // Tooltip mantém a data completa para referência
+            const dataFormatada = new Date(dia.data + 'T00:00:00').toLocaleDateString('pt-BR');
             const diaIndice = dia.dia !== undefined ? `D${dia.dia}` : '';
 
             return `
-                <span class="${classe}" title="${dia.data}">
-                    <div style="font-size: 7px;">${diaIndice} ${diaDoMes}/${mes}</div>
-                    <div>${formatarNumero(dia.estoque, 0)}</div>
+                <span class="${classe}" title="${diaIndice} - ${dataFormatada}">
+                    ${formatarNumero(dia.estoque, 0)}
                 </span>
             `;
         }).join('');
@@ -1371,6 +1448,9 @@
         // Atualizar offset GLOBAL
         const novoOffset = Math.max(0, Math.min(21, state.projecaoEstoqueOffset + direcao)); // Máximo 21 (28-7)
         state.projecaoEstoqueOffset = novoOffset;
+
+        // ✅ ATUALIZAR CABEÇALHO DE DATAS
+        atualizarCabecalhoEstoque();
 
         // 🆕 RENDERIZAR TODAS AS LINHAS (não só a clicada)
         state.dados.forEach((item, index) => {

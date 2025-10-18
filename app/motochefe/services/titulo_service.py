@@ -9,7 +9,7 @@ from decimal import Decimal
 import json
 
 
-def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
+def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config, tipos_permitidos=None):
     """
     Gera títulos aplicando FIFO entre parcelas
     Títulos podem ser divididos entre parcelas conforme necessário
@@ -24,6 +24,9 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
             {'numero': 1, 'valor': 7800, 'prazo_dias': 28},
             {'numero': 2, 'valor': 7800, 'prazo_dias': 35}
         ]
+        tipos_permitidos: list (opcional) - Se fornecido, gera APENAS esses tipos
+            Ex: ['VENDA', 'FRETE'] para modo histórico
+            Se None, gera TODOS os tipos (MOVIMENTACAO, MONTAGEM, FRETE, VENDA)
 
     Returns:
         list de TituloFinanceiro criados
@@ -57,6 +60,10 @@ def gerar_titulos_com_fifo_parcelas(pedido, itens_pedido, parcelas_config):
         ]
 
         for tipo, ordem, valor in tipos_titulo:
+            # ⚠️ FILTRO POR TIPO (modo histórico)
+            if tipos_permitidos and tipo not in tipos_permitidos:
+                continue
+
             # Pular montagem se não contratada
             if tipo == 'MONTAGEM' and not item.montagem_contratada:
                 continue

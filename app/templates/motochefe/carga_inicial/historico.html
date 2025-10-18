@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}Importação Histórica - MotoChefe{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-history"></i> Importação Histórica - Sistema MotoChefe</h2>
+            <p class="text-muted">Fases 5, 6 e 7: Comissões, Montagens e Movimentações hist\u00f3ricas</p>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div id="alertContainer"></div>
+
+    <!-- INSTRUÇÕES -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <h5><i class="fas fa-exclamation-triangle"></i> ⚠️ IMPORTANTE - LEIA ANTES DE IMPORTAR</h5>
+                <ol class="mb-0">
+                    <li><strong>PRÉ-REQUISITO:</strong> Pedidos JÁ devem estar importados (Fase 4)</li>
+                    <li><strong>DEDUÇÃO AUTOMÁTICA:</strong> Valores de montagem/movimentação serão DEDUZIDOS do título VENDA</li>
+                    <li><strong>ROLLBACK TOTAL:</strong> Se qualquer fase falhar, NADA será importado</li>
+                    <li><strong>ORDEM FIXA:</strong> Fase 5 → Fase 6 → Fase 7 (não pode mudar)</li>
+                    <li><strong>BACKUP:</strong> Faça backup do banco ANTES de executar</li>
+                    <li><strong>VALIDAÇÃO:</strong> Sistema valida pedidos, chassi e empresas antes de importar</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- EXEMPLO DE DEDUÇÃO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h6><i class="fas fa-calculator"></i> COMO FUNCIONA A DEDUÇÃO:</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Título VENDA Original:</strong><br>
+                        R$ 10.000,00
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Montagem (cliente paga):</strong><br>
+                        - R$ 100,00
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Movimentação (cliente paga):</strong><br>
+                        - R$ 50,00
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-12">
+                        <strong class="text-primary">Título VENDA Final:</strong> R$ 9.850,00 (10.000 - 100 - 50)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ÁREA DE UPLOAD -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file-upload"></i> Upload do Arquivo Excel</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Botão Download Template -->
+                    <div class="mb-4">
+                        <a href="{{ url_for('motochefe.download_template_historico') }}"
+                           class="btn btn-success btn-lg">
+                            <i class="fas fa-download"></i> Baixar Template Excel
+                        </a>
+                        <p class="text-muted mt-2 mb-0">
+                            <small>O template contém 3 abas: Comissoes, Montagens, Movimentacoes + instruções detalhadas</small>
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <!-- Formulário de Upload -->
+                    <form id="formUpload" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label class="font-weight-bold">Selecione o arquivo Excel preenchido:</label>
+                            <input type="file" class="form-control-file" id="inputArquivo" name="arquivo" accept=".xlsx,.xls" required>
+                            <small class="text-muted">Formato: .xlsx ou .xls | Máximo: 10MB</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="btnPreview">
+                            <i class="fas fa-eye"></i> Visualizar Dados (Preview)
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PREVIEW DOS DADOS -->
+    <div class="row mb-4" id="areaPreview" style="display: none;">
+        <div class="col-12">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-check-circle"></i> Preview dos Dados</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs mb-3" id="previewTabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="tab-comissoes" data-toggle="tab" href="#preview-comissoes" role="tab">
+                                <i class="fas fa-dollar-sign"></i> Comissões
+                                <span class="badge badge-primary ml-1" id="badge-comissoes">0</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="tab-montagens" data-toggle="tab" href="#preview-montagens" role="tab">
+                                <i class="fas fa-wrench"></i> Montagens
+                                <span class="badge badge-primary ml-1" id="badge-montagens">0</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="tab-movimentacoes" data-toggle="tab" href="#preview-movimentacoes" role="tab">
+                                <i class="fas fa-truck"></i> Movimentações
+                                <span class="badge badge-primary ml-1" id="badge-movimentacoes">0</span>
+                            </a>
+                        </li>
+                    </ul>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="previewTabContent">
+                        <div class="tab-pane fade show active" id="preview-comissoes" role="tabpanel">
+                            <div id="tabela-comissoes"></div>
+                        </div>
+                        <div class="tab-pane fade" id="preview-montagens" role="tabpanel">
+                            <div id="tabela-montagens"></div>
+                        </div>
+                        <div class="tab-pane fade" id="preview-movimentacoes" role="tabpanel">
+                            <div id="tabela-movimentacoes"></div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Botões de Ação -->
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary" id="btnCancelar">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success btn-lg" id="btnImportar">
+                            <i class="fas fa-play"></i> Executar Importação
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULTADO DA IMPORTAÇÃO -->
+    <div class="row mb-4" id="areaResultado" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header" id="resultadoHeader">
+                    <h5 class="mb-0" id="resultadoTitulo"></h5>
+                </div>
+                <div class="card-body" id="resultadoBody">
+                    <!-- Conteúdo dinâmico -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.table-preview {
+    font-size: 0.85rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.table-preview th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 1;
+}
+
+.badge-fase {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+}
+</style>
+
+<script>
+let arquivoTemp = null;
+
+// ============================================================
+// PREVIEW DO ARQUIVO
+// ============================================================
+
+document.getElementById('formUpload').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData();
+    const arquivo = document.getElementById('inputArquivo').files[0];
+
+    if (!arquivo) {
+        mostrarAlerta('Selecione um arquivo Excel', 'warning');
+        return;
+    }
+
+    formData.append('arquivo', arquivo);
+
+    const btnPreview = document.getElementById('btnPreview');
+    btnPreview.disabled = true;
+    btnPreview.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+    try {
+        const response = await fetch('{{ url_for("motochefe.preview_historico") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            arquivoTemp = data.arquivo_temp;
+            mostrarPreview(data.preview);
+            mostrarAlerta('Arquivo carregado com sucesso! Revise os dados antes de importar.', 'success');
+        } else {
+            mostrarAlerta(data.mensagem, 'danger');
+        }
+    } catch (error) {
+        mostrarAlerta('Erro ao processar arquivo: ' + error.message, 'danger');
+    } finally {
+        btnPreview.disabled = false;
+        btnPreview.innerHTML = '<i class="fas fa-eye"></i> Visualizar Dados (Preview)';
+    }
+});
+
+function mostrarPreview(preview) {
+    // Atualizar badges
+    document.getElementById('badge-comissoes').textContent = preview.comissoes.total;
+    document.getElementById('badge-montagens').textContent = preview.montagens.total;
+    document.getElementById('badge-movimentacoes').textContent = preview.movimentacoes.total;
+
+    // Gerar tabelas
+    document.getElementById('tabela-comissoes').innerHTML = gerarTabela(preview.comissoes);
+    document.getElementById('tabela-montagens').innerHTML = gerarTabela(preview.montagens);
+    document.getElementById('tabela-movimentacoes').innerHTML = gerarTabela(preview.movimentacoes);
+
+    // Mostrar área de preview
+    document.getElementById('areaPreview').style.display = 'block';
+    document.getElementById('areaPreview').scrollIntoView({ behavior: 'smooth' });
+}
+
+function gerarTabela(dados) {
+    if (dados.total === 0) {
+        return '<p class="text-muted">Nenhum dado encontrado nesta aba</p>';
+    }
+
+    let html = '<div class="table-responsive table-preview">';
+    html += '<table class="table table-sm table-bordered table-hover">';
+    html += '<thead class="thead-light"><tr>';
+
+    // Cabeçalho
+    dados.colunas.forEach(col => {
+        html += `<th>${col}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    // Linhas (primeiras 5)
+    dados.primeiras_linhas.forEach(linha => {
+        html += '<tr>';
+        dados.colunas.forEach(col => {
+            const valor = linha[col] || '';
+            html += `<td>${valor}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+
+    if (dados.total > 5) {
+        html += `<p class="text-muted"><small>Mostrando 5 de ${dados.total} linhas</small></p>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// ============================================================
+// EXECUTAR IMPORTAÇÃO
+// ============================================================
+
+document.getElementById('btnImportar').addEventListener('click', async function() {
+    if (!arquivoTemp) {
+        mostrarAlerta('Nenhum arquivo carregado. Faça o preview primeiro.', 'warning');
+        return;
+    }
+
+    if (!confirm('Confirma a importação? Esta ação NÃO pode ser desfeita!\n\nEm caso de erro, haverá ROLLBACK TOTAL.')) {
+        return;
+    }
+
+    const btnImportar = document.getElementById('btnImportar');
+    btnImportar.disabled = true;
+    btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+
+    try {
+        const response = await fetch('{{ url_for("motochefe.importar_historico") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                arquivo_temp: arquivoTemp
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            mostrarResultado(data);
+            mostrarAlerta(data.mensagem, 'success');
+
+            // Ocultar preview
+            document.getElementById('areaPreview').style.display = 'none';
+            arquivoTemp = null;
+        } else {
+            mostrarResultadoErro(data);
+            mostrarAlerta(data.mensagem, 'danger');
+        }
+    } catch (error) {
+        mostrarAlerta('Erro fatal: ' + error.message, 'danger');
+    } finally {
+        btnImportar.disabled = false;
+        btnImportar.innerHTML = '<i class="fas fa-play"></i> Executar Importação';
+    }
+});
+
+function mostrarResultado(data) {
+    const resultadoHeader = document.getElementById('resultadoHeader');
+    const resultadoTitulo = document.getElementById('resultadoTitulo');
+    const resultadoBody = document.getElementById('resultadoBody');
+
+    resultadoHeader.className = 'card-header bg-success text-white';
+    resultadoTitulo.innerHTML = '<i class="fas fa-check-circle"></i> Importação Concluída com Sucesso!';
+
+    let html = '<div class="row">';
+
+    // FASE 5
+    html += '<div class="col-md-4 mb-3">';
+    html += '<h6><span class="badge badge-primary">FASE 5</span> Comissões</h6>';
+    html += `<ul class="mb-0">`;
+    html += `<li>Criadas: ${data.resultados.fase5.comissoes_criadas}</li>`;
+    html += `<li>Pagas: ${data.resultados.fase5.comissoes_pagas}</li>`;
+    html += `<li>Pendentes: ${data.resultados.fase5.comissoes_pendentes}</li>`;
+    html += `<li>Lotes: ${data.resultados.fase5.lotes_criados}</li>`;
+    html += `<li>Valor Pago: R$ ${data.resultados.fase5.valor_total_pago.toFixed(2)}</li>`;
+    html += '</ul></div>';
+
+    // FASE 6
+    html += '<div class="col-md-4 mb-3">';
+    html += '<h6><span class="badge badge-primary">FASE 6</span> Montagens</h6>';
+    html += `<ul class="mb-0">`;
+    html += `<li>Itens Atualizados: ${data.resultados.fase6.itens_atualizados}</li>`;
+    html += `<li>Títulos A Receber: ${data.resultados.fase6.titulos_receber}</li>`;
+    html += `<li>Títulos A Pagar: ${data.resultados.fase6.titulos_pagar}</li>`;
+    html += `<li>Recebimentos: ${data.resultados.fase6.movimentacoes_recebimento}</li>`;
+    html += `<li>Pagamentos: ${data.resultados.fase6.movimentacoes_pagamento}</li>`;
+    html += `<li>Deduzido VENDA: R$ ${data.resultados.fase6.valor_deduzido_venda.toFixed(2)}</li>`;
+    html += '</ul></div>';
+
+    // FASE 7
+    html += '<div class="col-md-4 mb-3">';
+    html += '<h6><span class="badge badge-primary">FASE 7</span> Movimentações</h6>';
+    html += `<ul class="mb-0">`;
+    html += `<li>Títulos A Receber: ${data.resultados.fase7.titulos_receber}</li>`;
+    html += `<li>Títulos A Pagar: ${data.resultados.fase7.titulos_pagar}</li>`;
+    html += `<li>Recebimentos: ${data.resultados.fase7.movimentacoes_recebimento}</li>`;
+    html += `<li>Pagamentos: ${data.resultados.fase7.movimentacoes_pagamento}</li>`;
+    html += `<li>Deduzido VENDA: R$ ${data.resultados.fase7.valor_deduzido_venda.toFixed(2)}</li>`;
+    html += '</ul></div>';
+
+    html += '</div>';
+
+    resultadoBody.innerHTML = html;
+    document.getElementById('areaResultado').style.display = 'block';
+    document.getElementById('areaResultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+function mostrarResultadoErro(data) {
+    const resultadoHeader = document.getElementById('resultadoHeader');
+    const resultadoTitulo = document.getElementById('resultadoTitulo');
+    const resultadoBody = document.getElementById('resultadoBody');
+
+    resultadoHeader.className = 'card-header bg-danger text-white';
+    resultadoTitulo.innerHTML = '<i class="fas fa-times-circle"></i> Erro na Importação';
+
+    let html = `<p class="text-danger"><strong>${data.mensagem}</strong></p>`;
+
+    if (data.resultados) {
+        html += '<hr><h6>Detalhes por Fase:</h6>';
+
+        for (const [fase, resultado] of Object.entries(data.resultados)) {
+            if (resultado.erros && resultado.erros.length > 0) {
+                html += `<div class="alert alert-danger">`;
+                html += `<strong>${fase.toUpperCase()}:</strong><br>`;
+                resultado.erros.forEach(erro => {
+                    html += `<small>${erro}</small><br>`;
+                });
+                html += '</div>';
+            }
+        }
+    }
+
+    resultadoBody.innerHTML = html;
+    document.getElementById('areaResultado').style.display = 'block';
+    document.getElementById('areaResultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============================================================
+// CANCELAR
+// ============================================================
+
+document.getElementById('btnCancelar').addEventListener('click', function() {
+    document.getElementById('areaPreview').style.display = 'none';
+    document.getElementById('inputArquivo').value = '';
+    arquivoTemp = null;
+});
+
+// ============================================================
+// HELPER: ALERTA
+// ============================================================
+
+function mostrarAlerta(mensagem, tipo) {
+    const alertContainer = document.getElementById('alertContainer');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${tipo} alert-dismissible fade show`;
+    alert.role = 'alert';
+    alert.innerHTML = `
+        ${mensagem}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    `;
+    alertContainer.appendChild(alert);
+
+    // Auto-remover após 10 segundos
+    setTimeout(() => {
+        alert.remove();
+    }, 10000);
+}
+</script>
+{% endblock %}

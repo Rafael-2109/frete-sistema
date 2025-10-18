@@ -185,7 +185,7 @@
         <ul class="pagination justify-content-center">
             {% if page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('motochefe.extrato_financeiro', page=page-1, **request.args) }}">Anterior</a>
+                <a class="page-link" href="{{ url_for('motochefe.extrato_financeiro', page=page-1, empresa_id=request.args.get('empresa_id'), data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">Anterior</a>
             </li>
             {% endif %}
 
@@ -193,13 +193,13 @@
                 {% if p == page %}
                 <li class="page-item active"><span class="page-link">{{ p }}</span></li>
                 {% else %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('motochefe.extrato_financeiro', page=p, **request.args) }}">{{ p }}</a></li>
+                <li class="page-item"><a class="page-link" href="{{ url_for('motochefe.extrato_financeiro', page=p, empresa_id=request.args.get('empresa_id'), data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">{{ p }}</a></li>
                 {% endif %}
             {% endfor %}
 
             {% if page < total_pages %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('motochefe.extrato_financeiro', page=page+1, **request.args) }}">Próxima</a>
+                <a class="page-link" href="{{ url_for('motochefe.extrato_financeiro', page=page+1, empresa_id=request.args.get('empresa_id'), data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">Próxima</a>
             </li>
             {% endif %}
         </ul>

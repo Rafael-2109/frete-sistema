@@ -137,25 +137,60 @@ class ImportacaoFase4Service:
 
     @staticmethod
     def converter_string(valor):
-        """Converte valor para string, tratando NaN do pandas"""
+        """Converte valor para string, tratando NaN do pandas e números com .0"""
         if pd.isna(valor) or valor is None or valor == '':
             return None
 
         valor_str = str(valor).strip()
 
-        if valor_str.lower() == 'nan' or valor_str == '':
+        if valor_str.lower() == 'nan' or valor_str == '' or valor_str.lower() == 'none':
             return None
 
+        # ✅ Remover .0 de números (ex: 2763.0 → 2763, mas mantém 0315.0 → 0315)
+        if valor_str.endswith('.0') and not valor_str.startswith('0'):
+            valor_str = valor_str[:-2]
+        elif valor_str.endswith('.0') and valor_str.startswith('0'):
+            # Caso especial: 0315.0 deve virar 0315 (preservando zero à esquerda)
+            valor_str = valor_str[:-2]
+
         return valor_str
+
+    @staticmethod
+    def normalizar_cnpj(cnpj_str):
+        """
+        Normaliza CNPJ removendo formatação e garantindo 14 dígitos
+        Exemplos:
+        - '02.662.537/0001-42' → '02662537000142'
+        - '2662537000142' → '02662537000142'
+        - '02662537000142' → '02662537000142'
+        """
+        if not cnpj_str:
+            return None
+
+        # Remover formatação
+        cnpj_limpo = cnpj_str.replace('.', '').replace('/', '').replace('-', '').strip()
+
+        # Garantir que tenha apenas dígitos
+        if not cnpj_limpo.isdigit():
+            return cnpj_limpo
+
+        # Completar com zeros à esquerda até 14 dígitos
+        return cnpj_limpo.zfill(14)
 
     # ============================================================
     # IMPORTAÇÃO DE PEDIDOS E ITENS
     # ============================================================
 
     @staticmethod
-    def importar_pedidos_completo(df_pedidos, df_itens, usuario='sistema'):
+    def importar_pedidos_completo(df_pedidos, df_itens, usuario='sistema', modo='COMPLETO'):
         """
-        Importa pedidos com itens (chassis vinculados) e executa TODAS as funções automáticas
+        Importa pedidos com itens (chassis vinculados) e executa funções automáticas
+
+        MODO DE OPERAÇÃO:
+        - modo='COMPLETO' (padrão): Gera TODOS os títulos (VENDA + FRETE + MONTAGEM + MOVIMENTACAO)
+          → Usado para pedidos NOVOS criados pelo sistema
+        - modo='HISTORICO': Gera APENAS títulos VENDA + FRETE
+          → Usado para importação histórica (Montagem/Movimentação vêm das Fases 5/6/7)
 
         Colunas de df_pedidos esperadas:
         - numero_pedido (obrigatório - PK)
@@ -180,15 +215,15 @@ class ImportacaoFase4Service:
         - numero_pedido (obrigatório - FK)
         - numero_chassi (obrigatório - FK)
         - preco_venda (obrigatório)
-        - montagem_contratada (boolean - padrão: False)
-        - valor_montagem (decimal - padrão: 0)
-        - fornecedor_montagem (opcional)
+        - montagem_contratada (boolean - padrão: False) ← Ignorado se modo='HISTORICO'
+        - valor_montagem (decimal - padrão: 0) ← Ignorado se modo='HISTORICO'
+        - fornecedor_montagem (opcional) ← Ignorado se modo='HISTORICO'
 
-        ⚠️ FUNÇÕES AUTOMÁTICAS EXECUTADAS:
-        1. Atualizar moto.status (RESERVADA ou VENDIDA)
-        2. Gerar títulos financeiros (A RECEBER) com vencimentos
-        3. Gerar títulos a pagar (PENDENTES)
-        4. Calcular comissões dos vendedores
+        ⚠️ FUNÇÕES AUTOMÁTICAS EXECUTADAS (depende do modo):
+        1. Atualizar moto.status (RESERVADA ou VENDIDA) - SEMPRE
+        2. Gerar títulos financeiros (A RECEBER) - SEMPRE (mas tipos variam por modo)
+        3. Gerar títulos a pagar (PENDENTES) - APENAS se modo='COMPLETO'
+        4. Calcular comissões - FUTURO (não implementado)
         """
         resultado = ResultadoImportacaoFase4()
         resultado.total_pedidos = len(df_pedidos)
@@ -218,12 +253,23 @@ class ImportacaoFase4Service:
                 if not vendedor_nome:
                     raise ValueError(f"Linha {linha_pedido} (Pedidos): Vendedor é obrigatório")
 
-                # Buscar cliente (com cache)
-                cliente_cnpj_limpo = cliente_cnpj.replace('.', '').replace('/', '').replace('-', '').strip()
+                # Buscar cliente (com cache) - aceita CNPJ formatado OU sem formatação
+                # ✅ Normalizar CNPJ garantindo 14 dígitos com zeros à esquerda
+                cliente_cnpj_limpo = ImportacaoFase4Service.normalizar_cnpj(cliente_cnpj)
+                if not cliente_cnpj_limpo:
+                    raise ValueError(f"Linha {linha_pedido}: CNPJ do cliente inválido")
+
                 if cliente_cnpj_limpo not in cache_clientes:
+                    # Tentar buscar por CNPJ sem formatação (14 dígitos com zeros)
                     cliente = ClienteMoto.query.filter_by(cnpj_cliente=cliente_cnpj_limpo, ativo=True).first()
+
+                    # Se não encontrou, tentar com formatação XX.XXX.XXX/XXXX-XX
                     if not cliente:
-                        raise ValueError(f"Linha {linha_pedido}: Cliente CNPJ '{cliente_cnpj}' não encontrado")
+                        cnpj_formatado = f"{cliente_cnpj_limpo[:2]}.{cliente_cnpj_limpo[2:5]}.{cliente_cnpj_limpo[5:8]}/{cliente_cnpj_limpo[8:12]}-{cliente_cnpj_limpo[12:14]}"
+                        cliente = ClienteMoto.query.filter_by(cnpj_cliente=cnpj_formatado, ativo=True).first()
+
+                    if not cliente:
+                        raise ValueError(f"Linha {linha_pedido}: Cliente CNPJ '{cliente_cnpj}' não encontrado (tentou: '{cliente_cnpj_limpo}' e '{cnpj_formatado}')")
                     cache_clientes[cliente_cnpj_limpo] = cliente
                 cliente = cache_clientes[cliente_cnpj_limpo]
 
@@ -311,7 +357,14 @@ class ImportacaoFase4Service:
                 pedido.status = status
                 pedido.ativo = (status == 'APROVADO')  # Só ativa se aprovado
                 pedido.faturado = faturado
-                pedido.numero_nf = numero_nf
+
+                # ⚠️ MODO HISTORICO: Usar numero_nf_importada (permite duplicatas)
+                if modo == 'HISTORICO' and numero_nf:
+                    pedido.numero_nf_importada = numero_nf
+                    pedido.numero_nf = None  # Limpar numero_nf para evitar conflito
+                else:
+                    pedido.numero_nf = numero_nf
+
                 pedido.data_nf = data_nf
                 pedido.empresa_venda_id = empresa_venda_id
                 pedido.forma_pagamento = ImportacaoFase4Service.converter_string(row_ped.get('forma_pagamento'))
@@ -321,6 +374,8 @@ class ImportacaoFase4Service:
                 pedido.transportadora_id = transportadora_id
                 pedido.tipo_frete = ImportacaoFase4Service.converter_string(row_ped.get('tipo_frete'))
                 pedido.observacoes = ImportacaoFase4Service.converter_string(row_ped.get('observacoes'))
+                # ⚠️ IMPORTANTE: Inicializar valor_total_pedido com 0 (será calculado depois com os itens)
+                pedido.valor_total_pedido = Decimal('0')
 
                 db.session.add(pedido)
                 db.session.flush()  # Gera ID do pedido
@@ -346,34 +401,48 @@ class ImportacaoFase4Service:
                     if not numero_chassi:
                         raise ValueError(f"Linha {linha_item} (Itens): Número do chassi é obrigatório")
 
-                    # Buscar moto
-                    moto = Moto.query.filter_by(numero_chassi=numero_chassi, ativo=True).first()
+                    # Buscar moto (case-insensitive para aceitar 'mc695' ou 'MC695')
+                    moto = Moto.query.filter(
+                        func.upper(Moto.numero_chassi) == numero_chassi.upper(),
+                        Moto.ativo == True
+                    ).first()
                     if not moto:
                         raise ValueError(f"Linha {linha_item} (Itens): Chassi '{numero_chassi}' não encontrado")
 
-                    # Verificar se item já existe (UPSERT)
-                    item = PedidoVendaMotoItem.query.filter_by(
-                        pedido_id=pedido.id,
-                        numero_chassi=numero_chassi
+                    # Verificar se item já existe (UPSERT) - case-insensitive
+                    item = PedidoVendaMotoItem.query.filter(
+                        PedidoVendaMotoItem.pedido_id == pedido.id,
+                        func.upper(PedidoVendaMotoItem.numero_chassi) == numero_chassi.upper()
                     ).first()
 
                     if not item:
                         item = PedidoVendaMotoItem()
                         item.pedido_id = pedido.id
-                        item.numero_chassi = numero_chassi
+                        item.numero_chassi = moto.numero_chassi  # ✅ Usar o chassi do banco (formato correto)
                         item.criado_por = usuario
                         resultado.itens_inseridos += 1
 
                     # Preencher campos do item
                     item.preco_venda = ImportacaoFase4Service.converter_decimal(row_item.get('preco_venda'))
-                    item.montagem_contratada = ImportacaoFase4Service.converter_boolean(row_item.get('montagem_contratada'))
-                    item.valor_montagem = ImportacaoFase4Service.converter_decimal(row_item.get('valor_montagem'))
-                    item.fornecedor_montagem = ImportacaoFase4Service.converter_string(row_item.get('fornecedor_montagem'))
+
+                    # ⚠️ MODO HISTORICO: Ignora montagem (virá das Fases 5/6/7)
+                    if modo == 'HISTORICO':
+                        item.montagem_contratada = False
+                        item.valor_montagem = Decimal('0')
+                        item.fornecedor_montagem = None
+                    else:
+                        item.montagem_contratada = ImportacaoFase4Service.converter_boolean(row_item.get('montagem_contratada'))
+                        item.valor_montagem = ImportacaoFase4Service.converter_decimal(row_item.get('valor_montagem'))
+                        item.fornecedor_montagem = ImportacaoFase4Service.converter_string(row_item.get('fornecedor_montagem'))
 
                     db.session.add(item)
                     itens_criados.append(item)
 
-                    valor_total_calculado += item.preco_venda + (item.valor_montagem or Decimal('0'))
+                    # ⚠️ MODO HISTORICO: Soma apenas preco_venda (montagem vem depois)
+                    if modo == 'HISTORICO':
+                        valor_total_calculado += item.preco_venda
+                    else:
+                        valor_total_calculado += item.preco_venda + (item.valor_montagem or Decimal('0'))
 
                     # ✅ ATUALIZAR STATUS DA MOTO
                     if faturado:
@@ -392,6 +461,16 @@ class ImportacaoFase4Service:
                 # 4. GERAR TÍTULOS FINANCEIROS (A RECEBER)
                 # ========================================
 
+                # ✅ EVITAR DUPLICAÇÃO: Deletar títulos antigos ao atualizar pedido
+                if resultado.pedidos_atualizados > 0:  # É uma atualização, não inserção
+                    from app.motochefe.models.financeiro import TituloFinanceiro
+                    titulos_antigos = TituloFinanceiro.query.filter_by(pedido_id=pedido.id).all()
+                    if titulos_antigos:
+                        for titulo_antigo in titulos_antigos:
+                            db.session.delete(titulo_antigo)
+                        db.session.flush()
+                        resultado.avisos.append(f"Pedido {numero_pedido}: {len(titulos_antigos)} títulos antigos deletados antes de regenerar")
+
                 # Montar configuração de parcelas
                 parcelas_config = []
                 for n_parcela in range(1, numero_parcelas + 1):
@@ -402,10 +481,13 @@ class ImportacaoFase4Service:
                     })
 
                 # Gerar títulos usando o service
+                # ⚠️ MODO HISTORICO: Gera apenas VENDA + FRETE
+                tipos_permitidos = ['VENDA', 'FRETE'] if modo == 'HISTORICO' else None
                 titulos_financeiros = gerar_titulos_com_fifo_parcelas(
                     pedido,
                     itens_criados,
-                    parcelas_config
+                    parcelas_config,
+                    tipos_permitidos=tipos_permitidos
                 )
 
                 # ✅ CALCULAR data_vencimento
@@ -420,22 +502,24 @@ class ImportacaoFase4Service:
                 # 5. GERAR TÍTULOS A PAGAR (PENDENTES)
                 # ========================================
 
-                equipe = vendedor.equipe if vendedor else None
+                # ⚠️ MODO HISTORICO: NÃO gera títulos A PAGAR (virão das Fases 5/6/7)
+                if modo == 'COMPLETO':
+                    equipe = vendedor.equipe if vendedor else None
 
-                for titulo in titulos_financeiros:
-                    if titulo.tipo_titulo == 'MOVIMENTACAO':
-                        custo_real = equipe.custo_movimentacao if equipe else Decimal('0')
-                        if custo_real > 0:
-                            titulo_pagar = criar_titulo_a_pagar_movimentacao(titulo, custo_real)
-                            if titulo_pagar:
-                                resultado.total_titulos_a_pagar += 1
+                    for titulo in titulos_financeiros:
+                        if titulo.tipo_titulo == 'MOVIMENTACAO':
+                            custo_real = equipe.custo_movimentacao if equipe else Decimal('0')
+                            if custo_real > 0:
+                                titulo_pagar = criar_titulo_a_pagar_movimentacao(titulo, custo_real)
+                                if titulo_pagar:
+                                    resultado.total_titulos_a_pagar += 1
 
-                    elif titulo.tipo_titulo == 'MONTAGEM':
-                        item = next((i for i in itens_criados if i.numero_chassi == titulo.numero_chassi), None)
-                        if item and item.montagem_contratada:
-                            titulo_pagar = criar_titulo_a_pagar_montagem(titulo, item)
-                            if titulo_pagar:
-                                resultado.total_titulos_a_pagar += 1
+                        elif titulo.tipo_titulo == 'MONTAGEM':
+                            item = next((i for i in itens_criados if i.numero_chassi == titulo.numero_chassi), None)
+                            if item and item.montagem_contratada:
+                                titulo_pagar = criar_titulo_a_pagar_montagem(titulo, item)
+                                if titulo_pagar:
+                                    resultado.total_titulos_a_pagar += 1
 
                 db.session.flush()
 

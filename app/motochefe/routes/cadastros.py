@@ -929,7 +929,7 @@ def listar_clientes():
     per_page = 100
 
     paginacao = ClienteMoto.query.filter_by(ativo=True)\
-        .order_by(ClienteMoto.cliente)\
+        .order_by(ClienteMoto.vendedor_id, ClienteMoto.cliente)\
         .paginate(page=page, per_page=per_page, error_out=False)
 
     return render_template('motochefe/cadastros/clientes/listar.html',
@@ -1047,6 +1047,7 @@ def exportar_clientes():
 
     data = [{
         'ID': c.id,
+        'Vendedor': c.vendedor.vendedor if c.vendedor else '',
         'Cliente': c.cliente,
         'CNPJ': c.cnpj_cliente,
         'Endereço': c.endereco_cliente or '',

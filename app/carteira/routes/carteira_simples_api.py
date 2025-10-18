@@ -68,7 +68,9 @@ def obter_dados():
         data_entrega_ate = request.args.get('data_entrega_ate', '').strip()
         estado = request.args.get('estado', '').strip()
         municipio = request.args.get('municipio', '').strip()
-        limit = int(request.args.get('limit', 100))
+        rota = request.args.get('rota', '').strip()
+        sub_rota = request.args.get('sub_rota', '').strip()
+        limit = int(request.args.get('limit', 10000))  # 🆕 Aumentado para remover paginação
         offset = int(request.args.get('offset', 0))
 
         # Query base - apenas itens ativos
@@ -104,6 +106,13 @@ def obter_dados():
 
         if municipio:
             query = query.filter(CarteiraPrincipal.municipio.ilike(f'%{municipio}%'))
+
+        # 🆕 Filtros de Rota e Sub-rota
+        if rota:
+            query = query.filter(CarteiraPrincipal.rota == rota)
+
+        if sub_rota:
+            query = query.filter(CarteiraPrincipal.sub_rota == sub_rota)
 
         # Ordenação
         query = query.order_by(
@@ -185,11 +194,8 @@ def obter_dados():
                 # Estoque atual
                 estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
 
-                # Projeção de 28 dias (para navegação lateral)
-                data_expedicao = info['expedicao'] or date.today()
-                dias = max((data_expedicao - date.today()).days, 0) + 7  # Calcular até data + 7 dias
-
-                projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, min(dias, 28))
+                # Projeção de 28 dias (sempre fixo)
+                projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
 
                 estoque_map[cod_produto] = {
                     'estoque_atual': estoque_atual,
@@ -295,6 +301,16 @@ def obter_dados():
                         'projecoes': []
                     })
 
+                    # 🆕 BUSCAR ROTA E SUB_ROTA (se não estiver preenchido no banco)
+                    rota_calculada = produto.rota
+                    sub_rota_calculada = produto.sub_rota
+
+                    if not rota_calculada and produto.estado:
+                        rota_calculada = buscar_rota_por_uf(produto.estado)
+
+                    if not sub_rota_calculada and produto.estado and produto.municipio:
+                        sub_rota_calculada = buscar_sub_rota_por_uf_cidade(produto.estado, produto.municipio)
+
                     # ✅ LINHA DO PEDIDO
                     dados.append({
                         'tipo': 'pedido',
@@ -316,8 +332,8 @@ def obter_dados():
                         'valor_total': valor_total,
                         'pallets': pallets,
                         'peso': peso,
-                        'rota': produto.rota,
-                        'sub_rota': produto.sub_rota,
+                        'rota': rota_calculada,
+                        'sub_rota': sub_rota_calculada,
                         'expedicao': produto.expedicao.strftime('%Y-%m-%d') if produto.expedicao else None,
                         'agendamento': produto.agendamento.strftime('%Y-%m-%d') if produto.agendamento else None,
                         'protocolo': produto.protocolo,

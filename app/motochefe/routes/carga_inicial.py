@@ -334,7 +334,18 @@ def importar_fase3():
 # IMPORTAÇÃO FASE 4: PEDIDOS E VENDAS
 # ============================================================
 
-@motochefe_bp.route('/carga-inicial/fase4', methods=['POST'])
+@motochefe_bp.route('/carga-inicial/fase4')
+@login_required
+def fase4():
+    """Página de importação Fase 4: Pedidos e Vendas"""
+    if not current_user.pode_acessar_motochefe():
+        flash('Acesso negado ao sistema MotoChefe.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    return render_template('motochefe/carga_inicial/fase4.html')
+
+
+@motochefe_bp.route('/carga-inicial/fase4/importar', methods=['POST'])
 @login_required
 @csrf_exempt
 def importar_fase4():
@@ -360,15 +371,30 @@ def importar_fase4():
                 'mensagem': '❌ Envie os arquivos de Pedidos e Itens'
             }), 400
 
-        # 2. CARREGAR DATAFRAMES
-        df_pedidos = pd.read_excel(file_pedidos, sheet_name=0)
-        df_itens = pd.read_excel(file_itens, sheet_name=0)
+        # 2. LER MODO DE OPERAÇÃO
+        modo = request.form.get('modo', 'COMPLETO')  # COMPLETO ou HISTORICO
 
-        # 3. IMPORTAR PEDIDOS COM TODAS AS FUNÇÕES AUTOMÁTICAS
+        # 3. CARREGAR DATAFRAMES
+        # ✅ Forçar numero_pedido e numero_chassi como string para preservar zeros à esquerda e evitar .0
+        df_pedidos = pd.read_excel(file_pedidos, sheet_name=0, dtype={'numero_pedido': str, 'cliente_cnpj': str})
+        df_itens = pd.read_excel(file_itens, sheet_name=0, dtype={'numero_pedido': str, 'numero_chassi': str})
+
+        # ✅ LIMPAR ESPAÇOS EM BRANCO de colunas críticas (resolve "03.09JR " vs "03.09JR")
+        if 'numero_pedido' in df_pedidos.columns:
+            df_pedidos['numero_pedido'] = df_pedidos['numero_pedido'].astype(str).str.strip()
+        if 'cliente_cnpj' in df_pedidos.columns:
+            df_pedidos['cliente_cnpj'] = df_pedidos['cliente_cnpj'].astype(str).str.strip()
+        if 'numero_pedido' in df_itens.columns:
+            df_itens['numero_pedido'] = df_itens['numero_pedido'].astype(str).str.strip()
+        if 'numero_chassi' in df_itens.columns:
+            df_itens['numero_chassi'] = df_itens['numero_chassi'].astype(str).str.strip()
+
+        # 4. IMPORTAR PEDIDOS COM O MODO ESPECIFICADO
         resultado = ImportacaoFase4Service.importar_pedidos_completo(
             df_pedidos,
             df_itens,
-            usuario=current_user.username
+            usuario=current_user.nome,
+            modo=modo
         )
 
         # 4. RETORNAR RESULTADO
@@ -385,6 +411,252 @@ def importar_fase4():
                 'erros': resultado.erros,
                 'avisos': resultado.avisos
             }), 400
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'❌ Erro fatal: {str(e)}',
+            'erro_detalhado': traceback.format_exc()
+        }), 500
+
+
+# ============================================================
+# IMPORTAÇÃO HISTÓRICA - FASES 5, 6 E 7
+# ============================================================
+
+@motochefe_bp.route('/carga-inicial/historico')
+@login_required
+def importacao_historico():
+    """Página de importação histórica (Fases 5, 6, 7)"""
+    if not current_user.pode_acessar_motochefe():
+        flash('Acesso negado ao sistema MotoChefe.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    return render_template('motochefe/carga_inicial/historico.html')
+
+
+@motochefe_bp.route('/carga-inicial/historico/download-template')
+@login_required
+def download_template_historico():
+    """Download do template Excel de importação histórica"""
+    if not current_user.pode_acessar_motochefe():
+        return jsonify({'erro': 'Acesso negado'}), 403
+
+    try:
+        from app.motochefe.services.importacao_historico_service import gerar_template_historico_excel
+
+        arquivo = gerar_template_historico_excel()
+
+        return send_file(
+            arquivo,
+            as_attachment=True,
+            download_name='MotoChefe_Importacao_Historica.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except Exception as e:
+        flash(f'Erro ao gerar template: {str(e)}', 'danger')
+        return redirect(url_for('motochefe.importacao_historico'))
+
+
+@motochefe_bp.route('/carga-inicial/historico/preview', methods=['POST'])
+@login_required
+@csrf_exempt
+def preview_historico():
+    """Preview dos dados do Excel antes de importar"""
+    if not current_user.pode_acessar_motochefe():
+        return jsonify({'erro': 'Acesso negado'}), 403
+
+    try:
+        if 'arquivo' not in request.files:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Nenhum arquivo enviado'
+            }), 400
+
+        file = request.files['arquivo']
+
+        if not file or not arquivo_permitido(file.filename):
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Arquivo inválido. Use .xlsx ou .xls'
+            }), 400
+
+        # Ler Excel
+        excel_file = pd.ExcelFile(file)
+        abas_presentes = excel_file.sheet_names
+
+        # Validar abas obrigatórias
+        abas_necessarias = ['Comissoes', 'Montagens', 'Movimentacoes']
+        abas_faltando = [aba for aba in abas_necessarias if aba not in abas_presentes]
+
+        if abas_faltando:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': f"Abas faltando: {', '.join(abas_faltando)}"
+            }), 400
+
+        # Carregar DataFrames
+        df_comissoes = pd.read_excel(excel_file, sheet_name='Comissoes')
+        df_montagens = pd.read_excel(excel_file, sheet_name='Montagens')
+        df_movimentacoes = pd.read_excel(excel_file, sheet_name='Movimentacoes')
+
+        # Preparar preview
+        preview = {
+            'comissoes': {
+                'total': len(df_comissoes),
+                'colunas': list(df_comissoes.columns),
+                'primeiras_linhas': df_comissoes.head(5).fillna('').to_dict(orient='records')
+            },
+            'montagens': {
+                'total': len(df_montagens),
+                'colunas': list(df_montagens.columns),
+                'primeiras_linhas': df_montagens.head(5).fillna('').to_dict(orient='records')
+            },
+            'movimentacoes': {
+                'total': len(df_movimentacoes),
+                'colunas': list(df_movimentacoes.columns),
+                'primeiras_linhas': df_movimentacoes.head(5).fillna('').to_dict(orient='records')
+            }
+        }
+
+        # Salvar arquivo temporariamente para importação posterior
+        filename = secure_filename(f"historico_{current_user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.seek(0)  # Reset file pointer
+        file.save(filepath)
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': 'Preview carregado com sucesso',
+            'preview': preview,
+            'arquivo_temp': filename
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao ler arquivo: {str(e)}',
+            'erro_detalhado': traceback.format_exc()
+        }), 500
+
+
+@motochefe_bp.route('/carga-inicial/historico/importar', methods=['POST'])
+@login_required
+@csrf_exempt
+def importar_historico():
+    """Executa importação histórica completa (Fases 5, 6, 7)"""
+    if not current_user.pode_acessar_motochefe():
+        return jsonify({'erro': 'Acesso negado'}), 403
+
+    try:
+        # Buscar arquivo temporário
+        arquivo_temp = request.json.get('arquivo_temp')
+        if not arquivo_temp:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Arquivo não encontrado. Faça o preview novamente.'
+            }), 400
+
+        filepath = os.path.join(UPLOAD_FOLDER, arquivo_temp)
+        if not os.path.exists(filepath):
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Arquivo temporário expirado. Faça o upload novamente.'
+            }), 400
+
+        # Carregar Excel
+        excel_file = pd.ExcelFile(filepath)
+        df_comissoes = pd.read_excel(excel_file, sheet_name='Comissoes')
+        df_montagens = pd.read_excel(excel_file, sheet_name='Montagens')
+        df_movimentacoes = pd.read_excel(excel_file, sheet_name='Movimentacoes')
+
+        # Importar serviços
+        from app.motochefe.services.importacao_historico_service import (
+            importar_comissoes_historico,
+            importar_montagens_historico,
+            importar_movimentacoes_historico
+        )
+
+        resultados = {}
+
+        # FASE 5: COMISSÕES
+        resultado_fase5 = importar_comissoes_historico(df_comissoes, usuario=current_user.nome)
+        resultados['fase5'] = {
+            'sucesso': resultado_fase5.sucesso,
+            'mensagem': resultado_fase5.mensagem,
+            'comissoes_criadas': resultado_fase5.comissoes_criadas,
+            'comissoes_pagas': resultado_fase5.comissoes_pagas,
+            'comissoes_pendentes': resultado_fase5.comissoes_pendentes,
+            'lotes_criados': resultado_fase5.movimentacoes_pai_criadas,
+            'valor_total_pago': float(resultado_fase5.valor_total_pago),
+            'erros': resultado_fase5.erros,
+            'avisos': resultado_fase5.avisos
+        }
+
+        if not resultado_fase5.sucesso:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro na Fase 5 (Comissões)',
+                'resultados': resultados
+            }), 400
+
+        # FASE 6: MONTAGENS
+        resultado_fase6 = importar_montagens_historico(df_montagens, usuario=current_user.nome)
+        resultados['fase6'] = {
+            'sucesso': resultado_fase6.sucesso,
+            'mensagem': resultado_fase6.mensagem,
+            'itens_atualizados': resultado_fase6.itens_atualizados,
+            'titulos_receber': resultado_fase6.titulos_receber_criados,
+            'titulos_pagar': resultado_fase6.titulos_pagar_criados,
+            'movimentacoes_recebimento': resultado_fase6.movimentacoes_recebimento,
+            'movimentacoes_pagamento': resultado_fase6.movimentacoes_pagamento,
+            'valor_deduzido_venda': float(resultado_fase6.valor_total_deduzido_venda),
+            'erros': resultado_fase6.erros,
+            'avisos': resultado_fase6.avisos
+        }
+
+        if not resultado_fase6.sucesso:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro na Fase 6 (Montagens)',
+                'resultados': resultados
+            }), 400
+
+        # FASE 7: MOVIMENTAÇÕES
+        resultado_fase7 = importar_movimentacoes_historico(df_movimentacoes, usuario=current_user.nome)
+        resultados['fase7'] = {
+            'sucesso': resultado_fase7.sucesso,
+            'mensagem': resultado_fase7.mensagem,
+            'titulos_receber': resultado_fase7.titulos_receber_criados,
+            'titulos_pagar': resultado_fase7.titulos_pagar_criados,
+            'movimentacoes_recebimento': resultado_fase7.movimentacoes_recebimento,
+            'movimentacoes_pagamento': resultado_fase7.movimentacoes_pagamento,
+            'valor_deduzido_venda': float(resultado_fase7.valor_total_deduzido_venda),
+            'erros': resultado_fase7.erros,
+            'avisos': resultado_fase7.avisos
+        }
+
+        if not resultado_fase7.sucesso:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro na Fase 7 (Movimentações)',
+                'resultados': resultados
+            }), 400
+
+        # Limpar arquivo temporário
+        try:
+            os.remove(filepath)
+        except:
+            pass
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': '✅ Importação histórica concluída com sucesso!',
+            'resultados': resultados
+        })
 
     except Exception as e:
         import traceback
