@@ -1,12 +1,14 @@
 """
-Serviço de Estoque Simplificado - Queries Diretas sem Cache
+Serviço de Estoque Simplificado - Queries Diretas com Cache Otimizado
 Performance garantida < 50ms por consulta
 """
 
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 import logging
+import time
 
 from sqlalchemy import func
 from flask import current_app
@@ -17,13 +19,37 @@ from app.producao.models import ProgramacaoProducao
 
 logger = logging.getLogger(__name__)
 
+# 🚀 OTIMIZAÇÃO: Cache global com TTL de 30 segundos
+_cache_ttl = {}  # {chave: timestamp}
+_cache_data = {}  # {chave: dados}
+
 
 class ServicoEstoqueSimples:
     """
     Serviço único para todos os cálculos de estoque.
-    Sem triggers, sem cache, apenas queries otimizadas.
+    Com cache TTL de 30s para otimizar performance.
     """
-    
+
+    @staticmethod
+    def _get_cache(chave: str, ttl_seconds: int = 30):
+        """Obter valor do cache se ainda válido"""
+        if chave in _cache_ttl:
+            idade = time.time() - _cache_ttl[chave]
+            if idade < ttl_seconds:
+                return _cache_data.get(chave)
+            else:
+                # Limpar cache expirado
+                del _cache_ttl[chave]
+                if chave in _cache_data:
+                    del _cache_data[chave]
+        return None
+
+    @staticmethod
+    def _set_cache(chave: str, valor: Any):
+        """Salvar valor no cache"""
+        _cache_ttl[chave] = time.time()
+        _cache_data[chave] = valor
+
     @staticmethod
     def calcular_estoque_atual(cod_produto: str) -> float:
         """
@@ -171,10 +197,17 @@ class ServicoEstoqueSimples:
         """
         Calcula projeção completa de estoque para N dias.
         Combina estoque atual + entradas - saídas dia a dia.
-        
-        Performance esperada: < 50ms total (3 queries)
+
+        🚀 OTIMIZAÇÃO: Cache de 30s para reduzir queries repetidas
+        Performance esperada: < 50ms total (3 queries) ou < 1ms (cache hit)
         """
         try:
+            # 🚀 OTIMIZAÇÃO: Verificar cache primeiro
+            chave_cache = f"projecao_{cod_produto}_{dias}"
+            cached = ServicoEstoqueSimples._get_cache(chave_cache, ttl_seconds=30)
+            if cached is not None:
+                logger.debug(f"✅ Cache HIT para {cod_produto} (projeção {dias} dias)")
+                return cached
             hoje = date.today()
             data_fim = hoje + timedelta(days=dias)
             
@@ -240,8 +273,8 @@ class ServicoEstoqueSimples:
                 [p['saldo_final'] for p in projecao[:8]],  # D0 até D7
                 default=estoque_atual
             )
-            
-            return {
+
+            resultado = {
                 'cod_produto': cod_produto,
                 'estoque_atual': estoque_atual,
                 'menor_estoque_d7': menor_estoque_d7,
@@ -249,6 +282,11 @@ class ServicoEstoqueSimples:
                 'dia_ruptura': dia_ruptura.isoformat() if dia_ruptura else None,
                 'projecao': projecao
             }
+
+            # 🚀 OTIMIZAÇÃO: Salvar no cache
+            ServicoEstoqueSimples._set_cache(chave_cache, resultado)
+
+            return resultado
             
         except Exception as e:
             logger.error(f"Erro ao calcular projeção para {cod_produto}: {e}")

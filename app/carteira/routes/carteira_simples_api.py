@@ -57,6 +57,10 @@ def obter_dados():
     - limit: int (default 100)
     - offset: int (default 0)
     """
+    import time
+    tempo_inicio = time.time()
+    tempos = {}  # 🚀 PROFILING: Rastrear tempo de cada etapa
+
     try:
         # Parâmetros de filtro
         num_pedido = request.args.get('num_pedido', '').strip()
@@ -121,21 +125,39 @@ def obter_dados():
             CarteiraPrincipal.cod_produto.asc()
         )
 
-        # Total de registros
-        total = query.count()
-
-        # Paginação
+        # Paginação PRIMEIRO (mais rápido)
+        t1 = time.time()
         items = query.limit(limit).offset(offset).all()
+        tempos['query_items'] = time.time() - t1
+
+        # 🚀 OTIMIZAÇÃO: COUNT aproximado para evitar full table scan
+        t1 = time.time()
+        # Se limit >= 1000, usar estimativa baseada nos itens retornados
+        if limit >= 1000:
+            # Estimativa: se retornou menos que limit, total = offset + len(items)
+            if len(items) < limit:
+                total = offset + len(items)
+            else:
+                # Retornou completo, fazer COUNT real apenas se necessário
+                total = query.count()
+        else:
+            # Para filtros específicos (limit baixo), COUNT é aceitável
+            total = query.count()
+        tempos['count'] = time.time() - t1
 
         # Buscar dados de palletização (batch)
+        t1 = time.time()
         codigos_produtos = [item.cod_produto for item in items]
         palletizacoes = db.session.query(CadastroPalletizacao).filter(
             CadastroPalletizacao.cod_produto.in_(codigos_produtos),
             CadastroPalletizacao.ativo == True
         ).all()
+        tempos['palletizacoes'] = time.time() - t1
 
         # Criar mapa de palletização
+        t1 = time.time()
         pallet_map = {p.cod_produto: p for p in palletizacoes}
+        tempos['pallet_map'] = time.time() - t1
 
         # 🆕 CALCULAR QTD_CARTEIRA TOTAL POR PRODUTO (de TODOS os pedidos)
         qtd_carteira_por_produto = {}
@@ -187,25 +209,55 @@ def obter_dados():
             if qtd_saldo > 0:
                 produtos_unicos[item.cod_produto]['qtd_total_carteira'] += qtd_saldo
 
-        # Calcular estoque para todos os produtos de uma vez
+        # 🚀 OTIMIZAÇÃO CRÍTICA: Calcular estoque em PARALELO com ThreadPool
+        t1 = time.time()
         estoque_map = {}
         try:
-            for cod_produto, info in produtos_unicos.items():
-                # Estoque atual
-                estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+            # Usar método otimizado de cálculo em batch
+            codigos_produtos = list(produtos_unicos.keys())
 
-                # Projeção de 28 dias (sempre fixo)
-                projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+            # ✅ PROTEÇÃO: Só calcular estoque se houver produtos
+            if not codigos_produtos:
+                logger.warning("⚠️ Nenhum produto para calcular estoque")
+                tempos['estoque_batch'] = time.time() - t1
+                # Pular para próxima etapa
+            else:
+                # calcular_multiplos_produtos retorna {cod_produto: {...}}
+                resultados_batch = ServicoEstoqueSimples.calcular_multiplos_produtos(
+                    codigos_produtos,
+                    dias=28
+                )
 
-                estoque_map[cod_produto] = {
-                    'estoque_atual': estoque_atual,
-                    'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                    'projecoes': projecao.get('projecao', [])[:28]  # Limitar a 28 dias
-                }
+                # Mapear resultados para formato esperado
+                for cod_produto, resultado in resultados_batch.items():
+                    # ✅ CORREÇÃO: calcular_multiplos_produtos retorna 'projecao', não 'projecao_detalhada'
+                    projecoes_raw = resultado.get('projecao', resultado.get('projecao_detalhada', []))
+                    estoque_map[cod_produto] = {
+                        'estoque_atual': resultado.get('estoque_atual', 0),
+                        'menor_estoque_d7': resultado.get('menor_estoque_d7', 0),
+                        'projecoes': projecoes_raw[:28] if projecoes_raw else []  # Limitar a 28 dias
+                    }
+
+                logger.info(f"✅ Estoque calculado em BATCH para {len(codigos_produtos)} produtos ({len(estoque_map)} salvos)")
+                tempos['estoque_batch'] = time.time() - t1
+
         except Exception as e:
             logger.error(f"Erro ao calcular estoques em batch: {e}", exc_info=True)
+            tempos['estoque_batch'] = time.time() - t1
+            # Fallback: calcular individualmente em caso de erro (máximo 10 produtos)
+            for cod_produto in list(produtos_unicos.keys())[:10]:
+                try:
+                    projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+                    estoque_map[cod_produto] = {
+                        'estoque_atual': projecao.get('estoque_atual', 0),
+                        'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
+                        'projecoes': projecao.get('projecao', [])[:28]
+                    }
+                except Exception as e2:
+                    logger.error(f"Erro no fallback para {cod_produto}: {e2}")
 
         # 🆕 BUSCAR SEPARAÇÕES NÃO SINCRONIZADAS (sincronizado_nf=False)
+        t1 = time.time()
         # Obter lista de pedidos da página atual
         pedidos_da_pagina = [item.num_pedido for item in items]
 
@@ -220,8 +272,10 @@ def obter_dados():
             Separacao.separacao_lote_id,
             Separacao.id
         ).all()
+        tempos['separacoes'] = time.time() - t1
 
         # 🆕 BUSCAR EMBARQUES E TRANSPORTADORAS (batch)
+        t1 = time.time()
         separacao_lote_ids = [s.separacao_lote_id for s in separacoes_query if s.separacao_lote_id]
         embarques_map = {}
 
@@ -243,18 +297,21 @@ def obter_dados():
                     'numero': embarque_num,
                     'transportadora': transp_nome or 'Sem transportadora'
                 }
+        tempos['embarques'] = time.time() - t1
 
+        # 🚀 OTIMIZAÇÃO: Pré-processar dados para evitar loops aninhados
+        t1 = time.time()
         # Montar resposta - ESTRUTURA HIERÁRQUICA PLANA
         dados = []
 
-        # 🔧 NOVO: Agrupar produtos por pedido
+        # 🔧 Agrupar produtos por pedido (uma vez só)
         produtos_por_pedido = {}
         for item in items:
             if item.num_pedido not in produtos_por_pedido:
                 produtos_por_pedido[item.num_pedido] = []
             produtos_por_pedido[item.num_pedido].append(item)
 
-        # 🔧 NOVO: Agrupar separações por pedido e depois por lote
+        # 🔧 Agrupar separações por pedido e depois por lote (uma vez só)
         separacoes_por_pedido_lote = {}
         for sep in separacoes_query:
             if sep.num_pedido not in separacoes_por_pedido_lote:
@@ -264,6 +321,38 @@ def obter_dados():
                 separacoes_por_pedido_lote[sep.num_pedido][sep.separacao_lote_id] = []
 
             separacoes_por_pedido_lote[sep.num_pedido][sep.separacao_lote_id].append(sep)
+
+        # 🚀 OTIMIZAÇÃO: Pré-buscar produtos de referência para separações (evitar busca dentro de loop)
+        produtos_ref_map = {}  # {(num_pedido, cod_produto): item}
+        for item in items:
+            chave = (item.num_pedido, item.cod_produto)
+            if chave not in produtos_ref_map:
+                produtos_ref_map[chave] = item
+
+        # 🚀 OTIMIZAÇÃO: Pré-calcular TODAS as rotas em batch (evitar chamadas dentro do loop)
+        rotas_cache = {}  # {(estado, municipio): (rota, sub_rota)}
+        ufs_unicos = set()
+        cidades_unicas = set()
+
+        for item in items:
+            if item.estado:
+                ufs_unicos.add(item.estado)
+                if item.municipio:
+                    cidades_unicas.add((item.estado, item.municipio))
+
+        # Pré-calcular rotas por UF (uma vez só)
+        for uf in ufs_unicos:
+            rota = buscar_rota_por_uf(uf)
+            rotas_cache[(uf, None)] = (rota, None)
+
+        # Pré-calcular sub-rotas por cidade (uma vez só)
+        for uf, cidade in cidades_unicas:
+            sub_rota = buscar_sub_rota_por_uf_cidade(uf, cidade)
+            if (uf, None) in rotas_cache:
+                rota_existente = rotas_cache[(uf, None)][0]
+                rotas_cache[(uf, cidade)] = (rota_existente, sub_rota)
+
+        logger.info(f"✅ Rotas pré-calculadas: {len(ufs_unicos)} UFs, {len(cidades_unicas)} cidades")
 
         # 🔧 NOVO: Renderizar hierarquicamente - PRIMEIRO PRODUTOS, DEPOIS SEPARAÇÕES
         pedidos_processados = set()
@@ -301,15 +390,25 @@ def obter_dados():
                         'projecoes': []
                     })
 
-                    # 🆕 BUSCAR ROTA E SUB_ROTA (se não estiver preenchido no banco)
+                    # 🚀 OTIMIZAÇÃO: BUSCAR ROTA E SUB_ROTA do cache pré-calculado
                     rota_calculada = produto.rota
                     sub_rota_calculada = produto.sub_rota
 
-                    if not rota_calculada and produto.estado:
-                        rota_calculada = buscar_rota_por_uf(produto.estado)
+                    if not rota_calculada or not sub_rota_calculada:
+                        # Buscar do cache pré-calculado
+                        chave_cache = (produto.estado, produto.municipio) if produto.municipio else (produto.estado, None)
+                        rotas_cached = rotas_cache.get(chave_cache, (None, None))
 
-                    if not sub_rota_calculada and produto.estado and produto.municipio:
-                        sub_rota_calculada = buscar_sub_rota_por_uf_cidade(produto.estado, produto.municipio)
+                        if not rota_calculada:
+                            rota_calculada = rotas_cached[0]
+                        if not sub_rota_calculada:
+                            sub_rota_calculada = rotas_cached[1]
+
+                    # 🚀 OTIMIZAÇÃO: Pré-calcular datas (evitar strftime repetido)
+                    data_pedido_str = produto.data_pedido.isoformat() if produto.data_pedido else None
+                    data_entrega_str = produto.data_entrega_pedido.isoformat() if produto.data_entrega_pedido else None
+                    expedicao_str = produto.expedicao.isoformat() if produto.expedicao else None
+                    agendamento_str = produto.agendamento.isoformat() if produto.agendamento else None
 
                     # ✅ LINHA DO PEDIDO
                     dados.append({
@@ -317,8 +416,8 @@ def obter_dados():
                         'id': produto.id,
                         'num_pedido': produto.num_pedido,
                         'pedido_cliente': produto.pedido_cliente,
-                        'data_pedido': produto.data_pedido.strftime('%Y-%m-%d') if produto.data_pedido else None,
-                        'data_entrega_pedido': produto.data_entrega_pedido.strftime('%Y-%m-%d') if produto.data_entrega_pedido else None,
+                        'data_pedido': data_pedido_str,
+                        'data_entrega_pedido': data_entrega_str,
                         'cnpj_cpf': produto.cnpj_cpf,
                         'raz_social_red': produto.raz_social_red,
                         'estado': produto.estado,
@@ -334,8 +433,8 @@ def obter_dados():
                         'peso': peso,
                         'rota': rota_calculada,
                         'sub_rota': sub_rota_calculada,
-                        'expedicao': produto.expedicao.strftime('%Y-%m-%d') if produto.expedicao else None,
-                        'agendamento': produto.agendamento.strftime('%Y-%m-%d') if produto.agendamento else None,
+                        'expedicao': expedicao_str,
+                        'agendamento': agendamento_str,
                         'protocolo': produto.protocolo,
                         'agendamento_confirmado': produto.agendamento_confirmado,
                         'palletizacao': palletizacao,
@@ -350,8 +449,9 @@ def obter_dados():
 
                 for separacao_lote_id, seps in separacoes_do_pedido.items():
                     for sep in seps:
-                        # Buscar produto original para pegar preço e estado
-                        produto_ref = next((p for p in produtos_do_pedido if p.cod_produto == sep.cod_produto), None)
+                        # 🚀 OTIMIZAÇÃO: Buscar produto de referência do map pré-calculado
+                        chave_ref = (sep.num_pedido, sep.cod_produto)
+                        produto_ref = produtos_ref_map.get(chave_ref)
 
                         # Dados de palletização para separação
                         pallet_info_sep = pallet_map.get(sep.cod_produto)
@@ -378,6 +478,12 @@ def obter_dados():
                             'projecoes': []
                         })
 
+                        # 🚀 OTIMIZAÇÃO: Pré-calcular datas para separações
+                        data_criacao_str = sep.criado_em.date().isoformat() if sep.criado_em else None
+                        data_entrega_sep_str = produto_ref.data_entrega_pedido.isoformat() if (produto_ref and produto_ref.data_entrega_pedido) else None
+                        expedicao_sep_str = sep.expedicao.isoformat() if sep.expedicao else None
+                        agendamento_sep_str = sep.agendamento.isoformat() if sep.agendamento else None
+
                         dados.append({
                             'tipo': 'separacao',
                             'id': sep.id,
@@ -385,8 +491,8 @@ def obter_dados():
                             'separacao_lote_id': sep.separacao_lote_id,
                             'num_pedido': sep.num_pedido,
                             'pedido_cliente': sep.pedido_cliente,
-                            'data_pedido': sep.criado_em.strftime('%Y-%m-%d') if sep.criado_em else None,
-                            'data_entrega_pedido': produto_ref.data_entrega_pedido.strftime('%Y-%m-%d') if produto_ref and produto_ref.data_entrega_pedido else None,
+                            'data_pedido': data_criacao_str,
+                            'data_entrega_pedido': data_entrega_sep_str,
                             'cnpj_cpf': sep.separacao_lote_id,
                             'raz_social_red': cliente_texto,
                             'estado': produto_ref.estado if produto_ref else '',
@@ -402,8 +508,8 @@ def obter_dados():
                             'peso': peso_sep,
                             'rota': sep.rota,
                             'sub_rota': sep.sub_rota,
-                            'expedicao': sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else None,
-                            'agendamento': sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else None,
+                            'expedicao': expedicao_sep_str,
+                            'agendamento': agendamento_sep_str,
                             'protocolo': sep.protocolo,
                             'agendamento_confirmado': sep.agendamento_confirmado,
                             'palletizacao': palletizacao_sep,
@@ -412,6 +518,19 @@ def obter_dados():
                             'menor_estoque_d7': estoque_info_sep['menor_estoque_d7'],
                             'projecoes_estoque': estoque_info_sep['projecoes']
                         })
+        tempos['montar_resposta'] = time.time() - t1
+
+        # 🚀 PROFILING: Log de tempos
+        tempo_total = time.time() - tempo_inicio
+        print(f"\n{'='*60}")
+        print(f"⏱️ PROFILING /api/dados ({len(items)} itens, {len(dados)} linhas):")
+        logger.info(f"⏱️ PROFILING /api/dados ({len(items)} itens, {len(dados)} linhas):")
+        for chave, valor in tempos.items():
+            print(f"  - {chave}: {valor:.3f}s")
+            logger.info(f"  - {chave}: {valor:.3f}s")
+        print(f"  ⏱️ TOTAL: {tempo_total:.3f}s")
+        print(f"{'='*60}\n")
+        logger.info(f"  ⏱️ TOTAL: {tempo_total:.3f}s")
 
         return jsonify({
             'success': True,

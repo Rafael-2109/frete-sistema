@@ -15,12 +15,20 @@
         dados: [],
         filtrosAplicados: {},
         paginaAtual: 1,
-        itensPorPagina: 10000, // ✅ SEM PAGINAÇÃO - pegar todos os itens
+        itensPorPagina: 10000, // ✅ SEM PAGINAÇÃO - carregar todos os itens filtrados
         totalItens: 0,
         estoqueProjetadoCache: {}, // Cache {cod_produto_data: {estoque_atual, projecoes}}
         projecaoEstoqueOffset: 0, // 🆕 OFFSET GLOBAL para paginação D0-D28 (não mais por linha)
         carregando: false, // Flag para evitar múltiplas chamadas simultâneas
         modalLoading: null, // Instância única do modal de loading
+
+        // 🚀 VIRTUAL SCROLLING
+        virtualScroll: {
+            firstVisibleIndex: 0,
+            lastVisibleIndex: 150,  // Renderizar primeiras 150 linhas
+            rowHeight: 25,          // Altura estimada de cada linha
+            bufferSize: 50          // Buffer de linhas extras (25 antes + 25 depois)
+        }
     };
 
     // ==============================================
@@ -28,10 +36,27 @@
     // ==============================================
     document.addEventListener('DOMContentLoaded', function() {
         inicializarEventos();
+        restaurarFiltrosSalvos(); // 🚀 OTIMIZAÇÃO: Restaurar filtros do localStorage
         carregarDados();
     });
 
     function inicializarEventos() {
+        // 🚨 EMERGÊNCIA: Limpar localStorage no carregamento se tiver problema
+        try {
+            const filtrosSalvos = localStorage.getItem('carteira_simples_filtros');
+            if (filtrosSalvos) {
+                const filtros = JSON.parse(filtrosSalvos);
+                const todosVazios = Object.values(filtros).every(v => !v || v.trim() === '');
+                if (todosVazios) {
+                    console.warn('⚠️ localStorage com filtros inválidos detectado! Limpando...');
+                    localStorage.removeItem('carteira_simples_filtros');
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao validar localStorage:', e);
+            localStorage.removeItem('carteira_simples_filtros');
+        }
+
         // Filtros
         document.getElementById('btn-aplicar-filtros').addEventListener('click', aplicarFiltros);
         document.getElementById('btn-limpar-filtros').addEventListener('click', limparFiltros);
@@ -87,10 +112,15 @@
             renderizarTabela();
             popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
 
+            // ✅ IMPORTANTE: Fechar loading DEPOIS de renderizar (assíncrono)
+            setTimeout(() => {
+                state.carregando = false;
+                mostrarLoading(false);
+            }, 100);
+
         } catch (erro) {
             console.error('Erro ao carregar dados:', erro);
             mostrarMensagem('Erro', `Erro ao carregar dados: ${erro.message}`, 'danger');
-        } finally {
             state.carregando = false;
             mostrarLoading(false);
         }
@@ -98,7 +128,8 @@
 
     function aplicarFiltros() {
         try {
-            state.filtrosAplicados = {
+            // ✅ Coletar APENAS filtros com valores não vazios
+            const filtrosTemp = {
                 num_pedido: document.getElementById('filtro-busca')?.value.trim() || '',
                 estado: document.getElementById('filtro-estado')?.value.trim() || '',
                 municipio: document.getElementById('filtro-municipio')?.value.trim() || '',
@@ -110,8 +141,31 @@
                 data_entrega_ate: document.getElementById('filtro-data-entrega-ate')?.value.trim() || '',
             };
 
+            // 🚀 CRÍTICO: Remover campos vazios antes de salvar
+            state.filtrosAplicados = {};
+            Object.keys(filtrosTemp).forEach(key => {
+                if (filtrosTemp[key] && filtrosTemp[key] !== '') {
+                    state.filtrosAplicados[key] = filtrosTemp[key];
+                }
+            });
+
+            console.log('📋 Filtros aplicados:', state.filtrosAplicados);
+
+            // 🚀 OTIMIZAÇÃO: Salvar APENAS se houver filtros válidos
+            try {
+                if (Object.keys(state.filtrosAplicados).length > 0) {
+                    localStorage.setItem('carteira_simples_filtros', JSON.stringify(state.filtrosAplicados));
+                    console.log('✅ Filtros salvos no localStorage');
+                } else {
+                    localStorage.removeItem('carteira_simples_filtros');
+                    console.log('🗑️ Nenhum filtro para salvar, localStorage limpo');
+                }
+            } catch (e) {
+                console.warn('Erro ao salvar filtros no localStorage:', e);
+            }
+
             state.paginaAtual = 1;
-            state.projecaoEstoqueOffset = 0; // 🆕 RESETAR offset global
+            state.projecaoEstoqueOffset = 0;
             carregarDados();
         } catch (erro) {
             console.error('Erro ao aplicar filtros:', erro);
@@ -132,13 +186,77 @@
                 if (elemento) elemento.value = '';
             });
 
+            // 🚀 OTIMIZAÇÃO: Limpar filtros salvos no localStorage ANTES de limpar state
+            try {
+                localStorage.removeItem('carteira_simples_filtros');
+                console.log('✅ Filtros limpos do localStorage');
+            } catch (e) {
+                console.warn('Erro ao limpar filtros do localStorage:', e);
+            }
+
             state.filtrosAplicados = {};
             state.paginaAtual = 1;
             state.projecaoEstoqueOffset = 0; // 🆕 RESETAR offset global
+
             carregarDados();
         } catch (erro) {
             console.error('Erro ao limpar filtros:', erro);
             mostrarMensagem('Erro', 'Erro ao limpar filtros. Verifique o console.', 'danger');
+        }
+    }
+
+    // 🚀 OTIMIZAÇÃO: Função para restaurar filtros salvos do localStorage
+    function restaurarFiltrosSalvos() {
+        try {
+            const filtrosSalvos = localStorage.getItem('carteira_simples_filtros');
+            if (!filtrosSalvos) {
+                console.log('📋 Nenhum filtro salvo no localStorage');
+                return;
+            }
+
+            const filtros = JSON.parse(filtrosSalvos);
+
+            // ✅ VALIDAÇÃO: Verificar se filtros são válidos (não vazios)
+            const temFiltroValido = Object.values(filtros).some(valor => valor && valor.trim() !== '');
+            if (!temFiltroValido) {
+                console.log('⚠️ Filtros salvos estão vazios, ignorando...');
+                localStorage.removeItem('carteira_simples_filtros');
+                return;
+            }
+
+            // Aplicar filtros nos inputs
+            Object.keys(filtros).forEach(key => {
+                const valor = filtros[key];
+                if (!valor) return;
+
+                // Mapear chaves para IDs dos inputs
+                const mapeamento = {
+                    'num_pedido': 'filtro-busca',
+                    'estado': 'filtro-estado',
+                    'municipio': 'filtro-municipio',
+                    'rota': 'filtro-rota',
+                    'sub_rota': 'filtro-sub-rota',
+                    'data_pedido_de': 'filtro-data-pedido-de',
+                    'data_pedido_ate': 'filtro-data-pedido-ate',
+                    'data_entrega_de': 'filtro-data-entrega-de',
+                    'data_entrega_ate': 'filtro-data-entrega-ate'
+                };
+
+                const inputId = mapeamento[key];
+                if (inputId) {
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        input.value = valor;
+                    }
+                }
+            });
+
+            // Aplicar filtros no estado (sem chamar carregarDados, será chamado na inicialização)
+            state.filtrosAplicados = filtros;
+
+            console.log('✅ Filtros restaurados do localStorage:', filtros);
+        } catch (erro) {
+            console.warn('Erro ao restaurar filtros do localStorage:', erro);
         }
     }
 
@@ -175,7 +293,7 @@
     }
 
     // ==============================================
-    // RENDERIZAÇÃO DA TABELA
+    // RENDERIZAÇÃO DA TABELA (VIRTUAL SCROLLING)
     // ==============================================
     function renderizarTabela() {
         const tbody = document.getElementById('tbody-carteira');
@@ -185,36 +303,138 @@
             return;
         }
 
-        // 🆕 RENDERIZAÇÃO HIERÁRQUICA: pedidos + separações
-        const html = state.dados.map((item, index) => {
-            if (item.tipo === 'pedido') {
-                return renderizarLinha(item, index);
-            } else if (item.tipo === 'separacao') {
-                return renderizarLinhaSeparacao(item, index);
-            }
-            return '';
-        }).join('');
+        console.log(`🚀 Virtual Scrolling: ${state.dados.length} linhas (renderizando apenas primeiras 150)`);
 
-        tbody.innerHTML = html;
-
-        // 🆕 APLICAR CLASSES CSS PARA SEPARADORES E DESTAQUES
-        aplicarClassesVisuais();
-
-        // Inicializar tooltips
-        inicializarTooltips();
+        // Limpar tabela
+        tbody.innerHTML = '';
 
         // 🆕 ATUALIZAR CABEÇALHO DE ESTOQUE COM DATAS DINÂMICAS
         atualizarCabecalhoEstoque();
 
-        // 🚀 OTIMIZAÇÃO: Renderizar estoques pré-calculados (sem chamadas assíncronas)
-        // 🔧 CORREÇÃO: Renderizar SEMPRE, mesmo sem projecoes_estoque (usa saídas adicionais)
-        state.dados.forEach((item, index) => {
-            try {
-                renderizarEstoquePrecalculado(index, item);
-            } catch (erro) {
-                console.error(`Erro ao renderizar estoque para índice ${index}:`, erro);
+        // 🚀 VIRTUAL SCROLLING: Renderizar APENAS primeiras 150 linhas
+        const start = 0;
+        const end = Math.min(150, state.dados.length);
+
+        // Criar fragment
+        const fragment = document.createDocumentFragment();
+        const tempTable = document.createElement('table');
+        const tempTbody = document.createElement('tbody');
+        tempTable.appendChild(tempTbody);
+
+        // Renderizar apenas linhas visíveis
+        const html = state.dados.slice(start, end).map((item, relativeIndex) => {
+            const absoluteIndex = start + relativeIndex;
+            if (item.tipo === 'pedido') {
+                return renderizarLinha(item, absoluteIndex);
+            } else if (item.tipo === 'separacao') {
+                return renderizarLinhaSeparacao(item, absoluteIndex);
             }
+            return '';
+        }).join('');
+
+        tempTbody.innerHTML = html;
+        while (tempTbody.firstChild) {
+            fragment.appendChild(tempTbody.firstChild);
+        }
+
+        tbody.appendChild(fragment);
+
+        // Renderizar estoques das linhas visíveis
+        for (let i = start; i < end; i++) {
+            try {
+                renderizarEstoquePrecalculado(i, state.dados[i]);
+            } catch (erro) {
+                console.error(`Erro ao renderizar estoque ${i}:`, erro);
+            }
+        }
+
+        // Aplicar classes visuais e tooltips
+        aplicarClassesVisuais();
+        inicializarTooltips();
+
+        // 🚀 Configurar scroll listener para carregar mais linhas sob demanda
+        setupVirtualScrollListener();
+
+        console.log(`✅ Renderização inicial: ${end} de ${state.dados.length} linhas`);
+    }
+
+    // 🚀 VIRTUAL SCROLLING: Listener de scroll
+    function setupVirtualScrollListener() {
+        const tableContainer = document.querySelector('.table-responsive');
+        if (!tableContainer) {
+            console.warn('⚠️ .table-responsive não encontrado para virtual scroll');
+            return;
+        }
+
+        let scrollTimeout = null;
+
+        tableContainer.addEventListener('scroll', function() {
+            // Debounce scroll
+            if (scrollTimeout) clearTimeout(scrollTimeout);
+
+            scrollTimeout = setTimeout(() => {
+                const scrollTop = tableContainer.scrollTop;
+                const scrollHeight = tableContainer.scrollHeight;
+                const clientHeight = tableContainer.clientHeight;
+
+                // Se scrollou até 80% da página, carregar mais linhas
+                const scrollPercent = (scrollTop + clientHeight) / scrollHeight;
+
+                if (scrollPercent > 0.8) {
+                    carregarMaisLinhas();
+                }
+            }, 100);
         });
+
+        console.log('✅ Virtual scroll listener configurado');
+    }
+
+    // 🚀 Carregar mais linhas sob demanda
+    function carregarMaisLinhas() {
+        const tbody = document.getElementById('tbody-carteira');
+        const currentRendered = tbody.querySelectorAll('tr').length;
+
+        if (currentRendered >= state.dados.length) {
+            console.log('✅ Todas as linhas já foram renderizadas');
+            return;
+        }
+
+        const nextBatch = Math.min(currentRendered + 100, state.dados.length);
+        console.log(`🔄 Carregando mais linhas: ${currentRendered} → ${nextBatch}`);
+
+        const fragment = document.createDocumentFragment();
+        const tempTable = document.createElement('table');
+        const tempTbody = document.createElement('tbody');
+        tempTable.appendChild(tempTbody);
+
+        // Renderizar próximo lote
+        const html = state.dados.slice(currentRendered, nextBatch).map((item, relativeIndex) => {
+            const absoluteIndex = currentRendered + relativeIndex;
+            if (item.tipo === 'pedido') {
+                return renderizarLinha(item, absoluteIndex);
+            } else if (item.tipo === 'separacao') {
+                return renderizarLinhaSeparacao(item, absoluteIndex);
+            }
+            return '';
+        }).join('');
+
+        tempTbody.innerHTML = html;
+        while (tempTbody.firstChild) {
+            fragment.appendChild(tempTbody.firstChild);
+        }
+
+        tbody.appendChild(fragment);
+
+        // Renderizar estoques do novo lote
+        for (let i = currentRendered; i < nextBatch; i++) {
+            try {
+                renderizarEstoquePrecalculado(i, state.dados[i]);
+            } catch (erro) {
+                console.error(`Erro ao renderizar estoque ${i}:`, erro);
+            }
+        }
+
+        console.log(`✅ ${nextBatch} de ${state.dados.length} linhas renderizadas`);
     }
 
     // 🆕 FUNÇÃO PARA APLICAR CLASSES VISUAIS (bordas - cor já aplicada na renderização)
@@ -1514,19 +1734,31 @@
     // CONTADORES E PAGINAÇÃO
     // ==============================================
     function atualizarContadores() {
-        document.getElementById('contador-pedidos').textContent = state.totalItens;
+        // ✅ PROTEÇÃO: Verificar se elementos existem antes de atualizar
+        const contadorPedidos = document.getElementById('contador-pedidos');
+        if (contadorPedidos) {
+            contadorPedidos.textContent = state.totalItens;
+        }
 
-        // Calcular valor total
-        const valorTotal = state.dados.reduce((sum, item) => sum + (item.valor_total || 0), 0);
-        document.getElementById('valor-total-filtro').textContent = formatarMoeda(valorTotal).replace('R$ ', '');
+        const valorTotalEl = document.getElementById('valor-total-filtro');
+        if (valorTotalEl) {
+            const valorTotal = state.dados.reduce((sum, item) => sum + (item.valor_total || 0), 0);
+            valorTotalEl.textContent = formatarMoeda(valorTotal).replace('R$ ', '');
+        }
 
-        // Atualizar info de paginação
-        const de = state.totalItens > 0 ? (state.paginaAtual - 1) * state.itensPorPagina + 1 : 0;
-        const ate = Math.min(state.paginaAtual * state.itensPorPagina, state.totalItens);
+        // Atualizar info de paginação (se existir)
+        const infoExibindoDe = document.getElementById('info-exibindo-de');
+        const infoExibindoAte = document.getElementById('info-exibindo-ate');
+        const infoTotal = document.getElementById('info-total');
 
-        document.getElementById('info-exibindo-de').textContent = de;
-        document.getElementById('info-exibindo-ate').textContent = ate;
-        document.getElementById('info-total').textContent = state.totalItens;
+        if (infoExibindoDe && infoExibindoAte && infoTotal) {
+            const de = state.totalItens > 0 ? (state.paginaAtual - 1) * state.itensPorPagina + 1 : 0;
+            const ate = Math.min(state.paginaAtual * state.itensPorPagina, state.totalItens);
+
+            infoExibindoDe.textContent = de;
+            infoExibindoAte.textContent = ate;
+            infoTotal.textContent = state.totalItens;
+        }
     }
 
     function atualizarPaginacao() {

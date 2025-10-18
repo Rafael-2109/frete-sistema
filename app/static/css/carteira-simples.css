@@ -319,6 +319,26 @@
     background: #555;
 }
 
+/* 🚀 OTIMIZAÇÃO: Scroll suave */
+.table-responsive {
+    scroll-behavior: smooth;
+}
+
+/* 🎨 MELHORIA: Estoque projetado com scroll horizontal próprio */
+.estoque-projecao {
+    overflow-x: auto;
+    max-width: 1200px;
+}
+
+.estoque-projecao::-webkit-scrollbar {
+    height: 4px;
+}
+
+.estoque-projecao::-webkit-scrollbar-thumb {
+    background: #6c757d;
+    border-radius: 2px;
+}
+
 /* ==============================================
    LOADING E STATES
    ============================================== */
