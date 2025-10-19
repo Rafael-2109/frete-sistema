@@ -111,6 +111,7 @@
 
             renderizarTabela();
             popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
+            atualizarIndicadorFiltros(); // 🆕 Mostrar indicador de filtros ativos
 
             // ✅ IMPORTANTE: Fechar loading DEPOIS de renderizar (assíncrono)
             setTimeout(() => {
@@ -260,33 +261,99 @@
         }
     }
 
+    // 🆕 ATUALIZAR INDICADOR VISUAL DE FILTROS ATIVOS
+    function atualizarIndicadorFiltros() {
+        const btnLimparFiltros = document.getElementById('btn-limpar-filtros');
+        const btnAplicarFiltros = document.getElementById('btn-aplicar-filtros');
+
+        const temFiltros = Object.keys(state.filtrosAplicados).length > 0;
+
+        if (temFiltros) {
+            // 🔧 Adicionar badge visual no botão de limpar filtros
+            if (btnLimparFiltros) {
+                const qtdFiltros = Object.keys(state.filtrosAplicados).length;
+                btnLimparFiltros.classList.add('btn-warning');
+                btnLimparFiltros.classList.remove('btn-secondary');
+                btnLimparFiltros.innerHTML = `
+                    <i class="fas fa-times-circle"></i>
+                    Limpar Filtros
+                    <span class="badge bg-dark">${qtdFiltros}</span>
+                `;
+            }
+
+            if (btnAplicarFiltros) {
+                btnAplicarFiltros.classList.add('btn-success');
+                btnAplicarFiltros.classList.remove('btn-primary');
+            }
+
+            console.log(`✅ ${Object.keys(state.filtrosAplicados).length} filtro(s) ativo(s)`);
+        } else {
+            // 🔧 Remover badge quando não há filtros
+            if (btnLimparFiltros) {
+                btnLimparFiltros.classList.remove('btn-warning');
+                btnLimparFiltros.classList.add('btn-secondary');
+                btnLimparFiltros.innerHTML = '<i class="fas fa-times-circle"></i> Limpar Filtros';
+            }
+
+            if (btnAplicarFiltros) {
+                btnAplicarFiltros.classList.remove('btn-success');
+                btnAplicarFiltros.classList.add('btn-primary');
+            }
+        }
+    }
+
     // 🆕 POPULAR FILTROS DE ROTA E SUB-ROTA DINAMICAMENTE
     function popularFiltrosRotas() {
         try {
+            // 🔧 CORREÇÃO: Só atualizar selects se houver dados
+            // Se não há dados filtrados, preservar opções atuais
+            if (!state.dados || state.dados.length === 0) {
+                console.log('⚠️ Sem dados filtrados - preservando opções dos selects');
+                return;
+            }
+
             const rotas = new Set();
             const subRotas = new Set();
 
-            // Coletar todas as rotas e sub-rotas únicas dos dados
+            // Coletar todas as rotas e sub-rotas únicas dos dados FILTRADOS
             state.dados.forEach(item => {
                 if (item.rota) rotas.add(item.rota);
                 if (item.sub_rota) subRotas.add(item.sub_rota);
             });
 
-            // Popular select de Rota
+            // Popular select de Rota (APENAS se houver rotas nos dados)
             const selectRota = document.getElementById('filtro-rota');
-            if (selectRota) {
+            if (selectRota && rotas.size > 0) {
+                // 🔧 PRESERVAR valor selecionado atual
+                const valorAtual = selectRota.value;
+
                 const rotasOrdenadas = Array.from(rotas).sort();
                 selectRota.innerHTML = '<option value="">Rota</option>' +
                     rotasOrdenadas.map(r => `<option value="${r}">${r}</option>`).join('');
+
+                // 🔧 RESTAURAR valor selecionado se ainda existir nas opções
+                if (valorAtual && rotasOrdenadas.includes(valorAtual)) {
+                    selectRota.value = valorAtual;
+                }
             }
 
-            // Popular select de Sub-rota
+            // Popular select de Sub-rota (APENAS se houver sub-rotas nos dados)
             const selectSubRota = document.getElementById('filtro-sub-rota');
-            if (selectSubRota) {
+            if (selectSubRota && subRotas.size > 0) {
+                // 🔧 PRESERVAR valor selecionado atual
+                const valorAtual = selectSubRota.value;
+
                 const subRotasOrdenadas = Array.from(subRotas).sort();
                 selectSubRota.innerHTML = '<option value="">Sub-rota</option>' +
                     subRotasOrdenadas.map(sr => `<option value="${sr}">${sr}</option>`).join('');
+
+                // 🔧 RESTAURAR valor selecionado se ainda existir nas opções
+                if (valorAtual && subRotasOrdenadas.includes(valorAtual)) {
+                    selectSubRota.value = valorAtual;
+                }
             }
+
+            console.log(`✅ Filtros atualizados: ${rotas.size} rotas, ${subRotas.size} sub-rotas`);
         } catch (erro) {
             console.error('Erro ao popular filtros de rotas:', erro);
         }
@@ -299,7 +366,28 @@
         const tbody = document.getElementById('tbody-carteira');
 
         if (!state.dados || state.dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="29" class="text-center py-3">Nenhum registro encontrado</td></tr>';
+            // 🔧 CORREÇÃO: Mensagem de erro visual mais clara
+            const temFiltrosAplicados = Object.keys(state.filtrosAplicados).length > 0;
+
+            if (temFiltrosAplicados) {
+                // Se há filtros aplicados mas não há dados = filtro não encontrou nada
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="29" class="text-center py-4">
+                            <div class="alert alert-warning d-inline-block" role="alert">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>Nenhum registro encontrado com os filtros aplicados</strong>
+                                <br>
+                                <small>Tente ajustar os critérios de busca ou limpar os filtros.</small>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                console.warn('⚠️ Filtros aplicados mas nenhum dado encontrado:', state.filtrosAplicados);
+            } else {
+                // Se não há filtros e não há dados = carteira vazia
+                tbody.innerHTML = '<tr><td colspan="29" class="text-center py-3">Nenhum registro encontrado na carteira</td></tr>';
+            }
             return;
         }
 

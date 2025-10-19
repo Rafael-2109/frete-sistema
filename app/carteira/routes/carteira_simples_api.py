@@ -15,6 +15,7 @@ from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.estoque.models import UnificacaoCodigos
+from app.localidades.models import CadastroRota, CadastroSubRota
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
     buscar_rota_por_uf,
@@ -83,8 +84,17 @@ def obter_dados():
         limit = int(request.args.get('limit', 10000))  # 🆕 Aumentado para remover paginação
         offset = int(request.args.get('offset', 0))
 
-        # Query base - apenas itens ativos
-        query = CarteiraPrincipal.query.filter(
+        # 🔧 CORREÇÃO: Query base com JOINs para Rota e Sub-rota
+        query = db.session.query(CarteiraPrincipal).outerjoin(
+            CadastroRota,
+            CarteiraPrincipal.estado == CadastroRota.cod_uf
+        ).outerjoin(
+            CadastroSubRota,
+            and_(
+                CarteiraPrincipal.estado == CadastroSubRota.cod_uf,
+                CarteiraPrincipal.municipio == CadastroSubRota.nome_cidade
+            )
+        ).filter(
             CarteiraPrincipal.ativo == True,
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         )
@@ -117,12 +127,12 @@ def obter_dados():
         if municipio:
             query = query.filter(CarteiraPrincipal.municipio.ilike(f'%{municipio}%'))
 
-        # 🆕 Filtros de Rota e Sub-rota
+        # 🔧 CORREÇÃO CRÍTICA: Filtros de Rota e Sub-rota usando as tabelas de cadastro
         if rota:
-            query = query.filter(CarteiraPrincipal.rota == rota)
+            query = query.filter(CadastroRota.rota == rota)
 
         if sub_rota:
-            query = query.filter(CarteiraPrincipal.sub_rota == sub_rota)
+            query = query.filter(CadastroSubRota.sub_rota == sub_rota)
 
         # Ordenação
         query = query.order_by(
@@ -267,13 +277,31 @@ def obter_dados():
         # Obter lista de pedidos da página atual
         pedidos_da_pagina = [item.num_pedido for item in items]
 
-        # Buscar separações não sincronizadas
-        separacoes_query = db.session.query(Separacao).filter(
+        # 🔧 CORREÇÃO: Buscar separações COM JOIN nas tabelas de Rota e Sub-rota
+        separacoes_base = db.session.query(Separacao).outerjoin(
+            CadastroRota,
+            Separacao.cod_uf == CadastroRota.cod_uf
+        ).outerjoin(
+            CadastroSubRota,
+            and_(
+                Separacao.cod_uf == CadastroSubRota.cod_uf,
+                Separacao.nome_cidade == CadastroSubRota.nome_cidade
+            )
+        ).filter(
             and_(
                 Separacao.num_pedido.in_(pedidos_da_pagina),
                 Separacao.sincronizado_nf == False
             )
-        ).order_by(
+        )
+
+        # 🔧 APLICAR FILTROS DE ROTA E SUB-ROTA também nas separações
+        if rota:
+            separacoes_base = separacoes_base.filter(CadastroRota.rota == rota)
+
+        if sub_rota:
+            separacoes_base = separacoes_base.filter(CadastroSubRota.sub_rota == sub_rota)
+
+        separacoes_query = separacoes_base.order_by(
             Separacao.num_pedido,
             Separacao.separacao_lote_id,
             Separacao.id
