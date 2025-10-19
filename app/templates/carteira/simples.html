@@ -3,28 +3,119 @@
 {% block title %}Carteira Simplificada{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/carteira-simples.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/carteira-simples.css') }}?v=3">
+<!-- Google Fonts - Poppins -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* 🚀 VERSÃO 2 - FONTE 10PX + ALTURA REDUZIDA */
-    /* Estilos inline críticos para performance */
+/* 🌓 SISTEMA DE TEMAS - LIGHT/DARK MODE */
+    /* BASE - Configurações comuns */
     .carteira-simples-container {
-        font-size: 10px; /* 🚀 Aumentado para 10px - mais legível */
-        /* 🆕 5. FONTE MAIS LEGÍVEL */
+        font-size: 10px;
+        font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* 🌙 DARK MODE (padrão) */
+    body[data-theme="dark"] {
+        background-color: #1a1a1a !important;
+        color: #e0e0e0 !important;
+    }
+
+    body[data-theme="dark"] .carteira-simples-container {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+    }
+
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] {
+        background-color: #ffffff !important;
+        color: #212529 !important;
+    }
+
+    body[data-theme="light"] .carteira-simples-container {
+        background-color: #ffffff;
+        color: #212529;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
     .table-carteira-simples {
-        font-size: 10px; /* 🚀 Aumentado para 10px - mais legível */
-        line-height: 1.0; /* 🚀 Linha MUITO compacta para compensar fonte maior */
+        font-size: 10px;
+        line-height: 1.0;
     }
 
     .table-carteira-simples th,
     .table-carteira-simples td {
-        padding: 0px 2px !important; /* 🚀 ALTURA MÍNIMA */
+        padding: 0px 2px !important;
         vertical-align: middle !important;
         white-space: nowrap !important;
-        font-size: 10px !important; /* 🚀 FORÇA fonte 10px */
-        line-height: 1.0 !important; /* 🚀 FORÇA line-height compacto */
+        font-size: 10px !important;
+        line-height: 1.0 !important;
+    }
+
+    /* 🌙 DARK MODE - Tabela */
+    body[data-theme="dark"] .table-carteira-simples {
+        background-color: #1e1e1e !important;
+        color: #e0e0e0 !important;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples th {
+        color: #e0e0e0 !important;
+        border-color: #2a2a2a !important;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples td {
+        color: #e0e0e0;
+        border-color: #2a2a2a !important;
+    }
+
+    /* Células de estoque: sem forçar cor para permitir estilos inline do JS */
+    body[data-theme="dark"] .table-carteira-simples tbody td.est-data-edit,
+    body[data-theme="dark"] .table-carteira-simples tbody td.menor-est-7d {
+        color: inherit;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples thead th {
+        background-color: #0d0d0d !important;
+        color: #e0e0e0 !important;
+        border-bottom: 2px solid #2a2a2a !important;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples tbody td {
+        background-color: #1e1e1e;
+    }
+
+    /* ☀️ LIGHT MODE - Tabela */
+    body[data-theme="light"] .table-carteira-simples {
+        background-color: #ffffff !important;
+        color: #212529 !important;
+    }
+
+    body[data-theme="light"] .table-carteira-simples th {
+        color: #212529 !important;
+        border-color: #dee2e6 !important;
+    }
+
+    body[data-theme="light"] .table-carteira-simples td {
+        color: #212529;
+        border-color: #dee2e6 !important;
+    }
+
+    /* Células de estoque: sem forçar cor para permitir estilos inline do JS */
+    body[data-theme="light"] .table-carteira-simples tbody td.est-data-edit,
+    body[data-theme="light"] .table-carteira-simples tbody td.menor-est-7d {
+        color: inherit;
+    }
+
+    body[data-theme="light"] .table-carteira-simples thead th {
+        background-color: #f8f9fa !important;
+        color: #212529 !important;
+        border-bottom: 2px solid #dee2e6 !important;
+    }
+
+    body[data-theme="light"] .table-carteira-simples tbody td {
+        background-color: #ffffff;
     }
 
     /* 🚀 FORÇA ESTILOS NO TBODY */
@@ -35,37 +126,85 @@
         height: auto !important;
     }
 
+    /* ⚠️ NÃO forçar background e color nas células de estoque (permite estilos inline do JS) */
+    .table-carteira-simples tbody td.est-data-edit,
+    .table-carteira-simples tbody td.menor-est-7d {
+        background-color: transparent;
+        /* Sem forçar cor - permite que JS inline defina */
+    }
+
     .table-carteira-simples tbody tr {
         height: auto !important;
+    }
+
+    /* 🌙 DARK MODE - Hover */
+    body[data-theme="dark"] .table-carteira-simples tbody tr.table-warning:hover,
+    body[data-theme="dark"] .table-carteira-simples tbody tr.table-warning:hover td {
+        background-color: #404040 !important;
+        color: #ffc107 !important;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples tbody tr.table-info:hover,
+    body[data-theme="dark"] .table-carteira-simples tbody tr.table-info:hover td {
+        background-color: #2a2a2a !important;
+        color: #0dcaf0 !important;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples tbody tr:not(.table-warning):not(.table-info):not(.separacao-atrasada):hover td {
+        background-color: #2a2a2a !important;
+    }
+
+    /* ☀️ LIGHT MODE - Hover */
+    body[data-theme="light"] .table-carteira-simples tbody tr:hover td {
+        background-color: #f8f9fa !important;
     }
 
     .table-carteira-simples input[type="number"],
     .table-carteira-simples input[type="date"],
     .table-carteira-simples input[type="text"] {
         font-size: 10px;
-        padding: 0px 2px; /* 🔧 Padding ainda mais reduzido */
-        height: 18px; /* 🔧 3. Altura ainda mais reduzida (era 20px) */
-        border: 1px solid #ced4da;
+        padding: 0px 2px;
+        height: 18px;
         border-radius: 2px;
         line-height: 1;
     }
 
-    /* Específico para inputs de data - altura extra reduzida */
-    .table-carteira-simples input[type="date"] {
-        height: 17px;
-        font-size: 10px;
+    /* 🌙 DARK MODE - Inputs */
+    body[data-theme="dark"] .table-carteira-simples input[type="number"],
+    body[data-theme="dark"] .table-carteira-simples input[type="date"],
+    body[data-theme="dark"] .table-carteira-simples input[type="text"] {
+        border: 1px solid #404040;
+        background-color: #1a1a1a !important;
+        color: #e0e0e0 !important;
     }
 
-    /* 🆕 Específico para inputs de quantidade editável - mesma altura dos inputs de data */
+    body[data-theme="dark"] .table-carteira-simples input:focus {
+        background-color: #2d2d2d !important;
+        border-color: #0d6efd !important;
+        outline: none;
+    }
+
+    /* ☀️ LIGHT MODE - Inputs */
+    body[data-theme="light"] .table-carteira-simples input[type="number"],
+    body[data-theme="light"] .table-carteira-simples input[type="date"],
+    body[data-theme="light"] .table-carteira-simples input[type="text"] {
+        border: 1px solid #ced4da;
+        background-color: #ffffff !important;
+        color: #212529 !important;
+    }
+
+    body[data-theme="light"] .table-carteira-simples input:focus {
+        background-color: #ffffff !important;
+        border-color: #86b7fe !important;
+        outline: none;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* Inputs específicos */
+    .table-carteira-simples input[type="date"],
     .table-carteira-simples input.qtd-editavel,
     .table-carteira-simples input.qtd-separacao-editavel,
-    .table-carteira-simples input.qtd-separacao-editavel-2 {
-        height: 17px;
-        font-size: 10px;
-        padding: 0px 2px;
-    }
-
-    /* 🆕 Específico para inputs de protocolo - mesma altura dos inputs de data */
+    .table-carteira-simples input.qtd-separacao-editavel-2,
     .table-carteira-simples input.protocolo {
         height: 17px;
         font-size: 10px;
@@ -81,7 +220,7 @@
 
     .truncate-tooltip {
         cursor: help;
-        text-decoration: underline dotted;
+        text-decoration: none;
     }
 
     .estoque-projecao-container {
@@ -90,78 +229,183 @@
         gap: 2px;
     }
 
+    /* 🎨 ESTOQUE - Base */
     .estoque-dia {
         font-size: 10px;
         padding: 1px 2px;
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 2px;
+        border-radius: 3px;
         min-width: 40px;
         text-align: center;
+        font-weight: 500;
     }
 
-    .estoque-dia.negativo {
+    /* 🌙 DARK MODE - Estoque */
+    body[data-theme="dark"] .estoque-dia {
+        background: #1e1e1e;
+        border: 1px solid #2a2a2a;
+        color: #b0b0b0;
+    }
+
+    body[data-theme="dark"] .estoque-dia.negativo {
+        background-color: #dc3545;
+        color: #ffffff;
+        border-color: #dc3545;
+        font-weight: 600;
+    }
+
+    body[data-theme="dark"] .estoque-dia.baixo {
+        background-color: rgba(255, 193, 7, 0.15);
+        color: #ffa726;
+        border-color: rgba(255, 193, 7, 0.3);
+    }
+
+    /* ☀️ LIGHT MODE - Estoque */
+    body[data-theme="light"] .estoque-dia {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #212529;
+    }
+
+    body[data-theme="light"] .estoque-dia.negativo {
         background-color: #f8d7da;
         color: #842029;
+        border-color: #f8d7da;
+        font-weight: 600;
     }
 
-    .estoque-dia.baixo {
+    body[data-theme="light"] .estoque-dia.baixo {
         background-color: #fff3cd;
         color: #856404;
+        border-color: #fff3cd;
     }
 
     .btn-paginacao-estoque {
         font-size: 10px;
         padding: 0 3px;
         cursor: pointer;
-        background: #e9ecef;
-        border: 1px solid #dee2e6;
-        border-radius: 2px;
+        border-radius: 3px;
+        transition: all 0.2s ease;
     }
 
-    .btn-paginacao-estoque:hover {
+    /* 🌙 DARK MODE - Botões */
+    body[data-theme="dark"] .btn-paginacao-estoque {
+        background: #1e1e1e;
+        border: 1px solid #2a2a2a;
+        color: #b0b0b0;
+    }
+
+    body[data-theme="dark"] .btn-paginacao-estoque:hover {
+        background: #2a2a2a;
+        border-color: #3a3a3a;
+    }
+
+    /* ☀️ LIGHT MODE - Botões */
+    body[data-theme="light"] .btn-paginacao-estoque {
+        background: #e9ecef;
+        border: 1px solid #dee2e6;
+        color: #212529;
+    }
+
+    body[data-theme="light"] .btn-paginacao-estoque:hover {
         background: #dee2e6;
     }
 
-    /* 🆕 1. SEPARAÇÃO ATRASADA (expedicao < hoje) */
-    /* ⚠️ PRIORIDADE MÁXIMA - usa apenas classe separacao-atrasada */
-    .table-carteira-simples tr.separacao-atrasada {
-        background-color: #f8d7da !important; /* Vermelho suave */
-        border-left: 4px solid #dc3545 !important; /* Borda vermelha grossa */
+    /* 🚨 SEPARAÇÃO ATRASADA */
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .table-carteira-simples tr.separacao-atrasada {
+        background-color: #4d1f1f !important;
+        border-left: 4px solid #dc3545 !important;
     }
 
-    /* Sobrescrever cores do Bootstrap quando necessário */
-    .table-carteira-simples tr.separacao-atrasada td {
-        background-color: inherit !important;
+    body[data-theme="dark"] .table-carteira-simples tr.separacao-atrasada td {
+        background-color: #4d1f1f !important;
+        color: #ff6b6b !important;
     }
 
-    /* 🆕 2. SEPARADORES VISUAIS */
-    /* Linha GROSSA ao mudar de pedido */
-    .table-carteira-simples tr.border-pedido-top {
-        border-top: 3px solid #495057 !important;
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] .table-carteira-simples tr.separacao-atrasada {
+        background-color: #f8d7da !important;
+        border-left: 4px solid #dc3545 !important;
     }
 
-    /* Linha MÉDIA ao mudar de separacao_lote_id */
-    .table-carteira-simples tr.border-lote-top {
-        border-top: 2px solid #adb5bd !important;
+    body[data-theme="light"] .table-carteira-simples tr.separacao-atrasada td {
+        background-color: #f8d7da !important;
+        color: #842029 !important;
     }
 
-    /* 🆕 3. CABEÇALHO ESTOQUE COM DATAS */
-    /* ✅ Agora usa mesma estrutura das células (.estoque-projecao-container) */
+    /* 🟡 SEPARAÇÃO ABERTO */
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .table-carteira-simples tr.table-warning td {
+        background-color: #2d2d2d !important;
+        color: #ffc107 !important;
+    }
+
+    /* ☀️ LIGHT MODE - com destaque amarelo suave */
+    body[data-theme="light"] .table-carteira-simples tr.table-warning td {
+        background-color: #fff3cd !important;
+        color: #856404 !important;
+    }
+
+    /* 🔵 SEPARAÇÃO COTADO */
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .table-carteira-simples tr.table-info td {
+        background-color: #1e1e1e !important;
+        color: #0dcaf0 !important;
+    }
+
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] .table-carteira-simples tr.table-info td {
+        background-color: #ffffff !important;
+        color: #055160 !important;
+    }
+
+    /* Hover já definido acima nas linhas 77-87 */
+
+    /* 📏 SEPARADORES VISUAIS */
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .table-carteira-simples tr.border-pedido-top {
+        border-top: 2px solid #4a4a4a !important;
+    }
+
+    body[data-theme="dark"] .table-carteira-simples tr.border-lote-top {
+        border-top: 1px solid #3a3a3a !important;
+    }
+
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] .table-carteira-simples tr.border-pedido-top {
+        border-top: 2px solid #dee2e6 !important;
+    }
+
+    body[data-theme="light"] .table-carteira-simples tr.border-lote-top {
+        border-top: 1px solid #e9ecef !important;
+    }
+
+    /* 📅 CABEÇALHO ESTOQUE */
     .estoque-header-dia {
         font-size: 8px;
-        color: #6c757d;
-        min-width: 40px; /* ✅ Mesma largura dos .estoque-dia */
+        min-width: 40px;
         text-align: center;
         font-weight: 600;
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 2px;
+        border-radius: 3px;
         padding: 1px 2px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+    }
+
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .estoque-header-dia {
+        background: #1e1e1e;
+        border: 1px solid #2a2a2a;
+        color: #808080;
+    }
+
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] .estoque-header-dia {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #6c757d;
     }
 
     /* 🚀 LAYOUT DE ALTURA COMPLETA - INLINE COM !important */
@@ -204,10 +448,307 @@
         min-height: 0 !important;
         max-height: none !important;
     }
+
+    /* 🌓 CARDS E CONTAINERS */
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .card {
+        background-color: #1e1e1e !important;
+        border: 1px solid #2a2a2a !important;
+    }
+
+    body[data-theme="dark"] .card-body {
+        background-color: #1e1e1e !important;
+        color: #e0e0e0 !important;
+    }
+
+    body[data-theme="dark"] .card-header {
+        background-color: #0d0d0d !important;
+        color: #e0e0e0 !important;
+        border-bottom: 1px solid #2a2a2a !important;
+    }
+
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] .card {
+        background-color: #ffffff !important;
+        border: 1px solid #dee2e6 !important;
+    }
+
+    body[data-theme="light"] .card-body {
+        background-color: #ffffff !important;
+        color: #212529 !important;
+    }
+
+    body[data-theme="light"] .card-header {
+        background-color: #f8f9fa !important;
+        color: #212529 !important;
+        border-bottom: 1px solid #dee2e6 !important;
+    }
+
+    /* 🌓 INPUTS E SELECTS */
+    /* 🌙 DARK MODE */
+    body[data-theme="dark"] .form-control,
+    body[data-theme="dark"] .form-select {
+        background-color: #1a1a1a !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #404040 !important;
+    }
+
+    body[data-theme="dark"] .form-control:focus,
+    body[data-theme="dark"] .form-select:focus {
+        background-color: #2d2d2d !important;
+        color: #e0e0e0 !important;
+        border-color: #0d6efd !important;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    body[data-theme="dark"] .form-control::placeholder {
+        color: #6c757d !important;
+    }
+
+    body[data-theme="dark"] .input-group-text {
+        background-color: #3a3a3a !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #404040 !important;
+    }
+
+    /* ☀️ LIGHT MODE */
+    body[data-theme="light"] .form-control,
+    body[data-theme="light"] .form-select {
+        background-color: #ffffff !important;
+        color: #212529 !important;
+        border: 1px solid #ced4da !important;
+    }
+
+    body[data-theme="light"] .form-control:focus,
+    body[data-theme="light"] .form-select:focus {
+        background-color: #ffffff !important;
+        color: #212529 !important;
+        border-color: #86b7fe !important;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    body[data-theme="light"] .form-control::placeholder {
+        color: #6c757d !important;
+    }
+
+    body[data-theme="light"] .input-group-text {
+        background-color: #e9ecef !important;
+        color: #212529 !important;
+        border: 1px solid #ced4da !important;
+    }
+
+    /* 🌙 BOTÕES - TEMA ESCURO */
+    .btn {
+        border: 1px solid #404040 !important;
+    }
+
+    .btn-primary {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+    }
+
+    .btn-primary:hover {
+        background-color: #0b5ed7 !important;
+        border-color: #0a58ca !important;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5c636a !important;
+        border-color: #565e64 !important;
+    }
+
+    .btn-success {
+        background-color: #198754 !important;
+        border-color: #198754 !important;
+    }
+
+    .btn-success:hover {
+        background-color: #157347 !important;
+        border-color: #146c43 !important;
+    }
+
+    .btn-danger {
+        background-color: #dc3545 !important;
+        border-color: #dc3545 !important;
+    }
+
+    .btn-danger:hover {
+        background-color: #bb2d3b !important;
+        border-color: #b02a37 !important;
+    }
+
+    .btn-warning {
+        background-color: #ffc107 !important;
+        border-color: #ffc107 !important;
+        color: #000 !important;
+    }
+
+    .btn-warning:hover {
+        background-color: #ffca2c !important;
+        border-color: #ffc720 !important;
+        color: #000 !important;
+    }
+
+    .btn-info {
+        background-color: #0dcaf0 !important;
+        border-color: #0dcaf0 !important;
+        color: #000 !important;
+    }
+
+    .btn-info:hover {
+        background-color: #31d2f2 !important;
+        border-color: #25cff2 !important;
+        color: #000 !important;
+    }
+
+    /* 🌙 BADGES - TEMA ESCURO */
+    .badge {
+        color: #fff !important;
+    }
+
+    /* 🌙 MODALS - TEMA ESCURO */
+    .modal-content {
+        background-color: #1e1e1e !important;
+        border: 1px solid #2a2a2a !important;
+    }
+
+    .modal-header {
+        background-color: #0d0d0d !important;
+        border-bottom: 1px solid #2a2a2a !important;
+        color: #e0e0e0 !important;
+    }
+
+    .modal-body {
+        background-color: #1e1e1e !important;
+        color: #e0e0e0 !important;
+    }
+
+    .modal-footer {
+        background-color: #0d0d0d !important;
+        border-top: 1px solid #2a2a2a !important;
+    }
+
+    .modal-title {
+        color: #e0e0e0 !important;
+    }
+
+    .btn-close {
+        filter: invert(1) grayscale(100%) brightness(200%);
+    }
+
+    /* 🎨 ALERTS - CLEAN E SUTIS */
+    .alert {
+        border: 1px solid #3a3a3a !important;
+    }
+
+    .alert-success {
+        background-color: rgba(25, 135, 84, 0.15) !important;
+        color: #66bb6a !important;
+        border-color: rgba(25, 135, 84, 0.3) !important;
+    }
+
+    .alert-danger {
+        background-color: rgba(220, 53, 69, 0.15) !important;
+        color: #ef5350 !important;
+        border-color: rgba(220, 53, 69, 0.3) !important;
+    }
+
+    .alert-warning {
+        background-color: rgba(255, 193, 7, 0.15) !important;
+        color: #ffa726 !important;
+        border-color: rgba(255, 193, 7, 0.3) !important;
+    }
+
+    .alert-info {
+        background-color: rgba(13, 202, 240, 0.15) !important;
+        color: #4fc3f7 !important;
+        border-color: rgba(13, 202, 240, 0.3) !important;
+    }
+
+    /* 🎨 SCROLLBAR */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    body[data-theme="dark"] ::-webkit-scrollbar-track {
+        background: #1a1a1a;
+    }
+
+    body[data-theme="dark"] ::-webkit-scrollbar-thumb {
+        background: #3a3a3a;
+        border-radius: 3px;
+    }
+
+    body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+        background: #4a4a4a;
+    }
+
+    body[data-theme="light"] ::-webkit-scrollbar-track {
+        background: #f8f9fa;
+    }
+
+    body[data-theme="light"] ::-webkit-scrollbar-thumb {
+        background: #dee2e6;
+        border-radius: 3px;
+    }
+
+    body[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+        background: #ced4da;
+    }
+
+    /* 🌓 BOTÃO TOGGLE TEMA */
+    #theme-toggle-btn {
+        position: fixed;
+        top: 70px;
+        right: 20px;
+        z-index: 1000;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    body[data-theme="dark"] #theme-toggle-btn {
+        background-color: #2d2d2d;
+        color: #ffc107;
+        border-color: #ffc107;
+    }
+
+    body[data-theme="dark"] #theme-toggle-btn:hover {
+        background-color: #ffc107;
+        color: #000;
+    }
+
+    body[data-theme="light"] #theme-toggle-btn {
+        background-color: #ffffff;
+        color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    body[data-theme="light"] #theme-toggle-btn:hover {
+        background-color: #0d6efd;
+        color: #ffffff;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Botão Toggle Tema -->
+<button id="theme-toggle-btn" onclick="toggleTheme()">
+    <span id="theme-toggle-icon">☀️</span>
+    <span id="theme-toggle-text">Light Mode</span>
+</button>
+
 <div class="container-fluid carteira-simples-container">
     <!-- Filtros em uma linha única -->
     <section class="filters-section">
@@ -287,7 +828,7 @@
         <div class="card">
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
-                    <table class="table table-sm table-hover table-bordered table-carteira-simples mb-0" id="table-carteira">
+                    <table class="table table-sm table-bordered table-carteira-simples mb-0" id="table-carteira">
                         <thead class="table-light sticky-top">
                             <tr>
                                 <th style="min-width: 72px;">Pedido</th>
@@ -374,5 +915,48 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// 🌓 SISTEMA DE TEMAS - LIGHT/DARK MODE
+function toggleTheme() {
+    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+    // Atualizar atributo
+    document.body.setAttribute('data-theme', newTheme);
+
+    // Salvar preferência
+    localStorage.setItem('carteira-theme', newTheme);
+
+    // Atualizar texto do botão
+    const icon = document.getElementById('theme-toggle-icon');
+    const text = document.getElementById('theme-toggle-text');
+
+    if (newTheme === 'light') {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark Mode';
+    } else {
+        icon.textContent = '☀️';
+        text.textContent = 'Light Mode';
+    }
+}
+
+// Carregar tema salvo ao iniciar
+(function() {
+    const savedTheme = localStorage.getItem('carteira-theme') || 'dark';
+    document.body.setAttribute('data-theme', savedTheme);
+
+    // Atualizar botão
+    const icon = document.getElementById('theme-toggle-icon');
+    const text = document.getElementById('theme-toggle-text');
+
+    if (savedTheme === 'light') {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark Mode';
+    } else {
+        icon.textContent = '☀️';
+        text.textContent = 'Light Mode';
+    }
+})();
+</script>
 <script src="{{ url_for('static', filename='js/carteira-simples.js') }}"></script>
 {% endblock %}

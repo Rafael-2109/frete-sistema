@@ -1573,11 +1573,11 @@
                 menor7dEl.style.color = 'white';
                 menor7dEl.style.fontWeight = 'bold';
             }
-            // REGRA 2: Baixo estoque (< 100) = Laranja
+            // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
             else if (resultado.menor_estoque_d7 < 100) {
-                menor7dEl.style.backgroundColor = '#ffc107'; // Laranja
-                menor7dEl.style.color = 'black';
-                menor7dEl.style.fontWeight = '';
+                menor7dEl.style.setProperty('background-color', '#ffc107', 'important');
+                menor7dEl.style.setProperty('color', '#000000', 'important');
+                menor7dEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 3: Estoque OK = Sem cor
             else {
@@ -1629,11 +1629,11 @@
                 estDataEl.style.color = 'white';
                 estDataEl.style.fontWeight = 'bold';
             }
-            // REGRA 2: Baixo estoque (< 100) = Laranja
+            // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
             else if (estoqueDisponivel < 100) {
-                estDataEl.style.backgroundColor = '#ffc107'; // Laranja
-                estDataEl.style.color = 'black';
-                estDataEl.style.fontWeight = '';
+                estDataEl.style.setProperty('background-color', '#ffc107', 'important');
+                estDataEl.style.setProperty('color', '#000000', 'important');
+                estDataEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 3: Estoque OK = Sem cor
             else {
