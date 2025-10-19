@@ -5,8 +5,7 @@ Carteira compacta com edição inline e cálculos dinâmicos
 
 from flask import Blueprint, render_template, request, jsonify
 from datetime import date, datetime, timedelta
-from sqlalchemy import and_, or_, func
-from decimal import Decimal
+from sqlalchemy import and_, func
 import logging
 
 from app import db

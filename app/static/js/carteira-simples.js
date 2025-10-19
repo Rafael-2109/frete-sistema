@@ -1657,9 +1657,10 @@
             // 🔴 HIERARQUIA DE CORES: Vermelho > Laranja > Verde
             // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
             if (resultado.menor_estoque_d7 < 0) {
-                menor7dEl.style.backgroundColor = '#dc3545'; // Vermelho
-                menor7dEl.style.color = 'white';
-                menor7dEl.style.fontWeight = 'bold';
+                // 🔧 CORREÇÃO: Usar !important para sobrescrever classes de linha (table-warning, table-info)
+                menor7dEl.style.setProperty('background-color', '#dc3545', 'important'); // Vermelho
+                menor7dEl.style.setProperty('color', 'white', 'important');
+                menor7dEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
             else if (resultado.menor_estoque_d7 < 100) {
@@ -1713,9 +1714,10 @@
             // 🔴 HIERARQUIA DE CORES: Vermelho > Laranja > Verde
             // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
             if (estoqueDisponivel < 0) {
-                estDataEl.style.backgroundColor = '#dc3545'; // Vermelho
-                estDataEl.style.color = 'white';
-                estDataEl.style.fontWeight = 'bold';
+                // 🔧 CORREÇÃO: Usar !important para sobrescrever classes de linha (table-warning, table-info)
+                estDataEl.style.setProperty('background-color', '#dc3545', 'important'); // Vermelho
+                estDataEl.style.setProperty('color', 'white', 'important');
+                estDataEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
             else if (estoqueDisponivel < 100) {
