@@ -20,6 +20,47 @@
     font-size: var(--font-size-base);
     font-family: 'Arial', 'Helvetica', sans-serif;
     line-height: 1.2;
+    height: calc(100vh - 60px); /* 🚀 Altura total menos navbar */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Section da tabela ocupa espaço disponível */
+.carteira-simples-container .table-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Card principal ocupa todo espaço disponível */
+.carteira-simples-container .table-section .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0 !important;
+    height: 100%;
+}
+
+.carteira-simples-container .table-section .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0 !important;
+    min-height: 0;
+}
+
+/* Table responsive ocupa todo espaço */
+.carteira-simples-container .table-responsive {
+    flex: 1;
+    overflow-y: scroll !important; /* 🚀 Força scroll vertical sempre visível */
+    overflow-x: auto !important;
+    height: 100%;
+    min-height: 0;
 }
 
 /* ==============================================

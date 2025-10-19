@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Fontes - Carteira de Pedidos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            transition: all 0.3s ease;
+        }
+
+        /* Tema Claro (padrão) */
+        body.light-mode {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        body.light-mode .card {
+            background: white;
+            border: 1px solid #ddd;
+        }
+
+        body.light-mode .table {
+            background: white;
+        }
+
+        body.light-mode .table th {
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        body.light-mode .table td {
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        /* Tema Escuro */
+        body.dark-mode {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .card {
+            background: #2d2d2d;
+            border: 1px solid #404040;
+        }
+
+        body.dark-mode .table {
+            background: #2d2d2d;
+        }
+
+        body.dark-mode .table th {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .table td {
+            border-bottom: 1px solid #404040;
+        }
+
+        body.dark-mode .toggle-btn {
+            background: #4a4a4a;
+            color: #e0e0e0;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+
+        .toggle-container {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .toggle-btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background: #007bff;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #007bff;
+        }
+
+        .card {
+            margin-bottom: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .font-name {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #007bff;
+        }
+
+        .size-label {
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 5px;
+        }
+
+        /* Tabela de exemplo */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+        }
+
+        .table th {
+            font-weight: 600;
+        }
+
+        /* Grid de comparação */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        /* Fontes para teste */
+        .font-system {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .font-inter {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-roboto {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        }
+
+        .font-opensans {
+            font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-lato {
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-montserrat {
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-poppins {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-nunito {
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-source {
+            font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .font-worksans {
+            font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Tamanhos */
+        .size-12 { font-size: 12px; }
+        .size-13 { font-size: 13px; }
+        .size-14 { font-size: 14px; }
+        .size-15 { font-size: 15px; }
+        .size-16 { font-size: 16px; }
+
+        /* Indicadores visuais */
+        .highlight {
+            background: rgba(0, 123, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Nunito:wght@300;400;600;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="light-mode">
+    <div class="container">
+        <div class="header">
+            <h1>Teste de Fontes - Carteira de Pedidos</h1>
+            <p>Avalie diferentes fontes e tamanhos para a interface da carteira</p>
+        </div>
+
+        <div class="toggle-container">
+            <button class="toggle-btn" onclick="toggleTheme()">
+                <span id="theme-text">🌙 Mudar para Tema Escuro</span>
+            </button>
+        </div>
+
+        <!-- Seção 1: Fontes do Sistema -->
+        <div class="section">
+            <div class="section-title">1. Fonte Nativa do Sistema (Atual)</div>
+            <div class="card font-system">
+                <div class="font-name">System Font Stack</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 2: Inter -->
+        <div class="section">
+            <div class="section-title">2. Inter (Google Fonts) - Moderna e Limpa</div>
+            <div class="card font-inter">
+                <div class="font-name">Inter</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 3: Roboto -->
+        <div class="section">
+            <div class="section-title">3. Roboto (Google Fonts) - Popular e Versátil</div>
+            <div class="card font-roboto">
+                <div class="font-name">Roboto</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 4: Open Sans -->
+        <div class="section">
+            <div class="section-title">4. Open Sans - Humanista e Amigável</div>
+            <div class="card font-opensans">
+                <div class="font-name">Open Sans</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 5: Lato -->
+        <div class="section">
+            <div class="section-title">5. Lato - Elegante e Profissional</div>
+            <div class="card font-lato">
+                <div class="font-name">Lato</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 6: Montserrat -->
+        <div class="section">
+            <div class="section-title">6. Montserrat - Geométrica e Moderna</div>
+            <div class="card font-montserrat">
+                <div class="font-name">Montserrat</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 7: Poppins -->
+        <div class="section">
+            <div class="section-title">7. Poppins - Redonda e Amigável</div>
+            <div class="card font-poppins">
+                <div class="font-name">Poppins</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 8: Nunito -->
+        <div class="section">
+            <div class="section-title">8. Nunito - Suave e Legível</div>
+            <div class="card font-nunito">
+                <div class="font-name">Nunito</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 9: Source Sans Pro -->
+        <div class="section">
+            <div class="section-title">9. Source Sans Pro - Design Técnico</div>
+            <div class="card font-source">
+                <div class="font-name">Source Sans Pro</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 10: Work Sans -->
+        <div class="section">
+            <div class="section-title">10. Work Sans - Versátil e Clara</div>
+            <div class="card font-worksans">
+                <div class="font-name">Work Sans</div>
+                <p class="size-label">Tamanho 12px:</p>
+                <div class="size-12">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 13px:</p>
+                <div class="size-13">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="size-label">Tamanho 14px:</p>
+                <div class="size-14">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Produto</th>
+                                <th>Quantidade</th>
+                                <th>Valor</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>12345</td>
+                                <td>DISTRIBUIDORA ABC LTDA</td>
+                                <td>EMBALAGEM PLASTICA 500ML</td>
+                                <td>1.500,00</td>
+                                <td>R$ 45.750,00</td>
+                                <td>18/01/2025</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="section" style="margin-top: 60px; padding: 30px; background: rgba(0,123,255,0.1); border-radius: 8px;">
+            <h2 style="margin-bottom: 15px;">📌 Como Avaliar</h2>
+            <ul style="line-height: 2;">
+                <li><strong>Legibilidade:</strong> Qual fonte é mais fácil de ler em tamanhos pequenos?</li>
+                <li><strong>Densidade:</strong> Qual aproveita melhor o espaço sem ficar apertado?</li>
+                <li><strong>Profissionalismo:</strong> Qual passa mais credibilidade para um sistema corporativo?</li>
+                <li><strong>Tema Escuro:</strong> Alterne para o tema escuro e veja qual fica melhor</li>
+                <li><strong>Números:</strong> Veja se os números ficam bem alinhados e legíveis</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            const themeText = document.getElementById('theme-text');
+
+            if (body.classList.contains('light-mode')) {
+                body.classList.remove('light-mode');
+                body.classList.add('dark-mode');
+                themeText.textContent = '☀️ Mudar para Tema Claro';
+            } else {
+                body.classList.remove('dark-mode');
+                body.classList.add('light-mode');
+                themeText.textContent = '🌙 Mudar para Tema Escuro';
+            }
+        }
+    </script>
+</body>
+</html>

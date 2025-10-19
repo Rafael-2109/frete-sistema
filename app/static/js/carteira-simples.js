@@ -1561,18 +1561,27 @@
         // 5. Atualizar EST DATA com base na data de expedição
         atualizarEstoqueNaData(rowIndex, item, projecoesFormatadas);
 
-        // 6. Atualizar MENOR 7D
+        // 6. Atualizar MENOR 7D com HIERARQUIA DE CORES
         const menor7dEl = document.getElementById(`menor-7d-${rowIndex}`);
         if (menor7dEl) {
             menor7dEl.textContent = Math.round(resultado.menor_estoque_d7);
 
-            // Aplicar cores
+            // 🔴 HIERARQUIA DE CORES: Vermelho > Laranja > Verde
+            // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
             if (resultado.menor_estoque_d7 < 0) {
-                menor7dEl.style.color = 'red';
+                menor7dEl.style.backgroundColor = '#dc3545'; // Vermelho
+                menor7dEl.style.color = 'white';
                 menor7dEl.style.fontWeight = 'bold';
-            } else if (resultado.menor_estoque_d7 < 100) {
-                menor7dEl.style.color = 'orange';
-            } else {
+            }
+            // REGRA 2: Baixo estoque (< 100) = Laranja
+            else if (resultado.menor_estoque_d7 < 100) {
+                menor7dEl.style.backgroundColor = '#ffc107'; // Laranja
+                menor7dEl.style.color = 'black';
+                menor7dEl.style.fontWeight = '';
+            }
+            // REGRA 3: Estoque OK = Sem cor
+            else {
+                menor7dEl.style.backgroundColor = '';
                 menor7dEl.style.color = '';
                 menor7dEl.style.fontWeight = '';
             }
@@ -1613,13 +1622,22 @@
 
             estDataEl.textContent = Math.round(estoqueDisponivel);
 
-            // Aplicar cores
+            // 🔴 HIERARQUIA DE CORES: Vermelho > Laranja > Verde
+            // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
             if (estoqueDisponivel < 0) {
-                estDataEl.style.color = 'red';
+                estDataEl.style.backgroundColor = '#dc3545'; // Vermelho
+                estDataEl.style.color = 'white';
                 estDataEl.style.fontWeight = 'bold';
-            } else if (estoqueDisponivel < 100) {
-                estDataEl.style.color = 'orange';
-            } else {
+            }
+            // REGRA 2: Baixo estoque (< 100) = Laranja
+            else if (estoqueDisponivel < 100) {
+                estDataEl.style.backgroundColor = '#ffc107'; // Laranja
+                estDataEl.style.color = 'black';
+                estDataEl.style.fontWeight = '';
+            }
+            // REGRA 3: Estoque OK = Sem cor
+            else {
+                estDataEl.style.backgroundColor = '';
                 estDataEl.style.color = '';
                 estDataEl.style.fontWeight = '';
             }
@@ -1733,91 +1751,6 @@
     // ==============================================
     // CONTADORES E PAGINAÇÃO
     // ==============================================
-    function atualizarContadores() {
-        // ✅ PROTEÇÃO: Verificar se elementos existem antes de atualizar
-        const contadorPedidos = document.getElementById('contador-pedidos');
-        if (contadorPedidos) {
-            contadorPedidos.textContent = state.totalItens;
-        }
-
-        const valorTotalEl = document.getElementById('valor-total-filtro');
-        if (valorTotalEl) {
-            const valorTotal = state.dados.reduce((sum, item) => sum + (item.valor_total || 0), 0);
-            valorTotalEl.textContent = formatarMoeda(valorTotal).replace('R$ ', '');
-        }
-
-        // Atualizar info de paginação (se existir)
-        const infoExibindoDe = document.getElementById('info-exibindo-de');
-        const infoExibindoAte = document.getElementById('info-exibindo-ate');
-        const infoTotal = document.getElementById('info-total');
-
-        if (infoExibindoDe && infoExibindoAte && infoTotal) {
-            const de = state.totalItens > 0 ? (state.paginaAtual - 1) * state.itensPorPagina + 1 : 0;
-            const ate = Math.min(state.paginaAtual * state.itensPorPagina, state.totalItens);
-
-            infoExibindoDe.textContent = de;
-            infoExibindoAte.textContent = ate;
-            infoTotal.textContent = state.totalItens;
-        }
-    }
-
-    function atualizarPaginacao() {
-        const totalPaginas = Math.ceil(state.totalItens / state.itensPorPagina);
-        const paginacao = document.getElementById('paginacao');
-
-        if (totalPaginas <= 1) {
-            paginacao.innerHTML = '';
-            return;
-        }
-
-        let html = '';
-
-        // Botão Anterior
-        html += `
-            <li class="page-item ${state.paginaAtual === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" data-pagina="${state.paginaAtual - 1}">Anterior</a>
-            </li>
-        `;
-
-        // Páginas
-        const maxPaginas = 5;
-        let inicio = Math.max(1, state.paginaAtual - Math.floor(maxPaginas / 2));
-        let fim = Math.min(totalPaginas, inicio + maxPaginas - 1);
-
-        if (fim - inicio < maxPaginas - 1) {
-            inicio = Math.max(1, fim - maxPaginas + 1);
-        }
-
-        for (let i = inicio; i <= fim; i++) {
-            html += `
-                <li class="page-item ${i === state.paginaAtual ? 'active' : ''}">
-                    <a class="page-link" href="#" data-pagina="${i}">${i}</a>
-                </li>
-            `;
-        }
-
-        // Botão Próximo
-        html += `
-            <li class="page-item ${state.paginaAtual === totalPaginas ? 'disabled' : ''}">
-                <a class="page-link" href="#" data-pagina="${state.paginaAtual + 1}">Próximo</a>
-            </li>
-        `;
-
-        paginacao.innerHTML = html;
-
-        // Event listener
-        paginacao.querySelectorAll('a.page-link').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const pagina = parseInt(this.dataset.pagina);
-                if (pagina >= 1 && pagina <= totalPaginas && pagina !== state.paginaAtual) {
-                    state.paginaAtual = pagina;
-                    state.projecaoEstoqueOffset = 0; // 🆕 RESETAR offset global ao trocar página
-                    carregarDados();
-                }
-            });
-        });
-    }
 
     // ==============================================
     // MODAIS

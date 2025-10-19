@@ -3,25 +3,40 @@
 {% block title %}Carteira Simplificada{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/carteira-simples.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/carteira-simples.css') }}?v=2">
 <style>
+/* 🚀 VERSÃO 2 - FONTE 10PX + ALTURA REDUZIDA */
     /* Estilos inline críticos para performance */
     .carteira-simples-container {
-        font-size: 11px; /* 🔧 Aumentado de 10px para 11px */
+        font-size: 10px; /* 🚀 Aumentado para 10px - mais legível */
         /* 🆕 5. FONTE MAIS LEGÍVEL */
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
     .table-carteira-simples {
-        font-size: 11px; /* 🔧 Aumentado de 10px para 11px */
-        line-height: 1.1; /* 🔧 4. Linha mais compacta (mantido) */
+        font-size: 10px; /* 🚀 Aumentado para 10px - mais legível */
+        line-height: 1.0; /* 🚀 Linha MUITO compacta para compensar fonte maior */
     }
 
     .table-carteira-simples th,
     .table-carteira-simples td {
-        padding: 1px 3px !important; /* 🔧 4. ALTURA REDUZIDA (era 2px 4px) */
-        vertical-align: middle;
-        white-space: nowrap;
+        padding: 0px 2px !important; /* 🚀 ALTURA MÍNIMA */
+        vertical-align: middle !important;
+        white-space: nowrap !important;
+        font-size: 10px !important; /* 🚀 FORÇA fonte 10px */
+        line-height: 1.0 !important; /* 🚀 FORÇA line-height compacto */
+    }
+
+    /* 🚀 FORÇA ESTILOS NO TBODY */
+    .table-carteira-simples tbody td {
+        padding: 0px 2px !important;
+        font-size: 10px !important;
+        line-height: 1.0 !important;
+        height: auto !important;
+    }
+
+    .table-carteira-simples tbody tr {
+        height: auto !important;
     }
 
     .table-carteira-simples input[type="number"],
@@ -38,7 +53,7 @@
     /* Específico para inputs de data - altura extra reduzida */
     .table-carteira-simples input[type="date"] {
         height: 17px;
-        font-size: 9px;
+        font-size: 10px;
     }
 
     /* 🆕 Específico para inputs de quantidade editável - mesma altura dos inputs de data */
@@ -46,14 +61,14 @@
     .table-carteira-simples input.qtd-separacao-editavel,
     .table-carteira-simples input.qtd-separacao-editavel-2 {
         height: 17px;
-        font-size: 9px;
+        font-size: 10px;
         padding: 0px 2px;
     }
 
     /* 🆕 Específico para inputs de protocolo - mesma altura dos inputs de data */
     .table-carteira-simples input.protocolo {
         height: 17px;
-        font-size: 9px;
+        font-size: 10px;
         padding: 0px 2px;
     }
 
@@ -76,7 +91,7 @@
     }
 
     .estoque-dia {
-        font-size: 9px;
+        font-size: 10px;
         padding: 1px 2px;
         background: #f8f9fa;
         border: 1px solid #dee2e6;
@@ -96,7 +111,7 @@
     }
 
     .btn-paginacao-estoque {
-        font-size: 9px;
+        font-size: 10px;
         padding: 0 3px;
         cursor: pointer;
         background: #e9ecef;
@@ -148,13 +163,54 @@
         align-items: center;
         justify-content: center;
     }
+
+    /* 🚀 LAYOUT DE ALTURA COMPLETA - INLINE COM !important */
+    .carteira-simples-container {
+        height: calc(100vh - 60px) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .table-section {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        min-height: 0 !important;
+    }
+
+    .table-section .card {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        margin-bottom: 0 !important;
+    }
+
+    .table-section .card-body {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+    }
+
+    .table-responsive {
+        flex: 1 !important;
+        overflow-y: scroll !important;
+        overflow-x: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid carteira-simples-container">
     <!-- Filtros em uma linha única -->
-    <section class="filters-section mb-2">
+    <section class="filters-section">
         <div class="card">
             <div class="card-body py-1">
                 <div class="row align-items-center g-1">
@@ -263,9 +319,7 @@
                                 <th style="min-width: 60px;">Est. Atual</th>
                                 <th style="min-width: 60px;">Qtd Cart.</th>
                                 <th style="min-width: 1200px; padding: 2px 4px !important;">
-                                    <!-- 🆕 3. CABEÇALHO COM DATAS D0-D28 -->
-                                    <div style="font-size: 9px; margin-bottom: 2px;">Estoque Projetado (28 dias)</div>
-                                    <!-- ✅ MESMA ESTRUTURA DAS CÉLULAS - SEM flex-wrap -->
+                                    <!-- 🆕 CABEÇALHO COM DATAS D0-D28 -->
                                     <div class="d-flex gap-1 flex-nowrap" id="estoque-header-datas" style="min-width: 1200px; overflow-x: visible;">
                                         <!-- Será preenchido via JavaScript com 28 dias -->
                                     </div>
