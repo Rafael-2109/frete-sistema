@@ -288,6 +288,8 @@ def exportar_relatorios_producao():
             # Buscar informações de palletização
             pallet_info_saidas = palletizacoes.get(cod_produto, None)
             nome_produto = pallet_info_saidas.nome_produto if pallet_info_saidas else f"Produto {cod_produto}"
+            linha_producao = pallet_info_saidas.linha_producao if pallet_info_saidas else ''  # ✅ NOVA
+            tipo_materia_prima = pallet_info_saidas.tipo_materia_prima if pallet_info_saidas else ''  # ✅ NOVA
 
             # Verificar se há projeção
             projecao = estoque_info.get('projecao')
@@ -342,6 +344,8 @@ def exportar_relatorios_producao():
                         dados_saidas_previstas.append({
                             'Código Produto': cod_produto,
                             'Nome Produto': nome_produto,
+                            'Linha': linha_producao,  # ✅ NOVA COLUNA
+                            'MP': tipo_materia_prima,  # ✅ NOVA COLUNA
                             'Data': data_obj,
                             'Estoque Atual': int(estoque_atual),
                             'Saída do Dia': int(round(saida_dia)),
@@ -363,6 +367,11 @@ def exportar_relatorios_producao():
         ).all()
 
         for sep in separacoes_detalhadas:
+            # ✅ Buscar informações de palletização para obter Linha e MP
+            pallet_info_sep = palletizacoes.get(sep.cod_produto, None)
+            linha_producao_sep = pallet_info_sep.linha_producao if pallet_info_sep else ''
+            tipo_materia_prima_sep = pallet_info_sep.tipo_materia_prima if pallet_info_sep else ''
+
             dados_separacao.append({
                 'Número Pedido': sep.num_pedido or '',
                 'CNPJ': sep.cnpj_cpf or '',
@@ -370,6 +379,8 @@ def exportar_relatorios_producao():
                 'Data Expedição': sep.expedicao,  # Objeto date
                 'Código Produto': sep.cod_produto or '',
                 'Nome Produto': sep.nome_produto or '',
+                'Linha': linha_producao_sep,  # ✅ NOVA COLUNA
+                'MP': tipo_materia_prima_sep,  # ✅ NOVA COLUNA
                 'Quantidade': int(round(sep.qtd_saldo)) if sep.qtd_saldo else 0
             })
 
@@ -643,7 +654,7 @@ def exportar_relatorios_producao():
 
                         if col_name == 'Data':
                             worksheet_saidas.write_datetime(row_num, col_num, valor, formato_data_saida)
-                        elif col_name in ['Código Produto', 'Nome Produto']:
+                        elif col_name in ['Código Produto', 'Nome Produto', 'Linha', 'MP']:  # ✅ Incluir novas colunas
                             worksheet_saidas.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_saida)
                         elif col_name == 'Saldo sem Produção' and valor < 0:
                             # Saldo negativo - formato especial vermelho
@@ -657,16 +668,18 @@ def exportar_relatorios_producao():
                 # Ajustar larguras das colunas
                 worksheet_saidas.set_column(0, 0, 15)  # Código Produto
                 worksheet_saidas.set_column(1, 1, 40)  # Nome Produto
-                worksheet_saidas.set_column(2, 2, 12)  # Data
-                worksheet_saidas.set_column(3, 3, 15)  # Estoque Atual
-                worksheet_saidas.set_column(4, 4, 15)  # Saída do Dia
-                worksheet_saidas.set_column(5, 5, 18)  # Saída Acumulada
-                worksheet_saidas.set_column(6, 6, 20)  # Saldo sem Produção
+                worksheet_saidas.set_column(2, 2, 15)  # ✅ Linha
+                worksheet_saidas.set_column(3, 3, 15)  # ✅ MP
+                worksheet_saidas.set_column(4, 4, 12)  # Data
+                worksheet_saidas.set_column(5, 5, 15)  # Estoque Atual
+                worksheet_saidas.set_column(6, 6, 15)  # Saída do Dia
+                worksheet_saidas.set_column(7, 7, 18)  # Saída Acumulada
+                worksheet_saidas.set_column(8, 8, 20)  # Saldo sem Produção
             else:
                 # Criar aba vazia se não houver saídas previstas
                 logger.warning("Criando aba vazia de Saídas Previstas")
                 df_vazia_saidas = pd.DataFrame(columns=[
-                    'Código Produto', 'Nome Produto', 'Data',
+                    'Código Produto', 'Nome Produto', 'Linha', 'MP', 'Data',  # ✅ Incluir Linha e MP
                     'Estoque Atual', 'Saída do Dia',
                     'Saída Acumulada', 'Saldo sem Produção'
                 ])
@@ -716,7 +729,7 @@ def exportar_relatorios_producao():
                             # Coluna numérica
                             worksheet_sep.write_number(row_num, col_num, valor if valor else 0, formato_inteiro_sep)
                         else:
-                            # Colunas de texto
+                            # Colunas de texto (inclui Linha e MP)
                             worksheet_sep.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_sep)
 
                 # Ajustar larguras das colunas
@@ -726,13 +739,15 @@ def exportar_relatorios_producao():
                 worksheet_sep.set_column(3, 3, 15)  # Data Expedição
                 worksheet_sep.set_column(4, 4, 15)  # Código Produto
                 worksheet_sep.set_column(5, 5, 40)  # Nome Produto
-                worksheet_sep.set_column(6, 6, 12)  # Quantidade
+                worksheet_sep.set_column(6, 6, 15)  # ✅ Linha
+                worksheet_sep.set_column(7, 7, 15)  # ✅ MP
+                worksheet_sep.set_column(8, 8, 12)  # Quantidade
             else:
                 # Criar aba vazia se não houver dados de separação
                 logger.warning("Criando aba vazia de Separação")
                 df_vazia_sep = pd.DataFrame(columns=[
                     'Número Pedido', 'CNPJ', 'Cliente', 'Data Expedição',
-                    'Código Produto', 'Nome Produto', 'Quantidade'
+                    'Código Produto', 'Nome Produto', 'Linha', 'MP', 'Quantidade'  # ✅ Incluir Linha e MP
                 ])
                 df_vazia_sep.to_excel(writer, sheet_name='Separação', index=False)
                 worksheet_sep = writer.sheets['Separação']
