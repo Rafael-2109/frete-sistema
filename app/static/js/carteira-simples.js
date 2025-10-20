@@ -1016,14 +1016,9 @@
 
         state.dados.forEach((item, index) => {
             if (item.tipo === 'pedido') {
-                // Recalcular saldo atual (qtd_original - total_separado)
-                const totalSeparado = state.dados
-                    .filter(d => d.tipo === 'separacao' &&
-                                d.num_pedido === item.num_pedido &&
-                                d.cod_produto === item.cod_produto)
-                    .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
-
-                const saldoAtual = (item.qtd_original_pedido || 0) - totalSeparado;
+                // ✅ CORREÇÃO: Usar qtd_saldo que já vem calculado da API
+                // API já faz: qtd_saldo = qtd_saldo_produto_pedido - qtd_separada
+                const saldoAtual = parseFloat(item.qtd_saldo) || 0;
 
                 if (saldoAtual === 0) {
                     // OCULTAR pedido com saldo=0
@@ -1031,6 +1026,9 @@
                     if (row) {
                         row.style.display = 'none';
                         pedidosOcultados++;
+                        console.log(`👻 Ocultando Pedido ${item.num_pedido} - ${item.cod_produto} (saldo=0)`);
+                    } else {
+                        console.warn(`⚠️ Linha row-${index} não encontrada no DOM para Pedido ${item.num_pedido}`);
                     }
                 }
             }
@@ -1038,6 +1036,8 @@
 
         if (pedidosOcultados > 0) {
             console.log(`👻 ${pedidosOcultados} pedido(s) ocultado(s) por saldo=0`);
+        } else {
+            console.log('✅ Nenhum pedido com saldo=0 encontrado');
         }
     }
 
@@ -1062,7 +1062,8 @@
                 item.num_pedido === numPedido &&
                 item.cod_produto === codProduto) {
 
-                // Recalcular saldo atual (qtd_original - total_separado)
+                // ✅ CORREÇÃO: Recalcular saldo atual baseado nos dados atuais do state
+                // (necessário pois separações podem ter sido editadas)
                 const totalSeparado = state.dados
                     .filter(d => d.tipo === 'separacao' &&
                                 d.num_pedido === numPedido &&
@@ -1071,8 +1072,14 @@
 
                 const saldoAtual = (item.qtd_original_pedido || 0) - totalSeparado;
 
+                // ✅ ATUALIZAR qtd_saldo no state para refletir mudança
+                item.qtd_saldo = saldoAtual;
+
                 const row = document.getElementById(`row-${index}`);
                 if (row) {
+                    // Atualizar atributo data-qtd-saldo no DOM
+                    row.setAttribute('data-qtd-saldo', saldoAtual);
+
                     if (saldoAtual === 0) {
                         // OCULTAR (display:none)
                         row.style.display = 'none';

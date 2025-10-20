@@ -546,6 +546,10 @@ def obter_dados():
                         expedicao_sep_str = sep.expedicao.isoformat() if sep.expedicao else None
                         agendamento_sep_str = sep.agendamento.isoformat() if sep.agendamento else None
 
+                        # ✅ CORREÇÃO: Extrair últimos 10 dígitos do separacao_lote_id
+                        lote_id_completo = sep.separacao_lote_id or ''
+                        lote_id_ultimos_10 = lote_id_completo[-10:] if len(lote_id_completo) >= 10 else lote_id_completo
+
                         dados.append({
                             'tipo': 'separacao',
                             'id': sep.id,
@@ -555,10 +559,10 @@ def obter_dados():
                             'pedido_cliente': sep.pedido_cliente,
                             'data_pedido': data_criacao_str,
                             'data_entrega_pedido': data_entrega_sep_str,
-                            'cnpj_cpf': sep.separacao_lote_id,
-                            'raz_social_red': cliente_texto,
+                            'cnpj_cpf': sep.cnpj_cpf,  # ✅ CORREÇÃO: Usar CNPJ da separação
+                            'raz_social_red': sep.raz_social_red,  # ✅ CORREÇÃO: Usar razão social da separação
                             'estado': produto_ref.estado if produto_ref else '',
-                            'municipio': sep.status_calculado,
+                            'municipio': lote_id_ultimos_10,  # ✅ CORREÇÃO: Exibir últimos 10 dígitos do lote_id
                             'status_calculado': sep.status_calculado,
                             'cod_produto': sep.cod_produto,
                             'nome_produto': sep.nome_produto,
