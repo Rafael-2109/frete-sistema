@@ -526,6 +526,28 @@
             }
         }
 
+        // ✅ CORREÇÃO: Aplicar visibilidade nas novas linhas carregadas
+        // Verificar e ocultar pedidos com saldo=0 no novo lote
+        let pedidosOcultadosNovos = 0;
+        for (let i = currentRendered; i < nextBatch; i++) {
+            const item = state.dados[i];
+            if (item.tipo === 'pedido') {
+                const saldoAtual = parseFloat(item.qtd_saldo) || 0;
+
+                if (saldoAtual === 0) {
+                    const row = document.getElementById(`row-${i}`);
+                    if (row) {
+                        row.style.display = 'none';
+                        pedidosOcultadosNovos++;
+                    }
+                }
+            }
+        }
+
+        if (pedidosOcultadosNovos > 0) {
+            console.log(`👻 ${pedidosOcultadosNovos} novo(s) pedido(s) com saldo=0 ocultado(s) no virtual scrolling`);
+        }
+
         console.log(`✅ ${nextBatch} de ${state.dados.length} linhas renderizadas`);
     }
 
