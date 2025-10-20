@@ -69,6 +69,7 @@ def obter_dados():
 
     try:
         # Parâmetros de filtro
+        busca_geral = request.args.get('busca_geral', '').strip()  # 🆕 Busca em múltiplos campos
         num_pedido = request.args.get('num_pedido', '').strip()
         cnpj_cpf = request.args.get('cnpj_cpf', '').strip()
         cod_produto = request.args.get('cod_produto', '').strip()
@@ -99,6 +100,18 @@ def obter_dados():
         )
 
         # Aplicar filtros
+        # 🆕 BUSCA GERAL: Busca em múltiplos campos simultaneamente (OR)
+        if busca_geral:
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    CarteiraPrincipal.num_pedido.ilike(f'%{busca_geral}%'),
+                    CarteiraPrincipal.raz_social_red.ilike(f'%{busca_geral}%'),
+                    CarteiraPrincipal.pedido_cliente.ilike(f'%{busca_geral}%'),
+                    CarteiraPrincipal.cnpj_cpf.ilike(f'%{busca_geral}%')
+                )
+            )
+
         if num_pedido:
             query = query.filter(CarteiraPrincipal.num_pedido.ilike(f'%{num_pedido}%'))
 
@@ -133,11 +146,27 @@ def obter_dados():
         if sub_rota:
             query = query.filter(CadastroSubRota.sub_rota == sub_rota)
 
-        # Ordenação
+        # 🆕 ORDENAÇÃO - MESMA HIERARQUIA DA CARTEIRA AGRUPADA
+        # 1º Rota (com tratamento especial para FOB/RED via CASE)
+        # 2º Sub-rota
+        # 3º CNPJ
+        # 4º Num_pedido (para agrupar produtos do mesmo pedido)
+        # 5º Cod_produto (para ordenar produtos dentro do pedido)
+        from sqlalchemy import case
+
+        # CASE para tratar Incoterm FOB/RED como rota especial
+        rota_ordenacao = case(
+            (CarteiraPrincipal.incoterm == 'FOB', 'FOB'),
+            (CarteiraPrincipal.incoterm == 'RED', 'RED'),
+            else_=func.coalesce(CadastroRota.rota, 'ZZZZZ')
+        )
+
         query = query.order_by(
-            CarteiraPrincipal.data_pedido.desc(),
-            CarteiraPrincipal.num_pedido.asc(),
-            CarteiraPrincipal.cod_produto.asc()
+            rota_ordenacao.asc(),                                      # 1º Rota/Incoterm (A-Z, nulls no final)
+            func.coalesce(CadastroSubRota.sub_rota, 'ZZZZZ').asc(),  # 2º Sub-rota (A-Z, nulls no final)
+            func.coalesce(CarteiraPrincipal.cnpj_cpf, 'ZZZZZ').asc(), # 3º CNPJ (0-9, nulls no final)
+            CarteiraPrincipal.num_pedido.asc(),                        # 4º Num_pedido
+            CarteiraPrincipal.cod_produto.asc()                        # 5º Cod_produto
         )
 
         # Paginação PRIMEIRO (mais rápido)
@@ -925,6 +954,37 @@ def atualizar_qtd_separacao():
                 'error': f'Quantidade indisponível. Disponível: {qtd_disponivel:.2f}'
             }), 400
 
+        # 🆕 SE NOVA QTD = 0 → DELETAR SEPARAÇÃO DO BANCO DE DADOS
+        if nova_qtd == 0:
+            logger.info(f"🗑️ Deletando separação ID={separacao_id} (qtd=0)")
+
+            # Guardar dados antes de deletar (para retornar ao frontend)
+            separacao_deletada = {
+                'id': separacao.id,
+                'num_pedido': separacao.num_pedido,
+                'cod_produto': separacao.cod_produto,
+                'separacao_lote_id': separacao.separacao_lote_id,
+                'qtd_saldo': 0,
+                'valor_saldo': 0,
+                'peso': 0,
+                'pallet': 0
+            }
+
+            # DELETAR do banco de dados
+            db.session.delete(separacao)
+            db.session.commit()
+
+            logger.info(f"✅ Separação ID={separacao_id} deletada com sucesso")
+
+            # Retornar resposta indicando deleção
+            return jsonify({
+                'success': True,
+                'message': 'Separação deletada com sucesso (qtd=0)',
+                'deletado': True,
+                'separacao': separacao_deletada
+            })
+
+        # SE QTD > 0 → ATUALIZAR QUANTIDADE (comportamento original)
         # Atualizar quantidade
         separacao.qtd_saldo = nova_qtd
 
@@ -946,6 +1006,7 @@ def atualizar_qtd_separacao():
         return jsonify({
             'success': True,
             'message': 'Quantidade atualizada com sucesso',
+            'deletado': False,
             'separacao': {
                 'id': separacao.id,
                 'qtd_saldo': float(separacao.qtd_saldo),
@@ -1203,6 +1264,301 @@ def atualizar_item_carteira():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar item da carteira: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_simples_bp.route('/api/verificar-separacoes-existentes', methods=['POST'])
+def verificar_separacoes_existentes():
+    """
+    Verifica se um pedido já possui separações não sincronizadas
+    e retorna os lotes agrupados com totais
+
+    Body JSON:
+    {
+        "num_pedido": "123456"
+    }
+
+    Response:
+    {
+        "success": true,
+        "tem_separacoes": true,
+        "lotes": [
+            {
+                "separacao_lote_id": "SEP-2025-001",
+                "expedicao": "2025-01-20",
+                "agendamento": "2025-01-21",
+                "protocolo": "ABC123",
+                "agendamento_confirmado": false,
+                "qtd_itens": 3,
+                "valor_total": 15000.00,
+                "pallet_total": 5.50,
+                "peso_total": 2500.0
+            }
+        ]
+    }
+    """
+    try:
+        dados = request.get_json()
+
+        if not dados or 'num_pedido' not in dados:
+            return jsonify({
+                'success': False,
+                'error': 'Dados inválidos. Esperado: {num_pedido}'
+            }), 400
+
+        num_pedido = dados['num_pedido']
+
+        # Buscar separações não sincronizadas do pedido
+        separacoes = db.session.query(Separacao).filter(
+            and_(
+                Separacao.num_pedido == num_pedido,
+                Separacao.sincronizado_nf == False
+            )
+        ).all()
+
+        if not separacoes or len(separacoes) == 0:
+            return jsonify({
+                'success': True,
+                'tem_separacoes': False,
+                'lotes': []
+            })
+
+        # Agrupar por separacao_lote_id e calcular totais
+        lotes_map = {}
+
+        for sep in separacoes:
+            lote_id = sep.separacao_lote_id
+
+            if lote_id not in lotes_map:
+                lotes_map[lote_id] = {
+                    'separacao_lote_id': lote_id,
+                    'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
+                    'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
+                    'protocolo': sep.protocolo,
+                    'agendamento_confirmado': sep.agendamento_confirmado or False,
+                    'qtd_itens': 0,
+                    'valor_total': 0.0,
+                    'pallet_total': 0.0,
+                    'peso_total': 0.0
+                }
+
+            # Somar totais
+            lotes_map[lote_id]['qtd_itens'] += 1
+            lotes_map[lote_id]['valor_total'] += float(sep.valor_saldo or 0)
+            lotes_map[lote_id]['pallet_total'] += float(sep.pallet or 0)
+            lotes_map[lote_id]['peso_total'] += float(sep.peso or 0)
+
+        # Converter para lista
+        lotes_list = list(lotes_map.values())
+
+        logger.info(f"Pedido {num_pedido} possui {len(lotes_list)} lote(s) de separação")
+
+        return jsonify({
+            'success': True,
+            'tem_separacoes': True,
+            'lotes': lotes_list
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar separações existentes: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_simples_bp.route('/api/adicionar-itens-separacao', methods=['POST'])
+def adicionar_itens_separacao():
+    """
+    Adiciona novos itens a uma separação existente
+
+    Body JSON:
+    {
+        "separacao_lote_id": "SEP-2025-001",
+        "num_pedido": "123456",
+        "produtos": [
+            {
+                "cod_produto": "ABC123",
+                "quantidade": 100
+            }
+        ]
+    }
+    """
+    try:
+        dados = request.get_json()
+
+        if not dados or 'separacao_lote_id' not in dados or 'num_pedido' not in dados or 'produtos' not in dados:
+            return jsonify({
+                'success': False,
+                'error': 'Dados inválidos. Esperado: {separacao_lote_id, num_pedido, produtos}'
+            }), 400
+
+        separacao_lote_id = dados['separacao_lote_id']
+        num_pedido = dados['num_pedido']
+        produtos = dados['produtos']
+
+        if not produtos or len(produtos) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhum produto informado'
+            }), 400
+
+        # Buscar uma separação do lote para copiar os campos
+        separacao_referencia = Separacao.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).first()
+
+        if not separacao_referencia:
+            return jsonify({
+                'success': False,
+                'error': f'Lote {separacao_lote_id} não encontrado'
+            }), 404
+
+        # Copiar campos da separação de referência
+        expedicao = separacao_referencia.expedicao
+        agendamento = separacao_referencia.agendamento
+        protocolo = separacao_referencia.protocolo
+        agendamento_confirmado = separacao_referencia.agendamento_confirmado
+
+        itens_criados = []
+        itens_atualizados = []
+
+        for produto in produtos:
+            cod_produto = produto['cod_produto']
+            quantidade = float(produto['quantidade'])
+
+            # Buscar item da carteira
+            item_carteira = CarteiraPrincipal.query.filter_by(
+                num_pedido=num_pedido,
+                cod_produto=cod_produto,
+                ativo=True
+            ).first()
+
+            if not item_carteira:
+                logger.warning(f"Item {cod_produto} do pedido {num_pedido} não encontrado na carteira")
+                continue
+
+            # 🆕 VERIFICAR SE O PRODUTO JÁ EXISTE NA SEPARAÇÃO
+            separacao_existente = Separacao.query.filter_by(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=num_pedido,
+                cod_produto=cod_produto,
+                sincronizado_nf=False
+            ).first()
+
+            if separacao_existente:
+                # 🆕 PRODUTO JÁ EXISTE → SOMAR QUANTIDADES
+                logger.info(f"🔄 Produto {cod_produto} já existe no lote {separacao_lote_id}, somando quantidades")
+
+                qtd_anterior = float(separacao_existente.qtd_saldo or 0)
+                qtd_nova = qtd_anterior + quantidade
+
+                # Recalcular peso e pallet com a nova quantidade total
+                peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, qtd_nova)
+
+                # Recalcular valor com a nova quantidade total
+                preco_unitario = float(item_carteira.preco_produto_pedido or 0)
+                valor_calculado = qtd_nova * preco_unitario
+
+                # Atualizar registro existente
+                separacao_existente.qtd_saldo = qtd_nova
+                separacao_existente.valor_saldo = valor_calculado
+                separacao_existente.peso = peso_calculado
+                separacao_existente.pallet = pallet_calculado
+
+                itens_atualizados.append({
+                    'cod_produto': cod_produto,
+                    'quantidade_anterior': qtd_anterior,
+                    'quantidade_adicionada': quantidade,
+                    'quantidade_nova': qtd_nova,
+                    'valor': valor_calculado
+                })
+
+                logger.info(f"✅ Produto {cod_produto}: {qtd_anterior} + {quantidade} = {qtd_nova}")
+
+            else:
+                # 🆕 PRODUTO NÃO EXISTE → CRIAR NOVO REGISTRO
+                logger.info(f"➕ Produto {cod_produto} não existe no lote {separacao_lote_id}, criando novo registro")
+
+                # Calcular peso e pallet
+                peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, quantidade)
+
+                # Calcular valor
+                preco_unitario = float(item_carteira.preco_produto_pedido or 0)
+                valor_calculado = quantidade * preco_unitario
+
+                # Buscar rota e sub-rota
+                rota = buscar_rota_por_uf(item_carteira.estado) if item_carteira.estado else None
+                sub_rota = buscar_sub_rota_por_uf_cidade(item_carteira.estado, item_carteira.municipio) \
+                    if item_carteira.estado and item_carteira.municipio else None
+
+                # Criar novo registro de Separacao
+                nova_separacao = Separacao(
+                    separacao_lote_id=separacao_lote_id,
+                    num_pedido=num_pedido,
+                    cod_produto=cod_produto,
+                    nome_produto=item_carteira.nome_produto,
+                    qtd_saldo=quantidade,
+                    valor_saldo=valor_calculado,
+                    peso=peso_calculado,
+                    pallet=pallet_calculado,
+                    cnpj_cpf=item_carteira.cnpj_cpf,
+                    raz_social_red=item_carteira.raz_social_red,
+                    nome_cidade=item_carteira.municipio,
+                    cod_uf=item_carteira.estado,
+                    rota=rota,
+                    sub_rota=sub_rota,
+                    data_pedido=item_carteira.data_pedido,
+                    pedido_cliente=item_carteira.pedido_cliente,
+                    # 🆕 COPIAR CAMPOS DA SEPARAÇÃO DE REFERÊNCIA
+                    expedicao=expedicao,
+                    agendamento=agendamento,
+                    protocolo=protocolo,
+                    agendamento_confirmado=agendamento_confirmado,
+                    sincronizado_nf=False,
+                    criado_em=agora_brasil()
+                )
+
+                db.session.add(nova_separacao)
+                itens_criados.append({
+                    'cod_produto': cod_produto,
+                    'quantidade': quantidade,
+                    'valor': valor_calculado
+                })
+
+        db.session.commit()
+
+        # Montar mensagem descritiva
+        total_operacoes = len(itens_criados) + len(itens_atualizados)
+        mensagem_partes = []
+
+        if len(itens_criados) > 0:
+            mensagem_partes.append(f'{len(itens_criados)} item(ns) criado(s)')
+
+        if len(itens_atualizados) > 0:
+            mensagem_partes.append(f'{len(itens_atualizados)} item(ns) atualizado(s)')
+
+        mensagem = f"{' e '.join(mensagem_partes)} na separação {separacao_lote_id}"
+
+        logger.info(f"✅ {mensagem}")
+
+        return jsonify({
+            'success': True,
+            'message': mensagem,
+            'separacao_lote_id': separacao_lote_id,
+            'qtd_itens_criados': len(itens_criados),
+            'qtd_itens_atualizados': len(itens_atualizados),
+            'total_operacoes': total_operacoes,
+            'itens_criados': itens_criados,
+            'itens_atualizados': itens_atualizados
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao adicionar itens à separação: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

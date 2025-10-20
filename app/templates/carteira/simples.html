@@ -461,6 +461,19 @@
         color: #e0e0e0 !important;
     }
 
+    /* 🆕 MODAL - Garantir texto visível no modo dark */
+    body[data-theme="dark"] #modalEscolhaSeparacao .card-body,
+    body[data-theme="dark"] #modalEscolhaSeparacao .card-body *,
+    body[data-theme="dark"] #modalEscolhaSeparacao .card-title,
+    body[data-theme="dark"] #modalEscolhaSeparacao .card-title *,
+    body[data-theme="dark"] #modalEscolhaSeparacao h6,
+    body[data-theme="dark"] #modalEscolhaSeparacao h6 *,
+    body[data-theme="dark"] #modalEscolhaSeparacao p,
+    body[data-theme="dark"] #modalEscolhaSeparacao span,
+    body[data-theme="dark"] #modalEscolhaSeparacao strong {
+        color: #ffffff !important;
+    }
+
     body[data-theme="dark"] .card-header {
         background-color: #0d0d0d !important;
         color: #e0e0e0 !important;
@@ -908,6 +921,46 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🆕 Modal de Escolha de Separação -->
+<div class="modal fade" id="modalEscolhaSeparacao" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-boxes me-2"></i>
+                    Pedido <span id="modalPedidoNumero"></span> já possui separações
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">
+                    <i class="fas fa-info-circle me-1 text-primary"></i>
+                    <strong>Escolha uma opção abaixo:</strong>
+                </p>
+
+                <!-- Container para lista de lotes (preenchido dinamicamente) -->
+                <div id="listaSeparacoesExistentes" class="mb-3">
+                    <!-- Será preenchido via JavaScript -->
+                </div>
+
+                <!-- Botão criar nova separação -->
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-success btn-lg" id="btnCriarNovaSeparacao">
+                        <i class="fas fa-plus-circle me-2"></i>
+                        Criar nova separação
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>
+                    Cancelar
+                </button>
             </div>
         </div>
     </div>

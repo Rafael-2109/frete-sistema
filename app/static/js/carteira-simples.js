@@ -131,7 +131,7 @@
         try {
             // ✅ Coletar APENAS filtros com valores não vazios
             const filtrosTemp = {
-                num_pedido: document.getElementById('filtro-busca')?.value.trim() || '',
+                busca_geral: document.getElementById('filtro-busca')?.value.trim() || '',  // 🆕 Busca em múltiplos campos
                 estado: document.getElementById('filtro-estado')?.value.trim() || '',
                 municipio: document.getElementById('filtro-municipio')?.value.trim() || '',
                 rota: document.getElementById('filtro-rota')?.value.trim() || '',
@@ -232,7 +232,8 @@
 
                 // Mapear chaves para IDs dos inputs
                 const mapeamento = {
-                    'num_pedido': 'filtro-busca',
+                    'busca_geral': 'filtro-busca',  // 🆕 Busca geral
+                    'num_pedido': 'filtro-busca',   // Compatibilidade com filtros antigos
                     'estado': 'filtro-estado',
                     'municipio': 'filtro-municipio',
                     'rota': 'filtro-rota',
@@ -439,6 +440,9 @@
         // Aplicar classes visuais e tooltips
         aplicarClassesVisuais();
         inicializarTooltips();
+
+        // 🆕 APLICAR VISIBILIDADE INICIAL (ocultar pedidos com saldo=0 após carregamento)
+        aplicarVisibilidadeInicial();
 
         // 🚀 Configurar scroll listener para carregar mais linhas sob demanda
         setupVirtualScrollListener();
@@ -998,6 +1002,94 @@
     }
 
     // ==============================================
+    // VISIBILIDADE DE LINHAS (OCULTAR/REMOVER/REEXIBIR)
+    // ==============================================
+
+    /**
+     * Aplica visibilidade inicial para TODOS os pedidos após carregamento
+     * (oculta pedidos com saldo=0, não remove separações pois vêm corretas do backend)
+     */
+    function aplicarVisibilidadeInicial() {
+        console.log('🔍 Aplicando visibilidade inicial para todos os pedidos...');
+
+        let pedidosOcultados = 0;
+
+        state.dados.forEach((item, index) => {
+            if (item.tipo === 'pedido') {
+                // Recalcular saldo atual (qtd_original - total_separado)
+                const totalSeparado = state.dados
+                    .filter(d => d.tipo === 'separacao' &&
+                                d.num_pedido === item.num_pedido &&
+                                d.cod_produto === item.cod_produto)
+                    .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
+
+                const saldoAtual = (item.qtd_original_pedido || 0) - totalSeparado;
+
+                if (saldoAtual === 0) {
+                    // OCULTAR pedido com saldo=0
+                    const row = document.getElementById(`row-${index}`);
+                    if (row) {
+                        row.style.display = 'none';
+                        pedidosOcultados++;
+                    }
+                }
+            }
+        });
+
+        if (pedidosOcultados > 0) {
+            console.log(`👻 ${pedidosOcultados} pedido(s) ocultado(s) por saldo=0`);
+        }
+    }
+
+    /**
+     * Verifica e aplica regras de visibilidade para linhas de Pedido
+     *
+     * REGRAS:
+     * 1. Pedido com saldo=0 → OCULTAR (display:none) - manter em state.dados
+     * 2. Pedido com saldo>0 → REEXIBIR (remover display:none)
+     *
+     * NOTA: Separações com qtd=0 são DELETADAS pelo backend, não precisam de lógica aqui
+     *
+     * @param {string} codProduto - Código do produto afetado
+     * @param {string} numPedido - Número do pedido afetado
+     */
+    function verificarVisibilidadeLinhas(codProduto, numPedido) {
+        console.log(`🔍 Verificando visibilidade: Pedido=${numPedido}, Produto=${codProduto}`);
+
+        // VERIFICAR E OCULTAR/REEXIBIR PEDIDOS COM SALDO=0
+        state.dados.forEach((item, index) => {
+            if (item.tipo === 'pedido' &&
+                item.num_pedido === numPedido &&
+                item.cod_produto === codProduto) {
+
+                // Recalcular saldo atual (qtd_original - total_separado)
+                const totalSeparado = state.dados
+                    .filter(d => d.tipo === 'separacao' &&
+                                d.num_pedido === numPedido &&
+                                d.cod_produto === codProduto)
+                    .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
+
+                const saldoAtual = (item.qtd_original_pedido || 0) - totalSeparado;
+
+                const row = document.getElementById(`row-${index}`);
+                if (row) {
+                    if (saldoAtual === 0) {
+                        // OCULTAR (display:none)
+                        row.style.display = 'none';
+                        console.log(`👻 Ocultada linha de Pedido: ${numPedido} - ${codProduto} (saldo=0)`);
+                    } else if (saldoAtual > 0) {
+                        // REEXIBIR (remover display:none)
+                        if (row.style.display === 'none') {
+                            row.style.display = '';
+                            console.log(`👁️ Reexibida linha de Pedido: ${numPedido} - ${codProduto} (saldo=${saldoAtual})`);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ==============================================
     // AÇÕES DE BOTÕES
     // ==============================================
 
@@ -1030,6 +1122,35 @@
                 throw new Error(resultado.error || 'Erro ao atualizar quantidade');
             }
 
+            // 🆕 SE SEPARAÇÃO FOI DELETADA (qtd=0) → Remover do DOM e state, depois recarregar
+            if (resultado.deletado) {
+                console.log(`🗑️ Separação ID=${separacaoId} DELETADA do backend (qtd=0)`);
+
+                // Remover linha do DOM
+                const row = document.getElementById(`row-sep-${rowIndex}`);
+                if (row) {
+                    row.remove();
+                    console.log(`✅ Linha removida do DOM`);
+                }
+
+                // Remover do state.dados
+                state.dados.splice(rowIndex, 1);
+                console.log(`✅ Item removido do state.dados`);
+
+                // Atualizar qtd do pedido correspondente (deduzir)
+                atualizarQtdPedidoAposEdicaoSeparacao(item.num_pedido, item.cod_produto);
+
+                // Verificar se pedido ficou com saldo=0 e ocultar
+                verificarVisibilidadeLinhas(item.cod_produto, item.num_pedido);
+
+                // Recarregar dados do backend para atualizar estoques D0-D28
+                carregarDados();
+
+                console.log(`✅ Separação deletada e dados recarregados`);
+                return; // Sair da função
+            }
+
+            // SE NÃO FOI DELETADA (qtd > 0) → Atualizar dados locais normalmente
             // Atualizar dados locais
             item.qtd_saldo = resultado.separacao.qtd_saldo;
             item.valor_total = resultado.separacao.valor_saldo;
@@ -1052,6 +1173,9 @@
 
             // Atualizar qtd do pedido correspondente (deduzir)
             atualizarQtdPedidoAposEdicaoSeparacao(item.num_pedido, item.cod_produto);
+
+            // 🆕 VERIFICAR VISIBILIDADE (ocultar Pedido se saldo=0, reexibir se saldo>0)
+            verificarVisibilidadeLinhas(item.cod_produto, item.num_pedido);
 
             // 🔧 CORREÇÃO: Recarregar dados do backend para atualizar saidas_previstas
             // Isso garante que ESTOQUE D0-D28 seja recalculado com as novas separações
@@ -1376,6 +1500,48 @@
             return;
         }
 
+        // 🆕 VERIFICAR SE O PEDIDO JÁ POSSUI SEPARAÇÕES EXISTENTES
+        try {
+            mostrarLoading(true);
+
+            const responseVerificar = await fetch('/carteira/simples/api/verificar-separacoes-existentes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    num_pedido: numPedido
+                })
+            });
+
+            const resultadoVerificar = await responseVerificar.json();
+
+            if (!resultadoVerificar.success) {
+                throw new Error(resultadoVerificar.error || 'Erro ao verificar separações');
+            }
+
+            mostrarLoading(false);
+
+            // SE TEM SEPARAÇÕES → Abrir modal de escolha
+            if (resultadoVerificar.tem_separacoes && resultadoVerificar.lotes.length > 0) {
+                console.log(`📦 Pedido ${numPedido} possui ${resultadoVerificar.lotes.length} lote(s) existente(s)`);
+                abrirModalEscolhaSeparacao(numPedido, resultadoVerificar.lotes, produtosDoPedido);
+                return; // Parar aqui, aguardar escolha do usuário
+            }
+
+            // SE NÃO TEM SEPARAÇÕES → Criar nova separação (comportamento original)
+            console.log(`✅ Pedido ${numPedido} não possui separações, criando nova...`);
+            await criarNovaSeparacao(numPedido, produtosDoPedido);
+
+        } catch (erro) {
+            console.error('Erro ao gerar separação:', erro);
+            mostrarMensagem('Erro', erro.message, 'danger');
+            mostrarLoading(false);
+        }
+    }
+
+    // 🆕 FUNÇÃO PARA CRIAR NOVA SEPARAÇÃO (extraída para reutilização)
+    async function criarNovaSeparacao(numPedido, produtosDoPedido) {
         try {
             mostrarLoading(true);
 
@@ -1386,7 +1552,7 @@
                 },
                 body: JSON.stringify({
                     num_pedido: numPedido,
-                    produtos: produtosDoPedido  // 🆕 Array com produtos que passaram nos verificadores
+                    produtos: produtosDoPedido
                 })
             });
 
@@ -1404,12 +1570,168 @@
             carregarDados();
 
         } catch (erro) {
-            console.error('Erro ao gerar separação:', erro);
+            console.error('Erro ao criar nova separação:', erro);
             mostrarMensagem('Erro', erro.message, 'danger');
         } finally {
             mostrarLoading(false);
         }
     }
+
+    // ==============================================
+    // MODAL DE ESCOLHA DE SEPARAÇÃO
+    // ==============================================
+
+    /**
+     * Abre modal para escolher entre criar nova separação ou incluir em existente
+     *
+     * @param {string} numPedido - Número do pedido
+     * @param {Array} lotes - Array de lotes existentes
+     * @param {Array} produtosDoPedido - Produtos a serem adicionados
+     */
+    function abrirModalEscolhaSeparacao(numPedido, lotes, produtosDoPedido) {
+        // Preencher número do pedido no título
+        document.getElementById('modalPedidoNumero').textContent = numPedido;
+
+        // Renderizar lista de lotes (sem onclick inline)
+        const container = document.getElementById('listaSeparacoesExistentes');
+        container.innerHTML = lotes.map((lote, index) => `
+            <div class="card mb-3 border-primary">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h6 class="card-title mb-2">
+                                <i class="fas fa-box text-primary me-2"></i>
+                                Lote: <strong>${lote.separacao_lote_id}</strong>
+                            </h6>
+                            <div class="row g-2 small">
+                                <div class="col-sm-6">
+                                    <i class="fas fa-calendar me-1 text-primary"></i> <span>Expedição:</span> <strong>${lote.expedicao || 'Não informada'}</strong>
+                                </div>
+                                <div class="col-sm-6">
+                                    <i class="fas fa-calendar-check me-1 text-primary"></i> <span>Agendamento:</span> <strong>${lote.agendamento || 'Não informado'}</strong>
+                                </div>
+                                <div class="col-sm-6">
+                                    <i class="fas fa-file-alt me-1 text-primary"></i> <span>Protocolo:</span> <strong>${lote.protocolo || 'Não informado'}</strong>
+                                </div>
+                                <div class="col-sm-6">
+                                    <i class="fas fa-cubes me-1 text-primary"></i> <span>Produtos:</span> <strong>${lote.qtd_itens}</strong>
+                                </div>
+                                <div class="col-sm-4">
+                                    <i class="fas fa-dollar-sign me-1 text-success"></i> <span>Valor:</span> <strong>${formatarMoeda(lote.valor_total)}</strong>
+                                </div>
+                                <div class="col-sm-4">
+                                    <i class="fas fa-pallet me-1 text-warning"></i> <span>Pallets:</span> <strong>${formatarNumero(lote.pallet_total, 2)}</strong>
+                                </div>
+                                <div class="col-sm-4">
+                                    <i class="fas fa-weight me-1 text-info"></i> <span>Peso:</span> <strong>${Math.round(lote.peso_total)} kg</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <button type="button" class="btn btn-primary btn-sm w-100 btn-incluir-lote"
+                                    data-lote-id="${lote.separacao_lote_id}"
+                                    data-lote-index="${index}">
+                                <i class="fas fa-plus-circle me-1"></i>
+                                Incluir nesta separação
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // 🔧 CONFIGURAR EVENT LISTENERS para os botões "Incluir nesta separação"
+        document.querySelectorAll('.btn-incluir-lote').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const loteId = btn.dataset.loteId;
+                console.log(`🔘 Clicou em incluir no lote: ${loteId}`);
+                await incluirEmSeparacaoExistente(loteId, numPedido, produtosDoPedido);
+            });
+        });
+
+        // Configurar botão "Criar nova separação"
+        const btnCriarNova = document.getElementById('btnCriarNovaSeparacao');
+        btnCriarNova.onclick = async () => {
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEscolhaSeparacao'));
+            modal.hide();
+
+            // Criar nova separação
+            await criarNovaSeparacao(numPedido, produtosDoPedido);
+        };
+
+        // Abrir modal
+        const modalElement = document.getElementById('modalEscolhaSeparacao');
+        const modal = new bootstrap.Modal(modalElement);
+
+        // 🆕 LISTENER: Quando o modal for fechado (qualquer forma: X, Cancelar, ESC, backdrop)
+        // Garantir que o loading seja fechado se o usuário cancelar
+        modalElement.addEventListener('hidden.bs.modal', function handler() {
+            console.log('🚪 Modal fechado, garantindo que loading seja fechado');
+            mostrarLoading(false);
+            // Remover o listener após uso para não acumular
+            modalElement.removeEventListener('hidden.bs.modal', handler);
+        }, { once: true });
+
+        modal.show();
+    }
+
+    /**
+     * Inclui produtos em uma separação existente
+     *
+     * @param {string} separacaoLoteId - ID do lote existente
+     * @param {string} numPedido - Número do pedido
+     * @param {Array} produtosDoPedido - Produtos a adicionar
+     */
+    async function incluirEmSeparacaoExistente(separacaoLoteId, numPedido, produtosDoPedido) {
+        try {
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEscolhaSeparacao'));
+            modal.hide();
+
+            mostrarLoading(true);
+
+            const response = await fetch('/carteira/simples/api/adicionar-itens-separacao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    separacao_lote_id: separacaoLoteId,
+                    num_pedido: numPedido,
+                    produtos: produtosDoPedido
+                })
+            });
+
+            const resultado = await response.json();
+
+            if (!resultado.success) {
+                throw new Error(resultado.error || 'Erro ao adicionar itens à separação');
+            }
+
+            // Montar mensagem descritiva
+            let mensagem = resultado.message;
+
+            // Adicionar detalhes se houver atualizações
+            if (resultado.itens_atualizados && resultado.itens_atualizados.length > 0) {
+                mensagem += '<br><br><small class="text-muted">Detalhes das atualizações:</small><br>';
+                resultado.itens_atualizados.forEach(item => {
+                    mensagem += `<small>• ${item.cod_produto}: ${item.quantidade_anterior} + ${item.quantidade_adicionada} = ${item.quantidade_nova}</small><br>`;
+                });
+            }
+
+            mostrarMensagem('Sucesso', mensagem, 'success');
+
+            // Recarregar dados
+            carregarDados();
+
+        } catch (erro) {
+            console.error('Erro ao incluir em separação existente:', erro);
+            mostrarMensagem('Erro', erro.message, 'danger');
+        } finally {
+            mostrarLoading(false);
+        }
+    };
 
     // ==============================================
     // CÁLCULOS DINÂMICOS
