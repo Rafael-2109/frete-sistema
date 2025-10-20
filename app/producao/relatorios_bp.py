@@ -7,9 +7,13 @@ from flask import Blueprint, jsonify, send_file
 from datetime import datetime
 import pandas as pd
 import io
+from sqlalchemy import func
+from app import db
 from app.estoque.models import UnificacaoCodigos
 from app.estoque.api_tempo_real import APIEstoqueTempoReal
 from app.producao.models import CadastroPalletizacao
+from app.separacao.models import Separacao
+from app.carteira.models import CarteiraPrincipal
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,7 +35,34 @@ def exportar_relatorios_producao():
         
         # Buscar informações de palletização
         palletizacoes = {p.cod_produto: p for p in CadastroPalletizacao.query.all()}
-        
+
+        # 🆕 Buscar quantidades em Separação (sincronizado_nf=False)
+        separacoes_query = db.session.query(
+            Separacao.cod_produto,
+            func.sum(Separacao.qtd_saldo).label('qtd_separacao')
+        ).filter(
+            Separacao.sincronizado_nf == False
+        ).group_by(Separacao.cod_produto).all()
+
+        qtd_separacao_dict = {s.cod_produto: float(s.qtd_separacao or 0) for s in separacoes_query}
+
+        # 🆕 Buscar quantidades na Carteira Principal
+        carteira_query = db.session.query(
+            CarteiraPrincipal.cod_produto,
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_carteira')
+        ).group_by(CarteiraPrincipal.cod_produto).all()
+
+        qtd_carteira_dict = {c.cod_produto: float(c.qtd_carteira or 0) for c in carteira_query}
+
+        # 🆕 Buscar quantidades programadas de produção
+        from app.producao.models import ProgramacaoProducao
+        producao_query = db.session.query(
+            ProgramacaoProducao.cod_produto,
+            func.sum(ProgramacaoProducao.qtd_programada).label('qtd_programada')
+        ).group_by(ProgramacaoProducao.cod_produto).all()
+
+        qtd_programada_dict = {p.cod_produto: float(p.qtd_programada or 0) for p in producao_query}
+
         # Converter dados do serviço para formato do relatório
         for cod_produto, estoque_info in estoques_dict.items():
             # Verificar unificação de códigos
@@ -110,10 +141,18 @@ def exportar_relatorios_producao():
             # Buscar nome do produto de CadastroPalletizacao (fonte correta)
             nome_produto_correto = pallet_info.nome_produto if pallet_info else f"Produto {cod_produto}"
 
+            # 🆕 Buscar quantidades de Separação, Carteira e Programação
+            qtd_separacao = qtd_separacao_dict.get(cod_produto, 0)
+            qtd_carteira = qtd_carteira_dict.get(cod_produto, 0)
+            qtd_programada = qtd_programada_dict.get(cod_produto, 0)
+
             dados_estoque.append({
                 'Código Produto': cod_produto,
                 'Nome Produto': nome_produto_correto,  # Usar nome de CadastroPalletizacao
                 'Saldo Atual': int(estoque_info.get('estoque_atual', 0)),  # Sem casas decimais
+                'Qtd em Separação': int(qtd_separacao),  # 🆕 NOVA COLUNA
+                'Qtd Total Carteira': int(qtd_carteira),  # 🆕 NOVA COLUNA
+                'Qtd Programada Produção': int(qtd_programada),  # 🆕 NOVA COLUNA
                 'Menor Estoque D+7': int(menor_estoque_d7),  # Sem casas decimais
                 'Data Ruptura': data_ruptura_obj,  # Usar objeto datetime
                 'Códigos Unificados': ', '.join(codigos_unificados) if codigos_unificados else '',
@@ -240,8 +279,107 @@ def exportar_relatorios_producao():
             logger.warning("Nenhuma movimentação prevista encontrada!")
         
         df_movimentacoes = pd.DataFrame(dados_movimentacoes)
-        
-        # Gerar Excel com duas abas
+
+        # 🆕 PREPARAR DADOS DE SAÍDAS PREVISTAS (SEM PROGRAMAÇÃO DE PRODUÇÃO)
+        dados_saidas_previstas = []
+
+        # Iterar pelos produtos que têm saídas previstas
+        for cod_produto, estoque_info in estoques_dict.items():
+            # Buscar informações de palletização
+            pallet_info_saidas = palletizacoes.get(cod_produto, None)
+            nome_produto = pallet_info_saidas.nome_produto if pallet_info_saidas else f"Produto {cod_produto}"
+
+            # Verificar se há projeção
+            projecao = estoque_info.get('projecao')
+            if projecao and isinstance(projecao, list):
+                # Estoque atual (D0)
+                estoque_atual = estoque_info.get('estoque_atual', 0)
+
+                # Processar cada dia da projeção
+                for idx, dia in enumerate(projecao[:30]):  # Limitar a 30 dias
+                    if not isinstance(dia, dict):
+                        continue
+
+                    # Obter data
+                    data_prevista = dia.get('data')
+                    if not data_prevista:
+                        continue
+
+                    # Converter data para datetime object
+                    data_obj = None
+                    if hasattr(data_prevista, 'strftime'):
+                        data_obj = data_prevista
+                    else:
+                        try:
+                            data_str = str(data_prevista)[:10]
+                            if '-' in data_str and len(data_str) == 10:
+                                ano, mes, dia_parte = data_str.split('-')
+                                data_obj = datetime(int(ano), int(mes), int(dia_parte))
+                        except Exception as e:
+                            continue
+
+                    # Obter saída do dia (SEM considerar entrada/produção)
+                    try:
+                        saida_dia = float(dia.get('saida', 0) or dia.get('saidas', 0) or 0)
+                    except (TypeError, ValueError):
+                        saida_dia = 0
+
+                    # Apenas adicionar linhas com saída > 0
+                    if saida_dia > 0:
+                        # Calcular saída acumulada até este dia
+                        saida_acumulada = 0
+                        for d in projecao[:idx+1]:
+                            if isinstance(d, dict):
+                                try:
+                                    saida_acumulada += float(d.get('saida', 0) or d.get('saidas', 0) or 0)
+                                except (TypeError, ValueError):
+                                    pass
+
+                        # Calcular saldo SEM programação de produção
+                        # saldo = estoque_atual - saída_acumulada
+                        saldo_sem_producao = estoque_atual - saida_acumulada
+
+                        dados_saidas_previstas.append({
+                            'Código Produto': cod_produto,
+                            'Nome Produto': nome_produto,
+                            'Data': data_obj,
+                            'Estoque Atual': int(estoque_atual),
+                            'Saída do Dia': int(round(saida_dia)),
+                            'Saída Acumulada': int(round(saida_acumulada)),
+                            'Saldo sem Produção': int(round(saldo_sem_producao))
+                        })
+
+        df_saidas_previstas = pd.DataFrame(dados_saidas_previstas)
+
+        # 🆕 PREPARAR DADOS DA ABA SEPARAÇÃO
+        dados_separacao = []
+
+        # Buscar todos os registros de separação não sincronizados
+        separacoes_detalhadas = Separacao.query.filter_by(
+            sincronizado_nf=False
+        ).order_by(
+            Separacao.expedicao.asc(),
+            Separacao.num_pedido.asc()
+        ).all()
+
+        for sep in separacoes_detalhadas:
+            dados_separacao.append({
+                'Número Pedido': sep.num_pedido or '',
+                'CNPJ': sep.cnpj_cpf or '',
+                'Cliente': sep.raz_social_red or '',
+                'Data Expedição': sep.expedicao,  # Objeto date
+                'Código Produto': sep.cod_produto or '',
+                'Nome Produto': sep.nome_produto or '',
+                'Quantidade': int(round(sep.qtd_saldo)) if sep.qtd_saldo else 0
+            })
+
+        df_separacao = pd.DataFrame(dados_separacao)
+
+        # 📊 Gerar Excel com quatro abas:
+        # 1. Estoque Atual
+        # 2. Movimentações Previstas (com entradas de produção)
+        # 3. Saídas Previstas (SEM programação de produção) 🆕
+        # 4. Separação (dados detalhados) 🆕
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             # Aba de Estoque
@@ -293,7 +431,7 @@ def exportar_relatorios_producao():
                 for col_num, col_name in enumerate(df_estoque.columns):
                     valor = df_estoque.iloc[row_num, col_num]
 
-                    if col_name in ['Saldo Atual', 'Menor Estoque D+7']:
+                    if col_name in ['Saldo Atual', 'Menor Estoque D+7', 'Qtd em Separação', 'Qtd Total Carteira', 'Qtd Programada Produção']:
                         # Escrever número inteiro com formato de milhar
                         worksheet_estoque.write_number(row_num + 1, col_num, valor if valor else 0, formato_inteiro)
                     elif col_name == 'Data Ruptura':
@@ -319,6 +457,10 @@ def exportar_relatorios_producao():
             for col_num, col_name in enumerate(df_estoque.columns):
                 if col_name in ['Saldo Atual', 'Menor Estoque D+7', 'Peso Bruto (kg)', 'Palletização']:
                     worksheet_estoque.set_column(col_num, col_num, 15)
+                elif col_name in ['Qtd em Separação', 'Qtd Total Carteira']:  # 🆕 NOVAS COLUNAS
+                    worksheet_estoque.set_column(col_num, col_num, 18)
+                elif col_name == 'Qtd Programada Produção':  # 🆕 NOVA COLUNA
+                    worksheet_estoque.set_column(col_num, col_num, 22)
                 elif col_name in ['Data Ruptura', 'Última Atualização']:
                     worksheet_estoque.set_column(col_num, col_num, 18)
                 elif col_name == 'Linha':
@@ -461,7 +603,144 @@ def exportar_relatorios_producao():
                 # Adicionar cabeçalho mesmo vazio
                 for col_num, col_name in enumerate(df_vazia.columns):
                     worksheet_mov.write(0, col_num, col_name, header_format)
-        
+
+            # 🆕 ABA DE SAÍDAS PREVISTAS (SEM PROGRAMAÇÃO DE PRODUÇÃO)
+            if len(df_saidas_previstas) > 0:
+                df_saidas_previstas.to_excel(writer, sheet_name='Saídas Previstas', index=False)
+                worksheet_saidas = writer.sheets['Saídas Previstas']
+
+                # Reescrever cabeçalhos
+                for col_num, col_name in enumerate(df_saidas_previstas.columns):
+                    worksheet_saidas.write(0, col_num, col_name, header_format)
+
+                # Formatos para esta aba
+                formato_inteiro_saida = workbook.add_format({
+                    'num_format': '0',
+                    'border': 1
+                })
+
+                formato_data_saida = workbook.add_format({
+                    'num_format': 'dd/mm/yyyy',
+                    'border': 1
+                })
+
+                # Formato para saldo negativo (vermelho)
+                formato_saldo_negativo = workbook.add_format({
+                    'bg_color': '#FF5252',
+                    'font_color': 'white',
+                    'border': 1,
+                    'num_format': '0'
+                })
+
+                formato_texto_saida = workbook.add_format({'border': 1})
+
+                # Aplicar formatação linha por linha
+                for row_num in range(1, len(df_saidas_previstas) + 1):
+                    row_data = df_saidas_previstas.iloc[row_num - 1]
+
+                    for col_num, col_name in enumerate(df_saidas_previstas.columns):
+                        valor = row_data.iloc[col_num]
+
+                        if col_name == 'Data':
+                            worksheet_saidas.write_datetime(row_num, col_num, valor, formato_data_saida)
+                        elif col_name in ['Código Produto', 'Nome Produto']:
+                            worksheet_saidas.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_saida)
+                        elif col_name == 'Saldo sem Produção' and valor < 0:
+                            # Saldo negativo - formato especial vermelho
+                            worksheet_saidas.write_number(row_num, col_num, valor if valor else 0, formato_saldo_negativo)
+                        elif col_name in ['Estoque Atual', 'Saída do Dia', 'Saída Acumulada', 'Saldo sem Produção']:
+                            # Colunas numéricas
+                            worksheet_saidas.write_number(row_num, col_num, valor if valor else 0, formato_inteiro_saida)
+                        else:
+                            worksheet_saidas.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_saida)
+
+                # Ajustar larguras das colunas
+                worksheet_saidas.set_column(0, 0, 15)  # Código Produto
+                worksheet_saidas.set_column(1, 1, 40)  # Nome Produto
+                worksheet_saidas.set_column(2, 2, 12)  # Data
+                worksheet_saidas.set_column(3, 3, 15)  # Estoque Atual
+                worksheet_saidas.set_column(4, 4, 15)  # Saída do Dia
+                worksheet_saidas.set_column(5, 5, 18)  # Saída Acumulada
+                worksheet_saidas.set_column(6, 6, 20)  # Saldo sem Produção
+            else:
+                # Criar aba vazia se não houver saídas previstas
+                logger.warning("Criando aba vazia de Saídas Previstas")
+                df_vazia_saidas = pd.DataFrame(columns=[
+                    'Código Produto', 'Nome Produto', 'Data',
+                    'Estoque Atual', 'Saída do Dia',
+                    'Saída Acumulada', 'Saldo sem Produção'
+                ])
+                df_vazia_saidas.to_excel(writer, sheet_name='Saídas Previstas', index=False)
+                worksheet_saidas = writer.sheets['Saídas Previstas']
+
+                # Adicionar cabeçalho mesmo vazio
+                for col_num, col_name in enumerate(df_vazia_saidas.columns):
+                    worksheet_saidas.write(0, col_num, col_name, header_format)
+
+            # 🆕 ABA DE SEPARAÇÃO (DADOS DETALHADOS)
+            if len(df_separacao) > 0:
+                df_separacao.to_excel(writer, sheet_name='Separação', index=False)
+                worksheet_sep = writer.sheets['Separação']
+
+                # Reescrever cabeçalhos
+                for col_num, col_name in enumerate(df_separacao.columns):
+                    worksheet_sep.write(0, col_num, col_name, header_format)
+
+                # Formatos para esta aba
+                formato_inteiro_sep = workbook.add_format({
+                    'num_format': '0',
+                    'border': 1
+                })
+
+                formato_data_sep = workbook.add_format({
+                    'num_format': 'dd/mm/yyyy',
+                    'border': 1
+                })
+
+                formato_texto_sep = workbook.add_format({'border': 1})
+
+                # Aplicar formatação linha por linha
+                for row_num in range(1, len(df_separacao) + 1):
+                    row_data = df_separacao.iloc[row_num - 1]
+
+                    for col_num, col_name in enumerate(df_separacao.columns):
+                        valor = row_data.iloc[col_num]
+
+                        if col_name == 'Data Expedição':
+                            # Escrever data com formato DD/MM/YYYY
+                            if pd.notna(valor):
+                                worksheet_sep.write_datetime(row_num, col_num, valor, formato_data_sep)
+                            else:
+                                worksheet_sep.write(row_num, col_num, '', formato_data_sep)
+                        elif col_name == 'Quantidade':
+                            # Coluna numérica
+                            worksheet_sep.write_number(row_num, col_num, valor if valor else 0, formato_inteiro_sep)
+                        else:
+                            # Colunas de texto
+                            worksheet_sep.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_sep)
+
+                # Ajustar larguras das colunas
+                worksheet_sep.set_column(0, 0, 15)  # Número Pedido
+                worksheet_sep.set_column(1, 1, 18)  # CNPJ
+                worksheet_sep.set_column(2, 2, 35)  # Cliente
+                worksheet_sep.set_column(3, 3, 15)  # Data Expedição
+                worksheet_sep.set_column(4, 4, 15)  # Código Produto
+                worksheet_sep.set_column(5, 5, 40)  # Nome Produto
+                worksheet_sep.set_column(6, 6, 12)  # Quantidade
+            else:
+                # Criar aba vazia se não houver dados de separação
+                logger.warning("Criando aba vazia de Separação")
+                df_vazia_sep = pd.DataFrame(columns=[
+                    'Número Pedido', 'CNPJ', 'Cliente', 'Data Expedição',
+                    'Código Produto', 'Nome Produto', 'Quantidade'
+                ])
+                df_vazia_sep.to_excel(writer, sheet_name='Separação', index=False)
+                worksheet_sep = writer.sheets['Separação']
+
+                # Adicionar cabeçalho mesmo vazio
+                for col_num, col_name in enumerate(df_vazia_sep.columns):
+                    worksheet_sep.write(0, col_num, col_name, header_format)
+
         output.seek(0)
         
         filename = f'relatorio_producao_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
