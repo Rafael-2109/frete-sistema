@@ -1058,7 +1058,7 @@ def atualizar_qtd_separacao():
 @carteira_simples_bp.route('/api/confirmar-agendamento', methods=['POST'])
 def confirmar_agendamento():
     """
-    Confirma agendamento na CarteiraPrincipal
+    ✅ CORRIGIDO: Confirma agendamento em Separacao (não CarteiraPrincipal)
 
     Body JSON:
     {
@@ -1086,28 +1086,33 @@ def confirmar_agendamento():
                 'error': 'Protocolo é obrigatório para confirmação'
             }), 400
 
-        # Buscar item na carteira
-        item = CarteiraPrincipal.query.filter_by(
+        # ✅ CORREÇÃO: Buscar separações não sincronizadas (não CarteiraPrincipal)
+        separacoes = Separacao.query.filter_by(
             num_pedido=num_pedido,
             cod_produto=cod_produto,
-            ativo=True
-        ).first()
+            sincronizado_nf=False  # Apenas separações ativas
+        ).all()
 
-        if not item:
+        if not separacoes or len(separacoes) == 0:
             return jsonify({
                 'success': False,
-                'error': 'Item não encontrado na carteira'
+                'error': 'Nenhuma separação ativa encontrada para este pedido/produto'
             }), 404
 
-        # Confirmar agendamento
-        item.agendamento_confirmado = True
-        item.protocolo = protocolo
+        # ✅ CORREÇÃO: Atualizar TODAS as separações do produto
+        qtd_atualizadas = 0
+        for sep in separacoes:
+            sep.agendamento_confirmado = True
+            sep.protocolo = protocolo
+            qtd_atualizadas += 1
 
         db.session.commit()
 
+        logger.info(f"✅ Agendamento confirmado: {qtd_atualizadas} separação(ões) de {num_pedido}/{cod_produto}")
+
         return jsonify({
             'success': True,
-            'message': 'Agendamento confirmado com sucesso'
+            'message': f'Agendamento confirmado com sucesso ({qtd_atualizadas} separação(ões))'
         })
 
     except Exception as e:
@@ -1200,98 +1205,6 @@ def atualizar_separacao_lote():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar separação em lote: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@carteira_simples_bp.route('/api/atualizar-item-carteira', methods=['POST'])
-def atualizar_item_carteira():
-    """
-    Atualiza um item da CarteiraPrincipal (data de expedição, agendamento, etc)
-    e recalcula estoque projetado
-
-    Body JSON:
-    {
-        "id": 123,
-        "campo": "expedicao",  // expedicao, agendamento, protocolo
-        "valor": "2025-01-20"
-    }
-    """
-    try:
-        dados = request.get_json()
-
-        if not dados or 'id' not in dados or 'campo' not in dados or 'valor' not in dados:
-            return jsonify({
-                'success': False,
-                'error': 'Dados inválidos. Esperado: {id, campo, valor}'
-            }), 400
-
-        item_id = int(dados['id'])
-        campo = dados['campo']
-        valor = dados['valor']
-
-        # Campos permitidos
-        campos_permitidos = ['expedicao', 'agendamento', 'protocolo']
-        if campo not in campos_permitidos:
-            return jsonify({
-                'success': False,
-                'error': f'Campo não permitido. Use: {", ".join(campos_permitidos)}'
-            }), 400
-
-        # Buscar item
-        item = CarteiraPrincipal.query.get(item_id)
-
-        if not item:
-            return jsonify({
-                'success': False,
-                'error': 'Item não encontrado'
-            }), 404
-
-        # Atualizar campo
-        if campo in ['expedicao', 'agendamento']:
-            try:
-                valor_data = datetime.strptime(valor, '%Y-%m-%d').date() if valor else None
-                setattr(item, campo, valor_data)
-            except (ValueError, TypeError):
-                return jsonify({
-                    'success': False,
-                    'error': 'Data inválida. Use formato YYYY-MM-DD'
-                }), 400
-        else:  # protocolo
-            setattr(item, campo, valor)
-
-        db.session.commit()
-
-        # 🆕 RECALCULAR ESTOQUE se alterou data de expedição
-        estoque_atualizado = None
-        if campo == 'expedicao':
-            try:
-                estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(item.cod_produto)
-                projecao = ServicoEstoqueSimples.calcular_projecao(item.cod_produto, 28)
-
-                estoque_atualizado = {
-                    'estoque_atual': estoque_atual,
-                    'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                    'projecoes': projecao.get('projecao', [])[:28]
-                }
-            except Exception as e:
-                logger.error(f"Erro ao recalcular estoque de {item.cod_produto}: {e}")
-
-        return jsonify({
-            'success': True,
-            'message': f'{campo.capitalize()} atualizado com sucesso',
-            'item': {
-                'id': item.id,
-                campo: valor
-            },
-            'estoque_atualizado': estoque_atualizado
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao atualizar item da carteira: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

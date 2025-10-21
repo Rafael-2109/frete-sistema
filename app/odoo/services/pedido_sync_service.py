@@ -13,7 +13,7 @@ Data: 2025-01-20
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from app import db
@@ -245,9 +245,9 @@ class PedidoSyncService:
         """
         Atualiza pedido no sistema conforme dados do Odoo
 
-        Reutiliza:
-        - CarteiraService para mapear dados
-        - AjusteSincronizacaoService para processar alterações
+        FLUXO:
+        1. Atualiza CarteiraPrincipal com dados do Odoo
+        2. Chama AjusteSincronizacaoService que atualiza Separações baseado na CarteiraPrincipal
         """
         try:
             logger.info(f"📝 Atualizando pedido {num_pedido} no sistema...")
@@ -263,9 +263,17 @@ class PedidoSyncService:
                     'detalhes': {'num_pedido': num_pedido}
                 }
 
-            logger.info(f"📊 {len(itens_mapeados)} itens mapeados para processamento")
+            logger.info(f"📊 {len(itens_mapeados)} itens mapeados do Odoo")
 
-            # Processar alterações usando o serviço de ajuste
+            # ETAPA 1: Atualizar CarteiraPrincipal
+            logger.info(f"📝 ETAPA 1: Atualizando CarteiraPrincipal...")
+            resultado_carteira = self._atualizar_carteira_principal(num_pedido, itens_mapeados)
+
+            if not resultado_carteira['sucesso']:
+                return resultado_carteira
+
+            # ETAPA 2: Chamar AjusteSincronizacaoService que usa CarteiraPrincipal
+            logger.info(f"🔄 ETAPA 2: Processando ajuste nas Separações via AjusteSincronizacaoService...")
             resultado_ajuste = self.ajuste_service.processar_pedido_alterado(
                 num_pedido=num_pedido,
                 itens_odoo=itens_mapeados
@@ -305,6 +313,56 @@ class PedidoSyncService:
                 'sucesso': False,
                 'acao': 'NAO_PROCESSADO',
                 'mensagem': f'Erro ao atualizar pedido: {str(e)}',
+                'erro': str(e)
+            }
+
+    def _atualizar_carteira_principal(self, num_pedido: str, itens_mapeados: List[Dict]) -> Dict[str, Any]:
+        """
+        Atualiza CarteiraPrincipal com dados do Odoo
+
+        Similar ao que CarteiraService faz
+        """
+        try:
+            from app.carteira.models import CarteiraPrincipal
+
+            logger.info(f"🔄 Atualizando {len(itens_mapeados)} itens na CarteiraPrincipal...")
+
+            itens_atualizados = 0
+
+            for item in itens_mapeados:
+                cod_produto = item['cod_produto']
+
+                # Buscar item na CarteiraPrincipal
+                item_carteira = CarteiraPrincipal.query.filter_by(
+                    num_pedido=num_pedido,
+                    cod_produto=cod_produto
+                ).first()
+
+                if item_carteira:
+                    # ATUALIZAR quantidades
+                    item_carteira.qtd_produto_pedido = item['qtd_produto_pedido']
+                    item_carteira.qtd_saldo_produto_pedido = item['qtd_saldo_produto_pedido']
+                    item_carteira.qtd_cancelada_produto_pedido = item['qtd_cancelada_produto_pedido']
+                    item_carteira.preco_produto_pedido = item['preco_produto_pedido']
+
+                    itens_atualizados += 1
+                    logger.info(f"   ✅ Atualizado {cod_produto}: saldo={item['qtd_saldo_produto_pedido']}")
+                else:
+                    logger.warning(f"   ⚠️ Produto {cod_produto} não encontrado na CarteiraPrincipal")
+
+            logger.info(f"✅ CarteiraPrincipal atualizada: {itens_atualizados} itens")
+
+            return {
+                'sucesso': True,
+                'itens_atualizados': itens_atualizados
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao atualizar CarteiraPrincipal: {e}")
+            return {
+                'sucesso': False,
+                'acao': 'NAO_PROCESSADO',
+                'mensagem': f'Erro ao atualizar CarteiraPrincipal: {str(e)}',
                 'erro': str(e)
             }
 
@@ -367,15 +425,16 @@ class PedidoSyncService:
                     logger.warning(f"⚠️ Produto sem código encontrado, pulando linha")
                     continue
 
-                # CALCULAR SALDO como CarteiraService faz (linha 1624-1627)
+                # CALCULAR SALDO: qtd_produto - qtd_cancelada - qtd_faturada
                 qtd_produto = float(linha.get('product_uom_qty', 0))
+                qtd_cancelada = float(linha.get('qty_cancelado', 0) or 0)
                 qtd_faturada = faturamentos_dict.get(cod_produto, 0)
 
-                # FÓRMULA: qtd_produto - qtd_faturada
-                # NÃO subtrair qtd_cancelada porque Odoo já descontou!
-                qtd_saldo_calculado = qtd_produto - qtd_faturada
+                # FÓRMULA: qtd_produto - qtd_cancelada - qtd_faturada
+                qtd_saldo_calculado = qtd_produto - qtd_cancelada - qtd_faturada
 
                 logger.info(f"   📊 {cod_produto}: qtd_produto={qtd_produto}, "
+                          f"qtd_cancelada={qtd_cancelada}, "
                           f"qtd_faturada={qtd_faturada}, "
                           f"qtd_saldo_CALCULADO={qtd_saldo_calculado}")
 

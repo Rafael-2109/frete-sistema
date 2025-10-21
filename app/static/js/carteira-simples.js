@@ -1177,19 +1177,17 @@
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
             const novoValor = target.value;
-            const colunaEditada = 'expedicao';
 
-            // 🆕 DETECTAR SE É SEPARAÇÃO OU CARTEIRA
+            // ✅ CORREÇÃO: Apenas separações devem atualizar backend
             const isSeparacao = item.tipo === 'separacao';
             const separacaoLoteId = item.separacao_lote_id;
 
-            // 🆕 Se mudou data de uma separação com lote, atualizar todo o lote NO BACKEND
-            if (isSeparacao && separacaoLoteId && colunaEditada === 'expedicao') {
+            // Se mudou data de uma separação com lote, atualizar todo o lote NO BACKEND
+            if (isSeparacao && separacaoLoteId) {
                 await atualizarDataSeparacaoLote(separacaoLoteId, novoValor);
-            } else if (!isSeparacao && colunaEditada === 'expedicao') {
-                // Se mudou data de um item da CarteiraPrincipal, atualizar NO BACKEND
-                await atualizarItemCarteira(item.id, colunaEditada, novoValor);
             }
+            // ✅ REMOVIDO: Não atualizar CarteiraPrincipal - edição é apenas local até clicar "OK"
+            // Quando clicar "OK", a data será copiada para a Separacao criada
 
             // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
             recalcularTodasLinhasProduto(item.cod_produto);
@@ -1518,16 +1516,15 @@
         const novaData = dataAtual.toISOString().split('T')[0];
         inputData.value = novaData;
 
-        // 🆕 Se for separação, atualizar TODOS os produtos do mesmo lote NO BACKEND
+        // Se for separação, atualizar TODOS os produtos do mesmo lote NO BACKEND
         if (item.tipo === 'separacao' && item.separacao_lote_id) {
             await atualizarDataSeparacaoLote(item.separacao_lote_id, novaData);
-        } else {
-            // 🆕 Se for item da CarteiraPrincipal, atualizar NO BACKEND
-            await atualizarItemCarteira(item.id, 'expedicao', novaData);
-
-            // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
-            recalcularTodasLinhasProduto(item.cod_produto);
         }
+        // ✅ REMOVIDO: Não atualizar CarteiraPrincipal quando tipo === 'pedido'
+        // A data editada será usada apenas ao clicar "OK" para gerar separação
+
+        // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
+        recalcularTodasLinhasProduto(item.cod_produto);
     }
 
     // 🆕 FUNÇÃO PARA ATUALIZAR DATA DE TODOS OS PRODUTOS DE UM LOTE DE SEPARAÇÃO
@@ -1590,47 +1587,6 @@
 
         } catch (erro) {
             console.error('Erro ao atualizar data do lote:', erro);
-            mostrarMensagem('Erro', erro.message, 'danger');
-        }
-    }
-
-    // 🆕 FUNÇÃO PARA ATUALIZAR ITEM DA CARTEIRAPRINCIPAL
-    async function atualizarItemCarteira(itemId, campo, valor) {
-        try {
-            // 🔴 CHAMAR BACKEND PARA ATUALIZAR BANCO DE DADOS E RECALCULAR ESTOQUE
-            const response = await fetch('/carteira/simples/api/atualizar-item-carteira', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    id: itemId,
-                    campo: campo,
-                    valor: valor
-                })
-            });
-
-            const resultado = await response.json();
-
-            if (!resultado.success) {
-                throw new Error(resultado.error || 'Erro ao atualizar item da carteira');
-            }
-
-            console.log(`✅ Backend: ${resultado.message}`);
-
-            // 🆕 Atualizar estoque no estado local se veio do backend
-            if (resultado.estoque_atualizado) {
-                state.dados.forEach(d => {
-                    if (d.id === itemId && d.tipo === 'pedido') {
-                        d.estoque_atual = resultado.estoque_atualizado.estoque_atual;
-                        d.menor_estoque_d7 = resultado.estoque_atualizado.menor_estoque_d7;
-                        d.projecoes_estoque = resultado.estoque_atualizado.projecoes;
-                    }
-                });
-            }
-
-        } catch (erro) {
-            console.error('Erro ao atualizar item da carteira:', erro);
             mostrarMensagem('Erro', erro.message, 'danger');
         }
     }
