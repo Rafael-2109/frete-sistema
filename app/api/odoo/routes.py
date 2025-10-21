@@ -15,6 +15,7 @@ from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoPro
 from app.api.odoo.validators import validate_faturamento_data
 from app.api.odoo.auth import require_api_key, require_jwt_token
 from app.api.odoo.utils import process_bulk_operation, create_response
+from app.odoo.services.pedido_sync_service import PedidoSyncService
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -297,6 +298,91 @@ def _create_faturamento_produto_item(data):
 # ROTA: TESTE DE CONECTIVIDADE
 # ============================================================================
 
+# ============================================================================
+# ROTA: SINCRONIZAÇÃO MANUAL DE PEDIDO ESPECÍFICO
+# ============================================================================
+
+@odoo_bp.route('/pedido/<string:num_pedido>/sync', methods=['POST'])
+def sincronizar_pedido_especifico(num_pedido):
+    """
+    Sincroniza um pedido específico com o Odoo
+
+    Endpoint: POST /api/v1/odoo/pedido/<num_pedido>/sync
+
+    Comportamento:
+    - Se pedido ENCONTRADO no Odoo: ATUALIZA no sistema
+    - Se pedido NÃO ENCONTRADO no Odoo: EXCLUI do sistema
+    - Se pedido CANCELADO no Odoo: EXCLUI do sistema
+
+    Args:
+        num_pedido: Número do pedido (ex: VSC12345)
+
+    Returns:
+        JSON com resultado da sincronização:
+        {
+            "success": true/false,
+            "message": "...",
+            "data": {
+                "acao": "ATUALIZADO" | "EXCLUIDO" | "NAO_PROCESSADO",
+                "num_pedido": "VSC12345",
+                "detalhes": {...},
+                "tempo_execucao": 1.23,
+                "timestamp": "2025-01-20T10:30:00"
+            }
+        }
+
+    Exemplo de uso:
+        POST /api/v1/odoo/pedido/VSC12345/sync
+        Headers:
+            - X-API-Key: sua-api-key
+            - Authorization: Bearer seu-jwt-token
+    """
+    try:
+        logger.info(f"📥 Requisição de sincronização manual para pedido: {num_pedido}")
+
+        # Validar número do pedido
+        if not num_pedido or len(num_pedido.strip()) == 0:
+            return create_response(
+                success=False,
+                message="Número do pedido não pode ser vazio",
+                status_code=400
+            )
+
+        # Criar instância do serviço
+        sync_service = PedidoSyncService()
+
+        # Executar sincronização
+        resultado = sync_service.sincronizar_pedido_especifico(num_pedido)
+
+        # Determinar status code baseado no resultado
+        status_code = 200 if resultado.get('sucesso', False) else 500
+
+        # Se foi excluído por não existir, usar 404
+        if resultado.get('acao') == 'EXCLUIDO' and 'não encontrado' in resultado.get('mensagem', '').lower():
+            status_code = 200  # Mantém 200 pois a operação foi bem sucedida
+
+        return create_response(
+            success=resultado.get('sucesso', False),
+            message=resultado.get('mensagem', ''),
+            data={
+                'acao': resultado.get('acao'),
+                'num_pedido': num_pedido,
+                'detalhes': resultado.get('detalhes', {}),
+                'tempo_execucao': resultado.get('tempo_execucao', 0),
+                'timestamp': resultado.get('timestamp', datetime.now()).isoformat() if isinstance(resultado.get('timestamp'), datetime) else str(resultado.get('timestamp'))
+            },
+            status_code=status_code
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar sincronização do pedido {num_pedido}: {e}")
+        return create_response(
+            success=False,
+            message=f"Erro ao sincronizar pedido: {str(e)}",
+            status_code=500
+        )
+
+
 @odoo_bp.route('/test', methods=['GET'])
 def test_connection():
     """Testa conectividade com a API"""
@@ -309,6 +395,7 @@ def test_connection():
             'endpoints': [
                 '/api/v1/odoo/carteira/bulk-update',
                 '/api/v1/odoo/faturamento/bulk-update',
+                '/api/v1/odoo/pedido/<num_pedido>/sync',
                 '/api/v1/odoo/test'
             ]
         }

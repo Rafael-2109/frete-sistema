@@ -893,6 +893,76 @@
         </div>
     </section>
 
+    <!-- 🆕 PAINEL FLUTUANTE - RESUMO DA SEPARAÇÃO -->
+    <div id="painel-resumo-separacao" style="
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        width: 280px;
+        max-height: 600px;
+        overflow-y: auto;
+        background-color: white;
+        border: 2px solid #0d6efd;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 1040;
+        display: none;
+        font-size: 11px;
+        padding: 12px;
+    ">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong style="font-size: 12px;">📦 RESUMO DA SEPARAÇÃO</strong>
+            <button type="button" class="btn-close btn-sm" id="btn-ocultar-painel" style="font-size: 10px;"></button>
+        </div>
+        <hr class="my-2">
+        <div id="painel-resumo-conteudo">
+            <!-- Conteúdo será preenchido via JavaScript -->
+        </div>
+    </div>
+
+    <!-- 🌙 DARK MODE - Estilos do painel -->
+    <style>
+        body[data-theme="dark"] #painel-resumo-separacao {
+            background-color: #2d2d2d !important;
+            border-color: #0d6efd !important;
+            color: #e0e0e0 !important;
+        }
+
+        body[data-theme="dark"] #painel-resumo-separacao .card {
+            background-color: #1e1e1e !important;
+            border-color: #3a3a3a !important;
+            color: #e0e0e0 !important;
+        }
+
+        body[data-theme="dark"] #painel-resumo-separacao .card-body {
+            color: #e0e0e0 !important;
+        }
+
+        body[data-theme="dark"] #painel-resumo-separacao hr {
+            border-color: #3a3a3a !important;
+        }
+
+        body[data-theme="dark"] #painel-resumo-separacao .text-muted {
+            color: #a0a0a0 !important;
+        }
+
+        /* Linha de totais na tabela - Dark Mode */
+        body[data-theme="dark"] .linha-total-pedido {
+            background-color: #2a2a2a !important;
+            color: #e0e0e0 !important;
+            border-color: #0d6efd !important;
+        }
+
+        body[data-theme="dark"] .linha-total-pedido .badge {
+            background-color: #0d6efd !important;
+            color: white !important;
+        }
+
+        body[data-theme="dark"] .linha-total-pedido .text-muted {
+            color: #a0a0a0 !important;
+        }
+    </style>
+
 </div>
 
 <!-- Modals -->

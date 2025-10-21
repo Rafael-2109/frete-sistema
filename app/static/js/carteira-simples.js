@@ -76,6 +76,17 @@
         document.getElementById('tbody-carteira').addEventListener('click', handleTableClick);
         document.getElementById('tbody-carteira').addEventListener('change', handleTableChange);
         document.getElementById('tbody-carteira').addEventListener('input', handleTableInput);
+
+        // 🆕 Event listener para botão de ocultar painel flutuante
+        const btnOcultarPainel = document.getElementById('btn-ocultar-painel');
+        if (btnOcultarPainel) {
+            btnOcultarPainel.addEventListener('click', function() {
+                const painel = document.getElementById('painel-resumo-separacao');
+                if (painel) {
+                    painel.style.display = 'none';
+                }
+            });
+        }
     }
 
     // ==============================================
@@ -921,6 +932,197 @@
     }
 
     // ==============================================
+    // 🆕 CÁLCULO EM TEMPO REAL - RESUMO DA SEPARAÇÃO
+    // ==============================================
+
+    /**
+     * Calcula totais (Valor, Peso, Pallet) de TODOS os itens que têm:
+     * - QTD EDIT > 0
+     * - DT EXPED preenchida
+     *
+     * Agrupa por num_pedido para exibir múltiplos pedidos separadamente
+     */
+    function calcularTotaisSeparacao() {
+        const totaisPorPedido = {};
+
+        state.dados.forEach((item, index) => {
+            // Processar APENAS linhas de pedido (tipo='pedido')
+            if (item.tipo !== 'pedido') return;
+
+            const numPedido = item.num_pedido;
+            const qtdInput = document.getElementById(`qtd-edit-${index}`);
+            const dataExpedicaoInput = document.getElementById(`dt-exped-${index}`);
+
+            const qtdEditavel = qtdInput ? parseFloat(qtdInput.value || 0) : 0;
+            const dataExpedicao = dataExpedicaoInput ? dataExpedicaoInput.value : '';
+
+            // Critério: QTD > 0 E DATA preenchida
+            if (qtdEditavel > 0 && dataExpedicao) {
+                // Inicializar totais do pedido se ainda não existe
+                if (!totaisPorPedido[numPedido]) {
+                    totaisPorPedido[numPedido] = {
+                        numPedido: numPedido,
+                        razaoSocial: item.raz_social_red || '',
+                        qtdItens: 0,
+                        valorTotal: 0,
+                        pesoTotal: 0,
+                        palletTotal: 0
+                    };
+                }
+
+                // Calcular valores do item
+                const preco = parseFloat(item.preco_produto_pedido) || 0;
+                const pesoBruto = parseFloat(item.peso_bruto) || 0;
+                const palletizacao = parseFloat(item.palletizacao) || 100;
+
+                const valorItem = qtdEditavel * preco;
+                const pesoItem = qtdEditavel * pesoBruto;
+                const palletItem = palletizacao > 0 ? qtdEditavel / palletizacao : 0;
+
+                // Acumular totais
+                totaisPorPedido[numPedido].qtdItens += 1;
+                totaisPorPedido[numPedido].valorTotal += valorItem;
+                totaisPorPedido[numPedido].pesoTotal += pesoItem;
+                totaisPorPedido[numPedido].palletTotal += palletItem;
+            }
+        });
+
+        return totaisPorPedido;
+    }
+
+    /**
+     * Atualiza o Painel Flutuante com os totais em tempo real
+     */
+    function atualizarPainelFlutuante() {
+        const totaisPorPedido = calcularTotaisSeparacao();
+        const pedidos = Object.values(totaisPorPedido);
+
+        // Calcular totais gerais (soma de todos os pedidos)
+        const totaisGerais = pedidos.reduce((acc, p) => {
+            acc.qtdItens += p.qtdItens;
+            acc.valorTotal += p.valorTotal;
+            acc.pesoTotal += p.pesoTotal;
+            acc.palletTotal += p.palletTotal;
+            return acc;
+        }, { qtdItens: 0, valorTotal: 0, pesoTotal: 0, palletTotal: 0 });
+
+        // Elementos do painel
+        const painel = document.getElementById('painel-resumo-separacao');
+        const conteudo = document.getElementById('painel-resumo-conteudo');
+
+        if (!painel || !conteudo) return;
+
+        // Se não há itens selecionados, ocultar painel
+        if (totaisGerais.qtdItens === 0) {
+            painel.style.display = 'none';
+            return;
+        }
+
+        // Exibir painel
+        painel.style.display = 'block';
+
+        // Renderizar conteúdo
+        let html = '';
+
+        // Se houver múltiplos pedidos, mostrar separado
+        if (pedidos.length > 1) {
+            html += '<div class="mb-2"><strong>📦 Por Pedido:</strong></div>';
+            pedidos.forEach(p => {
+                html += `
+                    <div class="card mb-2" style="font-size: 10px;">
+                        <div class="card-body p-2">
+                            <div><strong>${p.numPedido}</strong></div>
+                            <div class="text-muted" style="font-size: 9px;">${p.razaoSocial.substring(0, 25)}</div>
+                            <div class="mt-1">
+                                <div>${p.qtdItens} itens</div>
+                                <div>R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                <div>${p.pesoTotal.toFixed(0)} kg</div>
+                                <div>${p.palletTotal.toFixed(2)} PLT</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '<hr class="my-2">';
+        }
+
+        // Totais gerais
+        html += `
+            <div><strong>📊 TOTAL GERAL</strong></div>
+            <div class="mt-2">
+                <div class="d-flex justify-content-between">
+                    <span>Produtos:</span>
+                    <strong>${totaisGerais.qtdItens} itens</strong>
+                </div>
+                <div class="d-flex justify-content-between text-success">
+                    <span>Valor:</span>
+                    <strong>R$ ${totaisGerais.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div class="d-flex justify-content-between text-info">
+                    <span>Peso:</span>
+                    <strong>${totaisGerais.pesoTotal.toFixed(0)} kg</strong>
+                </div>
+                <div class="d-flex justify-content-between text-warning">
+                    <span>Pallet:</span>
+                    <strong>${totaisGerais.palletTotal.toFixed(2)} PLT</strong>
+                </div>
+            </div>
+        `;
+
+        conteudo.innerHTML = html;
+    }
+
+    /**
+     * Atualiza linha de totais no final de cada pedido na tabela
+     */
+    function atualizarLinhasTotaisPedidos() {
+        const totaisPorPedido = calcularTotaisSeparacao();
+
+        // Remover linhas de totais antigas
+        document.querySelectorAll('.linha-total-pedido').forEach(el => el.remove());
+
+        // Para cada pedido com itens selecionados, adicionar linha de total
+        Object.values(totaisPorPedido).forEach(totais => {
+            // Encontrar a última linha do pedido na tabela
+            const linhasPedido = Array.from(document.querySelectorAll(`tr[data-num-pedido="${totais.numPedido}"]`));
+
+            if (linhasPedido.length === 0) return;
+
+            const ultimaLinha = linhasPedido[linhasPedido.length - 1];
+
+            // Criar linha de totais
+            const linhaTotais = document.createElement('tr');
+            linhaTotais.className = 'linha-total-pedido bg-light border-top border-3 border-primary';
+            linhaTotais.style.fontWeight = 'bold';
+            linhaTotais.style.fontSize = '11px';
+
+            linhaTotais.innerHTML = `
+                <td colspan="10" class="text-end">
+                    <span class="badge bg-primary">📊 TOTAL SELECIONADO (${totais.qtdItens} itens)</span>
+                </td>
+                <td class="text-end">-</td>
+                <td class="text-end text-success">R$ ${totais.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                <td class="text-end text-warning">${totais.palletTotal.toFixed(2)}</td>
+                <td class="text-end text-info">${totais.pesoTotal.toFixed(0)}</td>
+                <td colspan="20"></td>
+            `;
+
+            // Inserir após a última linha do pedido
+            ultimaLinha.after(linhaTotais);
+        });
+    }
+
+    /**
+     * Atualiza AMBOS: Painel Flutuante + Linhas de Totais
+     * Chamado sempre que QTD EDIT ou DT EXPED mudam
+     */
+    function atualizarResumoSeparacao() {
+        atualizarPainelFlutuante();
+        atualizarLinhasTotaisPedidos();
+    }
+
+    // ==============================================
     // HANDLERS DE EVENTOS
     // ==============================================
     function handleTableClick(e) {
@@ -991,6 +1193,9 @@
 
             // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
             recalcularTodasLinhasProduto(item.cod_produto);
+
+            // 🆕 ATUALIZAR RESUMO DA SEPARAÇÃO EM TEMPO REAL
+            atualizarResumoSeparacao();
         }
     }
 
@@ -1007,6 +1212,9 @@
 
             // Recalcular TODAS as linhas do mesmo produto
             recalcularTodasLinhasProduto(item.cod_produto);
+
+            // 🆕 ATUALIZAR RESUMO DA SEPARAÇÃO EM TEMPO REAL
+            atualizarResumoSeparacao();
         }
 
         // 🆕 Mudança na quantidade editável de SEPARAÇÃO

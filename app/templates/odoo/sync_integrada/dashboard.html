@@ -152,6 +152,17 @@
                         </div>
                     </div>
 
+                    <!-- 🔄 BOTÃO SINCRONIZAR PEDIDO -->
+                    <div class="row mb-4">
+                        <div class="col-12 text-center">
+                            <a href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar') }}" class="btn btn-primary btn-lg">
+                                <i class="fas fa-sync-alt"></i>
+                                <strong>SINCRONIZAR PEDIDO</strong>
+                                <small class="d-block mt-1">Sincronizar pedidos individuais</small>
+                            </a>
+                        </div>
+                    </div>
+
                     <!-- 🎯 COMPARAÇÃO: ANTES vs AGORA -->
                     <div class="row">
                         <div class="col-12">
@@ -211,7 +222,7 @@
 
 ✅ SEQUÊNCIA AUTOMÁTICA:
 1. 📊 FATURAMENTO sincronizado primeiro
-2. 🔍 Validação de integridade executada  
+2. 🔍 Validação de integridade executada
 3. 🔄 CARTEIRA sincronizada depois
 4. 🛡️ Proteção automática de pré-separações
 
@@ -224,6 +235,28 @@
 Esta é a forma MAIS SEGURA de sincronizar.
 
 Executar sincronização integrada segura?`;
+
+        return confirm(confirmMsg);
+    }
+
+    function confirmarSincPedido(numPedido) {
+        const confirmMsg = `🔄 SINCRONIZAR PEDIDO: ${numPedido}
+
+📋 O QUE VAI ACONTECER:
+
+✅ SE ENCONTRADO NO ODOO:
+   • Atualiza quantidades e dados
+   • Mantém separações existentes
+   • Aplica alterações conforme Odoo
+
+❌ SE NÃO ENCONTRADO NO ODOO:
+   • Exclui pedido completamente
+   • Remove TODAS as Separacao (sincronizado_nf=False)
+   • Cancela EmbarqueItems relacionados
+
+⚠️ Esta ação é IRREVERSÍVEL se o pedido for excluído.
+
+Deseja continuar?`;
 
         return confirm(confirmMsg);
     }

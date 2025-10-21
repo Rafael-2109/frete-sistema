@@ -139,9 +139,15 @@ def obter_dados():
         if municipio:
             query = query.filter(CarteiraPrincipal.municipio.ilike(f'%{municipio}%'))
 
-        # 🔧 CORREÇÃO CRÍTICA: Filtros de Rota e Sub-rota usando as tabelas de cadastro
+        # 🔧 CORREÇÃO CRÍTICA: Filtros de Rota considerando incoterm FOB/RED
         if rota:
-            query = query.filter(CadastroRota.rota == rota)
+            from sqlalchemy import or_
+            # Se filtro é FOB ou RED, buscar por incoterm
+            if rota in ['FOB', 'RED']:
+                query = query.filter(CarteiraPrincipal.incoterm == rota)
+            else:
+                # Para outras rotas (CIF), buscar normalmente na tabela CadastroRota
+                query = query.filter(CadastroRota.rota == rota)
 
         if sub_rota:
             query = query.filter(CadastroSubRota.sub_rota == sub_rota)
@@ -322,9 +328,27 @@ def obter_dados():
             )
         )
 
-        # 🔧 APLICAR FILTROS DE ROTA E SUB-ROTA também nas separações
+        # 🔧 APLICAR FILTROS DE ROTA E SUB-ROTA também nas separações (com incoterm FOB/RED)
         if rota:
-            separacoes_base = separacoes_base.filter(CadastroRota.rota == rota)
+            # 🆕 Se filtro é FOB ou RED, buscar por incoterm nas separações também
+            # IMPORTANTE: Separacao não tem campo incoterm, então buscar pelo pedido original
+            if rota in ['FOB', 'RED']:
+                # Buscar pedidos com incoterm FOB/RED
+                pedidos_fob_red = db.session.query(CarteiraPrincipal.num_pedido).filter(
+                    CarteiraPrincipal.incoterm == rota
+                ).distinct().all()
+                nums_pedidos_fob_red = [p[0] for p in pedidos_fob_red]
+
+                if nums_pedidos_fob_red:
+                    separacoes_base = separacoes_base.filter(
+                        Separacao.num_pedido.in_(nums_pedidos_fob_red)
+                    )
+                else:
+                    # Não há pedidos FOB/RED, retornar vazio
+                    separacoes_base = separacoes_base.filter(False)
+            else:
+                # Para outras rotas (CIF), filtrar normalmente
+                separacoes_base = separacoes_base.filter(CadastroRota.rota == rota)
 
         if sub_rota:
             separacoes_base = separacoes_base.filter(CadastroSubRota.sub_rota == sub_rota)

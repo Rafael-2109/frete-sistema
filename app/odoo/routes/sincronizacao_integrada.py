@@ -15,15 +15,20 @@ from flask import Blueprint, request, jsonify, render_template, flash, redirect,
 from flask_login import login_required
 import logging
 
+from app import db
 from app.odoo.services.sincronizacao_integrada_service import SincronizacaoIntegradaService
+from app.odoo.services.pedido_sync_service import PedidoSyncService
+from app.separacao.models import Separacao
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
 # Blueprint para sincronização integrada
 sync_integrada_bp = Blueprint('sync_integrada', __name__, url_prefix='/odoo/sync-integrada')
 
-# Instância do serviço
+# Instância dos serviços
 sync_service = SincronizacaoIntegradaService()
+pedido_sync_service = PedidoSyncService()
 
 @sync_integrada_bp.route('/')
 @login_required
@@ -33,16 +38,80 @@ def dashboard():
     """
     try:
         logger.info("📊 Carregando dashboard de sincronização integrada...")
-        
+
         # Verificar status atual do sistema
         status = sync_service.verificar_status_sincronizacao()
-        
-        return render_template('odoo/sync_integrada/dashboard.html', status=status)
-        
+
+        return render_template(
+            'odoo/sync_integrada/dashboard.html',
+            status=status
+        )
+
     except Exception as e:
         logger.error(f"❌ Erro no dashboard de sincronização integrada: {e}")
         flash(f"❌ Erro ao carregar dashboard: {str(e)}", 'error')
         return redirect(url_for('carteira.dashboard'))
+
+
+@sync_integrada_bp.route('/pedidos', methods=['GET'])
+@login_required
+def listar_pedidos_para_sincronizar():
+    """
+    Tela de listagem de pedidos com saldo para sincronização individual
+
+    Suporta paginação (sem limites)
+    """
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 50  # Pedidos por página
+
+        logger.info(f"📋 Carregando lista de pedidos para sincronização (página {page})...")
+
+        # Query paginada
+        query = db.session.query(
+            Separacao.num_pedido,
+            Separacao.raz_social_red,
+            Separacao.nome_cidade,
+            Separacao.cod_uf,
+            Separacao.status,
+            func.sum(Separacao.qtd_saldo).label('qtd_total'),
+            func.sum(Separacao.valor_saldo).label('valor_total'),
+            func.count(Separacao.cod_produto).label('total_itens'),
+            func.max(Separacao.expedicao).label('data_expedicao')
+        ).filter(
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
+        ).group_by(
+            Separacao.num_pedido,
+            Separacao.raz_social_red,
+            Separacao.nome_cidade,
+            Separacao.cod_uf,
+            Separacao.status
+        ).order_by(
+            Separacao.num_pedido.desc()
+        )
+
+        # Paginação
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+
+        pedidos = pagination.items
+
+        logger.info(f"✅ {len(pedidos)} pedidos carregados (página {page}/{pagination.pages})")
+
+        return render_template(
+            'odoo/sync_integrada/listar_pedidos.html',
+            pedidos=pedidos,
+            pagination=pagination
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao listar pedidos para sincronizar: {e}")
+        flash(f"❌ Erro ao carregar lista: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.dashboard'))
 
 @sync_integrada_bp.route('/executar', methods=['POST'])
 @login_required
@@ -206,3 +275,56 @@ def widget_sincronizacao():
             'erro': str(e),
             'pode_sincronizar': False
         })
+
+
+@sync_integrada_bp.route('/sincronizar-pedido/<string:num_pedido>', methods=['POST'])
+@login_required
+def sincronizar_pedido_individual(num_pedido):
+    """
+    🔄 SINCRONIZA UM PEDIDO ESPECÍFICO COM O ODOO
+
+    Comportamento:
+    - Se encontrado no Odoo: ATUALIZA
+    - Se NÃO encontrado no Odoo: EXCLUI (incluindo Separacao com sincronizado_nf=False)
+    """
+    try:
+        logger.info(f"🔄 Sincronizando pedido individual: {num_pedido}")
+
+        # Executar sincronização do pedido específico
+        resultado = pedido_sync_service.sincronizar_pedido_especifico(num_pedido)
+
+        # Processar resultado e mostrar feedback
+        if resultado.get('sucesso'):
+            acao = resultado.get('acao')
+            mensagem = resultado.get('mensagem')
+            tempo = resultado.get('tempo_execucao', 0)
+
+            if acao == 'ATUALIZADO':
+                flash(f"✅ {mensagem} ({tempo:.2f}s)", 'success')
+
+                # Mostrar detalhes se houver
+                detalhes = resultado.get('detalhes', {})
+                if detalhes.get('itens_processados'):
+                    flash(f"📦 {detalhes['itens_processados']} itens processados", 'info')
+
+                alteracoes = detalhes.get('alteracoes', [])
+                if alteracoes:
+                    flash(f"🔄 {len(alteracoes)} alterações aplicadas", 'info')
+
+            elif acao == 'EXCLUIDO':
+                flash(f"🗑️ {mensagem} ({tempo:.2f}s)", 'warning')
+                flash(f"✅ Todas as Separacao (sincronizado_nf=False) foram excluídas", 'info')
+
+            else:
+                flash(f"ℹ️ {mensagem}", 'info')
+
+        else:
+            erro = resultado.get('mensagem', 'Erro desconhecido')
+            flash(f"❌ Erro ao sincronizar pedido: {erro}", 'error')
+
+        return redirect(url_for('sync_integrada.dashboard'))
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao sincronizar pedido {num_pedido}: {e}")
+        flash(f"❌ Erro ao sincronizar pedido: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.dashboard'))

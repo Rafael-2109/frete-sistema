@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Sincronizar Pedidos Individuais{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-sync-alt"></i> Sincronizar Pedidos Individuais
+                        </h4>
+                        <div>
+                            <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-light btn-sm">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Explicação -->
+                    <div class="alert alert-info">
+                        <strong><i class="fas fa-info-circle"></i> Como funciona:</strong><br>
+                        • <strong>Se encontrado no Odoo</strong>: Atualiza quantidades e dados<br>
+                        • <strong>Se NÃO encontrado</strong>: Exclui completamente (incluindo Separacao com sincronizado_nf=False)<br>
+                        ⚠️ <strong>Ação irreversível</strong> quando pedido é excluído
+                    </div>
+
+                    <!-- Estatísticas -->
+                    {% if pagination %}
+                    <div class="alert alert-secondary mb-3">
+                        <i class="fas fa-chart-bar"></i>
+                        <strong>Total de pedidos:</strong> {{ pagination.total }} |
+                        <strong>Página:</strong> {{ pagination.page }} de {{ pagination.pages }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Tabela de pedidos -->
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Cidade/UF</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Qtd Total</th>
+                                    <th class="text-end">Valor</th>
+                                    <th class="text-center">Itens</th>
+                                    <th>Expedição</th>
+                                    <th class="text-center">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if pedidos %}
+                                    {% for pedido in pedidos %}
+                                    <tr>
+                                        <td><strong>{{ pedido.num_pedido }}</strong></td>
+                                        <td>{{ pedido.raz_social_red|truncate(30) }}</td>
+                                        <td>{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if pedido.status == 'COTADO' %}warning{% elif pedido.status == 'ABERTO' %}success{% elif pedido.status == 'PREVISAO' %}secondary{% else %}info{% endif %}">
+                                                {{ pedido.status }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end">{{ "%.2f"|format(pedido.qtd_total or 0) }}</td>
+                                        <td class="text-end">R$ {{ "{:,.2f}".format(pedido.valor_total or 0) }}</td>
+                                        <td class="text-center">{{ pedido.total_itens }}</td>
+                                        <td>{{ pedido.data_expedicao.strftime('%d/%m/%Y') if pedido.data_expedicao else '-' }}</td>
+                                        <td class="text-center">
+                                            <form method="POST" action="{{ url_for('sync_integrada.sincronizar_pedido_individual', num_pedido=pedido.num_pedido) }}"
+                                                  onsubmit="return confirmarSincPedido('{{ pedido.num_pedido }}');" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm btn-primary" title="Sincronizar com Odoo">
+                                                    <i class="fas fa-sync-alt"></i> Sincronizar
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted py-5">
+                                            <i class="fas fa-inbox fa-3x mb-3"></i><br>
+                                            <h5>Nenhum pedido com saldo encontrado</h5>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginação -->
+                    {% if pagination and pagination.pages > 1 %}
+                    <nav aria-label="Paginação de pedidos">
+                        <ul class="pagination justify-content-center">
+                            <!-- Primeira página -->
+                            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=1) }}">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+
+                            <!-- Página anterior -->
+                            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.prev_num) if pagination.has_prev else '#' }}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+
+                            <!-- Páginas numeradas -->
+                            {% for page_num in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=page_num) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <!-- Próxima página -->
+                            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.next_num) if pagination.has_next else '#' }}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+
+                            <!-- Última página -->
+                            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.pages) }}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+    function confirmarSincPedido(numPedido) {
+        const confirmMsg = `🔄 SINCRONIZAR PEDIDO: ${numPedido}
+
+📋 O QUE VAI ACONTECER:
+
+✅ SE ENCONTRADO NO ODOO:
+   • Atualiza quantidades e dados
+   • Mantém separações existentes
+   • Aplica alterações conforme Odoo
+
+❌ SE NÃO ENCONTRADO NO ODOO:
+   • Exclui pedido completamente
+   • Remove TODAS as Separacao (sincronizado_nf=False)
+   • Cancela EmbarqueItems relacionados
+
+⚠️ Esta ação é IRREVERSÍVEL se o pedido for excluído.
+
+Deseja continuar?`;
+
+        return confirm(confirmMsg);
+    }
+</script>
+
+{% endblock %}
