@@ -1916,9 +1916,12 @@
 
             if (novaLinha) {
                 // Inserir após a linha do pedido correspondente
-                const pedidoRow = Array.from(document.querySelectorAll(`tr[data-num-pedido="${sep.num_pedido}"]`))
-                    .filter(row => row.id.startsWith('row-'))  // Apenas linhas de pedido, não separação
-                    .pop(); // Última linha do pedido
+                const todasLinhasPedido = Array.from(document.querySelectorAll(`tr[data-num-pedido="${sep.num_pedido}"]`))
+                    .filter(row => row.id.startsWith('row-') && row.dataset.tipo === 'pedido');  // Apenas PEDIDOS
+
+                // Buscar última linha do produto específico
+                const linhasProduto = todasLinhasPedido.filter(row => row.dataset.codProduto === sep.cod_produto);
+                const pedidoRow = linhasProduto.length > 0 ? linhasProduto[linhasProduto.length - 1] : todasLinhasPedido[todasLinhasPedido.length - 1];
 
                 if (pedidoRow) {
                     pedidoRow.after(novaLinha);
