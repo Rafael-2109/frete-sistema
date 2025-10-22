@@ -6,8 +6,10 @@
   "server": {
     "url": "https://sistema-fretes.onrender.com",
     "cleartext": false,
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "hostname": "sistema-fretes.onrender.com"
   },
+  "initialRoute": "/rastreamento/app",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 2000,
