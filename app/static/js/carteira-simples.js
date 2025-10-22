@@ -1471,7 +1471,7 @@
                 // Verificar se pedido ficou com saldo=0 e ocultar
                 verificarVisibilidadeLinhas(item.cod_produto, item.num_pedido);
 
-                // ✅ CORREÇÃO: Recalcular estoques localmente (SEM RELOAD)
+                // ✅ RECALCULAR ESTOQUES localmente (SEM backend)
                 recalcularTodasLinhasProduto(item.cod_produto);
 
                 console.log(`✅ Separação deletada e estoques recalculados (sem reload)`);
@@ -1505,8 +1505,7 @@
             // 🆕 VERIFICAR VISIBILIDADE (ocultar Pedido se saldo=0, reexibir se saldo>0)
             verificarVisibilidadeLinhas(item.cod_produto, item.num_pedido);
 
-            // ✅ CORREÇÃO DEFINITIVA: Recalcular estoques localmente (SEM RELOAD)
-            // coletarSaidasAdicionais() agora lê separações de state.dados
+            // ✅ RECALCULAR ESTOQUES localmente (SEM backend)
             recalcularTodasLinhasProduto(item.cod_produto);
 
             console.log(`✅ Quantidade da separação ${separacaoId} atualizada para ${novaQtd} (sem reload)`);
@@ -1898,7 +1897,7 @@
                     }
                 });
 
-                // Recalcular estoques dos produtos afetados
+                // ✅ RECALCULAR ESTOQUES dos produtos afetados
                 if (resultado.produtos_afetados && resultado.produtos_afetados.length > 0) {
                     resultado.produtos_afetados.forEach(codProduto => {
                         recalcularTodasLinhasProduto(codProduto);
@@ -2282,9 +2281,8 @@
             let qtd = 0;
             let data = null;
 
-            // ✅ CORREÇÃO DEFINITIVA: Incluir separações de state.dados (sincronizado localmente)
+            // ✅ Coletar separações de state.dados (sempre atualizadas localmente)
             if (item.tipo === 'separacao') {
-                // Ler separações diretamente de state.dados (atualizado localmente sem reload)
                 qtd = parseFloat(item.qtd_saldo) || 0;
                 data = item.expedicao;
             } else {

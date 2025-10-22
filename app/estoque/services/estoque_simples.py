@@ -51,6 +51,22 @@ class ServicoEstoqueSimples:
         _cache_data[chave] = valor
 
     @staticmethod
+    def _invalidar_cache_produto(cod_produto: str):
+        """Invalida TODOS os caches de um produto específico"""
+        chaves_para_remover = []
+        for chave in _cache_ttl.keys():
+            if chave.startswith(f"projecao_{cod_produto}_"):
+                chaves_para_remover.append(chave)
+
+        for chave in chaves_para_remover:
+            del _cache_ttl[chave]
+            if chave in _cache_data:
+                del _cache_data[chave]
+
+        if chaves_para_remover:
+            logger.info(f"🗑️ Cache invalidado para produto {cod_produto}: {len(chaves_para_remover)} entrada(s)")
+
+    @staticmethod
     def calcular_estoque_atual(cod_produto: str) -> float:
         """
         Calcula estoque atual baseado em MovimentacaoEstoque.
@@ -154,20 +170,25 @@ class ServicoEstoqueSimples:
     
     @staticmethod
     def calcular_entradas_previstas(
-        cod_produto: str, 
-        data_inicio: date, 
-        data_fim: date
+        cod_produto: str,
+        data_inicio: date,
+        data_fim: date,
+        entrada_em_d_plus_1: bool = False
     ) -> Dict[date, float]:
         """
         Calcula entradas previstas por dia baseado em ProgramacaoProducao.
         Retorna dicionário {data: quantidade}.
-        
+
+        Args:
+            entrada_em_d_plus_1: Se True, programação entra no estoque em D+1 (dia seguinte à data_programacao)
+                                Se False (default), entra em D+0 (mesma data)
+
         Performance esperada: < 20ms
         """
         try:
             # Obter códigos unificados
             codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
-            
+
             # Query otimizada com GROUP BY
             resultados = db.session.query(
                 func.date(ProgramacaoProducao.data_programacao).label('data'),
@@ -179,47 +200,57 @@ class ServicoEstoqueSimples:
             ).group_by(
                 func.date(ProgramacaoProducao.data_programacao)
             ).all()
-            
+
             # Converter para dicionário
             entradas = {}
             for resultado in resultados:
                 if resultado.data and resultado.quantidade:
-                    entradas[resultado.data] = float(resultado.quantidade)
-            
+                    # ✅ APLICAR D+1 SE SOLICITADO
+                    if entrada_em_d_plus_1:
+                        data_entrada = resultado.data + timedelta(days=1)
+                    else:
+                        data_entrada = resultado.data
+
+                    entradas[data_entrada] = float(resultado.quantidade)
+
             return entradas
-            
+
         except Exception as e:
             logger.error(f"Erro ao calcular entradas previstas para {cod_produto}: {e}")
             return {}
     
     @staticmethod
-    def calcular_projecao(cod_produto: str, dias: int = 28) -> Dict[str, Any]:
+    def calcular_projecao(cod_produto: str, dias: int = 28, entrada_em_d_plus_1: bool = False) -> Dict[str, Any]:
         """
         Calcula projeção completa de estoque para N dias.
         Combina estoque atual + entradas - saídas dia a dia.
+
+        Args:
+            entrada_em_d_plus_1: Se True, programação entra no estoque em D+1 (apenas Carteira Simples)
 
         🚀 OTIMIZAÇÃO: Cache de 30s para reduzir queries repetidas
         Performance esperada: < 50ms total (3 queries) ou < 1ms (cache hit)
         """
         try:
-            # 🚀 OTIMIZAÇÃO: Verificar cache primeiro
-            chave_cache = f"projecao_{cod_produto}_{dias}"
+            # 🚀 OTIMIZAÇÃO: Verificar cache primeiro (incluir entrada_em_d_plus_1 na chave)
+            chave_cache = f"projecao_{cod_produto}_{dias}_d1_{entrada_em_d_plus_1}"
             cached = ServicoEstoqueSimples._get_cache(chave_cache, ttl_seconds=30)
             if cached is not None:
-                logger.debug(f"✅ Cache HIT para {cod_produto} (projeção {dias} dias)")
+                logger.debug(f"✅ Cache HIT para {cod_produto} (projeção {dias} dias, D+1={entrada_em_d_plus_1})")
                 return cached
             hoje = date.today()
             data_fim = hoje + timedelta(days=dias)
-            
+
             # 1. Estoque atual (1 query)
             estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
-            
+
             # 2. Movimentações futuras (2 queries)
             saidas = ServicoEstoqueSimples.calcular_saidas_previstas(
                 cod_produto, hoje, data_fim
             )
             entradas = ServicoEstoqueSimples.calcular_entradas_previstas(
-                cod_produto, hoje, data_fim
+                cod_produto, hoje, data_fim,
+                entrada_em_d_plus_1=entrada_em_d_plus_1  # ✅ PROPAGAR PARÂMETRO
             )
             
             # 3. Montar projeção dia a dia (em memória, sem query)
@@ -301,34 +332,40 @@ class ServicoEstoqueSimples:
     
     @staticmethod
     def calcular_multiplos_produtos(
-        cod_produtos: List[str], 
-        dias: int = 7
+        cod_produtos: List[str],
+        dias: int = 7,
+        entrada_em_d_plus_1: bool = False
     ) -> Dict[str, Dict[str, Any]]:
         """
         Calcula projeção para múltiplos produtos em paralelo.
         Otimizado para workspace e dashboards.
-        
+
+        Args:
+            entrada_em_d_plus_1: Se True, programação entra no estoque em D+1 (apenas Carteira Simples)
+
         Performance esperada: < 200ms para 10 produtos
         """
         resultados = {}
-        
+
         # Verificar se temos contexto Flask ativo
         try:
             # Se temos contexto, capturar para usar nas threads
             app = current_app._get_current_object()
-            
-            def calcular_com_contexto(cod_produto, dias):
+
+            def calcular_com_contexto(cod_produto, dias, entrada_em_d_plus_1):
                 """Executa cálculo com contexto Flask"""
                 with app.app_context():
-                    return ServicoEstoqueSimples.calcular_projecao(cod_produto, dias)
+                    return ServicoEstoqueSimples.calcular_projecao(
+                        cod_produto, dias, entrada_em_d_plus_1=entrada_em_d_plus_1
+                    )
             
             # Usar ThreadPoolExecutor para paralelizar
             with ThreadPoolExecutor(max_workers=min(len(cod_produtos), 10)) as executor:
                 futures = {
-                    cod: executor.submit(calcular_com_contexto, cod, dias)
+                    cod: executor.submit(calcular_com_contexto, cod, dias, entrada_em_d_plus_1)
                     for cod in cod_produtos
                 }
-                
+
                 for cod, future in futures.items():
                     try:
                         resultados[cod] = future.result(timeout=1)  # Timeout de 1s por produto
@@ -345,7 +382,9 @@ class ServicoEstoqueSimples:
             logger.warning("Executando cálculos sequencialmente (sem contexto Flask)")
             for cod in cod_produtos:
                 try:
-                    resultados[cod] = ServicoEstoqueSimples.calcular_projecao(cod, dias)
+                    resultados[cod] = ServicoEstoqueSimples.calcular_projecao(
+                        cod, dias, entrada_em_d_plus_1=entrada_em_d_plus_1
+                    )
                 except Exception as e:
                     logger.error(f"Erro ao calcular estoque para {cod}: {e}")
                     resultados[cod] = {

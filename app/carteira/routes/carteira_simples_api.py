@@ -273,9 +273,11 @@ def obter_dados():
                 # Pular para próxima etapa
             else:
                 # calcular_multiplos_produtos retorna {cod_produto: {...}}
+                # ✅ USAR entrada_em_d_plus_1=True APENAS NA CARTEIRA SIMPLES
                 resultados_batch = ServicoEstoqueSimples.calcular_multiplos_produtos(
                     codigos_produtos,
-                    dias=28
+                    dias=28,
+                    entrada_em_d_plus_1=True  # Programação entra em D+1 (apenas aqui!)
                 )
 
                 # Mapear resultados para formato esperado
@@ -682,8 +684,12 @@ def obter_estoque_projetado():
         menor_estoque = estoque_atual
 
         # Obter saídas e entradas previstas
+        # ✅ USAR entrada_em_d_plus_1=True NA CARTEIRA SIMPLES
         saidas = ServicoEstoqueSimples.calcular_saidas_previstas(cod_produto, hoje, data_fim)
-        entradas = ServicoEstoqueSimples.calcular_entradas_previstas(cod_produto, hoje, data_fim)
+        entradas = ServicoEstoqueSimples.calcular_entradas_previstas(
+            cod_produto, hoje, data_fim,
+            entrada_em_d_plus_1=True  # Programação entra em D+1 (apenas Carteira Simples)
+        )
 
         for i in range(dias + 1):
             dia = data_inicio + timedelta(days=i)
@@ -1022,6 +1028,7 @@ def atualizar_qtd_separacao():
             logger.info(f"🗑️ Deletando separação ID={separacao_id} (qtd=0)")
 
             # Guardar dados antes de deletar (para retornar ao frontend)
+            cod_produto_deletado = separacao.cod_produto
             separacao_deletada = {
                 'id': separacao.id,
                 'num_pedido': separacao.num_pedido,
@@ -1238,6 +1245,7 @@ def atualizar_separacao_lote():
                 setattr(sep, campo, valor)
 
         db.session.commit()
+        db.session.expire_all()  # ✅ INVALIDAR Identity Map (cache da sessão)
 
         # 🆕 RECALCULAR ESTOQUE PROJETADO (apenas se alterou expedicao)
         estoque_atualizado = {}
@@ -1248,13 +1256,14 @@ def atualizar_separacao_lote():
             # Calcular novo estoque projetado
             for cod_produto in codigos_afetados:
                 try:
-                    estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
-                    projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+                    projecao = ServicoEstoqueSimples.calcular_projecao(
+                        cod_produto, 28, entrada_em_d_plus_1=True  # ✅ D+1 na Carteira Simples
+                    )
 
                     estoque_atualizado[cod_produto] = {
-                        'estoque_atual': estoque_atual,
+                        'estoque_atual': projecao.get('estoque_atual', 0),
                         'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                        'projecoes': projecao.get('projecao', [])[:28]
+                        'projecoes': projecao.get('projecao', [])
                     }
                 except Exception as e:
                     logger.error(f"Erro ao recalcular estoque de {cod_produto}: {e}")
