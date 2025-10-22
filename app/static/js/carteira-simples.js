@@ -87,6 +87,18 @@
                 }
             });
         }
+
+        // 🆕 FUNCIONALIDADE 3: Checkboxes Sep./Pdd.
+        const checkboxSep = document.getElementById('filtro-tipo-sep');
+        const checkboxPdd = document.getElementById('filtro-tipo-pdd');
+
+        if (checkboxSep) {
+            checkboxSep.addEventListener('change', aplicarFiltroTipo);
+        }
+
+        if (checkboxPdd) {
+            checkboxPdd.addEventListener('change', aplicarFiltroTipo);
+        }
     }
 
     // ==============================================
@@ -654,6 +666,7 @@
                 class="${classesCor}"
                 data-tipo="separacao"
                 data-separacao-id="${item.separacao_id}"
+                data-separacao-lote-id="${item.separacao_lote_id || ''}"
                 data-num-pedido="${item.num_pedido}"
                 data-cod-produto="${item.cod_produto}"
                 data-palletizacao="${item.palletizacao}"
@@ -678,7 +691,12 @@
                         ${municipioTrunc}
                     </span>
                 </td>
-                <td>${item.cod_produto}</td>
+                <td>
+                    <span class="cod-produto-clicavel" data-cod-produto="${item.cod_produto}"
+                          style="cursor: pointer;">
+                        ${item.cod_produto}
+                    </span>
+                </td>
                 <td>
                     <span class="truncate-tooltip" title="${item.nome_produto || ''}">
                         ${nomeProdutoTrunc}
@@ -752,11 +770,13 @@
                 <td>
                     <input type="date" class="form-control form-control-sm dt-agendamento"
                         id="${dtAgendId}"
+                        data-row-index="${index}"
                         value="${item.agendamento || ''}">
                 </td>
 
                 <td>
                     <input type="text" class="form-control form-control-sm protocolo"
+                        data-row-index="${index}"
                         id="${protocoloId}"
                         maxlength="50"
                         value="${item.protocolo || ''}">
@@ -800,6 +820,7 @@
 
         return `
             <tr id="${rowId}"
+                data-tipo="pedido"
                 data-num-pedido="${item.num_pedido}"
                 data-cod-produto="${item.cod_produto}"
                 data-palletizacao="${item.palletizacao}"
@@ -824,7 +845,12 @@
                         ${municipioTrunc}
                     </span>
                 </td>
-                <td>${item.cod_produto}</td>
+                <td>
+                    <span class="cod-produto-clicavel" data-cod-produto="${item.cod_produto}"
+                          style="cursor: pointer;">
+                        ${item.cod_produto}
+                    </span>
+                </td>
                 <td>
                     <span class="truncate-tooltip" title="${item.nome_produto || ''}">
                         ${nomeProdutoTrunc}
@@ -897,11 +923,13 @@
                 <td>
                     <input type="date" class="form-control form-control-sm dt-agendamento"
                         id="${dtAgendId}"
+                        data-row-index="${index}"
                         value="${item.agendamento || ''}">
                 </td>
 
                 <td>
                     <input type="text" class="form-control form-control-sm protocolo"
+                        data-row-index="${index}"
                         id="${protocoloId}"
                         maxlength="50"
                         value="${item.protocolo || ''}">
@@ -994,32 +1022,37 @@
      * Atualiza o Painel Flutuante com os totais em tempo real
      */
     function atualizarPainelFlutuante() {
-        const totaisPorPedido = calcularTotaisSeparacao();
-        const pedidos = Object.values(totaisPorPedido);
+        try {
+            const totaisPorPedido = calcularTotaisSeparacao();
+            const pedidos = Object.values(totaisPorPedido);
 
-        // Calcular totais gerais (soma de todos os pedidos)
-        const totaisGerais = pedidos.reduce((acc, p) => {
-            acc.qtdItens += p.qtdItens;
-            acc.valorTotal += p.valorTotal;
-            acc.pesoTotal += p.pesoTotal;
-            acc.palletTotal += p.palletTotal;
-            return acc;
-        }, { qtdItens: 0, valorTotal: 0, pesoTotal: 0, palletTotal: 0 });
+            // Calcular totais gerais (soma de todos os pedidos)
+            const totaisGerais = pedidos.reduce((acc, p) => {
+                acc.qtdItens += p.qtdItens;
+                acc.valorTotal += p.valorTotal;
+                acc.pesoTotal += p.pesoTotal;
+                acc.palletTotal += p.palletTotal;
+                return acc;
+            }, { qtdItens: 0, valorTotal: 0, pesoTotal: 0, palletTotal: 0 });
 
-        // Elementos do painel
-        const painel = document.getElementById('painel-resumo-separacao');
-        const conteudo = document.getElementById('painel-resumo-conteudo');
+            // Elementos do painel
+            const painel = document.getElementById('painel-resumo-separacao');
+            const conteudo = document.getElementById('painel-resumo-conteudo');
 
-        if (!painel || !conteudo) return;
+            // ✅ PROTEÇÃO: Se elementos não existem, sair silenciosamente
+            if (!painel || !conteudo) {
+                console.warn('⚠️ Elementos do painel flutuante não encontrados no DOM');
+                return;
+            }
 
-        // Se não há itens selecionados, ocultar painel
-        if (totaisGerais.qtdItens === 0) {
-            painel.style.display = 'none';
-            return;
-        }
+            // Se não há itens selecionados, ocultar painel
+            if (totaisGerais.qtdItens === 0) {
+                painel.style.display = 'none';
+                return;
+            }
 
-        // Exibir painel
-        painel.style.display = 'block';
+            // Exibir painel
+            painel.style.display = 'block';
 
         // Renderizar conteúdo
         let html = '';
@@ -1070,7 +1103,11 @@
             </div>
         `;
 
-        conteudo.innerHTML = html;
+            conteudo.innerHTML = html;
+
+        } catch (erro) {
+            console.error('Erro ao atualizar painel flutuante:', erro);
+        }
     }
 
     /**
@@ -1128,6 +1165,28 @@
     function handleTableClick(e) {
         const target = e.target;
 
+        // 🆕 FUNCIONALIDADE 2: Clique em código de produto → Rastrear produto (PRIORIDADE MÁXIMA)
+        if (target.classList.contains('cod-produto-clicavel')) {
+            const codProduto = target.dataset.codProduto;
+            if (codProduto) {
+                rastrearProduto(codProduto);
+                return;
+            }
+        }
+
+        // 🆕 FUNCIONALIDADE 1: Clique em linha de separação → Exibir toast de totais
+        // APENAS se NÃO clicou em input, button, a OU código do produto
+        if (target.closest('tr')?.dataset.tipo === 'separacao' &&
+            !target.closest('input, button, a') &&
+            !target.classList.contains('cod-produto-clicavel')) {
+            const row = target.closest('tr');
+            const separacaoLoteId = row.dataset.separacaoLoteId;
+            if (separacaoLoteId) {
+                mostrarToastTotaisSeparacao(separacaoLoteId);
+                return;
+            }
+        }
+
         // Botão OK
         if (target.classList.contains('btn-ok')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
@@ -1184,7 +1243,7 @@
 
             // Se mudou data de uma separação com lote, atualizar todo o lote NO BACKEND
             if (isSeparacao && separacaoLoteId) {
-                await atualizarDataSeparacaoLote(separacaoLoteId, novoValor);
+                await atualizarCampoSeparacaoLote(separacaoLoteId, 'expedicao', novoValor);
             }
             // ✅ REMOVIDO: Não atualizar CarteiraPrincipal - edição é apenas local até clicar "OK"
             // Quando clicar "OK", a data será copiada para a Separacao criada
@@ -1194,6 +1253,21 @@
 
             // 🆕 ATUALIZAR RESUMO DA SEPARAÇÃO EM TEMPO REAL
             atualizarResumoSeparacao();
+        }
+
+        // ✅ NOVO: Mudança na data de agendamento
+        if (target.classList.contains('dt-agendamento')) {
+            const rowIndex = parseInt(target.dataset.rowIndex);
+            const item = state.dados[rowIndex];
+            const novoValor = target.value;
+
+            // Apenas separações devem atualizar backend
+            const isSeparacao = item.tipo === 'separacao';
+            const separacaoLoteId = item.separacao_lote_id;
+
+            if (isSeparacao && separacaoLoteId) {
+                await atualizarCampoSeparacaoLote(separacaoLoteId, 'agendamento', novoValor);
+            }
         }
     }
 
@@ -1226,6 +1300,25 @@
             target.debounceTimer = setTimeout(() => {
                 atualizarQtdSeparacao(separacaoId, novaQtd, rowIndex);
             }, 500); // 500ms de delay
+        }
+
+        // ✅ NOVO: Mudança no protocolo de SEPARAÇÃO
+        if (target.classList.contains('protocolo')) {
+            const rowIndex = parseInt(target.dataset.rowIndex);
+            const item = state.dados[rowIndex];
+            const novoValor = target.value.trim();
+
+            // Apenas separações devem atualizar backend
+            const isSeparacao = item.tipo === 'separacao';
+            const separacaoLoteId = item.separacao_lote_id;
+
+            if (isSeparacao && separacaoLoteId) {
+                // Debounce para evitar múltiplas chamadas
+                clearTimeout(target.debounceTimer);
+                target.debounceTimer = setTimeout(() => {
+                    atualizarCampoSeparacaoLote(separacaoLoteId, 'protocolo', novoValor);
+                }, 800); // 800ms de delay (maior que qtd porque é texto)
+            }
         }
     }
 
@@ -1378,10 +1471,10 @@
                 // Verificar se pedido ficou com saldo=0 e ocultar
                 verificarVisibilidadeLinhas(item.cod_produto, item.num_pedido);
 
-                // Recarregar dados do backend para atualizar estoques D0-D28
-                carregarDados();
+                // ✅ CORREÇÃO: Recalcular estoques localmente (SEM RELOAD)
+                recalcularTodasLinhasProduto(item.cod_produto);
 
-                console.log(`✅ Separação deletada e dados recarregados`);
+                console.log(`✅ Separação deletada e estoques recalculados (sem reload)`);
                 return; // Sair da função
             }
 
@@ -1412,11 +1505,11 @@
             // 🆕 VERIFICAR VISIBILIDADE (ocultar Pedido se saldo=0, reexibir se saldo>0)
             verificarVisibilidadeLinhas(item.cod_produto, item.num_pedido);
 
-            // 🔧 CORREÇÃO: Recarregar dados do backend para atualizar saidas_previstas
-            // Isso garante que ESTOQUE D0-D28 seja recalculado com as novas separações
-            carregarDados();
+            // ✅ CORREÇÃO DEFINITIVA: Recalcular estoques localmente (SEM RELOAD)
+            // coletarSaidasAdicionais() agora lê separações de state.dados
+            recalcularTodasLinhasProduto(item.cod_produto);
 
-            console.log(`✅ Quantidade da separação ${separacaoId} atualizada para ${novaQtd}`);
+            console.log(`✅ Quantidade da separação ${separacaoId} atualizada para ${novaQtd} (sem reload)`);
 
         } catch (erro) {
             console.error('Erro ao atualizar quantidade separação:', erro);
@@ -1467,6 +1560,9 @@
 
         // Recalcular estoques de TODAS as linhas do mesmo produto
         recalcularTodasLinhasProduto(item.cod_produto);
+
+        // ✅ CORREÇÃO: Atualizar painel flutuante
+        atualizarResumoSeparacao();
     }
 
     function adicionarTodosProdutos(rowIndex) {
@@ -1493,6 +1589,9 @@
             recalcularTodasLinhasProduto(codProduto);
         });
 
+        // ✅ CORREÇÃO: Atualizar painel flutuante
+        atualizarResumoSeparacao();
+
         mostrarMensagem('Sucesso', `Todas as quantidades do pedido ${numPedido} foram adicionadas`, 'success');
     }
 
@@ -1518,7 +1617,7 @@
 
         // Se for separação, atualizar TODOS os produtos do mesmo lote NO BACKEND
         if (item.tipo === 'separacao' && item.separacao_lote_id) {
-            await atualizarDataSeparacaoLote(item.separacao_lote_id, novaData);
+            await atualizarCampoSeparacaoLote(item.separacao_lote_id, 'expedicao', novaData);
         }
         // ✅ REMOVIDO: Não atualizar CarteiraPrincipal quando tipo === 'pedido'
         // A data editada será usada apenas ao clicar "OK" para gerar separação
@@ -1527,25 +1626,28 @@
         recalcularTodasLinhasProduto(item.cod_produto);
     }
 
-    // 🆕 FUNÇÃO PARA ATUALIZAR DATA DE TODOS OS PRODUTOS DE UM LOTE DE SEPARAÇÃO
-    async function atualizarDataSeparacaoLote(separacaoLoteId, novaData) {
+    // ✅ FUNÇÃO GENÉRICA PARA ATUALIZAR QUALQUER CAMPO DE UM LOTE DE SEPARAÇÃO
+    async function atualizarCampoSeparacaoLote(separacaoLoteId, campo, valor) {
         try {
-            // 🔴 CHAMAR BACKEND PARA ATUALIZAR BANCO DE DADOS E RECALCULAR ESTOQUE
+            // Preparar payload baseado no campo
+            const payload = {
+                separacao_lote_id: separacaoLoteId
+            };
+            payload[campo] = valor;
+
+            // CHAMAR BACKEND PARA ATUALIZAR BANCO DE DADOS
             const response = await fetch('/carteira/simples/api/atualizar-separacao-lote', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    separacao_lote_id: separacaoLoteId,
-                    expedicao: novaData
-                })
+                body: JSON.stringify(payload)
             });
 
             const resultado = await response.json();
 
             if (!resultado.success) {
-                throw new Error(resultado.error || 'Erro ao atualizar data do lote');
+                throw new Error(resultado.error || `Erro ao atualizar ${campo} do lote`);
             }
 
             console.log(`✅ Backend: ${resultado.message}`);
@@ -1555,17 +1657,25 @@
 
             state.dados.forEach((d, idx) => {
                 if (d.tipo === 'separacao' && d.separacao_lote_id === separacaoLoteId) {
-                    // Atualizar input de data
-                    const inputDataId = `dt-exped-sep-${idx}`;
-                    const inputData = document.getElementById(inputDataId);
-                    if (inputData) {
-                        inputData.value = novaData;
+                    // Atualizar input no DOM baseado no campo
+                    let inputId = '';
+                    if (campo === 'expedicao') {
+                        inputId = `dt-exped-sep-${idx}`;
+                    } else if (campo === 'agendamento') {
+                        inputId = `dt-agend-sep-${idx}`;
+                    } else if (campo === 'protocolo') {
+                        inputId = `protocolo-sep-${idx}`;
                     }
 
-                    // Atualizar estado
-                    d.expedicao = novaData;
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        input.value = valor;
+                    }
 
-                    // 🆕 Atualizar estoque se veio do backend
+                    // Atualizar estado local
+                    d[campo] = valor;
+
+                    // Atualizar estoque se veio do backend (apenas para datas)
                     if (resultado.estoque_atualizado && resultado.estoque_atualizado[d.cod_produto]) {
                         const estoqueNovo = resultado.estoque_atualizado[d.cod_produto];
                         d.estoque_atual = estoqueNovo.estoque_atual;
@@ -1593,53 +1703,60 @@
 
     async function confirmarAgendamento(rowIndex) {
         const item = state.dados[rowIndex];
-        const protocolo = document.getElementById(`protocolo-${rowIndex}`).value.trim();
 
-        if (!protocolo) {
-            mostrarMensagem('Atenção', 'Protocolo é obrigatório para confirmação', 'warning');
-            return;
+        // ✅ ALTERNAR estado atual (True <-> False)
+        const estadoAtual = item.agendamento_confirmado || false;
+        const novoEstado = !estadoAtual;
+
+        // Se está confirmando (False -> True), protocolo é obrigatório
+        if (novoEstado && !item.protocolo) {
+            const protocoloInput = document.getElementById(`protocolo-${rowIndex}`) ||
+                                   document.getElementById(`protocolo-sep-${rowIndex}`);
+            const protocolo = protocoloInput ? protocoloInput.value.trim() : '';
+
+            if (!protocolo) {
+                mostrarMensagem('Atenção', 'Protocolo é obrigatório para confirmação', 'warning');
+                return;
+            }
         }
 
         try {
-            mostrarLoading(true);
+            // ✅ CORREÇÃO: Apenas separações devem atualizar backend
+            const isSeparacao = item.tipo === 'separacao';
+            const separacaoLoteId = item.separacao_lote_id;
 
-            const response = await fetch('/carteira/simples/api/confirmar-agendamento', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    num_pedido: item.num_pedido,
-                    cod_produto: item.cod_produto,
-                    protocolo: protocolo
-                })
-            });
-
-            const resultado = await response.json();
-
-            if (!resultado.success) {
-                throw new Error(resultado.error || 'Erro ao confirmar agendamento');
+            if (isSeparacao && separacaoLoteId) {
+                // Atualizar via API de lote
+                await atualizarCampoSeparacaoLote(separacaoLoteId, 'agendamento_confirmado', novoEstado);
             }
 
-            mostrarMensagem('Sucesso', resultado.message, 'success');
+            // ✅ Atualizar estado local
+            state.dados[rowIndex].agendamento_confirmado = novoEstado;
 
-            // Atualizar estado e UI do botão
-            state.dados[rowIndex].agendamento_confirmado = true;
-
+            // ✅ Atualizar UI do botão
             const btnConfirmar = document.querySelector(`button.btn-confirmar[data-row-index="${rowIndex}"]`);
             if (btnConfirmar) {
-                btnConfirmar.disabled = true;
-                btnConfirmar.title = 'Já confirmado';
-                btnConfirmar.classList.remove('btn-primary');
-                btnConfirmar.classList.add('btn-success');
-                btnConfirmar.textContent = '✓';
+                if (novoEstado) {
+                    // Confirmado
+                    btnConfirmar.classList.remove('btn-primary');
+                    btnConfirmar.classList.add('btn-success');
+                    btnConfirmar.textContent = '✓';
+                    btnConfirmar.title = 'Clique para desconfirmar';
+                } else {
+                    // Não confirmado
+                    btnConfirmar.classList.remove('btn-success');
+                    btnConfirmar.classList.add('btn-primary');
+                    btnConfirmar.textContent = '⏱';
+                    btnConfirmar.title = 'Confirmar agendamento';
+                }
             }
 
+            const mensagem = novoEstado ? 'Agendamento confirmado' : 'Confirmação removida';
+            mostrarMensagem('Sucesso', mensagem, 'success');
+
         } catch (erro) {
-            console.error('Erro ao confirmar agendamento:', erro);
+            console.error('Erro ao alternar confirmação de agendamento:', erro);
             mostrarMensagem('Erro', erro.message, 'danger');
-        } finally {
-            mostrarLoading(false);
         }
     }
 
@@ -1759,8 +1876,45 @@
                 `Separação gerada com sucesso!<br>Lote: ${resultado.separacao_lote_id}<br>Produtos: ${resultado.qtd_itens}`,
                 'success');
 
-            // Recarregar dados
-            carregarDados();
+            // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
+            if (resultado.separacoes && resultado.separacoes.length > 0) {
+                // Adicionar separações em state.dados
+                resultado.separacoes.forEach(sep => {
+                    state.dados.push(sep);
+                });
+
+                // Atualizar qtd_saldo dos pedidos correspondentes
+                resultado.separacoes.forEach(sep => {
+                    atualizarQtdPedidoAposEdicaoSeparacao(sep.num_pedido, sep.cod_produto);
+                });
+
+                // Zerar campos editáveis dos pedidos
+                state.dados.forEach((item, index) => {
+                    if (item.tipo === 'pedido' && item.num_pedido === numPedido) {
+                        const qtdInput = document.getElementById(`qtd-edit-${index}`);
+                        const dtExpedInput = document.getElementById(`dt-exped-${index}`);
+                        if (qtdInput) qtdInput.value = 0;
+                        if (dtExpedInput) dtExpedInput.value = '';
+                    }
+                });
+
+                // Recalcular estoques dos produtos afetados
+                if (resultado.produtos_afetados && resultado.produtos_afetados.length > 0) {
+                    resultado.produtos_afetados.forEach(codProduto => {
+                        recalcularTodasLinhasProduto(codProduto);
+                    });
+                }
+
+                // Verificar visibilidade (ocultar pedidos com saldo=0)
+                resultado.separacoes.forEach(sep => {
+                    verificarVisibilidadeLinhas(sep.cod_produto, sep.num_pedido);
+                });
+
+                // Renderizar novas linhas de separação se estiver na área visível
+                renderizarNovasSeparacoes(resultado.separacoes);
+
+                console.log(`✅ ${resultado.separacoes.length} separação(ões) adicionada(s) localmente (sem reload)`);
+            }
 
         } catch (erro) {
             console.error('Erro ao criar nova separação:', erro);
@@ -1768,6 +1922,57 @@
         } finally {
             mostrarLoading(false);
         }
+    }
+
+    // ✅ NOVA FUNÇÃO: Renderizar novas separações na tabela
+    function renderizarNovasSeparacoes(separacoes) {
+        const tbody = document.getElementById('tbody-carteira');
+        if (!tbody) return;
+
+        separacoes.forEach(sep => {
+            // Encontrar índice correto em state.dados
+            const indexNoState = state.dados.findIndex(d => d.tipo === 'separacao' && d.id === sep.id);
+
+            if (indexNoState === -1) {
+                console.warn(`⚠️ Separação ${sep.id} não encontrada em state.dados`);
+                return;
+            }
+
+            // Verificar se já existe no DOM
+            const linhaExistente = document.getElementById(`row-sep-${indexNoState}`);
+            if (linhaExistente) {
+                console.log(`✅ Separação ${sep.id} já renderizada no DOM`);
+                return; // Já existe
+            }
+
+            // Renderizar nova linha
+            const html = renderizarLinhaSeparacao(sep, indexNoState);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const novaLinha = tempDiv.firstElementChild;
+
+            if (novaLinha) {
+                // Inserir após a linha do pedido correspondente
+                const pedidoRow = Array.from(document.querySelectorAll(`tr[data-num-pedido="${sep.num_pedido}"]`))
+                    .filter(row => row.id.startsWith('row-'))  // Apenas linhas de pedido, não separação
+                    .pop(); // Última linha do pedido
+
+                if (pedidoRow) {
+                    pedidoRow.after(novaLinha);
+                } else {
+                    tbody.appendChild(novaLinha);
+                }
+
+                // Renderizar estoque da nova linha
+                try {
+                    renderizarEstoquePrecalculado(indexNoState, sep);
+                } catch (erro) {
+                    console.error(`Erro ao renderizar estoque da nova separação ${indexNoState}:`, erro);
+                }
+
+                console.log(`✅ Separação ${sep.id} renderizada no DOM (index ${indexNoState})`);
+            }
+        });
     }
 
     // ==============================================
@@ -1915,8 +2120,74 @@
 
             mostrarMensagem('Sucesso', mensagem, 'success');
 
-            // Recarregar dados
-            carregarDados();
+            // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
+            if (resultado.separacoes && resultado.separacoes.length > 0) {
+                // Atualizar/adicionar separações em state.dados
+                resultado.separacoes.forEach(sepNova => {
+                    // Verificar se já existe em state.dados
+                    const indexExistente = state.dados.findIndex(
+                        d => d.tipo === 'separacao' && d.id === sepNova.id
+                    );
+
+                    if (indexExistente >= 0) {
+                        // Atualizar existente
+                        Object.assign(state.dados[indexExistente], sepNova);
+
+                        // Atualizar UI da linha se estiver renderizada
+                        const row = document.getElementById(`row-sep-${indexExistente}`);
+                        if (row) {
+                            const qtdInput = document.getElementById(`qtd-sep-${indexExistente}`);
+                            if (qtdInput) qtdInput.value = Math.round(sepNova.qtd_saldo);
+                            row.querySelector('.valor-total').textContent = formatarMoeda(sepNova.valor_saldo);
+                            row.querySelector('.pallets').textContent = formatarNumero(sepNova.pallet, 2);
+                            row.querySelector('.peso').textContent = Math.round(sepNova.peso);
+                        }
+                    } else {
+                        // Adicionar nova
+                        state.dados.push(sepNova);
+                    }
+                });
+
+                // Atualizar qtd_saldo dos pedidos correspondentes
+                resultado.separacoes.forEach(sep => {
+                    atualizarQtdPedidoAposEdicaoSeparacao(sep.num_pedido, sep.cod_produto);
+                });
+
+                // Zerar campos editáveis dos pedidos
+                state.dados.forEach((item, index) => {
+                    if (item.tipo === 'pedido' && item.num_pedido === numPedido) {
+                        const qtdInput = document.getElementById(`qtd-edit-${index}`);
+                        const dtExpedInput = document.getElementById(`dt-exped-${index}`);
+                        if (qtdInput) qtdInput.value = 0;
+                        if (dtExpedInput) dtExpedInput.value = '';
+                    }
+                });
+
+                // Recalcular estoques dos produtos afetados
+                if (resultado.produtos_afetados && resultado.produtos_afetados.length > 0) {
+                    resultado.produtos_afetados.forEach(codProduto => {
+                        recalcularTodasLinhasProduto(codProduto);
+                    });
+                }
+
+                // Verificar visibilidade
+                resultado.separacoes.forEach(sep => {
+                    verificarVisibilidadeLinhas(sep.cod_produto, sep.num_pedido);
+                });
+
+                // Renderizar novas separações se houver
+                const novasSeparacoes = resultado.separacoes.filter(sep => {
+                    return !state.dados.some((d, idx) => {
+                        return d.tipo === 'separacao' && d.id === sep.id && idx < state.dados.length - resultado.separacoes.length;
+                    });
+                });
+
+                if (novasSeparacoes.length > 0) {
+                    renderizarNovasSeparacoes(novasSeparacoes);
+                }
+
+                console.log(`✅ Itens adicionados/atualizados localmente (sem reload)`);
+            }
 
         } catch (erro) {
             console.error('Erro ao incluir em separação existente:', erro);
@@ -2011,12 +2282,13 @@
             let qtd = 0;
             let data = null;
 
-            // 🔧 CORREÇÃO: Detectar tipo e buscar inputs corretos
+            // ✅ CORREÇÃO DEFINITIVA: Incluir separações de state.dados (sincronizado localmente)
             if (item.tipo === 'separacao') {
-                // ✅ IGNORAR separações (já vêm em saidas_previstas do backend)
-                return;
+                // Ler separações diretamente de state.dados (atualizado localmente sem reload)
+                qtd = parseFloat(item.qtd_saldo) || 0;
+                data = item.expedicao;
             } else {
-                // Para pedidos: buscar inputs
+                // Para pedidos: buscar inputs editáveis
                 const qtdInput = document.getElementById(`qtd-edit-${index}`);
                 const dataInput = document.getElementById(`dt-exped-${index}`);
 
@@ -2263,6 +2535,11 @@
 
         const container = document.getElementById(`projecao-dias-${rowIndex}`);
 
+        // ✅ PROTEÇÃO: Se elemento não existe (linha não renderizada ou oculta), sair silenciosamente
+        if (!container) {
+            return; // Linha não está no DOM (virtual scrolling ou oculta)
+        }
+
         // ✅ MOSTRAR TODOS OS 28 DIAS (sem offset - sem navegação)
         const diasVisiveis = projecoes.slice(0, 28);
 
@@ -2405,6 +2682,277 @@
         header.className = `modal-header bg-${tipo} text-white`;
 
         bsModal.show();
+    }
+
+    // ==============================================
+    // 🆕 FUNCIONALIDADE 1: TOAST TOTAIS DA SEPARAÇÃO
+    // ==============================================
+    function mostrarToastTotaisSeparacao(separacaoLoteId) {
+        // Buscar todas as separações com o mesmo lote_id
+        const separacoesDoLote = state.dados.filter(item =>
+            item.tipo === 'separacao' && item.separacao_lote_id === separacaoLoteId
+        );
+
+        if (separacoesDoLote.length === 0) {
+            console.warn('⚠️ Nenhuma separação encontrada para lote:', separacaoLoteId);
+            return;
+        }
+
+        // Calcular totais
+        let totalValor = 0;
+        let totalPeso = 0;
+        let totalPallet = 0;
+        let qtdItens = separacoesDoLote.length;
+
+        separacoesDoLote.forEach(sep => {
+            totalValor += parseFloat(sep.valor_total || 0);
+            totalPeso += parseFloat(sep.peso || 0);
+            totalPallet += parseFloat(sep.pallets || 0);
+        });
+
+        // Pegar dados da primeira separação para contexto
+        const primeira = separacoesDoLote[0];
+        const loteIdCurto = separacaoLoteId.slice(-10); // Últimos 10 dígitos
+
+        // Criar toast HTML
+        const toastHtml = `
+            <div class="toast align-items-center border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true"
+                 style="position: fixed; top: 80px; right: 20px; z-index: 1050; min-width: 320px;"
+                 id="toast-totais-separacao">
+                <div class="d-flex">
+                    <div class="toast-body" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong style="font-size: 13px;">📦 TOTAIS DA SEPARAÇÃO</strong>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                        </div>
+                        <hr style="margin: 8px 0; border-color: rgba(255,255,255,0.3);">
+                        <div style="font-size: 11px; line-height: 1.6;">
+                            <div class="mb-1"><strong>Lote:</strong> ${loteIdCurto}</div>
+                            <div class="mb-1"><strong>Cliente:</strong> ${primeira.raz_social_red || 'N/A'}</div>
+                            <div class="mb-1"><strong>Expedição:</strong> ${primeira.expedicao ? formatarData(primeira.expedicao) : 'N/A'}</div>
+                            <hr style="margin: 8px 0; border-color: rgba(255,255,255,0.3);">
+                            <div class="mb-1">📦 <strong>Itens:</strong> ${qtdItens}</div>
+                            <div class="mb-1">💰 <strong>Valor:</strong> R$ ${Math.round(totalValor).toLocaleString('pt-BR')}</div>
+                            <div class="mb-1">⚖️ <strong>Peso:</strong> ${Math.round(totalPeso).toLocaleString('pt-BR')} kg</div>
+                            <div>📦 <strong>Pallet:</strong> ${totalPallet.toFixed(2)} PLT</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remover toast anterior se existir
+        const toastAntigo = document.getElementById('toast-totais-separacao');
+        if (toastAntigo) {
+            toastAntigo.remove();
+        }
+
+        // Inserir no DOM
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+
+        // Inicializar e exibir toast
+        const toastElement = document.getElementById('toast-totais-separacao');
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: 6000 // 6 segundos
+        });
+        toast.show();
+
+        // Remover do DOM após fechar
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            toastElement.remove();
+        });
+
+        console.log(`✅ Toast exibido para lote ${loteIdCurto}: ${qtdItens} itens, R$ ${totalValor.toFixed(2)}`);
+    }
+
+    // ==============================================
+    // 🆕 FUNCIONALIDADE 2: RASTREAMENTO DE PRODUTO
+    // ==============================================
+    async function rastrearProduto(codProduto) {
+        try {
+            const response = await fetch(`/carteira/simples/api/rastrear-produto?cod_produto=${encodeURIComponent(codProduto)}`);
+            const resultado = await response.json();
+
+            if (!resultado.success) {
+                mostrarMensagem('Erro', resultado.error || 'Erro ao rastrear produto', 'danger');
+                return;
+            }
+
+            // Abrir modal com os dados
+            abrirModalRastreamento(codProduto, resultado.separacoes);
+
+        } catch (erro) {
+            console.error('Erro ao rastrear produto:', erro);
+            mostrarMensagem('Erro', `Erro ao rastrear produto: ${erro.message}`, 'danger');
+        }
+    }
+
+    function abrirModalRastreamento(codProduto, separacoes) {
+        // Criar modal se não existir
+        let modal = document.getElementById('modalRastreamentoProduto');
+
+        if (!modal) {
+            const modalHtml = `
+                <div class="modal fade" id="modalRastreamentoProduto" tabindex="-1">
+                    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-search me-2"></i>
+                                    Rastreamento de Produto: <span id="modal-rastreamento-codigo"></span>
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="modal-rastreamento-conteudo">
+                                    <!-- Será preenchido dinamicamente -->
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modal = document.getElementById('modalRastreamentoProduto');
+        }
+
+        // Atualizar código do produto no título
+        document.getElementById('modal-rastreamento-codigo').textContent = codProduto;
+
+        // Gerar conteúdo da tabela
+        const conteudo = document.getElementById('modal-rastreamento-conteudo');
+
+        if (!separacoes || separacoes.length === 0) {
+            conteudo.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Nenhuma separação ativa encontrada para este produto.
+                </div>
+            `;
+        } else {
+            // Calcular totais
+            const totalQtd = separacoes.reduce((sum, s) => sum + parseFloat(s.qtd_saldo || 0), 0);
+            const totalValor = separacoes.reduce((sum, s) => sum + parseFloat(s.valor_saldo || 0), 0);
+
+            conteudo.innerHTML = `
+                <div class="alert alert-success mb-3">
+                    <strong>Total de separações encontradas:</strong> ${separacoes.length} |
+                    <strong>Quantidade total:</strong> ${Math.round(totalQtd).toLocaleString('pt-BR')} |
+                    <strong>Valor total:</strong> R$ ${Math.round(totalValor).toLocaleString('pt-BR')}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="min-width: 100px;">Lote ID</th>
+                                <th style="min-width: 150px;">Cliente</th>
+                                <th style="min-width: 80px;">Qtd</th>
+                                <th style="min-width: 100px;">Data Expedição</th>
+                                <th style="min-width: 100px;">Valor</th>
+                                <th style="min-width: 80px;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${separacoes.map(sep => {
+                                const loteIdCurto = sep.separacao_lote_id ? sep.separacao_lote_id.slice(-10) : 'N/A';
+                                const statusBadge = obterBadgeStatus(sep.status_calculado || sep.status || 'ABERTO');
+
+                                return `
+                                    <tr>
+                                        <td><code>${loteIdCurto}</code></td>
+                                        <td>${sep.raz_social_red || 'N/A'}</td>
+                                        <td class="text-end">${Math.round(sep.qtd_saldo || 0).toLocaleString('pt-BR')}</td>
+                                        <td>${sep.expedicao ? formatarData(sep.expedicao) : 'N/A'}</td>
+                                        <td class="text-end">R$ ${Math.round(sep.valor_saldo || 0).toLocaleString('pt-BR')}</td>
+                                        <td>${statusBadge}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // Exibir modal
+        const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+        bsModal.show();
+    }
+
+    function obterBadgeStatus(status) {
+        const statusMap = {
+            'PREVISAO': '<span class="badge bg-secondary">PREVISÃO</span>',
+            'ABERTO': '<span class="badge bg-warning text-dark">ABERTO</span>',
+            'COTADO': '<span class="badge bg-info text-dark">COTADO</span>',
+            'EMBARCADO': '<span class="badge bg-primary">EMBARCADO</span>',
+            'FATURADO': '<span class="badge bg-success">FATURADO</span>',
+            'NF no CD': '<span class="badge bg-danger">NF no CD</span>',
+            'Atrasado': '<span class="badge bg-danger">ATRASADO</span>'
+        };
+        return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
+    }
+
+    // ==============================================
+    // 🆕 FUNCIONALIDADE 3: FILTRO SEP./PDD.
+    // ==============================================
+    function aplicarFiltroTipo() {
+        const checkboxSep = document.getElementById('filtro-tipo-sep');
+        const checkboxPdd = document.getElementById('filtro-tipo-pdd');
+
+        if (!checkboxSep || !checkboxPdd) {
+            console.warn('⚠️ Checkboxes de filtro tipo não encontrados');
+            return;
+        }
+
+        const exibirSep = checkboxSep.checked;
+        const exibirPdd = checkboxPdd.checked;
+
+        console.log(`🔧 Filtro Tipo: Sep=${exibirSep}, Pdd=${exibirPdd}`);
+
+        // Se nenhum marcado, exibir NADA (Opção B confirmada)
+        if (!exibirSep && !exibirPdd) {
+            const tbody = document.getElementById('tbody-carteira');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="29" class="text-center py-4">
+                        <div class="alert alert-warning d-inline-block">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Nenhum tipo selecionado</strong><br>
+                            <small>Marque pelo menos "Sep." ou "Pdd." para exibir dados.</small>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        // Filtrar linhas via JavaScript (display: none)
+        const tbody = document.getElementById('tbody-carteira');
+        const linhas = tbody.querySelectorAll('tr');
+
+        linhas.forEach(linha => {
+            const tipo = linha.dataset.tipo; // 'pedido' ou 'separacao'
+
+            if (!tipo) {
+                // Linha de totais ou outras - manter visível
+                return;
+            }
+
+            // Lógica de visibilidade
+            let deveExibir = false;
+
+            if (tipo === 'separacao' && exibirSep) deveExibir = true;
+            if (tipo === 'pedido' && exibirPdd) deveExibir = true;
+
+            // Aplicar visibilidade
+            linha.style.display = deveExibir ? '' : 'none';
+        });
+
+        console.log(`✅ Filtro de tipo aplicado: exibindo ${exibirSep ? 'Sep.' : ''} ${exibirPdd ? 'Pdd.' : ''}`);
     }
 
 })();

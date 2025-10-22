@@ -894,11 +894,46 @@ def gerar_separacao():
 
         db.session.commit()
 
+        # ✅ Preparar dados das separações criadas para o frontend
+        separacoes_retorno = []
+        produtos_afetados = set()
+
+        for sep in separacoes_criadas:
+            separacoes_retorno.append({
+                'id': sep.id,
+                'separacao_lote_id': sep.separacao_lote_id,
+                'num_pedido': sep.num_pedido,
+                'cod_produto': sep.cod_produto,
+                'nome_produto': sep.nome_produto,
+                'qtd_saldo': float(sep.qtd_saldo),
+                'valor_saldo': float(sep.valor_saldo or 0),
+                'peso': float(sep.peso or 0),
+                'pallet': float(sep.pallet or 0),
+                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
+                'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
+                'protocolo': sep.protocolo,
+                'agendamento_confirmado': sep.agendamento_confirmado or False,  # ✅ Não esquecer
+                'cnpj_cpf': sep.cnpj_cpf,
+                'raz_social_red': sep.raz_social_red,
+                'nome_cidade': sep.nome_cidade,
+                'cod_uf': sep.cod_uf,
+                'rota': sep.rota,
+                'sub_rota': sep.sub_rota,
+                'data_pedido': sep.data_pedido.isoformat() if sep.data_pedido else None,
+                'pedido_cliente': sep.pedido_cliente,
+                'tipo': 'separacao'  # ✅ Importante para o frontend identificar
+            })
+            produtos_afetados.add(sep.cod_produto)
+
+        logger.info(f"✅ Lote {lote_id}: {len(separacoes_criadas)} separação(ões) criada(s)")
+
         return jsonify({
             'success': True,
             'message': f'{len(separacoes_criadas)} separação(ões) criada(s) com sucesso',
             'separacao_lote_id': lote_id,
-            'qtd_itens': len(separacoes_criadas)
+            'qtd_itens': len(separacoes_criadas),
+            'separacoes': separacoes_retorno,  # ✅ Dados completos para frontend
+            'produtos_afetados': list(produtos_afetados)  # ✅ Para recalcular estoques
         })
 
     except Exception as e:
@@ -1127,34 +1162,63 @@ def confirmar_agendamento():
 @carteira_simples_bp.route('/api/atualizar-separacao-lote', methods=['POST'])
 def atualizar_separacao_lote():
     """
-    Atualiza data de expedição de TODAS as separações de um lote
-    e recalcula estoque projetado
+    ✅ REFATORADO: Atualiza campos de TODAS as separações de um lote
 
     Body JSON:
     {
         "separacao_lote_id": "ABC123",
-        "expedicao": "2025-01-20"
+        "expedicao": "2025-01-20"              // opcional
+        "agendamento": "2025-01-19"            // opcional
+        "protocolo": "PROT123"                 // opcional
+        "agendamento_confirmado": true/false   // opcional
     }
     """
     try:
         dados = request.get_json()
 
-        if not dados or 'separacao_lote_id' not in dados or 'expedicao' not in dados:
+        if not dados or 'separacao_lote_id' not in dados:
             return jsonify({
                 'success': False,
-                'error': 'Dados inválidos. Esperado: {separacao_lote_id, expedicao}'
+                'error': 'Dados inválidos. Esperado: {separacao_lote_id, [expedicao|agendamento|protocolo]}'
             }), 400
 
         separacao_lote_id = dados['separacao_lote_id']
-        expedicao_str = dados['expedicao']
 
-        # Converter data
-        try:
-            expedicao = datetime.strptime(expedicao_str, '%Y-%m-%d').date()
-        except (ValueError, TypeError):
+        # Campos permitidos para atualização
+        campos_atualizaveis = {}
+
+        # Processar expedicao
+        if 'expedicao' in dados:
+            try:
+                campos_atualizaveis['expedicao'] = datetime.strptime(dados['expedicao'], '%Y-%m-%d').date() if dados['expedicao'] else None
+            except (ValueError, TypeError):
+                return jsonify({
+                    'success': False,
+                    'error': 'Data de expedição inválida. Use formato YYYY-MM-DD'
+                }), 400
+
+        # Processar agendamento
+        if 'agendamento' in dados:
+            try:
+                campos_atualizaveis['agendamento'] = datetime.strptime(dados['agendamento'], '%Y-%m-%d').date() if dados['agendamento'] else None
+            except (ValueError, TypeError):
+                return jsonify({
+                    'success': False,
+                    'error': 'Data de agendamento inválida. Use formato YYYY-MM-DD'
+                }), 400
+
+        # Processar protocolo
+        if 'protocolo' in dados:
+            campos_atualizaveis['protocolo'] = dados['protocolo']
+
+        # Processar agendamento_confirmado
+        if 'agendamento_confirmado' in dados:
+            campos_atualizaveis['agendamento_confirmado'] = bool(dados['agendamento_confirmado'])
+
+        if not campos_atualizaveis:
             return jsonify({
                 'success': False,
-                'error': 'Data de expedição inválida. Use formato YYYY-MM-DD'
+                'error': 'Nenhum campo válido para atualizar. Use: expedicao, agendamento, protocolo ou agendamento_confirmado'
             }), 400
 
         # Buscar TODAS as separações do lote
@@ -1168,38 +1232,43 @@ def atualizar_separacao_lote():
                 'error': 'Nenhuma separação encontrada para este lote'
             }), 404
 
-        # Atualizar data de TODAS as separações do lote
+        # Atualizar campos de TODAS as separações do lote
         for sep in separacoes:
-            sep.expedicao = expedicao
+            for campo, valor in campos_atualizaveis.items():
+                setattr(sep, campo, valor)
 
         db.session.commit()
 
-        # 🆕 RECALCULAR ESTOQUE PROJETADO
-        # Obter códigos de produtos afetados (únicos)
-        codigos_afetados = list(set([sep.cod_produto for sep in separacoes]))
-
-        # Calcular novo estoque projetado
+        # 🆕 RECALCULAR ESTOQUE PROJETADO (apenas se alterou expedicao)
         estoque_atualizado = {}
-        for cod_produto in codigos_afetados:
-            try:
-                estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
-                projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+        if 'expedicao' in campos_atualizaveis:
+            # Obter códigos de produtos afetados (únicos)
+            codigos_afetados = list(set([sep.cod_produto for sep in separacoes]))
 
-                estoque_atualizado[cod_produto] = {
-                    'estoque_atual': estoque_atual,
-                    'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                    'projecoes': projecao.get('projecao', [])[:28]
-                }
-            except Exception as e:
-                logger.error(f"Erro ao recalcular estoque de {cod_produto}: {e}")
+            # Calcular novo estoque projetado
+            for cod_produto in codigos_afetados:
+                try:
+                    estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+                    projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+
+                    estoque_atualizado[cod_produto] = {
+                        'estoque_atual': estoque_atual,
+                        'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
+                        'projecoes': projecao.get('projecao', [])[:28]
+                    }
+                except Exception as e:
+                    logger.error(f"Erro ao recalcular estoque de {cod_produto}: {e}")
+
+        campos_atualizados = ', '.join(campos_atualizaveis.keys())
+        logger.info(f"✅ Lote {separacao_lote_id}: {len(separacoes)} separação(ões) atualizada(s) - Campos: {campos_atualizados}")
 
         return jsonify({
             'success': True,
-            'message': f'{len(separacoes)} separação(ões) atualizada(s) com sucesso',
+            'message': f'{len(separacoes)} separação(ões) atualizada(s) com sucesso ({campos_atualizados})',
             'qtd_atualizada': len(separacoes),
             'separacao_lote_id': separacao_lote_id,
-            'expedicao': expedicao_str,
-            'estoque_atualizado': estoque_atualizado
+            'campos_atualizados': list(campos_atualizaveis.keys()),
+            'estoque_atualizado': estoque_atualizado if estoque_atualizado else None
         })
 
     except Exception as e:
@@ -1305,6 +1374,77 @@ def verificar_separacoes_existentes():
 
     except Exception as e:
         logger.error(f"Erro ao verificar separações existentes: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_simples_bp.route('/api/rastrear-produto')
+def rastrear_produto():
+    """
+    Retorna todas as separações não sincronizadas de um produto específico
+
+    Query params:
+    - cod_produto: string (required)
+
+    Response:
+    {
+        "success": true,
+        "separacoes": [
+            {
+                "separacao_lote_id": "SEP-2025-001",
+                "raz_social_red": "Cliente XYZ",
+                "qtd_saldo": 100.0,
+                "expedicao": "2025-10-20",
+                "valor_saldo": 5000.0,
+                "status": "ABERTO",
+                "status_calculado": "ABERTO"
+            }
+        ]
+    }
+    """
+    try:
+        cod_produto = request.args.get('cod_produto', '').strip()
+
+        if not cod_produto:
+            return jsonify({
+                'success': False,
+                'error': 'Parâmetro cod_produto é obrigatório'
+            }), 400
+
+        # Buscar TODAS as separações não sincronizadas deste produto
+        separacoes = Separacao.query.filter_by(
+            cod_produto=cod_produto,
+            sincronizado_nf=False
+        ).order_by(
+            Separacao.expedicao.asc()
+        ).all()
+
+        # Formatar resposta
+        separacoes_formatadas = []
+
+        for sep in separacoes:
+            separacoes_formatadas.append({
+                'separacao_lote_id': sep.separacao_lote_id,
+                'raz_social_red': sep.raz_social_red,
+                'qtd_saldo': float(sep.qtd_saldo or 0),
+                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
+                'valor_saldo': float(sep.valor_saldo or 0),
+                'status': sep.status,
+                'status_calculado': sep.status_calculado  # Propriedade calculada dinamicamente
+            })
+
+        logger.info(f"✅ Rastreamento produto {cod_produto}: {len(separacoes_formatadas)} separações encontradas")
+
+        return jsonify({
+            'success': True,
+            'separacoes': separacoes_formatadas,
+            'total': len(separacoes_formatadas)
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao rastrear produto: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1472,6 +1612,41 @@ def adicionar_itens_separacao():
 
         db.session.commit()
 
+        # ✅ Buscar TODAS as separações do lote para retornar ao frontend
+        separacoes_atualizadas = Separacao.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).all()
+
+        separacoes_retorno = []
+        produtos_afetados = set()
+
+        for sep in separacoes_atualizadas:
+            separacoes_retorno.append({
+                'id': sep.id,
+                'separacao_lote_id': sep.separacao_lote_id,
+                'num_pedido': sep.num_pedido,
+                'cod_produto': sep.cod_produto,
+                'nome_produto': sep.nome_produto,
+                'qtd_saldo': float(sep.qtd_saldo),
+                'valor_saldo': float(sep.valor_saldo or 0),
+                'peso': float(sep.peso or 0),
+                'pallet': float(sep.pallet or 0),
+                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
+                'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
+                'protocolo': sep.protocolo,
+                'agendamento_confirmado': sep.agendamento_confirmado or False,
+                'cnpj_cpf': sep.cnpj_cpf,
+                'raz_social_red': sep.raz_social_red,
+                'nome_cidade': sep.nome_cidade,
+                'cod_uf': sep.cod_uf,
+                'rota': sep.rota,
+                'sub_rota': sep.sub_rota,
+                'data_pedido': sep.data_pedido.isoformat() if sep.data_pedido else None,
+                'pedido_cliente': sep.pedido_cliente,
+                'tipo': 'separacao'
+            })
+            produtos_afetados.add(sep.cod_produto)
+
         # Montar mensagem descritiva
         total_operacoes = len(itens_criados) + len(itens_atualizados)
         mensagem_partes = []
@@ -1494,7 +1669,9 @@ def adicionar_itens_separacao():
             'qtd_itens_atualizados': len(itens_atualizados),
             'total_operacoes': total_operacoes,
             'itens_criados': itens_criados,
-            'itens_atualizados': itens_atualizados
+            'itens_atualizados': itens_atualizados,
+            'separacoes': separacoes_retorno,  # ✅ Dados completos
+            'produtos_afetados': list(produtos_afetados)  # ✅ Para recalcular estoques
         })
 
     except Exception as e:
