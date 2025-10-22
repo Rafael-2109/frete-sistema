@@ -259,7 +259,8 @@ def obter_dados():
             if qtd_saldo > 0:
                 produtos_unicos[item.cod_produto]['qtd_total_carteira'] += qtd_saldo
 
-        # 🚀 OTIMIZAÇÃO CRÍTICA: Calcular estoque em PARALELO com ThreadPool
+        # 🚀 OTIMIZAÇÃO CRÍTICA: Calcular APENAS estoque atual (não projeção completa)
+        # Front-end fará o cálculo dinâmico de projeção
         t1 = time.time()
         estoque_map = {}
         try:
@@ -272,41 +273,56 @@ def obter_dados():
                 tempos['estoque_batch'] = time.time() - t1
                 # Pular para próxima etapa
             else:
-                # calcular_multiplos_produtos retorna {cod_produto: {...}}
-                # ✅ USAR entrada_em_d_plus_1=True APENAS NA CARTEIRA SIMPLES
-                resultados_batch = ServicoEstoqueSimples.calcular_multiplos_produtos(
-                    codigos_produtos,
-                    dias=28,
-                    entrada_em_d_plus_1=True  # Programação entra em D+1 (apenas aqui!)
-                )
+                # ✅ MUDANÇA: Calcular APENAS estoque atual (performance 10x melhor)
+                from app.producao.models import ProgramacaoProducao
+                from datetime import date, timedelta
 
-                # Mapear resultados para formato esperado
-                for cod_produto, resultado in resultados_batch.items():
-                    # ✅ CORREÇÃO: calcular_multiplos_produtos retorna 'projecao', não 'projecao_detalhada'
-                    projecoes_raw = resultado.get('projecao', resultado.get('projecao_detalhada', []))
+                hoje = date.today()
+                data_fim = hoje + timedelta(days=28)
+
+                # Buscar estoque atual para todos os produtos em batch
+                for cod_produto in codigos_produtos:
+                    estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+
+                    # Buscar programação de produção (entradas futuras)
+                    programacao_query = db.session.query(
+                        ProgramacaoProducao.data_programacao,
+                        func.sum(ProgramacaoProducao.qtd_programada).label('qtd_total')
+                    ).filter(
+                        ProgramacaoProducao.cod_produto == cod_produto,
+                        ProgramacaoProducao.data_programacao >= hoje,
+                        ProgramacaoProducao.data_programacao <= data_fim
+                    ).group_by(
+                        ProgramacaoProducao.data_programacao
+                    ).all()
+
+                    # Converter programação para formato simples
+                    programacao = [
+                        {
+                            'data': prog.data_programacao.isoformat(),
+                            'qtd': float(prog.qtd_total or 0)
+                        }
+                        for prog in programacao_query
+                    ]
+
                     estoque_map[cod_produto] = {
-                        'estoque_atual': resultado.get('estoque_atual', 0),
-                        'menor_estoque_d7': resultado.get('menor_estoque_d7', 0),
-                        'projecoes': projecoes_raw[:28] if projecoes_raw else []  # Limitar a 28 dias
+                        'estoque_atual': estoque_atual,
+                        'programacao': programacao  # ✅ NOVO: Programação para front-end calcular
                     }
 
-                logger.info(f"✅ Estoque calculado em BATCH para {len(codigos_produtos)} produtos ({len(estoque_map)} salvos)")
+                logger.info(f"✅ Estoque atual calculado em BATCH para {len(codigos_produtos)} produtos")
                 tempos['estoque_batch'] = time.time() - t1
 
         except Exception as e:
             logger.error(f"Erro ao calcular estoques em batch: {e}", exc_info=True)
             tempos['estoque_batch'] = time.time() - t1
-            # Fallback: calcular individualmente em caso de erro (máximo 10 produtos)
-            for cod_produto in list(produtos_unicos.keys())[:10]:
-                try:
-                    projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 28)
+            # Fallback: retornar estoque 0 para produtos com erro
+            for cod_produto in list(produtos_unicos.keys()):
+                if cod_produto not in estoque_map:
                     estoque_map[cod_produto] = {
-                        'estoque_atual': projecao.get('estoque_atual', 0),
-                        'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                        'projecoes': projecao.get('projecao', [])[:28]
+                        'estoque_atual': 0,
+                        'programacao': []
                     }
-                except Exception as e2:
-                    logger.error(f"Erro no fallback para {cod_produto}: {e2}")
 
         # 🆕 BUSCAR SEPARAÇÕES NÃO SINCRONIZADAS (sincronizado_nf=False)
         t1 = time.time()
@@ -471,11 +487,10 @@ def obter_dados():
                     pallets = qtd_saldo / palletizacao if palletizacao > 0 else 0
                     peso = qtd_saldo * peso_bruto
 
-                    # Buscar dados de estoque pré-calculados
+                    # Buscar dados de estoque (apenas estoque_atual + programação)
                     estoque_info = estoque_map.get(produto.cod_produto, {
                         'estoque_atual': 0,
-                        'menor_estoque_d7': 0,
-                        'projecoes': []
+                        'programacao': []
                     })
 
                     # 🚀 OTIMIZAÇÃO: BUSCAR ROTA E SUB_ROTA do cache pré-calculado
@@ -528,8 +543,7 @@ def obter_dados():
                         'palletizacao': palletizacao,
                         'peso_bruto': peso_bruto,
                         'estoque_atual': estoque_info['estoque_atual'],
-                        'menor_estoque_d7': estoque_info['menor_estoque_d7'],
-                        'projecoes_estoque': estoque_info['projecoes']
+                        'programacao': estoque_info['programacao']  # ✅ NOVO: Programação para front-end
                     })
 
                 # 2️⃣ ADICIONAR TODAS AS SEPARAÇÕES DO PEDIDO, AGRUPADAS POR LOTE
@@ -559,11 +573,10 @@ def obter_dados():
                         pallets_sep = qtd_sep / palletizacao_sep if palletizacao_sep > 0 else 0
                         peso_sep = qtd_sep * peso_bruto_sep
 
-                        # Buscar estoque (mesmo do produto do pedido)
+                        # Buscar estoque (apenas estoque_atual + programação)
                         estoque_info_sep = estoque_map.get(sep.cod_produto, {
                             'estoque_atual': 0,
-                            'menor_estoque_d7': 0,
-                            'projecoes': []
+                            'programacao': []
                         })
 
                         # 🚀 OTIMIZAÇÃO: Pré-calcular datas para separações
@@ -607,8 +620,7 @@ def obter_dados():
                             'palletizacao': palletizacao_sep,
                             'peso_bruto': peso_bruto_sep,
                             'estoque_atual': estoque_info_sep['estoque_atual'],
-                            'menor_estoque_d7': estoque_info_sep['menor_estoque_d7'],
-                            'projecoes_estoque': estoque_info_sep['projecoes']
+                            'programacao': estoque_info_sep['programacao']  # ✅ NOVO: Programação para front-end
                         })
         tempos['montar_resposta'] = time.time() - t1
 
@@ -904,7 +916,48 @@ def gerar_separacao():
         separacoes_retorno = []
         produtos_afetados = set()
 
+        # 🆕 Calcular estoque atual + programação para produtos afetados
+        from app.producao.models import ProgramacaoProducao
+        from datetime import date, timedelta
+
+        hoje = date.today()
+        data_fim = hoje + timedelta(days=28)
+
+        estoque_map = {}
+        produtos_unicos = list(set([sep.cod_produto for sep in separacoes_criadas]))
+
+        for cod_produto in produtos_unicos:
+            estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+
+            # Buscar programação
+            programacao_query = db.session.query(
+                ProgramacaoProducao.data_programacao,
+                func.sum(ProgramacaoProducao.qtd_programada).label('qtd_total')
+            ).filter(
+                ProgramacaoProducao.cod_produto == cod_produto,
+                ProgramacaoProducao.data_programacao >= hoje,
+                ProgramacaoProducao.data_programacao <= data_fim
+            ).group_by(
+                ProgramacaoProducao.data_programacao
+            ).all()
+
+            programacao = [
+                {'data': prog.data_programacao.isoformat(), 'qtd': float(prog.qtd_total or 0)}
+                for prog in programacao_query
+            ]
+
+            estoque_map[cod_produto] = {
+                'estoque_atual': estoque_atual,
+                'programacao': programacao
+            }
+
         for sep in separacoes_criadas:
+            estoque_info = estoque_map.get(sep.cod_produto, {'estoque_atual': 0, 'programacao': []})
+
+            # ✅ Extrair últimos 10 dígitos do lote_id
+            lote_id_completo = sep.separacao_lote_id or ''
+            lote_id_ultimos_10 = lote_id_completo[-10:] if len(lote_id_completo) >= 10 else lote_id_completo
+
             separacoes_retorno.append({
                 'id': sep.id,
                 'separacao_lote_id': sep.separacao_lote_id,
@@ -918,16 +971,21 @@ def gerar_separacao():
                 'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
                 'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
                 'protocolo': sep.protocolo,
-                'agendamento_confirmado': sep.agendamento_confirmado or False,  # ✅ Não esquecer
+                'agendamento_confirmado': sep.agendamento_confirmado or False,
                 'cnpj_cpf': sep.cnpj_cpf,
                 'raz_social_red': sep.raz_social_red,
                 'nome_cidade': sep.nome_cidade,
+                'municipio': lote_id_ultimos_10,  # ✅ Últimos 10 dígitos do lote (padrão da tela)
+                'estado': sep.cod_uf,  # ✅ UF no campo estado
                 'cod_uf': sep.cod_uf,
                 'rota': sep.rota,
                 'sub_rota': sep.sub_rota,
                 'data_pedido': sep.data_pedido.isoformat() if sep.data_pedido else None,
                 'pedido_cliente': sep.pedido_cliente,
-                'tipo': 'separacao'  # ✅ Importante para o frontend identificar
+                'tipo': 'separacao',
+                'status_calculado': sep.status or 'ABERTO',  # ✅ Status para cor amarela
+                'estoque_atual': estoque_info['estoque_atual'],
+                'programacao': estoque_info['programacao']
             })
             produtos_afetados.add(sep.cod_produto)
 
@@ -1629,7 +1687,48 @@ def adicionar_itens_separacao():
         separacoes_retorno = []
         produtos_afetados = set()
 
+        # 🆕 Calcular estoque atual + programação para produtos afetados
+        from app.producao.models import ProgramacaoProducao
+        from datetime import date, timedelta
+
+        hoje = date.today()
+        data_fim = hoje + timedelta(days=28)
+
+        estoque_map = {}
+        produtos_unicos = list(set([sep.cod_produto for sep in separacoes_atualizadas]))
+
+        for cod_produto in produtos_unicos:
+            estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+
+            # Buscar programação
+            programacao_query = db.session.query(
+                ProgramacaoProducao.data_programacao,
+                func.sum(ProgramacaoProducao.qtd_programada).label('qtd_total')
+            ).filter(
+                ProgramacaoProducao.cod_produto == cod_produto,
+                ProgramacaoProducao.data_programacao >= hoje,
+                ProgramacaoProducao.data_programacao <= data_fim
+            ).group_by(
+                ProgramacaoProducao.data_programacao
+            ).all()
+
+            programacao = [
+                {'data': prog.data_programacao.isoformat(), 'qtd': float(prog.qtd_total or 0)}
+                for prog in programacao_query
+            ]
+
+            estoque_map[cod_produto] = {
+                'estoque_atual': estoque_atual,
+                'programacao': programacao
+            }
+
         for sep in separacoes_atualizadas:
+            estoque_info = estoque_map.get(sep.cod_produto, {'estoque_atual': 0, 'programacao': []})
+
+            # ✅ Extrair últimos 10 dígitos do lote_id
+            lote_id_completo = sep.separacao_lote_id or ''
+            lote_id_ultimos_10 = lote_id_completo[-10:] if len(lote_id_completo) >= 10 else lote_id_completo
+
             separacoes_retorno.append({
                 'id': sep.id,
                 'separacao_lote_id': sep.separacao_lote_id,
@@ -1647,12 +1746,17 @@ def adicionar_itens_separacao():
                 'cnpj_cpf': sep.cnpj_cpf,
                 'raz_social_red': sep.raz_social_red,
                 'nome_cidade': sep.nome_cidade,
+                'municipio': lote_id_ultimos_10,  # ✅ Últimos 10 dígitos do lote (padrão da tela)
+                'estado': sep.cod_uf,  # ✅ UF no campo estado
                 'cod_uf': sep.cod_uf,
                 'rota': sep.rota,
                 'sub_rota': sep.sub_rota,
                 'data_pedido': sep.data_pedido.isoformat() if sep.data_pedido else None,
                 'pedido_cliente': sep.pedido_cliente,
-                'tipo': 'separacao'
+                'tipo': 'separacao',
+                'status_calculado': sep.status or 'ABERTO',  # ✅ Status para cor amarela
+                'estoque_atual': estoque_info['estoque_atual'],
+                'programacao': estoque_info['programacao']
             })
             produtos_afetados.add(sep.cod_produto)
 

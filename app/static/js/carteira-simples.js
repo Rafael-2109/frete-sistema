@@ -132,6 +132,7 @@
             state.dados = resultado.dados;
             state.totalItens = resultado.total;
 
+
             renderizarTabela();
             popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
             atualizarIndicadorFiltros(); // 🆕 Mostrar indicador de filtros ativos
@@ -460,9 +461,9 @@
             }
         }
 
-        // Aplicar classes visuais e tooltips
+        // Aplicar classes visuais
         aplicarClassesVisuais();
-        inicializarTooltips();
+        // ❌ REMOVIDO: inicializarTooltips() - não necessário
 
         // 🆕 APLICAR VISIBILIDADE INICIAL (ocultar pedidos com saldo=0 após carregamento)
         aplicarVisibilidadeInicial();
@@ -1111,52 +1112,12 @@
     }
 
     /**
-     * Atualiza linha de totais no final de cada pedido na tabela
-     */
-    function atualizarLinhasTotaisPedidos() {
-        const totaisPorPedido = calcularTotaisSeparacao();
-
-        // Remover linhas de totais antigas
-        document.querySelectorAll('.linha-total-pedido').forEach(el => el.remove());
-
-        // Para cada pedido com itens selecionados, adicionar linha de total
-        Object.values(totaisPorPedido).forEach(totais => {
-            // Encontrar a última linha do pedido na tabela
-            const linhasPedido = Array.from(document.querySelectorAll(`tr[data-num-pedido="${totais.numPedido}"]`));
-
-            if (linhasPedido.length === 0) return;
-
-            const ultimaLinha = linhasPedido[linhasPedido.length - 1];
-
-            // Criar linha de totais
-            const linhaTotais = document.createElement('tr');
-            linhaTotais.className = 'linha-total-pedido bg-light border-top border-3 border-primary';
-            linhaTotais.style.fontWeight = 'bold';
-            linhaTotais.style.fontSize = '11px';
-
-            linhaTotais.innerHTML = `
-                <td colspan="10" class="text-end">
-                    <span class="badge bg-primary">📊 TOTAL SELECIONADO (${totais.qtdItens} itens)</span>
-                </td>
-                <td class="text-end">-</td>
-                <td class="text-end text-success">R$ ${totais.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
-                <td class="text-end text-warning">${totais.palletTotal.toFixed(2)}</td>
-                <td class="text-end text-info">${totais.pesoTotal.toFixed(0)}</td>
-                <td colspan="20"></td>
-            `;
-
-            // Inserir após a última linha do pedido
-            ultimaLinha.after(linhaTotais);
-        });
-    }
-
-    /**
-     * Atualiza AMBOS: Painel Flutuante + Linhas de Totais
+     * Atualiza Painel Flutuante com totais em tempo real
      * Chamado sempre que QTD EDIT ou DT EXPED mudam
      */
     function atualizarResumoSeparacao() {
         atualizarPainelFlutuante();
-        atualizarLinhasTotaisPedidos();
+        // ❌ REMOVIDO: atualizarLinhasTotaisPedidos() - interferia na renderização
     }
 
     // ==============================================
@@ -1871,9 +1832,8 @@
                 throw new Error(resultado.error || 'Erro ao gerar separação');
             }
 
-            mostrarMensagem('Sucesso',
-                `Separação gerada com sucesso!<br>Lote: ${resultado.separacao_lote_id}<br>Produtos: ${resultado.qtd_itens}`,
-                'success');
+            // ❌ REMOVIDO: Modal de sucesso (não necessário)
+            // mostrarMensagem('Sucesso', `Separação gerada...`, 'success');
 
             // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
             if (resultado.separacoes && resultado.separacoes.length > 0) {
@@ -1946,9 +1906,13 @@
 
             // Renderizar nova linha
             const html = renderizarLinhaSeparacao(sep, indexNoState);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            const novaLinha = tempDiv.firstElementChild;
+
+            // 🔴 CORREÇÃO: Usar table/tbody para criar <tr> corretamente
+            const tempTable = document.createElement('table');
+            const tempTbody = document.createElement('tbody');
+            tempTable.appendChild(tempTbody);
+            tempTbody.innerHTML = html;
+            const novaLinha = tempTbody.firstElementChild;
 
             if (novaLinha) {
                 // Inserir após a linha do pedido correspondente
@@ -2266,27 +2230,27 @@
     }
 
     /**
-     * 🔧 CORREÇÃO: Coleta TODAS as qtds/datas editáveis preenchidas na tela
-     * para um produto específico (PEDIDOS + SEPARAÇÕES).
-     * Retorna array de saídas adicionais: [{data, qtd}, ...]
+     * 🆕 COLETA TODAS AS SAÍDAS de um produto (PEDIDOS editáveis + SEPARAÇÕES).
+     * ✅ SEM DUPLICAÇÃO: Separações JÁ estão no state.dados.
+     * Retorna array de saídas: [{data, qtd}, ...]
      */
-    function coletarSaidasAdicionais(codProduto) {
-        const saidasAdicionais = [];
+    function coletarTodasSaidas(codProduto) {
+        const saidas = [];
 
         // Percorrer TODAS as linhas da tabela
         state.dados.forEach((item, index) => {
-            // Verificar se é o mesmo produto (considerar códigos unificados)
+            // Verificar se é o mesmo produto
             if (item.cod_produto !== codProduto) return;
 
             let qtd = 0;
             let data = null;
 
-            // ✅ Coletar separações de state.dados (sempre atualizadas localmente)
             if (item.tipo === 'separacao') {
+                // ✅ SEPARAÇÕES: Coletar qtd_saldo + expedicao de state.dados
                 qtd = parseFloat(item.qtd_saldo) || 0;
                 data = item.expedicao;
             } else {
-                // Para pedidos: buscar inputs editáveis
+                // ✅ PEDIDOS: Buscar inputs editáveis (qtd_edit > 0)
                 const qtdInput = document.getElementById(`qtd-edit-${index}`);
                 const dataInput = document.getElementById(`dt-exped-${index}`);
 
@@ -2298,90 +2262,99 @@
 
             // Se tem qtd E data preenchidas
             if (qtd > 0 && data) {
-                saidasAdicionais.push({
+                saidas.push({
                     data: data,
                     qtd: qtd
                 });
             }
         });
 
-        return saidasAdicionais;
+        return saidas;
     }
 
     /**
-     * Recalcula a projeção de estoque considerando saídas adicionais.
+     * 🆕 CALCULA PROJEÇÃO COMPLETA DE ESTOQUE (100% front-end).
      *
-     * @param {Array} projecaoBase - Array de projeção do backend (28 dias)
-     * @param {Array} saidasAdicionais - Array [{data, qtd}, ...]
-     * @param {Number} estoqueAtual - Estoque atual do produto
+     * Considera:
+     * - Estoque atual (físico)
+     * - Saídas: PEDIDOS editáveis + SEPARAÇÕES (sincronizado_nf=False)
+     * - Entradas: Programação de produção
+     *
+     * @param {Number} estoqueAtual - Estoque físico atual
+     * @param {Array} saidas - Array [{data, qtd}, ...] de TODAS as saídas
+     * @param {Array} entradas - Array [{data, qtd}, ...] de programação
      * @returns {Object} {projecao: [...], menor_estoque_d7: number}
      */
-    function recalcularProjecaoComSaidas(projecaoBase, saidasAdicionais, estoqueAtual = 0) {
-        // 🔧 CORREÇÃO: Se projecaoBase está vazia, criar projeção manual
-        if (!projecaoBase || projecaoBase.length === 0) {
-            // 🔧 CORREÇÃO: Criar projeção manual SEMPRE (mesmo sem saídas adicionais)
-            // Isso garante renderização quando backend não envia projecoes_estoque
+    function calcularProjecaoCompleta(estoqueAtual = 0, saidas = [], entradas = []) {
+        // Criar projeção de 28 dias do zero
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
 
-            // Criar projeção de 28 dias baseada em estoque_atual e saídas adicionais
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
+        const projecao = [];
 
-            const projecaoManual = [];
-            for (let dia = 0; dia <= 28; dia++) {
-                const data = new Date(hoje);
-                data.setDate(data.getDate() + dia);
-                const dataStr = data.toISOString().split('T')[0];
+        // Criar estrutura de 29 dias (D0 a D28)
+        for (let dia = 0; dia <= 28; dia++) {
+            const data = new Date(hoje);
+            data.setDate(data.getDate() + dia);
+            const dataStr = data.toISOString().split('T')[0];
 
-                projecaoManual.push({
-                    dia: dia,
-                    data: dataStr,
-                    saldo_inicial: dia === 0 ? estoqueAtual : 0,  // D0 = estoque_atual
-                    entrada: 0,
-                    saida: 0,  // Será preenchido com saidasAdicionais
-                    saldo: 0,
-                    saldo_final: 0
-                });
-            }
-
-            projecaoBase = projecaoManual;
+            projecao.push({
+                dia: dia,
+                data: dataStr,
+                saldo_inicial: 0,  // Será calculado em cascata
+                entrada: 0,
+                saida: 0,
+                saldo: 0,
+                saldo_final: 0
+            });
         }
 
-        // Criar cópia da projeção base
-        const projecaoAjustada = JSON.parse(JSON.stringify(projecaoBase));
-
-        // Agrupar saídas adicionais por data
+        // Agrupar saídas por data
         const saidasPorData = {};
-        saidasAdicionais.forEach(saida => {
-            const data = saida.data;
-            if (!saidasPorData[data]) {
-                saidasPorData[data] = 0;
+        saidas.forEach(s => {
+            if (!saidasPorData[s.data]) {
+                saidasPorData[s.data] = 0;
             }
-            saidasPorData[data] += saida.qtd;
+            saidasPorData[s.data] += s.qtd;
         });
 
-        // Ajustar saídas e recalcular saldo_final em cascata
-        let menorEstoque = projecaoAjustada[0].saldo_final;
+        // Agrupar entradas por data (programação + D+1)
+        const entradasPorData = {};
+        entradas.forEach(e => {
+            // ✅ ENTRADA EM D+1 (apenas na Carteira Simples)
+            const dataEntrada = new Date(e.data + 'T00:00:00');
+            dataEntrada.setDate(dataEntrada.getDate() + 1); // Adicionar 1 dia
+            const dataEntradaStr = dataEntrada.toISOString().split('T')[0];
 
-        for (let i = 0; i < projecaoAjustada.length; i++) {
-            const proj = projecaoAjustada[i];
-            const data = proj.data;
-
-            // Se tem saída adicional nesta data
-            if (saidasPorData[data]) {
-                proj.saida += saidasPorData[data];
+            if (!entradasPorData[dataEntradaStr]) {
+                entradasPorData[dataEntradaStr] = 0;
             }
+            entradasPorData[dataEntradaStr] += e.qtd;
+        });
 
-            // Recalcular saldo_final
+        // Preencher saídas e entradas na projeção
+        projecao.forEach(proj => {
+            proj.saida = saidasPorData[proj.data] || 0;
+            proj.entrada = entradasPorData[proj.data] || 0;
+        });
+
+        // Calcular saldo_final em cascata
+        let menorEstoque = estoqueAtual;
+
+        for (let i = 0; i < projecao.length; i++) {
+            const proj = projecao[i];
+
             if (i === 0) {
-                // D0: saldo_final = saldo_inicial - saida + entrada
-                proj.saldo_final = proj.saldo_inicial - proj.saida + proj.entrada;
-                proj.saldo = proj.saldo_inicial - proj.saida; // saldo sem produção
+                // D0: saldo_inicial = estoque atual
+                proj.saldo_inicial = estoqueAtual;
             } else {
                 // D+N: saldo_inicial = saldo_final do dia anterior
-                proj.saldo_inicial = projecaoAjustada[i - 1].saldo_final;
-                proj.saldo = proj.saldo_inicial - proj.saida; // saldo sem produção
-                proj.saldo_final = proj.saldo + proj.entrada;
+                proj.saldo_inicial = projecao[i - 1].saldo_final;
             }
+
+            // Calcular saldos
+            proj.saldo = proj.saldo_inicial - proj.saida; // Sem produção
+            proj.saldo_final = proj.saldo + proj.entrada; // Com produção
 
             // Atualizar menor estoque
             if (proj.saldo_final < menorEstoque) {
@@ -2389,13 +2362,13 @@
             }
         }
 
-        // Calcular menor_estoque_d7
+        // Calcular menor_estoque_d7 (primeiros 8 dias: D0 a D7)
         const menor_estoque_d7 = Math.min(
-            ...projecaoAjustada.slice(0, 8).map(p => p.saldo_final)
+            ...projecao.slice(0, 8).map(p => p.saldo_final)
         );
 
         return {
-            projecao: projecaoAjustada,
+            projecao: projecao,
             menor_estoque_d7: menor_estoque_d7
         };
     }
@@ -2405,18 +2378,18 @@
     // ==============================================
 
     /**
-     * 🚀 NOVA FUNÇÃO: Renderiza estoque pré-calculado considerando saídas adicionais
+     * 🆕 RENDERIZA ESTOQUE COM CÁLCULO 100% FRONT-END
      */
     function renderizarEstoquePrecalculado(rowIndex, item) {
-        // 🔧 CORREÇÃO: Permitir renderizar mesmo sem projecoes_estoque (usando apenas saídas adicionais)
-        const projecoesBase = item.projecoes_estoque || [];
+        // 1. Coletar TODAS as saídas (pedidos editáveis + separações)
+        const saidas = coletarTodasSaidas(item.cod_produto);
 
-        // 1. Coletar saídas adicionais (qtds/datas editáveis na tela)
-        const saidasAdicionais = coletarSaidasAdicionais(item.cod_produto);
+        // 2. Obter programação de produção (entradas futuras)
+        const programacao = item.programacao || [];
 
-        // 2. Recalcular projeção com saídas adicionais
+        // 3. Calcular projeção completa (100% front-end)
         const estoqueAtual = item.estoque_atual || 0;
-        const resultado = recalcularProjecaoComSaidas(projecoesBase, saidasAdicionais, estoqueAtual);
+        const resultado = calcularProjecaoCompleta(estoqueAtual, saidas, programacao);
 
         // 3. Converter formato para exibição
         const projecoesFormatadas = resultado.projecao.map(p => ({
@@ -2572,11 +2545,12 @@
 
         // 🆕 RENDERIZAR TODAS AS LINHAS (não só a clicada)
         state.dados.forEach((item, index) => {
-            if (item.projecoes_estoque && item.projecoes_estoque.length > 0) {
-                // Recalcular com saídas adicionais
-                const saidasAdicionais = coletarSaidasAdicionais(item.cod_produto);
+            if (item.estoque_atual !== undefined) {
+                // Recalcular com cálculo completo (100% front-end)
+                const saidas = coletarTodasSaidas(item.cod_produto);
+                const programacao = item.programacao || [];
                 const estoqueAtual = item.estoque_atual || 0;
-                const resultado = recalcularProjecaoComSaidas(item.projecoes_estoque, saidasAdicionais, estoqueAtual);
+                const resultado = calcularProjecaoCompleta(estoqueAtual, saidas, programacao);
 
                 const projecoesFormatadas = resultado.projecao.map(p => ({
                     data: p.data,
