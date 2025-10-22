@@ -103,11 +103,11 @@
             document.getElementById('modo').textContent = detectarPlataforma();
         }, 500);
 
-        // Redirecionar para dashboard de rastreamento
+        // Redirecionar para tela inicial do app (SEM LOGIN)
         setTimeout(() => {
             // O app usará server.url configurado em capacitor.config.json
             // Este index.html é apenas placeholder para o build
-            window.location.href = '/rastreamento/dashboard';
+            window.location.href = '/rastreamento/app';
         }, 1500);
     </script>
 </body>

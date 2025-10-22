@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#28a745">
+    <title>Rastreamento Nacom</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .logo {
+            font-size: 100px;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .subtitle {
+            font-size: 18px;
+            opacity: 0.95;
+            margin-bottom: 50px;
+            font-weight: 300;
+        }
+
+        .btn-scanner {
+            background: white;
+            color: #28a745;
+            border: none;
+            padding: 20px 40px;
+            font-size: 20px;
+            font-weight: 600;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 15px;
+            text-decoration: none;
+            margin-bottom: 30px;
+        }
+
+        .btn-scanner:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+
+        .btn-scanner:active {
+            transform: translateY(-2px);
+        }
+
+        .btn-scanner .icon {
+            font-size: 28px;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 20px;
+            margin-top: 30px;
+            text-align: left;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .instructions h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .instructions ol {
+            padding-left: 20px;
+            line-height: 1.8;
+        }
+
+        .instructions li {
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        .version {
+            margin-top: 30px;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        /* Loading state */
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsivo */
+        @media (max-width: 480px) {
+            .logo {
+                font-size: 80px;
+            }
+
+            h1 {
+                font-size: 28px;
+            }
+
+            .subtitle {
+                font-size: 16px;
+            }
+
+            .btn-scanner {
+                padding: 18px 35px;
+                font-size: 18px;
+            }
+
+            .instructions {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🚚</div>
+        <h1>Rastreamento Nacom</h1>
+        <p class="subtitle">Sistema de Rastreamento de Entregas</p>
+
+        <button class="btn-scanner" onclick="iniciarScanner()">
+            <span class="icon">📷</span>
+            <span>Escanear QR Code</span>
+        </button>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px;">Abrindo câmera...</p>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Como usar:</h3>
+            <ol>
+                <li>Toque no botão acima para abrir a câmera</li>
+                <li>Aponte para o <strong>QR Code</strong> do embarque</li>
+                <li>Aguarde o reconhecimento automático</li>
+                <li>Aceite os termos de uso</li>
+                <li>Pronto! O rastreamento iniciará automaticamente</li>
+            </ol>
+        </div>
+
+        <div class="version">
+            <p>📱 Versão 1.0.0</p>
+            <p id="modo">Modo: Web</p>
+        </div>
+    </div>
+
+    <!-- Capacitor Core (se app nativo) -->
+    <script type="module" src="{{ url_for('static', filename='js/capacitor/capacitor.js') }}"></script>
+
+    <script>
+        // Detectar se é app nativo ou web
+        function detectarPlataforma() {
+            if (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform()) {
+                document.getElementById('modo').textContent =
+                    'Modo: App Nativo (' + window.Capacitor.getPlatform() + ')';
+                return true;
+            }
+            return false;
+        }
+
+        // Detectar plataforma ao carregar
+        setTimeout(detectarPlataforma, 300);
+
+        // Função para iniciar o scanner
+        async function iniciarScanner() {
+            const btnScanner = document.querySelector('.btn-scanner');
+            const loading = document.getElementById('loading');
+
+            // Mostrar loading
+            btnScanner.style.display = 'none';
+            loading.style.display = 'block';
+
+            try {
+                // Verificar se é app nativo com plugin de QR Code
+                if (typeof window.Capacitor !== 'undefined' &&
+                    window.Capacitor.isNativePlatform() &&
+                    window.BarcodeScanner) {
+
+                    // Usar plugin nativo de QR Code (se disponível)
+                    const result = await window.BarcodeScanner.scan();
+
+                    if (result.text) {
+                        // QR Code escaneado com sucesso
+                        processarQRCode(result.text);
+                    } else {
+                        // Cancelado
+                        resetarBotao();
+                    }
+
+                } else {
+                    // Fallback: redirecionar para página web com scanner
+                    // Ou usar biblioteca JavaScript (html5-qrcode)
+                    window.location.href = '/rastreamento/scanner';
+                }
+
+            } catch (error) {
+                console.error('Erro ao abrir scanner:', error);
+                alert('Erro ao abrir câmera. Verifique as permissões do app.');
+                resetarBotao();
+            }
+        }
+
+        // Processar QR Code escaneado
+        function processarQRCode(qrCodeText) {
+            try {
+                // QR Code deve conter URL completa ou apenas o token
+                let token = null;
+
+                if (qrCodeText.includes('rastreamento/aceite/')) {
+                    // URL completa: extrair token
+                    token = qrCodeText.split('rastreamento/aceite/')[1];
+                } else if (qrCodeText.length > 10 && !qrCodeText.includes(' ')) {
+                    // Apenas o token
+                    token = qrCodeText;
+                } else {
+                    throw new Error('QR Code inválido');
+                }
+
+                // Redirecionar para tela de aceite LGPD
+                window.location.href = '/rastreamento/aceite/' + token;
+
+            } catch (error) {
+                console.error('Erro ao processar QR Code:', error);
+                alert('QR Code inválido. Tente novamente.');
+                resetarBotao();
+            }
+        }
+
+        // Resetar botão para estado inicial
+        function resetarBotao() {
+            const btnScanner = document.querySelector('.btn-scanner');
+            const loading = document.getElementById('loading');
+
+            loading.style.display = 'none';
+            btnScanner.style.display = 'inline-flex';
+        }
+
+        // DESENVOLVIMENTO: detectar se URL tem token na hash
+        // Útil para testar sem QR Code (ex: #token=abc123)
+        if (window.location.hash) {
+            const hash = window.location.hash.substring(1);
+            if (hash.startsWith('token=')) {
+                const token = hash.split('=')[1];
+                processarQRCode(token);
+            }
+        }
+    </script>
+</body>
+</html>

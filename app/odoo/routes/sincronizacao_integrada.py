@@ -19,6 +19,7 @@ from app import db
 from app.odoo.services.sincronizacao_integrada_service import SincronizacaoIntegradaService
 from app.odoo.services.pedido_sync_service import PedidoSyncService
 from app.separacao.models import Separacao
+from app.carteira.models import CarteiraPrincipal
 from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
@@ -59,36 +60,69 @@ def listar_pedidos_para_sincronizar():
     """
     Tela de listagem de pedidos com saldo para sincronização individual
 
-    Suporta paginação (sem limites)
+    ✅ BUSCA DA CARTEIRA PRINCIPAL (fonte da verdade)
+    - Apenas pedidos com qtd_saldo_produto_pedido > 0
+    - Permite sincronizar pedidos que ainda não viraram Separação
+
+    Suporta paginação e filtros
     """
     try:
+        # Parâmetros de paginação
         page = request.args.get('page', 1, type=int)
         per_page = 50  # Pedidos por página
 
-        logger.info(f"📋 Carregando lista de pedidos para sincronização (página {page})...")
+        # Parâmetros de filtro
+        filtro_pedido = request.args.get('num_pedido', '').strip()
+        filtro_cliente = request.args.get('cliente', '').strip()
+        filtro_cidade = request.args.get('cidade', '').strip()
+        filtro_uf = request.args.get('uf', '').strip()
 
-        # Query paginada
+        logger.info(f"📋 Carregando lista de pedidos da CARTEIRA PRINCIPAL para sincronização (página {page})...")
+
+        # ✅ QUERY DA CARTEIRA PRINCIPAL: Apenas pedidos com saldo > 0
         query = db.session.query(
-            Separacao.num_pedido,
-            Separacao.raz_social_red,
-            Separacao.nome_cidade,
-            Separacao.cod_uf,
-            Separacao.status,
-            func.sum(Separacao.qtd_saldo).label('qtd_total'),
-            func.sum(Separacao.valor_saldo).label('valor_total'),
-            func.count(Separacao.cod_produto).label('total_itens'),
-            func.max(Separacao.expedicao).label('data_expedicao')
+            CarteiraPrincipal.num_pedido,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.nome_cidade,
+            CarteiraPrincipal.cod_uf,
+            CarteiraPrincipal.status_pedido.label('status'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total'),
+            func.sum(
+                CarteiraPrincipal.qtd_saldo_produto_pedido *
+                CarteiraPrincipal.preco_produto_pedido
+            ).label('valor_total'),
+            func.count(CarteiraPrincipal.cod_produto).label('total_itens'),
+            func.max(CarteiraPrincipal.expedicao).label('data_expedicao')
         ).filter(
-            Separacao.sincronizado_nf == False,
-            Separacao.qtd_saldo > 0
-        ).group_by(
-            Separacao.num_pedido,
-            Separacao.raz_social_red,
-            Separacao.nome_cidade,
-            Separacao.cod_uf,
-            Separacao.status
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Apenas itens com saldo
+        )
+
+        # Aplicar filtros se fornecidos
+        if filtro_pedido:
+            query = query.filter(CarteiraPrincipal.num_pedido.ilike(f'%{filtro_pedido}%'))
+            logger.info(f"   🔍 Filtro pedido: {filtro_pedido}")
+
+        if filtro_cliente:
+            query = query.filter(CarteiraPrincipal.raz_social_red.ilike(f'%{filtro_cliente}%'))
+            logger.info(f"   🔍 Filtro cliente: {filtro_cliente}")
+
+        if filtro_cidade:
+            query = query.filter(CarteiraPrincipal.nome_cidade.ilike(f'%{filtro_cidade}%'))
+            logger.info(f"   🔍 Filtro cidade: {filtro_cidade}")
+
+        if filtro_uf:
+            query = query.filter(CarteiraPrincipal.cod_uf == filtro_uf.upper())
+            logger.info(f"   🔍 Filtro UF: {filtro_uf}")
+
+        # Agrupar e ordenar
+        query = query.group_by(
+            CarteiraPrincipal.num_pedido,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.nome_cidade,
+            CarteiraPrincipal.cod_uf,
+            CarteiraPrincipal.status_pedido
         ).order_by(
-            Separacao.num_pedido.desc()
+            CarteiraPrincipal.num_pedido.desc()
         )
 
         # Paginação
@@ -105,7 +139,11 @@ def listar_pedidos_para_sincronizar():
         return render_template(
             'odoo/sync_integrada/listar_pedidos.html',
             pedidos=pedidos,
-            pagination=pagination
+            pagination=pagination,
+            filtro_pedido=filtro_pedido,
+            filtro_cliente=filtro_cliente,
+            filtro_cidade=filtro_cidade,
+            filtro_uf=filtro_uf
         )
 
     except Exception as e:

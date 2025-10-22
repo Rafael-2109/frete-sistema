@@ -21,6 +21,35 @@ from app.utils.timezone import agora_brasil
 # ROTAS PÚBLICAS (SEM LOGIN) - TRANSPORTADOR
 # ========================================
 
+@rastreamento_bp.route('/app', methods=['GET'])
+@rastreamento_bp.route('/app/inicio', methods=['GET'])
+def app_inicio():
+    """
+    🚚 Tela inicial do app para motoristas (SEM LOGIN)
+
+    Esta é a primeira tela que o motorista vê ao abrir o app.
+    Apresenta botão para escanear QR Code e iniciar rastreamento.
+
+    Acesso: Público (sem autenticação)
+    Uso: Aplicativo mobile de rastreamento
+    """
+    return render_template('rastreamento/app_inicio.html')
+
+
+@rastreamento_bp.route('/scanner', methods=['GET'])
+def scanner_qrcode():
+    """
+    📷 Scanner de QR Code via câmera web (SEM LOGIN)
+
+    Página com leitor de QR Code usando biblioteca html5-qrcode.
+    Usado como fallback quando não é app nativo ou para testes em navegador.
+
+    Acesso: Público (sem autenticação)
+    Uso: Navegadores web e fallback do app mobile
+    """
+    return render_template('rastreamento/scanner_qrcode.html')
+
+
 @rastreamento_bp.route('/aceite/<token>', methods=['GET'])
 def aceite_lgpd(token):
     """

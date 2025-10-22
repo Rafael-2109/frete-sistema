@@ -24,9 +24,58 @@
                     <!-- Explicação -->
                     <div class="alert alert-info">
                         <strong><i class="fas fa-info-circle"></i> Como funciona:</strong><br>
+                        • <strong>✅ Busca da Carteira Principal</strong>: Fonte da verdade com qtd_saldo_produto_pedido > 0<br>
                         • <strong>Se encontrado no Odoo</strong>: Atualiza quantidades e dados<br>
                         • <strong>Se NÃO encontrado</strong>: Exclui completamente (incluindo Separacao com sincronizado_nf=False)<br>
                         ⚠️ <strong>Ação irreversível</strong> quando pedido é excluído
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-filter"></i> Filtros</h6>
+                        </div>
+                        <div class="card-body">
+                            <form method="GET" action="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar') }}">
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Número do Pedido</label>
+                                        <input type="text" name="num_pedido" class="form-control"
+                                               placeholder="Ex: VSC12345" value="{{ filtro_pedido }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Cliente</label>
+                                        <input type="text" name="cliente" class="form-control"
+                                               placeholder="Nome do cliente" value="{{ filtro_cliente }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Cidade</label>
+                                        <input type="text" name="cidade" class="form-control"
+                                               placeholder="Ex: São Paulo" value="{{ filtro_cidade }}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">UF</label>
+                                        <input type="text" name="uf" class="form-control"
+                                               placeholder="Ex: SP" maxlength="2" value="{{ filtro_uf }}">
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% if filtro_pedido or filtro_cliente or filtro_cidade or filtro_uf %}
+                                <div class="row mt-2">
+                                    <div class="col-12">
+                                        <a href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar') }}"
+                                           class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-times"></i> Limpar Filtros
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </form>
+                        </div>
                     </div>
 
                     <!-- Estatísticas -->
@@ -98,14 +147,14 @@
                         <ul class="pagination justify-content-center">
                             <!-- Primeira página -->
                             <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=1) }}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=1, num_pedido=filtro_pedido, cliente=filtro_cliente, cidade=filtro_cidade, uf=filtro_uf) }}">
                                     <i class="fas fa-angle-double-left"></i>
                                 </a>
                             </li>
 
                             <!-- Página anterior -->
                             <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.prev_num) if pagination.has_prev else '#' }}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.prev_num, num_pedido=filtro_pedido, cliente=filtro_cliente, cidade=filtro_cidade, uf=filtro_uf) if pagination.has_prev else '#' }}">
                                     <i class="fas fa-angle-left"></i>
                                 </a>
                             </li>
@@ -114,7 +163,7 @@
                             {% for page_num in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
                                 {% if page_num %}
                                     <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
-                                        <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=page_num) }}">
+                                        <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=page_num, num_pedido=filtro_pedido, cliente=filtro_cliente, cidade=filtro_cidade, uf=filtro_uf) }}">
                                             {{ page_num }}
                                         </a>
                                     </li>
@@ -125,14 +174,14 @@
 
                             <!-- Próxima página -->
                             <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.next_num) if pagination.has_next else '#' }}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.next_num, num_pedido=filtro_pedido, cliente=filtro_cliente, cidade=filtro_cidade, uf=filtro_uf) if pagination.has_next else '#' }}">
                                     <i class="fas fa-angle-right"></i>
                                 </a>
                             </li>
 
                             <!-- Última página -->
                             <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.pages) }}">
+                                <a class="page-link" href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar', page=pagination.pages, num_pedido=filtro_pedido, cliente=filtro_cliente, cidade=filtro_cidade, uf=filtro_uf) }}">
                                     <i class="fas fa-angle-double-right"></i>
                                 </a>
                             </li>
