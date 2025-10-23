@@ -112,7 +112,7 @@ xlsxwriter==3.2.5
 # ==========================================
 # EMAIL PROCESSING
 # ==========================================
-extract-msg==0.45.0  # Para ler arquivos .msg do Outlook
+extract-msg==0.55.0  # Para ler arquivos .msg e .eml do Outlook
 
 # ==========================================
 # PORTAL INTEGRATION - BROWSER AUTOMATION

@@ -3305,37 +3305,42 @@ def emitir_fatura_freteiro(transportadora_id):
 @fretes_bp.route('/despesa/<int:despesa_id>/anexar-email-ajax', methods=['POST'])
 @login_required
 def anexar_email_ajax(despesa_id):
-    """Rota AJAX para anexar email a uma despesa extra"""
+    """Rota AJAX para anexar email (.msg ou .eml) a uma despesa extra"""
     try:
         # Busca a despesa
         despesa = DespesaExtra.query.get_or_404(despesa_id)
-        
+
         # Verifica se foi enviado um arquivo
         if 'arquivo_email' not in request.files:
             return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
-        
+
         arquivo_email = request.files['arquivo_email']
-        
+
         if arquivo_email.filename == '':
             return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'}), 400
-        
-        # Verifica extensão
-        if not arquivo_email.filename.lower().endswith('.msg'):
-            return jsonify({'success': False, 'message': 'Arquivo deve ser .msg'}), 400
-        
-        # Processa o email
+
+        # Verifica extensão - aceita .msg e .eml
+        filename_lower = arquivo_email.filename.lower()
+        if not (filename_lower.endswith('.msg') or filename_lower.endswith('.eml')):
+            return jsonify({'success': False, 'message': 'Arquivo deve ser .msg ou .eml'}), 400
+
+        # Processa o email de acordo com a extensão
         email_handler = EmailHandler()
-        metadados = email_handler.processar_email_msg(arquivo_email)
-        
+
+        if filename_lower.endswith('.msg'):
+            metadados = email_handler.processar_email_msg(arquivo_email)
+        else:  # .eml
+            metadados = email_handler.processar_email_eml(arquivo_email)
+
         if not metadados:
             return jsonify({'success': False, 'message': 'Erro ao processar email'}), 500
-        
+
         # Faz upload do arquivo
         caminho = email_handler.upload_email(arquivo_email, despesa.id, current_user.nome)
-        
+
         if not caminho:
             return jsonify({'success': False, 'message': 'Erro ao fazer upload do email'}), 500
-        
+
         # Cria registro no banco
         email_anexado = EmailAnexado(
             despesa_extra_id=despesa.id,
@@ -3353,19 +3358,19 @@ def anexar_email_ajax(despesa_id):
             conteudo_preview=metadados.get('conteudo_preview', ''),
             criado_por=current_user.nome
         )
-        
+
         db.session.add(email_anexado)
         db.session.commit()
-        
+
         current_app.logger.info(f"✅ Email anexado com sucesso à despesa #{despesa_id} por {current_user.nome}")
-        
+
         return jsonify({
             'success': True,
             'message': 'Email anexado com sucesso',
             'email_id': email_anexado.id,
             'total_emails': len(despesa.emails_anexados)
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"❌ Erro ao anexar email: {str(e)}")
         db.session.rollback()
