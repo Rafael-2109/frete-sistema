@@ -2,6 +2,33 @@
 
 {% block title %}Gerenciar Despesas Extras{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Estilo customizado para as abas */
+    #despesasTabs .nav-link {
+        font-size: 1.1rem;
+        padding: 1rem 1.5rem;
+        color: #495057;
+        border: 2px solid transparent;
+    }
+
+    #despesasTabs .nav-link:hover {
+        border-color: #dee2e6;
+        background-color: #f8f9fa;
+    }
+
+    #despesasTabs .nav-link.active {
+        font-weight: 600;
+        border-bottom: 3px solid #0d6efd;
+        background-color: #fff;
+    }
+
+    .tab-content {
+        padding-top: 1.5rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -38,6 +65,58 @@
         </small>
     </div>
 
+    <!-- Filtros de Pesquisa -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter"></i> Filtros de Pesquisa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('fretes.gerenciar_despesas_extras') }}">
+                        <div class="row">
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label for="filtro_nf">
+                                        <i class="fas fa-file-invoice"></i> Número da NF
+                                    </label>
+                                    <input type="text" name="filtro_nf" id="filtro_nf"
+                                           class="form-control"
+                                           value="{{ filtro_nf if filtro_nf else '' }}"
+                                           placeholder="Ex: 12345">
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label for="filtro_documento">
+                                        <i class="fas fa-file-alt"></i> Número do Documento
+                                    </label>
+                                    <input type="text" name="filtro_documento" id="filtro_documento"
+                                           class="form-control"
+                                           value="{{ filtro_documento if filtro_documento else '' }}"
+                                           placeholder="Ex: CTe-123">
+                                </div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <div class="form-group w-100">
+                                    <button type="submit" class="btn btn-primary btn-block">
+                                        <i class="fas fa-search"></i> Filtrar
+                                    </button>
+                                    <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}"
+                                       class="btn btn-secondary btn-block mt-2">
+                                        <i class="fas fa-times"></i> Limpar
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Estatísticas -->
     <div class="row mb-4">
         <div class="col-md-6">
@@ -45,7 +124,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <h4 class="mb-0">{{ despesas_sem_fatura|length }}</h4>
+                            <h4 class="mb-0">{{ despesas_sem_fatura.total }}</h4>
                             <span class="small">Despesas SEM Fatura</span>
                         </div>
                         <div class="align-self-center">
@@ -60,7 +139,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <h4 class="mb-0">{{ despesas_com_fatura|length }}</h4>
+                            <h4 class="mb-0">{{ despesas_com_fatura.total }}</h4>
                             <span class="small">Despesas COM Fatura</span>
                         </div>
                         <div class="align-self-center">
@@ -72,18 +151,44 @@
         </div>
     </div>
 
-    <!-- Despesas SEM fatura -->
-    <div class="row mb-4">
+    <!-- ✅ ABAS (TABS) PARA SEPARAR AS DESPESAS -->
+    <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-exclamation-triangle"></i> Despesas SEM Fatura
-                        <small class="ml-2">({{ despesas_sem_fatura|length }} itens)</small>
-                    </h5>
-                </div>
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs nav-fill" id="despesasTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="sem-fatura-tab" data-bs-toggle="tab"
+                        data-bs-target="#sem-fatura" type="button" role="tab" aria-controls="sem-fatura"
+                        aria-selected="true">
+                        <i class="fas fa-exclamation-triangle text-warning"></i>
+                        <strong>SEM Fatura</strong>
+                        <span class="badge bg-warning text-dark ms-2">{{ despesas_sem_fatura.total }}</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="com-fatura-tab" data-bs-toggle="tab" data-bs-target="#com-fatura"
+                        type="button" role="tab" aria-controls="com-fatura" aria-selected="false">
+                        <i class="fas fa-check-circle text-success"></i>
+                        <strong>COM Fatura</strong>
+                        <span class="badge bg-success text-white ms-2">{{ despesas_com_fatura.total }}</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab panes -->
+            <div class="tab-content" id="despesasTabContent">
+                <!-- ========== ABA: DESPESAS SEM FATURA ========== -->
+                <div class="tab-pane fade show active" id="sem-fatura" role="tabpanel"
+                    aria-labelledby="sem-fatura-tab">
+                    <div class="card border-0 border-top-0 rounded-0 rounded-bottom">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-exclamation-triangle"></i> Despesas SEM Fatura
+                                <small class="ml-2">({{ despesas_sem_fatura.total }} itens{% if despesas_sem_fatura.pages > 1 %} - Página {{ despesas_sem_fatura.page }} de {{ despesas_sem_fatura.pages }}{% endif %})</small>
+                            </h5>
+                        </div>
                 <div class="card-body">
-                    {% if despesas_sem_fatura %}
+                    {% if despesas_sem_fatura.items %}
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
@@ -100,7 +205,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for despesa in despesas_sem_fatura %}
+                                {% for despesa in despesas_sem_fatura.items %}
                                 <tr>
                                     <td><strong>#{{ despesa.id }}</strong></td>
                                     <td>
@@ -131,29 +236,79 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Paginação Despesas SEM Fatura -->
+                    {% if despesas_sem_fatura.pages > 1 %}
+                    <nav aria-label="Paginação despesas sem fatura">
+                        <ul class="pagination justify-content-center">
+                            {% if despesas_sem_fatura.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=despesas_sem_fatura.prev_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                    Anterior
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Anterior</span>
+                            </li>
+                            {% endif %}
+
+                            {% for page_num in despesas_sem_fatura.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num == despesas_sem_fatura.page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=page_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if despesas_sem_fatura.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=despesas_sem_fatura.next_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                    Próximo
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Próximo</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
                     {% else %}
                     <div class="alert alert-success">
                         <i class="fas fa-check-circle"></i>
                         <strong>Excelente!</strong> Todas as despesas extras já estão vinculadas a faturas.
                     </div>
                     {% endif %}
+                    </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
+                <!-- FIM ABA: DESPESAS SEM FATURA -->
 
-    <!-- Despesas COM fatura -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-check-circle"></i> Despesas COM Fatura
-                        <small class="ml-2">({{ despesas_com_fatura|length }} itens)</small>
-                    </h5>
-                </div>
+                <!-- ========== ABA: DESPESAS COM FATURA ========== -->
+                <div class="tab-pane fade" id="com-fatura" role="tabpanel" aria-labelledby="com-fatura-tab">
+                    <div class="card border-0 border-top-0 rounded-0 rounded-bottom">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-check-circle"></i> Despesas COM Fatura
+                                <small class="ml-2">({{ despesas_com_fatura.total }} itens{% if despesas_com_fatura.pages > 1 %} - Página {{ despesas_com_fatura.page }} de {{ despesas_com_fatura.pages }}{% endif %})</small>
+                            </h5>
+                        </div>
                 <div class="card-body">
-                    {% if despesas_com_fatura %}
+                    {% if despesas_com_fatura.items %}
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
@@ -170,7 +325,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for despesa in despesas_com_fatura %}
+                                {% for despesa in despesas_com_fatura.items %}
                                 <tr>
                                     <td><strong>#{{ despesa.id }}</strong></td>
                                     <td>
@@ -217,14 +372,69 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Paginação Despesas COM Fatura -->
+                    {% if despesas_com_fatura.pages > 1 %}
+                    <nav aria-label="Paginação despesas com fatura">
+                        <ul class="pagination justify-content-center">
+                            {% if despesas_com_fatura.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=despesas_com_fatura.prev_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                    Anterior
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Anterior</span>
+                            </li>
+                            {% endif %}
+
+                            {% for page_num in despesas_com_fatura.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num == despesas_com_fatura.page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=page_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if despesas_com_fatura.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=despesas_com_fatura.next_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                    Próximo
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Próximo</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
                     {% else %}
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
                         <strong>Informação:</strong> Nenhuma despesa extra está vinculada a faturas ainda.
                     </div>
                     {% endif %}
+                    </div>
+                    </div>
                 </div>
+                <!-- FIM ABA: DESPESAS COM FATURA -->
             </div>
+            <!-- FIM Tab Content -->
         </div>
     </div>
 
@@ -240,4 +450,31 @@
         </div>
     </div>
 </div>
+
+<!-- ✅ Script para garantir funcionamento das abas -->
+<script>
+    // Inicializa as abas do Bootstrap quando o documento estiver pronto
+    document.addEventListener('DOMContentLoaded', function() {
+        // Para Bootstrap 5
+        const triggerTabList = document.querySelectorAll('#despesasTabs button');
+        triggerTabList.forEach(function(triggerEl) {
+            const tabTrigger = new bootstrap.Tab(triggerEl);
+
+            triggerEl.addEventListener('click', function(event) {
+                event.preventDefault();
+                tabTrigger.show();
+            });
+        });
+
+        // Se houver hash na URL, ativar a aba correspondente
+        const hash = window.location.hash;
+        if (hash === '#com-fatura') {
+            const comFaturaTab = document.querySelector('#com-fatura-tab');
+            if (comFaturaTab) {
+                const tab = new bootstrap.Tab(comFaturaTab);
+                tab.show();
+            }
+        }
+    });
+</script>
 {% endblock %}

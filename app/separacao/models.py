@@ -191,8 +191,43 @@ class Separacao(db.Model):
 
 
 # ============================================================================
-# EVENT LISTENERS PARA SINCRONIZAÇÃO AUTOMÁTICA DE STATUS
+# EVENT LISTENERS PARA SINCRONIZAÇÃO AUTOMÁTICA DE STATUS E FALTA_PAGAMENTO
 # ============================================================================
+
+@event.listens_for(Separacao, 'before_insert')
+def setar_falta_pagamento_inicial(mapper, connection, target):
+    """
+    Define falta_pagamento=True automaticamente APENAS na criação (INSERT)
+    se o pedido tem condição de pagamento ANTECIPADO.
+
+    Após a criação, o valor só pode ser alterado manualmente pelo usuário via botão.
+    Este listener NÃO roda em UPDATEs para preservar a escolha manual do usuário.
+
+    ✅ Executado: APENAS no INSERT (criação)
+    ❌ NÃO executado: Em UPDATEs (preserva valor manual)
+    """
+    if target.num_pedido:
+        from app.carteira.models import CarteiraPrincipal
+        from sqlalchemy import select
+
+        try:
+            # Buscar condição de pagamento na CarteiraPrincipal
+            stmt = select(CarteiraPrincipal.cond_pgto_pedido).where(
+                CarteiraPrincipal.num_pedido == target.num_pedido
+            ).limit(1)
+
+            result = connection.execute(stmt).scalar()
+
+            # Se encontrou e tem ANTECIPADO, marca falta_pagamento=True
+            if result and 'ANTECIPADO' in result.upper():
+                target.falta_pagamento = True
+
+        except Exception as e:
+            # Em caso de erro, mantém o valor padrão (False)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[FALTA_PAGAMENTO] Erro ao verificar pedido {target.num_pedido}: {e}")
+
 
 @event.listens_for(Separacao, 'before_insert')
 @event.listens_for(Separacao, 'before_update')

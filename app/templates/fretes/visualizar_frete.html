@@ -146,7 +146,10 @@
 
                             {% if frete.fatura_frete %}
                             <p><strong>Fatura:</strong>
-                                <a href="{{ url_for('fretes.listar_faturas') }}" title="Ver todas as faturas">
+                                <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=frete.fatura_frete.id) }}"
+                                   class="badge bg-primary text-white"
+                                   title="Ver detalhes da fatura {{ frete.fatura_frete.numero_fatura }}">
+                                    <i class="fas fa-file-invoice"></i>
                                     {{ frete.fatura_frete.numero_fatura }}
                                 </a>
                             </p>
@@ -384,6 +387,8 @@
                                     <th>Motivo</th>
                                     <th>Documento</th>
                                     <th>Número</th>
+                                    <th>Fatura</th>
+                                    <th>Transportadora</th>
                                     <th>Valor</th>
                                     <th>Vencimento</th>
                                     <th>Ações</th>
@@ -404,6 +409,25 @@
                                         </span>
                                         {% else %}
                                         {{ despesa.numero_documento }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if despesa.fatura_frete %}
+                                        <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=despesa.fatura_frete.id) }}"
+                                           class="badge bg-primary text-white text-decoration-none"
+                                           title="Ver detalhes da fatura {{ despesa.fatura_frete.numero_fatura }}">
+                                            <i class="fas fa-file-invoice"></i>
+                                            {{ despesa.fatura_frete.numero_fatura }}
+                                        </a>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if despesa.fatura_frete and despesa.fatura_frete.transportadora %}
+                                        {{ despesa.fatura_frete.transportadora.razao_social[:25] }}{% if despesa.fatura_frete.transportadora.razao_social|length > 25 %}...{% endif %}
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
                                         {% endif %}
                                     </td>
                                     <td>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</td>
@@ -479,7 +503,7 @@
                             </tbody>
                             <tfoot>
                                 <tr class="font-weight-bold">
-                                    <td colspan="5">Total Despesas Extras:</td>
+                                    <td colspan="7">Total Despesas Extras:</td>
                                     <td>R$ {{ "%.2f"|format(despesas_extras|sum(attribute='valor_despesa')) }}</td>
                                     <td></td>
                                     <td></td>

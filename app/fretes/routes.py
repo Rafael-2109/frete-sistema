@@ -1607,10 +1607,10 @@ def confirmar_despesa_extra():
         else:
             # Tem fatura - redireciona para seleção
             return redirect(url_for('fretes.selecionar_fatura_despesa'))
-    
-    # Busca faturas disponíveis da mesma transportadora
+
+    # ✅ ALTERADO: Busca TODAS as faturas disponíveis (não só da mesma transportadora)
+    # Permite vincular despesas extras a faturas de qualquer transportadora
     faturas_disponiveis = FaturaFrete.query.filter_by(
-        transportadora_id=frete.transportadora_id,
         status_conferencia='PENDENTE'
     ).order_by(desc(FaturaFrete.criado_em)).all()
     
@@ -1634,9 +1634,10 @@ def selecionar_fatura_despesa():
     if not frete:
         flash('Frete não encontrado!', 'error')
         return redirect(url_for('fretes.nova_despesa_extra_por_nf'))
-    
+
+    # ✅ ALTERADO: Busca TODAS as faturas disponíveis (não só da mesma transportadora)
+    # Permite vincular despesas extras a faturas de qualquer transportadora
     faturas_disponiveis = FaturaFrete.query.filter_by(
-        transportadora_id=frete.transportadora_id,
         status_conferencia='PENDENTE'
     ).order_by(desc(FaturaFrete.criado_em)).all()
     
@@ -2567,19 +2568,60 @@ def tentar_lancamento_frete_automatico(embarque_id, cnpj_cliente, usuario='Siste
 @login_required
 def gerenciar_despesas_extras():
     """Lista despesas extras para gerenciamento (vinculação a faturas, etc.)"""
-    # ✅ Busca despesas extras sem fatura vinculada (via FK)
-    despesas_sem_fatura = db.session.query(DespesaExtra).join(Frete).filter(
-        DespesaExtra.fatura_frete_id.is_(None)
-    ).order_by(desc(DespesaExtra.criado_em)).all()
+    # ✅ NOVOS FILTROS: NF, documento e fatura
+    filtro_nf = request.args.get('filtro_nf', '').strip()
+    filtro_documento = request.args.get('filtro_documento', '').strip()
 
-    # ✅ Busca despesas extras com fatura vinculada (via FK)
-    despesas_com_fatura = db.session.query(DespesaExtra).join(Frete).filter(
+    # Paginação
+    pagina_sem = request.args.get('pagina_sem', 1, type=int)
+    pagina_com = request.args.get('pagina_com', 1, type=int)
+    por_pagina = 20
+
+    # ✅ Query base para despesas SEM fatura
+    query_sem_fatura = db.session.query(DespesaExtra).join(Frete).filter(
+        DespesaExtra.fatura_frete_id.is_(None)
+    )
+
+    # Aplicar filtros para despesas SEM fatura
+    if filtro_nf:
+        query_sem_fatura = query_sem_fatura.filter(
+            Frete.numeros_nfs.ilike(f'%{filtro_nf}%')
+        )
+    if filtro_documento:
+        query_sem_fatura = query_sem_fatura.filter(
+            DespesaExtra.numero_documento.ilike(f'%{filtro_documento}%')
+        )
+
+    # Paginação para despesas SEM fatura
+    despesas_sem_fatura_paginadas = query_sem_fatura.order_by(
+        desc(DespesaExtra.criado_em)
+    ).paginate(page=pagina_sem, per_page=por_pagina, error_out=False)
+
+    # ✅ Query base para despesas COM fatura
+    query_com_fatura = db.session.query(DespesaExtra).join(Frete).filter(
         DespesaExtra.fatura_frete_id.isnot(None)
-    ).order_by(desc(DespesaExtra.criado_em)).all()
-    
+    )
+
+    # Aplicar filtros para despesas COM fatura
+    if filtro_nf:
+        query_com_fatura = query_com_fatura.filter(
+            Frete.numeros_nfs.ilike(f'%{filtro_nf}%')
+        )
+    if filtro_documento:
+        query_com_fatura = query_com_fatura.filter(
+            DespesaExtra.numero_documento.ilike(f'%{filtro_documento}%')
+        )
+
+    # Paginação para despesas COM fatura
+    despesas_com_fatura_paginadas = query_com_fatura.order_by(
+        desc(DespesaExtra.criado_em)
+    ).paginate(page=pagina_com, per_page=por_pagina, error_out=False)
+
     return render_template('fretes/gerenciar_despesas_extras.html',
-                         despesas_sem_fatura=despesas_sem_fatura,
-                         despesas_com_fatura=despesas_com_fatura)
+                         despesas_sem_fatura=despesas_sem_fatura_paginadas,
+                         despesas_com_fatura=despesas_com_fatura_paginadas,
+                         filtro_nf=filtro_nf,
+                         filtro_documento=filtro_documento)
 
 
 @fretes_bp.route('/despesas/<int:despesa_id>/vincular_fatura', methods=['GET', 'POST'])
@@ -2588,10 +2630,10 @@ def vincular_despesa_fatura(despesa_id):
     """Vincula uma despesa extra existente a uma fatura"""
     despesa = DespesaExtra.query.get_or_404(despesa_id)
     frete = Frete.query.get(despesa.frete_id)
-    
-    # Busca faturas disponíveis da mesma transportadora
+
+    # ✅ ALTERADO: Busca TODAS as faturas disponíveis (não só da mesma transportadora)
+    # Permite vincular despesas extras a faturas de qualquer transportadora
     faturas_disponiveis = FaturaFrete.query.filter_by(
-        transportadora_id=frete.transportadora_id,
         status_conferencia='PENDENTE'
     ).order_by(desc(FaturaFrete.criado_em)).all()
     
@@ -2698,9 +2740,9 @@ def desvincular_despesa_fatura(despesa_id):
 def editar_documento_despesa(despesa_id):
     """Permite editar o número do documento APENAS se houver fatura vinculada"""
     despesa = DespesaExtra.query.get_or_404(despesa_id)
-    
-    # ✅ VALIDAÇÃO: Só permite editar se houver fatura vinculada
-    if not despesa.frete.fatura_frete_id:
+
+    # ✅ CORRIGIDO: Valida se a DESPESA tem fatura vinculada (não o frete)
+    if not despesa.fatura_frete_id:
         flash('⚠️ Para preencher o número do documento, a fatura deve estar vinculada primeiro!', 'warning')
         return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
     
@@ -2723,10 +2765,11 @@ def editar_documento_despesa(despesa_id):
                 
             except Exception as e:
                 flash(f'Erro ao atualizar documento: {str(e)}', 'error')
-    
-    return render_template('fretes/editar_documento_despesa.html', 
+
+    # ✅ CORRIGIDO: Passa a fatura DA DESPESA (não a fatura do frete)
+    return render_template('fretes/editar_documento_despesa.html',
                          despesa=despesa,
-                         fatura=despesa.frete.fatura_frete)
+                         fatura=despesa.fatura_frete)
 
 @fretes_bp.route('/contas_correntes')
 @login_required

@@ -39,7 +39,7 @@
                         <div class="col-md-6">
                             <h5 class="text-muted">Fatura Vinculada</h5>
                             <p><strong>Número:</strong> {{ fatura.numero_fatura }}</p>
-                            <p><strong>Transportadora:</strong> {{ fatura.transportadora.nome }}</p>
+                            <p><strong>Transportadora:</strong> {{ fatura.transportadora.razao_social if fatura.transportadora else 'N/A' }}</p>
                             <p><strong>Emissão:</strong> {{ fatura.data_emissao | formatar_data_segura if
                                 fatura.data_emissao else 'N/A' }}</p>
                             <p><strong>Vencimento:</strong> {{ fatura.vencimento | formatar_data_segura if
