@@ -175,25 +175,11 @@ def obter_dados():
             CarteiraPrincipal.cod_produto.asc()                        # 5º Cod_produto
         )
 
-        # Paginação PRIMEIRO (mais rápido)
+        # ✅ BUSCAR TODOS os pedidos (sem paginação - Virtual Scrolling é no frontend)
         t1 = time.time()
-        items = query.limit(limit).offset(offset).all()
+        items = query.all()  # TODOS os pedidos filtrados (por rota, estado, etc.)
+        total = len(items)
         tempos['query_items'] = time.time() - t1
-
-        # 🚀 OTIMIZAÇÃO: COUNT aproximado para evitar full table scan
-        t1 = time.time()
-        # Se limit >= 1000, usar estimativa baseada nos itens retornados
-        if limit >= 1000:
-            # Estimativa: se retornou menos que limit, total = offset + len(items)
-            if len(items) < limit:
-                total = offset + len(items)
-            else:
-                # Retornou completo, fazer COUNT real apenas se necessário
-                total = query.count()
-        else:
-            # Para filtros específicos (limit baixo), COUNT é aceitável
-            total = query.count()
-        tempos['count'] = time.time() - t1
 
         # Buscar dados de palletização (batch)
         t1 = time.time()
@@ -371,11 +357,23 @@ def obter_dados():
         if sub_rota:
             separacoes_base = separacoes_base.filter(CadastroSubRota.sub_rota == sub_rota)
 
+        # ✅ EXECUTAR query de separações FILTRADAS (visíveis)
         separacoes_query = separacoes_base.order_by(
             Separacao.num_pedido,
             Separacao.separacao_lote_id,
             Separacao.id
         ).all()
+
+        # ✅ BUSCAR TODAS as separações (SEM filtros de rota/sub-rota) dos produtos
+        # IMPORTANTE: Buscar de TODOS os produtos, não apenas pedidos_da_pagina
+        separacoes_todas_query = db.session.query(Separacao).filter(
+            and_(
+                Separacao.cod_produto.in_(codigos_produtos),
+                Separacao.sincronizado_nf == False
+            )
+        )
+        separacoes_todas = separacoes_todas_query.all()
+
         tempos['separacoes'] = time.time() - t1
 
         # 🆕 BUSCAR EMBARQUES E TRANSPORTADORAS (batch)
@@ -624,6 +622,26 @@ def obter_dados():
                         })
         tempos['montar_resposta'] = time.time() - t1
 
+        # 🆕 CALCULAR SAÍDAS NÃO VISÍVEIS (para cálculos de estoque completos)
+        t1 = time.time()
+        saidas_nao_visiveis = {}
+
+        try:
+            # ✅ Calcular saídas NÃO visíveis: TODAS - FILTRADAS
+            saidas_nao_visiveis = calcular_saidas_nao_visiveis(
+                codigos_produtos=codigos_produtos,
+                separacoes_todas=separacoes_todas,  # TODAS as separações dos produtos
+                separacoes_filtradas=separacoes_query  # Separações FILTRADAS (com rota/sub-rota)
+            )
+
+            tempos['saidas_nao_visiveis'] = time.time() - t1
+            logger.info(f"✅ Saídas não visíveis calculadas em {tempos['saidas_nao_visiveis']:.3f}s")
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao calcular saídas não visíveis (continuando sem elas): {e}", exc_info=True)
+            saidas_nao_visiveis = {}
+            tempos['saidas_nao_visiveis'] = time.time() - t1
+
         # 🚀 PROFILING: Log de tempos
         tempo_total = time.time() - tempo_inicio
         print(f"\n{'='*60}")
@@ -641,7 +659,8 @@ def obter_dados():
             'total': total,
             'limit': limit,
             'offset': offset,
-            'dados': dados
+            'dados': dados,
+            'saidas_nao_visiveis': saidas_nao_visiveis  # 🆕 NOVO CAMPO
         })
 
     except Exception as e:
@@ -650,6 +669,92 @@ def obter_dados():
             'success': False,
             'error': str(e)
         }), 500
+
+
+def calcular_saidas_nao_visiveis(
+    codigos_produtos,
+    separacoes_todas,
+    separacoes_filtradas
+):
+    """
+    Calcula saídas NÃO visíveis usando: TODAS - FILTRADAS
+
+    ⚠️ IMPORTANTE: Apenas Separacao.expedicao contém datas de saída.
+
+    LÓGICA PERFEITA:
+    1. Recebe separacoes_todas (todas as separações dos pedidos da página)
+    2. Recebe separacoes_filtradas (separações que passaram pelos filtros)
+    3. Calcula: NÃO VISÍVEIS = TODAS - FILTRADAS
+    4. Agrupa por produto + data
+
+    Args:
+        codigos_produtos (list): Lista de códigos de produtos
+        separacoes_todas (list): TODAS as separações dos pedidos (sem filtros)
+        separacoes_filtradas (list): Separações FILTRADAS (visíveis)
+
+    Returns:
+        dict: {cod_produto: [{'data': '2025-10-23', 'qtd': 100.0}]}
+    """
+    try:
+        logger.info(f"🔍 Calculando saídas NÃO visíveis (TODAS - FILTRADAS)...")
+
+        # 1. Criar SET de IDs das separações FILTRADAS (visíveis)
+        ids_filtradas = set(sep.id for sep in separacoes_filtradas)
+
+        logger.info(f"   Total separações: {len(separacoes_todas)}")
+        logger.info(f"   Separações filtradas (visíveis): {len(ids_filtradas)}")
+
+        # 2. Filtrar separações NÃO VISÍVEIS = TODAS - FILTRADAS
+        separacoes_nao_visiveis = [
+            sep for sep in separacoes_todas
+            if sep.id not in ids_filtradas and sep.expedicao is not None
+        ]
+
+        logger.info(f"   Separações NÃO visíveis: {len(separacoes_nao_visiveis)}")
+
+        # 3. Agrupar por produto + data
+        saidas_por_produto_data = {}
+
+        for sep in separacoes_nao_visiveis:
+            cod_prod = sep.cod_produto
+            data_exp = sep.expedicao.isoformat()
+            qtd = float(sep.qtd_saldo or 0)
+
+            if qtd <= 0:
+                continue
+
+            chave = (cod_prod, data_exp)
+
+            if chave in saidas_por_produto_data:
+                saidas_por_produto_data[chave] += qtd
+            else:
+                saidas_por_produto_data[chave] = qtd
+
+        # 4. Converter para formato final
+        saidas_consolidadas = {}
+
+        for cod_prod in codigos_produtos:
+            saidas_consolidadas[cod_prod] = []
+
+        for (cod_prod, data_exp), qtd in saidas_por_produto_data.items():
+            saidas_consolidadas[cod_prod].append({
+                'data': data_exp,
+                'qtd': qtd
+            })
+
+        # 5. Ordenar por data
+        for cod_prod in saidas_consolidadas:
+            saidas_consolidadas[cod_prod].sort(key=lambda x: x['data'])
+
+        # Log final
+        total_saidas = sum(len(s) for s in saidas_consolidadas.values())
+        logger.info(f"✅ Saídas NÃO visíveis: {total_saidas} saídas calculadas")
+
+        return saidas_consolidadas
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao calcular saídas não visíveis: {e}", exc_info=True)
+        return {cod_prod: [] for cod_prod in codigos_produtos}
 
 
 @carteira_simples_bp.route('/api/estoque-projetado')

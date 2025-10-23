@@ -21,6 +21,7 @@
         projecaoEstoqueOffset: 0, // 🆕 OFFSET GLOBAL para paginação D0-D28 (não mais por linha)
         carregando: false, // Flag para evitar múltiplas chamadas simultâneas
         modalLoading: null, // Instância única do modal de loading
+        saidasNaoVisiveis: {}, // 🆕 Saídas de pedidos NÃO visíveis {cod_produto: [{data, qtd}]}
 
         // 🚀 VIRTUAL SCROLLING
         virtualScroll: {
@@ -131,7 +132,10 @@
 
             state.dados = resultado.dados;
             state.totalItens = resultado.total;
+            state.saidasNaoVisiveis = resultado.saidas_nao_visiveis || {};  // 🆕 Capturar saídas não visíveis
 
+            console.log(`✅ Dados carregados: ${state.dados.length} linhas visíveis`);
+            console.log(`✅ Saídas não visíveis: ${Object.keys(state.saidasNaoVisiveis).length} produtos`);
 
             renderizarTabela();
             popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
@@ -2240,7 +2244,9 @@
     function coletarTodasSaidas(codProduto) {
         const saidas = [];
 
-        // Percorrer TODAS as linhas da tabela
+        // ============================================
+        // PARTE 1: COLETAR SAÍDAS VISÍVEIS (state.dados)
+        // ============================================
         state.dados.forEach((item, index) => {
             // Verificar se é o mesmo produto
             if (item.cod_produto !== codProduto) return;
@@ -2271,6 +2277,16 @@
                 });
             }
         });
+
+        // ============================================
+        // PARTE 2: 🆕 ADICIONAR SAÍDAS NÃO VISÍVEIS (backend)
+        // ============================================
+        const saidasNaoVisiveis = state.saidasNaoVisiveis[codProduto] || [];
+
+        if (saidasNaoVisiveis.length > 0) {
+            console.log(`   🔧 Adicionando ${saidasNaoVisiveis.length} saída(s) NÃO visível(is) do produto ${codProduto}`);
+            saidas.push(...saidasNaoVisiveis);
+        }
 
         return saidas;
     }
@@ -2909,6 +2925,8 @@
         const tbody = document.getElementById('tbody-carteira');
         const linhas = tbody.querySelectorAll('tr');
 
+        let pedidosOcultadosPorSaldo = 0; // 🆕 Contador para debug
+
         linhas.forEach(linha => {
             const tipo = linha.dataset.tipo; // 'pedido' ou 'separacao'
 
@@ -2920,14 +2938,32 @@
             // Lógica de visibilidade
             let deveExibir = false;
 
-            if (tipo === 'separacao' && exibirSep) deveExibir = true;
-            if (tipo === 'pedido' && exibirPdd) deveExibir = true;
+            if (tipo === 'separacao' && exibirSep) {
+                deveExibir = true;
+            }
+
+            if (tipo === 'pedido' && exibirPdd) {
+                // ✅ CORREÇÃO: Verificar qtd_saldo ANTES de exibir
+                const qtdSaldo = parseFloat(linha.dataset.qtdSaldo || linha.getAttribute('data-qtd-saldo') || 0);
+
+                if (qtdSaldo > 0) {
+                    deveExibir = true;
+                } else {
+                    // Pedido com saldo=0 deve permanecer oculto
+                    deveExibir = false;
+                    pedidosOcultadosPorSaldo++;
+                }
+            }
 
             // Aplicar visibilidade
             linha.style.display = deveExibir ? '' : 'none';
         });
 
         console.log(`✅ Filtro de tipo aplicado: exibindo ${exibirSep ? 'Sep.' : ''} ${exibirPdd ? 'Pdd.' : ''}`);
+
+        if (pedidosOcultadosPorSaldo > 0) {
+            console.log(`   ℹ️ ${pedidosOcultadosPorSaldo} pedido(s) com saldo=0 mantidos ocultos`);
+        }
     }
 
 })();
