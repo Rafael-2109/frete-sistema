@@ -1029,15 +1029,10 @@ def conferir_fatura(fatura_id):
     # Busca todos os CTes (fretes) da fatura
     fretes = Frete.query.filter_by(fatura_frete_id=fatura_id).all()
     
-    # ✅ CORRIGIDO: Busca despesas extras VINCULADAS A ESTA FATURA pelo número da fatura
-    # Busca despesas que têm o número desta fatura nas observações
-    despesas_extras = DespesaExtra.query.filter(
-        DespesaExtra.observacoes.contains(f'Fatura: {fatura.numero_fatura}')
+    # ✅ Busca despesas extras vinculadas a esta fatura via FK
+    despesas_extras = DespesaExtra.query.filter_by(
+        fatura_frete_id=fatura.id
     ).all()
-    
-    # ✅ EXPLICAÇÃO: As despesas extras são vinculadas às faturas pelo número da fatura
-    # que fica armazenado no campo observacoes no formato "Fatura: NUMERO_FATURA | outras_obs"
-    # Isso permite que uma despesa seja vinculada a uma fatura independentemente do frete
     
     # Analisa status dos documentos
     documentos_status = []
@@ -1079,30 +1074,27 @@ def conferir_fatura(fatura_id):
     
     # Analisa Despesas Extras
     for despesa in despesas_extras:
-        # ✅ LÓGICA ORIGINAL RESTRITIVA (CORRIGIDA):
+        # ✅ LÓGICA ATUALIZADA: Verifica FK em vez de observações
         # Despesa é considerada LANÇADA apenas se tem documento preenchido E está vinculada à fatura
-        if (despesa.numero_documento and 
-            despesa.numero_documento != 'PENDENTE_FATURA' and 
-            despesa.valor_despesa and
-            despesa.observacoes and 'Fatura:' in despesa.observacoes):
+        if (despesa.numero_documento and
+                despesa.numero_documento != 'PENDENTE_FATURA' and
+                despesa.valor_despesa and
+                despesa.fatura_frete_id is not None):
             status_doc = "LANÇADO"
         else:
             status_doc = "PENDENTE"
-        
+
         # ✅ DEBUG: Mostra detalhes da despesa
-        fatura_vinculada = "SIM" if (despesa.observacoes and 'Fatura:' in despesa.observacoes) else "NÃO"
+        fatura_vinculada = "SIM" if despesa.fatura_frete_id is not None else "NÃO"
         documento_ok = "SIM" if (despesa.numero_documento and despesa.numero_documento != 'PENDENTE_FATURA') else "NÃO"
         print(f"  Despesa #{despesa.id}: numero_documento={despesa.numero_documento}, valor={despesa.valor_despesa}, fatura_vinculada={fatura_vinculada}, documento_ok={documento_ok} → STATUS: {status_doc}")
         
-        # ✅ CORRIGIDO: Identifica se despesa tem fatura vinculada
+        # ✅ Identifica se despesa tem fatura vinculada via FK
         cliente_obs = "Despesa Extra"
-        if despesa.observacoes and 'Fatura:' in despesa.observacoes:
-            try:
-                fatura_info = despesa.observacoes.split('Fatura:')[1].split('|')[0].strip()
-                cliente_obs = f"Despesa Extra (Fatura: {fatura_info})"
-            except Exception as e:
-                print(f"Erro ao processar despesa #{despesa.id}: {str(e)}")
-                cliente_obs = "Despesa Extra"
+        if despesa.fatura_frete_id:
+            fatura_vinculada_obj = FaturaFrete.query.get(despesa.fatura_frete_id)
+            if fatura_vinculada_obj:
+                cliente_obs = f"Despesa Extra (Fatura: {fatura_vinculada_obj.numero_fatura})"
         
         documentos_status.append({
             'tipo': 'Despesa',
@@ -1302,28 +1294,12 @@ def editar_fatura(fatura_id):
     
     if request.method == 'POST':
         try:
-            # ✅ CORREÇÃO CRÍTICA: Captura nome antigo antes de alterar
+            # ✅ Captura nome antigo antes de alterar (para mensagem)
             numero_fatura_antigo = fatura.numero_fatura
             numero_fatura_novo = request.form.get('numero_fatura')
-            
-            # ✅ ATUALIZA OBSERVAÇÕES DAS DESPESAS EXTRAS SE NOME MUDOU
-            if numero_fatura_novo != numero_fatura_antigo:
-                # Busca despesas vinculadas à fatura antiga
-                despesas_vinculadas = DespesaExtra.query.filter(
-                    DespesaExtra.observacoes.contains(f'Fatura: {numero_fatura_antigo}')
-                ).all()
-                
-                # Atualiza observações para usar novo nome da fatura
-                for despesa in despesas_vinculadas:
-                    if despesa.observacoes:
-                        import re
-                        despesa.observacoes = re.sub(
-                            rf'Fatura:\s*{re.escape(numero_fatura_antigo)}',
-                            f'Fatura: {numero_fatura_novo}',
-                            despesa.observacoes
-                        )
-                
-                print(f"DEBUG: Atualizadas {len(despesas_vinculadas)} despesas extras da fatura '{numero_fatura_antigo}' → '{numero_fatura_novo}'")
+
+            # ✅ Despesas extras já vinculadas via FK - não precisa atualizar nada
+            # O vínculo é pelo ID da fatura, não pelo nome
             
             # Atualiza dados da fatura
             fatura.numero_fatura = numero_fatura_novo
@@ -1335,7 +1311,7 @@ def editar_fatura(fatura_id):
             db.session.commit()
             
             if numero_fatura_novo != numero_fatura_antigo:
-                flash(f'✅ Fatura editada com sucesso! Nome alterado de "{numero_fatura_antigo}" para "{numero_fatura_novo}". Despesas extras atualizadas automaticamente.', 'success')
+                flash(f'✅ Fatura editada com sucesso! Nome alterado de "{numero_fatura_antigo}" para "{numero_fatura_novo}".', 'success')
             else:
                 flash(f'✅ Fatura {fatura.numero_fatura} atualizada com sucesso!', 'success')
             
@@ -1488,6 +1464,7 @@ def criar_despesa_extra_frete(frete_id):
         # Cria e salva a despesa imediatamente
         despesa = DespesaExtra(
             frete_id=frete_id,
+            fatura_frete_id=None,  # ✅ Despesa sem fatura inicialmente
             tipo_despesa=form.tipo_despesa.data,
             setor_responsavel=form.setor_responsavel.data,
             motivo_despesa=form.motivo_despesa.data,
@@ -1594,6 +1571,7 @@ def confirmar_despesa_extra():
             try:
                 despesa = DespesaExtra(
                     frete_id=despesa_data['frete_id'],
+                    fatura_frete_id=None,  # ✅ Despesa sem fatura
                     tipo_despesa=despesa_data['tipo_despesa'],
                     setor_responsavel=despesa_data['setor_responsavel'],
                     motivo_despesa=despesa_data['motivo_despesa'],
@@ -1697,6 +1675,7 @@ def selecionar_fatura_despesa():
             # Salva despesa com fatura
             despesa = DespesaExtra(
                 frete_id=despesa_data['frete_id'],
+                fatura_frete_id=fatura.id,  # ✅ FK direta para a fatura
                 tipo_despesa=despesa_data['tipo_despesa'],
                 setor_responsavel=despesa_data['setor_responsavel'],
                 motivo_despesa=despesa_data['motivo_despesa'],
@@ -1704,7 +1683,7 @@ def selecionar_fatura_despesa():
                 numero_documento='PENDENTE_FATURA',  # ✅ DOCUMENTO SERÁ PREENCHIDO APÓS FATURA
                 valor_despesa=valor_cobranca_float,  # Usa o valor da cobrança
                 vencimento_despesa=vencimento_final,  # **USA VENCIMENTO DA FATURA**
-                observacoes=f"Fatura: {fatura.numero_fatura} | {despesa_data['observacoes'] or ''}",
+                observacoes=despesa_data['observacoes'] or '',  # ✅ Sem "Fatura:" - usa FK
                 criado_por=current_user.nome
             )
             
@@ -1740,6 +1719,7 @@ def nova_despesa_extra(frete_id):
     if form.validate_on_submit():
         despesa = DespesaExtra(
             frete_id=frete_id,
+            fatura_frete_id=None,  # ✅ Despesa sem fatura inicialmente
             tipo_despesa=form.tipo_despesa.data,
             setor_responsavel=form.setor_responsavel.data,
             motivo_despesa=form.motivo_despesa.data,
@@ -2587,20 +2567,14 @@ def tentar_lancamento_frete_automatico(embarque_id, cnpj_cliente, usuario='Siste
 @login_required
 def gerenciar_despesas_extras():
     """Lista despesas extras para gerenciamento (vinculação a faturas, etc.)"""
-    # Busca despesas extras sem fatura vinculada
+    # ✅ Busca despesas extras sem fatura vinculada (via FK)
     despesas_sem_fatura = db.session.query(DespesaExtra).join(Frete).filter(
-        or_(
-            DespesaExtra.observacoes.is_(None),
-            ~DespesaExtra.observacoes.contains('Fatura:')
-        )
+        DespesaExtra.fatura_frete_id.is_(None)
     ).order_by(desc(DespesaExtra.criado_em)).all()
-    
-    # Busca despesas extras com fatura vinculada
+
+    # ✅ Busca despesas extras com fatura vinculada (via FK)
     despesas_com_fatura = db.session.query(DespesaExtra).join(Frete).filter(
-        and_(
-            DespesaExtra.observacoes.isnot(None),
-            DespesaExtra.observacoes.contains('Fatura:')
-        )
+        DespesaExtra.fatura_frete_id.isnot(None)
     ).order_by(desc(DespesaExtra.criado_em)).all()
     
     return render_template('fretes/gerenciar_despesas_extras.html',
@@ -2656,10 +2630,10 @@ def vincular_despesa_fatura(despesa_id):
             # **COPIA VENCIMENTO DA FATURA PARA A DESPESA**
             if fatura.vencimento:
                 despesa.vencimento_despesa = fatura.vencimento
-            
-            # Atualiza observações para incluir fatura
-            observacoes_original = despesa.observacoes or ""
-            despesa.observacoes = f"Fatura: {fatura.numero_fatura} | {observacoes_original}"
+
+            # ✅ VINCULA VIA FK em vez de observações
+            despesa.fatura_frete_id = fatura.id
+            # Observações permanecem sem o padrão "Fatura:"
             
             db.session.commit()
             
@@ -2686,59 +2660,31 @@ def desvincular_despesa_fatura(despesa_id):
     despesa = DespesaExtra.query.get_or_404(despesa_id)
     
     try:
-        # ✅ NOVA VALIDAÇÃO: Identifica a fatura vinculada
-        fatura_vinculada = None
-        if despesa.observacoes and 'Fatura:' in despesa.observacoes:
-            try:
-                import re
-                # Extrai o nome da fatura das observações
-                match = re.search(r'Fatura:\s*([^|]+)', despesa.observacoes)
-                if match:
-                    nome_fatura = match.group(1).strip()
-                    fatura_vinculada = FaturaFrete.query.filter_by(numero_fatura=nome_fatura).first()
-            except Exception as e:
-                print(f"Erro ao identificar fatura: {e}")
-        
+        # ✅ VALIDAÇÃO: Verifica se há fatura para desvincular via FK
+        if despesa.fatura_frete_id is None:
+            flash('⚠️ Esta despesa não está vinculada a nenhuma fatura!', 'warning')
+            return redirect(url_for('fretes.gerenciar_despesas_extras'))
+
         # ✅ VALIDAÇÃO CRÍTICA: Bloqueia desvinculação de fatura conferida
+        fatura_vinculada = FaturaFrete.query.get(despesa.fatura_frete_id)
         if fatura_vinculada and fatura_vinculada.status_conferencia == 'CONFERIDO':
             flash('❌ Não é possível desvincular despesa de fatura já CONFERIDA!', 'error')
             return redirect(url_for('fretes.gerenciar_despesas_extras'))
-        
-        # ✅ VALIDAÇÃO: Verifica se há fatura para desvincular
-        if not despesa.observacoes or 'Fatura:' not in despesa.observacoes:
-            flash('⚠️ Esta despesa não está vinculada a nenhuma fatura!', 'warning')
-            return redirect(url_for('fretes.gerenciar_despesas_extras'))
-        
-        # ✅ DESVINCULAÇÃO ROBUSTA: Remove referência da fatura das observações
-        observacoes_originais = despesa.observacoes
-        
-        # Remove padrões: "Fatura: XXX |", " | Fatura: XXX", "Fatura: XXX"
-        import re
-        # Remove início: "Fatura: XXX | "
-        despesa.observacoes = re.sub(r'^Fatura:\s*[^|]+\s*\|\s*', '', despesa.observacoes)
-        # Remove meio: " | Fatura: XXX | "
-        despesa.observacoes = re.sub(r'\s*\|\s*Fatura:\s*[^|]+\s*\|\s*', ' | ', despesa.observacoes)
-        # Remove final: " | Fatura: XXX"
-        despesa.observacoes = re.sub(r'\s*\|\s*Fatura:\s*[^|]+\s*$', '', despesa.observacoes)
-        # Remove caso seja só a fatura: "Fatura: XXX"
-        despesa.observacoes = re.sub(r'^Fatura:\s*[^|]+\s*$', '', despesa.observacoes)
-        
-        # Limpa observações vazias
-        if not despesa.observacoes or despesa.observacoes.strip() in ['', '|']:
-            despesa.observacoes = None
-        
+
+        # ✅ DESVINCULAÇÃO VIA FK (simples e seguro)
+        despesa.fatura_frete_id = None
+
         # ✅ RESET CAMPOS: Volta despesa ao estado "sem fatura"
         despesa.numero_documento = 'PENDENTE_FATURA'
         despesa.vencimento_despesa = None
+        # Observações permanecem intactas
         
         db.session.commit()
-        
+
         # ✅ LOG DEBUG: Para troubleshooting
         nome_fatura_debug = fatura_vinculada.numero_fatura if fatura_vinculada else 'Desconhecida'
-        print(f"DEBUG: Despesa #{despesa.id} desvinculada da fatura '{nome_fatura_debug}'")
-        print(f"  Observações antes: '{observacoes_originais}'")
-        print(f"  Observações depois: '{despesa.observacoes}'")
-        
+        print(f"DEBUG: Despesa #{despesa.id} desvinculada da fatura '{nome_fatura_debug}' (fatura_frete_id={despesa.fatura_frete_id})")
+
         flash(f'✅ Despesa extra desvinculada da fatura {nome_fatura_debug} com sucesso!', 'success')
         
     except Exception as e:
@@ -3286,12 +3232,11 @@ def emitir_fatura_freteiro(transportadora_id):
                 if frete:
                     frete.fatura_frete_id = nova_fatura.id
             
-            # Vincula despesas à fatura (via observações)
+            # ✅ Vincula despesas à fatura via FK
             for despesa_id in despesas_selecionadas:
                 despesa = DespesaExtra.query.get(int(despesa_id))
                 if despesa:
-                    obs_atual = despesa.observacoes or ''
-                    despesa.observacoes = f"{obs_atual} | Fatura: {nova_fatura.numero_fatura}".strip(' |')
+                    despesa.fatura_frete_id = nova_fatura.id
             
             db.session.commit()
             

@@ -216,27 +216,17 @@ class FaturaFrete(db.Model):
         return sum(f.valor_cte or 0 for f in self.fretes)
     
     def total_despesas_extras(self):
-        """Retorna o total de despesas extras VINCULADAS a esta fatura pelo número"""
-        # ✅ CORRIGIDO: Busca despesas que têm este número de fatura nas observações
-        despesas = DespesaExtra.query.filter(
-            DespesaExtra.observacoes.contains(f'Fatura: {self.numero_fatura}')
-        ).all()
-        return len(despesas)
-    
+        """Retorna o total de despesas extras vinculadas a esta fatura via FK"""
+        return DespesaExtra.query.filter_by(fatura_frete_id=self.id).count()
+
     def valor_total_despesas_extras(self):
-        """Retorna o valor total das despesas extras VINCULADAS a esta fatura pelo número"""
-        # ✅ CORRIGIDO: Busca despesas que têm este número de fatura nas observações
-        despesas = DespesaExtra.query.filter(
-            DespesaExtra.observacoes.contains(f'Fatura: {self.numero_fatura}')
-        ).all()
+        """Retorna o valor total das despesas extras vinculadas a esta fatura via FK"""
+        despesas = DespesaExtra.query.filter_by(fatura_frete_id=self.id).all()
         return sum(despesa.valor_despesa for despesa in despesas)
-    
+
     def todas_despesas_extras(self):
-        """Retorna todas as despesas extras VINCULADAS a esta fatura pelo número"""
-        # ✅ CORRIGIDO: Busca despesas que têm este número de fatura nas observações
-        return DespesaExtra.query.filter(
-            DespesaExtra.observacoes.contains(f'Fatura: {self.numero_fatura}')
-        ).all()
+        """Retorna todas as despesas extras vinculadas a esta fatura via FK"""
+        return DespesaExtra.query.filter_by(fatura_frete_id=self.id).all()
 
     def __repr__(self):
         return f'<FaturaFrete {self.numero_fatura} - {self.transportadora.razao_social if self.transportadora else "N/A"}>'
@@ -251,7 +241,8 @@ class DespesaExtra(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'), nullable=False)
-    
+    fatura_frete_id = db.Column(db.Integer, db.ForeignKey('faturas_frete.id'), nullable=True, index=True)
+
     # Tipos de despesa (conforme readme.md)
     TIPOS_DESPESA = [
         'REENTREGA', 'TDE', 'PERNOITE', 'DEVOLUÇÃO', 'DIARIA',
@@ -295,6 +286,9 @@ class DespesaExtra(db.Model):
     # Controle
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100), nullable=False)
+
+    # Relacionamentos
+    fatura_frete = db.relationship('FaturaFrete', backref='despesas_extras')
 
     def __repr__(self):
         return f'<DespesaExtra {self.tipo_despesa} - R$ {self.valor_despesa}>'
