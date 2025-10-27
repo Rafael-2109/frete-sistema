@@ -1,0 +1,72 @@
+/* ==================================================
+   LAYOUT OTIMIZADO - ALTURA DINÂMICA
+   ================================================== */
+
+/* Table container com altura fixa e scroll */
+.table-container {
+    max-height: calc(100vh - 250px); /* Ajuste conforme necessário */
+    overflow: auto;
+    position: relative;
+}
+
+/* Botões de tamanho de fonte compactos */
+.btn-size-compact {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.btn-size-compact:hover {
+    background: #e9ecef;
+    border-color: #ced4da;
+}
+
+.btn-size-compact.active {
+    background: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+/* Botões extras pequenos */
+.btn-xs {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* DROPDOWN INTELIGENTE - ABRE PARA CIMA QUANDO NECESSÁRIO */
+.menu-acoes-lista {
+    position: fixed !important; /* MUDADO PARA FIXED */
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    min-width: 180px;
+    z-index: 99999;
+    padding: 5px 0;
+}
+
+/* Customizador compacto */
+.customizador-colunas {
+    background: white;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.form-check-label {
+    font-size: 0.85rem;
+}
+
+/* Cursor pointer para linhas clicáveis */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.cursor-pointer:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}

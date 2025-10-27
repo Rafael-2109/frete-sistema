@@ -12,7 +12,8 @@ Data: 2025-08-10
 import logging
 from app import db
 from app.odoo.services.manufatura_service import ManufaturaOdooService
-from app.manufatura.services.ordem_producao_service import OrdemProducaoService
+# OrdemProducaoService removido durante refatoração - funcionalidade será reimplementada
+# from app.manufatura.services.ordem_producao_service import OrdemProducaoService
 from app.manufatura.models import LogIntegracao
 
 logger = logging.getLogger(__name__)
@@ -113,51 +114,30 @@ def job_sincronizar_producao():
 
 def job_gerar_ordens_mto():
     """
-    Job para gerar ordens MTO automaticamente
-    Executa a cada 4 horas
+    [DESABILITADO TEMPORARIAMENTE]
+    Job para gerar ordens MTO automaticamente - Executa a cada 4 horas
+
+    OrdemProducaoService foi removido durante refatoração do módulo.
+    Funcionalidade será reimplementada na próxima versão.
     """
-    logger.info("Iniciando job de geração de ordens MTO")
-    
-    try:
-        service = OrdemProducaoService()
-        ordens = service.gerar_ordens_mto_automaticas()
-        
-        resultado = {
-            'sucesso': True,
-            'ordens_criadas': len(ordens),
-            'mensagem': f'{len(ordens)} ordens MTO criadas automaticamente'
-        }
-        
-        # Registrar sucesso no log
-        if ordens:
-            log = LogIntegracao(
-                tipo_integracao='job_gerar_mto',
-                status='sucesso',
-                mensagem=resultado['mensagem'],
-                registros_processados=len(ordens),
-                registros_erro=0
-            )
-            db.session.add(log)
-            db.session.commit()
-        
-        logger.info(f"Job MTO concluído: {resultado}")
-        return resultado
-        
-    except Exception as e:
-        logger.error(f"Erro no job MTO: {e}")
-        
-        # Registrar erro no log
-        log = LogIntegracao(
-            tipo_integracao='job_gerar_mto',
-            status='erro',
-            mensagem=str(e),
-            registros_processados=0,
-            registros_erro=1
-        )
-        db.session.add(log)
-        db.session.commit()
-        
-        return {'sucesso': False, 'erro': str(e)}
+    logger.warning("⚠️ Job de ordens MTO desabilitado - OrdemProducaoService removido")
+
+    # Registrar aviso no log
+    log = LogIntegracao(
+        tipo_integracao='job_gerar_mto',
+        status='aviso',
+        mensagem='Job desabilitado - funcionalidade sendo reimplementada',
+        registros_processados=0,
+        registros_erro=0
+    )
+    db.session.add(log)
+    db.session.commit()
+
+    return {
+        'sucesso': False,
+        'erro': 'Funcionalidade temporariamente desabilitada',
+        'ordens_criadas': 0
+    }
 
 
 def job_importar_historico_mensal():

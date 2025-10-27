@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 
 def register_previsao_demanda_routes(bp):
-    
+
     @bp.route('/previsao-demanda')
     @login_required
     def previsao_demanda():
@@ -148,10 +148,10 @@ def register_previsao_demanda_routes(bp):
             if qtd_prevista == 0 or qtd_prevista is None:
                 # Se já existe um registro, deleta
                 previsao_existente = PrevisaoDemanda.query.filter_by(
-                    data_mes=dados['mes'],
-                    data_ano=dados['ano'],
-                    cod_produto=dados['cod_produto'],
-                    nome_grupo=dados.get('grupo', 'GERAL')
+                    data_mes=dados['mes'], # type: ignore
+                    data_ano=dados['ano'], # type: ignore
+                    cod_produto=dados['cod_produto'], # type: ignore
+                    nome_grupo=dados.get('grupo', 'GERAL') # type: ignore
                 ).first()
                 
                 if previsao_existente:
@@ -169,19 +169,19 @@ def register_previsao_demanda_routes(bp):
             
             # Busca ou cria previsão
             previsao = PrevisaoDemanda.query.filter_by(
-                data_mes=dados['mes'],
-                data_ano=dados['ano'],
-                cod_produto=dados['cod_produto'],
-                nome_grupo=dados.get('grupo', 'GERAL')
+                data_mes=dados['mes'], # type: ignore
+                data_ano=dados['ano'], # type: ignore
+                cod_produto=dados['cod_produto'], # type: ignore
+                nome_grupo=dados.get('grupo', 'GERAL') # type: ignore
             ).first()
             
             if not previsao:
                 previsao = PrevisaoDemanda(
-                    data_mes=dados['mes'],
-                    data_ano=dados['ano'],
-                    cod_produto=dados['cod_produto'],
-                    nome_produto=dados.get('nome_produto'),
-                    nome_grupo=dados.get('grupo', 'GERAL')
+                    data_mes=dados['mes'], # type: ignore
+                    data_ano=dados['ano'], # type: ignore
+                    cod_produto=dados['cod_produto'], # type: ignore
+                    nome_produto=dados.get('nome_produto'), # type: ignore
+                    nome_grupo=dados.get('grupo', 'GERAL') # type: ignore
                 )
                 db.session.add(previsao)
             
@@ -192,8 +192,8 @@ def register_previsao_demanda_routes(bp):
             previsao.criado_em = datetime.utcnow()
             
             # Se houver demanda realizada, atualiza também
-            if 'qtd_realizada' in dados:
-                previsao.qtd_demanda_realizada = dados['qtd_realizada']
+            if 'qtd_realizada' in dados: # type: ignore
+                previsao.qtd_demanda_realizada = dados['qtd_realizada'] # type: ignore
             
             db.session.commit()
             

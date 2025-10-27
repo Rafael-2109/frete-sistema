@@ -825,6 +825,11 @@ def create_app(config_name=None):
     app.register_blueprint(producao_bp)
     app.register_blueprint(relatorios_producao_bp)
     app.register_blueprint(manufatura_bp)
+
+    # Registrar blueprint de Recursos de Produção
+    from app.manufatura.routes.recursos_producao_routes import recursos_bp
+    app.register_blueprint(recursos_bp)
+
     app.register_blueprint(permissions_bp)
 
     # 📊 Módulo Comercial - Acompanhamento de Vendas

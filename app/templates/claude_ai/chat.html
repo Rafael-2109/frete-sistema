@@ -2,8 +2,7 @@
 
 {% block title %}Claude AI - Assistente do Sistema{% endblock %}
 
-{% block head %}
-    {{ super() }}
+{% block extra_css %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
 

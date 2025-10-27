@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% set active_page = "manufatura" %}
+
+{% block title %}Manufatura/PCP{% endblock %}
+
+{% block extra_css %}
+<style>
+    .module-card {
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        border: 2px solid #e0e0e0;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+        background: white;
+    }
+
+    .module-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+        border-color: var(--module-color);
+    }
+
+    .module-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 5px;
+        background: linear-gradient(90deg, var(--module-color) 0%, var(--module-color-light) 100%);
+    }
+
+    .module-card.planning {
+        --module-color: #007bff;
+        --module-color-light: #6c9eff;
+    }
+
+    .module-card.production {
+        --module-color: #28a745;
+        --module-color-light: #5dd67a;
+    }
+
+    .module-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1.5rem;
+        color: var(--module-color);
+        opacity: 0.9;
+    }
+
+    .module-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        color: #2c3e50;
+    }
+
+    .module-description {
+        color: #6c757d;
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+        line-height: 1.5;
+    }
+
+    .module-status {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-new {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .page-header h1 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 2rem;
+    }
+
+    .page-header p {
+        margin: 0.5rem 0 0 0;
+        opacity: 0.9;
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <!-- Cabeçalho da Página -->
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-industry me-3"></i>
+            Módulo de Manufatura/PCP
+        </h1>
+        <p>Sistema de Planejamento e Controle da Produção</p>
+    </div>
+
+    <!-- Cards de Módulos -->
+    <div class="row g-4">
+
+        <!-- Card: Previsão de Demanda -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card planning" onclick="window.location.href='{{ url_for('manufatura.previsao_demanda') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="module-title">Previsão de Demanda</h3>
+                    <p class="module-description">
+                        Gerencie previsões de vendas por grupo empresarial e analise históricos de demanda.
+                        Compare médias históricas, demanda ativa e demanda realizada.
+                    </p>
+                    <span class="module-status status-active">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Funcional
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Necessidade de Produção -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card production" onclick="window.location.href='{{ url_for('manufatura.necessidade_producao') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-cogs"></i>
+                    </div>
+                    <h3 class="module-title">Necessidade de Produção</h3>
+                    <p class="module-description">
+                        Analise a necessidade de produção baseada em previsões, carteira de pedidos e estoque atual.
+                        Visualize projeções de estoque D0-D60 e programe produção.
+                    </p>
+                    <span class="module-status status-new">
+                        <i class="fas fa-star me-1"></i>
+                        Nova Funcionalidade
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Recursos de Produção -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card production" onclick="window.location.href='{{ url_for('recursos_producao.listar') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-industry"></i>
+                    </div>
+                    <h3 class="module-title">Recursos de Produção</h3>
+                    <p class="module-description">
+                        Gerencie capacidades produtivas, linhas de produção e eficiências.
+                        Cadastre múltiplas linhas por produto e controle disponibilidade.
+                    </p>
+                    <span class="module-status status-new">
+                        <i class="fas fa-star me-1"></i>
+                        Nova Funcionalidade
+                    </span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Informações Adicionais -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-info" role="alert">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Em desenvolvimento:</strong> Novas funcionalidades serão adicionadas gradualmente ao módulo de Manufatura/PCP.
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    console.log('Módulo Manufatura/PCP - Tela Inicial carregada');
+</script>
+{% endblock %}

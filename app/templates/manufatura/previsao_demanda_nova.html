@@ -2,7 +2,7 @@
 
 {% block title %}Previsão de Demanda - Manufatura/PCP{% endblock %}
 
-{% block head %}
+{% block extra_css %}
 <style>
     .comparison-selector {
         display: flex;
@@ -107,7 +107,7 @@
         <div class="col-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ url_for('manufatura.dashboard') }}">Manufatura</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('manufatura.index') }}">Manufatura</a></li>
                     <li class="breadcrumb-item active">Previsão de Demanda</li>
                 </ol>
             </nav>

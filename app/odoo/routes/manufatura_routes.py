@@ -60,7 +60,7 @@ def dashboard():
     except Exception as e:
         logger.error(f"❌ Erro no dashboard de integração Manufatura: {e}")
         flash(f"❌ Erro ao carregar dashboard: {str(e)}", 'error')
-        return redirect(url_for('manufatura.dashboard'))
+        return redirect(url_for('manufatura.index'))
 
 @manufatura_odoo_bp.route('/importar/requisicoes', methods=['POST'])
 @login_required
@@ -168,52 +168,18 @@ def importar_historico():
 @manufatura_odoo_bp.route('/gerar/ordens-mto', methods=['POST'])
 @login_required
 def gerar_ordens_mto():
-    """Gera ordens MTO automaticamente"""
-    try:
-        logger.info("🔄 Iniciando geração automática de ordens MTO...")
-        
-        from app.manufatura.services.ordem_producao_service import OrdemProducaoService
-        
-        service = OrdemProducaoService()
-        ordens = service.gerar_ordens_mto_automaticas()
-        
-        resultado = {
-            'sucesso': True,
-            'ordens_criadas': len(ordens),
-            'mensagem': f'{len(ordens)} ordens MTO criadas automaticamente'
-        }
-        
-        # Registrar no log
-        if ordens:
-            log = LogIntegracao(
-                tipo_integracao='gerar_ordens_mto',
-                status='sucesso',
-                mensagem=resultado['mensagem'],
-                registros_processados=len(ordens),
-                registros_erro=0
-            )
-            db.session.add(log)
-            db.session.commit()
-        
-        flash(f"✅ {len(ordens)} ordens MTO criadas com sucesso!", 'success')
-        
-        return jsonify(resultado)
-        
-    except Exception as e:
-        logger.error(f"❌ Erro ao gerar ordens MTO: {e}")
-        
-        # Registrar erro no log
-        log = LogIntegracao(
-            tipo_integracao='gerar_ordens_mto',
-            status='erro',
-            mensagem=str(e),
-            registros_processados=0,
-            registros_erro=1
-        )
-        db.session.add(log)
-        db.session.commit()
-        
-        return jsonify({'erro': str(e)}), 500
+    """
+    [TEMPORARIAMENTE DESABILITADO]
+    Funcionalidade de Ordens MTO será reimplementada na próxima versão.
+    Service OrdemProducaoService foi removido durante refatoração do módulo.
+    """
+    logger.warning("⚠️ Rota /gerar/ordens-mto chamada mas está desabilitada")
+
+    return jsonify({
+        'sucesso': False,
+        'erro': 'Funcionalidade temporariamente desabilitada. Será reimplementada em breve.',
+        'ordens_criadas': 0
+    }), 503  # Service Unavailable
 
 @manufatura_odoo_bp.route('/sincronizacao-completa', methods=['POST'])
 @login_required
@@ -288,24 +254,15 @@ def sincronizacao_completa():
                 'erro': str(e)
             })
         
-        # 4. Gerar ordens MTO
-        try:
-            from app.manufatura.services.ordem_producao_service import OrdemProducaoService
-            service = OrdemProducaoService()
-            ordens = service.gerar_ordens_mto_automaticas()
-            
-            resultados['etapas'].append({
-                'etapa': 'Gerar Ordens MTO',
-                'sucesso': True,
-                'registros': len(ordens)
-            })
-        except Exception as e:
-            logger.error(f"Erro ao gerar ordens MTO: {e}")
-            resultados['etapas'].append({
-                'etapa': 'Gerar Ordens MTO',
-                'sucesso': False,
-                'erro': str(e)
-            })
+        # 4. Gerar ordens MTO [DESABILITADO TEMPORARIAMENTE]
+        # Service OrdemProducaoService removido durante refatoração
+        logger.warning("⚠️ Etapa 'Gerar Ordens MTO' pulada - funcionalidade desabilitada")
+        resultados['etapas'].append({
+            'etapa': 'Gerar Ordens MTO',
+            'sucesso': True,
+            'registros': 0,
+            'aviso': 'Funcionalidade desabilitada - será reimplementada'
+        })
         
         # Calcular tempo total
         fim = datetime.now()

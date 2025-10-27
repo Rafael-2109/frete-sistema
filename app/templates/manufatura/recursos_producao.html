@@ -1,0 +1,629 @@
+{% extends "base.html" %}
+{% set active_page = "manufatura" %}
+
+{% block title %}Recursos de Produção{% endblock %}
+
+<!-- Meta tag CSRF para requisições AJAX -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+{% block extra_css %}
+<style>
+    .table-recursos {
+        font-size: 0.85rem;
+    }
+    .badge-disponivel {
+        background-color: #28a745;
+    }
+    .badge-indisponivel {
+        background-color: #6c757d;
+    }
+    .card-stats {
+        border-left: 4px solid #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-industry text-success me-2"></i>
+                Recursos de Produção
+            </h2>
+            <p class="text-muted mb-0">Gerenciamento de capacidades produtivas e linhas de produção</p>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-success" onclick="abrirModalCriar()">
+                <i class="fas fa-plus me-2"></i>
+                Novo Recurso
+            </button>
+            <button class="btn btn-info" onclick="abrirModalImportar()">
+                <i class="fas fa-file-upload me-2"></i>
+                Importar XLSX
+            </button>
+            <a href="{{ url_for('recursos_producao.template_xlsx') }}" class="btn btn-outline-info" title="Baixar template">
+                <i class="fas fa-file-download me-2"></i>
+                Template
+            </a>
+            <a href="{{ url_for('recursos_producao.exportar_xlsx') }}" class="btn btn-primary">
+                <i class="fas fa-file-excel me-2"></i>
+                Exportar XLSX
+            </a>
+            <a href="{{ url_for('manufatura.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <h5 class="mb-0" id="total-recursos">0</h5>
+                    <small class="text-muted">Total de Recursos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <h5 class="mb-0" id="total-produtos">0</h5>
+                    <small class="text-muted">Produtos Cadastrados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <h5 class="mb-0" id="total-linhas">0</h5>
+                    <small class="text-muted">Linhas de Produção</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <h5 class="mb-0" id="total-disponiveis">0</h5>
+                    <small class="text-muted">Recursos Disponíveis</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">
+                        <i class="fas fa-search me-1"></i> Buscar
+                    </label>
+                    <input type="text" id="filtro-busca" class="form-control" placeholder="Código ou nome do produto">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">
+                        <i class="fas fa-cog me-1"></i> Linha de Produção
+                    </label>
+                    <select id="filtro-linha" class="form-select">
+                        <option value="">Todas as linhas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">
+                        <i class="fas fa-toggle-on me-1"></i> Disponibilidade
+                    </label>
+                    <select id="filtro-disponivel" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="true">Disponíveis</option>
+                        <option value="false">Indisponíveis</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="carregarRecursos()">
+                        <i class="fas fa-filter me-2"></i>
+                        Filtrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-table me-2"></i>
+            Lista de Recursos de Produção
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-recursos table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th rowspan="2" class="align-middle">Código</th>
+                            <th rowspan="2" class="align-middle">Produto</th>
+                            <th rowspan="2" class="align-middle">Linha de Produção</th>
+                            <th rowspan="2" class="align-middle text-end">Un/Caixa</th>
+                            <th rowspan="2" class="align-middle text-end">Cap. Un/Min</th>
+                            <th colspan="2" class="text-center bg-info text-white">Capacidade Teórica (100%)</th>
+                            <th colspan="2" class="text-center bg-success text-white">Capacidade Real (c/ Efic.)</th>
+                            <th rowspan="2" class="align-middle text-end">Eficiência %</th>
+                            <th rowspan="2" class="align-middle text-end">Tempo Setup</th>
+                            <th rowspan="2" class="align-middle text-center">Disponível</th>
+                            <th rowspan="2" class="align-middle text-center">Ações</th>
+                        </tr>
+                        <tr>
+                            <th class="text-end bg-info-subtle">SKU/Hora</th>
+                            <th class="text-end bg-info-subtle">SKU/Turno(8h)</th>
+                            <th class="text-end bg-success-subtle">SKU/Hora</th>
+                            <th class="text-end bg-success-subtle">SKU/Turno(8h)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-recursos">
+                        <tr>
+                            <td colspan="13" class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin me-2"></i>
+                                Carregando recursos...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal Criar/Editar -->
+<div class="modal fade" id="modalRecurso" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalRecursoTitulo">
+                    <i class="fas fa-plus me-2"></i>
+                    Novo Recurso de Produção
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formRecurso">
+                    <input type="hidden" id="recurso-id">
+
+                    <div class="row g-3">
+                        <!-- Produto -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-box me-1"></i> Código do Produto *
+                            </label>
+                            <input type="text" class="form-control" id="cod-produto" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Nome do Produto</label>
+                            <input type="text" class="form-control" id="nome-produto">
+                        </div>
+
+                        <!-- Linha de Produção -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-industry me-1"></i> Linha de Produção *
+                            </label>
+                            <input type="text" class="form-control" id="linha-producao" required>
+                        </div>
+
+                        <!-- Capacidade -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-tachometer-alt me-1"></i> Capacidade (un/min) *
+                            </label>
+                            <input type="number" step="0.001" class="form-control" id="capacidade-unidade-minuto" required>
+                        </div>
+
+                        <!-- Lotes -->
+                        <div class="col-md-4">
+                            <label class="form-label">Lote Ideal</label>
+                            <input type="number" step="0.001" class="form-control" id="qtd-lote-ideal">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Lote Mínimo</label>
+                            <input type="number" step="0.001" class="form-control" id="qtd-lote-minimo">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-box me-1"></i> Un. por Caixa *
+                            </label>
+                            <input type="number" step="1" min="1" class="form-control" id="qtd-unidade-por-caixa" required>
+                            <small class="text-muted">Necessário para conversão SKU→Unidade</small>
+                        </div>
+
+                        <!-- Eficiência e Setup -->
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="fas fa-percentage me-1"></i> Eficiência Média (%)
+                            </label>
+                            <input type="number" step="0.01" class="form-control" id="eficiencia-media" value="85.00">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="fas fa-clock me-1"></i> Tempo de Setup (min)
+                            </label>
+                            <input type="number" class="form-control" id="tempo-setup" value="30">
+                        </div>
+
+                        <!-- Disponibilidade -->
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="disponivel" checked>
+                                <label class="form-check-label" for="disponivel">
+                                    <i class="fas fa-toggle-on me-1"></i> Recurso Disponível
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarRecurso()">
+                    <i class="fas fa-save me-2"></i>
+                    Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Importar XLSX -->
+<div class="modal fade" id="modalImportar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-upload me-2"></i>
+                    Importar Recursos (XLSX)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Instruções:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Baixe o <strong>template XLSX</strong> primeiro</li>
+                        <li>Preencha as colunas obrigatórias: <code>cod_produto</code>, <code>linha_producao</code>, <code>qtd_unidade_por_caixa</code>, <code>capacidade_unidade_minuto</code></li>
+                        <li><strong class="text-danger">Importante:</strong> <code>qtd_unidade_por_caixa</code> é necessário para conversão SKU→Unidade</li>
+                        <li>Recursos existentes (mesmo código + linha) serão <strong>atualizados</strong></li>
+                        <li>Novos recursos serão <strong>criados</strong></li>
+                    </ul>
+                </div>
+
+                <form id="formImportarXLSX" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-file-excel me-1"></i> Selecione o arquivo XLSX
+                        </label>
+                        <input type="file" class="form-control" id="arquivo-xlsx" accept=".xlsx" required>
+                        <small class="text-muted">Apenas arquivos .xlsx são permitidos</small>
+                    </div>
+                </form>
+
+                <div id="resultado-importacao" class="d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info" onclick="importarXLSX()" id="btn-importar">
+                    <i class="fas fa-upload me-2"></i>
+                    Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+let recursos = [];
+
+$(document).ready(function() {
+    // Configurar CSRF token para todas as requisições AJAX
+    const csrfToken = $('meta[name="csrf-token"]').attr('content');
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", csrfToken);
+            }
+        }
+    });
+
+    carregarRecursos();
+    carregarLinhasProducao();
+
+    $('#filtro-busca').on('keypress', e => e.which === 13 && carregarRecursos());
+});
+
+function carregarRecursos() {
+    const search = $('#filtro-busca').val();
+    const linha = $('#filtro-linha').val();
+    const disponivel = $('#filtro-disponivel').val();
+
+    $.ajax({
+        url: '/manufatura/recursos/api/listar',
+        data: { search, linha, disponivel },
+        success: function(response) {
+            if (response.success) {
+                recursos = response.dados;
+                renderizarTabela(recursos);
+                atualizarEstatisticas(recursos);
+            }
+        },
+        error: function() {
+            Swal.fire('Erro', 'Falha ao carregar recursos', 'error');
+        }
+    });
+}
+
+// Função auxiliar para formatar números no padrão brasileiro
+function formatarNumeroBR(numero, decimais = 0) {
+    if (numero === null || numero === undefined || isNaN(numero)) return '-';
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: decimais,
+        maximumFractionDigits: decimais
+    }).format(numero);
+}
+
+function renderizarTabela(dados) {
+    if (!dados || !dados.length) {
+        $('#tbody-recursos').html('<tr><td colspan="13" class="text-center text-muted py-4"><i class="fas fa-inbox me-2"></i>Nenhum recurso encontrado</td></tr>');
+        return;
+    }
+
+    let html = '';
+    dados.forEach(r => {
+        const badgeDisp = r.disponivel ?
+            '<span class="badge badge-disponivel">Disponível</span>' :
+            '<span class="badge badge-indisponivel">Indisponível</span>';
+
+        // Calcular capacidades TEÓRICAS (100%)
+        const capSkuHoraTeorica = (r.capacidade_unidade_minuto * 60) / r.qtd_unidade_por_caixa;
+        const capSkuTurnoTeorica = (r.capacidade_unidade_minuto * 60 * 8) / r.qtd_unidade_por_caixa;
+
+        // Calcular capacidades REAIS (com eficiência)
+        const eficienciaDecimal = r.eficiencia_media / 100;
+        const capSkuHoraReal = capSkuHoraTeorica * eficienciaDecimal;
+        const capSkuTurnoReal = capSkuTurnoTeorica * eficienciaDecimal;
+
+        html += `<tr>
+            <td><strong>${r.cod_produto}</strong></td>
+            <td>${r.nome_produto || '-'}</td>
+            <td><i class="fas fa-cog me-1 text-success"></i>${r.linha_producao}</td>
+            <td class="text-end"><strong>${r.qtd_unidade_por_caixa}</strong> un</td>
+            <td class="text-end">${formatarNumeroBR(r.capacidade_unidade_minuto, 1)}</td>
+            <td class="text-end bg-info-subtle"><strong>${formatarNumeroBR(capSkuHoraTeorica, 0)}</strong></td>
+            <td class="text-end bg-info-subtle"><strong>${formatarNumeroBR(capSkuTurnoTeorica, 0)}</strong></td>
+            <td class="text-end bg-success-subtle"><strong class="text-success">${formatarNumeroBR(capSkuHoraReal, 0)}</strong></td>
+            <td class="text-end bg-success-subtle"><strong class="text-success">${formatarNumeroBR(capSkuTurnoReal, 0)}</strong></td>
+            <td class="text-end">${formatarNumeroBR(r.eficiencia_media, 1)}%</td>
+            <td class="text-end">${r.tempo_setup} min</td>
+            <td class="text-center">${badgeDisp}</td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-outline-primary" onclick="editarRecurso(${r.id})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletarRecurso(${r.id})" title="Deletar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+
+    $('#tbody-recursos').html(html);
+}
+
+function atualizarEstatisticas(dados) {
+    const produtosUnicos = new Set(dados.map(r => r.cod_produto)).size;
+    const linhasUnicas = new Set(dados.map(r => r.linha_producao)).size;
+    const disponiveis = dados.filter(r => r.disponivel).length;
+
+    $('#total-recursos').text(dados.length);
+    $('#total-produtos').text(produtosUnicos);
+    $('#total-linhas').text(linhasUnicas);
+    $('#total-disponiveis').text(disponiveis);
+}
+
+function carregarLinhasProducao() {
+    $.get('/manufatura/recursos/api/linhas-producao', function(response) {
+        if (response.success) {
+            const select = $('#filtro-linha');
+            response.linhas.forEach(linha => {
+                select.append(`<option value="${linha}">${linha}</option>`);
+            });
+        }
+    });
+}
+
+function abrirModalCriar() {
+    $('#formRecurso')[0].reset();
+    $('#recurso-id').val('');
+    $('#modalRecursoTitulo').html('<i class="fas fa-plus me-2"></i> Novo Recurso de Produção');
+    $('#modalRecurso').modal('show');
+}
+
+function editarRecurso(id) {
+    const recurso = recursos.find(r => r.id === id);
+    if (!recurso) return;
+
+    $('#recurso-id').val(recurso.id);
+    $('#cod-produto').val(recurso.cod_produto);
+    $('#nome-produto').val(recurso.nome_produto);
+    $('#linha-producao').val(recurso.linha_producao);
+    $('#qtd-unidade-por-caixa').val(recurso.qtd_unidade_por_caixa);
+    $('#capacidade-unidade-minuto').val(recurso.capacidade_unidade_minuto);
+    $('#qtd-lote-ideal').val(recurso.qtd_lote_ideal);
+    $('#qtd-lote-minimo').val(recurso.qtd_lote_minimo);
+    $('#eficiencia-media').val(recurso.eficiencia_media);
+    $('#tempo-setup').val(recurso.tempo_setup);
+    $('#disponivel').prop('checked', recurso.disponivel);
+
+    $('#modalRecursoTitulo').html('<i class="fas fa-edit me-2"></i> Editar Recurso de Produção');
+    $('#modalRecurso').modal('show');
+}
+
+function salvarRecurso() {
+    const id = $('#recurso-id').val();
+    const dados = {
+        cod_produto: $('#cod-produto').val(),
+        nome_produto: $('#nome-produto').val(),
+        linha_producao: $('#linha-producao').val(),
+        qtd_unidade_por_caixa: parseInt($('#qtd-unidade-por-caixa').val()),
+        capacidade_unidade_minuto: parseFloat($('#capacidade-unidade-minuto').val()),
+        qtd_lote_ideal: parseFloat($('#qtd-lote-ideal').val()) || null,
+        qtd_lote_minimo: parseFloat($('#qtd-lote-minimo').val()) || null,
+        eficiencia_media: parseFloat($('#eficiencia-media').val()),
+        tempo_setup: parseInt($('#tempo-setup').val()),
+        disponivel: $('#disponivel').is(':checked')
+    };
+
+    const url = id ? `/manufatura/recursos/api/atualizar/${id}` : '/manufatura/recursos/api/criar';
+    const method = id ? 'PUT' : 'POST';
+
+    $.ajax({
+        url: url,
+        method: method,
+        contentType: 'application/json',
+        data: JSON.stringify(dados),
+        success: function(response) {
+            if (response.success) {
+                Swal.fire('Sucesso!', response.message, 'success');
+                $('#modalRecurso').modal('hide');
+                carregarRecursos();
+            } else {
+                Swal.fire('Erro', response.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON?.message || 'Erro ao salvar recurso';
+            Swal.fire('Erro', msg, 'error');
+        }
+    });
+}
+
+function deletarRecurso(id) {
+    Swal.fire({
+        title: 'Tem certeza?',
+        text: 'Esta ação não pode ser desfeita!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sim, deletar!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/manufatura/recursos/api/deletar/${id}`,
+                method: 'DELETE',
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('Deletado!', response.message, 'success');
+                        carregarRecursos();
+                    }
+                },
+                error: function() {
+                    Swal.fire('Erro', 'Falha ao deletar recurso', 'error');
+                }
+            });
+        }
+    });
+}
+
+function abrirModalImportar() {
+    $('#formImportarXLSX')[0].reset();
+    $('#resultado-importacao').addClass('d-none').html('');
+    $('#modalImportar').modal('show');
+}
+
+function importarXLSX() {
+    const arquivo = $('#arquivo-xlsx')[0].files[0];
+
+    if (!arquivo) {
+        Swal.fire('Atenção', 'Selecione um arquivo XLSX', 'warning');
+        return;
+    }
+
+    if (!arquivo.name.endsWith('.xlsx')) {
+        Swal.fire('Erro', 'Apenas arquivos .xlsx são permitidos', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', arquivo);
+
+    // Adicionar CSRF token
+    const csrfToken = $('meta[name="csrf-token"]').attr('content');
+    formData.append('csrf_token', csrfToken);
+
+    // Desabilitar botão e mostrar loading
+    $('#btn-importar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Importando...');
+
+    $.ajax({
+        url: '/manufatura/recursos/importar-xlsx',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            $('#btn-importar').prop('disabled', false).html('<i class="fas fa-upload me-2"></i>Importar');
+
+            if (response.success) {
+                const mensagem = response.message.replace(/\n/g, '<br>');
+                const tipo = response.erros > 0 ? 'warning' : 'success';
+
+                $('#resultado-importacao')
+                    .removeClass('d-none alert-success alert-warning alert-danger')
+                    .addClass(`alert alert-${tipo}`)
+                    .html(`
+                        <h6><i class="fas fa-check-circle me-2"></i>Resultado da Importação</h6>
+                        <div style="white-space: pre-wrap;">${mensagem}</div>
+                        <hr>
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <strong class="text-success">${response.criados}</strong><br>
+                                <small>Criados</small>
+                            </div>
+                            <div class="col-4">
+                                <strong class="text-primary">${response.atualizados}</strong><br>
+                                <small>Atualizados</small>
+                            </div>
+                            <div class="col-4">
+                                <strong class="text-danger">${response.erros}</strong><br>
+                                <small>Erros</small>
+                            </div>
+                        </div>
+                    `);
+
+                // Recarregar tabela após 2 segundos
+                setTimeout(() => {
+                    carregarRecursos();
+                    if (response.erros === 0) {
+                        $('#modalImportar').modal('hide');
+                    }
+                }, 2000);
+            } else {
+                Swal.fire('Erro', response.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            $('#btn-importar').prop('disabled', false).html('<i class="fas fa-upload me-2"></i>Importar');
+            const msg = xhr.responseJSON?.message || 'Erro ao importar arquivo';
+            Swal.fire('Erro', msg, 'error');
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -124,7 +124,7 @@ class ServicoEstoqueSimples:
                 Separacao.sincronizado_nf == False,  # Apenas não sincronizados
                 db.or_(
                     Separacao.expedicao < hoje,  # ATRASADOS
-                    Separacao.expedicao == None   # SEM DATA
+                    Separacao.expedicao is None   # SEM DATA
                 )
             ).scalar()
 

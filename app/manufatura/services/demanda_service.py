@@ -5,7 +5,7 @@ from app import db
 from app.manufatura.models import PrevisaoDemanda, HistoricoPedidos, GrupoEmpresarial
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
-from app.carteira.models import PreSeparacaoItem, CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal
 from datetime import datetime
 from sqlalchemy import func, extract, or_
 from decimal import Decimal
@@ -77,7 +77,6 @@ class DemandaService:
     def calcular_demanda_ativa(self, cod_produto, grupo=None):
         """Calcula demanda ativa da carteira para um produto específico"""
         
-        from app.carteira.models import CarteiraPrincipal
         import logging
         logger = logging.getLogger(__name__)
         
@@ -146,138 +145,6 @@ class DemandaService:
         logger.info(f"=== FIM calcular_demanda_ativa ===")
         return valor_final
     
-    def calcular_demanda_ativa_OLD(self, mes=None, ano=None, cod_produto=None):
-        """Método antigo mantido para compatibilidade"""
-        
-        query_filters = []
-        if mes:
-            query_filters.append(extract('month', Separacao.expedicao) == mes)
-        if ano:
-            query_filters.append(extract('year', Separacao.expedicao) == ano)
-        if cod_produto:
-            query_filters.append(Separacao.cod_produto == cod_produto)
-        
-        # Demanda de Separacao (prioridade)
-        demanda_separacao = db.session.query(
-            Separacao.cod_produto,
-            Separacao.nome_produto,
-            extract('month', Separacao.expedicao).label('mes'),
-            extract('year', Separacao.expedicao).label('ano'),
-            func.sum(Separacao.qtd_saldo).label('qtd_demanda')
-        ).join(
-            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-        ).filter(
-            Pedido.status != 'FATURADO',
-            *query_filters
-        ).group_by(
-            Separacao.cod_produto,
-            Separacao.nome_produto,
-            'mes',
-            'ano'
-        )
-        
-        # Demanda de PreSeparacaoItem (só se não existe em Separacao)
-        subquery_separacao = db.session.query(Separacao.separacao_lote_id).subquery()
-        
-        query_filters_psi = []
-        if mes:
-            query_filters_psi.append(extract('month', PreSeparacaoItem.data_expedicao_editada) == mes)
-        if ano:
-            query_filters_psi.append(extract('year', PreSeparacaoItem.data_expedicao_editada) == ano)
-        if cod_produto:
-            query_filters_psi.append(PreSeparacaoItem.cod_produto == cod_produto)
-        
-        demanda_pre_separacao = db.session.query(
-            PreSeparacaoItem.cod_produto,
-            PreSeparacaoItem.nome_produto,
-            extract('month', PreSeparacaoItem.data_expedicao_editada).label('mes'),
-            extract('year', PreSeparacaoItem.data_expedicao_editada).label('ano'),
-            func.sum(PreSeparacaoItem.qtd_selecionada_usuario).label('qtd_demanda')
-        ).filter(
-            ~PreSeparacaoItem.separacao_lote_id.in_(subquery_separacao),
-            *query_filters_psi
-        ).group_by(
-            PreSeparacaoItem.cod_produto,
-            PreSeparacaoItem.nome_produto,
-            'mes',
-            'ano'
-        )
-        
-        # Demanda de CarteiraPrincipal (saldo sem separação)
-        # Subqueries para excluir itens já em Separacao ou PreSeparacaoItem
-        subquery_sep_pedidos = db.session.query(Separacao.num_pedido).distinct().subquery()
-        subquery_psi_pedidos = db.session.query(PreSeparacaoItem.num_pedido).distinct().subquery()
-        
-        query_filters_cp = []
-        if mes:
-            query_filters_cp.append(extract('month', CarteiraPrincipal.expedicao) == mes)
-        if ano:
-            query_filters_cp.append(extract('year', CarteiraPrincipal.expedicao) == ano)
-        if cod_produto:
-            query_filters_cp.append(CarteiraPrincipal.cod_produto == cod_produto)
-        
-        demanda_carteira = db.session.query(
-            CarteiraPrincipal.cod_produto,
-            CarteiraPrincipal.nome_produto,
-            extract('month', CarteiraPrincipal.expedicao).label('mes'),
-            extract('year', CarteiraPrincipal.expedicao).label('ano'),
-            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_demanda')
-        ).filter(
-            ~CarteiraPrincipal.num_pedido.in_(subquery_sep_pedidos),
-            ~CarteiraPrincipal.num_pedido.in_(subquery_psi_pedidos),
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
-            *query_filters_cp
-        ).group_by(
-            CarteiraPrincipal.cod_produto,
-            CarteiraPrincipal.nome_produto,
-            'mes',
-            'ano'
-        )
-        
-        # Combinar resultados
-        resultado = {}
-        for item in demanda_separacao.all():
-            key = (item.cod_produto, item.mes, item.ano)
-            resultado[key] = {
-                'cod_produto': item.cod_produto,
-                'nome_produto': item.nome_produto,
-                'mes': item.mes,
-                'ano': item.ano,
-                'qtd_demanda': float(item.qtd_demanda or 0),
-                'fonte': 'Separacao'
-            }
-        
-        for item in demanda_pre_separacao.all():
-            key = (item.cod_produto, item.mes, item.ano)
-            if key in resultado:
-                resultado[key]['qtd_demanda'] += float(item.qtd_demanda or 0)
-                resultado[key]['fonte'] = 'Separacao+PreSeparacao'
-            else:
-                resultado[key] = {
-                    'cod_produto': item.cod_produto,
-                    'nome_produto': item.nome_produto,
-                    'mes': item.mes,
-                    'ano': item.ano,
-                    'qtd_demanda': float(item.qtd_demanda or 0),
-                    'fonte': 'PreSeparacao'
-                }
-        
-        for item in demanda_carteira.all():
-            key = (item.cod_produto, item.mes, item.ano)
-            if key in resultado:
-                resultado[key]['qtd_demanda'] += float(item.qtd_demanda or 0)
-                resultado[key]['fonte'] += '+Carteira'
-            else:
-                resultado[key] = {
-                    'cod_produto': item.cod_produto,
-                    'nome_produto': item.nome_produto,
-                    'mes': item.mes,
-                    'ano': item.ano,
-                    'qtd_demanda': float(item.qtd_demanda or 0),
-                    'fonte': 'Carteira'
-                }
-        
-        return list(resultado.values())
     
     def atualizar_demanda_realizada(self, mes, ano):
         """Atualiza qtd_demanda_realizada baseado no histórico"""

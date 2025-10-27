@@ -1,0 +1,479 @@
+/* ==================================================
+   CSS VARIABLES - TAMANHOS DINÂMICOS
+   ================================================== */
+:root {
+    /* Tamanho MUITO PEQUENO (padrão atual) */
+    --font-base: 0.45rem;
+    --font-header: 0.4rem;
+    --font-codigo: 0.5rem;
+    --font-produto: 0.5rem;
+    --font-projecao: 0.4rem;
+    --font-badge: 0.42rem;
+
+    --width-codigo: 45px;
+    --width-produto: 250px;
+    --width-dados: 52px;
+    --width-projecao: 42px;
+    --width-criticidade: 58px;
+
+    --padding-cell: 0.2rem 0.1rem;
+    --padding-header: 0.2rem 0.1rem;
+    --padding-projecao: 0.15rem 0.05rem;
+    --padding-badge: 0.15rem 0.25rem;
+
+    --line-height: 1.1;
+}
+
+/* TAMANHO PEQUENO */
+.size-small {
+    --font-base: 0.65rem;
+    --font-header: 0.6rem;
+    --font-codigo: 0.7rem;
+    --font-produto: 0.7rem;
+    --font-projecao: 0.6rem;
+    --font-badge: 0.6rem;
+
+    --width-codigo: 60px;
+    --width-produto: 350px;
+    --width-dados: 75px;
+    --width-projecao: 52px;
+    --width-criticidade: 70px;
+
+    --padding-cell: 0.3rem 0.2rem;
+    --padding-header: 0.3rem 0.2rem;
+    --padding-projecao: 0.25rem 0.1rem;
+    --padding-badge: 0.2rem 0.35rem;
+
+    --line-height: 1.2;
+}
+
+/* TAMANHO MÉDIO */
+.size-medium {
+    --font-base: 0.85rem;
+    --font-header: 0.8rem;
+    --font-codigo: 0.9rem;
+    --font-produto: 0.9rem;
+    --font-projecao: 0.8rem;
+    --font-badge: 0.75rem;
+
+    --width-codigo: 80px;
+    --width-produto: 450px;
+    --width-dados: 90px;
+    --width-projecao: 65px;
+    --width-criticidade: 85px;
+
+    --padding-cell: 0.4rem 0.3rem;
+    --padding-header: 0.4rem 0.3rem;
+    --padding-projecao: 0.35rem 0.15rem;
+    --padding-badge: 0.25rem 0.45rem;
+
+    --line-height: 1.3;
+}
+
+/* TAMANHO GRANDE */
+.size-large {
+    --font-base: 1rem;
+    --font-header: 0.95rem;
+    --font-codigo: 1.05rem;
+    --font-produto: 1.05rem;
+    --font-projecao: 0.95rem;
+    --font-badge: 0.9rem;
+
+    --width-codigo: 90px;
+    --width-produto: 550px;
+    --width-dados: 120px;
+    --width-projecao: 75px;
+    --width-criticidade: 100px;
+
+    --padding-cell: 0.5rem 0.4rem;
+    --padding-header: 0.5rem 0.4rem;
+    --padding-projecao: 0.4rem 0.2rem;
+    --padding-badge: 0.3rem 0.55rem;
+
+    --line-height: 1.4;
+}
+
+.card-header-custom {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    font-weight: 600;
+}
+
+/* ==================================================
+   SOBRESCREVER BOOTSTRAP 5 - MÁXIMA PRIORIDADE
+   ================================================== */
+
+/* Resetar estilos Bootstrap na tabela */
+.table-container table.table.table-necessidade,
+.table-container table.table.table-necessidade * {
+    font-size: var(--font-base) !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    line-height: var(--line-height) !important;
+}
+
+.table-container table.table.table-necessidade {
+    white-space: nowrap !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+    margin-bottom: 0 !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+}
+
+/* Forçar fonte em TODAS as células */
+.table-container table.table-necessidade th,
+.table-container table.table-necessidade td {
+    font-size: var(--font-base) !important;
+}
+
+/* HEADERS - SOBRESCREVER BOOTSTRAP */
+.table-container table.table.table-necessidade thead th {
+    background-color: #f8f9fa !important;
+    border-bottom: 2px solid #dee2e6 !important;
+    font-weight: 600 !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    font-size: var(--font-header) !important;
+    padding: var(--padding-header) !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+}
+
+/* CELLS - SOBRESCREVER BOOTSTRAP */
+.table-container table.table.table-necessidade tbody td {
+    padding: var(--padding-cell) !important;
+    vertical-align: middle !important;
+    font-size: var(--font-base) !important;
+    line-height: var(--line-height) !important;
+}
+
+/* ==================================================
+   COLUNAS STICKY (TRAVADAS) - CÓDIGO E PRODUTO
+   ================================================== */
+
+/* COLUNA CÓDIGO - TRAVADA - SOBRESCREVER BOOTSTRAP */
+.table-container table.table.table-necessidade th.sticky-col-codigo,
+.table-container table.table.table-necessidade td.sticky-col-codigo {
+    position: sticky !important;
+    left: 0px !important;
+    background-color: #ffffff !important;
+    z-index: 100 !important;
+    border-right: 3px solid #343a40 !important;
+    font-weight: 700 !important;
+    min-width: var(--width-codigo) !important;
+    max-width: var(--width-codigo) !important;
+    width: var(--width-codigo) !important;
+    font-size: var(--font-codigo) !important;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1) !important;
+}
+
+/* COLUNA PRODUTO - TRAVADA - SOBRESCREVER BOOTSTRAP */
+.table-container table.table.table-necessidade th.sticky-col-produto,
+.table-container table.table.table-necessidade td.sticky-col-produto {
+    position: sticky !important;
+    left: var(--width-codigo) !important;
+    background-color: #ffffff !important;
+    z-index: 100 !important;
+    border-right: 3px solid #343a40 !important;
+    min-width: var(--width-produto) !important;
+    max-width: var(--width-produto) !important;
+    width: var(--width-produto) !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow: visible !important; /* DROPDOWN PRECISA APARECER */
+    font-size: var(--font-produto) !important;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1) !important;
+}
+
+/* HEADERS STICKY - MAIOR Z-INDEX - SOBRESCREVER BOOTSTRAP */
+.table-container table.table.table-necessidade thead th.sticky-col-codigo,
+.table-container table.table.table-necessidade thead th.sticky-col-produto {
+    background-color: #f8f9fa !important;
+    z-index: 200 !important;
+}
+
+/* ==================================================
+   COLUNAS DE PROJEÇÃO D0-D60
+   ================================================== */
+
+/* Colunas de projeção */
+table.table-necessidade th.col-projecao,
+table.table-necessidade td.col-projecao {
+    min-width: var(--width-projecao) !important;
+    max-width: var(--width-projecao) !important;
+    width: var(--width-projecao) !important;
+    text-align: right !important;
+    font-size: var(--font-projecao) !important;
+    padding: var(--padding-projecao) !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+}
+
+/* Headers de projeção centralizados */
+table.table-necessidade thead th.col-projecao {
+    text-align: center !important;
+    font-size: var(--font-projecao) !important;
+}
+
+table.table-necessidade .col-projecao br {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Cores de projeção */
+table.table-necessidade td.col-projecao.negativo {
+    background-color: #ffe6e6 !important;
+    color: #dc3545 !important;
+    font-weight: 700 !important;
+}
+
+table.table-necessidade td.col-projecao.zero {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+table.table-necessidade td.col-projecao.positivo {
+    color: #28a745 !important;
+}
+
+/* ==================================================
+   COLUNAS DE DADOS
+   ================================================== */
+
+table.table-necessidade th.col-previsao,
+table.table-necessidade td.col-previsao,
+table.table-necessidade th.col-pedidos,
+table.table-necessidade td.col-pedidos,
+table.table-necessidade th.col-carteira,
+table.table-necessidade td.col-carteira,
+table.table-necessidade th.col-saldo,
+table.table-necessidade td.col-saldo,
+table.table-necessidade th.col-estoque,
+table.table-necessidade td.col-estoque,
+table.table-necessidade th.col-programacao,
+table.table-necessidade td.col-programacao,
+table.table-necessidade th.col-necessidade,
+table.table-necessidade td.col-necessidade {
+    min-width: var(--width-dados) !important;
+    max-width: var(--width-dados) !important;
+    width: var(--width-dados) !important;
+    text-align: right !important;
+}
+
+table.table-necessidade th.col-criticidade,
+table.table-necessidade td.col-criticidade {
+    min-width: var(--width-criticidade) !important;
+    max-width: var(--width-criticidade) !important;
+    width: var(--width-criticidade) !important;
+    text-align: center !important;
+}
+
+/* ==================================================
+   BADGES E BOTÕES
+   ================================================== */
+
+.badge-necessidade {
+    font-size: var(--font-badge) !important;
+    padding: var(--padding-badge) !important;
+    line-height: 1 !important;
+}
+
+.badge-alta { background-color: #dc3545 !important; color: white !important; }
+.badge-media { background-color: #ffc107 !important; color: #333 !important; }
+.badge-baixa { background-color: #28a745 !important; color: white !important; }
+
+.btn-programar {
+    font-size: var(--font-badge) !important;
+    padding: var(--padding-badge) !important;
+}
+
+/* Dropdown de Ações */
+.btn-group .btn-sm {
+    font-size: var(--font-badge) !important;
+    padding: var(--padding-badge) !important;
+}
+
+.dropdown-menu {
+    font-size: var(--font-base) !important;
+    min-width: 200px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dropdown-item {
+    padding: 0.5rem 1rem;
+    transition: all 0.2s;
+}
+
+.dropdown-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(2px);
+}
+
+.dropdown-item i {
+    width: 20px;
+    text-align: center;
+}
+
+/* DROPDOWN DE AÇÕES - BÁSICO E FUNCIONAL */
+.dropdown-acoes-produto {
+    position: relative;
+    z-index: 1000; /* Acima de outros elementos da linha */
+}
+
+.btn-menu-acoes {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    color: #495057;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.btn-menu-acoes:hover {
+    background: #e9ecef;
+    border-color: #ced4da;
+}
+
+.menu-acoes-lista {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 5px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    min-width: 180px;
+    z-index: 99999; /* BEM ACIMA DE TUDO */
+    padding: 5px 0;
+}
+
+.menu-acoes-lista a {
+    display: block;
+    padding: 8px 15px;
+    color: #212529;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.menu-acoes-lista a:hover {
+    background: #f8f9fa;
+}
+
+.menu-acoes-lista a i {
+    width: 20px;
+    text-align: center;
+    margin-right: 8px;
+    color: #0d6efd;
+}
+
+/* ==================================================
+   SELETOR DE TAMANHO
+   ================================================== */
+.font-size-selector {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    background: white;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.font-size-selector .btn-size {
+    padding: 0.4rem 0.8rem;
+    border: 2px solid #dee2e6;
+    background: white;
+    color: #495057;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.font-size-selector .btn-size:hover {
+    border-color: #28a745;
+    background: #f8f9fa;
+}
+
+.font-size-selector .btn-size.active {
+    border-color: #28a745;
+    background: #28a745;
+    color: white;
+    font-weight: 600;
+}
+
+.font-size-selector label {
+    margin: 0;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* ==================================================
+   NÚMEROS COM COR
+   ================================================== */
+
+.numero-positivo {
+    color: #28a745 !important;
+    font-weight: 600 !important;
+}
+
+.numero-zero {
+    color: #6c757d !important;
+}
+
+.filtros-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-box {
+    background-color: #e7f3ff;
+    border-left: 4px solid #007bff;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+}
+
+.table-container {
+    max-height: 600px;
+    overflow: auto;
+    position: relative;
+}
+
+.spinner-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 999;
+}
+
+/* Customizador de colunas */
+.customizador-colunas {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.customizador-colunas .form-check {
+    display: inline-block;
+    margin-right: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.customizador-colunas .form-check-input {
+    cursor: pointer;
+}
+
+.customizador-colunas .form-check-label {
+    cursor: pointer;
+    font-size: 0.85rem;
+}

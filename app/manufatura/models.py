@@ -106,7 +106,7 @@ class RecursosProducao(db.Model):
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     nome_produto = db.Column(db.String(255))
     linha_producao = db.Column(db.String(50), nullable=False, index=True)
-    qtd_unidade_por_caixa = db.Column(db.Numeric(10, 2))
+    qtd_unidade_por_caixa = db.Column(db.Integer, nullable=False)  # OBRIGATÓRIO para conversão SKU
     capacidade_unidade_minuto = db.Column(db.Numeric(10, 3), nullable=False)
     qtd_lote_ideal = db.Column(db.Numeric(15, 3))
     qtd_lote_minimo = db.Column(db.Numeric(15, 3))
@@ -114,9 +114,10 @@ class RecursosProducao(db.Model):
     tempo_setup = db.Column(db.Integer, default=30)
     disponivel = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     __table_args__ = (
-        db.UniqueConstraint('cod_produto', 'linha_producao'),
+        # Removido UniqueConstraint para permitir múltiplas linhas por produto
+        db.Index('idx_recursos_produto_linha', 'cod_produto', 'linha_producao'),
     )
 
 
