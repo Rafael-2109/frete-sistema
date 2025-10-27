@@ -70,3 +70,14 @@
 .cursor-pointer:hover {
     background-color: rgba(0, 123, 255, 0.05);
 }
+
+/* Linhas de pedidos */
+.linha-pedido {
+    transition: all 0.2s;
+}
+
+.linha-pedido:hover {
+    background-color: rgba(13, 110, 253, 0.08) !important;
+    transform: scale(1.01);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}

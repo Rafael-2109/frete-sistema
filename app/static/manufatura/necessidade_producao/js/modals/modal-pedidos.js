@@ -101,20 +101,36 @@ function renderizarPedidos(data, produto) {
 
         dadosDia.separacoes.forEach(sep => {
             const statusClass = getStatusClass(sep.status);
+            const cnpjFormatado = formatarCNPJ(sep.cnpj_cpf);
+
             html += `
-                <tr class="cursor-pointer" onclick="verDetalhesSeparacao('${sep.separacao_lote_id}')">
-                    <td>
-                        <div class="text-truncate" style="max-width: 250px;" title="${sep.raz_social_red || ''}">
+                <tr class="cursor-pointer linha-pedido" onclick="verDetalhesSeparacao('${sep.separacao_lote_id}')">
+                    <td class="py-2">
+                        <div class="fw-semibold text-dark mb-1">
                             ${sep.raz_social_red || '-'}
                         </div>
-                        <small class="text-muted">${sep.nome_cidade || ''} - ${sep.cod_uf || ''}</small>
+                        <small class="text-muted">
+                            <i class="fas fa-map-marker-alt me-1"></i>${sep.nome_cidade || ''} - ${sep.cod_uf || ''}
+                        </small>
                     </td>
-                    <td class="text-center"><small>${sep.cnpj_cpf || '-'}</small></td>
-                    <td class="text-end"><strong>${formatarNumero(sep.qtd_saldo || 0)}</strong></td>
-                    <td class="text-center"><small>${sep.expedicao ? new Date(sep.expedicao).toLocaleDateString('pt-BR') : '-'}</small></td>
-                    <td class="text-center"><small>${sep.agendamento ? new Date(sep.agendamento).toLocaleDateString('pt-BR') : '-'}</small></td>
-                    <td class="text-center">
-                        <span class="badge ${statusClass}">${sep.status || 'ABERTO'}</span>
+                    <td class="text-center py-2">
+                        <small class="font-monospace text-muted">${cnpjFormatado}</small>
+                    </td>
+                    <td class="text-end py-2">
+                        <span class="badge bg-light text-dark border fs-6">${formatarNumero(sep.qtd_saldo || 0)}</span>
+                    </td>
+                    <td class="text-center py-2">
+                        <small>${sep.expedicao ? formatarData(sep.expedicao) : '-'}</small>
+                    </td>
+                    <td class="text-center py-2">
+                        ${sep.agendamento ? `
+                            <small class="text-success fw-semibold">
+                                <i class="fas fa-calendar-check me-1"></i>${formatarData(sep.agendamento)}
+                            </small>
+                        ` : '<small class="text-muted">-</small>'}
+                    </td>
+                    <td class="text-center py-2">
+                        <span class="badge ${statusClass} px-2">${sep.status || 'ABERTO'}</span>
                     </td>
                 </tr>`;
         });
@@ -239,4 +255,27 @@ function renderizarDetalhesSeparacao(data) {
     }
 
     $('#conteudo-detalhes-separacao').html(html);
+}
+
+/**
+ * Formata CNPJ
+ */
+function formatarCNPJ(cnpj) {
+    if (!cnpj) return '-';
+    const numeros = cnpj.replace(/\D/g, '');
+    if (numeros.length === 14) {
+        return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+    return cnpj;
+}
+
+/**
+ * Formata data para dd/mm
+ */
+function formatarData(data) {
+    if (!data) return '-';
+    const d = new Date(data);
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dia}/${mes}`;
 }
