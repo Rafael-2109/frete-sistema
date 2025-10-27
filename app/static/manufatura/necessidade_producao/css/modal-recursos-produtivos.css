@@ -1,0 +1,312 @@
+/* ==================================================
+   MODAL RECURSOS PRODUTIVOS - CALENDÁRIOS DINÂMICOS
+   ================================================== */
+
+/* Container de calendário por linha */
+.recursos-calendario-linha {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+/* Header da linha */
+.recursos-linha-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.recursos-linha-titulo {
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.recursos-linha-dados {
+    display: flex;
+    gap: 12px;
+    font-size: 0.7rem;
+}
+
+.recursos-linha-dados > div {
+    display: flex;
+    flex-direction: column;
+}
+
+.recursos-linha-dados small {
+    opacity: 0.9;
+    font-size: 0.65rem;
+}
+
+.recursos-linha-dados strong {
+    font-size: 0.75rem;
+}
+
+/* Calendário */
+.recursos-calendario {
+    background: white;
+    border-radius: 6px;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+/* Cabeçalho do calendário (Mês/Ano) */
+.recursos-calendario-mes {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #198754;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #e7f5ec;
+    border-radius: 4px;
+}
+
+/* Grid do calendário */
+.recursos-calendario-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(80px, 1fr);
+    gap: 2px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+/* Cada dia */
+.recursos-dia {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+    min-height: 120px;
+    padding: 6px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.recursos-dia:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    z-index: 10;
+}
+
+/* Header do dia */
+.recursos-dia-header {
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: #495057;
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e9ecef;
+    z-index: 10;  /* ✅ MAIOR que as barras (1, 2, 3) */
+    position: relative;
+}
+
+.recursos-dia-numero {
+    font-size: 1.2rem;
+    color: #198754;
+}
+
+.recursos-dia-semana {
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+/* ✅ SISTEMA DE BARRAS SOBREPOSTAS - Cada turno sobrepõe o anterior */
+.recursos-ocupacao-turno {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transition: height 0.3s ease;
+    border-radius: 0 0 4px 4px;
+}
+
+/* Turno 1 - Base (verde claro) */
+.recursos-ocupacao-turno-1 {
+    background: #b8e6c0;
+    opacity: 0.85;
+    z-index: 1;
+}
+
+/* Turno 2 - Sobrepõe turno 1 (verde médio) */
+.recursos-ocupacao-turno-2 {
+    background: #7dd88f;
+    opacity: 0.85;
+    z-index: 2;
+}
+
+/* Turno 3 - Sobrepõe todos (verde forte) */
+.recursos-ocupacao-turno-3 {
+    background: #28a745;
+    opacity: 0.85;
+    z-index: 3;
+}
+
+/* ✅ NOVO: Dados de estoque do produto no dia */
+.recursos-estoque-dia {
+    background: rgba(25, 135, 84, 0.1);
+    border-left: 3px solid #198754;
+    padding: 3px 5px;
+    margin-bottom: 4px;
+    font-size: 0.65rem;
+    line-height: 1.2;
+    position: relative;
+    z-index: 10;  /* ✅ MAIOR que as barras (1, 2, 3) */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: space-between;
+}
+
+.recursos-estoque-dia small {
+    white-space: nowrap;
+}
+
+/* Produtos programados */
+.recursos-produtos-programados {
+    position: relative;
+    z-index: 10;  /* ✅ MAIOR que as barras (1, 2, 3) */
+}
+
+.recursos-produto-item {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #198754;
+    border-radius: 3px;
+    padding: 3px 5px;
+    margin-bottom: 3px;
+    font-size: 0.75rem;
+    cursor: help;
+    transition: all 0.2s;
+}
+
+.recursos-produto-item:hover {
+    background: #198754;
+    color: white;
+    transform: scale(1.05);
+}
+
+.recursos-produto-cod {
+    font-weight: bold;
+    display: block;
+    color: #198754;
+}
+
+.recursos-produto-item:hover .recursos-produto-cod {
+    color: white;
+}
+
+.recursos-produto-qtd {
+    font-size: 0.7rem;
+    color: #6c757d;
+    display: block;
+}
+
+.recursos-produto-item:hover .recursos-produto-qtd {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Tooltip customizado */
+.recursos-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    z-index: 9999;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Dia vazio */
+.recursos-dia-vazio {
+    color: #adb5bd;
+    font-size: 0.75rem;
+    text-align: center;
+    padding-top: 20px;
+    font-style: italic;
+    position: relative;
+    z-index: 2;
+}
+
+/* Indicador de weekend */
+.recursos-dia.weekend {
+    background: #f8f9fa;
+}
+
+.recursos-dia.weekend .recursos-dia-header {
+    color: #dc3545;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .recursos-calendario-grid {
+        grid-auto-columns: minmax(60px, 1fr);
+    }
+
+    .recursos-dia {
+        min-height: 100px;
+        padding: 4px;
+    }
+
+    .recursos-linha-dados {
+        flex-direction: column;
+        gap: 5px;
+    }
+}
+
+/* Scrollbar customizado para calendário */
+.recursos-calendario-grid::-webkit-scrollbar {
+    height: 8px;
+}
+
+.recursos-calendario-grid::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.recursos-calendario-grid::-webkit-scrollbar-thumb {
+    background: #198754;
+    border-radius: 4px;
+}
+
+.recursos-calendario-grid::-webkit-scrollbar-thumb:hover {
+    background: #157347;
+}
+
+/* Animação de entrada */
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.recursos-calendario-linha {
+    animation: slideInUp 0.3s ease;
+}
+
+/* Badge de quantidade de linhas */
+#recursos-qtd-linhas {
+    font-size: 1rem !important;
+    padding: 0.5rem 1rem;
+}
+
+/* Lista de linhas no resumo */
+#recursos-lista-linhas {
+    margin-top: 4px;
+}

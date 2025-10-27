@@ -101,22 +101,43 @@ def register_necessidade_producao_routes(bp):
             if not cod_produto:
                 return jsonify({'erro': 'Código do produto é obrigatório'}), 400
 
-            # Buscar separações não sincronizadas
+            # Buscar separações não sincronizadas (saídas)
             separacoes = Separacao.query.filter(
                 Separacao.cod_produto == cod_produto,
                 Separacao.sincronizado_nf == False
             ).order_by(Separacao.expedicao).all()
 
+            # Buscar estoque atual usando ServicoEstoqueSimples
+            from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+            from app.producao.models import ProgramacaoProducao
+            from datetime import date
+
+            estoque_service = ServicoEstoqueSimples()
+            estoque_atual = estoque_service.calcular_estoque_atual(cod_produto)
+
             # Calcular total sem separação
-            total_carteira = db.session.query(
+            total_carteira_raw = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(CarteiraPrincipal.cod_produto == cod_produto).scalar()
 
-            total_carteira = float(total_carteira) if total_carteira else 0.0
+            total_carteira = float(total_carteira_raw) if total_carteira_raw is not None else 0.0
             total_separado = sum(float(sep.qtd_saldo or 0) for sep in separacoes)
             total_sem_separacao = total_carteira - total_separado
 
-            # Agrupar por dia
+            # Buscar programações de produção (entradas futuras)
+            hoje = date.today()
+            programacoes = ProgramacaoProducao.query.filter(
+                ProgramacaoProducao.cod_produto == cod_produto,
+                ProgramacaoProducao.data_programacao >= hoje
+            ).order_by(ProgramacaoProducao.data_programacao).all()
+
+            # Agrupar programações por dia
+            entradas_por_dia = defaultdict(float)
+            for prog in programacoes:
+                dia_key = prog.data_programacao.strftime('%Y-%m-%d')
+                entradas_por_dia[dia_key] += float(prog.qtd_programada)
+
+            # Agrupar saídas por dia
             por_dia = defaultdict(lambda: {'separacoes': [], 'saidas': 0, 'entradas': 0, 'estoque_inicial': 0, 'saldo_final': 0})
 
             for sep in separacoes:
@@ -139,6 +160,51 @@ def register_necessidade_producao_routes(bp):
                 })
                 por_dia[dia_key]['saidas'] += float(sep.qtd_saldo) if sep.qtd_saldo else 0
 
+            # Calcular estoque acumulado dia a dia
+            # ✅ CORREÇÃO: Filtrar apenas dias com data válida (ignorar 'sem_data')
+            dias_validos = [d for d in por_dia.keys() if d != 'sem_data']
+            dias_ordenados = sorted(dias_validos)
+            saldo_acumulado = estoque_atual
+
+            dia_anterior = None
+            for dia in dias_ordenados:
+                # Estoque inicial do dia = saldo acumulado do dia anterior
+                por_dia[dia]['estoque_inicial'] = saldo_acumulado
+
+                # Entradas acumuladas desde o dia posterior ao anterior até o dia atual
+                entradas_acumuladas = 0.0
+                if dia_anterior:
+                    # Buscar entradas entre dia_anterior+1 e dia atual
+                    data_inicio = date.fromisoformat(dia_anterior)
+                    data_fim = date.fromisoformat(dia)
+
+                    # Iterar pelos dias intermediários
+                    from datetime import timedelta
+                    data_atual = data_inicio + timedelta(days=1)
+                    while data_atual <= data_fim:
+                        dia_key_intermediario = data_atual.strftime('%Y-%m-%d')
+                        entradas_acumuladas += entradas_por_dia.get(dia_key_intermediario, 0.0)
+                        data_atual += timedelta(days=1)
+                else:
+                    # Primeiro dia: incluir entradas do próprio dia
+                    entradas_acumuladas = entradas_por_dia.get(dia, 0.0)
+
+                por_dia[dia]['entradas'] = entradas_acumuladas
+
+                # Saldo final = estoque inicial + entradas - saídas
+                por_dia[dia]['saldo_final'] = (
+                    por_dia[dia]['estoque_inicial'] +
+                    por_dia[dia]['entradas'] -
+                    por_dia[dia]['saidas']
+                )
+
+                # Atualizar saldo acumulado para próxima iteração
+                saldo_acumulado = por_dia[dia]['saldo_final']
+                dia_anterior = dia
+
+            # ✅ Para 'sem_data': deixar valores zerados (já está no defaultdict)
+            # Não calcular estoque para separações sem data de expedição
+
             # Converter defaultdict para dict normal
             por_dia_dict = dict(por_dia)
 
@@ -152,7 +218,9 @@ def register_necessidade_producao_routes(bp):
 
         except Exception as e:
             import logging
+            import traceback
             logging.error(f"[SEPARACOES] Erro ao listar: {str(e)}")
+            logging.error(f"[SEPARACOES] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
     @bp.route('/api/necessidade-producao/separacao-detalhes')
@@ -208,4 +276,161 @@ def register_necessidade_producao_routes(bp):
         except Exception as e:
             import logging
             logging.error(f"[DETALHES] Erro ao buscar: {str(e)}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/recursos-produtivos')
+    @login_required
+    def recursos_produtivos():
+        """Retorna dados para modal de Recursos Produtivos"""
+        try:
+            from app.manufatura.models import RecursosProducao
+            from app.producao.models import ProgramacaoProducao
+            from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+            from datetime import date, timedelta
+            from collections import defaultdict
+
+            cod_produto = request.args.get('cod_produto')
+            mes = request.args.get('mes', type=int)
+            ano = request.args.get('ano', type=int)
+
+            if not cod_produto:
+                return jsonify({'erro': 'Código do produto é obrigatório'}), 400
+
+            # Usar mês/ano atual se não fornecido
+            hoje = date.today()
+            if not mes:
+                mes = hoje.month
+            if not ano:
+                ano = hoje.year
+
+            # 1. Buscar recursos de produção para o produto
+            recursos = RecursosProducao.query.filter_by(
+                cod_produto=cod_produto,
+                disponivel=True
+            ).all()
+
+            if not recursos:
+                return jsonify({
+                    'recursos': [],
+                    'linhas': [],
+                    'mensagem': 'Produto não possui linhas de produção cadastradas'
+                }), 200
+
+            # 2. Buscar primeiro dia com falta de estoque (estoque < 0) e calcular estoque por dia
+            estoque_service = ServicoEstoqueSimples()
+            projecao_resultado = estoque_service.calcular_projecao(cod_produto, dias=60)
+
+            # ✅ CORREÇÃO: O serviço retorna 'projecao' (array) e 'dia_ruptura'
+            primeiro_dia_falta = projecao_resultado.get('dia_ruptura')  # Já vem no formato correto
+            estoque_por_dia = {}
+
+            # Converter array de projeção para dict por data
+            for dia_dados in projecao_resultado.get('projecao', []):
+                data_key = dia_dados.get('data')  # Já vem em formato ISO 'YYYY-MM-DD'
+                if data_key:
+                    estoque_por_dia[data_key] = {
+                        'estoque_inicial': float(dia_dados.get('saldo_inicial', 0)),
+                        'saidas': float(dia_dados.get('saida', 0)),
+                        'entradas': float(dia_dados.get('entrada', 0)),
+                        'saldo_final': float(dia_dados.get('saldo_final', 0))
+                    }
+
+            # 3. Buscar programação de produção para o mês solicitado
+            data_inicio = date(ano, mes, 1)
+            if mes == 12:
+                data_fim = date(ano + 1, 1, 1) - timedelta(days=1)
+            else:
+                data_fim = date(ano, mes + 1, 1) - timedelta(days=1)
+
+            # Buscar programações de TODAS as linhas (não filtrar por produto)
+            # para mostrar ocupação total de cada linha
+            programacoes = ProgramacaoProducao.query.filter(
+                ProgramacaoProducao.data_programacao >= data_inicio,
+                ProgramacaoProducao.data_programacao <= data_fim,
+                ProgramacaoProducao.linha_producao.isnot(None)  # Apenas com linha definida
+            ).order_by(ProgramacaoProducao.data_programacao).all()
+
+            # 4. Agrupar programações por linha e data
+            prog_por_linha = defaultdict(lambda: defaultdict(list))
+            produtos_programados = set()  # ✅ NOVO: Coletar produtos únicos
+
+            for prog in programacoes:
+                if prog.linha_producao:
+                    dia_key = prog.data_programacao.strftime('%Y-%m-%d')
+                    prog_por_linha[prog.linha_producao][dia_key].append({
+                        'cod_produto': prog.cod_produto,
+                        'nome_produto': prog.nome_produto,
+                        'qtd_programada': float(prog.qtd_programada)
+                    })
+                    produtos_programados.add(prog.cod_produto)  # ✅ NOVO
+
+            # 4.5. ✅ NOVO: Buscar projeção de estoque de TODOS os produtos programados
+            estoque_por_produto = {}
+            for cod_prod in produtos_programados:
+                try:
+                    proj = estoque_service.calcular_projecao(cod_prod, dias=60)
+                    estoque_por_produto[cod_prod] = {}
+
+                    for dia_dados in proj.get('projecao', []):
+                        data_key = dia_dados.get('data')
+                        if data_key:
+                            estoque_por_produto[cod_prod][data_key] = {
+                                'estoque_inicial': float(dia_dados.get('saldo_inicial', 0)),
+                                'saidas': float(dia_dados.get('saida', 0)),
+                                'entradas': float(dia_dados.get('entrada', 0)),
+                                'saldo_final': float(dia_dados.get('saldo_final', 0))
+                            }
+                except Exception as e:
+                    import logging
+                    logging.warning(f"[RECURSOS] Erro ao buscar estoque de {cod_prod}: {e}")
+                    estoque_por_produto[cod_prod] = {}
+
+            # 5. Preparar dados das linhas
+            linhas = []
+            for recurso in recursos:
+                linhas.append({
+                    'linha_producao': recurso.linha_producao,
+                    'capacidade_unidade_minuto': float(recurso.capacidade_unidade_minuto),
+                    'qtd_unidade_por_caixa': int(recurso.qtd_unidade_por_caixa),  # ✅ NOVO
+                    'qtd_lote_ideal': float(recurso.qtd_lote_ideal) if recurso.qtd_lote_ideal else 0,
+                    'qtd_lote_minimo': float(recurso.qtd_lote_minimo) if recurso.qtd_lote_minimo else 0,
+                    'eficiencia_media': float(recurso.eficiencia_media) if recurso.eficiencia_media else 85.0,
+                    'tempo_setup': int(recurso.tempo_setup) if recurso.tempo_setup else 30,
+                    'programacoes': dict(prog_por_linha.get(recurso.linha_producao, {}))
+                })
+
+            # 6. Dados do produto
+            produto_info = {
+                'cod_produto': cod_produto,
+                'nome_produto': recursos[0].nome_produto if recursos[0].nome_produto else f'Produto {cod_produto}'
+            }
+
+            # LOG DE DEBUG
+            import logging
+            logging.info(f"[RECURSOS] ========================================")
+            logging.info(f"[RECURSOS] Produto: {cod_produto}")
+            logging.info(f"[RECURSOS] Mês solicitado: {mes}/{ano}")
+            logging.info(f"[RECURSOS] Linhas encontradas: {len(linhas)}")
+            logging.info(f"[RECURSOS] Dias com estoque: {len(estoque_por_dia)}")
+            logging.info(f"[RECURSOS] Primeiro dia falta: {primeiro_dia_falta}")
+            if estoque_por_dia:
+                primeiros_dias = list(estoque_por_dia.keys())[:3]
+                logging.info(f"[RECURSOS] Primeiras 3 datas com estoque: {primeiros_dias}")
+            if linhas:
+                logging.info(f"[RECURSOS] Linha exemplo: {linhas[0].get('linha_producao')} - qtd_unidade_por_caixa={linhas[0].get('qtd_unidade_por_caixa')}")
+            logging.info(f"[RECURSOS] ========================================")
+
+            return jsonify({
+                'produto': produto_info,
+                'linhas': linhas,
+                'primeiro_dia_falta': primeiro_dia_falta,
+                'estoque_por_dia': estoque_por_dia,  # Estoque do produto selecionado
+                'estoque_por_produto': estoque_por_produto,  # ✅ NOVO: Estoque de TODOS os produtos
+                'mes': mes,
+                'ano': ano
+            })
+
+        except Exception as e:
+            import logging
+            logging.error(f"[RECURSOS] Erro ao buscar recursos produtivos: {str(e)}")
             return jsonify({'erro': str(e)}), 500

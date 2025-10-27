@@ -6,6 +6,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/necessidade_producao/css/necessidade-producao.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/necessidade_producao/css/necessidade-producao-layout.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='manufatura/necessidade_producao/css/modal-recursos-produtivos.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -160,6 +161,7 @@
 <!-- Incluir modais -->
 {% include 'manufatura/necessidade_producao/modals/_modal-projecao.html' %}
 {% include 'manufatura/necessidade_producao/modals/_modal-pedidos.html' %}
+{% include 'manufatura/necessidade_producao/modals/_modal-recursos-produtivos.html' %}
 
 {% endblock %}
 
@@ -168,4 +170,5 @@
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/necessidade-producao.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modals/modal-projecao.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modals/modal-pedidos.js') }}"></script>
+<script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modals/modal-recursos-produtivos.js') }}"></script>
 {% endblock %}

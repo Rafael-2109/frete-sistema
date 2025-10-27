@@ -1,0 +1,80 @@
+<!-- Modal Recursos Produtivos -->
+<div class="modal fade" id="modalRecursosProdutivos" tabindex="-1" aria-labelledby="modalRecursosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalRecursosLabel">
+                    <i class="fas fa-industry me-2"></i>
+                    Recursos Produtivos - <span id="recursos-produto-nome"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+
+            <div class="modal-body p-3">
+
+                <!-- Loading Spinner -->
+                <div id="recursos-loading" class="text-center py-5 d-none">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Carregando recursos produtivos...</p>
+                </div>
+
+                <!-- Resumo Compacto no Topo -->
+                <div id="recursos-resumo" class="card border-success mb-3 d-none">
+                    <div class="card-body p-2">
+                        <div class="row g-2 align-items-center">
+                            <!-- Produto -->
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">Produto</small>
+                                <strong id="recursos-cod-produto"></strong>
+                                <div class="text-muted small" id="recursos-nome-produto-resumo"></div>
+                            </div>
+
+                            <!-- Linhas Disponíveis -->
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">Linhas Disponíveis</small>
+                                <span id="recursos-qtd-linhas" class="badge bg-success fs-6"></span>
+                                <div id="recursos-lista-linhas" class="text-muted small"></div>
+                            </div>
+
+                            <!-- 1º Dia com Ruptura -->
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">1º Dia com Falta de Estoque</small>
+                                <span id="recursos-primeiro-dia-falta" class="fs-6 fw-bold text-danger"></span>
+                            </div>
+
+                            <!-- Navegação de Mês -->
+                            <div class="col-md-3 text-end">
+                                <small class="text-muted d-block">Mês Exibido</small>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mes-anterior">
+                                        <i class="fas fa-chevron-left"></i> Anterior
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-secondary" disabled id="btn-mes-atual">
+                                        <!-- Mês/Ano -->
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mes-proximo">
+                                        Próximo <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendários por Linha de Produção -->
+                <div id="recursos-calendarios-container">
+                    <!-- Calendários serão injetados aqui dinamicamente -->
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -161,6 +161,9 @@ function renderizarTabela(dados) {
                             <a href="#" onclick="verPedidos('${item.cod_produto}'); fecharDropdown(); return false;">
                                 <i class="fas fa-clipboard-list"></i> Pedidos
                             </a>
+                            <a href="#" onclick="abrirModalRecursosProdutivos('${item.cod_produto}'); fecharDropdown(); return false;">
+                                <i class="fas fa-industry"></i> Recursos Produtivos
+                            </a>
                         </div>
                     </div>
                 </div>

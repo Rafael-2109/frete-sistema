@@ -30,9 +30,11 @@ function verPedidos(codProduto) {
             $('#loading-pedidos').addClass('d-none');
             renderizarPedidos(data, produto);
         },
-        error: function() {
+        error: function(xhr) {
             $('#loading-pedidos').addClass('d-none');
-            Swal.fire('Erro', 'Erro ao carregar pedidos', 'error');
+            const errorMsg = xhr.responseJSON?.erro || 'Erro ao carregar pedidos';
+            console.error('[PEDIDOS] Erro:', errorMsg);
+            alert('Erro ao carregar pedidos: ' + errorMsg);
         }
     });
 }
