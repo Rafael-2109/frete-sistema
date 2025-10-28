@@ -1,14 +1,24 @@
 """
 Service para cálculo e gestão de demanda
+
+ATUALIZADO: Fonte híbrida de dados históricos
+- Até 30/06/2025: Odoo (sale.order) - dados legados
+- A partir de 01/07/2025: CarteiraPrincipal (qtd_produto_pedido)
 """
 from app import db
 from app.manufatura.models import PrevisaoDemanda, HistoricoPedidos, GrupoEmpresarial
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.carteira.models import CarteiraPrincipal
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import func, extract, or_
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Data de corte: antes desta data = Odoo, depois = CarteiraPrincipal
+DATA_CORTE = date(2025, 7, 1)
 
 
 class DemandaService:
@@ -292,76 +302,124 @@ class DemandaService:
     def calcular_media_historica(self, cod_produto, meses, mes_base, ano_base, grupo=None):
         """
         Calcula média dos últimos N meses para um produto
+        HÍBRIDO: HistoricoPedidos (até 30/06/2025) + CarteiraPrincipal (a partir 01/07/2025)
         Se grupo for especificado, filtra por grupo (incluindo 'RESTANTE')
         """
         from dateutil.relativedelta import relativedelta
-        from datetime import date
-        
+
         # Data base para cálculo
         data_base = date(ano_base, mes_base, 1)
-        
+
         # Calcula período de análise
         data_inicial = data_base - relativedelta(months=meses)
         data_final = data_base - relativedelta(days=1)  # Último dia do mês anterior
-        
-        # Query base
-        query = db.session.query(
-            func.sum(HistoricoPedidos.qtd_produto_pedido).label('qtd_total')
-        ).filter(
-            HistoricoPedidos.cod_produto == cod_produto,
-            HistoricoPedidos.data_pedido >= data_inicial,
-            HistoricoPedidos.data_pedido <= data_final
-        )
-        
-        # Filtro por grupo
-        if grupo and grupo != 'RESTANTE':
-            # Busca todos os prefixos do grupo
-            prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
-                GrupoEmpresarial.nome_grupo == grupo,
-                GrupoEmpresarial.ativo == True
-            ).all()
-            
-            if prefixos_grupo:
-                # Lista de prefixos do grupo
-                prefixos = [p[0] for p in prefixos_grupo]
-                
-                # Filtra CNPJs que começam com os prefixos
-                cnpj_filters = []
-                for prefixo in prefixos:
-                    cnpj_filters.append(
-                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
-                    )
-                if cnpj_filters:
-                    query = query.filter(or_(*cnpj_filters))
-            else:
-                # Grupo não encontrado, retorna 0
-                return 0
-                
-        elif grupo == 'RESTANTE':
-            # Busca todos os prefixos cadastrados
-            todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
-                GrupoEmpresarial.ativo == True
-            ).all()
-            
-            # Exclui CNPJs que pertencem a algum grupo
-            if todos_prefixos:
-                for prefixo_tuple in todos_prefixos:
-                    prefixo = prefixo_tuple[0]
-                    query = query.filter(
-                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
-                    )
-        
-        # Executa query
-        resultado = query.scalar() or 0
-        
+
+        total = 0
+
+        # ============================================
+        # PARTE 1: HistoricoPedidos (até 30/06/2025)
+        # ============================================
+        if data_inicial < DATA_CORTE:
+            data_final_historico = min(data_final, date(2025, 6, 30))
+
+            query_historico = db.session.query(
+                func.sum(HistoricoPedidos.qtd_produto_pedido)
+            ).filter(
+                HistoricoPedidos.cod_produto == cod_produto,
+                HistoricoPedidos.data_pedido >= data_inicial,
+                HistoricoPedidos.data_pedido <= data_final_historico
+            )
+
+            # Filtro por grupo para HistoricoPedidos
+            if grupo and grupo != 'RESTANTE':
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if prefixos_grupo:
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query_historico = query_historico.filter(or_(*cnpj_filters))
+
+            elif grupo == 'RESTANTE':
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query_historico = query_historico.filter(
+                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                        )
+
+            resultado_historico = query_historico.scalar() or 0
+            total += float(resultado_historico)
+            logger.debug(f"[HÍBRIDO] HistoricoPedidos: {resultado_historico}")
+
+        # ============================================
+        # PARTE 2: CarteiraPrincipal (a partir 01/07/2025)
+        # ============================================
+        if data_final >= DATA_CORTE:
+            data_inicial_carteira = max(data_inicial, DATA_CORTE)
+
+            query_carteira = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_produto_pedido)
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                CarteiraPrincipal.data_pedido >= data_inicial_carteira,
+                CarteiraPrincipal.data_pedido <= data_final
+            )
+
+            # Filtro por grupo para CarteiraPrincipal
+            if grupo and grupo != 'RESTANTE':
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if prefixos_grupo:
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query_carteira = query_carteira.filter(or_(*cnpj_filters))
+
+            elif grupo == 'RESTANTE':
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query_carteira = query_carteira.filter(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                        )
+
+            resultado_carteira = query_carteira.scalar() or 0
+            total += float(resultado_carteira)
+            logger.debug(f"[HÍBRIDO] CarteiraPrincipal: {resultado_carteira}")
+
         # Calcula média
-        media = float(resultado) / meses if meses > 0 else 0
-        
+        media = total / meses if meses > 0 else 0
+        logger.debug(f"[HÍBRIDO] Total: {total}, Média: {media}")
+
         return round(media, 3)
     
     def calcular_mes_anterior(self, cod_produto, mes, ano, grupo=None):
         """
         Busca quantidade do mês anterior
+        HÍBRIDO: HistoricoPedidos (até 30/06/2025) + CarteiraPrincipal (a partir 01/07/2025)
         """
         # Ajusta mês e ano para o mês anterior
         mes_anterior = mes - 1
@@ -369,95 +427,188 @@ class DemandaService:
         if mes_anterior == 0:
             mes_anterior = 12
             ano_anterior = ano - 1
-        
-        # Query base
-        query = db.session.query(
-            func.sum(HistoricoPedidos.qtd_produto_pedido).label('qtd_total')
-        ).filter(
-            HistoricoPedidos.cod_produto == cod_produto,
-            extract('month', HistoricoPedidos.data_pedido) == mes_anterior,
-            extract('year', HistoricoPedidos.data_pedido) == ano_anterior
-        )
-        
-        # Aplica mesma lógica de grupo
-        if grupo and grupo != 'RESTANTE':
-            # Busca todos os prefixos do grupo
-            prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
-                GrupoEmpresarial.nome_grupo == grupo,
-                GrupoEmpresarial.ativo == True
-            ).all()
-            
-            if prefixos_grupo:
-                prefixos = [p[0] for p in prefixos_grupo]
-                cnpj_filters = []
-                for prefixo in prefixos:
-                    cnpj_filters.append(
-                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
-                    )
-                if cnpj_filters:
-                    query = query.filter(or_(*cnpj_filters))
-                    
-        elif grupo == 'RESTANTE':
-            # Busca todos os prefixos cadastrados
-            todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
-                GrupoEmpresarial.ativo == True
-            ).all()
-            
-            if todos_prefixos:
-                for prefixo_tuple in todos_prefixos:
-                    prefixo = prefixo_tuple[0]
-                    query = query.filter(
-                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
-                    )
-        
-        resultado = query.scalar() or 0
-        return float(resultado)
+
+        # Verifica em qual período está o mês anterior
+        data_mes_anterior = date(ano_anterior, mes_anterior, 1)
+
+        total = 0
+
+        # Se o mês anterior é antes de 01/07/2025, busca de HistoricoPedidos
+        if data_mes_anterior < DATA_CORTE:
+            query = db.session.query(
+                func.sum(HistoricoPedidos.qtd_produto_pedido)
+            ).filter(
+                HistoricoPedidos.cod_produto == cod_produto,
+                extract('month', HistoricoPedidos.data_pedido) == mes_anterior,
+                extract('year', HistoricoPedidos.data_pedido) == ano_anterior
+            )
+
+            # Filtro por grupo
+            if grupo and grupo != 'RESTANTE':
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if prefixos_grupo:
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query = query.filter(or_(*cnpj_filters))
+
+            elif grupo == 'RESTANTE':
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query = query.filter(
+                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                        )
+
+            total = float(query.scalar() or 0)
+
+        # Se o mês anterior é a partir de 01/07/2025, busca de CarteiraPrincipal
+        else:
+            query = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_produto_pedido)
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                extract('month', CarteiraPrincipal.data_pedido) == mes_anterior,
+                extract('year', CarteiraPrincipal.data_pedido) == ano_anterior
+            )
+
+            # Filtro por grupo
+            if grupo and grupo != 'RESTANTE':
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if prefixos_grupo:
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query = query.filter(or_(*cnpj_filters))
+
+            elif grupo == 'RESTANTE':
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query = query.filter(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                        )
+
+            total = float(query.scalar() or 0)
+
+        return total
     
     def calcular_mesmo_mes_ano_anterior(self, cod_produto, mes, ano, grupo=None):
         """
         Busca quantidade do mesmo mês no ano anterior
+        HÍBRIDO: HistoricoPedidos (até 30/06/2025) + CarteiraPrincipal (a partir 01/07/2025)
         """
         ano_anterior = ano - 1
-        
-        # Query base
-        query = db.session.query(
-            func.sum(HistoricoPedidos.qtd_produto_pedido).label('qtd_total')
-        ).filter(
-            HistoricoPedidos.cod_produto == cod_produto,
-            extract('month', HistoricoPedidos.data_pedido) == mes,
-            extract('year', HistoricoPedidos.data_pedido) == ano_anterior
-        )
-        
-        # Aplica mesma lógica de grupo da função anterior
-        if grupo and grupo != 'RESTANTE':
-            # Busca todos os prefixos do grupo
-            prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
-                GrupoEmpresarial.nome_grupo == grupo,
-                GrupoEmpresarial.ativo == True
-            ).all()
-            
-            if prefixos_grupo:
-                prefixos = [p[0] for p in prefixos_grupo]
-                cnpj_filters = []
-                for prefixo in prefixos:
-                    cnpj_filters.append(
-                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
-                    )
-                if cnpj_filters:
-                    query = query.filter(or_(*cnpj_filters))
-                    
-        elif grupo == 'RESTANTE':
-            # Busca todos os prefixos cadastrados
-            todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
-                GrupoEmpresarial.ativo == True
-            ).all()
-            
-            if todos_prefixos:
-                for prefixo_tuple in todos_prefixos:
-                    prefixo = prefixo_tuple[0]
-                    query = query.filter(
-                        func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
-                    )
-        
-        resultado = query.scalar() or 0
-        return float(resultado)
+
+        # Verifica em qual período está o mês do ano anterior
+        data_mes_ano_anterior = date(ano_anterior, mes, 1)
+
+        total = 0
+
+        # Se o mês do ano anterior é antes de 01/07/2025, busca de HistoricoPedidos
+        if data_mes_ano_anterior < DATA_CORTE:
+            query = db.session.query(
+                func.sum(HistoricoPedidos.qtd_produto_pedido)
+            ).filter(
+                HistoricoPedidos.cod_produto == cod_produto,
+                extract('month', HistoricoPedidos.data_pedido) == mes,
+                extract('year', HistoricoPedidos.data_pedido) == ano_anterior
+            )
+
+            # Filtro por grupo
+            if grupo and grupo != 'RESTANTE':
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if prefixos_grupo:
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query = query.filter(or_(*cnpj_filters))
+
+            elif grupo == 'RESTANTE':
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query = query.filter(
+                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                        )
+
+            total = float(query.scalar() or 0)
+
+        # Se o mês do ano anterior é a partir de 01/07/2025, busca de CarteiraPrincipal
+        else:
+            query = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_produto_pedido)
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                extract('month', CarteiraPrincipal.data_pedido) == mes,
+                extract('year', CarteiraPrincipal.data_pedido) == ano_anterior
+            )
+
+            # Filtro por grupo
+            if grupo and grupo != 'RESTANTE':
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if prefixos_grupo:
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query = query.filter(or_(*cnpj_filters))
+
+            elif grupo == 'RESTANTE':
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query = query.filter(
+                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                        )
+
+            total = float(query.scalar() or 0)
+
+        return total

@@ -4,6 +4,7 @@ Rotas do módulo de Manufatura
 from app.manufatura.routes.dashboard_routes import register_dashboard_routes
 from app.manufatura.routes.previsao_demanda_routes import register_previsao_demanda_routes
 from app.manufatura.routes.necessidade_producao_routes import register_necessidade_producao_routes
+from app.manufatura.routes.historico_routes import register_historico_routes
 
 
 def register_routes(bp):
@@ -11,3 +12,4 @@ def register_routes(bp):
     register_dashboard_routes(bp)
     register_previsao_demanda_routes(bp)
     register_necessidade_producao_routes(bp)
+    register_historico_routes(bp)

@@ -432,20 +432,311 @@ def register_previsao_demanda_routes(bp):
                 nome_grupo=nome_grupo,
                 ativo=True
             ).all()
-            
+
             if not grupos:
                 return jsonify({'erro': 'Grupo não encontrado'}), 404
-            
+
             for grupo in grupos:
                 grupo.ativo = False
-            
+
             db.session.commit()
-            
+
             return jsonify({
                 'sucesso': True,
                 'mensagem': f'Grupo {nome_grupo} desativado com sucesso'
             })
-            
+
         except Exception as e:
             db.session.rollback()
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/previsao-demanda/importar-excel', methods=['POST'])
+    @login_required
+    def importar_excel():
+        """Importa demanda prevista de arquivo Excel (UPSERT)"""
+        try:
+            import pandas as pd
+
+            # Verificar se arquivo foi enviado
+            if 'arquivo' not in request.files:
+                return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
+
+            arquivo = request.files['arquivo']
+
+            if arquivo.filename == '':
+                return jsonify({'erro': 'Nome de arquivo vazio'}), 400
+
+            # Validar extensão
+            if not arquivo.filename.endswith(('.xlsx', '.xls')):
+                return jsonify({'erro': 'Arquivo deve ser Excel (.xlsx ou .xls)'}), 400
+
+            # Ler Excel
+            df = pd.read_excel(arquivo)
+
+            # Validar colunas obrigatórias
+            colunas_obrigatorias = ['cod_produto', 'mes', 'ano', 'qtd_prevista', 'disparo']
+            colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
+
+            if colunas_faltando:
+                return jsonify({
+                    'erro': f'Colunas obrigatórias faltando: {", ".join(colunas_faltando)}'
+                }), 400
+
+            # Processar linhas (UPSERT)
+            total_linhas = len(df)
+            inseridos = 0
+            atualizados = 0
+            erros = []
+
+            for idx, row in df.iterrows():
+                try:
+                    cod_produto = str(row['cod_produto']).strip()
+                    mes = int(row['mes'])
+                    ano = int(row['ano'])
+                    qtd_prevista = float(row['qtd_prevista'])
+                    disparo = str(row['disparo']).strip().upper()
+                    grupo = str(row.get('grupo', 'GERAL')).strip() if 'grupo' in row and pd.notna(row.get('grupo')) else 'GERAL'
+                    nome_produto = str(row.get('nome_produto', '')).strip() if 'nome_produto' in row and pd.notna(row.get('nome_produto')) else None
+
+                    # Validações
+                    if mes < 1 or mes > 12:
+                        erros.append(f"Linha {idx+2}: Mês inválido ({mes})")
+                        continue
+
+                    if disparo not in ['MTO', 'MTS']:
+                        erros.append(f"Linha {idx+2}: Disparo deve ser MTO ou MTS (recebido: {disparo})")
+                        continue
+
+                    # Buscar existente
+                    previsao = PrevisaoDemanda.query.filter_by(
+                        data_mes=mes,
+                        data_ano=ano,
+                        cod_produto=cod_produto,
+                        nome_grupo=grupo
+                    ).first()
+
+                    if previsao:
+                        # Atualizar
+                        previsao.qtd_demanda_prevista = qtd_prevista
+                        previsao.disparo_producao = disparo
+                        if nome_produto:
+                            previsao.nome_produto = nome_produto
+                        previsao.atualizado_em = datetime.utcnow()
+                        atualizados += 1
+                    else:
+                        # Inserir
+                        previsao = PrevisaoDemanda(
+                            data_mes=mes,
+                            data_ano=ano,
+                            cod_produto=cod_produto,
+                            nome_produto=nome_produto,
+                            nome_grupo=grupo,
+                            qtd_demanda_prevista=qtd_prevista,
+                            disparo_producao=disparo,
+                            criado_por=current_user.nome if current_user.is_authenticated else 'Sistema'
+                        )
+                        db.session.add(previsao)
+                        inseridos += 1
+
+                except Exception as e:
+                    erros.append(f"Linha {idx+2}: {str(e)}")
+                    continue
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'total_linhas': total_linhas,
+                'inseridos': inseridos,
+                'atualizados': atualizados,
+                'erros': erros,
+                'mensagem': f'Importação concluída: {inseridos} inseridos, {atualizados} atualizados'
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            import logging
+            logging.error(f"[IMPORTAR] Erro: {str(e)}", exc_info=True)
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/previsao-demanda/exportar-excel')
+    @login_required
+    def exportar_excel():
+        """Exporta previsões com comparações e dados históricos para Excel"""
+        try:
+            import pandas as pd
+            from io import BytesIO
+            from flask import send_file
+            from app.manufatura.services.demanda_service import DemandaService
+            import logging
+            logger = logging.getLogger(__name__)
+
+            # Parâmetros da requisição
+            mes = int(request.args.get('mes'))
+            ano = int(request.args.get('ano'))
+            grupo = request.args.get('grupo', '')
+
+            logger.info(f"[EXPORTAR] Mês: {mes}, Ano: {ano}, Grupo: {grupo}")
+
+            # Busca todos os produtos do histórico filtrados por grupo
+            query = db.session.query(
+                HistoricoPedidos.cod_produto,
+                func.max(HistoricoPedidos.nome_produto).label('nome_produto')
+            )
+
+            # Filtro por grupo se especificado
+            if grupo and grupo != '':
+                if grupo == 'RESTANTE':
+                    # Busca todos os prefixos cadastrados
+                    todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                        GrupoEmpresarial.ativo == True
+                    ).all()
+
+                    # Exclui CNPJs que pertencem a algum grupo
+                    if todos_prefixos:
+                        for prefixo_tuple in todos_prefixos:
+                            prefixo = prefixo_tuple[0]
+                            query = query.filter(
+                                func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                            )
+                else:
+                    # Busca prefixos do grupo específico
+                    prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                        GrupoEmpresarial.nome_grupo == grupo,
+                        GrupoEmpresarial.ativo == True
+                    ).all()
+
+                    if prefixos_grupo:
+                        from sqlalchemy import or_
+                        prefixos = [p[0] for p in prefixos_grupo]
+                        cnpj_filters = []
+                        for prefixo in prefixos:
+                            cnpj_filters.append(
+                                func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                            )
+                        if cnpj_filters:
+                            query = query.filter(or_(*cnpj_filters))
+
+            # Agrupa por produto
+            produtos = query.group_by(HistoricoPedidos.cod_produto).all()
+
+            logger.info(f"[EXPORTAR] Total de produtos encontrados: {len(produtos)}")
+
+            if not produtos:
+                return jsonify({'erro': 'Nenhum produto encontrado para exportar'}), 404
+
+            # Busca previsões existentes
+            previsoes_existentes = {}
+            previsoes = PrevisaoDemanda.query.filter_by(
+                data_mes=mes,
+                data_ano=ano
+            )
+            if grupo:
+                previsoes = previsoes.filter_by(nome_grupo=grupo)
+
+            for p in previsoes.all():
+                previsoes_existentes[p.cod_produto] = {
+                    'qtd_prevista': float(p.qtd_demanda_prevista or 0),
+                    'qtd_realizada': float(p.qtd_demanda_realizada or 0),
+                    'disparo': p.disparo_producao or 'MTS'
+                }
+
+            logger.info(f"[EXPORTAR] Previsões existentes: {len(previsoes_existentes)}")
+
+            # Inicializa service
+            service = DemandaService()
+
+            # Monta dados para exportação
+            dados_exportacao = []
+
+            for produto in produtos:
+                cod_produto = produto.cod_produto
+                nome_produto = produto.nome_produto or 'Produto sem nome'
+
+                logger.info(f"[EXPORTAR] Processando produto: {cod_produto}")
+
+                # Calcula comparações
+                comparacoes = {
+                    'media_3_meses': service.calcular_media_historica(cod_produto, 3, mes, ano, grupo),
+                    'media_6_meses': service.calcular_media_historica(cod_produto, 6, mes, ano, grupo),
+                    'mes_anterior': service.calcular_mes_anterior(cod_produto, mes, ano, grupo),
+                    'ano_anterior': service.calcular_mesmo_mes_ano_anterior(cod_produto, mes, ano, grupo),
+                    'demanda_ativa': service.calcular_demanda_ativa(cod_produto, grupo),
+                    'demanda_realizada': service.calcular_demanda_realizada(cod_produto, mes, ano, grupo)
+                }
+
+                # Dados da previsão existente (se houver)
+                previsao = previsoes_existentes.get(cod_produto, {})
+
+                # Monta linha de dados
+                dados_exportacao.append({
+                    'cod_produto': cod_produto,
+                    'nome_produto': nome_produto,
+                    'mes': mes,
+                    'ano': ano,
+                    'grupo': grupo if grupo else 'GERAL',
+                    'qtd_prevista': previsao.get('qtd_prevista', 0),
+                    'disparo': previsao.get('disparo', 'MTS'),
+                    'media_3_meses': round(comparacoes['media_3_meses'], 3),
+                    'media_6_meses': round(comparacoes['media_6_meses'], 3),
+                    'mes_anterior': round(comparacoes['mes_anterior'], 3),
+                    'ano_anterior': round(comparacoes['ano_anterior'], 3),
+                    'demanda_ativa': round(comparacoes['demanda_ativa'], 3),
+                    'demanda_realizada': round(comparacoes['demanda_realizada'], 3)
+                })
+
+            logger.info(f"[EXPORTAR] Total de linhas para exportar: {len(dados_exportacao)}")
+
+            # Cria DataFrame
+            df = pd.DataFrame(dados_exportacao)
+
+            # Renomeia colunas para ficar mais amigável
+            df.columns = [
+                'Código Produto',
+                'Nome Produto',
+                'Mês',
+                'Ano',
+                'Grupo',
+                'Qtd Prevista',
+                'Disparo',
+                'Média 3 Meses',
+                'Média 6 Meses',
+                'Mês Anterior',
+                'Ano Anterior',
+                'Demanda Ativa (Carteira)',
+                'Demanda Realizada'
+            ]
+
+            # Cria arquivo Excel em memória
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Previsão Demanda')
+
+                # Ajusta largura das colunas
+                worksheet = writer.sheets['Previsão Demanda']
+                for idx, col in enumerate(df.columns):
+                    max_length = max(
+                        df[col].astype(str).apply(len).max(),
+                        len(col)
+                    ) + 2
+                    worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
+
+            output.seek(0)
+
+            # Nome do arquivo
+            grupo_nome = grupo if grupo else 'TODOS'
+            nome_arquivo = f'previsao_demanda_{mes:02d}_{ano}_{grupo_nome}.xlsx'
+
+            logger.info(f"[EXPORTAR] Arquivo gerado: {nome_arquivo}")
+
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=nome_arquivo
+            )
+
+        except Exception as e:
+            import logging
+            logging.error(f"[EXPORTAR] Erro: {str(e)}", exc_info=True)
             return jsonify({'erro': str(e)}), 500

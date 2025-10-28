@@ -111,10 +111,15 @@
                     <li class="breadcrumb-item active">Previsão de Demanda</li>
                 </ol>
             </nav>
-            <h1 class="h3 mb-3">
-                <i class="fas fa-chart-line me-2"></i>
-                Previsão de Demanda
-            </h1>
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-3">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Previsão de Demanda
+                </h1>
+                <a href="{{ url_for('manufatura.historico_pedidos') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-history me-2"></i>Histórico de Pedidos
+                </a>
+            </div>
         </div>
     </div>
 
@@ -169,6 +174,12 @@
                         </button>
                         <button class="btn btn-success" onclick="salvarTodasPrevisoes()">
                             <i class="fas fa-save"></i> Salvar Todas
+                        </button>
+                        <button class="btn btn-info" onclick="exportarExcel()">
+                            <i class="fas fa-download"></i> Exportar Excel
+                        </button>
+                        <button class="btn btn-warning" data-toggle="modal" data-target="#modalImportar">
+                            <i class="fas fa-upload"></i> Importar Excel
                         </button>
                     </div>
                 </div>
@@ -427,6 +438,63 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Importação de Excel -->
+<div class="modal fade" id="modalImportar" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-upload me-2"></i>Importar Previsões do Excel
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Formato esperado do Excel:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li><code>cod_produto</code> - Código do produto</li>
+                        <li><code>nome_produto</code> - Nome do produto (opcional)</li>
+                        <li><code>mes</code> - Mês (1-12)</li>
+                        <li><code>ano</code> - Ano (ex: 2025)</li>
+                        <li><code>grupo</code> - Grupo empresarial (opcional)</li>
+                        <li><code>qtd_prevista</code> - Quantidade prevista</li>
+                        <li><code>disparo</code> - MTO ou MTS</li>
+                    </ul>
+                </div>
+
+                <form id="formImportar" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label>Selecione o arquivo Excel</label>
+                        <div class="custom-file">
+                            <input type="file" class="custom-file-input" id="arquivo-excel"
+                                   accept=".xlsx,.xls" required>
+                            <label class="custom-file-label" for="arquivo-excel">Escolher arquivo...</label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Apenas arquivos .xlsx ou .xls
+                        </small>
+                    </div>
+
+                    <div id="resultado-importacao" class="mt-3" style="display:none;">
+                        <div class="alert" id="alert-importacao">
+                            <div id="mensagem-importacao"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="importarExcel()">
+                    <i class="fas fa-upload"></i> Importar
+                </button>
             </div>
         </div>
     </div>
@@ -1010,7 +1078,7 @@ function editarGrupo(nomeGrupo) {
 // Deleta grupo
 function deletarGrupo(nomeGrupo) {
     if (!confirm('Deseja realmente desativar o grupo "' + nomeGrupo + '"?')) return;
-    
+
     $.ajax({
         url: '/manufatura/api/grupos-empresariais/' + encodeURIComponent(nomeGrupo),
         method: 'DELETE',
@@ -1025,6 +1093,149 @@ function deletarGrupo(nomeGrupo) {
         error: function(xhr) {
             var erro = xhr.responseJSON ? xhr.responseJSON.erro : 'Erro ao deletar grupo';
             alert(erro);
+        }
+    });
+}
+
+// ========================================
+// FUNÇÕES DE IMPORTAÇÃO/EXPORTAÇÃO EXCEL
+// ========================================
+
+// Exporta dados para Excel
+function exportarExcel() {
+    var mes = $('#mes-previsao').val();
+    var ano = $('#ano-previsao').val();
+    var grupo = $('#grupo-empresarial').val();
+
+    if (!mes || !ano) {
+        alert('Selecione mês e ano para exportar');
+        return;
+    }
+
+    // Monta URL
+    var url = '/manufatura/api/previsao-demanda/exportar-excel?' +
+              'mes=' + mes +
+              '&ano=' + ano +
+              '&grupo=' + encodeURIComponent(grupo);
+
+    // Feedback visual
+    var $btn = $('button:contains("Exportar Excel")');
+    var textoOriginal = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Exportando...');
+
+    // Cria link invisível e dispara download
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Restaura botão após 2 segundos
+    setTimeout(function() {
+        $btn.prop('disabled', false).html(textoOriginal);
+    }, 2000);
+}
+
+// Atualiza label do arquivo selecionado
+$(document).ready(function() {
+    $('#arquivo-excel').on('change', function() {
+        var fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').html(fileName);
+    });
+});
+
+// Importa dados do Excel
+function importarExcel() {
+    var arquivo = $('#arquivo-excel')[0].files[0];
+
+    if (!arquivo) {
+        alert('Selecione um arquivo para importar');
+        return;
+    }
+
+    // Validar extensão
+    var extensao = arquivo.name.split('.').pop().toLowerCase();
+    if (extensao !== 'xlsx' && extensao !== 'xls') {
+        alert('Arquivo deve ser Excel (.xlsx ou .xls)');
+        return;
+    }
+
+    // Prepara FormData
+    var formData = new FormData();
+    formData.append('arquivo', arquivo);
+
+    // Feedback visual
+    var $btn = $('button:contains("Importar")').last();
+    var textoOriginal = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+
+    // Esconde resultado anterior
+    $('#resultado-importacao').hide();
+
+    // Requisição AJAX
+    $.ajax({
+        url: '/manufatura/api/previsao-demanda/importar-excel',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+        },
+        success: function(response) {
+            console.log('Resposta da importação:', response);
+
+            // Monta mensagem de sucesso
+            var mensagem = '<strong>Importação Concluída!</strong><br>';
+            mensagem += '<i class="fas fa-check-circle text-success"></i> ' + response.total_linhas + ' linhas processadas<br>';
+            mensagem += '<i class="fas fa-plus-circle text-info"></i> ' + response.inseridos + ' inseridos<br>';
+            mensagem += '<i class="fas fa-edit text-warning"></i> ' + response.atualizados + ' atualizados';
+
+            if (response.erros && response.erros.length > 0) {
+                mensagem += '<br><br><strong>Erros encontrados:</strong><ul class="mb-0">';
+                response.erros.forEach(function(erro) {
+                    mensagem += '<li class="text-danger">' + erro + '</li>';
+                });
+                mensagem += '</ul>';
+            }
+
+            // Mostra resultado
+            $('#alert-importacao').removeClass('alert-danger').addClass('alert-success');
+            $('#mensagem-importacao').html(mensagem);
+            $('#resultado-importacao').show();
+
+            // Recarrega tabela após 2 segundos
+            setTimeout(function() {
+                carregarDados();
+
+                // Fecha modal após 3 segundos
+                setTimeout(function() {
+                    $('#modalImportar').modal('hide');
+
+                    // Limpa form
+                    $('#formImportar')[0].reset();
+                    $('.custom-file-label').html('Escolher arquivo...');
+                    $('#resultado-importacao').hide();
+                }, 3000);
+            }, 2000);
+        },
+        error: function(xhr) {
+            console.error('Erro na importação:', xhr);
+
+            var erro = xhr.responseJSON ? xhr.responseJSON.erro : 'Erro ao importar arquivo';
+
+            // Mostra erro
+            $('#alert-importacao').removeClass('alert-success').addClass('alert-danger');
+            $('#mensagem-importacao').html(
+                '<strong>Erro na Importação!</strong><br>' +
+                '<i class="fas fa-exclamation-circle"></i> ' + erro
+            );
+            $('#resultado-importacao').show();
+        },
+        complete: function() {
+            // Restaura botão
+            $btn.prop('disabled', false).html(textoOriginal);
         }
     });
 }

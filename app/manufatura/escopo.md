@@ -172,3 +172,5 @@ Projetar estoque de componentes para 60 dias
 Toggle entre visualização por estoque ou por capacidade produtiva
 
 
+Após essa etapa, preciso criar estoque dos componentes e retirar inserir pedidos e faturamento apenas do que tiver "ORIGEM".
+Segregar os estoques para considerar estoque dos componentes apenas do que houver compra

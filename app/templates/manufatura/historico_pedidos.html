@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}Histórico de Pedidos - Manufatura/PCP{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .stats-card h4 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    .stats-card p {
+        margin: 5px 0 0 0;
+        opacity: 0.9;
+    }
+    .table-sm td, .table-sm th {
+        padding: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .sync-btn {
+        position: relative;
+    }
+    .sync-btn .spinner-border {
+        width: 1rem;
+        height: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Token CSRF -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<div class="container-fluid px-4 py-3">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('manufatura.index') }}">Manufatura</a></li>
+                    <li class="breadcrumb-item active">Histórico de Pedidos</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-3">
+                <i class="fas fa-history me-2"></i>
+                Histórico de Pedidos (Odoo)
+            </h1>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4" id="estatisticas-container">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <h4 id="stat-registros">-</h4>
+                <p>Total de Registros</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <h4 id="stat-pedidos">-</h4>
+                <p>Pedidos Únicos</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <h4 id="stat-produtos">-</h4>
+                <p>Produtos Únicos</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <h4 id="stat-valor">-</h4>
+                <p>Valor Total</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros e Ações -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter me-2"></i>Filtros e Sincronização
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-2">
+                    <label>Data Início</label>
+                    <input type="date" class="form-control" id="filtro-data-inicio">
+                </div>
+                <div class="col-md-2">
+                    <label>Data Fim</label>
+                    <input type="date" class="form-control" id="filtro-data-fim" value="{{ hoje }}">
+                </div>
+                <div class="col-md-2">
+                    <label>Grupo</label>
+                    <select class="form-control" id="filtro-grupo">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label>Código Produto</label>
+                    <input type="text" class="form-control" id="filtro-cod-produto" placeholder="Ex: 12345">
+                </div>
+                <div class="col-md-4">
+                    <label>&nbsp;</label>
+                    <div>
+                        <button class="btn btn-primary" onclick="carregarHistorico()">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <button class="btn btn-success" onclick="exportarExcel()">
+                            <i class="fas fa-download"></i> Exportar Excel
+                        </button>
+                        <button class="btn btn-warning sync-btn" onclick="sincronizarOdoo()">
+                            <i class="fas fa-sync"></i> Sincronizar Odoo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Dados -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table me-2"></i>Registros do Histórico
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover table-sm" id="tabela-historico">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Grupo</th>
+                            <th>Cidade/UF</th>
+                            <th>Código Produto</th>
+                            <th>Nome Produto</th>
+                            <th class="text-right">Quantidade</th>
+                            <th class="text-right">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-historico">
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Configure os filtros e clique em "Buscar"
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <p id="info-paginacao" class="text-muted">-</p>
+                </div>
+                <div class="col-md-6 text-right">
+                    <button class="btn btn-sm btn-secondary" onclick="mudarPagina(-1)">
+                        <i class="fas fa-chevron-left"></i> Anterior
+                    </button>
+                    <span id="pagina-atual" class="mx-2">Página 1</span>
+                    <button class="btn btn-sm btn-secondary" onclick="mudarPagina(1)">
+                        Próxima <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Configuração global
+var paginaAtual = 1;
+var totalPaginas = 1;
+
+// Inicialização
+$(document).ready(function() {
+    // Define data padrão (30 dias atrás até hoje)
+    var hoje = new Date();
+    var umMesAtras = new Date();
+    umMesAtras.setMonth(umMesAtras.getMonth() - 1);
+
+    $('#filtro-data-fim').val(hoje.toISOString().split('T')[0]);
+    $('#filtro-data-inicio').val(umMesAtras.toISOString().split('T')[0]);
+
+    // Carrega grupos
+    carregarGrupos();
+
+    // Carrega estatísticas iniciais
+    carregarEstatisticas();
+
+    // Carrega histórico
+    carregarHistorico();
+});
+
+// Carrega grupos empresariais
+function carregarGrupos() {
+    $.get('/manufatura/api/previsao-demanda/listar-grupos')
+    .done(function(grupos) {
+        var $select = $('#filtro-grupo');
+        $select.empty().append('<option value="">Todos os Grupos</option>');
+
+        grupos.forEach(function(grupo) {
+            if (grupo.value !== '') {
+                $select.append($('<option>').val(grupo.value).text(grupo.label));
+            }
+        });
+    });
+}
+
+// Carrega estatísticas
+function carregarEstatisticas() {
+    var dataInicio = $('#filtro-data-inicio').val();
+    var dataFim = $('#filtro-data-fim').val();
+    var grupo = $('#filtro-grupo').val();
+
+    $.get('/manufatura/api/historico-pedidos/estatisticas', {
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        grupo: grupo
+    })
+    .done(function(stats) {
+        $('#stat-registros').text(stats.total_registros.toLocaleString('pt-BR'));
+        $('#stat-pedidos').text(stats.total_pedidos.toLocaleString('pt-BR'));
+        $('#stat-produtos').text(stats.total_produtos.toLocaleString('pt-BR'));
+        $('#stat-valor').text('R$ ' + stats.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2}));
+    })
+    .fail(function() {
+        alert('Erro ao carregar estatísticas');
+    });
+}
+
+// Carrega histórico
+function carregarHistorico(pagina) {
+    pagina = pagina || 1;
+
+    var dataInicio = $('#filtro-data-inicio').val();
+    var dataFim = $('#filtro-data-fim').val();
+    var grupo = $('#filtro-grupo').val();
+    var codProduto = $('#filtro-cod-produto').val();
+
+    $('#tbody-historico').html(
+        '<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Carregando...</td></tr>'
+    );
+
+    $.get('/manufatura/api/historico-pedidos/listar', {
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        grupo: grupo,
+        cod_produto: codProduto,
+        page: pagina,
+        per_page: 50
+    })
+    .done(function(response) {
+        var $tbody = $('#tbody-historico');
+        $tbody.empty();
+
+        if (response.registros.length === 0) {
+            $tbody.html('<tr><td colspan="9" class="text-center text-muted">Nenhum registro encontrado</td></tr>');
+            return;
+        }
+
+        response.registros.forEach(function(r) {
+            var $tr = $('<tr>');
+            $tr.append('<td>' + r.num_pedido + '</td>');
+            $tr.append('<td>' + r.data_pedido + '</td>');
+            $tr.append('<td><small>' + r.raz_social_red + '</small></td>');
+            $tr.append('<td><span class="badge bg-info">' + r.nome_grupo + '</span></td>');
+            $tr.append('<td>' + (r.nome_cidade || '-') + '/' + (r.cod_uf || '-') + '</td>');
+            $tr.append('<td><strong>' + r.cod_produto + '</strong></td>');
+            $tr.append('<td><small>' + (r.nome_produto || '-') + '</small></td>');
+            $tr.append('<td class="text-right">' + r.qtd_produto_pedido.toLocaleString('pt-BR', {minimumFractionDigits: 3}) + '</td>');
+            $tr.append('<td class="text-right">R$ ' + r.valor_produto_pedido.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>');
+            $tbody.append($tr);
+        });
+
+        // Atualiza paginação
+        paginaAtual = response.page;
+        totalPaginas = response.total_pages;
+        $('#pagina-atual').text('Página ' + paginaAtual + ' de ' + totalPaginas);
+        $('#info-paginacao').text('Mostrando ' + response.registros.length + ' de ' + response.total + ' registros');
+
+        // Atualiza estatísticas
+        carregarEstatisticas();
+    })
+    .fail(function() {
+        $('#tbody-historico').html('<tr><td colspan="9" class="text-center text-danger">Erro ao carregar dados</td></tr>');
+    });
+}
+
+// Muda página
+function mudarPagina(direcao) {
+    var novaPagina = paginaAtual + direcao;
+    if (novaPagina < 1 || novaPagina > totalPaginas) return;
+    carregarHistorico(novaPagina);
+}
+
+// Exporta para Excel
+function exportarExcel() {
+    var dataInicio = $('#filtro-data-inicio').val();
+    var dataFim = $('#filtro-data-fim').val();
+    var grupo = $('#filtro-grupo').val();
+
+    if (!dataFim) {
+        alert('Selecione uma data fim para exportar');
+        return;
+    }
+
+    var url = '/manufatura/api/historico-pedidos/exportar-excel?' +
+              'data_inicio=' + (dataInicio || '') +
+              '&data_fim=' + dataFim +
+              '&grupo=' + encodeURIComponent(grupo);
+
+    window.location.href = url;
+}
+
+// Sincroniza com Odoo
+function sincronizarOdoo() {
+    var dataInicio = $('#filtro-data-inicio').val();
+    var dataFim = $('#filtro-data-fim').val();
+
+    if (!dataFim) {
+        alert('Selecione uma data fim para sincronizar');
+        return;
+    }
+
+    if (!confirm('Sincronizar histórico de pedidos do Odoo?\n\nPeríodo: ' + (dataInicio || 'início') + ' até ' + dataFim)) {
+        return;
+    }
+
+    var $btn = $('.sync-btn');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Sincronizando...');
+
+    $.ajax({
+        url: '/manufatura/api/historico-pedidos/sincronizar-odoo',
+        method: 'POST',
+        data: JSON.stringify({
+            data_inicio: dataInicio,
+            data_fim: dataFim
+        }),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+        }
+    })
+    .done(function(response) {
+        alert(response.mensagem + '\n\nTotal de registros: ' + response.total_registros);
+        carregarHistorico();
+    })
+    .fail(function(xhr) {
+        var erro = xhr.responseJSON ? xhr.responseJSON.erro : 'Erro ao sincronizar';
+        alert('Erro: ' + erro);
+    })
+    .always(function() {
+        $btn.prop('disabled', false).html('<i class="fas fa-sync"></i> Sincronizar Odoo');
+    });
+}
+</script>
+{% endblock %}
