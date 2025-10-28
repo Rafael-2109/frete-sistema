@@ -2303,28 +2303,47 @@ function reverterConfirmacaoAgendamento(separacaoLoteId, numPedido) {
 // Função para abrir modal de endereço do pedido
 async function abrirModalEnderecoPedido(numPedido) {
     console.log(`📍 Abrindo modal de endereço para pedido ${numPedido}`);
-    
-    // Criar modal se não existir
-    if (!document.getElementById('modalEnderecoPedido')) {
-        criarModalEnderecoPedido();
-    }
-    
-    try {
-        // Buscar dados do endereço na CarteiraPrincipal
-        const response = await fetch(`/pedidos/api/pedido/${numPedido}/endereco-carteira`);
-        const data = await response.json();
 
+    try {
+        // 1️⃣ TENTAR BUSCAR NA CARTEIRA PRINCIPAL PRIMEIRO
+        let response = await fetch(`/pedidos/api/pedido/${numPedido}/endereco-carteira`);
+        let data = await response.json();
+        let fonte = 'carteira'; // fonte padrão
+
+        // 2️⃣ SE NÃO ENCONTRAR NA CARTEIRA, USAR FALLBACK DA RECEITA
         if (!response.ok || !data.success) {
-            throw new Error(data.error || 'Erro ao carregar dados do endereço');
+            console.log(`⚠️ Não encontrado na carteira. Buscando na ReceitaWS...`);
+
+            response = await fetch(`/pedidos/api/pedido/${numPedido}/endereco-receita`);
+            data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Erro ao carregar dados do endereço');
+            }
+
+            fonte = data.fonte || 'receita'; // 'receita' vem da API
         }
 
-        // Preencher dados do modal
-        preencherDadosEnderecoPedido(data.dados);
-        
-        // Mostrar modal
+        // 3️⃣ CRIAR MODAL SE NÃO EXISTIR (com título dinâmico)
+        if (!document.getElementById('modalEnderecoPedido')) {
+            criarModalEnderecoPedido(fonte);
+        } else {
+            // Atualizar título do modal existente
+            atualizarTituloModal(fonte);
+        }
+
+        // 4️⃣ PREENCHER DADOS DO MODAL
+        preencherDadosEnderecoPedido(data.dados, fonte);
+
+        // 5️⃣ MOSTRAR MODAL
         const modalElement = document.getElementById('modalEnderecoPedido');
         const modal = new bootstrap.Modal(modalElement);
         modal.show();
+
+        // 6️⃣ SE VIER DA RECEITA, ATUALIZAR CIDADE NA SEPARACAO
+        if (fonte === 'receita' && data.dados.separacao_lote_id && data.dados.nome_cidade) {
+            await atualizarCidadeSeparacao(data.dados.separacao_lote_id, data.dados.nome_cidade);
+        }
 
     } catch (error) {
         console.error('Erro ao carregar endereço:', error);
@@ -2332,7 +2351,51 @@ async function abrirModalEnderecoPedido(numPedido) {
     }
 }
 
-function criarModalEnderecoPedido() {
+// Função para atualizar cidade na Separacao
+async function atualizarCidadeSeparacao(loteId, cidade) {
+    try {
+        const response = await fetch(`/pedidos/api/separacao/${loteId}/atualizar-cidade`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+            },
+            body: JSON.stringify({ cidade: cidade })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            console.log(`✅ Cidade atualizada: ${data.atualizados} registro(s)`);
+        } else {
+            console.warn(`⚠️ Erro ao atualizar cidade: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar cidade:', error);
+    }
+}
+
+// Função para atualizar título do modal dinamicamente
+function atualizarTituloModal(fonte) {
+    const tituloElement = document.querySelector('#modalEnderecoPedido .bg-success h6');
+    if (tituloElement) {
+        if (fonte === 'receita') {
+            tituloElement.innerHTML = `
+                <i class="fas fa-truck"></i> Endereço de Entrega da Receita
+            `;
+        } else {
+            tituloElement.innerHTML = `
+                <i class="fas fa-truck"></i> Endereço de Entrega
+            `;
+        }
+    }
+}
+
+function criarModalEnderecoPedido(fonte = 'carteira') {
+    const tituloEndereco = fonte === 'receita'
+        ? 'Endereço de Entrega da Receita'
+        : 'Endereço de Entrega';
+
     const modal = document.createElement('div');
     modal.id = 'modalEnderecoPedido';
     modal.className = 'modal fade';
@@ -2378,13 +2441,13 @@ function criarModalEnderecoPedido() {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Endereço de Entrega -->
                         <div class="col-md-6">
                             <div class="card h-100">
                                 <div class="card-header bg-success text-white">
                                     <h6 class="mb-0">
-                                        <i class="fas fa-truck"></i> Endereço de Entrega
+                                        <i class="fas fa-truck"></i> ${tituloEndereco}
                                     </h6>
                                 </div>
                                 <div class="card-body">
@@ -2412,7 +2475,7 @@ function criarModalEnderecoPedido() {
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Observações -->
                     <div class="row mt-3">
                         <div class="col-12">

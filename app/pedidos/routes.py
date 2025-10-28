@@ -1369,6 +1369,161 @@ def api_endereco_carteira(num_pedido):
             'error': str(e)
         }), 500
 
+@pedidos_bp.route('/api/pedido/<string:num_pedido>/endereco-receita', methods=['GET'])
+@login_required
+def api_endereco_receita(num_pedido):
+    """
+    API fallback para buscar dados de endereço via ReceitaWS quando não encontrar na CarteiraPrincipal
+    Também retorna o separacao_lote_id para permitir atualização da cidade
+    """
+    import requests
+    import re
+
+    try:
+        from app.separacao.models import Separacao
+
+        # Buscar CNPJ e separacao_lote_id da primeira Separacao deste pedido
+        separacao = Separacao.query.filter_by(num_pedido=num_pedido).first()
+
+        if not separacao or not separacao.cnpj_cpf:
+            return jsonify({
+                'success': False,
+                'error': f'Pedido {num_pedido} não encontrado ou sem CNPJ'
+            }), 404
+
+        # Limpar CNPJ (apenas números)
+        cnpj_limpo = re.sub(r'\D', '', separacao.cnpj_cpf)
+
+        if len(cnpj_limpo) != 14:
+            return jsonify({
+                'success': False,
+                'error': f'CNPJ inválido: {separacao.cnpj_cpf}'
+            }), 400
+
+        # Buscar dados na ReceitaWS
+        url = f'https://www.receitaws.com.br/v1/cnpj/{cnpj_limpo}'
+        response = requests.get(url, timeout=10)
+
+        # Tratamento específico para erro 429 (Too Many Requests)
+        if response.status_code == 429:
+            return jsonify({
+                'success': False,
+                'error': 'Limite de consultas à ReceitaWS atingido. Tente novamente após 60 segundos.',
+                'error_code': 429
+            }), 429
+
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao consultar ReceitaWS: Status {response.status_code}'
+            }), response.status_code
+
+        dados_receita = response.json()
+
+        # Verificar se retornou erro
+        if dados_receita.get('status') == 'ERROR':
+            return jsonify({
+                'success': False,
+                'error': dados_receita.get('message', 'Erro desconhecido na ReceitaWS')
+            }), 400
+
+        # Preparar dados no formato esperado pelo modal
+        dados = {
+            # Dados do cliente
+            'raz_social': dados_receita.get('nome', '-'),
+            'raz_social_red': dados_receita.get('fantasia', dados_receita.get('nome', '-')),
+            'cnpj_cpf': dados_receita.get('cnpj', separacao.cnpj_cpf),
+            'municipio': dados_receita.get('municipio', '-'),
+            'estado': dados_receita.get('uf', '-'),
+            'incoterm': separacao.roteirizacao or '-',
+
+            # Dados do endereço de entrega (mesmo endereço do CNPJ)
+            'empresa_endereco_ent': dados_receita.get('fantasia', dados_receita.get('nome', '-')),
+            'cnpj_endereco_ent': dados_receita.get('cnpj', separacao.cnpj_cpf),
+            'cep_endereco_ent': dados_receita.get('cep', '-').replace('.', ''),
+            'nome_cidade': dados_receita.get('municipio', '-'),
+            'cod_uf': dados_receita.get('uf', '-'),
+            'bairro_endereco_ent': dados_receita.get('bairro', '-'),
+            'rua_endereco_ent': dados_receita.get('logradouro', '-'),
+            'endereco_ent': dados_receita.get('numero', '-'),
+            'telefone_endereco_ent': dados_receita.get('telefone', '-'),
+
+            # Observações
+            'observ_ped_1': separacao.observ_ped_1 or 'Sem observações',
+
+            # Dados adicionais
+            'pedido_cliente': separacao.pedido_cliente or '-',
+            'vendedor': '-',
+            'equipe_vendas': '-',
+            'cliente_nec_agendamento': False,
+
+            # IMPORTANTE: Incluir separacao_lote_id para permitir atualização
+            'separacao_lote_id': separacao.separacao_lote_id
+        }
+
+        return jsonify({
+            'success': True,
+            'dados': dados,
+            'fonte': 'receita'  # Indica que veio da ReceitaWS
+        })
+
+    except requests.Timeout:
+        return jsonify({
+            'success': False,
+            'error': 'Timeout ao consultar ReceitaWS. Tente novamente.'
+        }), 504
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@pedidos_bp.route('/api/separacao/<string:lote_id>/atualizar-cidade', methods=['POST'])
+@login_required
+def api_atualizar_cidade_separacao(lote_id):
+    """
+    API para atualizar a cidade de TODAS as Separacoes de um lote
+    """
+    try:
+        from app.separacao.models import Separacao
+
+        dados = request.get_json()
+        nova_cidade = dados.get('cidade')
+
+        if not nova_cidade:
+            return jsonify({
+                'success': False,
+                'error': 'Cidade não informada'
+            }), 400
+
+        # Buscar TODAS as separações deste lote
+        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+
+        if not separacoes:
+            return jsonify({
+                'success': False,
+                'error': f'Nenhuma separação encontrada para o lote {lote_id}'
+            }), 404
+
+        # Atualizar cidade em TODAS
+        for sep in separacoes:
+            sep.nome_cidade = nova_cidade
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'atualizados': len(separacoes),
+            'message': f'Cidade atualizada em {len(separacoes)} registro(s)'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @pedidos_bp.route('/gerar_resumo', methods=['GET'])
 def gerar_resumo():
     print("[DEBUG] 🔄 Iniciando geração de resumo com correção de separações...")
