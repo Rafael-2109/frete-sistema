@@ -2,6 +2,42 @@
 
 {% block title %}Cadastro de Palletização{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Letras menores na tabela */
+    #tabelaPalletizacao {
+        font-size: 0.85rem;
+    }
+
+    #tabelaPalletizacao th {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    #tabelaPalletizacao td {
+        font-size: 0.85rem;
+    }
+
+    /* Código em cima, nome embaixo */
+    .produto-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .produto-codigo {
+        font-weight: bold;
+        color: #0d6efd;
+        font-size: 0.9rem;
+    }
+
+    .produto-nome {
+        font-size: 0.75rem;
+        color: #6c757d;
+        line-height: 1.2;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -109,26 +145,30 @@
                             <table class="table table-sm table-hover" id="tabelaPalletizacao">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th>Código</th>
-                                        <th>Nome Produto</th>
+                                        <th>Produto</th>
                                         <th>Categoria</th>
                                         <th>Matéria-Prima</th>
                                         <th>Embalagem</th>
                                         <th>Linha Produção</th>
+                                        <th>Medidas<br><small>(C x L x A cm)</small></th>
                                         <th>Palletização</th>
                                         <th>Peso Bruto (kg)</th>
-                                        <th>Altura (cm)</th>
-                                        <th>Largura (cm)</th>
-                                        <th>Comprimento (cm)</th>
-                                        <th>Volume (m³)</th>
+                                        <th class="text-center">Comp.</th>
+                                        <th class="text-center">Prod.</th>
+                                        <th class="text-center">Vend.</th>
+                                        <th>Disparo</th>
+                                        <th>Lead Time</th>
+                                        <th class="text-center">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for item in palletizacao %}
                                     <tr>
-                                        <td><code class="fw-bold">{{ item.cod_produto }}</code></td>
                                         <td>
-                                            <small>{{ item.nome_produto[:60] }}{% if item.nome_produto|length > 60 %}...{% endif %}</small>
+                                            <div class="produto-info">
+                                                <span class="produto-codigo">{{ item.cod_produto }}</span>
+                                                <span class="produto-nome">{{ item.nome_produto[:50] }}{% if item.nome_produto|length > 50 %}...{% endif %}</span>
+                                            </div>
                                         </td>
                                         <td>
                                             {% if item.categoria_produto %}
@@ -159,38 +199,79 @@
                                             {% endif %}
                                         </td>
                                         <td>
+                                            <small>
+                                            {% if item.comprimento_cm and item.largura_cm and item.altura_cm %}
+                                                {{ item.comprimento_cm|numero_br }} x {{ item.largura_cm|numero_br }} x {{ item.altura_cm|numero_br }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                            </small>
+                                        </td>
+                                        <td>
                                             <span class="fw-bold text-primary">{{ item.palletizacao | numero_br }}</span>
                                         </td>
                                         <td>
                                             <span class="fw-bold text-success">{{ item.peso_bruto | numero_br }}</span>
                                         </td>
-                                        <td>
-                                            {% if item.altura_cm and item.altura_cm > 0 %}
-                                                <span class="fw-bold text-info">{{ item.altura_cm | numero_br }}</span>
+                                        <td class="text-center">
+                                            {% if item.produto_comprado %}
+                                                <i class="fas fa-check-circle text-success"></i>
+                                            {% else %}
+                                                <i class="fas fa-times-circle text-muted"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item.produto_produzido %}
+                                                <i class="fas fa-check-circle text-success"></i>
+                                            {% else %}
+                                                <i class="fas fa-times-circle text-muted"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item.produto_vendido %}
+                                                <i class="fas fa-check-circle text-success"></i>
+                                            {% else %}
+                                                <i class="fas fa-times-circle text-muted"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item.disparo_producao %}
+                                                <span class="badge bg-primary">{{ item.disparo_producao }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
-                                        <td>
-                                            {% if item.largura_cm and item.largura_cm > 0 %}
-                                                <span class="fw-bold text-info">{{ item.largura_cm | numero_br }}</span>
+                                        <td class="text-center">
+                                            {% if item.lead_time_mto %}
+                                                <span class="badge bg-info">{{ item.lead_time_mto }} dias</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
-                                        <td>
-                                            {% if item.comprimento_cm and item.comprimento_cm > 0 %}
-                                                <span class="fw-bold text-info">{{ item.comprimento_cm | numero_br }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if item.volume_m3 and item.volume_m3 > 0 %}
-                                                <span class="fw-bold text-warning">{{ item.volume_m3 | numero_br }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-primary btn-editar"
+                                                    data-id="{{ item.id }}"
+                                                    data-cod="{{ item.cod_produto }}"
+                                                    data-nome="{{ item.nome_produto }}"
+                                                    data-pallet="{{ item.palletizacao }}"
+                                                    data-peso="{{ item.peso_bruto }}"
+                                                    data-altura="{{ item.altura_cm or 0 }}"
+                                                    data-largura="{{ item.largura_cm or 0 }}"
+                                                    data-comp="{{ item.comprimento_cm or 0 }}"
+                                                    data-categoria="{{ item.categoria_produto or '' }}"
+                                                    data-subcat="{{ item.subcategoria or '' }}"
+                                                    data-materia="{{ item.tipo_materia_prima or '' }}"
+                                                    data-embalagem="{{ item.tipo_embalagem or '' }}"
+                                                    data-linha="{{ item.linha_producao or '' }}"
+                                                    data-comprado="{{ 'true' if item.produto_comprado else 'false' }}"
+                                                    data-produzido="{{ 'true' if item.produto_produzido else 'false' }}"
+                                                    data-vendido="{{ 'true' if item.produto_vendido else 'false' }}"
+                                                    data-disparo="{{ item.disparo_producao or '' }}"
+                                                    data-leadtime="{{ item.lead_time_mto or '' }}"
+                                                    data-custo="{{ item.custo_produto or '' }}"
+                                                    title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -255,6 +336,132 @@
     </div>
 </div>
 
+<!-- Modal de Edição -->
+<div class="modal fade" id="modalEditar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Editar Produto
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditar">
+                    <input type="hidden" id="edit-id">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Código do Produto:</label>
+                            <input type="text" class="form-control" id="edit-cod" disabled>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Nome do Produto: <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="edit-nome" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Palletização: <span class="text-danger">*</span></label>
+                            <input type="number" step="0.000001" class="form-control" id="edit-pallet" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Peso Bruto (kg): <span class="text-danger">*</span></label>
+                            <input type="number" step="0.000001" class="form-control" id="edit-peso" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Comprimento (cm):</label>
+                            <input type="number" step="0.01" class="form-control" id="edit-comp">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Largura (cm):</label>
+                            <input type="number" step="0.01" class="form-control" id="edit-largura">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Altura (cm):</label>
+                            <input type="number" step="0.01" class="form-control" id="edit-altura">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Categoria:</label>
+                            <input type="text" class="form-control" id="edit-categoria">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Subcategoria:</label>
+                            <input type="text" class="form-control" id="edit-subcat">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo Matéria-Prima:</label>
+                            <input type="text" class="form-control" id="edit-materia">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo Embalagem:</label>
+                            <input type="text" class="form-control" id="edit-embalagem">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Linha de Produção:</label>
+                            <input type="text" class="form-control" id="edit-linha">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Características do Produto:</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="edit-comprado">
+                                <label class="form-check-label" for="edit-comprado">Produto Comprado</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="edit-produzido">
+                                <label class="form-check-label" for="edit-produzido">Produto Produzido</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="edit-vendido">
+                                <label class="form-check-label" for="edit-vendido">Produto Vendido</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Disparo Produção:</label>
+                            <select class="form-control" id="edit-disparo">
+                                <option value="">Selecione...</option>
+                                <option value="MTO">MTO</option>
+                                <option value="MTS">MTS</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Lead Time MTO (dias):</label>
+                            <input type="number" class="form-control" id="edit-leadtime">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Custo do Produto (R$):</label>
+                            <input type="number" step="0.0001" class="form-control" id="edit-custo">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-edicao">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Auto-submit nos filtros
 document.getElementById('cod_produto').addEventListener('keyup', function(e) {
@@ -276,6 +483,103 @@ document.getElementById('palletizacao').addEventListener('change', function() {
 
 document.getElementById('peso_bruto').addEventListener('change', function() {
     document.getElementById('filtrosForm').submit();
+});
+
+// ============================================
+// CONTROLE DO MODAL DE EDIÇÃO
+// ============================================
+
+// Abrir modal ao clicar em Editar
+document.querySelectorAll('.btn-editar').forEach(btn => {
+    btn.addEventListener('click', function() {
+        // Preencher formulário
+        document.getElementById('edit-id').value = this.dataset.id;
+        document.getElementById('edit-cod').value = this.dataset.cod;
+        document.getElementById('edit-nome').value = this.dataset.nome;
+        document.getElementById('edit-pallet').value = this.dataset.pallet;
+        document.getElementById('edit-peso').value = this.dataset.peso;
+        document.getElementById('edit-altura').value = this.dataset.altura;
+        document.getElementById('edit-largura').value = this.dataset.largura;
+        document.getElementById('edit-comp').value = this.dataset.comp;
+        document.getElementById('edit-categoria').value = this.dataset.categoria;
+        document.getElementById('edit-subcat').value = this.dataset.subcat;
+        document.getElementById('edit-materia').value = this.dataset.materia;
+        document.getElementById('edit-embalagem').value = this.dataset.embalagem;
+        document.getElementById('edit-linha').value = this.dataset.linha;
+        document.getElementById('edit-comprado').checked = (this.dataset.comprado === 'true');
+        document.getElementById('edit-produzido').checked = (this.dataset.produzido === 'true');
+        document.getElementById('edit-vendido').checked = (this.dataset.vendido === 'true');
+        document.getElementById('edit-disparo').value = this.dataset.disparo;
+        document.getElementById('edit-leadtime').value = this.dataset.leadtime;
+        document.getElementById('edit-custo').value = this.dataset.custo;
+
+        // Abrir modal
+        const modal = new bootstrap.Modal(document.getElementById('modalEditar'));
+        modal.show();
+    });
+});
+
+// Salvar edição
+document.getElementById('btn-salvar-edicao').addEventListener('click', function() {
+    const id = document.getElementById('edit-id').value;
+
+    const dados = {
+        nome_produto: document.getElementById('edit-nome').value,
+        palletizacao: parseFloat(document.getElementById('edit-pallet').value),
+        peso_bruto: parseFloat(document.getElementById('edit-peso').value),
+        altura_cm: parseFloat(document.getElementById('edit-altura').value) || null,
+        largura_cm: parseFloat(document.getElementById('edit-largura').value) || null,
+        comprimento_cm: parseFloat(document.getElementById('edit-comp').value) || null,
+        categoria_produto: document.getElementById('edit-categoria').value || null,
+        subcategoria: document.getElementById('edit-subcat').value || null,
+        tipo_materia_prima: document.getElementById('edit-materia').value || null,
+        tipo_embalagem: document.getElementById('edit-embalagem').value || null,
+        linha_producao: document.getElementById('edit-linha').value || null,
+        produto_comprado: document.getElementById('edit-comprado').checked,
+        produto_produzido: document.getElementById('edit-produzido').checked,
+        produto_vendido: document.getElementById('edit-vendido').checked,
+        disparo_producao: document.getElementById('edit-disparo').value || null,
+        lead_time_mto: parseInt(document.getElementById('edit-leadtime').value) || null,
+        custo_produto: parseFloat(document.getElementById('edit-custo').value) || null
+    };
+
+    // Validações
+    if (!dados.nome_produto) {
+        alert('Nome do produto é obrigatório');
+        return;
+    }
+
+    if (!dados.palletizacao || dados.palletizacao <= 0) {
+        alert('Palletização deve ser maior que zero');
+        return;
+    }
+
+    if (!dados.peso_bruto || dados.peso_bruto <= 0) {
+        alert('Peso bruto deve ser maior que zero');
+        return;
+    }
+
+    // Enviar via fetch
+    fetch(`/producao/palletizacao/api/editar/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem || 'Produto atualizado com sucesso!');
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao atualizar produto');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao atualizar produto');
+    });
 });
 </script>
 {% endblock %} 

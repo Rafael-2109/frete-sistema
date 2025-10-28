@@ -42,6 +42,11 @@
         --module-color-light: #5dd67a;
     }
 
+    .module-card.structure {
+        --module-color: #6610f2;
+        --module-color-light: #9b5bf5;
+    }
+
     .module-icon {
         font-size: 3.5rem;
         margin-bottom: 1.5rem;
@@ -189,6 +194,26 @@
                     <p class="module-description">
                         Visualize e gerencie o histórico de pedidos importados do Odoo.
                         Exporte dados e sincronize pedidos por período para análise de demanda.
+                    </p>
+                    <span class="module-status status-new">
+                        <i class="fas fa-star me-1"></i>
+                        Nova Funcionalidade
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Lista de Materiais (BOM) -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card structure" onclick="window.location.href='{{ url_for('manufatura.lista_materiais_index') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-sitemap"></i>
+                    </div>
+                    <h3 class="module-title">Lista de Materiais (BOM)</h3>
+                    <p class="module-description">
+                        Gerencie a estrutura de produtos (Bill of Materials). Cadastre componentes,
+                        visualize hierarquias, exploda estruturas e valide dependências.
                     </p>
                     <span class="module-status status-new">
                         <i class="fas fa-star me-1"></i>

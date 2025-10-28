@@ -360,10 +360,19 @@ def processar_importacao_palletizacao():
                 
                 # 🏷️ NOVOS CAMPOS DE SUBCATEGORIAS (opcionais)
                 categoria_produto = str(row.get('CATEGORIA', '')).strip() if pd.notna(row.get('CATEGORIA')) else None
+                subcategoria = str(row.get('SUBCATEGORIA', '')).strip() if pd.notna(row.get('SUBCATEGORIA')) else None
                 tipo_materia_prima = str(row.get('MATERIA_PRIMA', '')).strip() if pd.notna(row.get('MATERIA_PRIMA')) else None
                 tipo_embalagem = str(row.get('EMBALAGEM', '')).strip() if pd.notna(row.get('EMBALAGEM')) else None
                 linha_producao = str(row.get('LINHA_PRODUCAO', '')).strip() if pd.notna(row.get('LINHA_PRODUCAO')) else None
-                
+
+                # 🔧 NOVOS CAMPOS DE PRODUÇÃO (opcionais)
+                produto_comprado = str(row.get('PRODUTO_COMPRADO', 'NAO')).strip().upper() == 'SIM' if pd.notna(row.get('PRODUTO_COMPRADO')) else False
+                produto_produzido = str(row.get('PRODUTO_PRODUZIDO', 'NAO')).strip().upper() == 'SIM' if pd.notna(row.get('PRODUTO_PRODUZIDO')) else False
+                produto_vendido = str(row.get('PRODUTO_VENDIDO', 'SIM')).strip().upper() == 'SIM' if pd.notna(row.get('PRODUTO_VENDIDO')) else True
+                disparo_producao = str(row.get('DISPARO_PRODUCAO', '')).strip() if pd.notna(row.get('DISPARO_PRODUCAO')) else None
+                lead_time_mto = int(row.get('LEAD_TIME_MTO', 0) or 0) if pd.notna(row.get('LEAD_TIME_MTO')) else None
+                custo_produto = float(row.get('CUSTO_PRODUTO', 0) or 0) if pd.notna(row.get('CUSTO_PRODUTO')) else None
+
                 if palletizacao_existente:
                     # ✏️ ATUALIZAR EXISTENTE
                     palletizacao_existente.nome_produto = nome_produto
@@ -1033,6 +1042,61 @@ def api_criar_produto_palletizacao():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
+@producao_bp.route('/palletizacao/api/editar/<int:id>', methods=['PUT'])
+@login_required
+def editar_palletizacao_api(id):
+    """API para editar produto via modal"""
+    try:
+        # Buscar produto
+        produto = CadastroPalletizacao.query.get(id)
+
+        if not produto:
+            return jsonify({'sucesso': False, 'erro': 'Produto não encontrado'}), 404
+
+        # Obter dados do JSON
+        dados = request.get_json()
+
+        # Validações
+        if not dados.get('nome_produto'):
+            return jsonify({'sucesso': False, 'erro': 'Nome do produto é obrigatório'}), 400
+
+        if not dados.get('palletizacao') or dados['palletizacao'] <= 0:
+            return jsonify({'sucesso': False, 'erro': 'Palletização deve ser maior que zero'}), 400
+
+        if not dados.get('peso_bruto') or dados['peso_bruto'] <= 0:
+            return jsonify({'sucesso': False, 'erro': 'Peso bruto deve ser maior que zero'}), 400
+
+        # Atualizar campos
+        produto.nome_produto = dados['nome_produto']
+        produto.palletizacao = dados['palletizacao']
+        produto.peso_bruto = dados['peso_bruto']
+        produto.altura_cm = dados.get('altura_cm')
+        produto.largura_cm = dados.get('largura_cm')
+        produto.comprimento_cm = dados.get('comprimento_cm')
+        produto.categoria_produto = dados.get('categoria_produto')
+        produto.subcategoria = dados.get('subcategoria')
+        produto.tipo_materia_prima = dados.get('tipo_materia_prima')
+        produto.tipo_embalagem = dados.get('tipo_embalagem')
+        produto.linha_producao = dados.get('linha_producao')
+        produto.produto_comprado = dados.get('produto_comprado', False)
+        produto.produto_produzido = dados.get('produto_produzido', False)
+        produto.produto_vendido = dados.get('produto_vendido', False)
+        produto.disparo_producao = dados.get('disparo_producao')
+        produto.lead_time_mto = dados.get('lead_time_mto')
+        produto.custo_produto = dados.get('custo_produto')
+        produto.updated_by = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+
+        db.session.commit()
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'Produto {produto.cod_produto} atualizado com sucesso!'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
 @producao_bp.route('/palletizacao/exportar-dados')
 @login_required
 def exportar_dados_palletizacao():
@@ -1064,6 +1128,7 @@ def exportar_dados_palletizacao():
                 'Cód.Produto': p.cod_produto,
                 'Descrição Produto': p.nome_produto,
                 'CATEGORIA': p.categoria_produto or '',
+                'SUBCATEGORIA': p.subcategoria or '',
                 'MATERIA_PRIMA': p.tipo_materia_prima or '',
                 'EMBALAGEM': p.tipo_embalagem or '',
                 'LINHA_PRODUCAO': p.linha_producao or '',
@@ -1072,7 +1137,13 @@ def exportar_dados_palletizacao():
                 'altura_cm': p.altura_cm or '',
                 'largura_cm': p.largura_cm or '',
                 'comprimento_cm': p.comprimento_cm or '',
-                'volume_m3': p.volume_m3 if hasattr(p, 'volume_m3') else 0
+                'volume_m3': p.volume_m3 if hasattr(p, 'volume_m3') else 0,
+                'PRODUTO_COMPRADO': 'SIM' if p.produto_comprado else 'NAO',
+                'PRODUTO_PRODUZIDO': 'SIM' if p.produto_produzido else 'NAO',
+                'PRODUTO_VENDIDO': 'SIM' if p.produto_vendido else 'NAO',
+                'DISPARO_PRODUCAO': p.disparo_producao or '',
+                'LEAD_TIME_MTO': p.lead_time_mto or '',
+                'CUSTO_PRODUTO': p.custo_produto or ''
             })
         
         df = pd.DataFrame(dados_export)

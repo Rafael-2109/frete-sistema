@@ -55,22 +55,6 @@ Realizado:
 
 ---
 
-## 🔄 FUNCIONALIDADES FUTURAS (Aguardando Implementação)
-
-### 3. PLANO MESTRE DE PRODUÇÃO (Planejado)
-Define/avalia estoque de segurança, avalia qtd_reposicao_sugerida e gera as ordens em PlanoMestreProducao.
-Essa tela deverá mostrar:
-- qtd_demanda_prevista.
-- qtd_estoque_seguranca.
-- qtd_estoque
-- qtd_producao_programada (esse campo acredito que deva ser uma querie sum(OrdemProducao.qtd_planejada) através do join com data_mes, data_ano com data_inicio_prevista e cod_produto)
-- qtd_reposicao_sugerida = qtd_demanda_prevista + qtd_estoque_seguranca - qtd_estoque - qtd_producao_programada
-
-
-### 4. SEQUENCIAMENTO DE ORDENS DE PRODUÇÃO (Planejado)
-Sequencia Ordens de produção através de:
-A- Carteira de Pedidos
-Deverá considerar as datas de expedicao das Separacao onde Pedido.status!=FATURADO (join através de separacao_lote_id), PreSeparacaoItem quando não houver Separacao (comparação se há duplicidade pelo separacao_lote_id) e considerar o saldo da CarteiraPrincipal que não contem Separacao/PreSeparacaoItem
 
 B- Disponibilidade dos componentes
 B.1 As ordens de produção deverá avaliar a ListaMateriais verificando separadamente os produtos_produzidos e produtos_comprados
@@ -80,9 +64,6 @@ Considerar as data_pedido_previsao dos componentes do produto pai e dos componen
 B.4- Lead time dos componentes
 Considerar o LeadTime dos produtos_comprados através dos componentes da ListaMateriais incluindo o componente dos produtos_produzidos constantes no produto pai
 
-
-C- Disponibilidade de maquinas
-Mostrar na tela de uma forma que seja extremamente visual e interativo para o usuario verificar se é possivel incluir aquela ordem de produção naquele dia ou se ele prefere quebrar a ordem de produção para coloca-la naquele momento
 
 ### 5. REQUISIÇÃO DE COMPRAS (Planejado)
 Cria uma requisição de compras respeitando lead time dos componentes de maneira automatica na criação da ordem de produção ou opta por não criar a requisição de compras na ordem de produção e cria posteriormente avaliando o estoque dos componentes.
@@ -152,8 +133,9 @@ Deu certo.
 Agora vamos pensar o seguinte:
 Quando uma pessoa for programar a produção, ela deverá visualizar os itens que há necessidade de programar e visualizar as diversas premissas que resultaram na conclusão de que "precisa programar", premissas essas que enxergo estar faltando apenas a qtd da carteira "s/data" onde seria "CarteiraPrincipal.qtd_saldo_produto_pedido - Separacao.qtd_saldo" para informações "macro".
 Após a definilção de que "precisa produzir" é necessario avaliar "qto produzir" e "qdo produzir", onde para se definir isso, enxergo como premissas:
-1- Capacidade de produção das maquinas - (definida em RecursosProducao, porem necessario remover "UniqueConstraint" pois há mais de uma maquina possivel produzir).
+- ✅ 1- Capacidade de produção das maquinas - (definida em RecursosProducao, porem necessario remover "UniqueConstraint" pois há mais de uma maquina possivel produzir).
 Com isso, é possivel ver qual/quais maquinas (maquinas = linhas de producao, trate como sinonimos) possuem espaço na linha tornando possivel programar, ver a qtd possivel a ser programada assim como ver quais produtos já estão programados naquela linha de produção.
+
 2- Disponibilidade de componentes onde deverá ser avaliado através da ListaMateriais do produto avaliado e deverá ser renderizado por produto acabado:
 - Todos os componentes nas linhas.
 - Na frente de cada linha, a qtd em estoque, qtd consumida pela "qtd a ser programada", e uma projeção de estoque dos componentes para os próximos 60 dias.
@@ -165,6 +147,7 @@ recursos de produção -> preciso garantir que não possua "unique constraint" e
 
 Me ajude a planejar em como fazer o que eu preciso de maneira que a lógica necessaria seja aplicavel.
 CONFIRMAÇÃO DO ENTENDIMENTO: Entendi que você precisa implementar um sistema completo de programação de produção que permita ao usuário:
+
 Visualizar necessidades de produção com todas as premissas (incluindo carteira s/data)
 Avaliar capacidade produtiva por linha/máquina (múltiplas linhas por produto)
 Verificar disponibilidade de componentes com estrutura multinível (até 2 níveis de intermediários)
@@ -172,5 +155,12 @@ Projetar estoque de componentes para 60 dias
 Toggle entre visualização por estoque ou por capacidade produtiva
 
 
-Após essa etapa, preciso criar estoque dos componentes e retirar inserir pedidos e faturamento apenas do que tiver "ORIGEM".
-Segregar os estoques para considerar estoque dos componentes apenas do que houver compra
+Preciso que avalie ListaMateriais e verifique como deverá ser feita a arquitetura do modelo CadastroPalletizacao e da estrutura necessaria com o objetivo de cadastrar a estrutura de produtos considerando a seguinte regra:
+Nivel 0: poderá ser programado a produção
+Nivel 1: tambem poderá ser programado a produção
+Nivel 2: componentes das outras estruturas
+
+Os dados dos produtos deverão ser centralizados no modelo existente CadastroPalletizacao.
+
+Ao programar a produção de um produto Nivel 0, deverá avaliar o estoque dos itens contidos na estrutura do Nivel 1 e verificando "CadastroPalletizacao.produto_produzido" desses itens, sugerindo tambem programar a produção dos "produto_produzido" através da qtd faltante para se atender o produto Nivel 0.
+

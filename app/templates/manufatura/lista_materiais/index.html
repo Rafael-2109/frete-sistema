@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Materiais - Estrutura de Produtos{% endblock %}
+
+{% block extra_css %}
+<!-- jsTree CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/themes/default/style.min.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='manufatura/lista_materiais/css/lista_materiais.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="fas fa-sitemap"></i> Lista de Materiais</h2>
+                    <p class="text-muted">Gestão de Estrutura de Produtos (BOM)</p>
+                </div>
+                <div>
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('manufatura.importar_lista_materiais') }}" class="btn btn-success">
+                            <i class="fas fa-file-upload"></i> Importar
+                        </a>
+                        <a href="{{ url_for('manufatura.exportar_dados_lista_materiais') }}" class="btn btn-info">
+                            <i class="fas fa-file-download"></i> Exportar
+                        </a>
+                        <a href="{{ url_for('manufatura.baixar_modelo_lista_materiais') }}" class="btn btn-warning">
+                            <i class="fas fa-file-excel"></i> Modelo
+                        </a>
+                        <a href="{{ url_for('manufatura.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card de Busca -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-search"></i> Buscar Produto</h5>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <input type="text" id="input-busca-produto" class="form-control"
+                                       placeholder="Digite o código ou nome do produto...">
+                                <button class="btn btn-primary" type="button" id="btn-buscar-produto">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Apenas produtos com <strong>produto_produzido=True</strong> podem ter estrutura
+                            </small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-outline-primary" type="button" id="btn-listar-todos">
+                                <i class="fas fa-list"></i> Listar Todos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card de Resultados -->
+    <div class="row" id="area-resultados" style="display: none;">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-cube"></i> Produtos Disponíveis
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tabela-produtos">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nome do Produto</th>
+                                    <th>Tipo</th>
+                                    <th>Estrutura</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-produtos">
+                                <!-- Preenchido via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card de Estrutura BOM -->
+    <div class="row mt-4" id="area-estrutura" style="display: none;">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0">
+                                <i class="fas fa-sitemap"></i>
+                                <span id="titulo-produto-estrutura">Estrutura do Produto</span>
+                            </h5>
+                            <small id="subtitulo-produto-estrutura"></small>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-light" id="btn-adicionar-componente-raiz">
+                                <i class="fas fa-plus"></i> Adicionar Componente
+                            </button>
+                            <button class="btn btn-sm btn-success" id="btn-explodir-bom">
+                                <i class="fas fa-expand"></i> Explodir BOM Completo
+                            </button>
+                            <button class="btn btn-sm btn-info" id="btn-validar-estrutura">
+                                <i class="fas fa-check-circle"></i> Validar Estrutura
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Legenda -->
+                    <div class="alert alert-info mb-3">
+                        <strong><i class="fas fa-info-circle"></i> Legenda:</strong>
+                        <span class="ms-3"><i class="fas fa-cube text-success"></i> Produto Acabado</span>
+                        <span class="ms-3"><i class="fas fa-cog text-warning"></i> Intermediário</span>
+                        <span class="ms-3"><i class="fas fa-leaf text-primary"></i> Componente</span>
+                        <span class="ms-3"><i class="fas fa-link text-secondary"></i> Unificado</span>
+                    </div>
+
+                    <!-- Árvore BOM -->
+                    <div id="tree-bom" class="bom-tree"></div>
+
+                    <!-- Loading -->
+                    <div id="loading-estrutura" class="text-center py-5" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando estrutura...</p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="empty-estrutura" class="text-center py-5" style="display: none;">
+                        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Este produto não possui componentes cadastrados.</p>
+                        <button class="btn btn-primary" id="btn-adicionar-primeiro-componente">
+                            <i class="fas fa-plus"></i> Adicionar Primeiro Componente
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal: Adicionar/Editar Componente -->
+<div class="modal fade" id="modalComponente" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalComponenteTitulo">
+                    <i class="fas fa-plus"></i> Adicionar Componente
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-componente">
+                    <input type="hidden" id="componente-id">
+                    <input type="hidden" id="cod-produto-produzido">
+
+                    <div class="mb-3">
+                        <label class="form-label">Produto Produzido:</label>
+                        <div id="nome-produto-produzido" class="form-control-plaintext fw-bold"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="cod-produto-componente" class="form-label">
+                            Componente: <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="cod-produto-componente"
+                               placeholder="Digite o código do componente" required>
+                        <div id="info-componente" class="mt-2" style="display: none;">
+                            <small class="text-muted">
+                                <strong>Nome:</strong> <span id="nome-componente-info"></span><br>
+                                <strong>Tipo:</strong> <span id="tipo-componente-info"></span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="qtd-utilizada" class="form-label">
+                            Quantidade Utilizada: <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" step="0.000001" class="form-control"
+                               id="qtd-utilizada" placeholder="Ex: 1.5" required>
+                        <small class="text-muted">Quantidade do componente necessária para produzir 1 unidade do produto</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="versao" class="form-label">Versão:</label>
+                        <input type="text" class="form-control" id="versao" value="v1">
+                        <small class="text-muted">Versão da estrutura (útil para controle de revisões)</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-componente">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Validação de Estrutura -->
+<div class="modal fade" id="modalValidacao" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle"></i> Validação de Estrutura
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="conteudo-validacao">
+                <!-- Preenchido via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Explosão BOM Completa -->
+<div class="modal fade" id="modalExplosao" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-expand"></i> Explosão BOM Completa
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="qtd-explosao" class="form-label">Quantidade a Produzir:</label>
+                    <input type="number" class="form-control" id="qtd-explosao" value="1" min="0.001" step="0.001">
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="incluir-estoque-explosao">
+                    <label class="form-check-label" for="incluir-estoque-explosao">
+                        Incluir análise de estoque (necessidade líquida)
+                    </label>
+                </div>
+                <button class="btn btn-primary mb-3" id="btn-calcular-explosao">
+                    <i class="fas fa-calculator"></i> Calcular
+                </button>
+                <hr>
+                <div id="resultado-explosao">
+                    <!-- Preenchido via JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- jQuery (necessário para jsTree) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- jsTree -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/jstree.min.js"></script>
+<!-- Script customizado -->
+<script src="{{ url_for('static', filename='manufatura/lista_materiais/js/lista_materiais.js') }}"></script>
+{% endblock %}

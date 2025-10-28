@@ -1,0 +1,232 @@
+/* ========================================
+   LISTA DE MATERIAIS - Estilos Customizados
+   ======================================== */
+
+/* Árvore BOM */
+.bom-tree {
+    min-height: 400px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+/* Customização jsTree */
+.jstree-default .jstree-node {
+    margin: 4px 0;
+}
+
+.jstree-default .jstree-anchor {
+    padding: 8px 12px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.jstree-default .jstree-hovered {
+    background: #e9ecef;
+}
+
+.jstree-default .jstree-clicked {
+    background: #0d6efd !important;
+    color: white !important;
+}
+
+/* Ícones por tipo de produto */
+.jstree-icon-acabado::before {
+    content: "\f1b2";  /* fa-cube */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: #198754;  /* success */
+}
+
+.jstree-icon-intermediario::before {
+    content: "\f013";  /* fa-cog */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: #ffc107;  /* warning */
+}
+
+.jstree-icon-componente::before {
+    content: "\f06c";  /* fa-leaf */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: #0dcaf0;  /* info */
+}
+
+.jstree-icon-erro::before {
+    content: "\f071";  /* fa-exclamation-triangle */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: #dc3545;  /* danger */
+}
+
+/* Badge de quantidade */
+.badge-quantidade {
+    background: #6c757d;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    margin-left: 8px;
+}
+
+/* Badge de unificação */
+.badge-unificado {
+    background: #6610f2;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    margin-left: 4px;
+}
+
+/* Botões de ação na árvore */
+.jstree-actions {
+    display: inline-block;
+    margin-left: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.jstree-anchor:hover .jstree-actions {
+    opacity: 1;
+}
+
+.btn-tree-action {
+    padding: 2px 8px;
+    font-size: 0.75em;
+    margin-left: 4px;
+}
+
+/* Tabela de produtos */
+#tabela-produtos tbody tr {
+    cursor: pointer;
+}
+
+#tabela-produtos tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Badge de status */
+.badge-tem-estrutura {
+    background: #198754;
+}
+
+.badge-sem-estrutura {
+    background: #6c757d;
+}
+
+/* Loading spinner customizado */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.15em;
+}
+
+/* Alertas de validação */
+.alert-validacao {
+    margin-bottom: 1rem;
+}
+
+.alert-validacao ul {
+    margin-bottom: 0;
+    padding-left: 1.5rem;
+}
+
+/* Explosão BOM */
+#resultado-explosao {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.explosao-nivel-0 {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #198754;
+}
+
+.explosao-nivel-1 {
+    padding-left: 20px;
+    color: #ffc107;
+}
+
+.explosao-nivel-2 {
+    padding-left: 40px;
+    color: #0dcaf0;
+}
+
+.explosao-nivel-3 {
+    padding-left: 60px;
+    color: #6c757d;
+}
+
+/* Card de viabilidade */
+.card-viabilidade {
+    border-left: 4px solid #198754;
+}
+
+.card-viabilidade.com-bloqueio {
+    border-left-color: #dc3545;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .bom-tree {
+        max-height: 400px;
+    }
+
+    .btn-tree-action {
+        font-size: 0.7em;
+        padding: 1px 6px;
+    }
+
+    #tabela-produtos {
+        font-size: 0.9em;
+    }
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+/* Contexto menu customizado (se implementado) */
+.jstree-contextmenu {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* Tooltip customizado para códigos unificados */
+.tooltip-unificado {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip-unificado:hover::after {
+    content: attr(data-codigos);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 100%;
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    white-space: nowrap;
+    z-index: 1000;
+    margin-bottom: 5px;
+}

@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from app.utils.file_storage import get_file_storage
 from email import policy
 from email.parser import BytesParser
+from dateutil import parser
 import email.utils
 
 
@@ -155,34 +156,34 @@ class EmailHandler:
 
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """
-        Converte string de data do email para datetime
+        Converte string de data de e-mails para datetime, aceitando múltiplos formatos.
         """
         if not date_str:
             return None
-            
+
+        date_str = date_str.strip().replace('\x00', '')  # Remove NUL chars problemáticos
+
         try:
-            # Tenta diferentes formatos comuns
             formats = [
-                '%a, %d %b %Y %H:%M:%S %z',
-                '%d/%m/%Y %H:%M:%S',
-                '%Y-%m-%d %H:%M:%S'
+                '%a, %d %b %Y %H:%M:%S %z',      # ex: Tue, 28 Oct 2025 17:56:02 +0000
+                '%Y-%m-%d %H:%M:%S.%f%z',        # ex: 2025-10-28 17:56:02.756887+00:00
+                '%Y-%m-%d %H:%M:%S.%f',          # ex: 2025-10-28 17:56:02.756887
+                '%Y-%m-%d %H:%M:%S',             # ex: 2025-10-28 17:56:02
+                '%d/%m/%Y %H:%M:%S'              # ex: 28/10/2025 17:56:02
             ]
-            
+
             for fmt in formats:
                 try:
-                    return datetime.strptime(date_str.strip(), fmt)
-                except Exception as e:
-                    current_app.logger.warning(f"⚠️ Erro ao parsear data: {date_str} - {str(e)}")
+                    return datetime.strptime(date_str, fmt)
+                except ValueError:
                     continue
-            
-            # Se nenhum formato funcionou, tenta parse básico
-            from dateutil import parser
+
+            # Fallback: usa parser inteligente do dateutil
             return parser.parse(date_str)
-            
+
         except Exception as e:
-            current_app.logger.warning(f"⚠️ Não foi possível parsear data: {date_str}")
-            return None
-    
+            current_app.logger.warning(f"⚠️ Não foi possível parsear data: {date_str} - {str(e)}")
+            return None    
     def upload_email(self, arquivo_email, despesa_id: int, usuario: str) -> Optional[str]:
         """
         Faz upload do arquivo .msg ou .eml usando FileStorage centralizado

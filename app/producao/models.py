@@ -85,7 +85,15 @@ class CadastroPalletizacao(db.Model):
     categoria_produto = db.Column(db.String(50), nullable=True, index=True)
     subcategoria = db.Column(db.String(50), nullable=True)
     linha_producao = db.Column(db.String(50), nullable=True, index=True)
-    
+
+    # Dados de produção
+    produto_comprado = db.Column(db.Boolean, nullable=False, default=False)
+    produto_produzido = db.Column(db.Boolean, nullable=False, default=False)
+    produto_vendido = db.Column(db.Boolean, nullable=False, default=True)
+    lead_time_mto = db.Column(db.Integer, nullable=True)
+    disparo_producao = db.Column(db.String(3), nullable=True)
+    custo_produto = db.Column(db.Numeric(15, 4), nullable=True)
+
     # Status
     ativo = db.Column(db.Boolean, nullable=False, default=True)
     

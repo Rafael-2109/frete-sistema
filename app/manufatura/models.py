@@ -252,8 +252,12 @@ class LeadTimeFornecedor(db.Model):
 
 
 class ListaMateriais(db.Model):
+    """
+    Estrutura de produtos (BOM - Bill of Materials)
+    Registra componentes necessários para fabricar um produto
+    """
     __tablename__ = 'lista_materiais'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     cod_produto_produzido = db.Column(db.String(50), nullable=False, index=True)
     nome_produto_produzido = db.Column(db.String(255))
@@ -261,13 +265,104 @@ class ListaMateriais(db.Model):
     nome_produto_componente = db.Column(db.String(255))
     qtd_utilizada = db.Column(db.Numeric(15, 6), nullable=False)
     status = db.Column(db.String(10), default='ativo', index=True)
-    versao = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    criado_por = db.Column(db.String(100))
-    
+    versao = db.Column(db.String(100), default='v1')
+
+    # Campos de auditoria expandidos
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_por = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+    inativado_em = db.Column(db.DateTime, nullable=True)
+    inativado_por = db.Column(db.String(100), nullable=True)
+    motivo_inativacao = db.Column(db.Text, nullable=True)
+
     __table_args__ = (
         db.UniqueConstraint('cod_produto_produzido', 'cod_produto_componente', 'versao'),
+        db.Index('idx_lista_materiais_status_data', 'status', 'criado_em'),
     )
+
+    def to_dict(self):
+        """Serializa para dict (útil para histórico)"""
+        return {
+            'id': self.id,
+            'cod_produto_produzido': self.cod_produto_produzido,
+            'nome_produto_produzido': self.nome_produto_produzido,
+            'cod_produto_componente': self.cod_produto_componente,
+            'nome_produto_componente': self.nome_produto_componente,
+            'qtd_utilizada': float(self.qtd_utilizada) if self.qtd_utilizada else 0,
+            'status': self.status,
+            'versao': self.versao,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'criado_por': self.criado_por,
+            'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
+            'atualizado_por': self.atualizado_por
+        }
+
+
+class ListaMateriaisHistorico(db.Model):
+    """
+    Histórico de todas as alterações em Lista de Materiais
+    Registra criação, edição, inativação e reativação de componentes
+    """
+    __tablename__ = 'lista_materiais_historico'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Referência ao registro original
+    lista_materiais_id = db.Column(db.Integer, nullable=False, index=True)
+
+    # Tipo de operação
+    operacao = db.Column(db.String(20), nullable=False, index=True)  # 'CRIAR', 'EDITAR', 'INATIVAR', 'REATIVAR'
+
+    # Dados do produto (snapshot no momento da alteração)
+    cod_produto_produzido = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto_produzido = db.Column(db.String(255))
+    cod_produto_componente = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto_componente = db.Column(db.String(255))
+    versao = db.Column(db.String(100))
+
+    # Valores ANTES da alteração (null para CRIAR)
+    qtd_utilizada_antes = db.Column(db.Numeric(15, 6), nullable=True)
+    status_antes = db.Column(db.String(10), nullable=True)
+
+    # Valores DEPOIS da alteração
+    qtd_utilizada_depois = db.Column(db.Numeric(15, 6), nullable=True)
+    status_depois = db.Column(db.String(10), nullable=True)
+
+    # Metadados da alteração
+    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    alterado_por = db.Column(db.String(100), nullable=False, index=True)
+    motivo = db.Column(db.Text, nullable=True)  # Motivo da alteração (opcional)
+
+    # Dados adicionais (JSON flexível para futuras extensões)
+    dados_adicionais = db.Column(JSONB, nullable=True)
+
+    __table_args__ = (
+        db.Index('idx_historico_produto_data', 'cod_produto_produzido', 'alterado_em'),
+        db.Index('idx_historico_componente_data', 'cod_produto_componente', 'alterado_em'),
+        db.Index('idx_historico_operacao_data', 'operacao', 'alterado_em'),
+    )
+
+    def to_dict(self):
+        """Serializa para dict"""
+        return {
+            'id': self.id,
+            'lista_materiais_id': self.lista_materiais_id,
+            'operacao': self.operacao,
+            'cod_produto_produzido': self.cod_produto_produzido,
+            'nome_produto_produzido': self.nome_produto_produzido,
+            'cod_produto_componente': self.cod_produto_componente,
+            'nome_produto_componente': self.nome_produto_componente,
+            'versao': self.versao,
+            'qtd_utilizada_antes': float(self.qtd_utilizada_antes) if self.qtd_utilizada_antes else None,
+            'status_antes': self.status_antes,
+            'qtd_utilizada_depois': float(self.qtd_utilizada_depois) if self.qtd_utilizada_depois else None,
+            'status_depois': self.status_depois,
+            'alterado_em': self.alterado_em.isoformat() if self.alterado_em else None,
+            'alterado_por': self.alterado_por,
+            'motivo': self.motivo,
+            'dados_adicionais': self.dados_adicionais
+        }
 
 
 class LogIntegracao(db.Model):

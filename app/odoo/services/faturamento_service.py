@@ -207,8 +207,9 @@ class FaturamentoService:
                     )
                     
                     # ✅ VALIDAÇÃO FINAL: Item deve ter campos essenciais
-                    if not item_mapeado.get('cod_produto') or not item_mapeado.get('numero_nf'):
-                        logger.debug(f"Item descartado na validação final: {item_mapeado.get('cod_produto')} / {item_mapeado.get('numero_nf')}")
+                    origem = item_mapeado.get('origem', '')
+                    if not item_mapeado.get('cod_produto') or not item_mapeado.get('numero_nf') or not origem or origem == 'false':
+                        logger.debug(f"Item descartado na validação final: {item_mapeado.get('cod_produto')} / {item_mapeado.get('numero_nf')} / origem: {origem}")
                         continue
                     
                     dados_processados.append(item_mapeado)
