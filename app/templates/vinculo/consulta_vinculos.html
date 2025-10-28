@@ -1,4 +1,10 @@
 {% extends 'base.html' %}
+
+{% block extra_css %}
+<!-- SweetAlert2 CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+{% endblock %}
+
 {% block content %}
 
 <div class="container mt-4">
@@ -153,16 +159,13 @@
               Editar
             </button>
 
-            <!-- Form para excluir este vínculo -->
-            <form method="POST"
-                  action="{{ url_for('vinculos.excluir_vinculo', id=v.id) }}"
-                  onsubmit="return confirm('Tem certeza que deseja excluir o vínculo ID {{ v.id }}?');"
-                  style="display: inline;">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-sm btn-outline-danger">
-                Excluir
-              </button>
-            </form>
+            <!-- Botão para excluir com SweetAlert2 -->
+            <button type="button" class="btn btn-sm btn-outline-danger btn-excluir-vinculo"
+                    data-vinculo-id="{{ v.id }}"
+                    data-transportadora="{{ v.transportadora.razao_social }}"
+                    data-cidade="{{ v.cidade.nome }}">
+              Excluir
+            </button>
           </td>
         </tr>
         {% endfor %}
@@ -304,6 +307,9 @@
   </div>
 </div>
 
+<!-- SweetAlert2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <!-- Script para abrir o Modal de Edição -->
 <script>
 function abrirModalEditar(id, razao, cnpj, uf, cidade, ibge, tabela, lead) {
@@ -329,5 +335,79 @@ function abrirModalEditar(id, razao, cnpj, uf, cidade, ibge, tabela, lead) {
   var modal = new bootstrap.Modal(document.getElementById('modalEditar'));
   modal.show();
 }
+
+// Script para excluir vínculo com SweetAlert2 (AJAX - sem reload)
+document.addEventListener('DOMContentLoaded', function() {
+    const botoesExcluir = document.querySelectorAll('.btn-excluir-vinculo');
+
+    botoesExcluir.forEach(function(botao) {
+        botao.addEventListener('click', function() {
+            const vinculoId = this.dataset.vinculoId;
+            const transportadora = this.dataset.transportadora;
+            const cidade = this.dataset.cidade;
+            const linhaTabela = this.closest('tr'); // Pega a linha da tabela
+
+            Swal.fire({
+                title: 'Excluir Vínculo?',
+                html: `
+                    <p><strong>ID:</strong> ${vinculoId}</p>
+                    <p><strong>Transportadora:</strong> ${transportadora}</p>
+                    <p><strong>Cidade:</strong> ${cidade}</p>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sim, excluir!',
+                cancelButtonText: 'Cancelar',
+                showLoaderOnConfirm: true,
+                preConfirm: () => {
+                    // Fazer requisição AJAX
+                    return fetch(`/vinculos/excluir_vinculo/${vinculoId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: `csrf_token={{ csrf_token() }}`
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Erro ao excluir vínculo');
+                        }
+                        return response;
+                    })
+                    .catch(error => {
+                        Swal.showValidationMessage(`Erro: ${error.message}`);
+                    });
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Animação suave de fade out na linha
+                    linhaTabela.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
+                    linhaTabela.style.opacity = '0';
+                    linhaTabela.style.transform = 'translateX(-20px)';
+
+                    // Remover linha após animação
+                    setTimeout(() => {
+                        linhaTabela.remove();
+                    }, 500);
+
+                    // Toast de sucesso
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: 'Vínculo excluído com sucesso!',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true
+                    });
+                }
+            });
+        });
+    });
+});
 </script>
 {% endblock %}
