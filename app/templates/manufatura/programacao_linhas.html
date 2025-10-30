@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% set active_page = "manufatura" %}
+
+{% block title %}Programação por Linha{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='manufatura/programacao_linhas/css/programacao-linhas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+    <!-- Cabeçalho com Filtros -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-2">
+            <h5 class="mb-0">
+                <i class="fas fa-calendar-alt text-success me-2"></i>
+                Programação por Linha de Produção
+            </h5>
+        </div>
+
+        <!-- Filtros Inline -->
+        <div class="d-flex align-items-center gap-2">
+            <select id="filtro-mes" class="form-select form-select-sm" style="width: 120px;">
+                <option value="1">Janeiro</option>
+                <option value="2">Fevereiro</option>
+                <option value="3">Março</option>
+                <option value="4">Abril</option>
+                <option value="5">Maio</option>
+                <option value="6">Junho</option>
+                <option value="7">Julho</option>
+                <option value="8">Agosto</option>
+                <option value="9">Setembro</option>
+                <option value="10">Outubro</option>
+                <option value="11">Novembro</option>
+                <option value="12">Dezembro</option>
+            </select>
+            <select id="filtro-ano" class="form-select form-select-sm" style="width: 90px;"></select>
+            <button id="btn-carregar" class="btn btn-success btn-sm">
+                <i class="fas fa-sync me-1"></i>Carregar
+            </button>
+            <button id="btn-expandir-todos" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-expand-alt me-1"></i>Expandir Todos
+            </button>
+            <button id="btn-colapsar-todos" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-compress-alt me-1"></i>Colapsar Todos
+            </button>
+        </div>
+
+        <a href="{{ url_for('manufatura.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i>Voltar
+        </a>
+    </div>
+
+    <!-- Card com Accordions das Linhas -->
+    <div class="card shadow">
+        <div class="card-header bg-light">
+            <i class="fas fa-industry me-2"></i>
+            Linhas de Produção
+            <span id="total-linhas" class="badge bg-success ms-2">0 linhas</span>
+        </div>
+        <div class="card-body p-0">
+            <div id="loading-spinner" class="text-center py-5 d-none">
+                <div class="spinner-border text-success" role="status"></div>
+                <p class="mt-2 text-muted">Carregando...</p>
+            </div>
+
+            <!-- Accordion das Linhas -->
+            <div id="accordion-linhas" class="accordion">
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Selecione o mês e clique em "Carregar"
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal de Separações e Estoque -->
+<div class="modal fade" id="modalSeparacoesProduto" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modal-separacoes-titulo">Separações e Estoque</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-separacoes-conteudo">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="mt-2">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas.js') }}"></script>
+{% endblock %}

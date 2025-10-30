@@ -81,3 +81,18 @@
     transform: scale(1.01);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+
+/* ✅ Container global para dropdowns (evita overflow da table) */
+#dropdown-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Não bloqueia cliques no resto da página */
+    z-index: 99998; /* Abaixo dos menus mas acima de tudo */
+}
+
+#dropdown-container .menu-acoes-lista {
+    pointer-events: auto; /* Permite cliques nos menus */
+}

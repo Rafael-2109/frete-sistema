@@ -432,3 +432,257 @@ def importar_xlsx():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro ao importar: {str(e)}'}), 500
+
+
+# ==============================================================
+# PROGRAMAÇÃO POR LINHA - NOVA TELA
+# ==============================================================
+
+@recursos_bp.route('/programacao-linhas')
+@login_required
+def programacao_linhas():
+    """Tela de Programação por Linha de Produção"""
+    return render_template('manufatura/programacao_linhas.html')
+
+
+@recursos_bp.route('/api/programacao-linhas/dados')
+@login_required
+def api_programacao_linhas_dados():
+    """API para buscar dados de todas as linhas com programações"""
+    try:
+        from app.producao.models import ProgramacaoProducao
+        from datetime import date, timedelta
+        from collections import defaultdict
+
+        # Parâmetros
+        mes = request.args.get('mes', type=int)
+        ano = request.args.get('ano', type=int)
+
+        if not mes or not ano:
+            hoje = date.today()
+            mes = hoje.month
+            ano = hoje.year
+
+        # Data início e fim do mês
+        data_inicio = date(ano, mes, 1)
+        if mes == 12:
+            data_fim = date(ano + 1, 1, 1) - timedelta(days=1)
+        else:
+            data_fim = date(ano, mes + 1, 1) - timedelta(days=1)
+
+        # Buscar todas as linhas de produção únicas
+        linhas_query = db.session.query(
+            RecursosProducao.linha_producao
+        ).filter(
+            RecursosProducao.disponivel == True
+        ).distinct().order_by(RecursosProducao.linha_producao).all()
+
+        linhas_producao = [linha[0] for linha in linhas_query if linha[0]]
+
+        # Para cada linha, buscar seus dados e programações
+        resultado = []
+
+        for linha_nome in linhas_producao:
+            # Buscar primeiro recurso da linha para pegar dados gerais
+            recurso_exemplo = RecursosProducao.query.filter_by(
+                linha_producao=linha_nome,
+                disponivel=True
+            ).first()
+
+            if not recurso_exemplo:
+                continue
+
+            # Buscar programações da linha no mês
+            programacoes = ProgramacaoProducao.query.filter(
+                ProgramacaoProducao.linha_producao == linha_nome,
+                ProgramacaoProducao.data_programacao >= data_inicio,
+                ProgramacaoProducao.data_programacao <= data_fim
+            ).order_by(ProgramacaoProducao.data_programacao).all()
+
+            # Agrupar programações por data
+            prog_por_dia = defaultdict(list)
+            for prog in programacoes:
+                dia_key = prog.data_programacao.strftime('%Y-%m-%d')
+
+                # ✅ BUSCAR dados de recursos do produto específico
+                recurso_produto = RecursosProducao.query.filter_by(
+                    cod_produto=prog.cod_produto,
+                    linha_producao=linha_nome,
+                    disponivel=True
+                ).first()
+
+                # Se não encontrar, usar valores padrão do recurso_exemplo
+                capacidade = float(recurso_produto.capacidade_unidade_minuto) if recurso_produto else float(recurso_exemplo.capacidade_unidade_minuto)
+                qtd_un_caixa = recurso_produto.qtd_unidade_por_caixa if recurso_produto else recurso_exemplo.qtd_unidade_por_caixa
+
+                prog_por_dia[dia_key].append({
+                    'cod_produto': prog.cod_produto,
+                    'nome_produto': prog.nome_produto,
+                    'qtd_programada': float(prog.qtd_programada),
+                    'capacidade_unidade_minuto': capacidade,  # ✅ NOVO
+                    'qtd_unidade_por_caixa': qtd_un_caixa     # ✅ NOVO
+                })
+
+            # Montar objeto da linha
+            resultado.append({
+                'linha_producao': linha_nome,
+                'capacidade_unidade_minuto': float(recurso_exemplo.capacidade_unidade_minuto),
+                'qtd_unidade_por_caixa': recurso_exemplo.qtd_unidade_por_caixa,
+                'qtd_lote_ideal': float(recurso_exemplo.qtd_lote_ideal) if recurso_exemplo.qtd_lote_ideal else 0,
+                'eficiencia_media': float(recurso_exemplo.eficiencia_media),
+                'tempo_setup': recurso_exemplo.tempo_setup,
+                'programacoes': dict(prog_por_dia)
+            })
+
+        return jsonify({
+            'linhas': resultado,
+            'mes': mes,
+            'ano': ano
+        })
+
+    except Exception as e:
+        import logging
+        logging.error(f"[PROGRAMACAO LINHAS] Erro: {str(e)}", exc_info=True)
+        return jsonify({'erro': str(e)}), 500
+
+
+@recursos_bp.route('/api/separacoes-estoque')
+@login_required
+def api_separacoes_estoque():
+    """API para buscar separações e estoque projetado de um produto em período"""
+    try:
+        from app.separacao.models import Separacao
+        from app.producao.models import CadastroPalletizacao
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+
+        # Parâmetros
+        cod_produto = request.args.get('cod_produto')
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        data_referencia = request.args.get('data_referencia')
+
+        if not all([cod_produto, data_inicio_str, data_fim_str]):
+            return jsonify({'erro': 'Parâmetros obrigatórios faltando'}), 400
+
+        data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+
+        # Buscar nome do produto
+        cadastro = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_produto,
+            ativo=True
+        ).first()
+        nome_produto = cadastro.nome_produto if cadastro else cod_produto
+
+        # Buscar separações no período (saídas: sincronizado_nf=False)
+        separacoes = Separacao.query.filter(
+            Separacao.cod_produto == cod_produto,
+            Separacao.expedicao >= data_inicio,
+            Separacao.expedicao <= data_fim,
+            Separacao.sincronizado_nf == False
+        ).all()
+
+        # Agrupar saídas por data
+        saidas_por_dia = defaultdict(float)
+        for sep in separacoes:
+            if sep.expedicao:
+                dia_key = sep.expedicao.strftime('%Y-%m-%d')
+                saidas_por_dia[dia_key] += float(sep.qtd_saldo or 0)
+
+        # Buscar programações (entradas)
+        from app.producao.models import ProgramacaoProducao
+        programacoes = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.cod_produto == cod_produto,
+            ProgramacaoProducao.data_programacao >= data_inicio,
+            ProgramacaoProducao.data_programacao <= data_fim
+        ).all()
+
+        # Agrupar entradas por data
+        entradas_por_dia = defaultdict(float)
+        for prog in programacoes:
+            if prog.data_programacao:
+                dia_key = prog.data_programacao.strftime('%Y-%m-%d')
+                entradas_por_dia[dia_key] += float(prog.qtd_programada or 0)
+
+        # ✅ BUSCAR ESTOQUE INICIAL (primeiro dia do período)
+        from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+        estoque_inicial = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+
+        # Calcular projeção dia a dia
+        dias = []
+        estoque_atual = estoque_inicial
+        dia_atual = data_inicio
+
+        while dia_atual <= data_fim:
+            dia_key = dia_atual.strftime('%Y-%m-%d')
+            entradas = entradas_por_dia.get(dia_key, 0)
+            saidas = saidas_por_dia.get(dia_key, 0)
+
+            # Estoque final = inicial + entradas - saídas
+            estoque_final = estoque_atual + entradas - saidas
+
+            dias.append({
+                'data': dia_key,
+                'est_inicial': estoque_atual,
+                'entradas': entradas,
+                'saidas': saidas,
+                'est_final': estoque_final
+            })
+
+            # Estoque final vira inicial do próximo dia
+            estoque_atual = estoque_final
+            dia_atual += timedelta(days=1)
+
+        # ✅ BUSCAR PEDIDOS (Separacao com sincronizado_nf=False no período)
+        from app.carteira.models import CarteiraPrincipal
+
+        # Buscar separações detalhadas
+        separacoes_detalhadas = Separacao.query.filter(
+            Separacao.cod_produto == cod_produto,
+            Separacao.expedicao >= data_inicio,
+            Separacao.expedicao <= data_fim,
+            Separacao.sincronizado_nf == False
+        ).order_by(Separacao.expedicao, Separacao.num_pedido).all()
+
+        # ✅ OTIMIZAÇÃO: Buscar TODAS as datas de entrega de UMA VEZ (evitar N+1)
+        pedidos_numeros = [sep.num_pedido for sep in separacoes_detalhadas]
+        carteira_map = {}
+        if pedidos_numeros:
+            carteira_items = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.num_pedido.in_(pedidos_numeros),
+                CarteiraPrincipal.cod_produto == cod_produto
+            ).all()
+
+            # Criar mapa: num_pedido -> data_entrega_pedido
+            for item in carteira_items:
+                carteira_map[item.num_pedido] = item.data_entrega_pedido
+
+        # Montar lista de pedidos
+        pedidos = []
+        for sep in separacoes_detalhadas:
+            data_entrega = carteira_map.get(sep.num_pedido)
+
+            pedidos.append({
+                'num_pedido': sep.num_pedido,
+                'cnpj_cpf': sep.cnpj_cpf,
+                'raz_social_red': sep.raz_social_red,
+                'qtd': float(sep.qtd_saldo or 0),
+                'expedicao': sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else None,
+                'agendamento': sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else None,
+                'agendamento_confirmado': sep.agendamento_confirmado or False,
+                'data_entrega_pedido': data_entrega.strftime('%Y-%m-%d') if data_entrega else None
+            })
+
+        return jsonify({
+            'nome_produto': nome_produto,
+            'cod_produto': cod_produto,
+            'data_referencia': data_referencia,
+            'dias': dias,
+            'pedidos': pedidos  # ✅ NOVO
+        })
+
+    except Exception as e:
+        import logging
+        logging.error(f"[SEPARACOES ESTOQUE] Erro: {str(e)}", exc_info=True)
+        return jsonify({'erro': str(e)}), 500

@@ -175,9 +175,12 @@ function renderizarTabela(dados) {
 
         for (let i = 0; i <= 60; i++) {
             const dia = item.projecao[i];
-            if (dia) {
+            if (dia && dia.data) {
                 const cls = dia.saldo_final < 0 ? 'negativo' : dia.saldo_final === 0 ? 'zero' : 'positivo';
-                html += `<td class="col-projecao col-projecao-d${i} ${cls}">${formatarNumero(dia.saldo_final)}</td>`;
+                // ✅ Adicionar onclick para abrir modal de separações
+                html += `<td class="col-projecao col-projecao-d${i} ${cls} cursor-pointer"
+                             onclick="abrirModalSeparacoesProduto('${item.cod_produto}', '${dia.data}')"
+                             title="Clique para ver separações e pedidos">${formatarNumero(dia.saldo_final)}</td>`;
             } else {
                 html += `<td class="col-projecao col-projecao-d${i}">-</td>`;
             }
@@ -253,6 +256,8 @@ function toggleDropdown(btn, codProduto) {
         return;
     }
 
+    console.log(`🔍 Toggle menu produto: ${codProduto}, display atual: ${menu.style.display}`);
+
     const todosMenus = document.querySelectorAll('.menu-acoes-lista');
 
     // Fechar todos os outros menus
@@ -264,25 +269,42 @@ function toggleDropdown(btn, codProduto) {
 
     // Toggle do menu atual
     if (menu.style.display === 'none' || menu.style.display === '') {
+        console.log(`✅ Abrindo menu ${codProduto}...`);
+
+        // ✅ SOLUÇÃO: Mover menu para fora da table-container (evita overflow)
+        const dropdownContainer = document.getElementById('dropdown-container');
+        if (dropdownContainer && menu.parentElement !== dropdownContainer) {
+            dropdownContainer.appendChild(menu);
+            console.log(`📦 Menu ${codProduto} movido para dropdown-container`);
+        }
+
         // Posicionar dropdown de forma inteligente
         posicionarDropdown(btn, menu);
         menu.style.display = 'block';
+        console.log(`📊 Menu ${codProduto} aberto! Display: ${menu.style.display}`);
     } else {
+        console.log(`❌ Fechando menu ${codProduto}...`);
         menu.style.display = 'none';
     }
 }
 
 function posicionarDropdown(btn, menu) {
     const btnRect = btn.getBoundingClientRect();
-    const menuHeight = 200; // Altura estimada do menu
+    const menuWidth = 200; // Largura estimada do menu
+    const menuHeight = 150; // Altura estimada do menu
+    const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
+
+    // Calcular espaços disponíveis
     const spaceBelow = windowHeight - btnRect.bottom;
     const spaceAbove = btnRect.top;
+    const spaceRight = windowWidth - btnRect.right;
+    const spaceLeft = btnRect.left;
 
-    // Decidir se abre para cima ou para baixo
+    // ✅ POSIÇÃO VERTICAL: Decidir se abre para cima ou para baixo
     if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
         // Abrir para CIMA
-        menu.style.bottom = (windowHeight - btnRect.top) + 'px';
+        menu.style.bottom = (windowHeight - btnRect.top + 5) + 'px';
         menu.style.top = 'auto';
     } else {
         // Abrir para BAIXO (padrão)
@@ -290,9 +312,18 @@ function posicionarDropdown(btn, menu) {
         menu.style.bottom = 'auto';
     }
 
-    // Posição horizontal (sempre à direita do botão)
-    menu.style.right = (window.innerWidth - btnRect.right) + 'px';
-    menu.style.left = 'auto';
+    // ✅ POSIÇÃO HORIZONTAL: Decidir se abre à esquerda ou direita do botão
+    if (spaceRight < menuWidth && spaceLeft > menuWidth) {
+        // Abrir à ESQUERDA do botão
+        menu.style.left = 'auto';
+        menu.style.right = (windowWidth - btnRect.left) + 'px';
+    } else {
+        // Abrir à DIREITA do botão (padrão) ou alinhado à direita do botão
+        menu.style.left = 'auto';
+        menu.style.right = (windowWidth - btnRect.right) + 'px';
+    }
+
+    console.log(`📍 Menu posicionado: top=${menu.style.top}, bottom=${menu.style.bottom}, right=${menu.style.right}`);
 }
 
 function fecharDropdown() {
@@ -313,4 +344,149 @@ document.addEventListener('click', function(event) {
 
 function formatarNumero(num) {
     return parseFloat(num || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+// ============================================================
+// MODAL DE SEPARAÇÕES E ESTOQUE (Reutilizado de programacao-linhas)
+// ============================================================
+
+async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
+    try {
+        console.log(`[MODAL SEPARACOES] Abrindo para produto: ${codProduto}, dia: ${diaClicado}`);
+
+        // Calcular período: 7 dias antes + dia + 7 dias depois
+        const dataClicada = new Date(diaClicado);
+        const dataInicio = new Date(dataClicada);
+        dataInicio.setDate(dataInicio.getDate() - 7);
+        const dataFim = new Date(dataClicada);
+        dataFim.setDate(dataFim.getDate() + 7);
+
+        // Buscar dados do backend
+        const params = new URLSearchParams({
+            cod_produto: codProduto,
+            data_inicio: dataInicio.toISOString().split('T')[0],
+            data_fim: dataFim.toISOString().split('T')[0],
+            data_referencia: diaClicado
+        });
+
+        const response = await fetch(`/manufatura/recursos/api/separacoes-estoque?${params}`);
+        const dados = await response.json();
+
+        if (dados.erro) {
+            throw new Error(dados.erro);
+        }
+
+        // Renderizar modal
+        renderizarModalSeparacoes(dados, codProduto, diaClicado);
+
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalSeparacoesProduto'));
+        modal.show();
+
+    } catch (error) {
+        console.error('[MODAL SEPARACOES] Erro:', error);
+        alert(`Erro ao carregar separações: ${error.message}`);
+    }
+}
+
+function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
+    $('#modal-separacoes-titulo').text(`${dados.nome_produto || codProduto}`);
+
+    // TABELA HORIZONTAL: Dias nas colunas, movimentações nas linhas
+    let html = '<div class="table-responsive"><table class="table table-sm table-bordered table-hover">';
+
+    // HEADER com datas
+    html += '<thead><tr><th class="text-start" style="min-width: 120px;">Movimentação</th>';
+    dados.dias.forEach(dia => {
+        const ehReferencia = dia.data === diaReferencia;
+        const data = new Date(dia.data);
+        const diaNum = data.getDate().toString().padStart(2, '0');
+        const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+        const classe = ehReferencia ? 'table-warning fw-bold' : '';
+
+        html += `<th class="text-center ${classe}" style="min-width: 70px;">${diaNum}/${mes}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    // LINHA 1: Estoque Inicial
+    html += '<tr><td class="fw-bold bg-light">Est. Inicial</td>';
+    dados.dias.forEach(dia => {
+        const ehReferencia = dia.data === diaReferencia;
+        const classe = ehReferencia ? 'table-warning' : '';
+        html += `<td class="text-center ${classe}">${Math.round(dia.est_inicial).toLocaleString('pt-BR')}</td>`;
+    });
+    html += '</tr>';
+
+    // LINHA 2: Entradas
+    html += '<tr><td class="fw-bold bg-light">Entradas</td>';
+    dados.dias.forEach(dia => {
+        const ehReferencia = dia.data === diaReferencia;
+        const classe = ehReferencia ? 'table-warning' : '';
+        const valor = dia.entradas > 0 ? `<span class="text-success fw-bold">+${Math.round(dia.entradas).toLocaleString('pt-BR')}</span>` : '0';
+        html += `<td class="text-center ${classe}">${valor}</td>`;
+    });
+    html += '</tr>';
+
+    // LINHA 3: Saídas
+    html += '<tr><td class="fw-bold bg-light">Saídas</td>';
+    dados.dias.forEach(dia => {
+        const ehReferencia = dia.data === diaReferencia;
+        const classe = ehReferencia ? 'table-warning' : '';
+        const valor = dia.saidas > 0 ? `<span class="text-danger fw-bold">-${Math.round(dia.saidas).toLocaleString('pt-BR')}</span>` : '0';
+        html += `<td class="text-center ${classe}">${valor}</td>`;
+    });
+    html += '</tr>';
+
+    // LINHA 4: Estoque Final
+    html += '<tr class="table-primary"><td class="fw-bold">Est. Final</td>';
+    dados.dias.forEach(dia => {
+        const ehReferencia = dia.data === diaReferencia;
+        const classe = ehReferencia ? 'table-warning fw-bold' : '';
+        const valor = Math.round(dia.est_final);
+        const cor = valor < 0 ? 'text-danger' : valor === 0 ? 'text-muted' : 'text-dark';
+        html += `<td class="text-center fw-bold ${classe} ${cor}">${valor.toLocaleString('pt-BR')}</td>`;
+    });
+    html += '</tr>';
+
+    html += '</tbody></table></div>';
+
+    // SEÇÃO DE PEDIDOS
+    if (dados.pedidos && dados.pedidos.length > 0) {
+        html += '<hr class="my-4">';
+        html += '<h6 class="text-success mb-3"><i class="fas fa-clipboard-list me-2"></i>Pedidos Não Sincronizados (sincronizado_nf=False)</h6>';
+        html += '<div class="table-responsive"><table class="table table-sm table-bordered table-striped">';
+        html += '<thead class="table-light"><tr>';
+        html += '<th>Pedido</th>';
+        html += '<th>CNPJ</th>';
+        html += '<th>Cliente</th>';
+        html += '<th class="text-end">Qtd</th>';
+        html += '<th>Expedição</th>';
+        html += '<th>Agendamento</th>';
+        html += '<th class="text-center">Confirmado</th>';
+        html += '<th>Dt. Entrega</th>';
+        html += '</tr></thead><tbody>';
+
+        dados.pedidos.forEach(ped => {
+            html += '<tr>';
+            html += `<td><strong>${ped.num_pedido}</strong></td>`;
+            html += `<td><small>${ped.cnpj_cpf || '-'}</small></td>`;
+            html += `<td>${ped.raz_social_red || '-'}</td>`;
+            html += `<td class="text-end">${Math.round(ped.qtd).toLocaleString('pt-BR')}</td>`;
+            html += `<td>${ped.expedicao ? new Date(ped.expedicao).toLocaleDateString('pt-BR') : '-'}</td>`;
+            html += `<td>${ped.agendamento ? new Date(ped.agendamento).toLocaleDateString('pt-BR') : '-'}</td>`;
+
+            const confirmado = ped.agendamento_confirmado;
+            const badgeConfirmado = confirmado
+                ? '<span class="badge bg-success">Sim</span>'
+                : '<span class="badge bg-secondary">Não</span>';
+            html += `<td class="text-center">${badgeConfirmado}</td>`;
+
+            html += `<td>${ped.data_entrega_pedido ? new Date(ped.data_entrega_pedido).toLocaleDateString('pt-BR') : '-'}</td>`;
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+    }
+
+    $('#modal-separacoes-conteudo').html(html);
 }

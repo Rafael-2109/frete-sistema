@@ -337,10 +337,7 @@ table.table-necessidade td.col-criticidade {
 }
 
 .menu-acoes-lista {
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: 5px;
+    position: fixed; /* ✅ FIXED para coordenadas relativas à viewport */
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -348,6 +345,7 @@ table.table-necessidade td.col-criticidade {
     min-width: 180px;
     z-index: 99999; /* BEM ACIMA DE TUDO */
     padding: 5px 0;
+    /* Posições serão definidas dinamicamente por JS */
 }
 
 .menu-acoes-lista a {
@@ -476,4 +474,16 @@ table.table-necessidade td.col-criticidade {
 .customizador-colunas .form-check-label {
     cursor: pointer;
     font-size: 0.85rem;
+}
+
+/* ✅ Células de projeção clicáveis */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.col-projecao.cursor-pointer:hover {
+    background-color: rgba(25, 135, 84, 0.1);
+    transform: scale(1.05);
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }

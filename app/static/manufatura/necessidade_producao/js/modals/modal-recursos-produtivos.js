@@ -168,6 +168,11 @@ function gerarCalendarioLinha(linha, mes, ano) {
     // Obter dias do mês
     const diasDoMes = obterDiasDoMes(mes, ano);
 
+    // ✅ CALCULAR SKU/HORA: (un/min * 60) / qtd_unidade_por_caixa
+    const skuPorHora = qtd_unidade_por_caixa > 0
+        ? ((capacidade_unidade_minuto * 60) / qtd_unidade_por_caixa).toFixed(1)
+        : 'N/A';
+
     // Gerar grid de dias - ✅ PASSANDO qtd_unidade_por_caixa
     const diasHTML = diasDoMes.map(dia =>
         gerarDiaHTML(dia, programacoes, capacidade_unidade_minuto, qtd_unidade_por_caixa)
@@ -184,6 +189,10 @@ function gerarCalendarioLinha(linha, mes, ano) {
                     <div>
                         <small>Capacidade</small>
                         <strong>${capacidade_unidade_minuto.toFixed(1)} un/min</strong>
+                    </div>
+                    <div>
+                        <small>SKU/Hora</small>
+                        <strong>${skuPorHora}</strong>
                     </div>
                     <div>
                         <small>Lote Ideal</small>

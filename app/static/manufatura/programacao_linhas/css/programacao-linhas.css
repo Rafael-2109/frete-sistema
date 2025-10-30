@@ -1,0 +1,293 @@
+/* ==================================================
+   PROGRAMAÇÃO POR LINHA - ESTILOS
+   Reutiliza estilos do modal-recursos-produtivos.css
+   ================================================== */
+
+/* Accordion customizado */
+.accordion-item {
+    border: 1px solid #dee2e6;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.accordion-button {
+    background-color: #f8f9fa;
+    color: #212529;
+    font-weight: 500;
+    padding: 1rem 1.25rem;
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: #e7f5ec;
+    color: #198754;
+    box-shadow: none;
+}
+
+.accordion-button:focus {
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+    border-color: #198754;
+}
+
+.accordion-button::after {
+    filter: brightness(0) saturate(100%) invert(45%) sepia(8%) saturate(870%) hue-rotate(169deg) brightness(92%) contrast(85%);
+}
+
+.accordion-button:not(.collapsed)::after {
+    filter: brightness(0) saturate(100%) invert(37%) sepia(92%) saturate(409%) hue-rotate(93deg) brightness(95%) contrast(93%);
+}
+
+/* ============================================================
+   ESTILOS DO CALENDÁRIO (REUTILIZADOS DO MODAL)
+   ============================================================ */
+
+/* Container de calendário por linha */
+.recursos-calendario-linha {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    padding: 15px;
+    margin-bottom: 0;
+}
+
+/* Header da linha */
+.recursos-linha-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.recursos-linha-titulo {
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.recursos-linha-dados {
+    display: flex;
+    gap: 12px;
+    font-size: 0.7rem;
+}
+
+.recursos-linha-dados > div {
+    display: flex;
+    flex-direction: column;
+}
+
+.recursos-linha-dados small {
+    opacity: 0.9;
+    font-size: 0.65rem;
+}
+
+.recursos-linha-dados strong {
+    font-size: 0.75rem;
+}
+
+/* Calendário */
+.recursos-calendario {
+    background: white;
+    border-radius: 6px;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+/* Cabeçalho do calendário (Mês/Ano) */
+.recursos-calendario-mes {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #198754;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #e7f5ec;
+    border-radius: 4px;
+}
+
+/* Grid do calendário */
+.recursos-calendario-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(100px, 1fr);
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+/* Cada dia */
+.recursos-dia {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: white;
+    min-height: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.2s;
+    position: relative; /* ✅ Para barras absolutas */
+    overflow: hidden;
+}
+
+.recursos-dia:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10;
+}
+
+/* Header do dia */
+.dia-header {
+    text-align: center;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #e9ecef;
+    z-index: 10; /* ✅ Acima das barras */
+    position: relative;
+}
+
+.dia-numero {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #198754;
+}
+
+.dia-semana {
+    font-size: 0.7rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+/* Barra de ocupação */
+.dia-ocupacao {
+    position: relative;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ocupacao-barra {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #20c997);
+    transition: width 0.3s ease;
+}
+
+.ocupacao-texto {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    line-height: 20px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: #495057;
+    z-index: 1;
+}
+
+/* Produtos programados */
+.dia-produtos {
+    flex: 1;
+    z-index: 10; /* ✅ Acima das barras */
+    position: relative;
+}
+
+.dia-produto {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #198754;
+    border-left: 3px solid #198754;
+    padding: 3px 6px;
+    margin-bottom: 3px;
+    font-size: 0.72rem;
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dia-produto:hover {
+    background: #198754;
+    color: white;
+    transform: scale(1.05);
+}
+
+.dia-produto:hover strong,
+.dia-produto:hover span {
+    color: white !important;
+}
+
+.dia-produto strong {
+    color: #198754;
+}
+
+.dia-produto span {
+    color: #6c757d;
+    font-size: 0.65rem;
+}
+
+.dia-vazio {
+    text-align: center;
+    color: #adb5bd;
+    font-size: 0.8rem;
+    padding: 8px;
+}
+
+/* Footer do dia */
+.dia-footer {
+    text-align: center;
+    padding-top: 4px;
+    border-top: 1px solid #e9ecef;
+    font-size: 0.65rem;
+    color: #6c757d;
+    z-index: 10; /* ✅ Acima das barras */
+    position: relative;
+}
+
+/* ✅ BARRAS DE OCUPAÇÃO SOBREPOSTAS (igual modal recursos) */
+.recursos-ocupacao-turno {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transition: height 0.3s ease;
+    border-radius: 0 0 6px 6px;
+}
+
+.recursos-ocupacao-turno-1 {
+    background: #b8e6c0;
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.recursos-ocupacao-turno-2 {
+    background: #7dd88f;
+    opacity: 0.85;
+    z-index: 2;
+}
+
+.recursos-ocupacao-turno-3 {
+    background: #28a745;
+    opacity: 0.85;
+    z-index: 3;
+}
+
+/* Dia de hoje */
+.dia-hoje {
+    border: 2px solid #ffc107;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+}
+
+.dia-hoje .dia-numero {
+    color: #ffc107;
+}
+
+/* Loading spinner */
+#loading-spinner {
+    min-height: 200px;
+}

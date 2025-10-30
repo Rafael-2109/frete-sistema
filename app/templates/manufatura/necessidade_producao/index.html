@@ -153,10 +153,33 @@
 
 </div>
 
+<!-- Container para dropdowns (fora da table para evitar overflow) -->
+<div id="dropdown-container"></div>
+
 <!-- Incluir modais -->
 {% include 'manufatura/necessidade_producao/modals/_modal-projecao.html' %}
 {% include 'manufatura/necessidade_producao/modals/_modal-pedidos.html' %}
 {% include 'manufatura/necessidade_producao/modals/_modal-recursos-produtivos.html' %}
+
+<!-- Modal de Separações e Estoque (Reutilizado de programacao-linhas) -->
+<div class="modal fade" id="modalSeparacoesProduto" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modal-separacoes-titulo">Separações e Estoque</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-separacoes-conteudo">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="mt-2">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
