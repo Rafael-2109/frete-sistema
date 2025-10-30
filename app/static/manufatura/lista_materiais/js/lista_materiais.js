@@ -135,38 +135,45 @@ const ListaMateriais = {
         }
 
         produtos.forEach(produto => {
-            const iconeTipo = this.getIconeTipo(produto.tipo);
             const badgeEstrutura = produto.tem_estrutura
                 ? '<span class="badge badge-tem-estrutura">Tem Estrutura</span>'
                 : '<span class="badge badge-sem-estrutura">Sem Estrutura</span>';
 
             tbody.append(`
-                <tr data-cod-produto="${produto.cod_produto}">
+                <tr data-cod-produto="${produto.cod_produto}" class="tr-produto-clicavel" style="cursor: pointer;">
                     <td><strong>${produto.cod_produto}</strong></td>
                     <td>${produto.nome_produto}</td>
-                    <td>${iconeTipo} ${produto.tipo}</td>
                     <td>${badgeEstrutura}</td>
                     <td>
-                        <button class="btn btn-sm btn-primary btn-visualizar-estrutura"
-                                data-cod="${produto.cod_produto}">
-                            <i class="fas fa-eye"></i> Ver Estrutura
-                        </button>
+                        <i class="fas fa-chevron-down text-primary"></i>
+                        <small class="text-muted">Clique para expandir</small>
                     </td>
                 </tr>
             `);
         });
 
-        // Event listener para visualizar estrutura
-        console.log('🔗 Vinculando eventos aos botões "Ver Estrutura"...');
-        const botoes = $('.btn-visualizar-estrutura');
-        console.log(`✅ ${botoes.length} botões encontrados`);
+        // Event listener para expandir estrutura ao clicar na linha
+        console.log('🔗 Vinculando eventos às linhas de produto...');
+        const linhas = $('.tr-produto-clicavel');
+        console.log(`✅ ${linhas.length} linhas encontradas`);
 
-        $('.btn-visualizar-estrutura').on('click', (e) => {
-            console.log('🖱️ Botão "Ver Estrutura" clicado!');
-            const cod = $(e.currentTarget).data('cod');
-            const $linhaClicada = $(e.currentTarget).closest('tr');
+        $('.tr-produto-clicavel').on('click', (e) => {
+            console.log('🖱️ Linha de produto clicada!');
+            const $linhaClicada = $(e.currentTarget);
+            const cod = $linhaClicada.data('cod-produto');
             console.log(`📦 Código do produto: ${cod}`);
-            this.carregarEstrutura(cod, $linhaClicada);
+
+            // Verificar se já está expandido
+            const $proxima = $linhaClicada.next('.linha-estrutura-bom');
+            if ($proxima.length > 0) {
+                // Já expandido, colapsar
+                $proxima.slideUp(300, () => $proxima.remove());
+                $linhaClicada.find('i.fa-chevron-down').removeClass('fa-chevron-down').addClass('fa-chevron-right');
+            } else {
+                // Expandir
+                this.carregarEstrutura(cod, $linhaClicada);
+                $linhaClicada.find('i.fa-chevron-right').removeClass('fa-chevron-right').addClass('fa-chevron-down');
+            }
         });
 
         $('#area-resultados').fadeIn();
@@ -182,39 +189,21 @@ const ListaMateriais = {
         // Remover linha de estrutura anterior se existir
         $('.linha-estrutura-bom').remove();
 
-        // Criar nova linha expansível
+        // Criar nova linha expansível (sem cabeçalho repetido)
         const numColunas = $linhaClicada.find('td').length;
         const $linhaEstrutura = $(`
             <tr class="linha-estrutura-bom">
-                <td colspan="${numColunas}" style="padding: 0; background-color: #f8f9fa; border-left: 4px solid #0d6efd;">
-                    <div id="estrutura-expandida" style="padding: 20px; max-width: 100%; overflow-x: auto;">
-                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-                            <div class="mb-2 mb-md-0">
-                                <h5 class="mb-1">
-                                    <i class="fas fa-sitemap text-primary"></i>
-                                    <span id="titulo-estrutura-inline">Estrutura do Produto</span>
-                                </h5>
-                                <small class="text-muted d-block" id="subtitulo-estrutura-inline"></small>
-                            </div>
+                <td colspan="${numColunas}" style="padding: 10px 20px; background-color: #f8f9fa;">
+                    <div id="estrutura-expandida" style="max-width: 100%; overflow-x: hidden;">
+                        <div class="d-flex justify-content-end align-items-center mb-2">
                             <div class="btn-group" role="group">
                                 <button class="btn btn-sm btn-outline-primary" id="btn-adicionar-componente-inline" title="Adicionar componente">
-                                    <i class="fas fa-plus"></i> <span class="d-none d-md-inline">Adicionar</span>
+                                    <i class="fas fa-plus"></i>
                                 </button>
                                 <button class="btn btn-sm btn-outline-success" id="btn-explodir-bom-inline" title="Explodir BOM completo">
-                                    <i class="fas fa-expand"></i> <span class="d-none d-md-inline">Explodir BOM</span>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger" id="btn-fechar-estrutura" title="Fechar estrutura">
-                                    <i class="fas fa-times"></i> <span class="d-none d-md-inline">Fechar</span>
+                                    <i class="fas fa-expand"></i>
                                 </button>
                             </div>
-                        </div>
-
-                        <div class="alert alert-info mb-3 py-2">
-                            <small class="d-flex flex-wrap gap-3">
-                                <span><i class="fas fa-cube text-success"></i> Acabado</span>
-                                <span><i class="fas fa-cog text-warning"></i> Intermediário</span>
-                                <span><i class="fas fa-leaf text-primary"></i> Componente</span>
-                            </small>
                         </div>
 
                         <div id="loading-estrutura-inline" class="text-center py-3">
@@ -222,7 +211,7 @@ const ListaMateriais = {
                             <small class="ms-2">Carregando...</small>
                         </div>
 
-                        <div id="tree-bom-inline" style="display: none; min-height: 200px; max-height: 600px; overflow-y: auto;"></div>
+                        <div id="tree-bom-inline" style="display: none;"></div>
 
                         <div id="empty-estrutura-inline" class="text-center py-3" style="display: none;">
                             <i class="fas fa-box-open fa-2x text-muted mb-2"></i>
@@ -237,10 +226,6 @@ const ListaMateriais = {
         $linhaClicada.after($linhaEstrutura);
 
         // Event listeners
-        $('#btn-fechar-estrutura').on('click', () => {
-            $linhaEstrutura.slideUp(300, () => $linhaEstrutura.remove());
-        });
-
         $('#btn-adicionar-componente-inline').on('click', () => this.abrirModalComponente());
 
         $('#btn-explodir-bom-inline').on('click', () => this.abrirModalExplosao());
@@ -258,11 +243,6 @@ const ListaMateriais = {
             if (data.sucesso) {
                 console.log('✅ Dados carregados com sucesso');
                 console.log(`📊 ${data.componentes.length} componentes encontrados`);
-
-                // Atualizar título inline
-                const iconeTipo = this.getIconeTipo(data.produto.tipo);
-                $('#titulo-estrutura-inline').html(`${iconeTipo} ${data.produto.cod_produto} - ${data.produto.nome_produto}`);
-                $('#subtitulo-estrutura-inline').text(`Tipo: ${data.produto.tipo} | Total: ${data.total_componentes} componentes`);
 
                 $('#loading-estrutura-inline').hide();
 
@@ -292,45 +272,418 @@ const ListaMateriais = {
     },
 
     /**
-     * Renderiza árvore BOM inline (dentro da tabela)
+     * Renderiza árvore BOM inline como TABELA (accordion style)
      */
     renderizarArvoreInline(data) {
-        const treeData = this.construirDadosArvore(data);
+        const container = $('#tree-bom-inline');
+        container.empty();
 
-        // Destruir árvore anterior se existir
-        $('#tree-bom-inline').jstree('destroy');
+        if (data.componentes && data.componentes.length > 0) {
+            const tabelaHtml = `
+                <table class="table table-sm table-hover bom-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;"></th>
+                            <th style="width: 40px;"></th>
+                            <th style="width: 120px;">Código</th>
+                            <th>Produto</th>
+                            <th style="width: 100px;" class="text-end">Quantidade</th>
+                            <th style="width: 100px;" class="text-end">Estoque</th>
+                            <th style="width: 80px;" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.renderizarLinhasTabela(data.componentes, 0)}
+                    </tbody>
+                </table>
+            `;
+            container.html(tabelaHtml);
 
-        // Criar nova árvore
-        $('#tree-bom-inline').jstree({
-            core: {
-                data: treeData,
-                themes: {
-                    name: 'default',
-                    responsive: true
-                },
-                check_callback: true
-            },
-            plugins: ['contextmenu', 'types'],
-            types: {
-                'acabado': {
-                    icon: 'fas fa-cube text-success'
-                },
-                'intermediario': {
-                    icon: 'fas fa-cog text-warning'
-                },
-                'componente': {
-                    icon: 'fas fa-leaf text-primary'
-                },
-                'erro': {
-                    icon: 'fas fa-exclamation-triangle text-danger'
+            // Vincular eventos
+            this.bindAccordionEvents();
+        }
+
+        container.show();
+    },
+
+    /**
+     * Renderiza linhas da tabela BOM (accordion) - VERSÃO HARMONIZADA
+     */
+    renderizarLinhasTabela(componentes, nivel) {
+        if (!componentes || componentes.length === 0) {
+            return '';
+        }
+
+        return componentes.map(comp => {
+            const isIntermediate = comp.tipo_componente && comp.tipo_componente.toUpperCase() === 'INTERMEDIARIO';
+            const produtoProduzido = comp.produto_produzido === true;
+            const podeExpandir = isIntermediate || produtoProduzido;
+            const rowId = `row-${comp.cod_produto_componente}-${Math.random().toString(36).substring(2, 11)}`;
+
+            // Ícone baseado no tipo (usando classes do Font Awesome corretamente)
+            let iconeClass = 'fa-leaf';
+            let iconeCor = '#0dcaf0';
+            if (comp.tipo_componente) {
+                const tipo = comp.tipo_componente.toUpperCase();
+                if (tipo === 'ACABADO') {
+                    iconeClass = 'fa-cube';
+                    iconeCor = '#198754';
+                } else if (tipo === 'INTERMEDIARIO') {
+                    iconeClass = 'fa-cog';
+                    iconeCor = '#ffc107';
                 }
-            },
-            contextmenu: {
-                items: (node) => this.getContextMenu(node)
+            }
+
+            // Linha principal com identação progressiva
+            let html = `
+                <tr class="bom-row bom-row-nivel-${nivel}" data-nivel="${nivel}" data-cod="${comp.cod_produto_componente}" data-row-id="${rowId}">
+                    <td class="bom-col-expand">
+                        ${podeExpandir ? `
+                            <button class="btn-expand-accordion" data-row-id="${rowId}" data-cod="${comp.cod_produto_componente}" title="Expandir estrutura">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        ` : '<span class="tree-spacer"></span>'}
+                    </td>
+                    <td class="bom-col-icon">
+                        <i class="fas ${iconeClass}" style="color: ${iconeCor};"></i>
+                    </td>
+                    <td class="bom-col-codigo">
+                        <code>${comp.cod_produto_componente}</code>
+                    </td>
+                    <td class="bom-col-produto">${comp.nome_produto_componente}</td>
+                    <td class="bom-col-qtd text-end">
+                        ${comp.qtd_utilizada !== null && comp.qtd_utilizada !== undefined ?
+                            `<span class="badge rounded-pill bg-secondary">${this.formatarNumero(comp.qtd_utilizada)}</span>`
+                            : '<span class="text-muted">-</span>'}
+                    </td>
+                    <td class="bom-col-estoque text-end">
+                        ${comp.estoque_atual !== undefined && comp.estoque_atual !== null ?
+                            `<span class="badge rounded-pill ${comp.estoque_atual > 0 ? 'bg-success' : 'bg-danger'}">${this.formatarNumero(comp.estoque_atual)}</span>`
+                            : '<span class="text-muted">-</span>'}
+                    </td>
+                    <td class="bom-col-acoes text-center">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-primary btn-sm" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm btn-remover" data-id="${comp.id}" title="Remover">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            // Linha expansível para sub-componentes
+            if (podeExpandir) {
+                html += `
+                    <tr class="bom-row-children" id="children-${rowId}" style="display: none;">
+                        <td colspan="7" class="bom-children-cell">
+                            <div class="bom-children-container" data-nivel="${nivel}">
+                                <div class="loading-container">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Carregando...</span>
+                                    </div>
+                                    <span class="ms-2 text-muted">Carregando componentes...</span>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            return html;
+        }).join('');
+    },
+
+    /**
+     * Renderiza um item BOM (produto) recursivamente - MÉTODO ANTIGO (manter para compatibilidade)
+     */
+    renderizarItemBOM(item, nivel) {
+        const tipoClass = `tipo-${item.tipo.toLowerCase()}`;
+        const icone = this.getIconeHTML(item.tipo);
+        const hasChildren = item.componentes && item.componentes.length > 0;
+        const isIntermediate = item.tipo.toUpperCase() === 'INTERMEDIARIO';
+        const produtoProduzido = item.produto_produzido === true;
+
+        // ID único para o item
+        const itemId = `bom-item-${item.cod_produto}-${nivel}-${Math.random().toString(36).substring(2, 11)}`;
+
+        // Determinar se deve ter botão de expansão
+        // Produtos intermediários OU produtos produzidos com componentes devem ser expansíveis
+        const shouldExpand = (isIntermediate || produtoProduzido) && (hasChildren || !item.is_root);
+
+        let html = `
+            <div class="bom-item" data-nivel="${nivel}">
+                <div class="bom-card ${tipoClass}" data-cod-produto="${item.cod_produto}">
+                    ${shouldExpand ? `
+                        <div class="bom-expand-btn" data-item-id="${itemId}" data-cod="${item.cod_produto}" data-loaded="false">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    ` : '<div style="width: 28px;"></div>'}
+
+                    <div class="bom-icon">
+                        ${icone}
+                    </div>
+
+                    <div class="bom-content">
+                        <div class="bom-header">
+                            <span class="bom-codigo">${item.cod_produto}</span>
+                            <span class="bom-nome" title="${item.nome_produto}">${item.nome_produto}</span>
+                            ${item.qtd_utilizada !== null ? `
+                                <span class="bom-badge qtd">
+                                    <i class="fas fa-calculator"></i> ${this.formatarNumero(item.qtd_utilizada)}
+                                </span>
+                            ` : ''}
+                            ${item.estoque_atual !== undefined && item.estoque_atual !== null ? `
+                                <span class="bom-badge" style="background: ${item.estoque_atual > 0 ? '#d1e7dd' : '#f8d7da'}; color: ${item.estoque_atual > 0 ? '#0f5132' : '#842029'};">
+                                    <i class="fas fa-boxes"></i> ${this.formatarNumero(item.estoque_atual)}
+                                </span>
+                            ` : ''}
+                            ${hasChildren && item.is_root ? `
+                                <span class="bom-badge tipo">
+                                    <i class="fas fa-layer-group"></i> ${item.componentes.length}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="bom-actions">
+                        <button class="bom-action-btn btn-editar-componente"
+                                data-cod="${item.cod_produto}"
+                                title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ${!item.is_root ? `
+                            <button class="bom-action-btn btn-remover-componente"
+                                    data-id="${item.id}"
+                                    title="Remover">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                ${shouldExpand ? `
+                    <div class="bom-children" id="${itemId}-children" data-cod="${item.cod_produto}" data-loaded="false">
+                        ${hasChildren && item.is_root ?
+                            this.renderizarComponentes(item.componentes, nivel + 1) :
+                            `<div class="bom-loading">
+                                <div class="spinner-border"></div>
+                                <span>Clique no botão para expandir...</span>
+                            </div>`
+                        }
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        return html;
+    },
+
+    /**
+     * Renderiza lista de componentes
+     */
+    renderizarComponentes(componentes, nivel) {
+        if (!componentes || componentes.length === 0) {
+            return '<div class="bom-empty">Nenhum componente cadastrado</div>';
+        }
+
+        return componentes.map(comp => {
+            return this.renderizarItemBOM({
+                id: comp.id,
+                cod_produto: comp.cod_produto_componente,
+                nome_produto: comp.nome_produto_componente,
+                tipo: comp.tipo_componente,
+                qtd_utilizada: comp.qtd_utilizada,
+                produto_produzido: comp.produto_produzido || false,
+                estoque_atual: comp.estoque_atual,
+                componentes: [],
+                is_root: false
+            }, nivel);
+        }).join('');
+    },
+
+    /**
+     * Vincula eventos do accordion
+     */
+    bindAccordionEvents() {
+        // Expandir/colapsar accordion
+        $('.btn-expand-accordion').off('click').on('click', async (e) => {
+            e.stopPropagation();
+            const $btn = $(e.currentTarget);
+            const rowId = $btn.data('row-id');
+            const codProduto = $btn.data('cod');
+            const $childrenRow = $(`#children-${rowId}`);
+            const $icon = $btn.find('i');
+
+            // Se já está expandido, colapsar
+            if ($icon.hasClass('fa-chevron-down')) {
+                $icon.removeClass('fa-chevron-down').addClass('fa-chevron-right');
+                $childrenRow.hide();
+                return;
+            }
+
+            // Expandir
+            $icon.removeClass('fa-chevron-right').addClass('fa-chevron-down');
+            $childrenRow.show();
+
+            // Verificar se já foi carregado
+            const $container = $childrenRow.find('.bom-children-container');
+            if ($container.data('loaded') === 'true') {
+                return;
+            }
+
+            // Carregar sub-estrutura
+            try {
+                const response = await fetch(`/manufatura/api/lista-materiais/${codProduto}`);
+                const data = await response.json();
+
+                if (data.sucesso && data.componentes.length > 0) {
+                    const nivel = parseInt($btn.closest('tr').data('nivel')) + 1;
+                    const subLinhas = this.renderizarLinhasTabela(data.componentes, nivel);
+
+                    $container.html(subLinhas);
+                    $container.data('loaded', 'true');
+
+                    // Re-vincular eventos
+                    this.bindAccordionEvents();
+                } else {
+                    $container.html(`
+                        <tr>
+                            <td colspan="7" class="text-center py-2">
+                                <small class="text-muted">Nenhum componente cadastrado</small>
+                            </td>
+                        </tr>
+                    `);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar:', error);
+                $container.html(`
+                    <tr>
+                        <td colspan="7" class="text-center py-2">
+                            <small class="text-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</small>
+                        </td>
+                    </tr>
+                `);
             }
         });
 
-        $('#tree-bom-inline').show();
+        // Botão remover
+        $('.btn-remover').off('click').on('click', (e) => {
+            e.stopPropagation();
+            const id = $(e.currentTarget).data('id');
+            if (id) {
+                this.confirmarRemocao(id);
+            }
+        });
+    },
+
+    /**
+     * Vincula eventos de expansão - MÉTODO ANTIGO (manter para compatibilidade)
+     */
+    bindExpandEvents() {
+        $('.bom-expand-btn').off('click').on('click', async (e) => {
+            e.stopPropagation();
+            const $btn = $(e.currentTarget);
+            const itemId = $btn.data('item-id');
+            const codProduto = $btn.data('cod');
+            const $children = $(`#${itemId}-children`);
+            const isLoaded = $children.data('loaded') === 'true';
+
+            // Se já está expandido, apenas colapsar
+            if ($btn.hasClass('expanded')) {
+                $btn.removeClass('expanded');
+                $children.removeClass('expanded');
+                return;
+            }
+
+            // Expandir
+            $btn.addClass('expanded');
+
+            // Se ainda não carregou, buscar estrutura do intermediário
+            if (!isLoaded) {
+                $children.html(`
+                    <div class="bom-loading">
+                        <div class="spinner-border"></div>
+                        <span>Carregando estrutura...</span>
+                    </div>
+                `);
+
+                try {
+                    const response = await fetch(`/manufatura/api/lista-materiais/${codProduto}`);
+                    const data = await response.json();
+
+                    if (data.sucesso && data.componentes.length > 0) {
+                        const nivel = parseInt($btn.closest('.bom-item').data('nivel')) + 1;
+                        $children.html(this.renderizarComponentes(data.componentes, nivel));
+                        $children.data('loaded', 'true');
+
+                        // Re-vincular eventos nos novos elementos
+                        this.bindExpandEvents();
+                        this.bindActionButtons();
+                    } else {
+                        $children.html('<div class="bom-empty">Nenhum componente cadastrado</div>');
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar sub-estrutura:', error);
+                    $children.html(`
+                        <div class="bom-empty" style="color: #dc3545;">
+                            <i class="fas fa-exclamation-triangle"></i> Erro ao carregar
+                        </div>
+                    `);
+                }
+            }
+
+            $children.addClass('expanded');
+        });
+
+        this.bindActionButtons();
+    },
+
+    /**
+     * Vincula botões de ação (editar, remover)
+     */
+    bindActionButtons() {
+        $('.btn-editar-componente').off('click').on('click', (e) => {
+            e.stopPropagation();
+            const codProduto = $(e.currentTarget).data('cod');
+            console.log('Editar componente:', codProduto);
+            // TODO: Implementar edição
+        });
+
+        $('.btn-remover-componente').off('click').on('click', (e) => {
+            e.stopPropagation();
+            const componenteId = $(e.currentTarget).data('id');
+            if (componenteId) {
+                this.confirmarRemocao(componenteId);
+            }
+        });
+    },
+
+    /**
+     * Retorna HTML do ícone por tipo
+     */
+    getIconeHTML(tipo) {
+        const icones = {
+            'ACABADO': '<i class="fas fa-cube"></i>',
+            'INTERMEDIARIO': '<i class="fas fa-cog"></i>',
+            'COMPONENTE': '<i class="fas fa-leaf"></i>',
+            'DESCONHECIDO': '<i class="fas fa-question"></i>',
+            'ERRO': '<i class="fas fa-exclamation-triangle"></i>'
+        };
+        return icones[tipo.toUpperCase()] || icones['DESCONHECIDO'];
+    },
+
+    /**
+     * Formata número para exibição
+     */
+    formatarNumero(num) {
+        if (num === null || num === undefined) return '-';
+        return parseFloat(num).toLocaleString('pt-BR', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 6
+        });
     },
 
     /**

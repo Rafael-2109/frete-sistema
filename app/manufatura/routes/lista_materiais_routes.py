@@ -9,7 +9,8 @@ from app.manufatura.models import ListaMateriais, ListaMateriaisHistorico
 from app.producao.models import CadastroPalletizacao
 from app.manufatura.services.bom_service import ServicoBOM
 from app.manufatura.services.auditoria_service import ServicoAuditoria
-from datetime import datetime
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from datetime import datetime, date
 from io import BytesIO
 import pandas as pd
 import tempfile
@@ -109,6 +110,17 @@ def register_lista_materiais_routes(bp):
                 # Classificar componente
                 comp_classificacao = ServicoBOM._classificar_produto(comp.cod_produto_componente)
 
+                # Buscar estoque do componente
+                try:
+                    estoque_info = ServicoEstoqueSimples.obter_resumo_estoque(
+                        comp.cod_produto_componente,
+                        date.today()
+                    )
+                    estoque_atual = estoque_info.get('estoque_atual', 0) if estoque_info else 0
+                except Exception as e:
+                    logger.warning(f"Erro ao buscar estoque de {comp.cod_produto_componente}: {e}")
+                    estoque_atual = 0
+
                 componentes.append({
                     'id': comp.id,
                     'cod_produto_componente': comp.cod_produto_componente,
@@ -119,6 +131,7 @@ def register_lista_materiais_routes(bp):
                     'tipo_componente': comp_classificacao['tipo'],
                     'produto_produzido': comp_classificacao['produto_produzido'],
                     'produto_comprado': comp_classificacao['produto_comprado'],
+                    'estoque_atual': float(estoque_atual),
                     'status': comp.status,
                     'versao': comp.versao
                 })

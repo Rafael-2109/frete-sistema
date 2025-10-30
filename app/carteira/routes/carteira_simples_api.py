@@ -33,6 +33,34 @@ logger = logging.getLogger(__name__)
 carteira_simples_bp = Blueprint('carteira_simples', __name__, url_prefix='/simples')
 
 
+def validar_numero_json(valor, padrao, permitir_zero=True):
+    """
+    Valida um número para garantir que é JSON-serializável (não NaN/Infinity)
+
+    Args:
+        valor: Valor a validar
+        padrao: Valor padrão caso validação falhe
+        permitir_zero: Se True, aceita 0 como valor válido
+
+    Returns:
+        float válido ou valor padrão
+    """
+    try:
+        numero = float(valor) if valor is not None else padrao
+        # Verificar se é um número válido (não NaN, não Infinity)
+        if numero != numero or numero == float('inf') or numero == float('-inf'):
+            return padrao
+        # Verificar se é negativo
+        if numero < 0:
+            return padrao
+        # Verificar se é zero quando não permitido
+        if not permitir_zero and numero == 0:
+            return padrao
+        return numero
+    except (ValueError, TypeError, AttributeError):
+        return padrao
+
+
 @carteira_simples_bp.route('/')
 def index():
     """Renderiza página da carteira simplificada"""
@@ -476,14 +504,24 @@ def obter_dados():
 
                     # Dados de palletização
                     pallet_info = pallet_map.get(produto.cod_produto)
-                    palletizacao = float(pallet_info.palletizacao) if pallet_info else 100.0
-                    peso_bruto = float(pallet_info.peso_bruto) if pallet_info else 1.0
+
+                    # 🔧 CORREÇÃO: Validar para evitar NaN no JSON
+                    palletizacao = validar_numero_json(
+                        pallet_info.palletizacao if pallet_info else None,
+                        100.0,
+                        permitir_zero=False  # Palletizacao não pode ser 0
+                    )
+                    peso_bruto = validar_numero_json(
+                        pallet_info.peso_bruto if pallet_info else None,
+                        1.0,
+                        permitir_zero=False  # Peso bruto não pode ser 0
+                    )
 
                     # Calcular valores
-                    preco_unitario = float(produto.preco_produto_pedido or 0)
-                    valor_total = qtd_saldo * preco_unitario
-                    pallets = qtd_saldo / palletizacao if palletizacao > 0 else 0
-                    peso = qtd_saldo * peso_bruto
+                    preco_unitario = validar_numero_json(produto.preco_produto_pedido, 0)
+                    valor_total = validar_numero_json(qtd_saldo * preco_unitario, 0)
+                    pallets = validar_numero_json(qtd_saldo / palletizacao if palletizacao > 0 else 0, 0)
+                    peso = validar_numero_json(qtd_saldo * peso_bruto, 0)
 
                     # Buscar dados de estoque (apenas estoque_atual + programação)
                     estoque_info = estoque_map.get(produto.cod_produto, {
@@ -492,18 +530,23 @@ def obter_dados():
                     })
 
                     # 🚀 OTIMIZAÇÃO: BUSCAR ROTA E SUB_ROTA do cache pré-calculado
-                    rota_calculada = produto.rota
-                    sub_rota_calculada = produto.sub_rota
+                    # 🔧 CORREÇÃO: SEMPRE verificar incoterm FOB/RED PRIMEIRO
+                    if hasattr(produto, 'incoterm') and produto.incoterm in ['FOB', 'RED']:
+                        rota_calculada = produto.incoterm
+                        sub_rota_calculada = None  # FOB/RED não tem sub-rota
+                    else:
+                        rota_calculada = produto.rota
+                        sub_rota_calculada = produto.sub_rota
 
-                    if not rota_calculada or not sub_rota_calculada:
-                        # Buscar do cache pré-calculado
-                        chave_cache = (produto.estado, produto.municipio) if produto.municipio else (produto.estado, None)
-                        rotas_cached = rotas_cache.get(chave_cache, (None, None))
+                        if not rota_calculada or not sub_rota_calculada:
+                            # Buscar do cache pré-calculado
+                            chave_cache = (produto.estado, produto.municipio) if produto.municipio else (produto.estado, None)
+                            rotas_cached = rotas_cache.get(chave_cache, (None, None))
 
-                        if not rota_calculada:
-                            rota_calculada = rotas_cached[0]
-                        if not sub_rota_calculada:
-                            sub_rota_calculada = rotas_cached[1]
+                            if not rota_calculada:
+                                rota_calculada = rotas_cached[0]
+                            if not sub_rota_calculada:
+                                sub_rota_calculada = rotas_cached[1]
 
                     # 🚀 OTIMIZAÇÃO: Pré-calcular datas (evitar strftime repetido)
                     data_pedido_str = produto.data_pedido.isoformat() if produto.data_pedido else None
@@ -555,8 +598,18 @@ def obter_dados():
 
                         # Dados de palletização para separação
                         pallet_info_sep = pallet_map.get(sep.cod_produto)
-                        palletizacao_sep = float(pallet_info_sep.palletizacao) if pallet_info_sep else 100.0
-                        peso_bruto_sep = float(pallet_info_sep.peso_bruto) if pallet_info_sep else 1.0
+
+                        # 🔧 CORREÇÃO: Validar para evitar NaN no JSON
+                        palletizacao_sep = validar_numero_json(
+                            pallet_info_sep.palletizacao if pallet_info_sep else None,
+                            100.0,
+                            permitir_zero=False  # Palletizacao não pode ser 0
+                        )
+                        peso_bruto_sep = validar_numero_json(
+                            pallet_info_sep.peso_bruto if pallet_info_sep else None,
+                            1.0,
+                            permitir_zero=False  # Peso bruto não pode ser 0
+                        )
 
                         # Buscar embarque + transportadora
                         embarque_info = embarques_map.get(sep.separacao_lote_id, {})
@@ -1744,9 +1797,14 @@ def adicionar_itens_separacao():
                 valor_calculado = quantidade * preco_unitario
 
                 # Buscar rota e sub-rota
-                rota = buscar_rota_por_uf(item_carteira.estado) if item_carteira.estado else None
-                sub_rota = buscar_sub_rota_por_uf_cidade(item_carteira.estado, item_carteira.municipio) \
-                    if item_carteira.estado and item_carteira.municipio else None
+                # 🔧 CORREÇÃO: SEMPRE verificar incoterm FOB/RED PRIMEIRO
+                if hasattr(item_carteira, 'incoterm') and item_carteira.incoterm in ['FOB', 'RED']:
+                    rota = item_carteira.incoterm
+                    sub_rota = None  # FOB/RED não tem sub-rota
+                else:
+                    rota = buscar_rota_por_uf(item_carteira.estado) if item_carteira.estado else None
+                    sub_rota = buscar_sub_rota_por_uf_cidade(item_carteira.estado, item_carteira.municipio) \
+                        if item_carteira.estado and item_carteira.municipio else None
 
                 # Criar novo registro de Separacao
                 nova_separacao = Separacao(

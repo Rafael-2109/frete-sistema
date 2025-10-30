@@ -1,19 +1,544 @@
 /* ========================================
    LISTA DE MATERIAIS - Estilos Customizados
+   Nova estrutura com cards hierárquicos
    ======================================== */
 
-/* Árvore BOM */
+/* Container principal da árvore BOM */
 .bom-tree {
-    min-height: 400px;
-    max-height: 600px;
-    overflow-y: auto;
-    padding: 15px;
-    background: #f8f9fa;
+    padding: 0;
+    background: white;
     border-radius: 8px;
     border: 1px solid #dee2e6;
+    overflow: hidden;
 }
 
-/* Customização jsTree */
+/* ========================================
+   ESTILO ACCORDION - TABELA HARMONIZADA
+   ======================================== */
+
+.bom-table {
+    margin-bottom: 0;
+    font-size: 13px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.bom-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+    padding: 12px 10px;
+    vertical-align: middle;
+}
+
+/* Colunas com larguras específicas */
+.bom-col-expand {
+    width: 40px;
+    text-align: center;
+    position: relative;
+}
+
+.bom-col-icon {
+    width: 40px;
+    text-align: center;
+    position: relative;
+}
+
+.bom-col-codigo {
+    width: 130px;
+}
+
+.bom-col-produto {
+    min-width: 250px;
+}
+
+.bom-col-qtd {
+    width: 110px;
+}
+
+.bom-col-estoque {
+    width: 110px;
+}
+
+.bom-col-acoes {
+    width: 100px;
+}
+
+/* Linhas da tabela BOM */
+.bom-table tbody tr.bom-row {
+    transition: background-color 0.15s ease;
+    border-left: 3px solid transparent;
+}
+
+.bom-table tbody tr.bom-row:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+}
+
+.bom-table tbody tr.bom-row td {
+    vertical-align: middle;
+    font-size: 13px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* Código com tag <code> */
+.bom-col-codigo code {
+    font-family: 'Courier New', Consolas, Monaco, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #212529;
+    background: transparent;
+    padding: 0;
+}
+
+/* ========================================
+   INDENTAÇÃO PROGRESSIVA COM TABS VISUAIS
+   Sistema de árvore com tabs de 25px por nível
+   ======================================== */
+
+/* Variável de tab: 25px por nível */
+.bom-row-nivel-0 td:first-child,
+.bom-row-nivel-0 .bom-col-icon {
+    padding-left: 10px;
+}
+
+.bom-row-nivel-1 td:first-child {
+    padding-left: 10px;
+}
+
+.bom-row-nivel-1 .bom-col-icon {
+    padding-left: 35px; /* 10 base + 25 tab */
+}
+
+.bom-row-nivel-2 td:first-child {
+    padding-left: 10px;
+}
+
+.bom-row-nivel-2 .bom-col-icon {
+    padding-left: 60px; /* 10 base + 50 tab (2x25) */
+}
+
+.bom-row-nivel-3 td:first-child {
+    padding-left: 10px;
+}
+
+.bom-row-nivel-3 .bom-col-icon {
+    padding-left: 85px; /* 10 base + 75 tab (3x25) */
+}
+
+.bom-row-nivel-4 td:first-child {
+    padding-left: 10px;
+}
+
+.bom-row-nivel-4 .bom-col-icon {
+    padding-left: 110px; /* 10 base + 100 tab (4x25) */
+}
+
+/* Linha conectora horizontal (do chevron até o ícone) */
+.bom-row-nivel-1 .bom-col-expand::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    width: 15px;
+    height: 1px;
+    background-color: #d0d7de;
+}
+
+.bom-row-nivel-2 .bom-col-expand::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    width: 40px;
+    height: 1px;
+    background-color: #d0d7de;
+}
+
+.bom-row-nivel-3 .bom-col-expand::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    width: 65px;
+    height: 1px;
+    background-color: #d0d7de;
+}
+
+.bom-row-nivel-4 .bom-col-expand::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    width: 90px;
+    height: 1px;
+    background-color: #d0d7de;
+}
+
+/* Linha vertical conectando ao pai (apenas para níveis > 0) */
+.bom-row-nivel-1 .bom-col-expand::before,
+.bom-row-nivel-2 .bom-col-expand::before,
+.bom-row-nivel-3 .bom-col-expand::before,
+.bom-row-nivel-4 .bom-col-expand::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: -10px;
+    height: calc(50% + 10px);
+    width: 1px;
+    background-color: #d0d7de;
+}
+
+/* Botão de expansão do accordion */
+.btn-expand-accordion {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.btn-expand-accordion:hover {
+    background-color: #e9ecef;
+    color: #0d6efd;
+}
+
+.btn-expand-accordion i {
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+.btn-expand-accordion i.fa-chevron-down {
+    transform: rotate(90deg);
+}
+
+/* Espaçador para itens sem expansão */
+.tree-spacer {
+    display: inline-block;
+    width: 24px;
+}
+
+/* Container de filhos (sub-estrutura) */
+.bom-row-children {
+    background-color: #fafbfc;
+}
+
+.bom-children-cell {
+    padding: 0 !important;
+    border-top: none !important;
+}
+
+.bom-children-container {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.bom-children-container .bom-row {
+    background-color: #fafbfc;
+}
+
+.bom-children-container .bom-row:hover {
+    background-color: #f0f2f5;
+}
+
+/* Loading */
+.loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+}
+
+/* Badges harmonizados */
+.bom-table .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+/* Ícones dos tipos */
+.bom-col-icon i {
+    font-size: 16px;
+}
+
+/* ========================================
+   ESTRUTURA DE CARDS HIERÁRQUICOS
+   ======================================== */
+
+/* Item da estrutura BOM */
+.bom-item {
+    margin-bottom: 6px;
+    position: relative;
+}
+
+/* Card do produto */
+.bom-card {
+    background: white;
+    border-radius: 6px;
+    padding: 6px 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.2s;
+    border-left: 3px solid transparent;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    user-select: none;
+}
+
+.bom-card:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* Estados do card por tipo */
+.bom-card.tipo-acabado {
+    border-left-color: #198754;
+    background: linear-gradient(to right, #f0f9f4 0%, white 30%);
+}
+
+.bom-card.tipo-intermediario {
+    border-left-color: #ffc107;
+    background: linear-gradient(to right, #fffbf0 0%, white 30%);
+}
+
+.bom-card.tipo-componente {
+    border-left-color: #0dcaf0;
+    background: linear-gradient(to right, #f0f9fc 0%, white 30%);
+}
+
+/* Ícone do tipo de produto */
+.bom-icon {
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    flex-shrink: 0;
+}
+
+.tipo-acabado .bom-icon {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+.tipo-intermediario .bom-icon {
+    background: #fff3cd;
+    color: #ff9800;
+}
+
+.tipo-componente .bom-icon {
+    background: #cff4fc;
+    color: #0dcaf0;
+}
+
+/* Conteúdo do card */
+.bom-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.bom-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.bom-codigo {
+    font-weight: 700;
+    font-size: 11px;
+    color: #212529;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+}
+
+.bom-nome {
+    font-size: 11px;
+    color: #495057;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+/* Badges e informações */
+.bom-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.bom-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.bom-badge.qtd {
+    background: #6c757d;
+    color: white;
+}
+
+.bom-badge.tipo {
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* Botão de expansão */
+.bom-expand-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    border: 2px solid #dee2e6;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.bom-expand-btn:hover {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+.bom-expand-btn.expanded {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+    transform: rotate(90deg);
+}
+
+.bom-expand-btn i {
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+/* Container de filhos (sub-estrutura) */
+.bom-children {
+    margin-top: 4px;
+    margin-left: 24px;
+    padding-left: 12px;
+    border-left: 2px solid #dee2e6;
+    position: relative;
+    display: none;
+}
+
+.bom-children.expanded {
+    display: block;
+    animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Linha conectora */
+.bom-children::before {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, #dee2e6 0%, transparent 100%);
+}
+
+/* Loading spinner */
+.bom-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+.bom-loading .spinner-border {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+    margin-right: 8px;
+}
+
+/* Empty state */
+.bom-empty {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+/* Ações contextuais */
+.bom-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.bom-card:hover .bom-actions {
+    opacity: 1;
+}
+
+.bom-action-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: none;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 11px;
+}
+
+.bom-action-btn:hover {
+    background: #0d6efd;
+    color: white;
+}
+
+/* Animações */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* ========================================
+   COMPATIBILIDADE COM CÓDIGO ANTIGO
+   ======================================== */
+
+/* Manter estilos antigos do jsTree para não quebrar */
 .jstree-default .jstree-node {
     margin: 4px 0;
 }
@@ -31,35 +556,6 @@
 .jstree-default .jstree-clicked {
     background: #0d6efd !important;
     color: white !important;
-}
-
-/* Ícones por tipo de produto */
-.jstree-icon-acabado::before {
-    content: "\f1b2";  /* fa-cube */
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    color: #198754;  /* success */
-}
-
-.jstree-icon-intermediario::before {
-    content: "\f013";  /* fa-cog */
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    color: #ffc107;  /* warning */
-}
-
-.jstree-icon-componente::before {
-    content: "\f06c";  /* fa-leaf */
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    color: #0dcaf0;  /* info */
-}
-
-.jstree-icon-erro::before {
-    content: "\f071";  /* fa-exclamation-triangle */
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    color: #dc3545;  /* danger */
 }
 
 /* Badge de quantidade */
@@ -171,20 +667,162 @@
     border-left-color: #dc3545;
 }
 
-/* Responsividade */
+/* ========================================
+   RESPONSIVIDADE
+   ======================================== */
+
 @media (max-width: 768px) {
+    /* Container principal */
     .bom-tree {
         max-height: 400px;
+        padding: 10px;
+    }
+
+    /* Cards em mobile */
+    .bom-card {
+        padding: 10px 12px;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .bom-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+    }
+
+    .bom-codigo {
+        font-size: 13px;
+    }
+
+    .bom-nome {
+        font-size: 12px;
+    }
+
+    .bom-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+
+    /* Botão de expansão menor */
+    .bom-expand-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Reduzir margem dos filhos */
+    .bom-children {
+        margin-left: 20px;
+        padding-left: 12px;
+    }
+
+    /* Ações sempre visíveis em mobile */
+    .bom-actions {
+        opacity: 1;
+    }
+
+    .bom-action-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    /* Tabela de produtos */
+    #tabela-produtos {
+        font-size: 0.9em;
     }
 
     .btn-tree-action {
         font-size: 0.7em;
         padding: 1px 6px;
     }
+}
 
-    #tabela-produtos {
-        font-size: 0.9em;
+@media (max-width: 480px) {
+    /* Mobile muito pequeno */
+    .bom-card {
+        padding: 8px 10px;
     }
+
+    .bom-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .bom-nome {
+        max-width: 100%;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .bom-children {
+        margin-left: 12px;
+        padding-left: 8px;
+    }
+}
+
+/* ========================================
+   MELHORIAS VISUAIS EXTRAS
+   ======================================== */
+
+/* Remover efeito de hover que causa scroll */
+
+/* Badge animado de quantidade */
+.bom-badge.qtd {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Pulsação sutil no botão de expansão quando há conteúdo não carregado */
+.bom-expand-btn[data-loaded="false"] {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(13, 110, 253, 0);
+    }
+}
+
+/* Indicador visual de nível de profundidade */
+.bom-item[data-nivel="0"] .bom-card {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
+.bom-item[data-nivel="1"] .bom-card {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.bom-item[data-nivel="2"] .bom-card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Skeleton loading para melhor UX */
+.bom-loading.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Fade in suave */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
 }
 
 /* Animações */
@@ -197,10 +835,6 @@
         opacity: 1;
         transform: translateY(0);
     }
-}
-
-.fade-in {
-    animation: fadeIn 0.3s ease-in;
 }
 
 /* Contexto menu customizado (se implementado) */
