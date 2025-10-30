@@ -5,6 +5,7 @@ from flask import render_template, jsonify, request
 from flask_login import login_required, current_user
 from app import db
 from app.manufatura.models import PrevisaoDemanda, GrupoEmpresarial, HistoricoPedidos
+from app.producao.models import CadastroPalletizacao
 from datetime import datetime
 from sqlalchemy import func
 
@@ -142,7 +143,7 @@ def register_previsao_demanda_routes(bp):
         """Salva previsão editada pelo usuário"""
         try:
             dados = request.json
-            
+
             # CORREÇÃO: Não salvar se qtd_prevista for 0 ou None
             qtd_prevista = dados.get('qtd_prevista', 0)
             if qtd_prevista == 0 or qtd_prevista is None:
@@ -153,7 +154,7 @@ def register_previsao_demanda_routes(bp):
                     cod_produto=dados['cod_produto'], # type: ignore
                     nome_grupo=dados.get('grupo', 'GERAL') # type: ignore
                 ).first()
-                
+
                 if previsao_existente:
                     db.session.delete(previsao_existente)
                     db.session.commit()
@@ -166,42 +167,53 @@ def register_previsao_demanda_routes(bp):
                         'sucesso': True,
                         'mensagem': 'Nada a salvar (qtd = 0)'
                     })
-            
+
+            # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao
+            cod_produto = dados['cod_produto'] # type: ignore
+            cadastro = CadastroPalletizacao.query.filter_by(
+                cod_produto=cod_produto,
+                ativo=True
+            ).first()
+            nome_produto = cadastro.nome_produto if cadastro else f'Produto {cod_produto}'
+
             # Busca ou cria previsão
             previsao = PrevisaoDemanda.query.filter_by(
                 data_mes=dados['mes'], # type: ignore
                 data_ano=dados['ano'], # type: ignore
-                cod_produto=dados['cod_produto'], # type: ignore
+                cod_produto=cod_produto,
                 nome_grupo=dados.get('grupo', 'GERAL') # type: ignore
             ).first()
-            
+
             if not previsao:
                 previsao = PrevisaoDemanda(
                     data_mes=dados['mes'], # type: ignore
                     data_ano=dados['ano'], # type: ignore
-                    cod_produto=dados['cod_produto'], # type: ignore
-                    nome_produto=dados.get('nome_produto'), # type: ignore
+                    cod_produto=cod_produto,
+                    nome_produto=nome_produto,  # ✅ Nome de CadastroPalletizacao
                     nome_grupo=dados.get('grupo', 'GERAL') # type: ignore
                 )
                 db.session.add(previsao)
-            
+            else:
+                # ✅ Sempre atualizar nome do produto
+                previsao.nome_produto = nome_produto
+
             # Atualiza valores
             previsao.qtd_demanda_prevista = qtd_prevista
             previsao.disparo_producao = dados.get('disparo_producao', 'MTS')
             previsao.criado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
             previsao.criado_em = datetime.utcnow()
-            
+
             # Se houver demanda realizada, atualiza também
             if 'qtd_realizada' in dados: # type: ignore
                 previsao.qtd_demanda_realizada = dados['qtd_realizada'] # type: ignore
-            
+
             db.session.commit()
-            
+
             return jsonify({
                 'sucesso': True,
                 'mensagem': 'Previsão salva com sucesso'
             })
-            
+
         except Exception as e:
             db.session.rollback()
             return jsonify({'erro': str(e)}), 500
@@ -445,7 +457,13 @@ def register_previsao_demanda_routes(bp):
                     qtd_prevista = float(row['qtd_prevista'])
                     disparo = str(row['disparo']).strip().upper()
                     grupo = str(row.get('grupo', 'GERAL')).strip() if 'grupo' in row and pd.notna(row.get('grupo')) else 'GERAL'
-                    nome_produto = str(row.get('nome_produto', '')).strip() if 'nome_produto' in row and pd.notna(row.get('nome_produto')) else None
+
+                    # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao
+                    cadastro = CadastroPalletizacao.query.filter_by(
+                        cod_produto=cod_produto,
+                        ativo=True
+                    ).first()
+                    nome_produto = cadastro.nome_produto if cadastro else f'Produto {cod_produto}'
 
                     # Validações
                     if mes < 1 or mes > 12:
@@ -468,8 +486,7 @@ def register_previsao_demanda_routes(bp):
                         # Atualizar
                         previsao.qtd_demanda_prevista = qtd_prevista
                         previsao.disparo_producao = disparo
-                        if nome_produto:
-                            previsao.nome_produto = nome_produto
+                        previsao.nome_produto = nome_produto  # ✅ Sempre atualizar com nome do cadastro
                         previsao.atualizado_em = datetime.utcnow()
                         atualizados += 1
                     else:
@@ -478,7 +495,7 @@ def register_previsao_demanda_routes(bp):
                             data_mes=mes,
                             data_ano=ano,
                             cod_produto=cod_produto,
-                            nome_produto=nome_produto,
+                            nome_produto=nome_produto,  # ✅ Nome de CadastroPalletizacao
                             nome_grupo=grupo,
                             qtd_demanda_prevista=qtd_prevista,
                             disparo_producao=disparo,

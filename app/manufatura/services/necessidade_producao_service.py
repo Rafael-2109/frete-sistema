@@ -9,7 +9,7 @@ from sqlalchemy import func, extract
 from app import db
 from app.manufatura.models import PrevisaoDemanda
 from app.carteira.models import CarteiraPrincipal
-from app.producao.models import ProgramacaoProducao
+from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.estoque.models import UnificacaoCodigos
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 
@@ -133,12 +133,12 @@ class NecessidadeProducaoService:
         """
         Obtém lista de produtos únicos considerando unificação de códigos.
         Retorna apenas o código destino (unificado) para evitar duplicação.
+        Busca o nome do produto de CadastroPalletizacao.
         """
         try:
             # Buscar produtos da PrevisaoDemanda do período
             query = db.session.query(
-                PrevisaoDemanda.cod_produto,
-                PrevisaoDemanda.nome_produto
+                PrevisaoDemanda.cod_produto
             ).filter(
                 PrevisaoDemanda.data_mes == mes,
                 PrevisaoDemanda.data_ano == ano
@@ -153,7 +153,7 @@ class NecessidadeProducaoService:
 
             # Mapear produtos para códigos unificados
             produtos_map = {}
-            for cod, nome in produtos:
+            for (cod,) in produtos:
                 cod_unificado = UnificacaoCodigos.get_codigo_unificado(cod)
                 cod_unificado_str = str(cod_unificado)
 
@@ -161,9 +161,17 @@ class NecessidadeProducaoService:
                     # Obter todos os códigos relacionados ao código unificado
                     codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_unificado)
 
+                    # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao
+                    cadastro = CadastroPalletizacao.query.filter_by(
+                        cod_produto=cod_unificado_str,
+                        ativo=True
+                    ).first()
+
+                    nome_produto = cadastro.nome_produto if cadastro else f'Produto {cod_unificado_str}'
+
                     produtos_map[cod_unificado_str] = {
                         'cod_produto': cod_unificado_str,
-                        'nome_produto': nome,  # Usa o nome do primeiro código encontrado
+                        'nome_produto': nome_produto,
                         'codigos_relacionados': codigos_relacionados
                     }
 

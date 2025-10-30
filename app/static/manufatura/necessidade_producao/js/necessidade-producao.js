@@ -140,15 +140,12 @@ function renderizarTabela(dados) {
 
     let html = '';
     dados.forEach(item => {
-        const crit = calcularCriticidade(item.necessidade_producao, item.estoque_atual);
-        const classCrit = crit === 'Alta' ? 'badge-alta' : crit === 'Média' ? 'badge-media' : 'badge-baixa';
-
         html += `<tr>
             <td class="sticky-col-codigo"><strong>${item.cod_produto}</strong></td>
             <td class="sticky-col-produto">
                 <div class="d-flex align-items-center gap-2">
                     <div class="flex-grow-1">
-                        ${item.nome_produto}${item.codigos_relacionados.length > 1 ? `<br><small class="text-muted"><i class="fas fa-link me-1"></i>${item.codigos_relacionados.join(', ')}</small>` : ''}
+                        ${item.nome_produto || 'Nome não encontrado'}
                     </div>
                     <div class="dropdown-acoes-produto" style="position: relative;">
                         <button type="button" class="btn-menu-acoes" onclick="toggleDropdown(this, '${item.cod_produto}')">
@@ -174,8 +171,7 @@ function renderizarTabela(dados) {
             <td class="text-end col-saldo"><strong>${formatarNumero(item.saldo_vendas)}</strong></td>
             <td class="text-end col-estoque">${formatarNumero(item.estoque_atual)}</td>
             <td class="text-end col-programacao">${formatarNumero(item.programacao_producao)}</td>
-            <td class="text-end col-necessidade ${item.necessidade_producao > 0 ? 'numero-positivo' : 'numero-zero'}"><strong>${formatarNumero(item.necessidade_producao)}</strong></td>
-            <td class="text-center col-criticidade"><span class="badge-necessidade ${classCrit}">${crit}</span></td>`;
+            <td class="text-end col-necessidade ${item.necessidade_producao > 0 ? 'numero-positivo' : 'numero-zero'}"><strong>${formatarNumero(item.necessidade_producao)}</strong></td>`;
 
         for (let i = 0; i <= 60; i++) {
             const dia = item.projecao[i];
@@ -210,7 +206,6 @@ function aplicarVisibilidadeColunas() {
     $('.col-estoque').toggle($('#col-estoque').is(':checked'));
     $('.col-programacao').toggle($('#col-programacao').is(':checked'));
     $('.col-necessidade').toggle($('#col-necessidade').is(':checked'));
-    $('.col-criticidade').toggle($('#col-criticidade').is(':checked'));
 
     const mostrar = $('#col-projecao').is(':checked');
     for (let i = 0; i <= 60; i++) $('.col-projecao-d' + i).toggle(mostrar);
@@ -315,10 +310,6 @@ document.addEventListener('click', function(event) {
 // ============================================================
 // UTILITÁRIOS
 // ============================================================
-
-function calcularCriticidade(nec, est) {
-    return nec <= 0 ? 'Baixa' : nec > est * 0.5 ? 'Alta' : 'Média';
-}
 
 function formatarNumero(num) {
     return parseFloat(num || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
