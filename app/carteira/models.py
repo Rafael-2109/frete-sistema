@@ -155,6 +155,9 @@ class CarteiraPrincipal(db.Model):
     # ⭐ MARCADOR DE IMPORTÂNCIA
     importante = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Marcador de pedido importante
 
+    # 🏷️ TAGS DO PEDIDO (ODOO)
+    tags_pedido = db.Column(db.Text, nullable=True)  # JSON com tags do pedido: [{"name": "VIP", "color": 5}]
+
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)

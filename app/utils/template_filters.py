@@ -3,6 +3,7 @@ from app.utils.file_storage import get_file_storage
 from app.utils.timezone import utc_para_brasil, formatar_data_hora_brasil, formatar_data_brasil
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import locale
+import json
 
 def file_url(file_path):
     """
@@ -78,9 +79,23 @@ def valor_br(valor, decimais=2):
     except (ValueError, TypeError):
         return f"0,{'0' * decimais}"
 
+def from_json(json_string):
+    """
+    Filtro para converter string JSON em objeto Python
+    Uso no template: {% set tags = pedido.tags_pedido|from_json %}
+    """
+    if not json_string:
+        return []
+
+    try:
+        return json.loads(json_string)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return []
+
 def register_template_filters(app):
     """Registra filtros customizados no Flask"""
     app.jinja_env.filters['file_url'] = file_url
     app.jinja_env.filters['datetime_br'] = datetime_br
     app.jinja_env.filters['date_br'] = date_br
-    app.jinja_env.filters['valor_br'] = valor_br 
+    app.jinja_env.filters['valor_br'] = valor_br
+    app.jinja_env.filters['from_json'] = from_json 

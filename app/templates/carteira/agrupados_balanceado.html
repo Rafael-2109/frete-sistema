@@ -492,6 +492,32 @@
                                         {% elif pedido.rota %}
                                         <span class="badge bg-info text-white">{{ pedido.rota }}{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% endif %}
+
+                                        <!-- Tags do Pedido (Odoo) -->
+                                        {% if pedido.tags_pedido %}
+                                        <div class="mt-1">
+                                            {% set tags = pedido.tags_pedido|from_json %}
+                                            {% for tag in tags %}
+                                            <span class="badge badge-tag" data-color="{{ tag.color }}" style="
+                                                {% if tag.color == 0 %}background-color: #6c757d; color: white;
+                                                {% elif tag.color == 1 %}background-color: #dc3545; color: white;
+                                                {% elif tag.color == 2 %}background-color: #fd7e14; color: white;
+                                                {% elif tag.color == 3 %}background-color: #ffc107; color: #212529;
+                                                {% elif tag.color == 4 %}background-color: #20c997; color: white;
+                                                {% elif tag.color == 5 %}background-color: #198754; color: white;
+                                                {% elif tag.color == 6 %}background-color: #0dcaf0; color: #212529;
+                                                {% elif tag.color == 7 %}background-color: #0d6efd; color: white;
+                                                {% elif tag.color == 8 %}background-color: #6f42c1; color: white;
+                                                {% elif tag.color == 9 %}background-color: #d63384; color: white;
+                                                {% elif tag.color == 10 %}background-color: #495057; color: white;
+                                                {% elif tag.color == 11 %}background-color: #343a40; color: white;
+                                                {% else %}background-color: #6c757d; color: white;
+                                                {% endif %}">
+                                                <i class="fas fa-tag me-1"></i>{{ tag.name }}
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </td>
 
@@ -979,6 +1005,32 @@
         100% {
             background-color: transparent;
         }
+
+    /* 🏷️ Estilos para Tags do Pedido (Odoo) */
+    .badge-tag {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
+        display: inline-block;
+        border-radius: 0.25rem;
+        font-weight: 500;
+        color: white !important; /* Forçar texto branco por padrão */
+    }
+
+    /* Mapeamento de cores do Odoo para Bootstrap */
+    .badge-tag[data-color="0"] { background-color: #6c757d !important; } /* Cinza */
+    .badge-tag[data-color="1"] { background-color: #dc3545 !important; } /* Vermelho */
+    .badge-tag[data-color="2"] { background-color: #fd7e14 !important; } /* Laranja */
+    .badge-tag[data-color="3"] { background-color: #ffc107 !important; color: #212529 !important; } /* Amarelo - texto escuro */
+    .badge-tag[data-color="4"] { background-color: #20c997 !important; } /* Turquesa */
+    .badge-tag[data-color="5"] { background-color: #198754 !important; } /* Verde */
+    .badge-tag[data-color="6"] { background-color: #0dcaf0 !important; color: #212529 !important; } /* Cyan - texto escuro */
+    .badge-tag[data-color="7"] { background-color: #0d6efd !important; } /* Azul */
+    .badge-tag[data-color="8"] { background-color: #6f42c1 !important; } /* Roxo */
+    .badge-tag[data-color="9"] { background-color: #d63384 !important; } /* Rosa */
+    .badge-tag[data-color="10"] { background-color: #495057 !important; } /* Cinza escuro */
+    .badge-tag[data-color="11"] { background-color: #343a40 !important; } /* Preto */
     }
 
     .pulse-animation {

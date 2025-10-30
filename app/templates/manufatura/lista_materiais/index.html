@@ -278,10 +278,8 @@
 
 {% endblock %}
 
-{% block extra_js %}
-<!-- jQuery (necessário para jsTree) -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<!-- jsTree -->
+{% block scripts %}
+<!-- jsTree (jQuery já está no base.html) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/jstree.min.js"></script>
 <!-- Script customizado -->
 <script src="{{ url_for('static', filename='manufatura/lista_materiais/js/lista_materiais.js') }}"></script>

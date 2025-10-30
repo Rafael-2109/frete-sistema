@@ -21,12 +21,22 @@ const ListaMateriais = {
      * Vincula eventos
      */
     bindEvents() {
+        console.log('🔗 Vinculando eventos...');
+
         // Busca de produtos
         $('#btn-buscar-produto').on('click', () => this.buscarProdutos());
         $('#input-busca-produto').on('keypress', (e) => {
             if (e.which === 13) this.buscarProdutos();
         });
-        $('#btn-listar-todos').on('click', () => this.listarTodosProdutos());
+
+        // Verificar se botão existe
+        const btnListarTodos = $('#btn-listar-todos');
+        console.log('✅ Botão "Listar Todos" encontrado:', btnListarTodos.length > 0);
+
+        $('#btn-listar-todos').on('click', () => {
+            console.log('🖱️ Botão "Listar Todos" clicado!');
+            this.listarTodosProdutos();
+        });
 
         // Ações de componente
         $('#btn-adicionar-componente-raiz, #btn-adicionar-primeiro-componente')
@@ -74,18 +84,28 @@ const ListaMateriais = {
      * Lista todos os produtos produzidos
      */
     async listarTodosProdutos() {
+        console.log('📋 Buscando lista de todos os produtos...');
+
         try {
-            const response = await fetch('/manufatura/api/lista-materiais/produtos-produzidos');
+            const url = '/manufatura/api/lista-materiais/produtos-produzidos';
+            console.log('🌐 Fazendo request para:', url);
+
+            const response = await fetch(url);
+            console.log('📡 Response status:', response.status);
+
             const data = await response.json();
+            console.log('📦 Dados recebidos:', data);
 
             if (data.sucesso) {
+                console.log(`✅ ${data.produtos.length} produtos encontrados`);
                 this.exibirProdutos(data.produtos);
             } else {
+                console.error('❌ Erro na resposta:', data.erro);
                 toastr.error(data.erro || 'Erro ao listar produtos');
             }
         } catch (error) {
-            console.error('Erro ao listar produtos:', error);
-            toastr.error('Erro ao listar produtos');
+            console.error('❌ Erro ao listar produtos:', error);
+            toastr.error('Erro ao listar produtos: ' + error.message);
         }
     },
 
@@ -93,10 +113,15 @@ const ListaMateriais = {
      * Exibe lista de produtos
      */
     exibirProdutos(produtos) {
+        console.log('📋 exibirProdutos chamado com', produtos.length, 'produtos');
+        console.log('Produtos:', produtos);
+
         const tbody = $('#tbody-produtos');
+        console.log('tbody encontrado:', tbody.length > 0);
         tbody.empty();
 
         if (produtos.length === 0) {
+            console.log('⚠️ Nenhum produto para exibir');
             tbody.append(`
                 <tr>
                     <td colspan="5" class="text-center text-muted">
@@ -132,9 +157,16 @@ const ListaMateriais = {
         });
 
         // Event listener para visualizar estrutura
+        console.log('🔗 Vinculando eventos aos botões "Ver Estrutura"...');
+        const botoes = $('.btn-visualizar-estrutura');
+        console.log(`✅ ${botoes.length} botões encontrados`);
+
         $('.btn-visualizar-estrutura').on('click', (e) => {
+            console.log('🖱️ Botão "Ver Estrutura" clicado!');
             const cod = $(e.currentTarget).data('cod');
-            this.carregarEstrutura(cod);
+            const $linhaClicada = $(e.currentTarget).closest('tr');
+            console.log(`📦 Código do produto: ${cod}`);
+            this.carregarEstrutura(cod, $linhaClicada);
         });
 
         $('#area-resultados').fadeIn();
@@ -143,41 +175,166 @@ const ListaMateriais = {
     /**
      * Carrega estrutura BOM de um produto
      */
-    async carregarEstrutura(codProduto) {
+    async carregarEstrutura(codProduto, $linhaClicada) {
+        console.log(`🔍 carregarEstrutura chamado para: ${codProduto}`);
         this.produtoAtual = codProduto;
 
-        $('#loading-estrutura').show();
-        $('#tree-bom, #empty-estrutura').hide();
-        $('#area-estrutura').fadeIn();
+        // Remover linha de estrutura anterior se existir
+        $('.linha-estrutura-bom').remove();
+
+        // Criar nova linha expansível
+        const numColunas = $linhaClicada.find('td').length;
+        const $linhaEstrutura = $(`
+            <tr class="linha-estrutura-bom">
+                <td colspan="${numColunas}" style="padding: 0; background-color: #f8f9fa; border-left: 4px solid #0d6efd;">
+                    <div id="estrutura-expandida" style="padding: 20px; max-width: 100%; overflow-x: auto;">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                            <div class="mb-2 mb-md-0">
+                                <h5 class="mb-1">
+                                    <i class="fas fa-sitemap text-primary"></i>
+                                    <span id="titulo-estrutura-inline">Estrutura do Produto</span>
+                                </h5>
+                                <small class="text-muted d-block" id="subtitulo-estrutura-inline"></small>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" id="btn-adicionar-componente-inline" title="Adicionar componente">
+                                    <i class="fas fa-plus"></i> <span class="d-none d-md-inline">Adicionar</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" id="btn-explodir-bom-inline" title="Explodir BOM completo">
+                                    <i class="fas fa-expand"></i> <span class="d-none d-md-inline">Explodir BOM</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" id="btn-fechar-estrutura" title="Fechar estrutura">
+                                    <i class="fas fa-times"></i> <span class="d-none d-md-inline">Fechar</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mb-3 py-2">
+                            <small class="d-flex flex-wrap gap-3">
+                                <span><i class="fas fa-cube text-success"></i> Acabado</span>
+                                <span><i class="fas fa-cog text-warning"></i> Intermediário</span>
+                                <span><i class="fas fa-leaf text-primary"></i> Componente</span>
+                            </small>
+                        </div>
+
+                        <div id="loading-estrutura-inline" class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <small class="ms-2">Carregando...</small>
+                        </div>
+
+                        <div id="tree-bom-inline" style="display: none; min-height: 200px; max-height: 600px; overflow-y: auto;"></div>
+
+                        <div id="empty-estrutura-inline" class="text-center py-3" style="display: none;">
+                            <i class="fas fa-box-open fa-2x text-muted mb-2"></i>
+                            <p class="text-muted mb-0">Produto sem componentes cadastrados.</p>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `);
+
+        // Inserir após a linha clicada
+        $linhaClicada.after($linhaEstrutura);
+
+        // Event listeners
+        $('#btn-fechar-estrutura').on('click', () => {
+            $linhaEstrutura.slideUp(300, () => $linhaEstrutura.remove());
+        });
+
+        $('#btn-adicionar-componente-inline').on('click', () => this.abrirModalComponente());
+
+        $('#btn-explodir-bom-inline').on('click', () => this.abrirModalExplosao());
 
         try {
-            const response = await fetch(`/manufatura/api/lista-materiais/${codProduto}`);
+            const url = `/manufatura/api/lista-materiais/${codProduto}`;
+            console.log(`🌐 Fazendo request para: ${url}`);
+
+            const response = await fetch(url);
+            console.log(`📡 Response status: ${response.status}`);
+
             const data = await response.json();
+            console.log(`📦 Dados recebidos:`, data);
 
             if (data.sucesso) {
-                // Atualizar título
+                console.log('✅ Dados carregados com sucesso');
+                console.log(`📊 ${data.componentes.length} componentes encontrados`);
+
+                // Atualizar título inline
                 const iconeTipo = this.getIconeTipo(data.produto.tipo);
-                $('#titulo-produto-estrutura').html(`${iconeTipo} ${data.produto.cod_produto} - ${data.produto.nome_produto}`);
-                $('#subtitulo-produto-estrutura').text(`Tipo: ${data.produto.tipo} | Total de componentes: ${data.total_componentes}`);
+                $('#titulo-estrutura-inline').html(`${iconeTipo} ${data.produto.cod_produto} - ${data.produto.nome_produto}`);
+                $('#subtitulo-estrutura-inline').text(`Tipo: ${data.produto.tipo} | Total: ${data.total_componentes} componentes`);
+
+                $('#loading-estrutura-inline').hide();
 
                 if (data.componentes.length === 0) {
-                    $('#empty-estrutura').show();
+                    console.log('⚠️ Nenhum componente - mostrando empty state');
+                    $('#empty-estrutura-inline').show();
                 } else {
-                    this.renderizarArvore(data);
+                    console.log('🌳 Renderizando árvore inline...');
+                    this.renderizarArvoreInline(data);
                 }
             } else {
-                toastr.error(data.erro || 'Erro ao carregar estrutura');
+                console.error('❌ Erro na resposta:', data.erro);
+                $('#loading-estrutura-inline').hide();
+                $('#empty-estrutura-inline').html(`
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                    <p class="text-danger mb-0">${data.erro || 'Erro ao carregar estrutura'}</p>
+                `).show();
             }
         } catch (error) {
-            console.error('Erro ao carregar estrutura:', error);
-            toastr.error('Erro ao carregar estrutura');
-        } finally {
-            $('#loading-estrutura').hide();
+            console.error('❌ Erro ao carregar estrutura:', error);
+            $('#loading-estrutura-inline').hide();
+            $('#empty-estrutura-inline').html(`
+                <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                <p class="text-danger mb-0">Erro: ${error.message}</p>
+            `).show();
         }
     },
 
     /**
-     * Renderiza árvore BOM usando jsTree
+     * Renderiza árvore BOM inline (dentro da tabela)
+     */
+    renderizarArvoreInline(data) {
+        const treeData = this.construirDadosArvore(data);
+
+        // Destruir árvore anterior se existir
+        $('#tree-bom-inline').jstree('destroy');
+
+        // Criar nova árvore
+        $('#tree-bom-inline').jstree({
+            core: {
+                data: treeData,
+                themes: {
+                    name: 'default',
+                    responsive: true
+                },
+                check_callback: true
+            },
+            plugins: ['contextmenu', 'types'],
+            types: {
+                'acabado': {
+                    icon: 'fas fa-cube text-success'
+                },
+                'intermediario': {
+                    icon: 'fas fa-cog text-warning'
+                },
+                'componente': {
+                    icon: 'fas fa-leaf text-primary'
+                },
+                'erro': {
+                    icon: 'fas fa-exclamation-triangle text-danger'
+                }
+            },
+            contextmenu: {
+                items: (node) => this.getContextMenu(node)
+            }
+        });
+
+        $('#tree-bom-inline').show();
+    },
+
+    /**
+     * Renderiza árvore BOM usando jsTree (versão antiga - manter para compatibilidade)
      */
     renderizarArvore(data) {
         const treeData = this.construirDadosArvore(data);

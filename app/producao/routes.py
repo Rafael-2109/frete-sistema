@@ -386,6 +386,13 @@ def processar_importacao_palletizacao():
                     palletizacao_existente.tipo_materia_prima = tipo_materia_prima
                     palletizacao_existente.tipo_embalagem = tipo_embalagem
                     palletizacao_existente.linha_producao = linha_producao
+                    # 🔧 CORRIGIDO: Atualizar campos de produção
+                    palletizacao_existente.produto_comprado = produto_comprado
+                    palletizacao_existente.produto_produzido = produto_produzido
+                    palletizacao_existente.produto_vendido = produto_vendido
+                    palletizacao_existente.disparo_producao = disparo_producao
+                    palletizacao_existente.lead_time_mto = lead_time_mto
+                    palletizacao_existente.custo_produto = custo_produto
                     palletizacao_existente.updated_by = current_user.nome
                     palletizacao_existente.ativo = True  # Reativar se estava inativo
                     produtos_atualizados += 1
@@ -404,9 +411,16 @@ def processar_importacao_palletizacao():
                     nova_palletizacao.tipo_materia_prima = tipo_materia_prima
                     nova_palletizacao.tipo_embalagem = tipo_embalagem
                     nova_palletizacao.linha_producao = linha_producao
+                    # 🔧 CORRIGIDO: Adicionar campos de produção
+                    nova_palletizacao.produto_comprado = produto_comprado
+                    nova_palletizacao.produto_produzido = produto_produzido
+                    nova_palletizacao.produto_vendido = produto_vendido
+                    nova_palletizacao.disparo_producao = disparo_producao
+                    nova_palletizacao.lead_time_mto = lead_time_mto
+                    nova_palletizacao.custo_produto = custo_produto
                     nova_palletizacao.created_by = current_user.nome
                     nova_palletizacao.ativo = True
-                    
+
                     db.session.add(nova_palletizacao)
                     produtos_importados += 1
                 

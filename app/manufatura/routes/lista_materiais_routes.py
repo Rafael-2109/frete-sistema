@@ -683,7 +683,17 @@ def register_lista_materiais_routes(bp):
             }
         """
         try:
+            print("\n" + "="*80)
+            print("🔍 [LISTA MATERIAIS] Iniciando busca de produtos produzidos")
+            print("="*80)
+
             busca = request.args.get('busca', '').strip()
+            print(f"📝 Busca: '{busca}'")
+
+            # 🔍 DEBUG: Contar total de produtos
+            total_produtos = CadastroPalletizacao.query.filter_by(ativo=True).count()
+            print(f"📊 Total de produtos ativos no banco: {total_produtos}")
+            logger.info(f"🔍 Total de produtos ativos no banco: {total_produtos}")
 
             # Query base
             query = CadastroPalletizacao.query.filter_by(
@@ -691,8 +701,14 @@ def register_lista_materiais_routes(bp):
                 ativo=True
             )
 
+            # 🔍 DEBUG: Contar produtos com produto_produzido=True
+            count_produzidos = query.count()
+            print(f"🏭 Produtos com produto_produzido=True: {count_produzidos}")
+            logger.info(f"🔍 Produtos com produto_produzido=True: {count_produzidos}")
+
             # Filtro de busca
             if busca:
+                print(f"🔍 Aplicando filtro de busca: {busca}")
                 query = query.filter(
                     db.or_(
                         CadastroPalletizacao.cod_produto.ilike(f'%{busca}%'),
@@ -701,9 +717,15 @@ def register_lista_materiais_routes(bp):
                 )
 
             produtos_db = query.order_by(CadastroPalletizacao.nome_produto).all()
+            print(f"✅ Produtos retornados pela query: {len(produtos_db)}")
+            logger.info(f"🔍 Produtos retornados pela query: {len(produtos_db)}")
 
             produtos = []
-            for prod in produtos_db:
+            print(f"🔄 Processando {len(produtos_db)} produtos...")
+
+            for i, prod in enumerate(produtos_db, 1):
+                print(f"  [{i}/{len(produtos_db)}] Processando: {prod.cod_produto}")
+
                 # Verificar se tem estrutura cadastrada
                 tem_estrutura = db.session.query(
                     db.exists().where(
@@ -715,6 +737,7 @@ def register_lista_materiais_routes(bp):
                 ).scalar()
 
                 classificacao = ServicoBOM._classificar_produto(prod.cod_produto)
+                print(f"      Tipo: {classificacao['tipo']} | Estrutura: {tem_estrutura}")
 
                 produtos.append({
                     'cod_produto': prod.cod_produto,
@@ -723,6 +746,9 @@ def register_lista_materiais_routes(bp):
                     'tem_estrutura': tem_estrutura
                 })
 
+            print(f"✅ Total de produtos processados: {len(produtos)}")
+            print("="*80 + "\n")
+
             return jsonify({
                 'sucesso': True,
                 'produtos': produtos,
@@ -730,6 +756,9 @@ def register_lista_materiais_routes(bp):
             })
 
         except Exception as e:
+            print(f"\n❌ ERRO ao listar produtos produzidos: {e}")
+            import traceback
+            traceback.print_exc()
             logger.error(f"Erro ao listar produtos produzidos: {e}")
             return jsonify({
                 'sucesso': False,

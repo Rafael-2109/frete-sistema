@@ -363,7 +363,7 @@ class CarteiraService:
                 'id', 'name', 'partner_id', 'partner_shipping_id', 'user_id', 'team_id',
                 'create_date', 'date_order', 'state', 'l10n_br_pedido_compra',
                 'payment_term_id', 'payment_provider_id', 'incoterm', 'carrier_id',
-                'commitment_date', 'picking_note'
+                'commitment_date', 'picking_note', 'tag_ids', 'write_date'
             ]
             
             logger.info("🔍 Query 1/5: Buscando pedidos...")
@@ -756,10 +756,13 @@ class CarteiraService:
                     # 📈 CAMPOS DE ESTOQUE D0 a D28
                     'estoque': None,  # Campo base
                     **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
-                    
+
+                    # 🏷️ TAGS DO PEDIDO (ODOO)
+                    'tags_pedido': self._processar_tags_pedido(pedido.get('tag_ids', [])),
+
                     # 🏳️ CAMPO ATIVO
                     'ativo': True,  # Todos os registros importados são ativos
-                    
+
                     # 🔄 SINCRONIZAÇÃO INCREMENTAL
                     'odoo_write_date': pedido.get('write_date'),  # write_date do Odoo
                     'ultima_sync': datetime.now(),  # momento da sincronização
@@ -986,24 +989,83 @@ class CarteiraService:
     def _mapear_status_pedido(self, status_odoo: str) -> str:
         """
         🎯 MAPEAR STATUS DO ODOO PARA PORTUGUÊS
-        
+
         Traduz status técnicos do Odoo para nomes em português
         que o sistema brasileiro compreende.
         """
         if not status_odoo:
             return 'Rascunho'
-            
+
         mapeamento_status = {
             'draft': 'Cotação',
-            'sent': 'Cotação', 
+            'sent': 'Cotação',
             'sale': 'Pedido de venda',
             'done': 'Pedido de venda',
             'cancel': 'Cancelado'
         }
-        
+
         status_traduzido = mapeamento_status.get(status_odoo.lower(), status_odoo)
         logger.debug(f"Status mapeado: {status_odoo} → {status_traduzido}")
         return status_traduzido
+
+    def _processar_tags_pedido(self, tag_ids: list, cache_tags: dict = None) -> str:
+        """
+        🏷️ PROCESSAR TAGS DO PEDIDO
+
+        Busca detalhes das tags no Odoo e retorna JSON formatado
+
+        Args:
+            tag_ids: Lista de IDs de tags [1, 2, 3]
+            cache_tags: Cache de tags já buscadas (opcional)
+
+        Returns:
+            String JSON com tags: '[{"name": "VIP", "color": 5}]' ou None
+        """
+        import json
+
+        if not tag_ids or not isinstance(tag_ids, list) or len(tag_ids) == 0:
+            return None
+
+        try:
+            # Se não há cache, criar um vazio
+            if cache_tags is None:
+                cache_tags = {}
+
+            tags_processadas = []
+            tags_para_buscar = []
+
+            # Verificar quais tags já estão no cache
+            for tag_id in tag_ids:
+                if tag_id in cache_tags:
+                    tags_processadas.append(cache_tags[tag_id])
+                else:
+                    tags_para_buscar.append(tag_id)
+
+            # Buscar tags que não estão no cache
+            if tags_para_buscar and self.connection:
+                tags_odoo = self.connection.read(
+                    'crm.tag',
+                    tags_para_buscar,
+                    ['id', 'name', 'color']
+                )
+
+                for tag in tags_odoo:
+                    tag_info = {
+                        'name': tag.get('name', ''),
+                        'color': tag.get('color', 0)
+                    }
+                    tags_processadas.append(tag_info)
+                    cache_tags[tag['id']] = tag_info  # Adicionar ao cache
+
+            # Retornar JSON se houver tags
+            if tags_processadas:
+                return json.dumps(tags_processadas, ensure_ascii=False)
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao processar tags: {e}")
+            return None
 
     def _verificar_produto_no_odoo(self, num_pedido: str, cod_produto: str) -> bool:
         """

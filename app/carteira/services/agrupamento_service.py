@@ -86,6 +86,7 @@ class AgrupamentoService:
             CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.forma_agendamento,
             CarteiraPrincipal.importante,  # ⭐ Campo importante
+            CarteiraPrincipal.tags_pedido,  # 🏷️ Tags do Odoo
 
             # Agregações conforme especificação
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
@@ -139,7 +140,8 @@ class AgrupamentoService:
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.forma_agendamento,
-            CarteiraPrincipal.importante  # ⭐ Campo importante no GROUP BY
+            CarteiraPrincipal.importante,  # ⭐ Campo importante no GROUP BY
+            CarteiraPrincipal.tags_pedido  # 🏷️ Tags do Odoo no GROUP BY
         ).order_by(
             CarteiraPrincipal.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
             CarteiraPrincipal.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
@@ -229,7 +231,9 @@ class AgrupamentoService:
                 'grupo_cliente': grupo_cliente,  # Adicionar grupo do cliente
                 # ⭐ Campos novos para funcionalidade de importante
                 'importante': pedido.importante,  # Marcador de pedido importante
-                'agendamento_primeira_separacao': primeira_separacao  # Agendamento da 1ª separação
+                'agendamento_primeira_separacao': primeira_separacao,  # Agendamento da 1ª separação
+                # 🏷️ Tags do Odoo
+                'tags_pedido': pedido.tags_pedido  # Tags do pedido (JSON)
             }
             
         except Exception as e:
@@ -361,5 +365,7 @@ class AgrupamentoService:
             'grupo_cliente': grupo_cliente,
             # ⭐ Campos novos para funcionalidade de importante
             'importante': pedido.importante if hasattr(pedido, 'importante') else False,
-            'agendamento_primeira_separacao': None  # Não tem separação no modo básico
+            'agendamento_primeira_separacao': None,  # Não tem separação no modo básico
+            # 🏷️ Tags do Odoo
+            'tags_pedido': pedido.tags_pedido if hasattr(pedido, 'tags_pedido') else None
         }

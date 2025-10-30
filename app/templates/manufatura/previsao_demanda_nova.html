@@ -178,7 +178,7 @@
                         <button class="btn btn-info" onclick="exportarExcel()">
                             <i class="fas fa-download"></i> Exportar Excel
                         </button>
-                        <button class="btn btn-warning" data-toggle="modal" data-target="#modalImportar">
+                        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalImportar">
                             <i class="fas fa-upload"></i> Importar Excel
                         </button>
                     </div>
@@ -357,9 +357,7 @@
                 <h5 class="modal-title">
                     <i class="fas fa-users me-2"></i>Gerenciar Grupos Empresariais
                 </h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <!-- Formulário de Cadastro -->
@@ -437,7 +435,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -451,9 +449,7 @@
                 <h5 class="modal-title">
                     <i class="fas fa-upload me-2"></i>Importar Previsões do Excel
                 </h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info">
@@ -471,16 +467,13 @@
                 </div>
 
                 <form id="formImportar" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <label>Selecione o arquivo Excel</label>
-                        <div class="custom-file">
-                            <input type="file" class="custom-file-input" id="arquivo-excel"
-                                   accept=".xlsx,.xls" required>
-                            <label class="custom-file-label" for="arquivo-excel">Escolher arquivo...</label>
-                        </div>
-                        <small class="form-text text-muted">
+                    <div class="mb-3">
+                        <label for="arquivo-excel" class="form-label">Selecione o arquivo Excel</label>
+                        <input type="file" class="form-control" id="arquivo-excel"
+                               accept=".xlsx,.xls" required>
+                        <div class="form-text">
                             Apenas arquivos .xlsx ou .xls
-                        </small>
+                        </div>
                     </div>
 
                     <div id="resultado-importacao" class="mt-3" style="display:none;">
@@ -491,7 +484,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="importarExcel()">
                     <i class="fas fa-upload"></i> Importar
                 </button>
@@ -535,7 +528,8 @@ $(document).ready(function() {
     
     // Configura botão de gerenciar grupos
     $('#btn-gerenciar-grupos').click(function() {
-        $('#modalGrupos').modal('show');
+        var modalGrupos = new bootstrap.Modal(document.getElementById('modalGrupos'));
+        modalGrupos.show();
         carregarGruposCadastrados();
     });
     
@@ -1137,13 +1131,7 @@ function exportarExcel() {
     }, 2000);
 }
 
-// Atualiza label do arquivo selecionado
-$(document).ready(function() {
-    $('#arquivo-excel').on('change', function() {
-        var fileName = $(this).val().split('\\').pop();
-        $(this).next('.custom-file-label').html(fileName);
-    });
-});
+// Input de arquivo - Bootstrap 5 nativo (não precisa de código extra)
 
 // Importa dados do Excel
 function importarExcel() {
@@ -1211,11 +1199,13 @@ function importarExcel() {
 
                 // Fecha modal após 3 segundos
                 setTimeout(function() {
-                    $('#modalImportar').modal('hide');
+                    var modalImportar = bootstrap.Modal.getInstance(document.getElementById('modalImportar'));
+                    if (modalImportar) {
+                        modalImportar.hide();
+                    }
 
                     // Limpa form
                     $('#formImportar')[0].reset();
-                    $('.custom-file-label').html('Escolher arquivo...');
                     $('#resultado-importacao').hide();
                 }, 3000);
             }, 2000);

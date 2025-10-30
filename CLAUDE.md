@@ -165,6 +165,23 @@ estoque_d1 = db.Column(db.Numeric(15, 3), nullable=True)        # ⚠️ NÃO US
 # ... até estoque_d28 - TODOS NÃO USADOS
 ```
 
+### 🏷️ Tags do Pedido (Odoo)
+```python
+# ✅ CAMPO PARA TAGS DO ODOO:
+tags_pedido = db.Column(db.Text, nullable=True)  # ✅ JSON: [{"name": "VIP", "color": 5}]
+
+# FORMATO JSON ESPERADO:
+# [
+#   {"name": "Urgente", "color": 1},
+#   {"name": "VIP", "color": 5},
+#   {"name": "Grande Volume", "color": 7}
+# ]
+
+# SINCRONIZAÇÃO: Vem do campo tag_ids do sale.order no Odoo
+# MODELO ODOO: crm.tag com campos id, name, color
+# EXIBIÇÃO: Template agrupados_balanceado.html usa badges coloridos
+```
+
 ---
 
 ## 🚛 Separacao (app/separacao/models.py)

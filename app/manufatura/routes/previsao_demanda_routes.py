@@ -4,7 +4,7 @@ Rotas de Previsão de Demanda - Versão Limpa
 from flask import render_template, jsonify, request
 from flask_login import login_required, current_user
 from app import db
-from app.manufatura.models import PrevisaoDemanda, GrupoEmpresarial
+from app.manufatura.models import PrevisaoDemanda, GrupoEmpresarial, HistoricoPedidos
 from datetime import datetime
 from sqlalchemy import func
 
@@ -370,58 +370,7 @@ def register_previsao_demanda_routes(bp):
         except Exception as e:
             db.session.rollback()
             return jsonify({'erro': str(e)}), 500
-    
-    @bp.route('/api/previsao-demanda/debug-carteira/<cod_produto>')
-    @login_required
-    def debug_carteira(cod_produto):
-        """Debug endpoint para verificar dados da CarteiraPrincipal"""
-        try:
-            from app.carteira.models import CarteiraPrincipal
-            
-            # Total de registros do produto
-            total = db.session.query(CarteiraPrincipal).filter(
-                CarteiraPrincipal.cod_produto == cod_produto
-            ).count()
-            
-            # Registros com saldo > 0
-            com_saldo = db.session.query(CarteiraPrincipal).filter(
-                CarteiraPrincipal.cod_produto == cod_produto,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
-            ).count()
-            
-            # Soma total
-            soma = db.session.query(
-                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
-            ).filter(
-                CarteiraPrincipal.cod_produto == cod_produto,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
-            ).scalar()
-            
-            # Primeiros 5 registros
-            amostras = db.session.query(
-                CarteiraPrincipal.num_pedido,
-                CarteiraPrincipal.qtd_saldo_produto_pedido,
-                CarteiraPrincipal.cnpj_cpf
-            ).filter(
-                CarteiraPrincipal.cod_produto == cod_produto,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
-            ).limit(5).all()
-            
-            return jsonify({
-                'cod_produto': cod_produto,
-                'total_registros': total,
-                'registros_com_saldo': com_saldo,
-                'soma_total': float(soma or 0),
-                'amostras': [{
-                    'pedido': a.num_pedido,
-                    'saldo': float(a.qtd_saldo_produto_pedido),
-                    'cnpj': a.cnpj_cpf
-                } for a in amostras]
-            })
-            
-        except Exception as e:
-            return jsonify({'erro': str(e)}), 500
-    
+        
     @bp.route('/api/grupos-empresariais/<nome_grupo>', methods=['DELETE'])
     @login_required
     def deletar_grupo_empresarial(nome_grupo):
@@ -500,11 +449,11 @@ def register_previsao_demanda_routes(bp):
 
                     # Validações
                     if mes < 1 or mes > 12:
-                        erros.append(f"Linha {idx+2}: Mês inválido ({mes})")
+                        erros.append(f"Linha {idx+2}: Mês inválido ({mes})") # type: ignore
                         continue
 
                     if disparo not in ['MTO', 'MTS']:
-                        erros.append(f"Linha {idx+2}: Disparo deve ser MTO ou MTS (recebido: {disparo})")
+                        erros.append(f"Linha {idx+2}: Disparo deve ser MTO ou MTS (recebido: {disparo})") # type: ignore
                         continue
 
                     # Buscar existente
@@ -539,7 +488,7 @@ def register_previsao_demanda_routes(bp):
                         inseridos += 1
 
                 except Exception as e:
-                    erros.append(f"Linha {idx+2}: {str(e)}")
+                    erros.append(f"Linha {idx+2}: {str(e)}") # type: ignore
                     continue
 
             db.session.commit()

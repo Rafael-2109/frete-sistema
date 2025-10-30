@@ -73,6 +73,9 @@ class CarteiraMapper:
             'rua_endereco_ent': 'order_id/partner_shipping_id/street',
             'endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_numero',
             'telefone_endereco_ent': 'order_id/partner_shipping_id/phone',
+
+            # 🏷️ TAGS DO PEDIDO (ODOO)
+            'tags_pedido': 'order_id/tag_ids',  # Array de IDs de tags (crm.tag)
         }
         
         logger.info(f"Mapeamento hardcoded carregado: {len(self.mapeamento_carteira)} campos")
@@ -88,13 +91,14 @@ class CarteiraMapper:
             partes = campo_odoo.split('/')
             
             # Critério: campos com 3+ níveis OU campos específicos que sabemos que precisam
-            if (len(partes) >= 3 or 
-                'partner_id' in campo_odoo or 
-                'partner_shipping_id' in campo_odoo or
-                'state_id' in campo_odoo or
-                'municipio_id' in campo_odoo or
-                'categ_id/parent_id' in campo_odoo):
-                
+            if (len(partes) >= 3 or
+                    'partner_id' in campo_odoo or
+                    'partner_shipping_id' in campo_odoo or
+                    'state_id' in campo_odoo or
+                    'municipio_id' in campo_odoo or
+                    'categ_id/parent_id' in campo_odoo or
+                    'tag_ids' in campo_odoo):
+
                 multiplas_queries[campo_odoo] = self._gerar_queries_para_campo(campo_odoo)
         
         self.campos_multiplas_queries = multiplas_queries
