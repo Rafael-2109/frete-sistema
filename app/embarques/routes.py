@@ -2019,6 +2019,143 @@ def desvincular_pedido(lote_id):
     return redirect(url_for('pedidos.lista_pedidos'))
 
 
+@embarques_bp.route('/admin/recalcular-pallets-embarque/<int:embarque_id>', methods=['POST'])
+@login_required
+def recalcular_pallets_embarque(embarque_id):
+    """
+    🔧 ROTA ADMINISTRATIVA: Recalcula pallets de um embarque usando CadastroPalletizacao
+
+    ✅ AÇÕES:
+    1. Recalcula pallets de cada EmbarqueItem usando CadastroPalletizacao
+    2. Atualiza embarque.pallet_total com nova soma
+    3. Retorna relatório detalhado das mudanças
+
+    ⚠️ APENAS PARA ADMINISTRADORES
+    """
+    # Verifica se o usuário é administrador
+    if not hasattr(current_user, 'perfil') or current_user.perfil != 'administrador':
+        return jsonify({
+            'success': False,
+            'message': 'Acesso negado. Esta função é restrita a administradores.'
+        }), 403
+
+    try:
+        from app.embarques.services.pallet_calculator import PalletCalculator
+
+        # Busca embarque
+        embarque = Embarque.query.get_or_404(embarque_id)
+
+        print(f"[RECALCULAR PALLETS] Iniciando recálculo para embarque #{embarque.numero}...")
+
+        # Usa o serviço para recalcular
+        resultado = PalletCalculator.recalcular_pallets_embarque(embarque)
+
+        if resultado.get('success'):
+            print(f"[RECALCULAR PALLETS] ✅ Embarque #{embarque.numero} recalculado com sucesso")
+            print(f"  - Pallets antigo: {resultado['pallet_total_antigo']:.2f}")
+            print(f"  - Pallets novo: {resultado['pallet_total_novo']:.2f}")
+            print(f"  - Diferença: {resultado['diferenca_total']:.2f}")
+            print(f"  - Itens atualizados: {resultado['itens_atualizados']}")
+
+            return jsonify({
+                'success': True,
+                'message': f'✅ Pallets recalculados com sucesso! Embarque #{embarque.numero}',
+                **resultado
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'❌ Erro ao recalcular: {resultado.get("error")}'
+            }), 500
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO RECALCULAR PALLETS] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao recalcular pallets: {str(e)}'
+        }), 500
+
+
+@embarques_bp.route('/admin/recalcular-pallets-todos', methods=['POST'])
+@login_required
+def recalcular_pallets_todos_embarques():
+    """
+    🔧 ROTA ADMINISTRATIVA: Recalcula pallets de TODOS os embarques ativos
+
+    ✅ ÚTIL PARA:
+    - Corrigir inconsistências em lote
+    - Aplicar nova lógica de palletização em embarques antigos
+    - Manutenção do sistema
+
+    ⚠️ APENAS PARA ADMINISTRADORES
+    ⚠️ OPERAÇÃO PESADA - Use com cautela
+    """
+    # Verifica se o usuário é administrador
+    if not hasattr(current_user, 'perfil') or current_user.perfil != 'administrador':
+        return jsonify({
+            'success': False,
+            'message': 'Acesso negado. Esta função é restrita a administradores.'
+        }), 403
+
+    try:
+        from app.embarques.services.pallet_calculator import PalletCalculator
+
+        # Busca embarques ativos (não cancelados)
+        embarques = Embarque.query.filter(
+            Embarque.status != 'cancelado'
+        ).order_by(Embarque.id.desc()).limit(100).all()  # Limita a 100 para segurança
+
+        print(f"[RECALCULAR PALLETS LOTE] Processando {len(embarques)} embarques...")
+
+        resultados = []
+        sucessos = 0
+        erros = 0
+
+        for embarque in embarques:
+            resultado = PalletCalculator.recalcular_pallets_embarque(embarque)
+
+            if resultado.get('success'):
+                sucessos += 1
+                resultados.append({
+                    'embarque_id': embarque.id,
+                    'embarque_numero': embarque.numero,
+                    'status': 'sucesso',
+                    'diferenca': resultado['diferenca_total']
+                })
+            else:
+                erros += 1
+                resultados.append({
+                    'embarque_id': embarque.id,
+                    'embarque_numero': embarque.numero,
+                    'status': 'erro',
+                    'erro': resultado.get('error')
+                })
+
+        print(f"[RECALCULAR PALLETS LOTE] ✅ Concluído: {sucessos} sucessos, {erros} erros")
+
+        return jsonify({
+            'success': True,
+            'message': f'✅ Processamento concluído! {sucessos} embarques atualizados, {erros} erros',
+            'total_processados': len(embarques),
+            'sucessos': sucessos,
+            'erros': erros,
+            'detalhes': resultados
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO RECALCULAR PALLETS LOTE] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao recalcular pallets em lote: {str(e)}'
+        }), 500
+
+
 @embarques_bp.route('/item/<int:item_id>/confirmar_agendamento', methods=['POST'])
 @login_required
 def confirmar_agendamento_item(item_id):

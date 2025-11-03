@@ -115,7 +115,8 @@ class Embarque(db.Model):
         ✅ CORREÇÃO CRÍTICA: Usa pallet_total gravado no embarque (fonte da verdade)
         Esse valor é calculado usando CadastroPalletizacao e é mais preciso
         """
-        if self.pallet_total is not None and self.pallet_total > 0:
+        # ✅ CORREÇÃO: Verifica apenas se não é None (0 é válido!)
+        if self.pallet_total is not None:
             return self.pallet_total
 
         # Fallback: soma dos itens ativos (sem cálculo por peso)

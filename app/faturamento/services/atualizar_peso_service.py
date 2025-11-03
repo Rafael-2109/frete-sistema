@@ -279,6 +279,7 @@ class AtualizadorPesoService:
     def _atualizar_embarque_totais(self, numero_nf: str) -> Dict[str, Any]:
         """
         Atualiza peso_total e pallet_total em Embarque recalculando de EmbarqueItem
+        ✅ NOVO: Usa PalletCalculator para recalcular pallets corretamente
         """
         logger.info(f"  📦 Atualizando totais do Embarque...")
 
@@ -296,10 +297,22 @@ class AtualizadorPesoService:
             if not embarque:
                 continue
 
+            # ✅ NOVO: Usa PalletCalculator para recalcular pallets do item com a NF
+            from app.embarques.services.pallet_calculator import PalletCalculator
+
+            # Recalcula pallets do item usando a NF (com CadastroPalletizacao)
+            pallets_nf = PalletCalculator.calcular_pallets_por_nf(numero_nf)
+            embarque_item.pallets = pallets_nf
+
+            logger.info(f"  🔄 EmbarqueItem {embarque_item.id}: pallets recalculados = {pallets_nf:.2f}")
+
             # Recalcular totais do embarque baseado em TODOS os itens ativos
+            # ⚠️ IMPORTANTE: Não precisa recalcular aqui - o TRIGGER fará isso automaticamente
+            # Mas vamos fazer manualmente para garantir (caso trigger não esteja ativo)
             totais = db.session.query(
                 func.sum(EmbarqueItem.peso).label('peso_total'),
-                func.sum(EmbarqueItem.pallets).label('pallet_total')
+                func.sum(EmbarqueItem.pallets).label('pallet_total'),
+                func.sum(EmbarqueItem.valor).label('valor_total')
             ).filter(
                 EmbarqueItem.embarque_id == embarque.id,
                 EmbarqueItem.status == 'ativo'
@@ -307,6 +320,9 @@ class AtualizadorPesoService:
 
             embarque.peso_total = float(totais.peso_total or 0)
             embarque.pallet_total = float(totais.pallet_total or 0)
+            embarque.valor_total = float(totais.valor_total or 0)
+
+            logger.info(f"  ✅ Embarque {embarque.numero}: totais atualizados - Peso: {embarque.peso_total:.2f}kg | Pallets: {embarque.pallet_total:.2f} | Valor: R${embarque.valor_total:.2f}")
 
             embarques_atualizados.add(embarque.id)
 
