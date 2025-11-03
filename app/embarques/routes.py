@@ -2126,11 +2126,12 @@ def confirmar_agendamento_item(item_id):
 @login_required
 def sincronizar_item_faturamento(item_id):
     """
-    Sincroniza valor e peso de um EmbarqueItem com o total da NF em FaturamentoProduto
+    Sincroniza valor, peso E PALLETS de um EmbarqueItem com o total da NF em FaturamentoProduto
 
     Busca todos os produtos da NF e soma:
     - valor_produto_faturado (para atualizar item.valor)
     - peso_total (para atualizar item.peso)
+    - ✅ NOVO: pallets calculados com CadastroPalletizacao (para atualizar item.pallets)
 
     Response:
     {
@@ -2139,7 +2140,9 @@ def sincronizar_item_faturamento(item_id):
         "valor_anterior": 1000.00,
         "valor_novo": 1050.00,
         "peso_anterior": 500.0,
-        "peso_novo": 520.5
+        "peso_novo": 520.5,
+        "pallets_anterior": 2.5,
+        "pallets_novo": 2.8
     }
     """
     try:
@@ -2155,6 +2158,7 @@ def sincronizar_item_faturamento(item_id):
 
         # Buscar produtos da NF em FaturamentoProduto
         from app.faturamento.models import FaturamentoProduto
+        from app.embarques.services.pallet_calculator import PalletCalculator
 
         produtos_nf = FaturamentoProduto.query.filter_by(
             numero_nf=item.nota_fiscal
@@ -2170,17 +2174,33 @@ def sincronizar_item_faturamento(item_id):
         valor_nf_total = sum(float(p.valor_produto_faturado or 0) for p in produtos_nf)
         peso_nf_total = sum(float(p.peso_total or 0) for p in produtos_nf)
 
+        # ✅ NOVO: Calcular pallets usando CadastroPalletizacao
+        pallets_nf_total = PalletCalculator.calcular_pallets_por_nf(item.nota_fiscal)
+
         # Guardar valores anteriores
         valor_anterior = float(item.valor or 0)
         peso_anterior = float(item.peso or 0)
+        pallets_anterior = float(item.pallets or 0)
 
         # Atualizar EmbarqueItem
         item.valor = valor_nf_total
         item.peso = peso_nf_total
+        item.pallets = pallets_nf_total  # ✅ NOVO: Atualiza pallets
+
+        # ✅ NOVO: Recalcula total do embarque
+        embarque = item.embarque
+        if embarque:
+            # Recalcula totais do embarque somando todos os itens ativos
+            embarque.valor_total = sum(i.valor or 0 for i in embarque.itens if i.status == 'ativo')
+            embarque.peso_total = sum(i.peso or 0 for i in embarque.itens if i.status == 'ativo')
+            embarque.pallet_total = sum(i.pallets or 0 for i in embarque.itens if i.status == 'ativo')
 
         db.session.commit()
 
-        print(f"[SINCRONIZAÇÃO FATURAMENTO] Item {item_id} | NF {item.nota_fiscal} | Valor: {valor_anterior} → {valor_nf_total} | Peso: {peso_anterior} → {peso_nf_total}")
+        print(f"[SINCRONIZAÇÃO FATURAMENTO] Item {item_id} | NF {item.nota_fiscal}")
+        print(f"  Valor: {valor_anterior} → {valor_nf_total}")
+        print(f"  Peso: {peso_anterior} → {peso_nf_total}")
+        print(f"  ✅ Pallets: {pallets_anterior} → {pallets_nf_total}")
 
         return jsonify({
             'success': True,
@@ -2190,7 +2210,9 @@ def sincronizar_item_faturamento(item_id):
             'valor_anterior': round(valor_anterior, 2),
             'valor_novo': round(valor_nf_total, 2),
             'peso_anterior': round(peso_anterior, 2),
-            'peso_novo': round(peso_nf_total, 2)
+            'peso_novo': round(peso_nf_total, 2),
+            'pallets_anterior': round(pallets_anterior, 2),
+            'pallets_novo': round(pallets_nf_total, 2)
         })
 
     except Exception as e:

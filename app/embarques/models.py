@@ -90,25 +90,36 @@ class Embarque(db.Model):
         return sum(i.volumes or 0 for i in self.itens if i.status == 'ativo')
 
     def total_peso_pedidos(self):
-        """Retorna o peso total dos pedidos contidos no embarque"""
+        """
+        Retorna o peso total dos pedidos contidos no embarque
+        ✅ ESTRATÉGIA: Usa peso_total gravado no embarque se disponível (mais confiável)
+        Fallback: soma dos itens ativos
+        """
+        if self.peso_total is not None and self.peso_total > 0:
+            return self.peso_total
         return sum(i.peso or 0 for i in self.itens if i.status == 'ativo')
 
     def total_valor_pedidos(self):
-        """Retorna o valor total dos pedidos contidos no embarque"""
+        """
+        Retorna o valor total dos pedidos contidos no embarque
+        ✅ ESTRATÉGIA: Usa valor_total gravado no embarque se disponível (mais confiável)
+        Fallback: soma dos itens ativos
+        """
+        if self.valor_total is not None and self.valor_total > 0:
+            return self.valor_total
         return sum(i.valor or 0 for i in self.itens if i.status == 'ativo')
 
     def total_pallet_pedidos(self):
-        """Retorna o total de pallets dos pedidos contidos no embarque"""
-        # Soma os pallets reais dos itens ativos
-        total_pallets = sum(i.pallets or 0 for i in self.itens if i.status == 'ativo')
-        
-        # Se não há pallets informados, calcula baseado no peso (fallback)
-        if total_pallets == 0:
-            peso_total = self.total_peso_pedidos()
-            if peso_total > 0:
-                return round(peso_total / 500, 2)  # 500kg por pallet
-        
-        return total_pallets
+        """
+        Retorna o total de pallets dos pedidos contidos no embarque
+        ✅ CORREÇÃO CRÍTICA: Usa pallet_total gravado no embarque (fonte da verdade)
+        Esse valor é calculado usando CadastroPalletizacao e é mais preciso
+        """
+        if self.pallet_total is not None and self.pallet_total > 0:
+            return self.pallet_total
+
+        # Fallback: soma dos itens ativos (sem cálculo por peso)
+        return sum(i.pallets or 0 for i in self.itens if i.status == 'ativo')
 
     @property
     def itens_ativos(self):
