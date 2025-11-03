@@ -15,8 +15,30 @@ from app.producao.models import CadastroPalletizacao
 from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 import logging
+import math
 
 logger = logging.getLogger(__name__)
+
+
+def sanitizar_numero(valor):
+    """
+    Sanitiza um valor numérico para evitar NaN/Inf no Excel.
+
+    Converte NaN e Inf em 0 para que o XlsxWriter possa processar.
+
+    Args:
+        valor: Valor a ser sanitizado
+
+    Returns:
+        float: Valor sanitizado (0 se NaN/Inf, valor original caso contrário)
+    """
+    try:
+        # Verificar se é NaN ou Inf
+        if pd.isna(valor) or math.isinf(float(valor)) or math.isnan(float(valor)):
+            return 0
+        return float(valor)
+    except (TypeError, ValueError):
+        return 0
 
 # Criar o blueprint de relatórios
 relatorios_producao_bp = Blueprint('relatorios_producao', __name__, url_prefix='/producao/relatorios')
@@ -443,8 +465,8 @@ def exportar_relatorios_producao():
                     valor = df_estoque.iloc[row_num, col_num]
 
                     if col_name in ['Saldo Atual', 'Menor Estoque D+7', 'Qtd em Separação', 'Qtd Total Carteira', 'Qtd Programada Produção']:
-                        # Escrever número inteiro com formato de milhar
-                        worksheet_estoque.write_number(row_num + 1, col_num, valor if valor else 0, formato_inteiro)
+                        # Escrever número inteiro com formato de milhar (sanitizado)
+                        worksheet_estoque.write_number(row_num + 1, col_num, sanitizar_numero(valor), formato_inteiro)
                     elif col_name == 'Data Ruptura':
                         # Escrever data com formato DD/MM/YYYY
                         if pd.notna(valor):
@@ -458,8 +480,8 @@ def exportar_relatorios_producao():
                         else:
                             worksheet_estoque.write(row_num + 1, col_num, '', formato_data_hora)
                     elif col_name in ['Peso Bruto (kg)', 'Palletização']:
-                        # Escrever número decimal com formato
-                        worksheet_estoque.write_number(row_num + 1, col_num, valor if valor else 0, formato_decimal)
+                        # Escrever número decimal com formato (sanitizado)
+                        worksheet_estoque.write_number(row_num + 1, col_num, sanitizar_numero(valor), formato_decimal)
                     else:
                         # Escrever texto normal
                         worksheet_estoque.write(row_num + 1, col_num, str(valor) if pd.notna(valor) else '')
@@ -595,11 +617,11 @@ def exportar_relatorios_producao():
                         elif col_name in ['Código Produto', 'Nome Produto', 'Categoria', 'Linha', 'MP', 'Emb.']:
                             worksheet_mov.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto)
                         elif col_name == 'Saldo Projetado' and saldo_negativo:
-                            # Saldo negativo - formato especial vermelho escuro
-                            worksheet_mov.write_number(row_num, col_num, valor if valor else 0, saldo_negativo_format)
+                            # Saldo negativo - formato especial vermelho escuro (sanitizado)
+                            worksheet_mov.write_number(row_num, col_num, sanitizar_numero(valor), saldo_negativo_format)
                         elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
-                            # Colunas numéricas com formato de milhar
-                            worksheet_mov.write_number(row_num, col_num, valor if valor else 0, formato_numero)
+                            # Colunas numéricas com formato de milhar (sanitizado)
+                            worksheet_mov.write_number(row_num, col_num, sanitizar_numero(valor), formato_numero)
                         else:
                             worksheet_mov.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto)
             else:
@@ -657,11 +679,11 @@ def exportar_relatorios_producao():
                         elif col_name in ['Código Produto', 'Nome Produto', 'Linha', 'MP']:  # ✅ Incluir novas colunas
                             worksheet_saidas.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_saida)
                         elif col_name == 'Saldo sem Produção' and valor < 0:
-                            # Saldo negativo - formato especial vermelho
-                            worksheet_saidas.write_number(row_num, col_num, valor if valor else 0, formato_saldo_negativo)
+                            # Saldo negativo - formato especial vermelho (sanitizado)
+                            worksheet_saidas.write_number(row_num, col_num, sanitizar_numero(valor), formato_saldo_negativo)
                         elif col_name in ['Estoque Atual', 'Saída do Dia', 'Saída Acumulada', 'Saldo sem Produção']:
-                            # Colunas numéricas
-                            worksheet_saidas.write_number(row_num, col_num, valor if valor else 0, formato_inteiro_saida)
+                            # Colunas numéricas (sanitizado)
+                            worksheet_saidas.write_number(row_num, col_num, sanitizar_numero(valor), formato_inteiro_saida)
                         else:
                             worksheet_saidas.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_saida)
 
@@ -726,8 +748,8 @@ def exportar_relatorios_producao():
                             else:
                                 worksheet_sep.write(row_num, col_num, '', formato_data_sep)
                         elif col_name == 'Quantidade':
-                            # Coluna numérica
-                            worksheet_sep.write_number(row_num, col_num, valor if valor else 0, formato_inteiro_sep)
+                            # Coluna numérica (sanitizado)
+                            worksheet_sep.write_number(row_num, col_num, sanitizar_numero(valor), formato_inteiro_sep)
                         else:
                             # Colunas de texto (inclui Linha e MP)
                             worksheet_sep.write(row_num, col_num, str(valor) if pd.notna(valor) else '', formato_texto_sep)

@@ -517,10 +517,35 @@ def create_app(config_name=None):
         except (ValueError, TypeError):
             return "0,0 pal"
 
+    def formatar_quantidade_brasileira(valor, casas_decimais=2):
+        """
+        Formata quantidade em padrão brasileiro com casas decimais personalizadas
+        Ex: 1234.567 -> "1.234,57" (2 casas)
+            1234.567 -> "1.234,567" (3 casas)
+        """
+        if valor is None or valor == "":
+            return f"0{',' + '0' * casas_decimais}"
+
+        try:
+            valor_float = float(valor)
+            # Formata com casas decimais especificadas
+            valor_formatado = f"{valor_float:,.{casas_decimais}f}"
+            # Converte para padrão brasileiro (troca , por . e . por ,)
+            partes = valor_formatado.split(".")
+            if len(partes) == 2:
+                inteira = partes[0].replace(",", ".")
+                decimal = partes[1]
+                return f"{inteira},{decimal}"
+            else:
+                return valor_formatado.replace(",", ".")
+        except (ValueError, TypeError):
+            return f"0{',' + '0' * casas_decimais}"
+
     app.jinja_env.filters["valor_br"] = formatar_valor_brasileiro
     app.jinja_env.filters["numero_br"] = formatar_numero_brasileiro
     app.jinja_env.filters["peso_br"] = formatar_peso_brasileiro
     app.jinja_env.filters["pallet_br"] = formatar_pallet_brasileiro
+    app.jinja_env.filters["qtd_br"] = formatar_quantidade_brasileira  # ✅ NOVO: Quantidade com 2 casas decimais
 
     # ✅ CARTEIRA: Filtros específicos da carteira
     from app.carteira.utils.formatters import formatar_moeda, formatar_peso, formatar_pallet
@@ -829,6 +854,10 @@ def create_app(config_name=None):
     # Registrar blueprint de Recursos de Produção
     from app.manufatura.routes.recursos_producao_routes import recursos_bp
     app.register_blueprint(recursos_bp)
+
+    # Registrar blueprints de Pedidos de Compra e Projeção de Estoque
+    from app.manufatura.routes import register_blueprints
+    register_blueprints(app)
 
     app.register_blueprint(permissions_bp)
 

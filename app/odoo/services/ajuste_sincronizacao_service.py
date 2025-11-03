@@ -137,22 +137,23 @@ class AjusteSincronizacaoService:
         IMPORTANTE:
         - Processa apenas Separacao com sincronizado_nf=False
         - Apenas status alteráveis: PREVISAO, ABERTO, COTADO
+        - 🔴 PROTEÇÃO: IGNORA pedidos com múltiplos separacao_lote_id
 
         Returns:
             Lista de dicts com {lote_id, tipo, status}
         """
         # 🔴 PROTEÇÃO: Verificar se pedido tem NF processada sem lote (não deve ser alterado)
         from app.faturamento.models import FaturamentoProduto
-        
+
         nf_sem_lote = FaturamentoProduto.query.filter_by(
             origem=num_pedido,
             status_nf='SEM_LOTE'
         ).first()
-        
+
         if nf_sem_lote:
             logger.warning(f"⚠️ PROTEÇÃO: Pedido {num_pedido} tem NF {nf_sem_lote.numero_nf} processada sem lote (status_nf='SEM_LOTE') - NÃO será alterado para evitar redução indevida")
             return []  # Retorna vazio para não processar alterações
-        
+
         lotes = []
 
         # Buscar separações não sincronizadas e com status alterável
@@ -166,6 +167,16 @@ class AjusteSincronizacaoService:
             .distinct()
             .all()
         )
+
+        # 🔴 PROTEÇÃO CRÍTICA: Se pedido tem múltiplos lotes, IGNORAR completamente
+        # Pedidos divididos manualmente não devem ser alterados automaticamente
+        if len(seps) > 1:
+            lotes_ids = [lote_id for lote_id, _, _ in seps]
+            logger.warning(
+                f"🛡️ PROTEÇÃO: Pedido {num_pedido} possui {len(seps)} separacao_lote_id diferentes "
+                f"({', '.join(lotes_ids)}) - Alteração automática BLOQUEADA para evitar corrupção de dados"
+            )
+            return []  # Retorna vazio para não processar
 
         for lote_id, status, numero_nf in seps:
             lotes.append({"lote_id": lote_id, "tipo": "SEPARACAO", "status": status})

@@ -2569,7 +2569,9 @@ function sincronizarItemsFaturamento(loteId) {
         if (data.success) {
             const msg = `✅ Items sincronizados com sucesso!\n\n` +
                         `📋 NF: ${data.numero_nf}\n` +
-                        `📦 Items atualizados: ${data.atualizados}\n` +
+                        `✏️ Items atualizados: ${data.atualizados}\n` +
+                        `➕ Items adicionados: ${data.adicionados || 0}\n` +
+                        `⚠️ Items zerados: ${data.zerados || 0}\n` +
                         `❌ Erros: ${data.erros}`;
 
             alert(msg);
