@@ -154,15 +154,23 @@ def sincronizar_entrega_por_nf(numero_nf):
 
     # Se não existe data_agenda em agendamentos e temos data_agenda do embarque => cria agendamento
     if (not ja_existe_data_agenda) and data_agenda_embarque:
+        # ✅ CORREÇÃO: Respeitar EmbarqueItem.agendamento_confirmado
+        agendamento_confirmado = getattr(item_mais_recente, 'agendamento_confirmado', False)
+        status_agendamento = 'confirmado' if agendamento_confirmado else 'aguardando'
+
         novo_ag = AgendamentoEntrega(
             entrega_id=entrega.id,
             data_agendada=data_agenda_embarque,
             forma_agendamento="Embarque Automático",
             autor=get_usuario_nome(),
-            status="confirmado",  # ✅ Se está no embarque, já foi confirmado
-            confirmado_por=get_usuario_nome(),
-            confirmado_em=datetime.utcnow()
+            status=status_agendamento,  # ✅ Respeita EmbarqueItem.agendamento_confirmado
         )
+
+        # Só preenche confirmação se realmente confirmado
+        if agendamento_confirmado:
+            novo_ag.confirmado_por = get_usuario_nome()
+            novo_ag.confirmado_em = datetime.utcnow()
+
         db.session.add(novo_ag)
 
         # Se não existe nenhum protocolo em agendamentos e temos do embarque => setar
@@ -176,16 +184,24 @@ def sincronizar_entrega_por_nf(numero_nf):
             # Se não existe nenhum protocolo em nenhum agendamento => cria
             ja_existe_protocolo = any(a.protocolo_agendamento for a in entrega.agendamentos)
             if not ja_existe_protocolo:
+                # ✅ CORREÇÃO: Respeitar EmbarqueItem.agendamento_confirmado
+                agendamento_confirmado = getattr(item_mais_recente, 'agendamento_confirmado', False)
+                status_agendamento = 'confirmado' if agendamento_confirmado else 'aguardando'
+
                 # Você pode criar UM novo agendamento só para salvar o protocolo
                 novo_ag = AgendamentoEntrega(
                     entrega_id=entrega.id,
                     protocolo_agendamento=protocolo_embarque,
                     forma_agendamento="Embarque Automático",
                     autor=get_usuario_nome(),
-                    status="confirmado",  # ✅ Se está no embarque, já foi confirmado
-                    confirmado_por=get_usuario_nome(),
-                    confirmado_em=datetime.utcnow()
+                    status=status_agendamento,  # ✅ Respeita EmbarqueItem.agendamento_confirmado
                 )
+
+                # Só preenche confirmação se realmente confirmado
+                if agendamento_confirmado:
+                    novo_ag.confirmado_por = get_usuario_nome()
+                    novo_ag.confirmado_em = datetime.utcnow()
+
                 db.session.add(novo_ag)
 
     if fat.cnpj_cliente:
@@ -288,6 +304,10 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
 
     entrega.data_agenda = data_agenda_item
     if data_agenda_item:
+        # ✅ CORREÇÃO: Respeitar EmbarqueItem.agendamento_confirmado
+        agendamento_confirmado = getattr(item_embarque, 'agendamento_confirmado', False)
+        status_agendamento = 'confirmado' if agendamento_confirmado else 'aguardando'
+
         novo_ag = AgendamentoEntrega(
             entrega_id=entrega.id,
             protocolo_agendamento=item_embarque.protocolo_agendamento,
@@ -295,10 +315,14 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
             forma_agendamento="Reenvio do CD",
             autor=get_usuario_nome(),
             criado_em=datetime.utcnow(),
-            status="confirmado",  # ✅ Se está no embarque/reenvio, já foi confirmado
-            confirmado_por=get_usuario_nome(),
-            confirmado_em=datetime.utcnow()
+            status=status_agendamento,  # ✅ Respeita EmbarqueItem.agendamento_confirmado
         )
+
+        # Só preenche confirmação se realmente confirmado
+        if agendamento_confirmado:
+            novo_ag.confirmado_por = get_usuario_nome()
+            novo_ag.confirmado_em = datetime.utcnow()
+
         db.session.add(novo_ag)
 
     # Calcula data_entrega_prevista

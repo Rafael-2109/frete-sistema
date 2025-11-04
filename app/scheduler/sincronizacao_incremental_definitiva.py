@@ -35,12 +35,18 @@ logger = logging.getLogger(__name__)
 INTERVALO_MINUTOS = int(os.environ.get('SYNC_INTERVAL_MINUTES', 30))
 JANELA_CARTEIRA = int(os.environ.get('JANELA_CARTEIRA', 40))
 STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 5760))
+JANELA_REQUISICOES = int(os.environ.get('JANELA_REQUISICOES', 90))  # 90 minutos
+JANELA_PEDIDOS = int(os.environ.get('JANELA_PEDIDOS', 90))  # 90 minutos (mesma janela)
+JANELA_ALOCACOES = int(os.environ.get('JANELA_ALOCACOES', 90))  # 90 minutos (mesma janela)
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
+requisicao_service = None
+pedido_service = None
+alocacao_service = None
 
 
 def inicializar_services():
@@ -49,16 +55,22 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
         from app.odoo.services.faturamento_service import FaturamentoService
         from app.odoo.services.carteira_service import CarteiraService
+        from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
+        from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
+        from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
         carteira_service = CarteiraService()
+        requisicao_service = RequisicaoComprasService()
+        pedido_service = PedidoComprasServiceOtimizado()
+        alocacao_service = AlocacaoComprasServiceOtimizado()
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -73,7 +85,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -82,10 +94,13 @@ def executar_sincronizacao():
     logger.info(f"   - Intervalo: {INTERVALO_MINUTOS} minutos")
     logger.info(f"   - Faturamento: status={STATUS_FATURAMENTO}min (96h)")
     logger.info(f"   - Carteira: janela={JANELA_CARTEIRA}min")
+    logger.info(f"   - Requisições: janela={JANELA_REQUISICOES}min")
+    logger.info(f"   - Pedidos: janela={JANELA_PEDIDOS}min")
+    logger.info(f"   - Alocações: janela={JANELA_ALOCACOES}min")
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not faturamento_service or not carteira_service:
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -226,6 +241,237 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes da Verificação de Exclusões")
+        except Exception as e:
+            pass
+
+        # 2.5️⃣ VERIFICAÇÃO DE PEDIDOS EXCLUÍDOS DO ODOO - com retry
+        sucesso_verificacao = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"🔍 Verificando pedidos excluídos do Odoo (tentativa {tentativa}/{MAX_RETRIES})...")
+
+                # Usar service já instanciado
+                resultado_verificacao = carteira_service.verificar_pedidos_excluidos_odoo()
+
+                if resultado_verificacao.get("sucesso"):
+                    sucesso_verificacao = True
+                    logger.info("✅ Verificação de exclusões concluída!")
+                    logger.info(f"   - Pedidos verificados: {resultado_verificacao.get('pedidos_verificados', 0)}")
+                    logger.info(f"   - Pedidos excluídos: {resultado_verificacao.get('pedidos_excluidos', 0)}")
+                    logger.info(f"   - Tempo: {resultado_verificacao.get('tempo_execucao', 0):.2f}s")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_verificacao.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Verificação: {erro}")
+
+                    if "SSL" in str(erro) or "connection" in str(erro).lower():
+                        if tentativa < MAX_RETRIES:
+                            logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                            sleep(RETRY_DELAY)
+                            # Reinicializar service
+                            from app.odoo.services.carteira_service import CarteiraService
+                            carteira_service = CarteiraService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar pedidos excluídos: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        # Reinicializar service
+                        from app.odoo.services.carteira_service import CarteiraService
+                        carteira_service = CarteiraService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes das Requisições")
+        except Exception as e:
+            pass
+
+        # 3️⃣ REQUISIÇÕES DE COMPRAS - com retry
+        sucesso_requisicoes = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📋 Sincronizando Requisições (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_REQUISICOES} minutos")
+
+                # Usar service já instanciado
+                resultado_requisicoes = requisicao_service.sincronizar_requisicoes_incremental(
+                    minutos_janela=JANELA_REQUISICOES,
+                    primeira_execucao=False
+                )
+
+                if resultado_requisicoes.get("sucesso"):
+                    sucesso_requisicoes = True
+                    logger.info("✅ Requisições sincronizadas com sucesso!")
+                    logger.info(f"   - Novas: {resultado_requisicoes.get('requisicoes_novas', 0)}")
+                    logger.info(f"   - Atualizadas: {resultado_requisicoes.get('requisicoes_atualizadas', 0)}")
+                    logger.info(f"   - Linhas processadas: {resultado_requisicoes.get('linhas_processadas', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_requisicoes.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Requisições: {erro}")
+
+                    if "SSL" in str(erro) or "connection" in str(erro).lower():
+                        if tentativa < MAX_RETRIES:
+                            logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                            sleep(RETRY_DELAY)
+                            # Reinicializar service
+                            from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
+                            requisicao_service = RequisicaoComprasService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar requisições: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        # Reinicializar service
+                        from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
+                        requisicao_service = RequisicaoComprasService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes dos Pedidos")
+        except Exception as e:
+            pass
+
+        # 4️⃣ PEDIDOS DE COMPRAS - com retry
+        sucesso_pedidos = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"🛒 Sincronizando Pedidos de Compra (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_PEDIDOS} minutos")
+
+                # Usar service já instanciado
+                resultado_pedidos = pedido_service.sincronizar_pedidos_incremental(
+                    minutos_janela=JANELA_PEDIDOS,
+                    primeira_execucao=False
+                )
+
+                if resultado_pedidos.get("sucesso"):
+                    sucesso_pedidos = True
+                    logger.info("✅ Pedidos sincronizados com sucesso!")
+                    logger.info(f"   - Novos: {resultado_pedidos.get('pedidos_novos', 0)}")
+                    logger.info(f"   - Atualizados: {resultado_pedidos.get('pedidos_atualizados', 0)}")
+                    logger.info(f"   - Linhas processadas: {resultado_pedidos.get('linhas_processadas', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_pedidos.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Pedidos: {erro}")
+
+                    if "SSL" in str(erro) or "connection" in str(erro).lower():
+                        if tentativa < MAX_RETRIES:
+                            logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                            sleep(RETRY_DELAY)
+                            from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
+                            pedido_service = PedidoComprasServiceOtimizado()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar pedidos: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
+                        pedido_service = PedidoComprasServiceOtimizado()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes das Alocações")
+        except Exception as e:
+            pass
+
+        # 5️⃣ ALOCAÇÕES DE COMPRAS - com retry
+        sucesso_alocacoes = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"🔗 Sincronizando Alocações (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_ALOCACOES} minutos")
+
+                # Usar service já instanciado
+                resultado_alocacoes = alocacao_service.sincronizar_alocacoes_incremental(
+                    minutos_janela=JANELA_ALOCACOES,
+                    primeira_execucao=False
+                )
+
+                if resultado_alocacoes.get("sucesso"):
+                    sucesso_alocacoes = True
+                    logger.info("✅ Alocações sincronizadas com sucesso!")
+                    logger.info(f"   - Novas: {resultado_alocacoes.get('alocacoes_novas', 0)}")
+                    logger.info(f"   - Atualizadas: {resultado_alocacoes.get('alocacoes_atualizadas', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_alocacoes.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Alocações: {erro}")
+
+                    if "SSL" in str(erro) or "connection" in str(erro).lower():
+                        if tentativa < MAX_RETRIES:
+                            logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                            sleep(RETRY_DELAY)
+                            from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
+                            alocacao_service = AlocacaoComprasServiceOtimizado()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar alocações: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
+                        alocacao_service = AlocacaoComprasServiceOtimizado()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -235,14 +481,26 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        if sucesso_faturamento and sucesso_carteira:
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes])
+
+        if total_sucesso == 6:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif sucesso_faturamento:
-            logger.info("⚠️ Sincronização parcial - Apenas Faturamento OK")
-        elif sucesso_carteira:
-            logger.info("⚠️ Sincronização parcial - Apenas Carteira OK")
+        elif total_sucesso >= 4:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/6 módulos OK")
+            if not sucesso_faturamento:
+                logger.info("   ❌ Faturamento: FALHOU")
+            if not sucesso_carteira:
+                logger.info("   ❌ Carteira: FALHOU")
+            if not sucesso_verificacao:
+                logger.info("   ❌ Verificação Exclusões: FALHOU")
+            if not sucesso_requisicoes:
+                logger.info("   ❌ Requisições: FALHOU")
+            if not sucesso_pedidos:
+                logger.info("   ❌ Pedidos: FALHOU")
+            if not sucesso_alocacoes:
+                logger.info("   ❌ Alocações: FALHOU")
         else:
-            logger.error("❌ Sincronização falhou completamente")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/6 módulos OK")
         logger.info("=" * 60)
 
 

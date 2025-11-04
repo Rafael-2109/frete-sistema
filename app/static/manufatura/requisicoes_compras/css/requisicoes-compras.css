@@ -1,0 +1,324 @@
+/**
+ * Estilos para Requisições de Compras
+ * Módulo: Manufatura
+ */
+
+/* ========================================
+   Cards e Containers
+======================================== */
+.card {
+    border-radius: 8px;
+    border: none;
+}
+
+.card-header {
+    border-radius: 8px 8px 0 0 !important;
+    font-weight: 500;
+}
+
+.shadow-sm {
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.075) !important;
+}
+
+/* ========================================
+   Tabelas
+======================================== */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+    cursor: pointer;
+}
+
+.table thead th {
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* ========================================
+   Badges de Status
+======================================== */
+.badge {
+    padding: 0.35em 0.65em;
+    font-weight: 500;
+    font-size: 0.85rem;
+}
+
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+.badge.bg-primary {
+    background-color: #007bff !important;
+}
+
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+/* ========================================
+   Filtros
+======================================== */
+.form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+}
+
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* ========================================
+   Botões
+======================================== */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-group .btn {
+    margin-left: 0;
+}
+
+/* ========================================
+   Paginação
+======================================== */
+.pagination {
+    margin-top: 1rem;
+}
+
+.page-link {
+    color: #007bff;
+    border-radius: 6px;
+    margin: 0 3px;
+}
+
+.page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.page-link:hover {
+    background-color: #e9ecef;
+}
+
+/* ========================================
+   Estados Vazios
+======================================== */
+.text-muted {
+    color: #6c757d !important;
+}
+
+/* ========================================
+   Histórico de Alterações
+======================================== */
+.table-sm th,
+.table-sm td {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.table-sm tbody tr:hover {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* Cores para valor antes/depois */
+.text-danger {
+    color: #dc3545 !important;
+}
+
+.text-success {
+    color: #28a745 !important;
+}
+
+/* ========================================
+   Loading States
+======================================== */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* ========================================
+   Responsividade
+======================================== */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+
+    .btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+
+    .d-flex.gap-2 {
+        flex-direction: column;
+    }
+
+    .btn-group {
+        flex-direction: column;
+    }
+
+    .btn-group .btn {
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* ========================================
+   Utilitários
+======================================== */
+.gap-2 {
+    gap: 0.5rem !important;
+}
+
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+dl.row {
+    margin-bottom: 0;
+}
+
+dl.row dt {
+    font-weight: 600;
+    color: #6c757d;
+}
+
+dl.row dd {
+    color: #212529;
+}
+
+/* ========================================
+   Info Period (Sincronização)
+======================================== */
+#info-periodo {
+    font-size: 0.95rem;
+    margin-top: 1rem;
+}
+
+#info-periodo strong {
+    color: #495057;
+}
+
+/* ========================================
+   Alerts
+======================================== */
+.alert {
+    border-radius: 8px;
+    border: none;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+}
+
+.alert-secondary {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+.alert-heading {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.alert ul {
+    padding-left: 1.2rem;
+}
+
+.alert ul li {
+    margin-bottom: 0.3rem;
+}
+
+
+/* ========================================
+   Timeline do Histórico
+======================================== */
+.timeline-historico {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-historico::before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dee2e6;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    left: -26px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #007bff;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 3px #007bff33;
+}
+
+.timeline-item:first-child::before {
+    background: #28a745;
+    box-shadow: 0 0 0 3px #28a74533;
+}
+
+.timeline-item .card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.timeline-item .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 500;
+}
+
+/* ========================================
+   Modal Histórico
+======================================== */
+#modalHistoricoCompleto .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}

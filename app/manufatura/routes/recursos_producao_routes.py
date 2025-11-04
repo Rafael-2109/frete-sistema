@@ -3,8 +3,8 @@ Rotas para CRUD de Recursos de Produção
 Gerencia capacidades produtivas, linhas de produção e eficiências
 """
 
-from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, send_file
-from flask_login import login_required, current_user
+from flask import Blueprint, render_template, request, jsonify, send_file
+from flask_login import login_required
 from app import db
 from app.manufatura.models import RecursosProducao
 from sqlalchemy import or_
@@ -362,7 +362,7 @@ def importar_xlsx():
             try:
                 # Validar campos obrigatórios
                 if pd.isna(row['cod_produto']) or pd.isna(row['linha_producao']) or pd.isna(row['qtd_unidade_por_caixa']) or pd.isna(row['capacidade_unidade_minuto']):
-                    erros.append(f'Linha {idx + 2}: Campos obrigatórios vazios')
+                    erros.append(f'Linha {idx + 2}: Campos obrigatórios vazios') # type: ignore
                     continue
 
                 cod_produto = str(row['cod_produto']).strip().upper()
@@ -407,7 +407,7 @@ def importar_xlsx():
                     recursos_criados += 1
 
             except Exception as e:
-                erros.append(f'Linha {idx + 2}: {str(e)}')
+                erros.append(f'Linha {idx + 2}: {str(e)}') # type: ignore
                 continue
 
         # Commit se houver sucesso

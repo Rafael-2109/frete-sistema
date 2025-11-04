@@ -47,6 +47,11 @@
         --module-color-light: #9b5bf5;
     }
 
+    .module-card.purchasing {
+        --module-color: #fd7e14;
+        --module-color-light: #ff9a44;
+    }
+
     .module-icon {
         font-size: 3.5rem;
         margin-bottom: 1.5rem;
@@ -234,6 +239,66 @@
                     <p class="module-description">
                         Visualize a programação de produção de todas as linhas em calendários.
                         Acompanhe ocupação, SKU/hora e recursos por linha de produção.
+                    </p>
+                    <span class="module-status status-new">
+                        <i class="fas fa-star me-1"></i>
+                        Nova Funcionalidade
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Requisições de Compras -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card purchasing" onclick="window.location.href='{{ url_for('manufatura.listar_requisicoes') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h3 class="module-title">Requisições de Compras</h3>
+                    <p class="module-description">
+                        Visualize e gerencie requisições de compras importadas do Odoo.
+                        Acompanhe status, histórico de alterações e sincronize dados por período.
+                    </p>
+                    <span class="module-status status-new">
+                        <i class="fas fa-star me-1"></i>
+                        Nova Funcionalidade
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Pedidos de Compra -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card purchasing" onclick="window.location.href='{{ url_for('pedidos_compras.index') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-cart-plus"></i>
+                    </div>
+                    <h3 class="module-title">Pedidos de Compra</h3>
+                    <p class="module-description">
+                        Visualize pedidos de compra confirmados com fornecedores.
+                        Veja alocações, requisições atendidas e datas de previsão de entrega.
+                    </p>
+                    <span class="module-status status-new">
+                        <i class="fas fa-star me-1"></i>
+                        Nova Funcionalidade
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Projeção de Estoque -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card planning" onclick="window.location.href='{{ url_for('projecao_estoque.index') }}'">
+                <div class="card-body p-4 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-chart-area"></i>
+                    </div>
+                    <h3 class="module-title">Projeção de Estoque</h3>
+                    <p class="module-description">
+                        Projete estoque de componentes para 60 dias.
+                        Entradas (pedidos + requisições) vs Saídas (consumo por BOM). Detecta rupturas.
                     </p>
                     <span class="module-status status-new">
                         <i class="fas fa-star me-1"></i>

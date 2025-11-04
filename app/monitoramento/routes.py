@@ -346,15 +346,26 @@ def adicionar_agendamento(id):
         entrega.data_entrega_prevista = data_agendada
         db.session.commit()
 
-        # ✅ NOVA FUNCIONALIDADE: Sincronizar com pedido se NF está no CD
-        if entrega.nf_cd:
-            sucesso, resultado = sincronizar_agendamento_pedido(entrega)
-            if sucesso:
-                flash(f"✅ Agendamento criado e sincronizado: {resultado}", 'success')
+        # ✅ SINCRONIZAÇÃO BIDIRECIONAL: Propagar para Separacao e EmbarqueItem
+        from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+        try:
+            sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome)
+            resultado_sync = sincronizador.sincronizar_desde_agendamento_entrega(
+                entrega_id=entrega.id,
+                agendamento_id=ag.id
+            )
+
+            if resultado_sync['success']:
+                tabelas = ', '.join(resultado_sync.get('tabelas_atualizadas', []))
+                if tabelas:
+                    flash(f"✅ Agendamento criado e sincronizado com: {tabelas}", 'success')
+                else:
+                    flash('✅ Agendamento criado com sucesso!', 'success')
             else:
-                flash(f"✅ Agendamento criado. Aviso: {resultado}", 'warning')
-        else:
-            flash('✅ Agendamento criado com sucesso!', 'success')
+                flash(f"✅ Agendamento criado. Aviso na sincronização: {resultado_sync.get('error', '')}", 'warning')
+        except Exception as e:
+            flash(f"✅ Agendamento criado. Erro na sincronização: {str(e)}", 'warning')
         
         session['feedback'] = 'agendamento'
     else:
@@ -377,15 +388,35 @@ def confirmar_agendamento(agendamento_id):
     agendamento.status = 'confirmado'
     agendamento.confirmado_por = current_user.nome
     agendamento.confirmado_em = datetime.utcnow()
-    
+
     # Pega observações do POST se houver
     observacoes = request.form.get('observacoes_confirmacao', '').strip()
     if observacoes:
         agendamento.observacoes_confirmacao = observacoes
-    
+
     db.session.commit()
-    
-    flash('✅ Agendamento confirmado com sucesso!', 'success')
+
+    # ✅ SINCRONIZAÇÃO BIDIRECIONAL: Propagar confirmação para Separacao e EmbarqueItem
+    from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+    try:
+        sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome)
+        resultado_sync = sincronizador.sincronizar_desde_agendamento_entrega(
+            entrega_id=agendamento.entrega_id,
+            agendamento_id=agendamento.id
+        )
+
+        if resultado_sync['success']:
+            tabelas = ', '.join(resultado_sync.get('tabelas_atualizadas', []))
+            if tabelas:
+                flash(f'✅ Agendamento confirmado e sincronizado com: {tabelas}', 'success')
+            else:
+                flash('✅ Agendamento confirmado com sucesso!', 'success')
+        else:
+            flash(f"✅ Agendamento confirmado. Aviso na sincronização: {resultado_sync.get('error', '')}", 'warning')
+    except Exception as e:
+        flash(f'✅ Agendamento confirmado. Erro na sincronização: {str(e)}', 'warning')
+
     return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
 
 

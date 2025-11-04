@@ -1,0 +1,56 @@
+{
+  "data_analise": "2025-11-01",
+  "objetivo": "Descobrir relacionamento real entre Requisições e Pedidos",
+
+  "dados_locais": {
+    "total_requisicoes": 3490,
+    "requisicoes_unicas": 2880,
+    "media_linhas_por_requisicao": 1.2,
+    "total_pedidos": 0,
+    "observacao": "NÃO HÁ PEDIDOS importados ainda no banco local"
+  },
+
+  "estrutura_odoo_requisicoes": {
+    "modelo": "purchase.request",
+    "modelo_linhas": "purchase.request.line",
+    "campo_relacionamento": "purchase_lines",
+    "tipo": "purchase.request.line.purchase_lines → [purchase.order.line IDs]",
+    "exemplo": {
+      "requisicao": "REQ/FB/06618",
+      "linha_id": 20448,
+      "produto": "[800000012] SERVICO DE PROMOCAO DE VENDA",
+      "purchase_lines": [85772],
+      "conclusao": "1 linha de requisição PODE ter N linhas de pedidos vinculadas"
+    }
+  },
+
+  "estrutura_odoo_pedidos": {
+    "modelo": "purchase.order",
+    "modelo_linhas": "purchase.order.line",
+    "erro": "Campo 'request_line_id' NÃO EXISTE no Odoo",
+    "conclusao": "Relacionamento reverso NÃO EXISTE no seu Odoo"
+  },
+
+  "descoberta_principal": {
+    "tipo": "Relacionamento UNIDIRECIONAL",
+    "direcao": "Requisição → Pedidos (apenas)",
+    "campo": "purchase.request.line.purchase_lines",
+    "reverso": "NÃO EXISTE"
+  },
+
+  "recomendacao": {
+    "arquitetura": "Manter separado SEM FK formal",
+    "campos_agregados": {
+      "RequisicaoCompras": [
+        "qtd_produto_requisicao (existente)",
+        "qtd_com_pedido (NOVO - calculado)",
+        "qtd_sem_pedido (NOVO - calculado)",
+        "percentual_atendimento (NOVO - calculado)"
+      ],
+      "PedidoCompras": [
+        "num_requisicao (existente - informativo sem FK)"
+      ]
+    },
+    "calculo": "Calcular qtd_com_pedido via query sob demanda"
+  }
+}

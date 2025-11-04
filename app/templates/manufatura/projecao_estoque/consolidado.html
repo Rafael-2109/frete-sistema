@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% set active_page = "manufatura" %}
+
+{% block title %}Projeção de Estoque - Componentes{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='manufatura/projecao_estoque/css/projecao-consolidado.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+    <!-- Cabeçalho com Filtros -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center gap-2">
+            <h5 class="mb-0">
+                <i class="fas fa-boxes text-primary me-1"></i>
+                Projeção de Estoque - Componentes
+            </h5>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <input type="text" id="filtro-produto" class="form-control form-control-sm" placeholder="Buscar produto..." style="width: 200px;">
+            <button id="btn-calcular" class="btn btn-primary btn-sm">
+                <i class="fas fa-calculator me-1"></i>Calcular
+            </button>
+            <a href="{{ url_for('manufatura.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Customizador de Colunas -->
+    <div class="customizador-colunas mb-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <!-- Colunas Fixas -->
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-estoque" value="estoque" checked>
+                <label class="form-check-label" for="col-estoque">Estoque Atual</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-consumo" value="consumo" checked>
+                <label class="form-check-label" for="col-consumo">Consumo Carteira</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo" value="saldo" checked>
+                <label class="form-check-label" for="col-saldo">Saldo Carteira</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-programacao" value="programacao" checked>
+                <label class="form-check-label" for="col-programacao">Programação Produção</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo-prog" value="saldo-prog" checked>
+                <label class="form-check-label" for="col-saldo-prog">Saldo Programação</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-requisicoes" value="requisicoes" checked>
+                <label class="form-check-label" for="col-requisicoes">Qtd Requisições</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-pedidos" value="pedidos" checked>
+                <label class="form-check-label" for="col-pedidos">Qtd Pedidos</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-projecao" value="projecao" checked>
+                <label class="form-check-label" for="col-projecao"><strong>Projeção D0-D60</strong></label>
+            </div>
+
+            <span class="mx-2">|</span>
+
+            <!-- Tamanho de Fonte -->
+            <div class="d-flex align-items-center gap-1">
+                <span class="text-muted small"><i class="fas fa-text-height me-1"></i>Fonte:</span>
+                <button class="btn-size-compact" data-size="very-small" onclick="mudarTamanhoFonte('very-small')">XS</button>
+                <button class="btn-size-compact" data-size="small" onclick="mudarTamanhoFonte('small')">S</button>
+                <button class="btn-size-compact active" data-size="medium" onclick="mudarTamanhoFonte('medium')">M</button>
+                <button class="btn-size-compact" data-size="large" onclick="mudarTamanhoFonte('large')">L</button>
+            </div>
+
+            <span class="mx-2">|</span>
+
+            <!-- Botões de Seleção -->
+            <button class="btn btn-xs btn-outline-primary" onclick="selecionarTodasColunas()">
+                <i class="fas fa-check-double"></i> Todas
+            </button>
+            <button class="btn btn-xs btn-outline-secondary" onclick="limparSelecaoColunas()">
+                <i class="fas fa-times"></i> Nenhuma
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card shadow">
+        <div class="card-header card-header-custom">
+            <i class="fas fa-table me-2"></i>
+            Projeção de Componentes
+            <span id="total-componentes" class="badge bg-light text-dark ms-2">0 componentes</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <div id="loading-spinner" class="spinner-overlay d-none">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Calculando projeção...</p>
+                </div>
+
+                <table class="table table-projecao table-hover table-bordered mb-0">
+                    <thead>
+                        <tr id="thead-row">
+                            <th class="sticky-col-codigo header">Código</th>
+                            <th class="sticky-col-produto header">Produto</th>
+                            <th class="text-end col-estoque">Estoque<br>Atual</th>
+                            <th class="text-end col-consumo">Consumo<br>Carteira</th>
+                            <th class="text-end col-saldo">Saldo<br>Carteira</th>
+                            <th class="text-end col-programacao">Programação<br>Produção</th>
+                            <th class="text-end col-saldo-prog">Saldo<br>Programação</th>
+                            <th class="text-end col-requisicoes">Qtd<br>Requisições</th>
+                            <th class="text-end col-pedidos">Qtd<br>Pedidos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-projecao">
+                        <tr>
+                            <td colspan="100" class="text-center text-muted py-5">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Clique em "Calcular" para gerar a projeção
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='manufatura/projecao_estoque/js/projecao-consolidado.js') }}"></script>
+{% endblock %}

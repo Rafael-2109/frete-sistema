@@ -5,7 +5,7 @@ CRUD para estrutura de produtos COM AUDITORIA
 from flask import render_template, jsonify, request, flash, redirect, url_for, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.manufatura.models import ListaMateriais, ListaMateriaisHistorico
+from app.manufatura.models import ListaMateriais
 from app.producao.models import CadastroPalletizacao
 from app.manufatura.services.bom_service import ServicoBOM
 from app.manufatura.services.auditoria_service import ServicoAuditoria
@@ -853,7 +853,7 @@ def register_lista_materiais_routes(bp):
 
                     qtd_utilizada = float(row.get('qtd_utilizada', 0))
                     if qtd_utilizada <= 0:
-                        erros.append(f"Linha {index + 1}: Quantidade deve ser maior que zero")
+                        erros.append(f"Linha {index + 1}: Quantidade deve ser maior que zero") # type: ignore
                         continue
 
                     versao = str(row.get('versao', 'v1')).strip() or 'v1'
@@ -865,7 +865,7 @@ def register_lista_materiais_routes(bp):
                     ).first()
 
                     if not produto:
-                        erros.append(f"Linha {index + 1}: Produto {cod_produzido} não encontrado")
+                        erros.append(f"Linha {index + 1}: Produto {cod_produzido} não encontrado") # type: ignore
                         continue
 
                     # Verificar se componente existe
@@ -875,7 +875,7 @@ def register_lista_materiais_routes(bp):
                     ).first()
 
                     if not componente_cadastro:
-                        erros.append(f"Linha {index + 1}: Componente {cod_componente} não encontrado")
+                        erros.append(f"Linha {index + 1}: Componente {cod_componente} não encontrado") # type: ignore
                         continue
 
                     # Verificar se já existe
@@ -929,7 +929,7 @@ def register_lista_materiais_routes(bp):
                         importados += 1
 
                 except Exception as e:
-                    erros.append(f"Linha {index + 1}: {str(e)}")
+                    erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                     continue
 
             # Commit das alterações

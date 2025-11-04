@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhe da Requisição - {{ requisicao.num_requisicao }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='manufatura/requisicoes_compras/css/requisicoes-compras.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>
+                        <i class="fas fa-clipboard-list"></i>
+                        Requisição {{ requisicao.num_requisicao }}
+                    </h2>
+                    <p class="text-muted">Detalhes e histórico de alterações</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('manufatura.listar_requisicoes') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações Principais -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i> Informações da Requisição
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Número:</dt>
+                                <dd class="col-sm-7"><strong>{{ requisicao.num_requisicao }}</strong></dd>
+
+                                <dt class="col-sm-5">Data Criação:</dt>
+                                <dd class="col-sm-7">
+                                    {{ requisicao.data_requisicao_criacao.strftime('%d/%m/%Y') if requisicao.data_requisicao_criacao else '-' }}
+                                </dd>
+
+                                <dt class="col-sm-5">Criado por:</dt>
+                                <dd class="col-sm-7">{{ requisicao.usuario_requisicao_criacao or '-' }}</dd>
+
+                                <dt class="col-sm-5">Status:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="badge bg-{% if requisicao.status == 'approved' %}success{% elif requisicao.status == 'done' %}primary{% else %}secondary{% endif %}">
+                                        {{ requisicao.status }}
+                                    </span>
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Data Solicitada:</dt>
+                                <dd class="col-sm-7">
+                                    {{ requisicao.data_requisicao_solicitada.strftime('%d/%m/%Y') if requisicao.data_requisicao_solicitada else '-' }}
+                                </dd>
+
+                                <dt class="col-sm-5">Lead Time:</dt>
+                                <dd class="col-sm-7">
+                                    {% if requisicao.lead_time_requisicao %}
+                                    <span class="badge bg-info">{{ requisicao.lead_time_requisicao }} dias</span>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </dd>
+
+                                <dt class="col-sm-5">Importado do Odoo:</dt>
+                                <dd class="col-sm-7">
+                                    {% if requisicao.importado_odoo %}
+                                    <i class="fas fa-check-circle text-success"></i> Sim
+                                    {% else %}
+                                    <i class="fas fa-times-circle text-danger"></i> Não
+                                    {% endif %}
+                                </dd>
+
+                                <dt class="col-sm-5">Odoo ID:</dt>
+                                <dd class="col-sm-7">{{ requisicao.requisicao_odoo_id or '-' }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Resumo -->
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-box"></i> Resumo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h3 class="text-primary mb-0">{{ requisicao.qtd_produto_requisicao|qtd_br(2) }}</h3>
+                        <small class="text-muted">Quantidade Requisitada</small>
+                    </div>
+                    {% if requisicao.qtd_produto_sem_requisicao and requisicao.qtd_produto_sem_requisicao > 0 %}
+                    <div class="text-center">
+                        <h5 class="text-warning mb-0">{{ requisicao.qtd_produto_sem_requisicao|qtd_br(2) }}</h5>
+                        <small class="text-muted">Sem Requisição</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações do Produto -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cube"></i> Produto
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Código:</strong><br>
+                            <code>{{ requisicao.cod_produto }}</code>
+                        </div>
+                        <div class="col-md-9">
+                            <strong>Nome:</strong><br>
+                            {{ requisicao.nome_produto or '-' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Histórico de Alterações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i> Histórico de Alterações
+                        <button class="btn btn-sm btn-primary float-end" id="btn-ver-historico-completo">
+                            <i class="fas fa-eye"></i> Ver Histórico Completo
+                        </button>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Clique em "Ver Histórico Completo" para visualizar todas as alterações com comparação detalhada.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal: Histórico Completo -->
+<div class="modal fade" id="modalHistoricoCompleto" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="fas fa-history"></i> Histórico Completo de Alterações
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info da Requisição -->
+                <div class="mb-3">
+                    <strong>Requisição:</strong> <span id="modal-num-requisicao"></span><br>
+                    <strong>Produto:</strong> <span id="modal-cod-produto"></span> - <span id="modal-nome-produto"></span>
+                </div>
+
+                <hr>
+
+                <!-- Loading -->
+                <div id="historico-loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2">Carregando histórico...</p>
+                </div>
+
+                <!-- Conteúdo do Histórico -->
+                <div id="historico-conteudo" style="display: none;">
+                    <!-- Timeline será preenchida via JavaScript -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="historico-vazio" style="display: none;" class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Nenhum histórico encontrado</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Dados da requisição para o JavaScript
+window.REQUISICAO_DATA = {
+    id: {{ requisicao.id }},
+    num_requisicao: '{{ requisicao.num_requisicao }}',
+    cod_produto: '{{ requisicao.cod_produto }}',
+    nome_produto: '{{ requisicao.nome_produto }}'
+};
+</script>
+<script src="{{ url_for('static', filename='manufatura/requisicoes_compras/js/requisicoes-compras.js') }}"></script>
+<script src="{{ url_for('static', filename='manufatura/requisicoes_compras/js/historico-modal.js') }}"></script>
+{% endblock %}

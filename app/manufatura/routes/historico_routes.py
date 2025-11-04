@@ -8,12 +8,10 @@ Funcionalidades:
 - Sincronização com Odoo por período
 """
 from flask import render_template, jsonify, request, send_file
-from flask_login import login_required, current_user
+from flask_login import login_required
 from app import db
-from app.manufatura.models import HistoricoPedidos, GrupoEmpresarial
-from app.odoo.utils.connection import get_odoo_connection
-from datetime import datetime
-from sqlalchemy import func, or_, extract
+from app.manufatura.models import HistoricoPedidos
+from sqlalchemy import func
 import pandas as pd
 from io import BytesIO
 import logging

@@ -175,9 +175,9 @@ class OrdemProducao(db.Model):
 
 class RequisicaoCompras(db.Model):
     __tablename__ = 'requisicao_compras'
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    num_requisicao = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    num_requisicao = db.Column(db.String(30), nullable=False, index=True)  # ✅ REMOVIDO unique=True
     data_requisicao_criacao = db.Column(db.Date, nullable=False)
     usuario_requisicao_criacao = db.Column(db.String(100))
     lead_time_requisicao = db.Column(db.Integer)
@@ -190,24 +190,29 @@ class RequisicaoCompras(db.Model):
     necessidade = db.Column(db.Boolean, default=False)
     data_necessidade = db.Column(db.Date)
     status = db.Column(db.String(20), default='Pendente', index=True)
-    
+
     # Vínculo com Odoo (MELHORADO)
     importado_odoo = db.Column(db.Boolean, default=False)
-    odoo_id = db.Column(db.String(50))
-    requisicao_odoo_id = db.Column(db.String(50), index=True)  # NOVO: ID da requisição no Odoo
-    status_requisicao = db.Column(db.String(20), default='rascunho')  # NOVO: 'rascunho', 'enviada_odoo', 'confirmada'
-    data_envio_odoo = db.Column(db.DateTime)  # NOVO
-    data_confirmacao_odoo = db.Column(db.DateTime)  # NOVO
-    observacoes_odoo = db.Column(db.Text)  # NOVO
+    odoo_id = db.Column(db.String(50), unique=True)  # ✅ UNIQUE aqui pois é o ID da LINHA no Odoo
+    requisicao_odoo_id = db.Column(db.String(50), index=True)  # ID da requisição no Odoo
+    status_requisicao = db.Column(db.String(20), default='rascunho')
+    data_envio_odoo = db.Column(db.DateTime)
+    data_confirmacao_odoo = db.Column(db.DateTime)
+    observacoes_odoo = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # ✅ Constraint única: requisição + produto (permite múltiplas linhas por requisição)
+    __table_args__ = (
+        db.UniqueConstraint('num_requisicao', 'cod_produto', name='uq_requisicao_produto'),
+    )
 
 
 class PedidoCompras(db.Model):
     __tablename__ = 'pedido_compras'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     num_pedido = db.Column(db.String(30), unique=True, nullable=False, index=True)
-    num_requisicao = db.Column(db.String(30), db.ForeignKey('requisicao_compras.num_requisicao'), index=True)
+    num_requisicao = db.Column(db.String(30), index=True)  # ✅ REMOVIDO ForeignKey - agora apenas informativo
     cnpj_fornecedor = db.Column(db.String(20), index=True)
     raz_social = db.Column(db.String(255))
     numero_nf = db.Column(db.String(20))
@@ -227,11 +232,15 @@ class PedidoCompras(db.Model):
     confirmacao_pedido = db.Column(db.Boolean, default=False)
     confirmado_por = db.Column(db.String(100))
     confirmado_em = db.Column(db.DateTime)
+
+    # Status do Odoo (draft, sent, to approve, purchase, done, cancel)
+    status_odoo = db.Column(db.String(20), index=True)
+
     importado_odoo = db.Column(db.Boolean, default=False)
     odoo_id = db.Column(db.String(50))
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    requisicao = db.relationship('RequisicaoCompras', backref='pedidos')
+
+    # ✅ Relacionamento removido - num_requisicao agora é apenas campo informativo
 
 
 class LeadTimeFornecedor(db.Model):
@@ -365,9 +374,104 @@ class ListaMateriaisHistorico(db.Model):
         }
 
 
+class HistoricoRequisicaoCompras(db.Model):
+    """
+    Histórico COMPLETO (snapshot) de Requisições de Compras
+    Grava TODOS os campos para permitir comparação completa no modal
+    """
+    __tablename__ = 'historico_requisicao_compras'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # ================================================
+    # CAMPOS DE CONTROLE DO HISTÓRICO
+    # ================================================
+    requisicao_id = db.Column(db.Integer, db.ForeignKey('requisicao_compras.id', ondelete='CASCADE'), nullable=False, index=True)
+    operacao = db.Column(db.String(20), nullable=False, index=True)  # 'CRIAR', 'EDITAR'
+    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    alterado_por = db.Column(db.String(100), nullable=False, index=True)  # 'Odoo' ou usuário
+    write_date_odoo = db.Column(db.DateTime, nullable=True)
+
+    # ================================================
+    # SNAPSHOT COMPLETO - MESMOS CAMPOS DA REQUISICAO
+    # ================================================
+
+    # Campos principais
+    num_requisicao = db.Column(db.String(30), nullable=False, index=True)
+    data_requisicao_criacao = db.Column(db.Date, nullable=False)
+    usuario_requisicao_criacao = db.Column(db.String(100))
+    lead_time_requisicao = db.Column(db.Integer)
+    lead_time_previsto = db.Column(db.Integer)
+    data_requisicao_solicitada = db.Column(db.Date)
+
+    # Produto
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto = db.Column(db.String(255))
+
+    # Quantidades
+    qtd_produto_requisicao = db.Column(db.Numeric(15, 3), nullable=False)
+    qtd_produto_sem_requisicao = db.Column(db.Numeric(15, 3), default=0)
+
+    # Necessidade
+    necessidade = db.Column(db.Boolean, default=False)
+    data_necessidade = db.Column(db.Date)
+
+    # Status
+    status = db.Column(db.String(20), default='Pendente')
+
+    # Vínculo com Odoo
+    importado_odoo = db.Column(db.Boolean, default=False)
+    odoo_id = db.Column(db.String(50))
+    requisicao_odoo_id = db.Column(db.String(50))
+    status_requisicao = db.Column(db.String(20), default='rascunho')
+    data_envio_odoo = db.Column(db.DateTime)
+    data_confirmacao_odoo = db.Column(db.DateTime)
+    observacoes_odoo = db.Column(db.Text)
+
+    # Data criação original
+    criado_em = db.Column(db.DateTime)
+
+    __table_args__ = (
+        db.Index('idx_hist_req_requisicao_data', 'requisicao_id', 'alterado_em'),
+        db.Index('idx_hist_req_num_data', 'num_requisicao', 'alterado_em'),
+    )
+
+    def to_dict(self):
+        """Serializa para dict"""
+        return {
+            'id': self.id,
+            'requisicao_id': self.requisicao_id,
+            'operacao': self.operacao,
+            'alterado_em': self.alterado_em.isoformat() if self.alterado_em else None,
+            'alterado_por': self.alterado_por,
+            'write_date_odoo': self.write_date_odoo.isoformat() if self.write_date_odoo else None,
+            'num_requisicao': self.num_requisicao,
+            'data_requisicao_criacao': self.data_requisicao_criacao.isoformat() if self.data_requisicao_criacao else None,
+            'usuario_requisicao_criacao': self.usuario_requisicao_criacao,
+            'lead_time_requisicao': self.lead_time_requisicao,
+            'lead_time_previsto': self.lead_time_previsto,
+            'data_requisicao_solicitada': self.data_requisicao_solicitada.isoformat() if self.data_requisicao_solicitada else None,
+            'cod_produto': self.cod_produto,
+            'nome_produto': self.nome_produto,
+            'qtd_produto_requisicao': float(self.qtd_produto_requisicao) if self.qtd_produto_requisicao else 0,
+            'qtd_produto_sem_requisicao': float(self.qtd_produto_sem_requisicao) if self.qtd_produto_sem_requisicao else 0,
+            'necessidade': self.necessidade,
+            'data_necessidade': self.data_necessidade.isoformat() if self.data_necessidade else None,
+            'status': self.status,
+            'importado_odoo': self.importado_odoo,
+            'odoo_id': self.odoo_id,
+            'requisicao_odoo_id': self.requisicao_odoo_id,
+            'status_requisicao': self.status_requisicao,
+            'data_envio_odoo': self.data_envio_odoo.isoformat() if self.data_envio_odoo else None,
+            'data_confirmacao_odoo': self.data_confirmacao_odoo.isoformat() if self.data_confirmacao_odoo else None,
+            'observacoes_odoo': self.observacoes_odoo,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+        }
+
+
 class LogIntegracao(db.Model):
     __tablename__ = 'log_integracao'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     tipo_integracao = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), nullable=False)
@@ -377,3 +481,128 @@ class LogIntegracao(db.Model):
     data_execucao = db.Column(db.DateTime, default=datetime.utcnow)
     tempo_execucao = db.Column(db.Float)
     detalhes = db.Column(JSONB)
+
+
+class RequisicaoCompraAlocacao(db.Model):
+    """
+    Tabela intermediária N:N entre Requisições de Compra e Pedidos de Compra
+    Mapeia purchase.request.allocation do Odoo
+
+    Permite rastrear:
+    - Qual requisição gerou qual pedido de compra
+    - Quantidades alocadas vs abertas
+    - Status de atendimento de requisições
+    """
+    __tablename__ = 'requisicao_compra_alocacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # ================================================
+    # RELACIONAMENTOS PRINCIPAIS
+    # ================================================
+
+    # FK para RequisicaoCompras (purchase.request.line)
+    requisicao_compra_id = db.Column(
+        db.Integer,
+        db.ForeignKey('requisicao_compras.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    # FK para PedidoCompras (purchase.order.line) - NULLABLE pois pode não existir ainda
+    pedido_compra_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pedido_compras.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True
+    )
+
+    # ================================================
+    # IDs DO ODOO (para sincronização)
+    # ================================================
+
+    odoo_allocation_id = db.Column(db.String(50), unique=True, index=True)  # ID da alocação no Odoo
+    purchase_request_line_odoo_id = db.Column(db.String(50), nullable=False, index=True)  # purchase.request.line ID
+    purchase_order_line_odoo_id = db.Column(db.String(50), nullable=True, index=True)  # purchase.order.line ID
+
+    # ================================================
+    # PRODUTO (para queries sem JOIN)
+    # ================================================
+
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto = db.Column(db.String(255), nullable=True)
+
+    # ================================================
+    # QUANTIDADES (conforme Odoo)
+    # ================================================
+
+    qtd_alocada = db.Column(db.Numeric(15, 3), nullable=False)  # allocated_product_qty
+    qtd_requisitada = db.Column(db.Numeric(15, 3), nullable=False)  # requested_product_uom_qty
+    qtd_aberta = db.Column(db.Numeric(15, 3), default=0)  # open_product_qty
+
+    # ================================================
+    # STATUS E CONTROLE
+    # ================================================
+
+    purchase_state = db.Column(db.String(20), nullable=True)  # 'draft', 'sent', 'purchase', 'done', 'cancel'
+    stock_move_odoo_id = db.Column(db.String(50), nullable=True)  # ID do movimento de estoque
+
+    # ================================================
+    # AUDITORIA
+    # ================================================
+
+    importado_odoo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Datas do Odoo
+    create_date_odoo = db.Column(db.DateTime, nullable=True)
+    write_date_odoo = db.Column(db.DateTime, nullable=True)
+
+    # ================================================
+    # RELACIONAMENTOS (SQLAlchemy)
+    # ================================================
+
+    requisicao = db.relationship('RequisicaoCompras', backref='alocacoes')
+    pedido = db.relationship('PedidoCompras', backref='alocacoes')
+
+    # ================================================
+    # CONSTRAINTS E ÍNDICES
+    # ================================================
+
+    __table_args__ = (
+        # Não permitir duplicação de alocação
+        db.UniqueConstraint('purchase_request_line_odoo_id', 'purchase_order_line_odoo_id',
+                           name='uq_allocation_request_order'),
+
+        # Índices compostos para queries comuns
+        db.Index('idx_alocacao_requisicao_pedido', 'requisicao_compra_id', 'pedido_compra_id'),
+        db.Index('idx_alocacao_produto_estado', 'cod_produto', 'purchase_state'),
+        db.Index('idx_alocacao_odoo_ids', 'purchase_request_line_odoo_id', 'purchase_order_line_odoo_id'),
+    )
+
+    def __repr__(self):
+        return f'<RequisicaoCompraAlocacao {self.id} - Req:{self.requisicao_compra_id} → Ped:{self.pedido_compra_id}>'
+
+    def percentual_alocado(self):
+        """Calcula % de atendimento da requisição"""
+        if self.qtd_requisitada and self.qtd_requisitada > 0:
+            return round((float(self.qtd_alocada) / float(self.qtd_requisitada)) * 100, 2)
+        return 0.0
+
+    def to_dict(self):
+        """Serializa para dict"""
+        return {
+            'id': self.id,
+            'requisicao_compra_id': self.requisicao_compra_id,
+            'pedido_compra_id': self.pedido_compra_id,
+            'odoo_allocation_id': self.odoo_allocation_id,
+            'cod_produto': self.cod_produto,
+            'nome_produto': self.nome_produto,
+            'qtd_alocada': float(self.qtd_alocada) if self.qtd_alocada else 0,
+            'qtd_requisitada': float(self.qtd_requisitada) if self.qtd_requisitada else 0,
+            'qtd_aberta': float(self.qtd_aberta) if self.qtd_aberta else 0,
+            'percentual_alocado': self.percentual_alocado(),
+            'purchase_state': self.purchase_state,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+        }

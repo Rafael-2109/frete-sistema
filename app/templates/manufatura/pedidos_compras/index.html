@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}Pedidos de Compra{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="bi bi-cart-check"></i> Pedidos de Compra</h2>
+                    <p class="text-muted">Visualize pedidos confirmados, alocações e requisições atendidas</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('pedidos_compras.tela_sincronizacao_manual') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-sync"></i> Importar do Odoo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Produto:</label>
+                    <input type="text" id="filtro-produto" class="form-control" placeholder="Código do produto...">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fornecedor:</label>
+                    <input type="text" id="filtro-fornecedor" class="form-control" placeholder="Nome do fornecedor...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Início:</label>
+                    <input type="date" id="filtro-data-inicio" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Fim:</label>
+                    <input type="date" id="filtro-data-fim" class="form-control">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="filtrarPedidos()">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div id="loading" class="text-center py-5 d-none">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2">Carregando pedidos...</p>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Produto</th>
+                            <th class="text-end">Quantidade</th>
+                            <th class="text-end">Preço Un.</th>
+                            <th>Fornecedor</th>
+                            <th>Data Previsão</th>
+                            <th>Requisições Atendidas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-pedidos"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => filtrarPedidos());
+
+function filtrarPedidos() {
+    const params = new URLSearchParams();
+    const produto = document.getElementById('filtro-produto').value;
+    const fornecedor = document.getElementById('filtro-fornecedor').value;
+    const dataInicio = document.getElementById('filtro-data-inicio').value;
+    const dataFim = document.getElementById('filtro-data-fim').value;
+
+    if (produto) params.append('cod_produto', produto);
+    if (fornecedor) params.append('fornecedor', fornecedor);
+    if (dataInicio) params.append('data_inicio', dataInicio);
+    if (dataFim) params.append('data_fim', dataFim);
+
+    document.getElementById('loading').classList.remove('d-none');
+    document.getElementById('tbody-pedidos').innerHTML = '';
+
+    fetch(`/manufatura/pedidos-compras/api/listar?${params}`)
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('loading').classList.add('d-none');
+            if (data.sucesso) renderizarPedidos(data.pedidos);
+            else alert('Erro ao carregar pedidos');
+        })
+        .catch(err => {
+            document.getElementById('loading').classList.add('d-none');
+            console.error(err);
+            alert('Erro ao carregar pedidos');
+        });
+}
+
+function renderizarPedidos(pedidos) {
+    const tbody = document.getElementById('tbody-pedidos');
+
+    if (pedidos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum pedido encontrado</td></tr>';
+        return;
+    }
+
+    pedidos.forEach(pedido => {
+        let requisicoesHTML = '';
+        if (pedido.requisicoes_atendidas.length > 0) {
+            requisicoesHTML = '<ul class="list-unstyled mb-0 small">';
+            pedido.requisicoes_atendidas.forEach(req => {
+                requisicoesHTML += `
+                    <li>
+                        <span class="badge bg-info">${req.num_requisicao}</span>
+                        ${req.qtd_alocada.toFixed(2)} un
+                        <span class="text-muted">(${req.percentual.toFixed(1)}%)</span>
+                    </li>
+                `;
+            });
+            requisicoesHTML += '</ul>';
+        } else {
+            requisicoesHTML = '<span class="text-muted">-</span>';
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${pedido.num_pedido}</strong></td>
+            <td>
+                <strong>${pedido.cod_produto}</strong><br>
+                <small class="text-muted">${pedido.nome_produto}</small>
+            </td>
+            <td class="text-end">${pedido.qtd_pedido.toFixed(2)}</td>
+            <td class="text-end">R$ ${pedido.preco_unitario.toFixed(2)}</td>
+            <td>${pedido.fornecedor || '-'}</td>
+            <td>${pedido.data_previsao ? new Date(pedido.data_previsao).toLocaleDateString('pt-BR') : '-'}</td>
+            <td>${requisicoesHTML}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+</script>
+{% endblock %}

@@ -61,13 +61,10 @@ def lista_pedidos():
             func.date(Pedido.expedicao) == data_filtro
         ).count()
         
-        # Conta pedidos ABERTOS da data
+        # Conta pedidos ABERTOS da data (APENAS por status='ABERTO' e expedição)
         abertos_data = Pedido.query.filter(
             func.date(Pedido.expedicao) == data_filtro,
-            Pedido.cotacao_id.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
-            Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
+            Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
         ).count()
         
         contadores_data[f'd{i}'] = {
@@ -80,10 +77,7 @@ def lista_pedidos():
     contadores_status = {
         'todos': Pedido.query.count(),
         'abertos': Pedido.query.filter(
-            Pedido.cotacao_id.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
-            Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
+            Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
         ).count(),
         'cotados': Pedido.query.filter(
             Pedido.cotacao_id.isnot(None),
@@ -104,9 +98,7 @@ def lista_pedidos():
         ).count(),
         # Contador de atrasados apenas abertos
         'atrasados_abertos': Pedido.query.filter(
-            Pedido.cotacao_id.is_(None),
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.nf_cd == False,
+            Pedido.status == 'ABERTO',  # ✅ Filtro APENAS por status
             Pedido.expedicao < hoje
         ).count(),
         # ✅ NOVO: Contador de pedidos sem data de expedição
@@ -211,10 +203,7 @@ def lista_pedidos():
         filtros_botao_aplicados = True
         if filtro_status == 'abertos':
             query = query.filter(
-                Pedido.cotacao_id.is_(None),
-                Pedido.nf_cd == False,
-                (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
-                Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
+                Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
             )
         elif filtro_status == 'cotados':
             query = query.filter(
@@ -348,8 +337,7 @@ def lista_pedidos():
                 )
             elif status_filtro == 'ABERTO':
                 query = query.filter(
-                    Pedido.cotacao_id.is_(None),
-                    Pedido.nf_cd == False  # ✅ CORRIGIDO: Não deve estar no CD
+                    Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
                 )
         
         # ✨ NOVO: Filtro para pedidos pendentes de cotação

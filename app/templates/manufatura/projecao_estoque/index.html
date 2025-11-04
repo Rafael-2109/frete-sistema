@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}Projeção de Estoque - Componentes{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="bi bi-graph-up-arrow"></i> Projeção de Estoque - Componentes (60 dias)</h2>
+            <p class="text-muted">Entradas (Pedidos + Saldo Requisições) vs Saídas (Consumo por BOM)</p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Produto (opcional):</label>
+                    <select id="select-produto" class="form-select">
+                        <option value="">Todos os componentes (produto_comprado=True)</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="projetar()">
+                        <i class="bi bi-calculator"></i> Projetar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">Calculando projeção...</p>
+    </div>
+
+    <div id="resultado-projecao"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    carregarProdutos();
+    projetar();
+});
+
+function carregarProdutos() {
+    fetch('/manufatura/projecao-estoque/api/produtos-comprados')
+        .then(res => res.json())
+        .then(data => {
+            if (data.sucesso) {
+                const select = document.getElementById('select-produto');
+                data.produtos.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.cod_produto;
+                    option.textContent = `${p.cod_produto} - ${p.nome_produto}`;
+                    select.appendChild(option);
+                });
+            }
+        });
+}
+
+function projetar() {
+    const codProduto = document.getElementById('select-produto').value;
+    const params = new URLSearchParams();
+    if (codProduto) params.append('cod_produto', codProduto);
+
+    document.getElementById('loading').classList.remove('d-none');
+    document.getElementById('resultado-projecao').innerHTML = '';
+
+    fetch(`/manufatura/projecao-estoque/api/projetar?${params}`)
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('loading').classList.add('d-none');
+            if (data.sucesso) {
+                if (data.projecao) {
+                    renderizarProjecaoUnica(data.projecao);
+                } else {
+                    renderizarProjecaoMultipla(data.projecoes);
+                }
+            } else {
+                alert('Erro: ' + data.erro);
+            }
+        })
+        .catch(err => {
+            document.getElementById('loading').classList.add('d-none');
+            console.error(err);
+            alert('Erro ao calcular projeção');
+        });
+}
+
+function renderizarProjecaoUnica(projecao) {
+    const div = document.getElementById('resultado-projecao');
+
+    const card = document.createElement('div');
+    card.className = 'card mb-3';
+
+    let alertaRuptura = '';
+    if (projecao.dias_ruptura > 0) {
+        // ✅ Corrigir bug de timezone: força hora meio-dia
+        const dataRuptura = new Date(projecao.primeira_ruptura + 'T12:00:00');
+        alertaRuptura = `
+            <div class="alert alert-danger">
+                <strong>⚠️ ALERTA DE RUPTURA!</strong><br>
+                ${projecao.dias_ruptura} dia(s) com estoque negativo.<br>
+                Primeira ruptura: ${dataRuptura.toLocaleDateString('pt-BR')}
+            </div>
+        `;
+    }
+
+    card.innerHTML = `
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">${projecao.cod_produto} - ${projecao.nome_produto}</h5>
+        </div>
+        <div class="card-body">
+            ${alertaRuptura}
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <strong>Estoque Atual:</strong><br>
+                    <span class="h4">${projecao.estoque_inicial.toFixed(2)}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Total Entradas:</strong><br>
+                    <span class="h4 text-success">+${projecao.total_entradas.toFixed(2)}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Total Saídas:</strong><br>
+                    <span class="h4 text-danger">-${projecao.total_saidas.toFixed(2)}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Estoque Final:</strong><br>
+                    <span class="h4 ${projecao.estoque_final_projetado < 0 ? 'text-danger' : 'text-primary'}">
+                        ${projecao.estoque_final_projetado.toFixed(2)}
+                    </span>
+                </div>
+            </div>
+
+            <h6>Projeção Diária (apenas dias com movimento):</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data</th>
+                            <th class="text-end">Est. Inicial</th>
+                            <th class="text-end">Entradas</th>
+                            <th class="text-end">Saídas</th>
+                            <th class="text-end">Est. Final</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${projecao.projecao_diaria.map(dia => {
+                            // ✅ Corrigir bug de timezone: força hora meio-dia para evitar mudança de dia
+                            const data = new Date(dia.data + 'T12:00:00');
+                            return `
+                            <tr class="${dia.ruptura ? 'table-danger' : ''}">
+                                <td>${data.toLocaleDateString('pt-BR')}</td>
+                                <td class="text-end">${dia.estoque_inicial.toFixed(2)}</td>
+                                <td class="text-end text-success">${dia.entradas > 0 ? '+' + dia.entradas.toFixed(2) : '-'}</td>
+                                <td class="text-end text-danger">${dia.saidas > 0 ? '-' + dia.saidas.toFixed(2) : '-'}</td>
+                                <td class="text-end ${dia.ruptura ? 'fw-bold text-danger' : ''}">${dia.estoque_final.toFixed(2)}</td>
+                            </tr>
+                        `}).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    div.appendChild(card);
+}
+
+function renderizarProjecaoMultipla(projecoes) {
+    const div = document.getElementById('resultado-projecao');
+
+    const resumo = document.createElement('div');
+    resumo.className = 'card mb-3';
+    resumo.innerHTML = `
+        <div class="card-body">
+            <h5>Resumo: ${projecoes.length} componentes projetados</h5>
+            <p class="text-muted mb-0">Produtos com ruptura: ${projecoes.filter(p => p.dias_ruptura > 0).length}</p>
+        </div>
+    `;
+    div.appendChild(resumo);
+
+    projecoes.forEach(projecao => {
+        renderizarProjecaoUnica(projecao);
+    });
+}
+</script>
+{% endblock %}

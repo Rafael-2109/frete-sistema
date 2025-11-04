@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Sincronização Manual - Requisições de Compras{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='manufatura/requisicoes_compras/css/requisicoes-compras.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="fas fa-sync"></i> Sincronização Manual</h2>
+                    <p class="text-muted">Importar requisições de compras do Odoo por período</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('manufatura.listar_requisicoes') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Principal -->
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+
+                    <!-- Informações -->
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-info-circle"></i> Informações Importantes
+                        </h6>
+                        <ul class="mb-0">
+                            <li>Sincronize requisições de um período específico</li>
+                            <li><strong>Período máximo:</strong> 90 dias</li>
+                            <li>Apenas requisições com status <code>approved</code> ou <code>done</code> serão importadas</li>
+                            <li>Apenas produtos com <code>detailed_type='product'</code> serão processados</li>
+                            <li>A sincronização automática ocorre a cada 30 minutos (janela de 90 minutos)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Formulário -->
+                    <form method="POST" action="{{ url_for('manufatura.executar_sincronizacao_manual') }}" id="form-sincronizacao">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="data_inicio" class="form-label">
+                                        <i class="fas fa-calendar-alt"></i> Data Início
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="date" class="form-control" id="data_inicio" name="data_inicio"
+                                           value="{{ data_inicio_padrao }}" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="data_fim" class="form-label">
+                                        <i class="fas fa-calendar-check"></i> Data Fim
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="date" class="form-control" id="data_fim" name="data_fim"
+                                           value="{{ data_fim_padrao }}" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Info do Período -->
+                        <div class="alert alert-secondary" id="info-periodo" style="display: none;">
+                            <strong>Período selecionado:</strong> <span id="periodo-texto"></span><br>
+                            <strong>Total de dias:</strong> <span id="periodo-dias"></span>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success" id="btn-sincronizar">
+                                <i class="fas fa-sync"></i> Iniciar Sincronização
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="btn-ultimos-7-dias">
+                                Últimos 7 dias
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="btn-ultimos-30-dias">
+                                Últimos 30 dias
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="btn-ultimos-90-dias">
+                                Últimos 90 dias
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Loading State -->
+                    <div id="loading-sincronizacao" class="text-center py-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Sincronizando...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Sincronizando com o Odoo... Aguarde.</p>
+                        <small class="text-muted">Este processo pode levar alguns minutos dependendo do volume de dados.</small>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Card de Histórico Recente -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-history"></i> Dicas de Uso
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-check-circle text-success"></i> Quando usar</h6>
+                            <ul class="small">
+                                <li>Para importar requisições de um período específico</li>
+                                <li>Quando precisar reprocessar dados</li>
+                                <li>Para verificar atualizações de requisições antigas</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-exclamation-triangle text-warning"></i> Atenção</h6>
+                            <ul class="small">
+                                <li>Não execute sincronizações simultâneas</li>
+                                <li>Períodos muito longos podem demorar</li>
+                                <li>O sistema já sincroniza automaticamente</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='manufatura/requisicoes_compras/js/requisicoes-compras.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dataInicio = document.getElementById('data_inicio');
+    const dataFim = document.getElementById('data_fim');
+    const infoPeriodo = document.getElementById('info-periodo');
+    const periodoTexto = document.getElementById('periodo-texto');
+    const periodoDias = document.getElementById('periodo-dias');
+    const formSincronizacao = document.getElementById('form-sincronizacao');
+    const loadingSincronizacao = document.getElementById('loading-sincronizacao');
+    const btnSincronizar = document.getElementById('btn-sincronizar');
+
+    // Atualizar info do período
+    function atualizarInfoPeriodo() {
+        if (dataInicio.value && dataFim.value) {
+            const inicio = new Date(dataInicio.value + 'T00:00:00');
+            const fim = new Date(dataFim.value + 'T23:59:59');
+            const dias = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24));
+
+            if (dias >= 0) {
+                periodoTexto.textContent = `${inicio.toLocaleDateString('pt-BR')} até ${fim.toLocaleDateString('pt-BR')}`;
+                periodoDias.textContent = `${dias} dia${dias !== 1 ? 's' : ''}`;
+                infoPeriodo.style.display = 'block';
+
+                // Validar período máximo
+                if (dias > 90) {
+                    periodoDias.innerHTML = `<span class="text-danger">${dias} dias (MÁXIMO: 90 dias)</span>`;
+                }
+            } else {
+                infoPeriodo.style.display = 'none';
+            }
+        }
+    }
+
+    dataInicio.addEventListener('change', atualizarInfoPeriodo);
+    dataFim.addEventListener('change', atualizarInfoPeriodo);
+
+    // Botões de atalho
+    document.getElementById('btn-ultimos-7-dias').addEventListener('click', function() {
+        const hoje = new Date();
+        const seteDiasAtras = new Date(hoje);
+        seteDiasAtras.setDate(hoje.getDate() - 7);
+
+        dataInicio.value = seteDiasAtras.toISOString().split('T')[0];
+        dataFim.value = hoje.toISOString().split('T')[0];
+        atualizarInfoPeriodo();
+    });
+
+    document.getElementById('btn-ultimos-30-dias').addEventListener('click', function() {
+        const hoje = new Date();
+        const trintaDiasAtras = new Date(hoje);
+        trintaDiasAtras.setDate(hoje.getDate() - 30);
+
+        dataInicio.value = trintaDiasAtras.toISOString().split('T')[0];
+        dataFim.value = hoje.toISOString().split('T')[0];
+        atualizarInfoPeriodo();
+    });
+
+    document.getElementById('btn-ultimos-90-dias').addEventListener('click', function() {
+        const hoje = new Date();
+        const noventaDiasAtras = new Date(hoje);
+        noventaDiasAtras.setDate(hoje.getDate() - 90);
+
+        dataInicio.value = noventaDiasAtras.toISOString().split('T')[0];
+        dataFim.value = hoje.toISOString().split('T')[0];
+        atualizarInfoPeriodo();
+    });
+
+    // Loading ao submeter
+    formSincronizacao.addEventListener('submit', function() {
+        btnSincronizar.disabled = true;
+        loadingSincronizacao.style.display = 'block';
+    });
+
+    // Inicializar
+    atualizarInfoPeriodo();
+});
+</script>
+{% endblock %}

@@ -17,6 +17,7 @@ Data: 2025-07-14
 """
 
 import logging
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 
@@ -156,6 +157,167 @@ class CarteiraService:
             logger.error(f"❌ Erro ao processar cancelamento do pedido {num_pedido}: {e}")
             db.session.rollback()
             return False
+
+    def verificar_pedidos_excluidos_odoo(self) -> Dict[str, Any]:
+        """
+        🔍 VERIFICAÇÃO OTIMIZADA DE PEDIDOS EXCLUÍDOS DO ODOO
+
+        Busca pedidos pendentes na CarteiraPrincipal e verifica se ainda existem no Odoo.
+        Se não existirem, processa a exclusão completa.
+
+        OTIMIZAÇÕES:
+        1. Query única para pegar pedidos pendentes com saldo > 0
+        2. Filtra apenas pedidos do Odoo (VSC, VCD, VFB)
+        3. Busca em LOTE no Odoo (100 pedidos por vez) - MUITO MAIS RÁPIDO
+        4. Exclui apenas os que não foram encontrados
+
+        PERFORMANCE ESTIMADA:
+        - 50 pedidos: ~1-2 segundos
+        - 200 pedidos: ~3-5 segundos
+        - 500 pedidos: ~8-12 segundos
+        - 1000 pedidos: ~15-20 segundos
+
+        Returns:
+            Dict com estatísticas da verificação:
+            {
+                'sucesso': bool,
+                'pedidos_verificados': int,
+                'pedidos_excluidos': int,
+                'pedidos_nao_encontrados': List[str],
+                'tempo_execucao': float
+            }
+        """
+        from datetime import datetime
+        from app.carteira.models import CarteiraPrincipal
+        from sqlalchemy import func, distinct
+
+        inicio = datetime.now()
+
+        try:
+            logger.info("🔍 INICIANDO VERIFICAÇÃO DE PEDIDOS EXCLUÍDOS DO ODOO")
+
+            # ETAPA 1: Buscar pedidos PENDENTES e ÚNICOS (query otimizada)
+            logger.info("📊 Buscando pedidos pendentes com saldo > 0...")
+
+            pedidos_pendentes = db.session.query(
+                distinct(CarteiraPrincipal.num_pedido)
+            ).filter(
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            ).all()
+
+            # Converter para lista simples
+            pedidos_pendentes = [p[0] for p in pedidos_pendentes]
+
+            # Filtrar APENAS pedidos do Odoo
+            pedidos_odoo = [p for p in pedidos_pendentes if self.is_pedido_odoo(p)]
+
+            total_pendentes = len(pedidos_pendentes)
+            total_odoo = len(pedidos_odoo)
+
+            logger.info(f"   ✅ {total_pendentes} pedidos pendentes encontrados")
+            logger.info(f"   ✅ {total_odoo} pedidos do Odoo para verificar")
+
+            if total_odoo == 0:
+                logger.info("   ℹ️ Nenhum pedido do Odoo para verificar")
+                return {
+                    'sucesso': True,
+                    'pedidos_verificados': 0,
+                    'pedidos_excluidos': 0,
+                    'pedidos_nao_encontrados': [],
+                    'tempo_execucao': (datetime.now() - inicio).total_seconds()
+                }
+
+            # ETAPA 2: Verificar em LOTE no Odoo (muito mais rápido!)
+            logger.info(f"🔍 Verificando existência de {total_odoo} pedidos no Odoo (em lotes)...")
+
+            pedidos_nao_encontrados = []
+            lote_size = 100  # Buscar 100 pedidos por vez
+
+            for i in range(0, len(pedidos_odoo), lote_size):
+                lote = pedidos_odoo[i:i + lote_size]
+                lote_num = (i // lote_size) + 1
+                total_lotes = (len(pedidos_odoo) + lote_size - 1) // lote_size
+
+                logger.info(f"   📦 Verificando lote {lote_num}/{total_lotes} ({len(lote)} pedidos)...")
+
+                # Busca otimizada: apenas ID e name
+                domain = [('name', 'in', lote)]
+
+                try:
+                    pedidos_encontrados = self.connection.search_read(
+                        model='sale.order',
+                        domain=domain,
+                        fields=['name', 'state'],  # Apenas campos mínimos
+                        limit=len(lote) + 10  # Segurança
+                    )
+
+                    # Pegar apenas os nomes dos pedidos encontrados (e NÃO cancelados)
+                    nomes_encontrados = {
+                        p['name'] for p in pedidos_encontrados
+                        if p.get('state') != 'cancel'
+                    }
+
+                    # Identificar os que NÃO foram encontrados ou estão cancelados
+                    nao_encontrados_lote = [p for p in lote if p not in nomes_encontrados]
+
+                    if nao_encontrados_lote:
+                        logger.warning(f"      ⚠️ {len(nao_encontrados_lote)} pedidos NÃO encontrados ou cancelados neste lote")
+                        pedidos_nao_encontrados.extend(nao_encontrados_lote)
+                    else:
+                        logger.info(f"      ✅ Todos os {len(lote)} pedidos do lote encontrados no Odoo")
+
+                except Exception as e:
+                    logger.error(f"      ❌ Erro ao verificar lote {lote_num}: {e}")
+                    # Continuar com próximo lote mesmo em caso de erro
+                    continue
+
+            # ETAPA 3: Processar exclusões
+            total_excluidos = 0
+
+            if pedidos_nao_encontrados:
+                logger.warning(f"🚨 {len(pedidos_nao_encontrados)} pedidos NÃO encontrados no Odoo - processando exclusão...")
+
+                for num_pedido in pedidos_nao_encontrados:
+                    try:
+                        logger.info(f"   🗑️ Excluindo pedido {num_pedido}...")
+                        sucesso = self._processar_cancelamento_pedido(num_pedido)
+
+                        if sucesso:
+                            total_excluidos += 1
+
+                    except Exception as e:
+                        logger.error(f"   ❌ Erro ao excluir pedido {num_pedido}: {e}")
+
+                logger.info(f"✅ {total_excluidos}/{len(pedidos_nao_encontrados)} pedidos excluídos com sucesso")
+            else:
+                logger.info("✅ Todos os pedidos pendentes existem no Odoo - nenhuma exclusão necessária")
+
+            tempo_total = (datetime.now() - inicio).total_seconds()
+
+            logger.info("=" * 80)
+            logger.info(f"✅ VERIFICAÇÃO CONCLUÍDA em {tempo_total:.2f}s")
+            logger.info(f"   Pedidos verificados: {total_odoo}")
+            logger.info(f"   Pedidos excluídos: {total_excluidos}")
+            logger.info("=" * 80)
+
+            return {
+                'sucesso': True,
+                'pedidos_verificados': total_odoo,
+                'pedidos_excluidos': total_excluidos,
+                'pedidos_nao_encontrados': pedidos_nao_encontrados,
+                'tempo_execucao': tempo_total
+            }
+
+        except Exception as e:
+            tempo_total = (datetime.now() - inicio).total_seconds()
+            logger.error(f"❌ Erro na verificação de pedidos excluídos: {e}")
+            logger.error(traceback.format_exc())
+
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'tempo_execucao': tempo_total
+            }
 
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None,
                                modo_incremental=False, minutos_janela=40):
@@ -2167,35 +2329,47 @@ class CarteiraService:
             logger.info("📞 Fase 10.6: Verificação de Contatos de Agendamento...")
             try:
                 from app.cadastros_agendamento.models import ContatoAgendamento
-                
-                # Buscar clientes que necessitam agendamento
+
+                # 🔍 DIAGNÓSTICO: Buscar clientes que necessitam agendamento
+                # ✅ CORREÇÃO: Usar upper() para case-insensitive
                 clientes_necessitam_agendamento = CarteiraPrincipal.query.filter(
-                    CarteiraPrincipal.cliente_nec_agendamento == 'Sim'
+                    db.func.upper(CarteiraPrincipal.cliente_nec_agendamento) == 'SIM'
                 ).with_entities(CarteiraPrincipal.cnpj_cpf).distinct().all()
-                
+
+                # 🔍 LOG DIAGNÓSTICO
+                logger.info(f"   📊 Encontrados {len(clientes_necessitam_agendamento)} clientes que necessitam agendamento")
+
                 contador_contatos_criados = 0
                 contador_contatos_atualizados = 0
-                
+                contador_cnpjs_vazios = 0
+                contador_ja_existentes = 0
+
                 for (cnpj,) in clientes_necessitam_agendamento:
-                    if not cnpj:
+                    if not cnpj or not cnpj.strip():
+                        contador_cnpjs_vazios += 1
+                        logger.debug(f"   ⚠️ CNPJ vazio/None encontrado - pulando")
                         continue
-                    
+
                     # Verificar se existe ContatoAgendamento para este CNPJ
                     contato_existente = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
-                    
+
                     if not contato_existente:
                         # Criar novo registro com forma=ODOO
-                        novo_contato = ContatoAgendamento(
-                            cnpj=cnpj,
-                            forma='ODOO',
-                            contato='Importado do Odoo',
-                            observacao='Cliente necessita agendamento - Configurado automaticamente na importação',
-                            atualizado_em=datetime.now()
-                        )
-                        db.session.add(novo_contato)
-                        contador_contatos_criados += 1
-                        logger.debug(f"   ➕ Criado ContatoAgendamento para CNPJ {cnpj}")
-                        
+                        try:
+                            novo_contato = ContatoAgendamento(
+                                cnpj=cnpj,
+                                forma='ODOO',
+                                contato='Importado do Odoo',
+                                observacao='Cliente necessita agendamento - Configurado automaticamente na importação',
+                                atualizado_em=datetime.now()
+                            )
+                            db.session.add(novo_contato)
+                            contador_contatos_criados += 1
+                            logger.info(f"   ➕ Criado ContatoAgendamento para CNPJ {cnpj}")
+                        except Exception as e:
+                            logger.error(f"   ❌ Erro ao criar ContatoAgendamento para CNPJ {cnpj}: {e}")
+                            raise  # Re-lança para ser capturado pelo try externo
+
                     elif contato_existente.forma == 'SEM AGENDAMENTO':
                         # Atualizar para forma=ODOO se estava como SEM AGENDAMENTO
                         contato_existente.forma = 'ODOO'
@@ -2203,18 +2377,31 @@ class CarteiraService:
                         contato_existente.observacao = 'Atualizado de SEM AGENDAMENTO para ODOO na importação'
                         contato_existente.atualizado_em = datetime.now()
                         contador_contatos_atualizados += 1
-                        logger.debug(f"   🔄 Atualizado ContatoAgendamento para CNPJ {cnpj} de 'SEM AGENDAMENTO' para 'ODOO'")
-                    
-                    # Se já existe com outra forma (Portal, Telefone, etc), mantém como está
-                
+                        logger.info(f"   🔄 Atualizado ContatoAgendamento para CNPJ {cnpj} de 'SEM AGENDAMENTO' para 'ODOO'")
+
+                    else:
+                        # Já existe com outra forma (Portal, Telefone, ODOO, etc), mantém como está
+                        contador_ja_existentes += 1
+                        logger.debug(f"   ✓ CNPJ {cnpj} já tem ContatoAgendamento (forma={contato_existente.forma}) - mantido")
+
+                # 🔍 LOG DIAGNÓSTICO DETALHADO
+                logger.info(f"   📊 Resumo processamento:")
+                logger.info(f"      - Total clientes com agendamento: {len(clientes_necessitam_agendamento)}")
+                logger.info(f"      - CNPJs vazios/None: {contador_cnpjs_vazios}")
+                logger.info(f"      - Contatos criados: {contador_contatos_criados}")
+                logger.info(f"      - Contatos atualizados: {contador_contatos_atualizados}")
+                logger.info(f"      - Já existentes (mantidos): {contador_ja_existentes}")
+
                 if contador_contatos_criados > 0 or contador_contatos_atualizados > 0:
                     db.session.commit()
-                    logger.info(f"   ✅ Contatos de Agendamento: {contador_contatos_criados} criados, {contador_contatos_atualizados} atualizados")
+                    logger.info(f"   ✅ Commit realizado: {contador_contatos_criados} criados, {contador_contatos_atualizados} atualizados")
                 else:
-                    logger.info("   ✅ Todos os contatos de agendamento já estão configurados corretamente")
-                    
+                    logger.info("   ✅ Nenhuma alteração necessária em ContatoAgendamento")
+
             except Exception as e:
-                logger.warning(f"   ⚠️ Erro ao verificar Contatos de Agendamento: {e}")
+                logger.error(f"   ❌ ERRO CRÍTICO ao verificar Contatos de Agendamento: {e}")
+                logger.error(f"   ❌ Tipo do erro: {type(e).__name__}")
+                logger.error(f"   ❌ Traceback: {traceback.format_exc()}")
                 db.session.rollback()
             
             # FASE 10.7: ATUALIZAR FORMA_AGENDAMENTO NA CARTEIRA
