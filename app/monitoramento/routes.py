@@ -819,12 +819,12 @@ def listar_entregas():
             
             # ✅ CORREÇÃO: Agendamento pendente é critério INDEPENDENTE (não else)
             # Verifica se precisa de agendamento independente do status de data
-            if (not e.status_finalizacao and 
-                e.cnpj_cliente in contatos_agendamento and 
-                len(e.agendamentos) == 0 and 
-                contatos_agendamento[e.cnpj_cliente].forma and
-                contatos_agendamento[e.cnpj_cliente].forma != '' and
-                contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO'):
+            if (not e.status_finalizacao and
+                    e.cnpj_cliente in contatos_agendamento and
+                    len(e.agendamentos) == 0 and
+                    contatos_agendamento[e.cnpj_cliente].forma and
+                    contatos_agendamento[e.cnpj_cliente].forma != '' and
+                    contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO'):
                 # Se não estava em nenhum grupo ainda (entregas estranhas), coloca em agendamento
                 encontrado_em_grupo = False
                 for grupo in entregas_agrupadas.values():
@@ -2022,7 +2022,7 @@ def exportar_entregas():
             
             # Aplica filtros
             query = aplicar_filtros_exportacao(query, filtros)
-            
+
             # 🚀 BUSCA OTIMIZADA - Carrega relacionamentos em uma query
             # 🚀 QUERY OTIMIZADA: Carrega todos os relacionamentos de uma vez
             from sqlalchemy.orm import joinedload
@@ -2033,13 +2033,29 @@ def exportar_entregas():
                 joinedload(EntregaMonitorada.custos_extras)
                 # Removido joinedload(EntregaMonitorada.comentarios) devido a lazy='dynamic'
             ).order_by(EntregaMonitorada.numero_nf).all()
-            
-            # Carregar comentários manualmente após a query principal
-            for entrega in entregas:
-                # Como comentarios tem lazy='dynamic', carregamos após
-                entrega._comentarios_carregados = entrega.comentarios.filter(
+
+            # 🚀 OTIMIZAÇÃO: Carregar TODOS os comentários em UMA ÚNICA QUERY
+            # Antes: N queries (uma por entrega) - LENTO para 2000-3000 entregas
+            # Depois: 1 query apenas - RÁPIDO!
+            if entregas:
+                entrega_ids = [e.id for e in entregas]
+                comentarios_dict = {}
+
+                # Busca todos os comentários principais (sem resposta_a_id) de uma vez
+                comentarios = ComentarioNF.query.filter(
+                    ComentarioNF.entrega_id.in_(entrega_ids),
                     ComentarioNF.resposta_a_id.is_(None)
                 ).all()
+
+                # Agrupa comentários por entrega_id
+                for comentario in comentarios:
+                    if comentario.entrega_id not in comentarios_dict:
+                        comentarios_dict[comentario.entrega_id] = []
+                    comentarios_dict[comentario.entrega_id].append(comentario)
+
+                # Atribui comentários pré-carregados a cada entrega
+                for entrega in entregas:
+                    entrega._comentarios_carregados = comentarios_dict.get(entrega.id, [])
             
             if not entregas:
                 flash('❌ Nenhuma entrega encontrada com os filtros especificados', 'warning')

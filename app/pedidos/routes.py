@@ -1851,6 +1851,7 @@ def processar_cotacao_manual():
                 data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 peso=pedido.peso_total or 0,
                 valor=pedido.valor_saldo_total or 0,
+                pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
                 uf_destino=uf_correto,
                 cidade_destino=nome_cidade_correto,
                 cotacao_id=cotacao.id,
@@ -1863,20 +1864,20 @@ def processar_cotacao_manual():
             embarque_item.icms_destino = None
             db.session.add(embarque_item)
 
+        # Commit antes de atualizar separações (Embarque e itens já criados)
+        db.session.commit()
+
         # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens
+        # Usa método Separacao.atualizar_cotacao() que já faz commit internamente
         for pedido in pedidos:
             if pedido.separacao_lote_id:
-                # Atualiza em Separacao (transportadora ignorado conforme orientação)
-                Separacao.query.filter_by(
-                    separacao_lote_id=pedido.separacao_lote_id
-                ).update({
-                    'cotacao_id': cotacao.id,
-                    'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao criar cotação manual
-                })
-            # Status será calculado automaticamente
-
-        # Commit final
-        db.session.commit()
+                # Usa método que dispara event listeners para atualizar status automaticamente
+                Separacao.atualizar_cotacao(
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    cotacao_id=cotacao.id,
+                    nf_cd=False
+                )
+                # Status será calculado automaticamente como COTADO pelo listener
 
         # Limpa a sessão
         if "cotacao_manual_pedidos" in session:
@@ -2025,6 +2026,7 @@ def embarque_fob():
                 data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 peso=pedido.peso_total or 0,
                 valor=pedido.valor_saldo_total or 0,
+                pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
                 uf_destino=uf_correto,
                 cidade_destino=nome_cidade_correto,
                 cotacao_id=None,  # SEM COTAÇÃO para FOB
@@ -2064,21 +2066,23 @@ def embarque_fob():
                 # Atualiza o embarque com a cotação FOB
                 embarque.cotacao_id = cotacao_fob.id
             
-            # ✅ NOVO: Atualizar pedidos com cotação FOB
-            if pedido.separacao_lote_id:
-                update_data = {'nf_cd': False}  # ✅ NOVO: Reseta flag NF no CD
-                
-                if embarque.cotacao_id or (cotacao_fob and cotacao_fob.id):
-                    update_data['cotacao_id'] = embarque.cotacao_id or cotacao_fob.id
-                
-                # Atualiza em Separacao (transportadora ignorado conforme orientação)
-                Separacao.query.filter_by(
-                    separacao_lote_id=pedido.separacao_lote_id
-                ).update(update_data)
-            # O status será calculado automaticamente como COTADO pelo trigger
-
-        # Commit final
+        # Commit antes de atualizar separações (Embarque e itens já criados)
         db.session.commit()
+
+        # ✅ NOVO: Atualizar pedidos com cotação FOB
+        # Usa método Separacao.atualizar_cotacao() que já faz commit internamente
+        for pedido in pedidos:
+            if pedido.separacao_lote_id:
+                cotacao_id_final = embarque.cotacao_id or (cotacao_fob.id if cotacao_fob else None)
+
+                if cotacao_id_final:
+                    # Usa método que dispara event listeners para atualizar status automaticamente
+                    Separacao.atualizar_cotacao(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        cotacao_id=cotacao_id_final,
+                        nf_cd=False
+                    )
+                    # Status será calculado automaticamente como COTADO pelo listener
 
         flash(f"Embarque FOB #{embarque.numero} criado com sucesso! Transportadora: FOB - COLETA", "success")
         return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
