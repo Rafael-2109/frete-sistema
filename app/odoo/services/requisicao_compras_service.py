@@ -232,7 +232,7 @@ class RequisicaoComprasService:
             fields=[
                 'id', 'request_id', 'product_id', 'name',
                 'product_qty', 'product_uom_id', 'date_required',
-                'estimated_cost', 'description'
+                'estimated_cost', 'description', 'purchase_state'  # ✅ ADICIONADO
             ]
         )
 
@@ -522,14 +522,21 @@ class RequisicaoComprasService:
                 req_odoo['date_start'], '%Y-%m-%d'
             ).date()
 
-        # Calcular lead_time
+        # ✅ CORRIGIDO: Extrair data_necessidade (date_required do Odoo)
+        data_necessidade = None
         lead_time_requisicao = None
-        if data_requisicao_solicitada and linha_odoo.get('date_required'):
-            date_required = datetime.strptime(linha_odoo['date_required'], '%Y-%m-%d').date()
-            lead_time_requisicao = (date_required - data_requisicao_solicitada).days
+        if linha_odoo.get('date_required'):
+            data_necessidade = datetime.strptime(linha_odoo['date_required'], '%Y-%m-%d').date()
+
+            # Calcular lead_time se tiver data_requisicao_solicitada
+            if data_requisicao_solicitada:
+                lead_time_requisicao = (data_necessidade - data_requisicao_solicitada).days
 
         # Status
         status = self.MAPA_STATUS.get(req_odoo['state'], 'Pendente')
+
+        # ✅ NOVO: Extrair purchase_state
+        purchase_state = linha_odoo.get('purchase_state')
 
         # Criar objeto
         requisicao = RequisicaoCompras(
@@ -540,6 +547,8 @@ class RequisicaoComprasService:
             cod_produto=cod_produto,
             nome_produto=nome_produto,
             qtd_produto_requisicao=Decimal(str(linha_odoo['product_qty'])),
+            data_necessidade=data_necessidade,  # ✅ ADICIONADO
+            purchase_state=purchase_state,  # ✅ ADICIONADO
             lead_time_requisicao=lead_time_requisicao,
             lead_time_previsto=None,  # Será preenchido quando houver pedido
             qtd_produto_sem_requisicao=Decimal('0'),
@@ -621,11 +630,21 @@ class RequisicaoComprasService:
         """
         alteracoes = []
 
+        # ✅ CORRIGIDO: Calcular data_necessidade para comparação
+        data_necessidade_nova = None
+        if linha_odoo.get('date_required'):
+            data_necessidade_nova = datetime.strptime(linha_odoo['date_required'], '%Y-%m-%d').date()
+
+        # ✅ NOVO: purchase_state
+        purchase_state_novo = linha_odoo.get('purchase_state')
+
         # Comparar campos mapeados
         campos_para_comparar = {
             'qtd_produto_requisicao': Decimal(str(linha_odoo['product_qty'])),
             'status': self.MAPA_STATUS.get(req_odoo['state'], 'Pendente'),
             'observacoes_odoo': req_odoo.get('description') if req_odoo.get('description') != False else None,
+            'data_necessidade': data_necessidade_nova,  # ✅ ADICIONADO
+            'purchase_state': purchase_state_novo,  # ✅ ADICIONADO
         }
 
         # Verificar mudanças
@@ -715,7 +734,7 @@ class RequisicaoComprasService:
 
             requisicoes_sistema = RequisicaoCompras.query.filter(
                 RequisicaoCompras.importado_odoo == True,
-                RequisicaoCompras.odoo_id != None,
+                RequisicaoCompras.odoo_id.isnot(None),  # ✅ CORRIGIDO: E711
                 RequisicaoCompras.status_requisicao != 'rejected',  # Só verificar as que não estão rejeitadas
                 RequisicaoCompras.criado_em >= data_limite  # Apenas da janela de tempo
             ).all()

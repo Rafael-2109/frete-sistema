@@ -187,98 +187,95 @@ class ManufaturaOdooService:
             
             for ped_odoo in pedidos:
                 try:
-                    # Verificar se já foi importado
-                    existe = PedidoCompras.query.filter_by(
-                        odoo_id=str(ped_odoo['id'])
-                    ).first()
-                    
-                    if not existe:
-                        # Buscar linhas do pedido
-                        linhas = self.connection.search_read(
-                            'purchase.order.line',
-                            [['order_id', '=', ped_odoo['id']]],
-                            ['product_id', 'product_qty', 'price_unit', 
-                             'price_tax', 'price_total']
-                        )
-                        
-                        # Processar cada linha
-                        for linha in linhas:
-                            # Processar datas
-                            data_pedido = datetime.now().date()
-                            if ped_odoo.get('date_order'):
-                                try:
-                                    data_pedido = datetime.strptime(
-                                        ped_odoo['date_order'], '%Y-%m-%d %H:%M:%S'
-                                    ).date()
-                                except Exception as e:
-                                    self.logger.error(f"Erro ao processar data de pedido: {e}")
-                                    pass
-                            
-                            data_prevista = None
-                            if ped_odoo.get('date_planned'):
-                                try:
-                                    data_prevista = datetime.strptime(
-                                        ped_odoo['date_planned'], '%Y-%m-%d %H:%M:%S'
-                                    ).date()
-                                except Exception as e:
-                                    self.logger.error(f"Erro ao processar data prevista: {e}")
-                                    pass
-                            
-                            # Buscar NF se existir
-                            numero_nf = None
-                            if ped_odoo.get('invoice_ids'):
-                                try:
-                                    invoice = self.connection.search_read(
-                                        'account.move',
-                                        [['id', 'in', ped_odoo['invoice_ids']]],
-                                        ['name'],
-                                        limit=1
-                                    )
-                                    if invoice:
-                                        numero_nf = invoice[0].get('name')
-                                except Exception as e:
-                                    self.logger.error(f"Erro ao buscar NF: {e}")
-                                    pass
-                            
-                            # Verificar se pedido já existe
-                            num_pedido = ped_odoo.get('name', f"PO-{ped_odoo['id']}")
-                            cod_produto = str(linha['product_id'][0]) if linha.get('product_id') else None
-                            
-                            pedido_existente = PedidoCompras.query.filter_by(
-                                num_pedido=num_pedido,
-                                cod_produto=cod_produto
-                            ).first()
-                            
-                            if pedido_existente:
-                                # Atualizar pedido existente
-                                pedido_existente.numero_nf = numero_nf
-                                pedido_existente.data_pedido_previsao = data_prevista
-                                pedido_existente.qtd_produto_pedido = Decimal(str(linha.get('product_qty', 0)))
-                                pedido_existente.preco_produto_pedido = Decimal(str(linha.get('price_unit', 0)))
-                                pedido_existente.atualizado_em = datetime.now()
-                                logger.info(f"Pedido {num_pedido} produto {cod_produto} atualizado")
-                            else:
-                                # Criar novo pedido
-                                pedido = PedidoCompras(
-                                    num_pedido=num_pedido,
-                                    cnpj_fornecedor=str(ped_odoo['partner_id'][0]) if ped_odoo.get('partner_id') else None,
-                                    raz_social=ped_odoo['partner_id'][1] if ped_odoo.get('partner_id') else None,
-                                    numero_nf=numero_nf,
-                                    data_pedido_criacao=data_pedido,
-                                    usuario_pedido_criacao=ped_odoo['user_id'][1] if ped_odoo.get('user_id') else 'Odoo',
-                                    data_pedido_previsao=data_prevista,
-                                    cod_produto=cod_produto,
-                                    nome_produto=linha['product_id'][1] if linha.get('product_id') else None,
-                                    qtd_produto_pedido=Decimal(str(linha.get('product_qty', 0))),
-                                    preco_produto_pedido=Decimal(str(linha.get('price_unit', 0))),
-                                    confirmacao_pedido=True,
-                                    importado_odoo=True,
-                                    odoo_id=str(ped_odoo['id'])
+                    # ✅ CORRIGIDO: Buscar linhas do pedido primeiro
+                    # Não verificamos odoo_id aqui porque um pedido pode ter múltiplos produtos
+                    linhas = self.connection.search_read(
+                        'purchase.order.line',
+                        [['order_id', '=', ped_odoo['id']]],
+                        ['product_id', 'product_qty', 'price_unit',
+                         'price_tax', 'price_total']
+                    )
+
+                    # Processar cada linha
+                    for linha in linhas:
+                        # Processar datas
+                        data_pedido = datetime.now().date()
+                        if ped_odoo.get('date_order'):
+                            try:
+                                data_pedido = datetime.strptime(
+                                    ped_odoo['date_order'], '%Y-%m-%d %H:%M:%S'
+                                ).date()
+                            except Exception as e:
+                                self.logger.error(f"Erro ao processar data de pedido: {e}")
+                                pass
+
+                        data_prevista = None
+                        if ped_odoo.get('date_planned'):
+                            try:
+                                data_prevista = datetime.strptime(
+                                    ped_odoo['date_planned'], '%Y-%m-%d %H:%M:%S'
+                                ).date()
+                            except Exception as e:
+                                self.logger.error(f"Erro ao processar data prevista: {e}")
+                                pass
+
+                        # Buscar NF se existir
+                        numero_nf = None
+                        if ped_odoo.get('invoice_ids'):
+                            try:
+                                invoice = self.connection.search_read(
+                                    'account.move',
+                                    [['id', 'in', ped_odoo['invoice_ids']]],
+                                    ['name'],
+                                    limit=1
                                 )
-                                db.session.add(pedido)
-                                logger.info(f"Novo pedido {num_pedido} produto {cod_produto} criado")
-                            
-                            registros_processados += 1
+                                if invoice:
+                                    numero_nf = invoice[0].get('name')
+                            except Exception as e:
+                                self.logger.error(f"Erro ao buscar NF: {e}")
+                                pass
+
+                        # ✅ CORRIGIDO: Verificar (num_pedido, cod_produto) - nossa constraint real
+                        num_pedido = ped_odoo.get('name', f"PO-{ped_odoo['id']}")
+                        cod_produto = str(linha['product_id'][0]) if linha.get('product_id') else None
+
+                        pedido_existente = PedidoCompras.query.filter_by(
+                            num_pedido=num_pedido,
+                            cod_produto=cod_produto
+                        ).first()
+
+                        if pedido_existente:
+                            # Atualizar pedido existente
+                            pedido_existente.numero_nf = numero_nf
+                            pedido_existente.data_pedido_previsao = data_prevista
+                            pedido_existente.qtd_produto_pedido = Decimal(str(linha.get('product_qty', 0)))
+                            pedido_existente.preco_produto_pedido = Decimal(str(linha.get('price_unit', 0)))
+                            pedido_existente.status_odoo = ped_odoo.get('state', 'draft')
+                            pedido_existente.atualizado_em = datetime.now()
+                            logger.info(f"Pedido {num_pedido} produto {cod_produto} atualizado")
+                        else:
+                            # Criar novo pedido
+                            pedido = PedidoCompras(
+                                num_pedido=num_pedido,
+                                cnpj_fornecedor=str(ped_odoo['partner_id'][0]) if ped_odoo.get('partner_id') else None,
+                                raz_social=ped_odoo['partner_id'][1] if ped_odoo.get('partner_id') else None,
+                                numero_nf=numero_nf,
+                                data_pedido_criacao=data_pedido,
+                                usuario_pedido_criacao=ped_odoo['user_id'][1] if ped_odoo.get('user_id') else 'Odoo',
+                                data_pedido_previsao=data_prevista,
+                                cod_produto=cod_produto,
+                                nome_produto=linha['product_id'][1] if linha.get('product_id') else None,
+                                qtd_produto_pedido=Decimal(str(linha.get('product_qty', 0))),
+                                preco_produto_pedido=Decimal(str(linha.get('price_unit', 0))),
+                                confirmacao_pedido=True,
+                                status_odoo=ped_odoo.get('state', 'draft'),
+                                importado_odoo=True,
+                                odoo_id=str(ped_odoo['id'])
+                            )
+                            db.session.add(pedido)
+                            logger.info(f"Novo pedido {num_pedido} produto {cod_produto} criado")
+
+                        registros_processados += 1
                             
                 except Exception as e:
                     registros_erro += 1

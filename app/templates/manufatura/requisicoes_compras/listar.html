@@ -4,6 +4,55 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/requisicoes_compras/css/requisicoes-compras.css') }}">
+<style>
+    .req-card {
+        margin-bottom: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .req-card .card-header {
+        padding: 0.5rem 1rem;
+        background-color: #c9dbec;
+        border-bottom: 1px solid #8696a7;
+    }
+    .req-card .card-body {
+        padding: 0;
+    }
+    .linha-produto {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .linha-produto:hover {
+        background-color: rgba(0,123,255,0.05);
+    }
+    .table-linhas {
+        margin-bottom: 0;
+        font-size: 0.9rem;
+    }
+    .table-linhas th {
+        font-weight: 600;
+        background-color: #e6f1fd;
+        padding: 0.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .table-linhas td {
+        padding: 0.5rem;
+        vertical-align: middle;
+    }
+    .btn-toggle-projecao {
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        line-height: 1;
+        color: #6c757d;
+    }
+    .btn-toggle-projecao:hover {
+        color: #0d6efd;
+    }
+    .projecao-row td {
+        background-color: #f8f9fa;
+        border-top: none !important;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -15,12 +64,12 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2><i class="fas fa-clipboard-list"></i> Requisições de Compras</h2>
-                    <p class="text-muted">Requisições importadas do Odoo</p>
+                    <p class="text-muted mb-0">Agrupadas por número de requisição</p>
                 </div>
                 <div>
                     <div class="btn-group" role="group">
                         <a href="{{ url_for('manufatura.tela_sincronizacao_manual') }}" class="btn btn-success">
-                            <i class="fas fa-sync"></i> Sincronização Manual
+                            <i class="fas fa-sync"></i> Sincronizar
                         </a>
                         <a href="{{ url_for('manufatura.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-arrow-left"></i> Voltar
@@ -43,14 +92,14 @@
                                 <div class="mb-3">
                                     <label for="num_requisicao" class="form-label">Número Requisição</label>
                                     <input type="text" class="form-control" id="num_requisicao" name="num_requisicao"
-                                           placeholder="Ex: PR001" value="{{ filtros.num_requisicao or '' }}">
+                                           placeholder="Ex: REQ/FB/001" value="{{ filtros.num_requisicao or '' }}">
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="mb-3">
                                     <label for="cod_produto" class="form-label">Código Produto</label>
                                     <input type="text" class="form-control" id="cod_produto" name="cod_produto"
-                                           placeholder="Ex: PROD001" value="{{ filtros.cod_produto or '' }}">
+                                           placeholder="Ex: 101001" value="{{ filtros.cod_produto or '' }}">
                                 </div>
                             </div>
                             <div class="col-md-2">
@@ -95,140 +144,218 @@
         </div>
     </div>
 
-    <!-- Tabela de Requisições -->
+    <!-- Lista de Requisições Agrupadas -->
     <div class="row">
         <div class="col-12">
-            <div class="card shadow-sm">
+            {% if requisicoes %}
+
+            <!-- Contagem -->
+            <div class="mb-3">
+                <span class="badge bg-primary fs-6">{{ paginacao.total }} requisições encontradas</span>
+            </div>
+
+            <!-- Cards de Requisições -->
+            {% for req in requisicoes %}
+            <div class="card req-card">
+                <!-- Cabeçalho: Requisição + Data + Status -->
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="fs-6">{{ req.num_requisicao }}</strong>
+                            <span class="text-muted">- Criada em: {{ req.data_criacao.strftime('%d/%m/%Y') if req.data_criacao else '-' }}</span>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted">{{ req.usuario or 'Sistema' }}</small>
+                            <span class="badge bg-{% if req.status == 'Aprovada' %}success{% elif req.status == 'Concluída' %}primary{% else %}secondary{% endif %} ms-2">
+                                {{ req.status }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Corpo: Linhas de Produtos -->
                 <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-list"></i> Requisições
-                        {% if paginacao %}
-                        <span class="badge bg-primary">{{ paginacao.total }}</span>
-                        {% endif %}
-                    </h5>
-
-                    {% if requisicoes %}
-                    <div class="table-responsive">
-                        <table class="table table-hover table-striped">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Número</th>
-                                    <th>Data Criação</th>
-                                    <th>Produto</th>
-                                    <th class="text-end">Quantidade</th>
-                                    <th>Status</th>
-                                    <th>Data Solicitada</th>
-                                    <th class="text-center">Lead Time</th>
-                                    <th class="text-center">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for req in requisicoes %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ req.num_requisicao }}</strong>
-                                    </td>
-                                    <td>
-                                        {{ req.data_requisicao_criacao.strftime('%d/%m/%Y') if req.data_requisicao_criacao else '-' }}
-                                    </td>
-                                    <td>
-                                        <small class="text-muted d-block">[{{ req.cod_produto }}]</small>
-                                        <span class="text-truncate d-inline-block" style="max-width: 250px;"
-                                              title="{{ req.nome_produto }}">
-                                            {{ req.nome_produto }}
+                    <table class="table table-linhas table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;"></th>
+                                <th style="width: 90px;">Data Necessidade</th>
+                                <th style="width: 100px;">Código</th>
+                                <th>Produto</th>
+                                <th class="text-end" style="width: 100px;">Qtd</th>
+                                <th style="width: 130px;">Status Linha</th>
+                                <th style="width: 150px;">Pedido Compras</th>
+                                <th style="width: 140px;">Status Recebimento</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for linha in req.linhas %}
+                            <!-- Linha do Produto -->
+                            <tr class="linha-produto" data-linha-id="{{ linha.id }}">
+                                <td class="text-center">
+                                    {% if linha.data_necessidade %}
+                                    <button class="btn btn-link btn-toggle-projecao" type="button" title="Ver projeção de estoque">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if linha.data_necessidade %}
+                                    <strong>{{ linha.data_necessidade.strftime('%d/%m/%Y') }}</strong>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ linha.cod_produto }}</strong>
+                                </td>
+                                <td>
+                                    <span class="text-truncate d-inline-block" style="max-width: 400px;" title="{{ linha.nome_produto }}">
+                                        {{ linha.nome_produto }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <strong>{{ linha.qtd|qtd_br(2) }}</strong>
+                                </td>
+                                <td>
+                                    {% if linha.purchase_state == 'purchase' %}
+                                    <span class="badge bg-success">Pedido Compras</span>
+                                    {% elif linha.purchase_state == 'to approve' %}
+                                    <span class="badge bg-warning text-dark">A Aprovar</span>
+                                    {% elif linha.purchase_state == 'sent' %}
+                                    <span class="badge bg-info text-dark">SDC Enviada</span>
+                                    {% elif linha.purchase_state == 'draft' %}
+                                    <span class="badge bg-secondary">SDC</span>
+                                    {% elif linha.purchase_state == 'done' %}
+                                    <span class="badge bg-primary">Travado</span>
+                                    {% elif linha.purchase_state == 'cancel' %}
+                                    <span class="badge bg-danger">Cancelado</span>
+                                    {% elif linha.purchase_state and linha.purchase_state != False %}
+                                    <span class="badge bg-light text-dark">{{ linha.purchase_state }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if linha.pedido %}
+                                    <strong>{{ linha.pedido.num_pedido }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar-alt"></i>
+                                        {{ linha.pedido.data_pedido.strftime('%d/%m/%Y') if linha.pedido.data_pedido else '-' }}
+                                    </small>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if linha.pedido and linha.pedido.status_recebimento %}
+                                        {% if linha.pedido.status_recebimento == 'recebido' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check-circle"></i> Recebido
                                         </span>
-                                    </td>
-                                    <td class="text-end">
-                                        <strong>{{ req.qtd_produto_requisicao|qtd_br(2) }}</strong>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-{% if req.status == 'approved' %}success{% elif req.status == 'done' %}primary{% else %}secondary{% endif %}">
-                                            {{ req.status }}
+                                        <br>
+                                        <small class="text-success">{{ linha.pedido.qtd_recebida|qtd_br(2) }} / {{ linha.pedido.qtd_pedido|qtd_br(2) }}</small>
+                                        {% elif linha.pedido.status_recebimento == 'parcial' %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-clock"></i> Parcial
                                         </span>
-                                    </td>
-                                    <td>
-                                        {% if req.data_requisicao_solicitada %}
-                                        {{ req.data_requisicao_solicitada.strftime('%d/%m/%Y') }}
+                                        <br>
+                                        <small class="text-warning">{{ linha.pedido.qtd_recebida|qtd_br(2) }} / {{ linha.pedido.qtd_pedido|qtd_br(2) }}</small>
                                         {% else %}
-                                        <span class="text-muted">-</span>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-hourglass-start"></i> A Receber
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">0 / {{ linha.pedido.qtd_pedido|qtd_br(2) }}</small>
                                         {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        {% if req.lead_time_requisicao %}
-                                        <span class="badge bg-info">{{ req.lead_time_requisicao }} dias</span>
-                                        {% else %}
-                                        <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        <a href="{{ url_for('manufatura.detalhe_requisicao', requisicao_id=req.id) }}"
-                                           class="btn btn-sm btn-outline-primary" title="Ver detalhes">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
 
-                    <!-- Paginação -->
-                    {% if paginacao and paginacao.pages > 1 %}
-                    <nav aria-label="Paginação">
-                        <ul class="pagination justify-content-center">
-                            {% if paginacao.has_prev %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ paginacao.prev_num }}&cod_produto={{ filtros.cod_produto or '' }}&status={{ filtros.status or '' }}&num_requisicao={{ filtros.num_requisicao or '' }}&data_inicio={{ filtros.data_inicio or '' }}&data_fim={{ filtros.data_fim or '' }}">
-                                    Anterior
-                                </a>
-                            </li>
-                            {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">Anterior</span>
-                            </li>
+                            <!-- Linha Expansível com Projeção -->
+                            {% if linha.data_necessidade %}
+                            <tr class="projecao-row collapse" id="projecao-{{ linha.id }}">
+                                <td colspan="8" class="p-0">
+                                    <div class="p-3 bg-light">
+                                        <div class="d-flex justify-content-end align-items-center mb-2">
+                                            <span class="spinner-border spinner-border-sm text-primary loading-spinner" role="status">
+                                                <span class="visually-hidden">Carregando...</span>
+                                            </span>
+                                        </div>
+                                        <div class="projecao-content">
+                                            <!-- Conteúdo será carregado via AJAX -->
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
                             {% endif %}
-
-                            {% for page_num in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                                {% if page_num %}
-                                    <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
-                                        <a class="page-link" href="?page={{ page_num }}&cod_produto={{ filtros.cod_produto or '' }}&status={{ filtros.status or '' }}&num_requisicao={{ filtros.num_requisicao or '' }}&data_inicio={{ filtros.data_inicio or '' }}&data_fim={{ filtros.data_fim or '' }}">
-                                            {{ page_num }}
-                                        </a>
-                                    </li>
-                                {% else %}
-                                    <li class="page-item disabled">
-                                        <span class="page-link">...</span>
-                                    </li>
-                                {% endif %}
                             {% endfor %}
-
-                            {% if paginacao.has_next %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ paginacao.next_num }}&cod_produto={{ filtros.cod_produto or '' }}&status={{ filtros.status or '' }}&num_requisicao={{ filtros.num_requisicao or '' }}&data_inicio={{ filtros.data_inicio or '' }}&data_fim={{ filtros.data_fim or '' }}">
-                                    Próxima
-                                </a>
-                            </li>
-                            {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">Próxima</span>
-                            </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
-                    {% endif %}
-
-                    {% else %}
-                    <!-- Empty State -->
-                    <div class="text-center py-5">
-                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Nenhuma requisição encontrada</p>
-                        <a href="{{ url_for('manufatura.tela_sincronizacao_manual') }}" class="btn btn-primary">
-                            <i class="fas fa-sync"></i> Sincronizar do Odoo
-                        </a>
-                    </div>
-                    {% endif %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
+            {% endfor %}
+
+            <!-- Paginação -->
+            {% if paginacao and paginacao.pages > 1 %}
+            <nav aria-label="Paginação" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if paginacao.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ paginacao.prev_num }}&cod_produto={{ filtros.cod_produto or '' }}&status={{ filtros.status or '' }}&num_requisicao={{ filtros.num_requisicao or '' }}&data_inicio={{ filtros.data_inicio or '' }}&data_fim={{ filtros.data_fim or '' }}">
+                            Anterior
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Anterior</span>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
+                                <a class="page-link" href="?page={{ page_num }}&cod_produto={{ filtros.cod_produto or '' }}&status={{ filtros.status or '' }}&num_requisicao={{ filtros.num_requisicao or '' }}&data_inicio={{ filtros.data_inicio or '' }}&data_fim={{ filtros.data_fim or '' }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if paginacao.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ paginacao.next_num }}&cod_produto={{ filtros.cod_produto or '' }}&status={{ filtros.status or '' }}&num_requisicao={{ filtros.num_requisicao or '' }}&data_inicio={{ filtros.data_inicio or '' }}&data_fim={{ filtros.data_fim or '' }}">
+                            Próxima
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Próxima</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Nenhuma requisição encontrada</p>
+                    <a href="{{ url_for('manufatura.tela_sincronizacao_manual') }}" class="btn btn-primary">
+                        <i class="fas fa-sync"></i> Sincronizar do Odoo
+                    </a>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 

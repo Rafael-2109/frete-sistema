@@ -191,6 +191,10 @@ class RequisicaoCompras(db.Model):
     data_necessidade = db.Column(db.Date)
     status = db.Column(db.String(20), default='Pendente', index=True)
 
+    # ✅ NOVO: Status da linha no Odoo
+    # Valores: 'draft', 'sent', 'to approve', 'purchase', 'done', 'cancel'
+    purchase_state = db.Column(db.String(20), index=True)
+
     # Vínculo com Odoo (MELHORADO)
     importado_odoo = db.Column(db.Boolean, default=False)
     odoo_id = db.Column(db.String(50), unique=True)  # ✅ UNIQUE aqui pois é o ID da LINHA no Odoo
@@ -211,7 +215,7 @@ class PedidoCompras(db.Model):
     __tablename__ = 'pedido_compras'
 
     id = db.Column(db.Integer, primary_key=True)
-    num_pedido = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    num_pedido = db.Column(db.String(30), nullable=False, index=True)  # ✅ CORRIGIDO: Removido unique=True
     num_requisicao = db.Column(db.String(30), index=True)  # ✅ REMOVIDO ForeignKey - agora apenas informativo
     cnpj_fornecedor = db.Column(db.String(20), index=True)
     raz_social = db.Column(db.String(255))
@@ -225,6 +229,7 @@ class PedidoCompras(db.Model):
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     nome_produto = db.Column(db.String(255))
     qtd_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False)
+    qtd_recebida = db.Column(db.Numeric(15, 3), default=0)  # ✅ NOVO: qty_received do Odoo
     preco_produto_pedido = db.Column(db.Numeric(15, 4))
     icms_produto_pedido = db.Column(db.Numeric(15, 2))
     pis_produto_pedido = db.Column(db.Numeric(15, 2))
@@ -236,9 +241,20 @@ class PedidoCompras(db.Model):
     # Status do Odoo (draft, sent, to approve, purchase, done, cancel)
     status_odoo = db.Column(db.String(20), index=True)
 
+    # ✅ NOVO: Tipo de pedido (l10n_br_tipo_pedido do Odoo Brasil)
+    # Tipos relevantes: compra, importacao, comp-importacao, devolucao, devolucao_compra,
+    # industrializacao, serv-industrializacao, ent-bonificacao
+    tipo_pedido = db.Column(db.String(50), nullable=True, index=True)
+
     importado_odoo = db.Column(db.Boolean, default=False)
     odoo_id = db.Column(db.String(50))
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # ✅ ADICIONADO
+
+    # ✅ CORRIGIDO: Constraint composta para permitir múltiplos produtos no mesmo pedido
+    __table_args__ = (
+        db.UniqueConstraint('num_pedido', 'cod_produto', name='uq_pedido_compras_num_cod_produto'),
+    )
 
     # ✅ Relacionamento removido - num_requisicao agora é apenas campo informativo
 

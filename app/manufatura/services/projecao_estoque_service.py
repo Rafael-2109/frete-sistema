@@ -201,6 +201,96 @@ class ServicoProjecaoEstoque:
             'detalhes_saidas': saidas
         }
 
+    def projetar_requisicao(self, requisicao_id: int) -> Dict[str, Any]:
+        """
+        Projeta estoque para uma requisição específica: -D7 a +D7 da data_necessidade
+
+        Args:
+            requisicao_id: ID da requisição
+
+        Returns:
+            Dict com projeção centrada na data_necessidade
+        """
+        from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
+
+        # Buscar requisição
+        requisicao = RequisicaoCompras.query.get(requisicao_id)
+        if not requisicao:
+            return {'sucesso': False, 'erro': 'Requisição não encontrada'}
+
+        if not requisicao.data_necessidade:
+            return {'sucesso': False, 'erro': 'Requisição sem data_necessidade'}
+
+        # Calcular janela: -D7 a +D7 da data_necessidade
+        data_centro = requisicao.data_necessidade
+        data_inicio = data_centro - timedelta(days=7)
+        data_fim = data_centro + timedelta(days=7)
+
+        cod_produto = requisicao.cod_produto
+
+        # Estoque atual
+        estoque_atual = self.estoque_service.calcular_estoque_atual(cod_produto)
+
+        # Entradas e Saídas
+        entradas = self._calcular_entradas(cod_produto, data_inicio, data_fim)
+        saidas = self._calcular_saidas_por_bom(cod_produto, data_inicio, data_fim)
+
+        # Projeção diária detalhada
+        projecao_diaria = self._calcular_projecao_diaria(
+            estoque_atual,
+            entradas,
+            saidas,
+            data_inicio,
+            data_fim
+        )
+
+        # Buscar pedidos vinculados via alocação
+        alocacoes = RequisicaoCompraAlocacao.query.filter_by(
+            requisicao_compra_id=requisicao.id
+        ).all()
+
+        pedidos_vinculados = []
+        for alocacao in alocacoes:
+            if alocacao.pedido:
+                pedidos_vinculados.append({
+                    'num_pedido': alocacao.pedido.num_pedido,
+                    'fornecedor': alocacao.pedido.raz_social,
+                    'qtd_alocada': float(alocacao.qtd_alocada),
+                    'qtd_aberta': float(alocacao.qtd_aberta),
+                    'percentual_atendido': alocacao.percentual_alocado(),
+                    'status': alocacao.purchase_state,
+                    'data_previsao': alocacao.pedido.data_pedido_previsao.isoformat() if alocacao.pedido.data_pedido_previsao else None
+                })
+
+        # Buscar produtos que consomem este componente (com programação ativa)
+        produtos_consumidores = self._buscar_produtos_consumidores_com_programacao(
+            cod_produto,
+            data_inicio,
+            data_fim
+        )
+
+        return {
+            'sucesso': True,
+            'requisicao': {
+                'id': requisicao.id,
+                'num_requisicao': requisicao.num_requisicao,
+                'cod_produto': requisicao.cod_produto,
+                'nome_produto': requisicao.nome_produto,
+                'qtd_requisitada': float(requisicao.qtd_produto_requisicao),
+                'data_necessidade': requisicao.data_necessidade.isoformat(),
+                'status': requisicao.status
+            },
+            'estoque_atual': float(estoque_atual),
+            'data_centro': data_centro.isoformat(),
+            'data_inicio': data_inicio.isoformat(),
+            'data_fim': data_fim.isoformat(),
+            'projecao_diaria': projecao_diaria,
+            'pedidos_vinculados': pedidos_vinculados,
+            'produtos_consumidores': produtos_consumidores,
+            'total_entradas': sum(e['quantidade'] for e in entradas),
+            'total_saidas': sum(s['quantidade'] for s in saidas)
+        }
+
     def _calcular_entradas(
         self,
         cod_produto: str,
@@ -607,16 +697,15 @@ class ServicoProjecaoEstoque:
 
             estoque_final = estoque_atual + entrada_dia - saida_dia
 
-            # Só adicionar dias com movimento ou ruptura
-            if entrada_dia > 0 or saida_dia > 0 or estoque_final < 0:
-                projecao.append({
-                    'data': data_atual.isoformat(),
-                    'estoque_inicial': round(estoque_atual, 2),
-                    'entradas': round(entrada_dia, 2),
-                    'saidas': round(saida_dia, 2),
-                    'estoque_final': round(estoque_final, 2),
-                    'ruptura': estoque_final < 0
-                })
+            # ✅ MUDOU: Adicionar TODOS os dias (não apenas com movimento)
+            projecao.append({
+                'data': data_atual.isoformat(),
+                'estoque_inicial': round(estoque_atual, 2),
+                'entradas': round(entrada_dia, 2),
+                'saidas': round(saida_dia, 2),
+                'estoque_final': round(estoque_final, 2),
+                'ruptura': estoque_final < 0
+            })
 
             estoque_atual = estoque_final
             data_atual += timedelta(days=1)
@@ -780,3 +869,142 @@ class ServicoProjecaoEstoque:
             data_atual += timedelta(days=1)
 
         return timeline
+
+    def _buscar_produtos_consumidores_com_programacao(
+        self,
+        cod_produto_componente: str,
+        data_inicio: date,
+        data_fim: date
+    ) -> List[Dict]:
+        """
+        Busca produtos que consomem este componente E têm programação ativa no período
+
+        Retorna lista com:
+        - Produtos finais programados
+        - Produtos intermediários expandidos (caminho completo na hierarquia)
+        - Quantidade programada e consumo previsto
+
+        Args:
+            cod_produto_componente: Código do componente
+            data_inicio: Data início do período
+            data_fim: Data fim do período
+
+        Returns:
+            Lista de dicts com produtos consumidores e suas programações
+        """
+        from app.producao.models import ProgramacaoProducao
+
+        resultados = []
+
+        # Buscar quais produtos CONSOMEM este componente
+        boms = ListaMateriais.query.filter(
+            ListaMateriais.cod_produto_componente == cod_produto_componente,
+            ListaMateriais.status == 'ativo'
+        ).all()
+
+        if not boms:
+            return []
+
+        # Para cada produto que consome
+        for bom in boms:
+            cod_produto_pai = bom.cod_produto_produzido
+            qtd_utilizada_base = float(bom.qtd_utilizada)
+
+            # Buscar programações (diretas ou upstream se for intermediário)
+            programacoes_e_fatores = self._buscar_programacoes_upstream(
+                cod_produto_pai,
+                data_inicio,
+                data_fim,
+                qtd_utilizada_base
+            )
+
+            # Se encontrou programações, processar
+            for prog, fator_conversao in programacoes_e_fatores:
+                qtd_consumo = prog.qtd_programada * fator_conversao
+
+                # Verificar se é intermediário (para expandir caminho)
+                eh_intermediario = self._eh_produto_intermediario(cod_produto_pai)
+
+                # Buscar info do produto pai
+                produto_pai = CadastroPalletizacao.query.filter_by(
+                    cod_produto=cod_produto_pai
+                ).first()
+
+                nome_produto_pai = produto_pai.nome_produto if produto_pai else cod_produto_pai
+
+                # Se intermediário, mostrar caminho completo
+                caminho_hierarquia = []
+                if eh_intermediario:
+                    caminho_hierarquia = self._montar_caminho_hierarquia(
+                        cod_produto_pai,
+                        prog.cod_produto
+                    )
+
+                resultados.append({
+                    'cod_produto_programado': prog.cod_produto,
+                    'nome_produto_programado': prog.nome_produto,
+                    'qtd_programada': float(prog.qtd_programada),
+                    'data_programacao': prog.data_programacao.isoformat(),
+                    'via_intermediario': cod_produto_pai if eh_intermediario else None,
+                    'nome_intermediario': nome_produto_pai if eh_intermediario else None,
+                    'caminho_hierarquia': caminho_hierarquia if caminho_hierarquia else None,
+                    'fator_conversao': fator_conversao,
+                    'qtd_consumo_previsto': round(qtd_consumo, 3)
+                })
+
+        return resultados
+
+    def _montar_caminho_hierarquia(
+        self,
+        cod_intermediario: str,
+        cod_produto_final: str
+    ) -> List[str]:
+        """
+        Monta o caminho completo da hierarquia BOM
+
+        Ex: ["ACIDO CITRICO", "SALMOURA", "AZEITONA VERDE 180 G"]
+
+        Args:
+            cod_intermediario: Código do intermediário
+            cod_produto_final: Código do produto final programado
+
+        Returns:
+            Lista com nomes dos produtos no caminho
+        """
+        caminho = []
+
+        # Adicionar intermediário
+        produto_int = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_intermediario
+        ).first()
+
+        if produto_int:
+            caminho.append(produto_int.nome_produto or cod_intermediario)
+
+        # Buscar quem consome o intermediário (subir na hierarquia)
+        boms_upstream = ListaMateriais.query.filter(
+            ListaMateriais.cod_produto_componente == cod_intermediario,
+            ListaMateriais.status == 'ativo'
+        ).all()
+
+        # Adicionar próximo nível (recursivamente se necessário)
+        for bom in boms_upstream:
+            cod_pai = bom.cod_produto_produzido
+
+            # Se chegou no produto final, adicionar e parar
+            if cod_pai == cod_produto_final:
+                produto_final = CadastroPalletizacao.query.filter_by(
+                    cod_produto=cod_produto_final
+                ).first()
+
+                if produto_final:
+                    caminho.append(produto_final.nome_produto or cod_produto_final)
+                break
+
+            # Se é outro intermediário, continuar recursão
+            if self._eh_produto_intermediario(cod_pai):
+                caminho_restante = self._montar_caminho_hierarquia(cod_pai, cod_produto_final)
+                caminho.extend(caminho_restante)
+                break
+
+        return caminho

@@ -779,6 +779,16 @@
                         value="${item.agendamento || ''}">
                 </td>
 
+                <!-- Botão totais do protocolo -->
+                <td class="text-center">
+                    <button type="button" class="btn btn-info btn-sm-custom btn-totais-protocolo"
+                        data-row-index="${index}"
+                        data-protocolo="${item.protocolo || ''}"
+                        title="Ver totais do protocolo">
+                        📊
+                    </button>
+                </td>
+
                 <td>
                     <input type="text" class="form-control form-control-sm protocolo"
                         data-row-index="${index}"
@@ -791,8 +801,7 @@
                 <td class="text-center">
                     <button type="button" class="btn ${item.agendamento_confirmado ? 'btn-success' : 'btn-primary'} btn-sm-custom btn-confirmar"
                         data-row-index="${index}"
-                        ${item.agendamento_confirmado ? 'disabled' : ''}
-                        title="${item.agendamento_confirmado ? 'Já confirmado' : 'Confirmar agendamento (protocolo necessário)'}">
+                        title="${item.agendamento_confirmado ? 'Clique para desconfirmar' : 'Confirmar agendamento'}">
                         ${item.agendamento_confirmado ? '✓' : '⏱'}
                     </button>
                 </td>
@@ -932,6 +941,16 @@
                         value="${item.agendamento || ''}">
                 </td>
 
+                <!-- Botão totais do protocolo -->
+                <td class="text-center">
+                    <button type="button" class="btn btn-info btn-sm-custom btn-totais-protocolo"
+                        data-row-index="${index}"
+                        data-protocolo="${item.protocolo || ''}"
+                        title="Ver totais do protocolo">
+                        📊
+                    </button>
+                </td>
+
                 <td>
                     <input type="text" class="form-control form-control-sm protocolo"
                         data-row-index="${index}"
@@ -944,8 +963,7 @@
                 <td class="text-center">
                     <button type="button" class="btn ${item.agendamento_confirmado ? 'btn-success' : 'btn-primary'} btn-sm-custom btn-confirmar"
                         data-row-index="${index}"
-                        ${item.agendamento_confirmado ? 'disabled' : ''}
-                        title="${item.agendamento_confirmado ? 'Já confirmado' : 'Confirmar agendamento (protocolo necessário)'}">
+                        title="${item.agendamento_confirmado ? 'Clique para desconfirmar' : 'Confirmar agendamento'}">
                         ${item.agendamento_confirmado ? '✓' : '⏱'}
                     </button>
                 </td>
@@ -1180,6 +1198,12 @@
         else if (target.classList.contains('btn-confirmar')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             confirmarAgendamento(rowIndex);
+        }
+
+        // Botão totais do protocolo
+        else if (target.classList.contains('btn-totais-protocolo')) {
+            const protocolo = target.dataset.protocolo;
+            mostrarTotaisProtocolo(protocolo);
         }
 
         // Navegação de estoque
@@ -1556,7 +1580,8 @@
         // ✅ CORREÇÃO: Atualizar painel flutuante
         atualizarResumoSeparacao();
 
-        mostrarMensagem('Sucesso', `Todas as quantidades do pedido ${numPedido} foram adicionadas`, 'success');
+        // ✅ Removido toast de confirmação para agilizar fluxo
+        // mostrarMensagem('Sucesso', `Todas as quantidades do pedido ${numPedido} foram adicionadas`, 'success');
     }
 
     async function adicionarDiaUtil(rowIndex) {
@@ -1694,33 +1719,106 @@
                 await atualizarCampoSeparacaoLote(separacaoLoteId, 'agendamento_confirmado', novoEstado);
             }
 
-            // ✅ Atualizar estado local
-            state.dados[rowIndex].agendamento_confirmado = novoEstado;
+            // ✅ ATUALIZAR TODAS AS LINHAS DA MESMA SEPARAÇÃO
+            let qtdLinhasAtualizadas = 0;
 
-            // ✅ Atualizar UI do botão
-            const btnConfirmar = document.querySelector(`button.btn-confirmar[data-row-index="${rowIndex}"]`);
-            if (btnConfirmar) {
-                if (novoEstado) {
-                    // Confirmado
-                    btnConfirmar.classList.remove('btn-primary');
-                    btnConfirmar.classList.add('btn-success');
-                    btnConfirmar.textContent = '✓';
-                    btnConfirmar.title = 'Clique para desconfirmar';
-                } else {
-                    // Não confirmado
-                    btnConfirmar.classList.remove('btn-success');
-                    btnConfirmar.classList.add('btn-primary');
-                    btnConfirmar.textContent = '⏱';
-                    btnConfirmar.title = 'Confirmar agendamento';
+            state.dados.forEach((d, idx) => {
+                // Atualizar apenas linhas com mesmo separacao_lote_id
+                if (d.separacao_lote_id === separacaoLoteId) {
+                    // Atualizar estado local
+                    state.dados[idx].agendamento_confirmado = novoEstado;
+                    qtdLinhasAtualizadas++;
+
+                    // Atualizar UI do botão
+                    const btnConfirmar = document.querySelector(`button.btn-confirmar[data-row-index="${idx}"]`);
+                    if (btnConfirmar) {
+                        if (novoEstado) {
+                            // Confirmado
+                            btnConfirmar.classList.remove('btn-primary');
+                            btnConfirmar.classList.add('btn-success');
+                            btnConfirmar.textContent = '✓';
+                            btnConfirmar.title = 'Clique para desconfirmar';
+                        } else {
+                            // Não confirmado
+                            btnConfirmar.classList.remove('btn-success');
+                            btnConfirmar.classList.add('btn-primary');
+                            btnConfirmar.textContent = '⏱';
+                            btnConfirmar.title = 'Confirmar agendamento';
+                        }
+                    }
                 }
-            }
+            });
 
-            const mensagem = novoEstado ? 'Agendamento confirmado' : 'Confirmação removida';
-            mostrarMensagem('Sucesso', mensagem, 'success');
+            // ✅ Removido toast de confirmação para agilizar fluxo
+            // const mensagem = novoEstado
+            //     ? `Agendamento confirmado (${qtdLinhasAtualizadas} ${qtdLinhasAtualizadas === 1 ? 'linha' : 'linhas'})`
+            //     : `Confirmação removida (${qtdLinhasAtualizadas} ${qtdLinhasAtualizadas === 1 ? 'linha' : 'linhas'})`;
+            // mostrarMensagem('Sucesso', mensagem, 'success');
 
         } catch (erro) {
             console.error('Erro ao alternar confirmação de agendamento:', erro);
             mostrarMensagem('Erro', erro.message, 'danger');
+        }
+    }
+
+    /**
+     * Mostrar totais do protocolo em um toast
+     */
+    async function mostrarTotaisProtocolo(protocolo) {
+        // Se não houver protocolo, mostrar mensagem
+        if (!protocolo || protocolo.trim() === '') {
+            mostrarToast('⚠️ Sem protocolo', 'Esta linha não possui protocolo informado', 'warning');
+            return;
+        }
+
+        try {
+            // Buscar totais via API
+            const response = await fetch(`/carteira/simples/api/totais-protocolo?protocolo=${encodeURIComponent(protocolo)}`);
+
+            if (!response.ok) {
+                throw new Error('Erro ao buscar totais do protocolo');
+            }
+
+            const dados = await response.json();
+
+            if (dados.erro) {
+                mostrarToast('❌ Erro', dados.erro, 'danger');
+                return;
+            }
+
+            // Formatar valores para exibição
+            const valorTotal = new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(dados.valor_total || 0);
+
+            const pesoTotal = new Intl.NumberFormat('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(dados.peso_total || 0);
+
+            const palletTotal = new Intl.NumberFormat('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(dados.pallet_total || 0);
+
+            const qtdSeparacoes = dados.qtd_separacoes || 0;
+
+            // Montar mensagem do toast
+            const mensagem = `
+                <strong>Protocolo:</strong> ${protocolo}<br>
+                <strong>Separações:</strong> ${qtdSeparacoes}<br>
+                <hr class="my-1">
+                <strong>💰 Valor Total:</strong> ${valorTotal}<br>
+                <strong>⚖️ Peso Total:</strong> ${pesoTotal} kg<br>
+                <strong>📦 Pallets Total:</strong> ${palletTotal}
+            `;
+
+            mostrarToast('📊 Totais do Protocolo', mensagem, 'info', 2000);
+
+        } catch (erro) {
+            console.error('Erro ao buscar totais do protocolo:', erro);
+            mostrarToast('❌ Erro', 'Não foi possível buscar os totais do protocolo', 'danger');
         }
     }
 
@@ -2077,18 +2175,19 @@
                 throw new Error(resultado.error || 'Erro ao adicionar itens à separação');
             }
 
+            // ✅ Removido toast de confirmação para agilizar fluxo
             // Montar mensagem descritiva
-            let mensagem = resultado.message;
-
-            // Adicionar detalhes se houver atualizações
-            if (resultado.itens_atualizados && resultado.itens_atualizados.length > 0) {
-                mensagem += '<br><br><small class="text-muted">Detalhes das atualizações:</small><br>';
-                resultado.itens_atualizados.forEach(item => {
-                    mensagem += `<small>• ${item.cod_produto}: ${item.quantidade_anterior} + ${item.quantidade_adicionada} = ${item.quantidade_nova}</small><br>`;
-                });
-            }
-
-            mostrarMensagem('Sucesso', mensagem, 'success');
+            // let mensagem = resultado.message;
+            //
+            // // Adicionar detalhes se houver atualizações
+            // if (resultado.itens_atualizados && resultado.itens_atualizados.length > 0) {
+            //     mensagem += '<br><br><small class="text-muted">Detalhes das atualizações:</small><br>';
+            //     resultado.itens_atualizados.forEach(item => {
+            //         mensagem += `<small>• ${item.cod_produto}: ${item.quantidade_anterior} + ${item.quantidade_adicionada} = ${item.quantidade_nova}</small><br>`;
+            //     });
+            // }
+            //
+            // mostrarMensagem('Sucesso', mensagem, 'success');
 
             // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
             if (resultado.separacoes && resultado.separacoes.length > 0) {
@@ -2673,6 +2772,35 @@
         header.className = `modal-header bg-${tipo} text-white`;
 
         bsModal.show();
+    }
+
+    /**
+     * Mostrar toast de notificação
+     * @param {string} titulo - Título do toast
+     * @param {string} mensagem - Mensagem do toast (aceita HTML)
+     * @param {string} tipo - Tipo: success, danger, warning, info
+     * @param {number} duracao - Duração em ms (padrão: 5000)
+     */
+    function mostrarToast(titulo, mensagem, tipo = 'info', duracao = 5000) {
+        const toastElement = document.getElementById('toastProtocolo');
+        const toastTitulo = document.getElementById('toastProtocoloTitulo');
+        const toastMensagem = document.getElementById('toastProtocoloMensagem');
+
+        // Configurar conteúdo
+        toastTitulo.textContent = titulo;
+        toastMensagem.innerHTML = mensagem;
+
+        // Aplicar classes de cor
+        const header = toastElement.querySelector('.toast-header');
+        header.className = `toast-header bg-${tipo} text-white`;
+
+        // Criar e mostrar o toast
+        const bsToast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: duracao
+        });
+
+        bsToast.show();
     }
 
     // ==============================================

@@ -831,17 +831,20 @@ def cancelar_embarque(id):
                     
                     for sep in separacoes:
                         mudancas = []
-                        
+
                         # Limpar data_embarque se corresponder
                         if embarque.data_embarque and sep.data_embarque == embarque.data_embarque:
                             sep.data_embarque = None
                             mudancas.append('data_embarque')
-                        
-                        # Limpar cotacao_id se corresponder
-                        if embarque.cotacao_id and sep.cotacao_id == embarque.cotacao_id:
+
+                        # ✅ CORREÇÃO: Limpar cotacao_id verificando AMBOS embarque.cotacao_id E item.cotacao_id
+                        # Para carga DIRETA: embarque.cotacao_id é preenchido
+                        # Para carga FRACIONADA: item.cotacao_id é preenchido
+                        cotacao_do_embarque = embarque.cotacao_id or item.cotacao_id
+                        if cotacao_do_embarque and sep.cotacao_id == cotacao_do_embarque:
                             sep.cotacao_id = None
                             mudancas.append('cotacao_id')
-                        
+
                         if mudancas:
                             print(f"[CANCEL] Lote {item.separacao_lote_id}, produto {sep.cod_produto}: {', '.join(mudancas)} limpos")
             
@@ -1713,8 +1716,9 @@ def cancelar_item_embarque(item_id):
                     mudancas.append('data_embarque')
                 
                 # 2. REVERTER COTACAO_ID se corresponder a cotação deste embarque
-                # Como o lote inteiro sai do embarque, podemos limpar a cotação
-                if embarque.cotacao_id and sep.cotacao_id == embarque.cotacao_id:
+                # ✅ CORREÇÃO: Verificar AMBOS embarque.cotacao_id E item.cotacao_id
+                cotacao_do_embarque = embarque.cotacao_id or item.cotacao_id
+                if cotacao_do_embarque and sep.cotacao_id == cotacao_do_embarque:
                     # Verificar se não há OUTRO embarque ativo com este mesmo lote
                     outro_embarque = EmbarqueItem.query.join(Embarque).filter(
                         EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
@@ -1722,7 +1726,7 @@ def cancelar_item_embarque(item_id):
                         Embarque.status == 'ativo',
                         Embarque.id != embarque.id
                     ).first()
-                    
+
                     if not outro_embarque:
                         # Seguro limpar - este lote não está em outro embarque
                         sep.cotacao_id = None

@@ -288,12 +288,12 @@ def log_reversao_status(mapper, connection, target):
     # Verificar se houve mudança de status
     if not hasattr(target, '_sa_instance_state'):
         return
-    
+
     history = db.inspect(target).attrs.status.history
     if history.has_changes():
         status_anterior = history.deleted[0] if history.deleted else None
         status_novo = target.status
-        
+
         # Detectar reversões importantes
         reversoes = {
             ('EMBARCADO', 'COTADO'): "Removido do embarque",
@@ -304,11 +304,123 @@ def log_reversao_status(mapper, connection, target):
             ('FATURADO', 'ABERTO'): "NF cancelada (sem vínculos)",
             ('NF no CD', 'FATURADO'): "NF saiu do CD"
         }
-        
+
         if (status_anterior, status_novo) in reversoes:
             import logging
             logger = logging.getLogger(__name__)
             logger.info(f"[REVERSÃO] Separação {target.id}: {reversoes[(status_anterior, status_novo)]}")
+
+
+@event.listens_for(Separacao, 'after_update')
+@event.listens_for(Separacao, 'after_delete')
+def recalcular_totais_embarque(mapper, connection, target):
+    """
+    ✅ CORREÇÃO: Recalcula automaticamente os totais do Embarque e EmbarqueItem
+    quando peso, valor ou pallet de uma Separacao são alterados.
+
+    Este listener dispara APÓS o commit, então pode fazer queries normalmente.
+
+    IMPORTANTE:
+    - Recalcula APENAS se a Separacao está vinculada a um EmbarqueItem
+    - Atualiza EmbarqueItem.peso, .valor, .pallets
+    - Atualiza Embarque.peso_total, .valor_total, .pallet_total
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Só recalcular se tem separacao_lote_id
+    if not target.separacao_lote_id:
+        return
+
+    try:
+        # Buscar EmbarqueItem vinculado a este lote
+        from app.embarques.models import EmbarqueItem, Embarque
+        from sqlalchemy import select, func
+
+        # Buscar EmbarqueItem pelo separacao_lote_id
+        stmt = select(EmbarqueItem).where(
+            EmbarqueItem.separacao_lote_id == target.separacao_lote_id,
+            EmbarqueItem.status == 'ativo'
+        )
+        resultado = connection.execute(stmt).first()
+
+        if not resultado:
+            # Não está em nenhum embarque ativo
+            return
+
+        embarque_item_id = resultado[0]  # ID do EmbarqueItem
+        embarque_id = resultado[1]  # ID do Embarque (segunda coluna)
+
+        # ✅ RECALCULAR TOTAIS DO LOTE (somando TODAS as Separacoes do lote)
+        stmt_totais = select(
+            func.sum(Separacao.peso).label('peso_total'),
+            func.sum(Separacao.valor_saldo).label('valor_total'),
+            func.sum(Separacao.pallet).label('pallet_total')
+        ).where(
+            Separacao.separacao_lote_id == target.separacao_lote_id,
+            Separacao.sincronizado_nf == False
+        )
+
+        totais = connection.execute(stmt_totais).first()
+
+        if totais:
+            peso_total_lote = float(totais[0] or 0)
+            valor_total_lote = float(totais[1] or 0)
+            pallet_total_lote = float(totais[2] or 0)
+
+            # ✅ ATUALIZAR EmbarqueItem
+            connection.execute(
+                text("""
+                    UPDATE embarque_itens
+                    SET peso = :peso, valor = :valor, pallets = :pallets
+                    WHERE id = :item_id
+                """),
+                {
+                    'peso': peso_total_lote,
+                    'valor': valor_total_lote,
+                    'pallets': pallet_total_lote,
+                    'item_id': embarque_item_id
+                }
+            )
+
+            # ✅ RECALCULAR TOTAIS DO EMBARQUE (somando TODOS os EmbarqueItems ativos)
+            stmt_embarque = select(
+                func.sum(EmbarqueItem.peso).label('peso_total'),
+                func.sum(EmbarqueItem.valor).label('valor_total'),
+                func.sum(EmbarqueItem.pallets).label('pallet_total')
+            ).where(
+                EmbarqueItem.embarque_id == embarque_id,
+                EmbarqueItem.status == 'ativo'
+            )
+
+            totais_embarque = connection.execute(stmt_embarque).first()
+
+            if totais_embarque:
+                peso_total_embarque = float(totais_embarque[0] or 0)
+                valor_total_embarque = float(totais_embarque[1] or 0)
+                pallet_total_embarque = float(totais_embarque[2] or 0)
+
+                # ✅ ATUALIZAR Embarque
+                connection.execute(
+                    text("""
+                        UPDATE embarques
+                        SET peso_total = :peso, valor_total = :valor, pallet_total = :pallet
+                        WHERE id = :embarque_id
+                    """),
+                    {
+                        'peso': peso_total_embarque,
+                        'valor': valor_total_embarque,
+                        'pallet': pallet_total_embarque,
+                        'embarque_id': embarque_id
+                    }
+                )
+
+                logger.info(f"✅ [RECALC] Embarque #{embarque_id} atualizado: "
+                           f"Peso={peso_total_embarque:.2f}, Valor={valor_total_embarque:.2f}, "
+                           f"Pallets={pallet_total_embarque:.2f}")
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao recalcular totais do embarque: {e}", exc_info=True)
 
 
 # ============================================================================

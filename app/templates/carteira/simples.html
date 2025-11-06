@@ -881,9 +881,10 @@
                                 <th style="min-width: 60px;">Ações</th>
                                 <th style="min-width: 60px;">Qtd Edit.</th>
                                 <th style="min-width: 30px;">D1</th>
-                                <th style="min-width: 77px;">Dt Exped.</th>
-                                <th style="min-width: 77px;">Dt Agend.</th>
-                                <th style="min-width: 80px;">Protocolo</th>
+                                <th style="min-width: 69px;">Dt Exped.</th>
+                                <th style="min-width: 69px;">Dt Agend.</th>
+                                <th style="min-width: 30px;">📊</th>
+                                <th style="min-width: 92px;">Protocolo</th>
                                 <th style="min-width: 30px;">✓</th>
                                 <th style="min-width: 60px;">Est. Atual</th>
                                 <th style="min-width: 60px;">Qtd Cart.</th>
@@ -897,7 +898,7 @@
                         </thead>
                         <tbody id="tbody-carteira">
                             <tr>
-                                <td colspan="29" class="text-center py-3">
+                                <td colspan="30" class="text-center py-3">
                                     <i class="fas fa-spinner fa-spin me-2"></i> Carregando dados...
                                 </td>
                             </tr>
@@ -1007,6 +1008,19 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🆕 Container de Toasts -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    <div id="toastProtocolo" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto" id="toastProtocoloTitulo">Notificação</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastProtocoloMensagem">
+            Mensagem
         </div>
     </div>
 </div>

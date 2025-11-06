@@ -20,9 +20,12 @@ def register_requisicao_compras_routes(bp):
     @login_required
     def listar_requisicoes():
         """
-        Lista todas as requisições de compras com filtros
+        Lista requisições agrupadas por num_requisicao com suas linhas
         """
         try:
+            from collections import defaultdict
+            from app.manufatura.models import RequisicaoCompraAlocacao, PedidoCompras
+
             # Filtros
             cod_produto = request.args.get('cod_produto', '').strip()
             status = request.args.get('status', '').strip()
@@ -51,18 +54,111 @@ def register_requisicao_compras_routes(bp):
                 data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d').date()
                 query = query.filter(RequisicaoCompras.data_requisicao_criacao <= data_fim_dt)
 
-            # Ordenar por data de criação DESC
-            query = query.order_by(RequisicaoCompras.data_requisicao_criacao.desc())
-
-            # Paginação
-            page = request.args.get('page', 1, type=int)
-            per_page = request.args.get('per_page', 50, type=int)
-
-            requisicoes_paginadas = query.paginate(
-                page=page,
-                per_page=per_page,
-                error_out=False
+            # Ordenar por data de criação DESC + num_requisicao
+            query = query.order_by(
+                RequisicaoCompras.data_requisicao_criacao.desc(),
+                RequisicaoCompras.num_requisicao,
+                RequisicaoCompras.cod_produto
             )
+
+            # Buscar TODAS as linhas (sem paginação nas linhas individuais)
+            todas_linhas = query.all()
+
+            # ✅ AGRUPAR por num_requisicao
+            requisicoes_agrupadas = defaultdict(lambda: {
+                'num_requisicao': None,
+                'data_criacao': None,
+                'usuario': None,
+                'status': None,
+                'linhas': []
+            })
+
+            for linha in todas_linhas:
+                if requisicoes_agrupadas[linha.num_requisicao]['num_requisicao'] is None:
+                    # Primeira linha desta requisição - preencher cabeçalho
+                    requisicoes_agrupadas[linha.num_requisicao].update({
+                        'num_requisicao': linha.num_requisicao,
+                        'data_criacao': linha.data_requisicao_solicitada or linha.data_requisicao_criacao,
+                        'usuario': linha.usuario_requisicao_criacao,
+                        'status': linha.status
+                    })
+
+                # Buscar pedido vinculado
+                alocacao = RequisicaoCompraAlocacao.query.filter_by(
+                    requisicao_compra_id=linha.id
+                ).first()
+
+                pedido_info = None
+                status_recebimento = None
+                if alocacao and alocacao.pedido:
+                    # ✅ Calcular status de recebimento
+                    qtd_pedido = float(alocacao.pedido.qtd_produto_pedido or 0)
+                    qtd_recebida = float(alocacao.pedido.qtd_recebida or 0)
+
+                    if qtd_recebida == 0:
+                        status_recebimento = 'a_receber'
+                    elif qtd_recebida >= qtd_pedido:
+                        status_recebimento = 'recebido'
+                    else:
+                        status_recebimento = 'parcial'
+
+                    pedido_info = {
+                        'num_pedido': alocacao.pedido.num_pedido,
+                        'data_pedido': alocacao.pedido.data_pedido_criacao,
+                        'qtd_pedido': qtd_pedido,
+                        'qtd_recebida': qtd_recebida,
+                        'status_recebimento': status_recebimento
+                    }
+
+                # Adicionar linha
+                requisicoes_agrupadas[linha.num_requisicao]['linhas'].append({
+                    'id': linha.id,
+                    'cod_produto': linha.cod_produto,
+                    'nome_produto': linha.nome_produto,
+                    'qtd': linha.qtd_produto_requisicao,
+                    'data_necessidade': linha.data_necessidade,
+                    'purchase_state': linha.purchase_state,
+                    'pedido': pedido_info
+                })
+
+            # Converter para lista ordenada
+            requisicoes_lista = list(requisicoes_agrupadas.values())
+
+            # Paginação manual
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 20, type=int)
+            total = len(requisicoes_lista)
+
+            inicio = (page - 1) * per_page
+            fim = inicio + per_page
+            requisicoes_paginadas = requisicoes_lista[inicio:fim]
+
+            # Criar objeto de paginação
+            class Paginacao:
+                def __init__(self, items, page, per_page, total):
+                    self.items = items
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.pages = (total + per_page - 1) // per_page
+                    self.has_prev = page > 1
+                    self.has_next = page < self.pages
+                    self.prev_num = page - 1 if self.has_prev else None
+                    self.next_num = page + 1 if self.has_next else None
+
+                def iter_pages(self, left_edge=2, left_current=2, right_current=3, right_edge=2):
+                    last = 0
+                    for num in range(1, self.pages + 1):
+                        if (num <= left_edge or
+                            (num > self.page - left_current - 1 and
+                             num < self.page + right_current) or
+                            num > self.pages - right_edge):
+                            if last + 1 != num:
+                                yield None
+                            yield num
+                            last = num
+
+            paginacao = Paginacao(requisicoes_paginadas, page, per_page, total)
 
             # Buscar status únicos para filtro
             status_lista = db.session.query(RequisicaoCompras.status).distinct().all()
@@ -70,8 +166,8 @@ def register_requisicao_compras_routes(bp):
 
             return render_template(
                 'manufatura/requisicoes_compras/listar.html',
-                requisicoes=requisicoes_paginadas.items,
-                paginacao=requisicoes_paginadas,
+                requisicoes=requisicoes_paginadas,
+                paginacao=paginacao,
                 status_lista=status_lista,
                 filtros={
                     'cod_produto': cod_produto,
@@ -271,6 +367,32 @@ def register_requisicao_compras_routes(bp):
 
         except Exception as e:
             logger.error(f"[REQUISICOES] Erro ao buscar histórico: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/requisicoes-compras/<int:requisicao_id>/projecao')
+    @login_required
+    def projecao_requisicao(requisicao_id):
+        """
+        API: Projeção de estoque -D7 a +D7 para uma requisição
+
+        Retorna:
+        - Projeção diária de estoque
+        - Pedidos vinculados
+        - Produtos consumidores (com intermediários expandidos)
+        """
+        try:
+            from app.manufatura.services.projecao_estoque_service import ServicoProjecaoEstoque
+
+            servico = ServicoProjecaoEstoque()
+            resultado = servico.projetar_requisicao(requisicao_id)
+
+            if not resultado.get('sucesso'):
+                return jsonify(resultado), 404
+
+            return jsonify(resultado)
+
+        except Exception as e:
+            logger.error(f"[REQUISICOES] Erro ao calcular projeção: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
     @bp.route('/api/requisicoes-compras/estatisticas')

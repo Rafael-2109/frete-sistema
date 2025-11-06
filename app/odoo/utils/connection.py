@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any
 from functools import wraps
 import time
 import socket
+from .circuit_breaker import get_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +28,25 @@ class OdooConnection:
         self.database = config['database']
         self.username = config['username']
         self.api_key = config['api_key']
+
+        # 🔧 Circuit Breaker: Timeout otimizado para operações longas
+        # Aumentado para 30s para suportar sincronizações com período maior
+        # Autenticação pode demorar mais quando Odoo está ocupado
         self.timeout = config.get('timeout', 30)
+
+        # 🔧 Retry reduzido: Circuit Breaker gerencia tentativas
+        # Com Circuit Breaker, não precisa de muitas tentativas internas
         self.retry_attempts = config.get('retry_attempts', 3)
-        
+
+        # 🔧 Circuit Breaker para proteger sistema
+        self.circuit_breaker = get_circuit_breaker()
+
         # Configurar SSL para produção
         self.ssl_context = ssl.create_default_context()
         if 'localhost' in self.url or '127.0.0.1' in self.url:
             self.ssl_context.check_hostname = False
             self.ssl_context.verify_mode = ssl.CERT_NONE
-        
+
         # Conexões XML-RPC
         self._common = None
         self._models = None
@@ -76,50 +87,71 @@ class OdooConnection:
         return self._models
     
     def authenticate(self) -> bool:
-        """Autentica no Odoo e obtém UID"""
-        try:
+        """
+        Autentica no Odoo e obtém UID
+        Protegido por Circuit Breaker
+        """
+        def _do_authenticate():
+            """Função interna para autenticação"""
             common = self._get_common()
-            
-            # Autenticação com retry
-            for attempt in range(self.retry_attempts):
-                try:
-                    self._uid = common.authenticate(
-                        self.database,
-                        self.username,
-                        self.api_key,
-                        {}
-                    )
-                    
-                    if self._uid:
-                        logger.info(f"✅ Autenticado no Odoo com UID: {self._uid}")
-                        return True
-                    else:
-                        logger.warning(f"Falha na autenticação - tentativa {attempt + 1}/{self.retry_attempts}")
-                        
-                except Exception as e:
-                    logger.error(f"Erro na autenticação (tentativa {attempt + 1}): {e}")
-                    if attempt < self.retry_attempts - 1:
-                        time.sleep(2 ** attempt)  # Backoff exponencial
-                    else:
-                        raise
-            
+
+            # ✅ CORRIGIDO: Sem retry interno - Circuit Breaker gerencia tentativas
+            # Falhar rápido para o Circuit Breaker detectar problemas imediatamente
+            try:
+                self._uid = common.authenticate(
+                    self.database,
+                    self.username,
+                    self.api_key,
+                    {}
+                )
+
+                if self._uid:
+                    logger.info(f"✅ Autenticado no Odoo com UID: {self._uid}")
+                    return True
+                else:
+                    error_msg = "Credenciais inválidas ou UID não retornado"
+                    logger.error(f"❌ Falha na autenticação: {error_msg}")
+                    raise Exception(error_msg)
+
+            except Exception as e:
+                # ✅ Lançar exceção imediatamente para Circuit Breaker detectar
+                logger.error(f"❌ Erro na autenticação: {e}")
+                raise
+
             logger.error("❌ Falha na autenticação após todas as tentativas")
             return False
-            
+
+        try:
+            # 🔧 Usar Circuit Breaker para proteger autenticação
+            return self.circuit_breaker.call(_do_authenticate)
+
         except Exception as e:
-            logger.error(f"Erro na autenticação: {e}")
+            error_msg = str(e)
+
+            # Mensagens amigáveis para diferentes estados do Circuit Breaker
+            if "Circuit Breaker ABERTO" in error_msg:
+                logger.warning(f"⚠️ Circuit Breaker bloqueou autenticação: Odoo indisponível")
+            else:
+                logger.error(f"Erro na autenticação: {e}")
+
             return False
     
     def execute_kw(self, model: str, method: str, args: list, kwargs: Optional[dict] = None) -> Any:
-        """Executa método no Odoo com retry automático"""
-        if not self._uid:
-            if not self.authenticate():
-                raise Exception("Falha na autenticação com Odoo")
-        
-        models = self._get_models()
-        kwargs = kwargs or {}
-        
-        for attempt in range(self.retry_attempts):
+        """
+        Executa método no Odoo com retry automático
+        Protegido por Circuit Breaker
+        """
+        def _do_execute():
+            """Função interna para execução"""
+            if not self._uid:
+                if not self.authenticate():
+                    raise Exception("Falha na autenticação com Odoo")
+
+            models = self._get_models()
+            kwargs_resolved = kwargs or {}
+
+            # ✅ CORRIGIDO: Sem retry interno - Circuit Breaker gerencia tentativas
+            # Falhar rápido para o Circuit Breaker detectar problemas imediatamente
             try:
                 result = models.execute_kw(
                     self.database,
@@ -128,20 +160,17 @@ class OdooConnection:
                     model,
                     method,
                     args,
-                    kwargs
+                    kwargs_resolved
                 )
                 return result
-                
+
             except Exception as e:
-                logger.error(f"Erro na execução (tentativa {attempt + 1}): {e}")
-                if attempt < self.retry_attempts - 1:
-                    time.sleep(2 ** attempt)  # Backoff exponencial
-                    # Tentar reautenticar
-                    self._uid = None
-                    if not self.authenticate():
-                        raise Exception("Falha na reautenticação")
-                else:
-                    raise
+                # ✅ Lançar exceção imediatamente para Circuit Breaker detectar
+                logger.error(f"❌ Erro na execução de {model}.{method}: {e}")
+                raise
+
+        # 🔧 Usar Circuit Breaker para proteger execução
+        return self.circuit_breaker.call(_do_execute)
     
     def search_read(self, model: str, domain: list, fields: Optional[list] = None, limit: Optional[int] = None) -> list:
         """Busca registros no Odoo"""
@@ -195,7 +224,7 @@ class OdooConnection:
             # Testar conexão common
             common = self._get_common()
             version = common.version()
-            
+
             # Testar autenticação
             if not self.authenticate():
                 return {
@@ -203,7 +232,7 @@ class OdooConnection:
                     'message': 'Falha na autenticação',
                     'error': 'Credenciais inválidas'
                 }
-            
+
             # Testar busca simples
             models = self._get_models()
             test_result = models.execute_kw(
@@ -215,11 +244,11 @@ class OdooConnection:
                 [[['id', '=', self._uid]]],
                 {'fields': ['name', 'login'], 'limit': 1}
             )
-            
+
             user_data = None
             if test_result and isinstance(test_result, list) and len(test_result) > 0:
                 user_data = test_result[0]
-            
+
             return {
                 'success': True,
                 'message': 'Conexão estabelecida com sucesso',
@@ -230,7 +259,7 @@ class OdooConnection:
                     'uid': self._uid
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Erro no teste de conexão: {e}")
             return {
@@ -238,6 +267,15 @@ class OdooConnection:
                 'message': 'Erro na conexão',
                 'error': str(e)
             }
+
+    def get_circuit_breaker_status(self) -> Dict[str, Any]:
+        """Retorna status do Circuit Breaker"""
+        return self.circuit_breaker.get_status()
+
+    def reset_circuit_breaker(self):
+        """Reseta manualmente o Circuit Breaker"""
+        logger.warning("🔄 Reset manual do Circuit Breaker solicitado")
+        self.circuit_breaker.reset()
 
 
 def get_odoo_connection():

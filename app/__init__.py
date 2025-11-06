@@ -109,7 +109,6 @@ def register_pg_types_on_connect(dbapi_conn, connection_record):
     Registra tipos PostgreSQL em CADA conexão criada
     """
     try:
-        import psycopg2
         from psycopg2 import extensions
 
         # Criar cursor para registrar tipos nesta conexão específica
@@ -722,6 +721,10 @@ def create_app(config_name=None):
     # app.register_blueprint(odoo_bp)  # Movido para Carteira & Estoque
     app.register_blueprint(sync_integrada_bp)  # REATIVADO - Necessário!
     app.register_blueprint(manufatura_odoo_bp)  # Integração Manufatura/Odoo
+
+    # 🔧 Circuit Breaker - Monitoramento e gestão de conexões Odoo
+    from app.odoo.routes_circuit_breaker import circuit_breaker_bp
+    app.register_blueprint(circuit_breaker_bp)
 
     # 🤖 Claude AI Integration
     # Claude AI - registrar apenas se habilitado

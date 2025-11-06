@@ -92,6 +92,24 @@
                         </div>
 
                         <div class="col-md-6">
+                            <!-- 🔧 CIRCUIT BREAKER DO ODOO -->
+                            <div class="card border-info mb-3" id="circuit-breaker-card">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-shield-alt"></i> Circuit Breaker Odoo
+                                        <span class="badge bg-light text-info ml-2" id="cb-state-badge">...</span>
+                                    </h6>
+                                </div>
+                                <div class="card-body" id="cb-card-body">
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm text-info" role="status">
+                                            <span class="sr-only">Carregando...</span>
+                                        </div>
+                                        <p class="mb-0 mt-2"><small>Carregando status...</small></p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- 🔄 BOTÃO PRINCIPAL DE SINCRONIZAÇÃO -->
                             <div class="card border-primary">
                                 <div class="card-header bg-primary text-white">
@@ -291,7 +309,176 @@ Deseja continuar?`;
                 }, 60000); // 60 segundos
             });
         }
+
+        // 🔧 Circuit Breaker - Carregar status
+        loadCircuitBreakerStatus();
+        setInterval(loadCircuitBreakerStatus, 10000); // Atualiza a cada 10s
     });
+
+    // 🔧 Funções do Circuit Breaker
+    async function loadCircuitBreakerStatus() {
+        try {
+            const response = await fetch('/admin/circuit-breaker/status');
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    renderCircuitBreakerError('Faça login para ver o status');
+                    return;
+                } else if (response.status === 403) {
+                    renderCircuitBreakerError('Sem permissão para ver status');
+                    return;
+                }
+                renderCircuitBreakerError(`Erro ${response.status}: ${response.statusText}`);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                renderCircuitBreakerStatus(data.circuit_breaker);
+            } else {
+                renderCircuitBreakerError(data.error || 'Erro ao carregar status');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar Circuit Breaker:', error);
+            renderCircuitBreakerError(`Erro de conexão: ${error.message}`);
+        }
+    }
+
+    function renderCircuitBreakerStatus(status) {
+        const badge = document.getElementById('cb-state-badge');
+        const cardBody = document.getElementById('cb-card-body');
+        const card = document.getElementById('circuit-breaker-card');
+
+        // Estados e cores
+        const stateConfig = {
+            'CLOSED': {
+                icon: '🟢',
+                text: 'NORMAL',
+                color: 'success',
+                description: 'Odoo funcionando normalmente'
+            },
+            'OPEN': {
+                icon: '🔴',
+                text: 'BLOQUEADO',
+                color: 'danger',
+                description: 'Odoo indisponível - Sistema protegido'
+            },
+            'HALF_OPEN': {
+                icon: '🟡',
+                text: 'TESTANDO',
+                color: 'warning',
+                description: 'Verificando se Odoo voltou'
+            }
+        };
+
+        const config = stateConfig[status.state] || stateConfig['CLOSED'];
+
+        // Atualizar badge
+        badge.className = `badge bg-light text-${config.color} ml-2`;
+        badge.textContent = `${config.icon} ${config.text}`;
+
+        // Atualizar borda do card
+        card.className = `card border-${config.color} mb-3`;
+
+        // Renderizar conteúdo
+        let html = `
+            <div class="mb-2">
+                <strong>${config.description}</strong>
+            </div>
+
+            <div class="row text-center mb-3">
+                <div class="col-4">
+                    <small class="text-muted">Chamadas</small>
+                    <div class="h5 mb-0">${status.total_calls}</div>
+                </div>
+                <div class="col-4">
+                    <small class="text-muted">Sucessos</small>
+                    <div class="h5 mb-0 text-success">${status.total_successes}</div>
+                </div>
+                <div class="col-4">
+                    <small class="text-muted">Falhas</small>
+                    <div class="h5 mb-0 text-danger">${status.total_failures}</div>
+                </div>
+            </div>
+        `;
+
+        // Informações específicas por estado
+        if (status.state === 'OPEN' && status.time_until_retry !== null) {
+            html += `
+                <div class="alert alert-warning alert-sm mb-2">
+                    <small>
+                        <i class="fas fa-clock"></i>
+                        Próxima tentativa em <strong>${Math.ceil(status.time_until_retry)}s</strong>
+                    </small>
+                </div>
+            `;
+        }
+
+        if (status.state === 'CLOSED' && status.failure_count > 0) {
+            html += `
+                <div class="alert alert-info alert-sm mb-2">
+                    <small>
+                        <i class="fas fa-info-circle"></i>
+                        Falhas consecutivas: <strong>${status.failure_count}/${status.failure_threshold}</strong>
+                    </small>
+                </div>
+            `;
+        }
+
+        // Botão de reset (apenas para admins e se circuit estiver aberto ou com falhas)
+        {% if current_user.perfil == 'administrador' %}
+        if (status.state === 'OPEN' || status.failure_count > 0) {
+            html += `
+                <button onclick="resetCircuitBreaker()" class="btn btn-sm btn-outline-primary btn-block">
+                    <i class="fas fa-redo"></i> Resetar Circuit Breaker
+                </button>
+            `;
+        }
+        {% endif %}
+
+        // Link para dashboard detalhado
+        html += `
+            <div class="mt-2 text-center">
+                <a href="/admin/circuit-breaker/dashboard" target="_blank" class="btn btn-sm btn-link">
+                    <i class="fas fa-chart-line"></i> Ver Dashboard Completo
+                </a>
+            </div>
+        `;
+
+        cardBody.innerHTML = html;
+    }
+
+    function renderCircuitBreakerError(message) {
+        const cardBody = document.getElementById('cb-card-body');
+        cardBody.innerHTML = `
+            <div class="alert alert-warning alert-sm mb-0">
+                <small><i class="fas fa-exclamation-triangle"></i> ${message}</small>
+            </div>
+        `;
+    }
+
+    async function resetCircuitBreaker() {
+        if (!confirm('🔄 RESETAR CIRCUIT BREAKER\n\nIsso forçará novas tentativas de conexão com o Odoo.\n\nApenas faça isso se souber que o Odoo voltou.\n\nContinuar?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/circuit-breaker/reset', {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('✅ Circuit Breaker resetado com sucesso!\n\nO sistema tentará conectar ao Odoo novamente.');
+                loadCircuitBreakerStatus();
+            } else {
+                alert('❌ Erro ao resetar: ' + data.error);
+            }
+        } catch (error) {
+            alert('❌ Erro na requisição: ' + error.message);
+        }
+    }
 </script>
 
 {% endblock %}

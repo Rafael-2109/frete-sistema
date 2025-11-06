@@ -45,6 +45,19 @@ class PedidoComprasServiceOtimizado:
         'cancel': 'Cancelado',
     }
 
+    # ✅ TIPOS DE PEDIDO RELEVANTES (apenas materiais armazenáveis)
+    # Exclui: transferências, remessas, serviços (exceto industrialização), operações temporárias
+    TIPOS_RELEVANTES = {
+        'compra',                   # Compra normal - PRINCIPAL
+        'importacao',               # Importação
+        'comp-importacao',          # Complementar de importação
+        'devolucao',                # Devolução de cliente
+        'devolucao_compra',         # Devolução de venda
+        'industrializacao',         # Retorno de industrialização
+        'serv-industrializacao',    # Serviço de industrialização (produção terceirizada)
+        'ent-bonificacao',          # Bonificação (brinde)
+    }
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.connection = get_odoo_connection()
@@ -175,7 +188,8 @@ class PedidoComprasServiceOtimizado:
         campos_pedido = [
             'id', 'name', 'state', 'create_date', 'write_date',
             'date_order', 'date_planned', 'partner_id', 'company_id',
-            'order_line', 'currency_id', 'amount_total', 'notes'
+            'order_line', 'currency_id', 'amount_total', 'notes',
+            'l10n_br_tipo_pedido'  # ✅ ADICIONADO: Tipo de pedido (Brasil)
         ]
 
         pedidos = self.connection.search_read(
@@ -217,7 +231,7 @@ class PedidoComprasServiceOtimizado:
             todos_line_ids,
             fields=[
                 'id', 'order_id', 'product_id', 'name',
-                'product_qty', 'product_uom', 'date_planned',
+                'product_qty', 'qty_received', 'product_uom', 'date_planned',  # ✅ ADICIONADO qty_received
                 'price_unit', 'price_subtotal', 'price_total',
                 'taxes_id', 'state'
             ]
@@ -288,16 +302,18 @@ class PedidoComprasServiceOtimizado:
             importado_odoo=True
         ).all()
 
-        # Criar 2 índices para busca rápida
+        # ✅ CORRIGIDO: Criar índice por chave composta (num_pedido, cod_produto)
         cache = {
-            'por_odoo_id': {},      # odoo_id -> PedidoCompras
-            'por_num_pedido': {}    # num_pedido -> PedidoCompras
+            'por_odoo_id': {},           # odoo_id -> PedidoCompras (para compatibilidade)
+            'por_chave_composta': {}     # "num_pedido|cod_produto" -> PedidoCompras
         }
 
         for pedido in todos_pedidos:
             if pedido.odoo_id:
                 cache['por_odoo_id'][pedido.odoo_id] = pedido
-            cache['por_num_pedido'][pedido.num_pedido] = pedido
+            # Criar chave composta usando constraint real do banco
+            chave = f"{pedido.num_pedido}|{pedido.cod_produto}"
+            cache['por_chave_composta'][chave] = pedido
 
         self.logger.info(f"   ✅ {len(todos_pedidos)} pedidos carregados em memória")
 
@@ -377,6 +393,16 @@ class PedidoComprasServiceOtimizado:
         Processa uma linha de pedido usando CACHE (SEM queries adicionais)
         """
         try:
+            # ✅ PASSO 0: Verificar tipo de pedido (filtrar apenas relevantes)
+            tipo_pedido = pedido_odoo.get('l10n_br_tipo_pedido')
+
+            if tipo_pedido and tipo_pedido not in self.TIPOS_RELEVANTES:
+                self.logger.info(
+                    f"   Pedido {pedido_odoo['name']} tipo '{tipo_pedido}' "
+                    f"não é relevante para estoque - IGNORADA"
+                )
+                return {'processado': False, 'nova': False, 'atualizada': False}
+
             # PASSO 1: Buscar produto no CACHE
             product_id_odoo = linha_odoo['product_id'][0] if linha_odoo.get('product_id') else None
 
@@ -405,11 +431,15 @@ class PedidoComprasServiceOtimizado:
                 return {'processado': False, 'nova': False, 'atualizada': False}
 
             # PASSO 2: Verificar se já existe no CACHE
-            odoo_id = str(linha_odoo['id'])
+            # ✅ CORRIGIDO: Usar ID do PEDIDO + cod_produto (constraint real)
+            odoo_id_pedido = str(pedido_odoo['id'])
             num_pedido = pedido_odoo['name']
 
-            # 🚀 Busca no CACHE em vez de query
-            pedido_existente = pedidos_existentes_cache['por_odoo_id'].get(odoo_id)
+            # Criar chave composta para busca
+            chave_composta = f"{num_pedido}|{cod_produto}"
+
+            # 🚀 Busca no CACHE por chave composta
+            pedido_existente = pedidos_existentes_cache['por_chave_composta'].get(chave_composta)
 
             if pedido_existente:
                 # ATUALIZAR
@@ -424,10 +454,11 @@ class PedidoComprasServiceOtimizado:
                 # CRIAR NOVO
                 novo_pedido = self._criar_pedido(pedido_odoo, linha_odoo, produto_odoo)
 
-                # 🚀 Atualizar CACHE com novo pedido
+                # 🚀 Atualizar CACHE com novo pedido usando chave composta
                 if novo_pedido.odoo_id:
                     pedidos_existentes_cache['por_odoo_id'][novo_pedido.odoo_id] = novo_pedido
-                pedidos_existentes_cache['por_num_pedido'][novo_pedido.num_pedido] = novo_pedido
+                chave_nova = f"{novo_pedido.num_pedido}|{novo_pedido.cod_produto}"
+                pedidos_existentes_cache['por_chave_composta'][chave_nova] = novo_pedido
 
                 return {'processado': True, 'nova': True, 'atualizada': False}
 
@@ -482,6 +513,7 @@ class PedidoComprasServiceOtimizado:
 
             # Quantidades e preços
             qtd_produto_pedido=Decimal(str(linha_odoo.get('product_qty', 0))),
+            qtd_recebida=Decimal(str(linha_odoo.get('qty_received', 0))),  # ✅ NOVO
             preco_produto_pedido=Decimal(str(linha_odoo.get('price_unit', 0))),
 
             # Datas
@@ -490,6 +522,9 @@ class PedidoComprasServiceOtimizado:
 
             # Status do Odoo (✅ NOVO)
             status_odoo=pedido_odoo.get('state'),
+
+            # ✅ Tipo de pedido (l10n_br_tipo_pedido)
+            tipo_pedido=pedido_odoo.get('l10n_br_tipo_pedido'),
 
             # Controle
             importado_odoo=True
@@ -520,6 +555,12 @@ class PedidoComprasServiceOtimizado:
             pedido_existente.qtd_produto_pedido = nova_qtd
             alterado = True
 
+        # ✅ Verificar mudanças em quantidade recebida
+        nova_qtd_recebida = Decimal(str(linha_odoo.get('qty_received', 0)))
+        if pedido_existente.qtd_recebida != nova_qtd_recebida:
+            pedido_existente.qtd_recebida = nova_qtd_recebida
+            alterado = True
+
         # Verificar mudanças em preço
         novo_preco = Decimal(str(linha_odoo.get('price_unit', 0)))
         if pedido_existente.preco_produto_pedido != novo_preco:
@@ -533,6 +574,12 @@ class PedidoComprasServiceOtimizado:
             alterado = True
             if novo_status == 'cancel':
                 self.logger.warning(f"   ⚠️  Pedido {pedido_existente.num_pedido} CANCELADO no Odoo")
+
+        # ✅ Verificar mudança de tipo de pedido
+        novo_tipo = pedido_odoo.get('l10n_br_tipo_pedido')
+        if pedido_existente.tipo_pedido != novo_tipo:
+            pedido_existente.tipo_pedido = novo_tipo
+            alterado = True
 
         if alterado:
             db.session.flush()
@@ -563,7 +610,7 @@ class PedidoComprasServiceOtimizado:
 
             pedidos_sistema = PedidoCompras.query.filter(
                 PedidoCompras.importado_odoo == True,
-                PedidoCompras.odoo_id != None,
+                PedidoCompras.odoo_id.isnot(None),  # ✅ CORRIGIDO: E711
                 PedidoCompras.status_odoo != 'cancel',  # Só verificar os que não estão cancelados
                 PedidoCompras.criado_em >= data_limite  # Apenas da janela de tempo
             ).all()

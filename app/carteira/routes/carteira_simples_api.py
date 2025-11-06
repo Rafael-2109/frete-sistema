@@ -1807,6 +1807,7 @@ def adicionar_itens_separacao():
                         if item_carteira.estado and item_carteira.municipio else None
 
                 # Criar novo registro de Separacao
+                # ✅ CORREÇÃO: Copiar status e cotacao_id da separação de referência
                 nova_separacao = Separacao(
                     separacao_lote_id=separacao_lote_id,
                     num_pedido=num_pedido,
@@ -1829,6 +1830,8 @@ def adicionar_itens_separacao():
                     agendamento=agendamento,
                     protocolo=protocolo,
                     agendamento_confirmado=agendamento_confirmado,
+                    status=separacao_referencia.status,  # ✅ COPIAR STATUS
+                    cotacao_id=separacao_referencia.cotacao_id,  # ✅ COPIAR COTACAO_ID
                     sincronizado_nf=False,
                     criado_em=agora_brasil()
                 )
@@ -1956,4 +1959,66 @@ def adicionar_itens_separacao():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+
+@carteira_simples_bp.route('/api/totais-protocolo', methods=['GET'])
+def totais_protocolo():
+    """
+    Buscar totais agregados de todas as separações com um protocolo específico
+
+    Query params:
+        protocolo (str): Protocolo para buscar totais
+
+    Returns:
+        JSON com valor_total, peso_total, pallet_total e qtd_separacoes
+    """
+    try:
+        protocolo = request.args.get('protocolo', '').strip()
+
+        if not protocolo:
+            return jsonify({
+                'erro': 'Protocolo não informado'
+            }), 400
+
+        # Buscar todas as separações com este protocolo (sincronizado_nf=False)
+        separacoes = Separacao.query.filter(
+            and_(
+                Separacao.protocolo == protocolo,
+                Separacao.sincronizado_nf == False  # Apenas separações não faturadas
+            )
+        ).all()
+
+        if not separacoes:
+            return jsonify({
+                'protocolo': protocolo,
+                'qtd_separacoes': 0,
+                'valor_total': 0,
+                'peso_total': 0,
+                'pallet_total': 0,
+                'mensagem': 'Nenhuma separação encontrada com este protocolo'
+            })
+
+        # Agregar totais
+        valor_total = 0
+        peso_total = 0
+        pallet_total = 0
+
+        for sep in separacoes:
+            valor_total += float(sep.valor_saldo or 0)
+            peso_total += float(sep.peso or 0)
+            pallet_total += float(sep.pallet or 0)
+
+        return jsonify({
+            'protocolo': protocolo,
+            'qtd_separacoes': len(separacoes),
+            'valor_total': round(valor_total, 2),
+            'peso_total': round(peso_total, 2),
+            'pallet_total': round(pallet_total, 2)
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar totais do protocolo: {e}", exc_info=True)
+        return jsonify({
+            'erro': f'Erro ao buscar totais: {str(e)}'
         }), 500
