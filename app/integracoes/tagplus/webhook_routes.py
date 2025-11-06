@@ -9,12 +9,12 @@ IMPORTANTE - SEGURANÇA:
 from flask import Blueprint, request, jsonify
 import logging
 from datetime import datetime
-from app import db
-from app.carteira.models import CadastroCliente
-from app.faturamento.models import FaturamentoProduto
 import re
 import hashlib
 import hmac
+from app import db, csrf
+from app.carteira.models import CadastroCliente
+from app.faturamento.models import FaturamentoProduto
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,6 @@ tagplus_webhook = Blueprint('tagplus_webhook', __name__)
 
 # Token secreto para validar webhooks (configurar no TagPlus)
 WEBHOOK_SECRET = 'frete2024tagplus#secret'  # Use este mesmo valor no campo X-Hub-Secret do TagPlus
-
-# ✅ Importar CSRF para usar csrf.exempt
-from app import csrf
 
 @csrf.exempt
 @tagplus_webhook.route('/webhook/tagplus/cliente', methods=['POST'])
@@ -81,22 +78,28 @@ def webhook_nfe():
 
         # Pega dados do webhook
         dados = request.get_json()
-        evento = dados.get('evento', '')  # nfe_aprovada, nfe_cancelada, nfe_alterada, nfe_apagada
+        evento = dados.get('evento', '').strip()  # Remove espaços em branco
         nfe_data = dados.get('nfe', {})
+
+        # 🔍 Se evento vazio, assume nfe_autorizada (comportamento padrão TagPlus)
+        if not evento:
+            logger.warning(f"⚠️ Evento vazio recebido - assumindo 'nfe_autorizada' | NF: {nfe_data.get('numero', 'N/A')}")
+            evento = 'nfe_autorizada'
 
         logger.info(f"📦 WEBHOOK NFE | Evento: {evento} | NF: {nfe_data.get('numero', 'N/A')}")
 
-        # TagPlus usa 'nfe_aprovada' para NFe autorizada
-        if evento in ['autorizada', 'nfe_aprovada']:
+        # ✅ PROCESSAR: NFe autorizada/aprovada
+        if evento in ['nfe_autorizada', 'autorizada', 'nfe_aprovada']:
             processar_nfe_webhook(nfe_data)
-        # TagPlus usa 'nfe_cancelada' para NFe cancelada
-        elif evento in ['cancelada', 'nfe_cancelada']:
+        # ❌ CANCELAR: NFe cancelada, denegada ou rejeitada
+        elif evento in ['nfe_cancelada', 'cancelada', 'nfe_denegada', 'nfe_rejeitada']:
             cancelar_nfe_webhook(nfe_data)
-        # Eventos ignorados (retorna ok mas não processa)
+        # ⏭️ IGNORAR: Eventos alterada/apagada (retorna ok mas não processa)
         elif evento in ['nfe_alterada', 'nfe_apagada']:
-            logger.info(f"Evento {evento} ignorado (não processado)")
+            logger.info(f"ℹ️ Evento {evento} ignorado (não processado)")
+        # ⚠️ DESCONHECIDO: Qualquer outro evento
         else:
-            logger.warning(f"Evento desconhecido: {evento}")
+            logger.warning(f"⚠️ Evento desconhecido: '{evento}' (será ignorado)")
 
         return jsonify({'status': 'ok'}), 200
         

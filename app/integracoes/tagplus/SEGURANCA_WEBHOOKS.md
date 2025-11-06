@@ -1,11 +1,46 @@
 # 🔐 SEGURANÇA DOS WEBHOOKS TAGPLUS
 
 **Data de Criação**: 08/10/2025
-**Última Atualização**: 08/10/2025
+**Última Atualização**: 06/11/2025
 
 ---
 
-## 🚨 PROBLEMA RESOLVIDO
+## 📋 EVENTOS SUPORTADOS
+
+### Eventos de NFE (Endpoint: `/webhook/tagplus/nfe`)
+
+| Evento | Ação | Descrição |
+|--------|------|-----------|
+| `nfe_autorizada` | ✅ PROCESSAR | NFe autorizada pela SEFAZ - Cria faturamento e vincula com pedidos |
+| `autorizada` | ✅ PROCESSAR | Alias para nfe_autorizada |
+| `nfe_aprovada` | ✅ PROCESSAR | Alias para nfe_autorizada |
+| **(vazio)** | ✅ PROCESSAR | Assume automaticamente nfe_autorizada |
+| `nfe_cancelada` | ❌ CANCELAR | NFe cancelada - Marca itens como cancelados |
+| `cancelada` | ❌ CANCELAR | Alias para nfe_cancelada |
+| `nfe_denegada` | ❌ CANCELAR | NFe denegada pela SEFAZ - Trata como cancelamento |
+| `nfe_rejeitada` | ❌ CANCELAR | NFe rejeitada - Trata como cancelamento |
+| `nfe_alterada` | ⏭️ IGNORAR | Ignora (não processa) |
+| `nfe_apagada` | ⏭️ IGNORAR | Ignora (não processa) |
+
+### Eventos de Cliente (Endpoint: `/webhook/tagplus/cliente`)
+
+| Evento | Ação | Descrição |
+|--------|------|-----------|
+| `cliente_criado` | ✅ CRIAR | Cria novo cliente no sistema |
+| `criado` | ✅ CRIAR | Alias para cliente_criado |
+| `cliente_atualizado` | ✅ ATUALIZAR | Atualiza dados do cliente |
+| `atualizado` | ✅ ATUALIZAR | Alias para cliente_atualizado |
+
+### ⚠️ Comportamento Especial: Evento Vazio
+
+O TagPlus pode enviar webhooks **sem o campo `evento`** ou com **`evento=""`**. Nestes casos:
+- ✅ Sistema assume automaticamente `nfe_autorizada`
+- 📝 Log registra: `"⚠️ Evento vazio recebido - assumindo 'nfe_autorizada'"`
+- ✅ Processa normalmente a NFe
+
+---
+
+## 🚨 PROBLEMAS RESOLVIDOS
 
 ### Erro Anterior:
 ```
@@ -243,6 +278,14 @@ curl -X POST https://sistema-fretes.onrender.com/webhook/tagplus/nfe \
 ---
 
 ## 🔄 CHANGELOG
+
+### 06/11/2025
+- ✅ Corrigido tratamento de evento vazio (TagPlus envia `evento=""`)
+- ✅ Adicionado suporte a `nfe_autorizada` (evento padrão TagPlus)
+- ✅ Adicionado suporte a `nfe_denegada` e `nfe_rejeitada` (cancelamento)
+- ✅ Evento vazio agora assume automaticamente `nfe_autorizada`
+- ✅ Corrigido import do csrf para topo do arquivo (PEP8)
+- ✅ Melhorados logs com emojis para melhor visualização
 
 ### 08/10/2025
 - ✅ Adicionado `@csrf.exempt` em todas as rotas
