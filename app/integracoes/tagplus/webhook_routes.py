@@ -40,18 +40,21 @@ def webhook_cliente():
 
         logger.info(f"✅ WEBHOOK VALIDADO | {motivo}")
 
-        # Pega dados do webhook
+        # Pega dados do webhook (formato TagPlus)
         dados = request.get_json()
-        evento = dados.get('evento', '')  # cliente_criado, cliente_atualizado, etc
-        cliente_data = dados.get('cliente', {})
 
-        logger.info(f"📦 WEBHOOK CLIENTE | Evento: {evento} | Cliente: {cliente_data.get('cnpj', 'N/A')}")
+        # ✅ TagPlus usa 'event_type' não 'evento'
+        event_type = dados.get('event_type', '').strip()
 
-        # Aceita vários formatos de evento (compatibilidade)
-        if evento in ['criado', 'atualizado', 'cliente_criado', 'cliente_atualizado']:
-            processar_cliente_webhook(cliente_data)
-        else:
-            logger.info(f"Evento de cliente ignorado: {evento}")
+        # Extrair ID do cliente do campo 'data' (TagPlus envia apenas ID)
+        data_array = dados.get('data', [])
+        cliente_id = data_array[0].get('id') if data_array and len(data_array) > 0 else None
+
+        logger.info(f"📦 WEBHOOK CLIENTE | Event Type: {event_type} | Cliente ID: {cliente_id}")
+
+        # TagPlus webhook de cliente apenas notifica - pode ignorar (clientes vêm via API)
+        # Eventos: cliente_criado, cliente_alterado, cliente_apagado
+        logger.info(f"ℹ️ Webhook de cliente recebido (event_type={event_type}) - dados virão pela API")
 
         return jsonify({'status': 'ok'}), 200
         
@@ -76,30 +79,51 @@ def webhook_nfe():
 
         logger.info(f"✅ WEBHOOK VALIDADO | {motivo}")
 
-        # Pega dados do webhook
+        # Pega dados do webhook (formato TagPlus)
         dados = request.get_json()
-        evento = dados.get('evento', '').strip()  # Remove espaços em branco
-        nfe_data = dados.get('nfe', {})
 
-        # 🔍 Se evento vazio, assume nfe_autorizada (comportamento padrão TagPlus)
-        if not evento:
-            logger.warning(f"⚠️ Evento vazio recebido - assumindo 'nfe_autorizada' | NF: {nfe_data.get('numero', 'N/A')}")
-            evento = 'nfe_autorizada'
+        # ✅ TagPlus usa 'event_type' não 'evento'
+        event_type = dados.get('event_type', '').strip()
 
-        logger.info(f"📦 WEBHOOK NFE | Evento: {evento} | NF: {nfe_data.get('numero', 'N/A')}")
+        # Extrair ID da NFe do campo 'data' (TagPlus envia apenas ID)
+        data_array = dados.get('data', [])
+        nfe_id = data_array[0].get('id') if data_array and len(data_array) > 0 else None
 
-        # ✅ PROCESSAR: NFe autorizada/aprovada
-        if evento in ['nfe_autorizada', 'autorizada', 'nfe_aprovada']:
-            processar_nfe_webhook(nfe_data)
-        # ❌ CANCELAR: NFe cancelada, denegada ou rejeitada
-        elif evento in ['nfe_cancelada', 'cancelada', 'nfe_denegada', 'nfe_rejeitada']:
-            cancelar_nfe_webhook(nfe_data)
-        # ⏭️ IGNORAR: Eventos alterada/apagada (retorna ok mas não processa)
-        elif evento in ['nfe_alterada', 'nfe_apagada']:
-            logger.info(f"ℹ️ Evento {evento} ignorado (não processado)")
-        # ⚠️ DESCONHECIDO: Qualquer outro evento
+        logger.info(f"📦 WEBHOOK NFE | Event Type: {event_type} | NFe ID: {nfe_id}")
+
+        # ⚠️ TagPlus envia apenas ID - precisa buscar dados completos via API
+        if not nfe_id:
+            logger.error("❌ Webhook sem ID da NFe no campo 'data'")
+            return jsonify({'erro': 'ID da NFe não fornecido'}), 400
+
+        # 🔄 BUSCAR DADOS COMPLETOS DA NFE VIA API (TagPlus envia apenas ID)
+        try:
+            from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
+            importador = ImportadorTagPlusV2()
+
+            # Buscar NFe completa pela API usando método privado
+            nfe_completa = importador._buscar_nfe_detalhada(nfe_id)
+
+            if not nfe_completa:
+                logger.error(f"❌ NFe ID {nfe_id} não encontrada na API TagPlus")
+                return jsonify({'erro': 'NFe não encontrada na API'}), 404
+
+            logger.info(f"✅ NFe {nfe_completa.get('numero', 'S/N')} buscada com sucesso via API")
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar NFe {nfe_id} via API: {e}")
+            return jsonify({'erro': f'Erro ao buscar NFe via API: {str(e)}'}), 500
+
+        # ✅ PROCESSAR EVENTOS
+        # Eventos TagPlus: nfe_criada, nfe_alterada, nfe_apagada
+        if event_type in ['nfe_criada', 'nfe_alterada']:
+            # Assumir que NFe criada/alterada = autorizada (processar)
+            processar_nfe_webhook(nfe_completa)
+        elif event_type == 'nfe_apagada':
+            # NFe apagada = cancelar
+            cancelar_nfe_webhook(nfe_completa)
         else:
-            logger.warning(f"⚠️ Evento desconhecido: '{evento}' (será ignorado)")
+            logger.warning(f"⚠️ Evento desconhecido: '{event_type}' | NFe ID: {nfe_id}")
 
         return jsonify({'status': 'ok'}), 200
         
@@ -210,8 +234,8 @@ def criar_cliente_webhook(dados, cnpj):
         endereco_ent=f"{dados.get('logradouro', '')}, {dados.get('numero', '')}",
         bairro_endereco_ent=dados.get('bairro', ''),
         nome_cidade=dados.get('cidade', ''),
-        municipio=dados.get('cidade', ''),
-        estado=dados.get('uf', ''),
+        municipio=dados.get('cidade', '') or 'A DEFINIR',  # ✅ Campo obrigatório
+        estado=dados.get('uf', '') or 'XX',  # ✅ Campo obrigatório
         cod_uf=dados.get('uf', ''),
         
         # Contato
@@ -225,11 +249,10 @@ def criar_cliente_webhook(dados, cnpj):
         vendedor='A DEFINIR',
         equipe_vendas='GERAL',
         cliente_ativo=True,
-        
-        # Controle
-        created_by='WebhookTagPlus',
-        updated_by='WebhookTagPlus',
-        observacoes=f"Criado via webhook TagPlus - ID: {dados.get('id', '')}"
+
+        # ✅ Controle (campos corretos: criado_por e atualizado_por)
+        criado_por='WebhookTagPlus',
+        atualizado_por='WebhookTagPlus'
     )
     
     db.session.add(cliente)

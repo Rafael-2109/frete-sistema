@@ -22,7 +22,9 @@ class ImportadorPedidosNaoOdoo:
             'num_pedido': 'D13',
             'cnpj_cpf': 'D8',
             'pedido_cliente': 'D12',
-            'data_entrega': 'E5'
+            'data_entrega': 'E5',
+            'vendedor_sugerido': 'G2',  # ✅ NOVO: Vendedor sugerido
+            'equipe_sugerida': 'I2'     # ✅ NOVO: Equipe sugerida
         },
         'campos_produtos': {
             'cod_produto': {'coluna': 'B', 'linha_inicial': 19},
@@ -30,14 +32,16 @@ class ImportadorPedidosNaoOdoo:
             'preco_produto_pedido': {'coluna': 'K', 'linha_inicial': 19}
         }
     }
-    
+
     MODELO_2 = {
         'identificador': {'celula': 'B8', 'valor': 'CNPJ*'},  # Identificador do modelo
         'campos_cabecalho': {
             'num_pedido': 'C14',
             'cnpj_cpf': 'C8',
             'pedido_cliente': 'C13',
-            'data_entrega': 'D5'
+            'data_entrega': 'D5',
+            'vendedor_sugerido': 'G2',  # ✅ NOVO: Vendedor sugerido
+            'equipe_sugerida': 'I2'     # ✅ NOVO: Equipe sugerida
         },
         'campos_produtos': {
             'cod_produto': {'coluna': 'A', 'linha_inicial': 20},
@@ -298,13 +302,48 @@ class ImportadorPedidosNaoOdoo:
             # Buscar dados do cliente
             cnpj = dados_cabecalho.get('cnpj_cpf')
             cliente = self.buscar_dados_cliente(cnpj)
-            
+
             if not cliente:
-                self.erros.append(f"Cliente com CNPJ {cnpj} não cadastrado. Cadastre o cliente primeiro.")
+                # ✅ CLIENTE NÃO EXISTE - BUSCAR NA API RECEITA
+                logger.info(f"🔍 Cliente {cnpj} não encontrado - buscando na API Receita...")
+
+                from app.utils.api_receita import APIReceita
+
+                cnpj_limpo = self.limpar_cnpj(cnpj)
+                dados_receita = APIReceita.buscar_cnpj(cnpj_limpo, retry=True)
+
+                if not dados_receita or dados_receita.get('status') != 'OK':
+                    # ❌ CNPJ não encontrado na Receita ou erro
+                    if dados_receita and dados_receita.get('status') == 'ERROR':
+                        self.erros.append(f"CNPJ {cnpj} inválido ou não encontrado na Receita Federal: {dados_receita.get('message', 'Erro desconhecido')}")
+                    else:
+                        self.erros.append(f"Cliente com CNPJ {cnpj} não cadastrado e não encontrado na Receita Federal.")
+                    return {
+                        'success': False,
+                        'erros': self.erros,
+                        'avisos': self.avisos
+                    }
+
+                # ✅ ENCONTRADO NA RECEITA - Preparar para modal
+                logger.info(f"✅ CNPJ {cnpj} encontrado na Receita: {dados_receita.get('nome', 'N/A')}")
+
+                # Extrair vendedor e equipe sugeridos do Excel
+                vendedor_sugerido = dados_cabecalho.get('vendedor_sugerido') or 'A DEFINIR'
+                equipe_sugerida = dados_cabecalho.get('equipe_sugerida') or 'GERAL'
+
+                # ✅ RETORNAR FLAG PENDENTE PARA MODAL
                 return {
                     'success': False,
-                    'erros': self.erros,
-                    'avisos': self.avisos
+                    'pendente_cadastro': True,  # Flag para abrir modal
+                    'dados_cliente_novo': {
+                        'cnpj': cnpj_limpo,
+                        'dados_receita': dados_receita,
+                        'vendedor_sugerido': vendedor_sugerido,
+                        'equipe_sugerida': equipe_sugerida,
+                        'num_pedido': dados_cabecalho.get('num_pedido')  # Para associar depois
+                    },
+                    'avisos': [f"Cliente {dados_receita.get('nome')} precisa ser cadastrado"],
+                    'erros': []
                 }
             
             # Extrair produtos baseado no modelo
@@ -569,3 +608,77 @@ class ImportadorPedidosNaoOdoo:
         except Exception as e:
             logger.error(f"Erro ao remover pedidos antigos: {e}")
             raise
+
+    def criar_cliente_automatico(self, dados_receita, vendedor, equipe_vendas):
+        """
+        Cria um cliente automaticamente com dados da Receita + vendedor/equipe escolhidos
+
+        Args:
+            dados_receita: Dict com dados da API Receita
+            vendedor: String com nome do vendedor escolhido
+            equipe_vendas: String com nome da equipe de vendas
+
+        Returns:
+            CadastroCliente criado ou None se erro
+        """
+        try:
+            from app.utils.api_receita import APIReceita
+
+            # Extrair dados para cliente
+            dados_cliente = APIReceita.extrair_dados_para_cliente(dados_receita)
+
+            if not dados_cliente:
+                logger.error("Erro ao extrair dados da Receita para cliente")
+                return None
+
+            # Verificar se já existe (segurança)
+            cnpj_limpo = dados_cliente.get('cnpj_cpf')
+            cliente_existente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_limpo).first()
+
+            if cliente_existente:
+                logger.warning(f"Cliente {cnpj_limpo} já existe - retornando existente")
+                return cliente_existente
+
+            # Criar novo cliente
+            novo_cliente = CadastroCliente(
+                # Dados principais
+                cnpj_cpf=cnpj_limpo,
+                raz_social=dados_cliente.get('raz_social', ''),
+                raz_social_red=dados_cliente.get('raz_social_red', ''),
+                municipio=dados_cliente.get('municipio', ''),
+                estado=dados_cliente.get('estado', ''),
+
+                # ✅ DADOS COMERCIAIS (do modal)
+                vendedor=vendedor,
+                equipe_vendas=equipe_vendas,
+
+                # Endereço de entrega (mesmo do cliente)
+                cnpj_endereco_ent=cnpj_limpo,
+                empresa_endereco_ent=dados_cliente.get('raz_social_red', ''),
+                cep_endereco_ent=dados_cliente.get('cep_endereco_ent', ''),
+                nome_cidade=dados_cliente.get('nome_cidade', ''),
+                cod_uf=dados_cliente.get('cod_uf', ''),
+                bairro_endereco_ent=dados_cliente.get('bairro_endereco_ent', ''),
+                rua_endereco_ent=dados_cliente.get('rua_endereco_ent', ''),
+                endereco_ent=dados_cliente.get('endereco_ent', ''),
+                telefone_endereco_ent=dados_cliente.get('telefone_endereco_ent', ''),
+
+                # Flags
+                endereco_mesmo_cliente=True,
+                cliente_ativo=True,
+
+                # Auditoria
+                criado_por=self.usuario,
+                atualizado_por=self.usuario
+            )
+
+            db.session.add(novo_cliente)
+            db.session.commit()
+
+            logger.info(f"✅ Cliente {cnpj_limpo} criado automaticamente: {novo_cliente.raz_social}")
+            return novo_cliente
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"❌ Erro ao criar cliente automaticamente: {e}")
+            return None

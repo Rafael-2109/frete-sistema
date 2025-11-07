@@ -57,3 +57,106 @@ class NFPendenteTagPlus(db.Model):
 
     def __repr__(self):
         return f'<NFPendenteTagPlus {self.numero_nf}/{self.cod_produto}>'
+
+
+class TagPlusOAuthToken(db.Model):
+    """
+    Armazena tokens OAuth2 do TagPlus no BANCO DE DADOS (não em session)
+
+    ⚠️ IMPORTANTE: Resolve problema de perda de tokens após deploy
+
+    Cada api_type (clientes, notas) tem seu próprio token.
+    O refresh_token permite renovação automática por 30-90 dias.
+    """
+    __tablename__ = 'tagplus_oauth_token'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Tipo de API (único por tipo)
+    api_type = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    # Exemplos: 'clientes', 'notas', 'produtos'
+
+    # ✅ Tokens OAuth2
+    access_token = db.Column(db.Text, nullable=False)  # Expira em 24h
+    refresh_token = db.Column(db.Text, nullable=True)  # Dura 30-90 dias
+
+    # ⏰ Controle de expiração
+    expires_at = db.Column(db.DateTime, nullable=True)  # Quando access_token expira
+
+    # 📝 Metadados OAuth
+    token_type = db.Column(db.String(20), default='Bearer')
+    scope = db.Column(db.String(255), nullable=True)
+
+    # 📊 Auditoria e estatísticas
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    ultimo_refresh = db.Column(db.DateTime, nullable=True)  # Última renovação
+    total_refreshes = db.Column(db.Integer, default=0)  # Contador de renovações
+    ultima_requisicao = db.Column(db.DateTime, nullable=True)  # Último uso
+
+    # ✅ Status
+    ativo = db.Column(db.Boolean, default=True, index=True)
+
+    def __repr__(self):
+        status = "VÁLIDO" if not self.esta_expirado else "EXPIRADO"
+        return f'<TagPlusOAuthToken {self.api_type} {status}>'
+
+    @property
+    def esta_expirado(self):
+        """
+        Verifica se access_token está expirado
+        Margem de segurança: 5 minutos antes da expiração real
+        """
+        if not self.expires_at:
+            return True
+
+        from datetime import timedelta
+        margem = timedelta(minutes=5)
+        return datetime.utcnow() >= (self.expires_at - margem)
+
+    @property
+    def tem_refresh_token(self):
+        """Verifica se tem refresh_token disponível para renovação"""
+        return bool(self.refresh_token and self.refresh_token.strip())
+
+    @property
+    def tempo_ate_expiracao(self):
+        """Retorna timedelta até expiração (None se já expirado)"""
+        if not self.expires_at or self.esta_expirado:
+            return None
+        return self.expires_at - datetime.utcnow()
+
+    def to_dict(self):
+        """Converte para dicionário (não expõe tokens completos)"""
+        return {
+            'id': self.id,
+            'api_type': self.api_type,
+            'access_token_preview': self.access_token[:20] + '...' if self.access_token else None,
+            'tem_refresh_token': self.tem_refresh_token,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'esta_expirado': self.esta_expirado,
+            'tempo_restante_minutos': int(self.tempo_ate_expiracao.total_seconds() / 60) if self.tempo_ate_expiracao else 0,
+            'ultimo_refresh': self.ultimo_refresh.isoformat() if self.ultimo_refresh else None,
+            'total_refreshes': self.total_refreshes,
+            'ultima_requisicao': self.ultima_requisicao.isoformat() if self.ultima_requisicao else None,
+            'ativo': self.ativo
+        }
+
+    @staticmethod
+    def buscar_ou_criar(api_type):
+        """
+        Busca token existente ou cria novo registro
+
+        Args:
+            api_type: Tipo da API ('clientes', 'notas', etc)
+
+        Returns:
+            Instância de TagPlusOAuthToken
+        """
+        token = TagPlusOAuthToken.query.filter_by(api_type=api_type, ativo=True).first()
+
+        if not token:
+            token = TagPlusOAuthToken(api_type=api_type)
+            db.session.add(token)
+
+        return token

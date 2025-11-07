@@ -1,5 +1,7 @@
 """
 OAuth2 para TagPlus API v2 - Fluxo Authorization Code
+
+✅ VERSÃO PERSISTENTE: Tokens salvos no BANCO DE DADOS
 """
 
 import os
@@ -8,6 +10,8 @@ import requests
 import logging
 from urllib.parse import urlencode
 from flask import session
+from datetime import datetime, timedelta
+from app import db
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +43,13 @@ class TagPlusOAuth2V2:
             self.redirect_uri = 'https://sistema-fretes.onrender.com/tagplus/oauth/callback/nfe'
             self.scopes = 'read:nfes read:clientes read:produtos'
         
-        # Tokens (armazenados em sessão ou memória)
+        # ✅ Tokens agora vêm do BANCO DE DADOS
         self.access_token = None
         self.refresh_token = None
         self.token_expires_at = None
-        
-        # Tenta carregar tokens da sessão se disponível
-        self._load_tokens_from_session()
+
+        # Carregar tokens do banco (não session!)
+        self._load_tokens_from_database()
     
     def get_authorization_url(self, state=None):
         """
@@ -114,7 +118,7 @@ class TagPlusOAuth2V2:
                 try:
                     error_json = response.json()
                     logger.error(f"[{self.api_type}] Erro JSON: {error_json}")
-                except:
+                except Exception:
                     pass
                 return None
 
@@ -124,15 +128,19 @@ class TagPlusOAuth2V2:
     
     def refresh_access_token(self):
         """
-        Renova access token usando refresh token
-        
+        ✅ MELHORADO: Renova access token usando refresh token
+
+        Atualiza contadores e timestamps no banco de dados
+
         Returns:
             bool indicando sucesso
         """
         if not self.refresh_token:
-            logger.warning(f"Sem refresh token para {self.api_type}")
+            logger.warning(f"❌ Sem refresh token para {self.api_type}")
             return False
-        
+
+        logger.info(f"🔄 Renovando token para {self.api_type}...")
+
         try:
             data = {
                 'grant_type': 'refresh_token',
@@ -140,56 +148,141 @@ class TagPlusOAuth2V2:
                 'client_id': self.client_id,
                 'client_secret': self.client_secret
             }
-            
+
             response = requests.post(
                 self.TOKEN_URL,
                 data=data,
                 headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=30
             )
-            
+
             if response.status_code == 200:
                 tokens = response.json()
                 self._save_tokens(tokens)
-                logger.info(f"Token renovado para {self.api_type}")
+
+                # ✅ Atualiza estatísticas de renovação no banco
+                try:
+                    from app.integracoes.tagplus.models import TagPlusOAuthToken
+                    token_record = TagPlusOAuthToken.query.filter_by(
+                        api_type=self.api_type,
+                        ativo=True
+                    ).first()
+
+                    if token_record:
+                        token_record.ultimo_refresh = datetime.utcnow()
+                        token_record.total_refreshes += 1
+                        db.session.commit()
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao atualizar estatísticas: {e}")
+
+                logger.info(f"✅ Token renovado com sucesso para {self.api_type}")
                 return True
             else:
-                logger.error(f"Erro ao renovar token: {response.status_code} - {response.text}")
+                logger.error(f"❌ Erro ao renovar token [{self.api_type}]: {response.status_code}")
+                logger.error(f"Resposta: {response.text}")
                 return False
-                
+
         except Exception as e:
-            logger.error(f"Erro ao renovar token: {e}")
+            logger.error(f"❌ Erro ao renovar token [{self.api_type}]: {e}")
             return False
     
     def _save_tokens(self, token_data):
-        """Salva tokens na memória e sessão"""
+        """
+        ✅ NOVO: Salva tokens no BANCO DE DADOS (persistente)
+
+        Args:
+            token_data: Dicionário com access_token, refresh_token, expires_in
+        """
+        from app.integracoes.tagplus.models import TagPlusOAuthToken
+
         self.access_token = token_data.get('access_token')
         self.refresh_token = token_data.get('refresh_token', self.refresh_token)
-        
-        # Calcula expiração (com margem de 5 minutos)
+
+        # Calcula expiração (margem de 5 minutos)
         expires_in = token_data.get('expires_in', 86400)
+        expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 300)
         self.token_expires_at = time.time() + expires_in - 300
-        
-        # Salva na sessão se disponível
+
         try:
-            if session:
-                session[f'tagplus_{self.api_type}_access_token'] = self.access_token
-                session[f'tagplus_{self.api_type}_refresh_token'] = self.refresh_token
-                session[f'tagplus_{self.api_type}_expires_at'] = self.token_expires_at
+            # Busca ou cria registro no banco
+            token_record = TagPlusOAuthToken.buscar_ou_criar(self.api_type)
+
+            # Atualiza tokens
+            token_record.access_token = self.access_token
+            token_record.refresh_token = self.refresh_token
+            token_record.expires_at = expires_at
+            token_record.token_type = token_data.get('token_type', 'Bearer')
+            token_record.scope = token_data.get('scope')
+            token_record.atualizado_em = datetime.utcnow()
+
+            db.session.commit()
+            logger.info(f"✅ Tokens salvos no banco para {self.api_type}")
+
+            # Também salva na session para compatibilidade (opcional)
+            try:
+                if session:
+                    session[f'tagplus_{self.api_type}_access_token'] = self.access_token
+                    session[f'tagplus_{self.api_type}_refresh_token'] = self.refresh_token
+                    session[f'tagplus_{self.api_type}_expires_at'] = self.token_expires_at
+            except Exception:
+                pass  # Session não disponível
+
         except Exception as e:
-            logger.error(f"Erro ao salvar tokens na sessão: {e}")
-            pass  # Sessão não disponível (ex: script CLI)
-    
-    def _load_tokens_from_session(self):
-        """Carrega tokens da sessão Flask se disponível"""
+            logger.error(f"❌ Erro ao salvar tokens no banco: {e}")
+            db.session.rollback()
+            raise
+
+    def _load_tokens_from_database(self):
+        """
+        ✅ NOVO: Carrega tokens do BANCO DE DADOS (persistente)
+
+        Prioridade:
+        1. Banco de dados (persistente entre deploys)
+        2. Session (fallback para compatibilidade)
+        """
+        from app.integracoes.tagplus.models import TagPlusOAuthToken
+
         try:
-            if session:
-                self.access_token = session.get(f'tagplus_{self.api_type}_access_token')
-                self.refresh_token = session.get(f'tagplus_{self.api_type}_refresh_token')
-                self.token_expires_at = session.get(f'tagplus_{self.api_type}_expires_at')
+            # Busca token no banco
+            token_record = TagPlusOAuthToken.query.filter_by(
+                api_type=self.api_type,
+                ativo=True
+            ).first()
+
+            if token_record and token_record.access_token:
+                self.access_token = token_record.access_token
+                self.refresh_token = token_record.refresh_token
+
+                # Converte datetime para timestamp
+                if token_record.expires_at:
+                    self.token_expires_at = token_record.expires_at.timestamp()
+
+                # Atualiza última requisição
+                token_record.ultima_requisicao = datetime.utcnow()
+                db.session.commit()
+
+                logger.info(f"✅ Tokens carregados do banco para {self.api_type}")
+                return True
+
+            # Fallback: tentar session (compatibilidade)
+            try:
+                if session:
+                    self.access_token = session.get(f'tagplus_{self.api_type}_access_token')
+                    self.refresh_token = session.get(f'tagplus_{self.api_type}_refresh_token')
+                    self.token_expires_at = session.get(f'tagplus_{self.api_type}_expires_at')
+
+                    if self.access_token:
+                        logger.info(f"⚠️ Tokens carregados da session (migre para banco!)")
+                        return True
+            except Exception:
+                pass
+
+            logger.warning(f"⚠️ Nenhum token encontrado para {self.api_type}")
+            return False
+
         except Exception as e:
-            logger.error(f"Erro ao carregar tokens da sessão: {e}")
-            pass  # Sessão não disponível
+            logger.error(f"❌ Erro ao carregar tokens do banco: {e}")
+            return False
     
     def get_headers(self):
         """

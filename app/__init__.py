@@ -29,15 +29,15 @@ except Exception:  # pragma: no cover - allow running without Flask-Session
             pass
 
 
-import os
-from flask import Flask, request, g
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
-from flask_migrate import Migrate
-from config import Config, TestConfig
-import time
-from sqlalchemy import text
+import os # noqa: E402
+from flask import Flask, request, g # noqa: E402
+from flask_sqlalchemy import SQLAlchemy # noqa: E402
+from flask_login import LoginManager # noqa: E402
+from flask_wtf.csrf import CSRFProtect # noqa: E402
+from flask_migrate import Migrate # noqa: E402
+from config import Config, TestConfig # noqa: E402
+import time # noqa: E402
+from sqlalchemy import text # noqa: E402
 
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
@@ -83,7 +83,7 @@ try:
 
     # Importar também o módulo de configuração se existir
     try:
-        from app.utils.pg_types_config import registrar_tipos_postgresql
+        from app.utils.pg_types_config import registrar_tipos_postgresql 
 
         print("✅ Módulo pg_types_config também importado")
     except Exception:
@@ -99,8 +99,8 @@ csrf = CSRFProtect()
 migrate = Migrate()
 
 # 🔥 EVENT LISTENER PARA REGISTRAR TIPOS EM CADA CONEXÃO
-from sqlalchemy import event
-from sqlalchemy.pool import Pool
+from sqlalchemy import event # noqa: E402
+from sqlalchemy.pool import Pool # noqa: E402
 
 
 @event.listens_for(Pool, "connect")
@@ -257,7 +257,7 @@ def create_app(config_name=None):
     from flask_wtf.csrf import CSRFError
 
     @app.errorhandler(CSRFError)
-    def handle_csrf_error(error):
+    def handle_csrf_error(error):   # pyright: ignore[reportUnusedFunction]
         """Handler específico para erros de CSRF"""
         from flask import request, flash, redirect, url_for
 

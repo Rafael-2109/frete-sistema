@@ -22,9 +22,16 @@
                     <form id="formImportacao" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-group">
-                            <label>Arquivo Excel <span class="text-danger">*</span></label>
-                            <input type="file" class="form-control-file" id="arquivo" name="file" accept=".xlsx,.xls" required>
-                            <small class="form-text text-muted">Formatos aceitos: .xlsx, .xls</small>
+                            <label>Arquivo(s) Excel <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control-file" id="arquivo" name="file" accept=".xlsx,.xls" multiple required>
+                            <small class="form-text text-muted">
+                                ✅ <strong>Múltiplos arquivos aceitos!</strong> Selecione um ou mais arquivos (.xlsx, .xls)
+                            </small>
+                            <div id="arquivosSelecionados" class="mt-2" style="display: none;">
+                                <small class="text-info">
+                                    <i class="fas fa-file-excel"></i> <span id="qtdArquivos">0</span> arquivo(s) selecionado(s)
+                                </small>
+                            </div>
                         </div>
                         
                         <div class="row mt-3">
@@ -134,26 +141,74 @@
     </div>
 </div>
 
+<!-- ✅ MODAL PARA CADASTRAR CLIENTES NOVOS -->
+<div class="modal fade" id="modalCadastrarClientes" tabindex="-1" role="dialog" aria-labelledby="modalCadastrarClientesLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title" id="modalCadastrarClientesLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Clientes Não Cadastrados - Ação Necessária
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>📋 Instruções:</strong> Os clientes abaixo foram encontrados na Receita Federal mas não estão cadastrados no sistema.
+                    Revise os dados e selecione o vendedor e equipe de vendas para cada um.
+                </div>
+
+                <div id="clientesPendentesContainer">
+                    <!-- Preenchido via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar Importação
+                </button>
+                <button type="button" class="btn btn-success" id="btnConfirmarCadastros" onclick="confirmarCadastrosEImportar()">
+                    <i class="fas fa-check"></i> Cadastrar Clientes e Importar Pedidos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-// Validar arquivo antes de importar
+// ✅ Variável global para armazenar arquivos durante o processo
+let arquivosParaReimportar = null;
+// ✅ Mostrar quantidade de arquivos selecionados
+document.getElementById('arquivo').addEventListener('change', function() {
+    const qtd = this.files.length;
+    if (qtd > 0) {
+        document.getElementById('arquivosSelecionados').style.display = 'block';
+        document.getElementById('qtdArquivos').textContent = qtd;
+    } else {
+        document.getElementById('arquivosSelecionados').style.display = 'none';
+    }
+});
+
+// Validar arquivo antes de importar (apenas primeiro arquivo para preview)
 function validarArquivo() {
     const fileInput = document.getElementById('arquivo');
     if (!fileInput.files.length) {
-        toastr.warning('Selecione um arquivo primeiro');
+        toastr.warning('Selecione pelo menos um arquivo');
         return;
     }
-    
+
     const formData = new FormData();
+    // Valida apenas o primeiro arquivo para preview
     formData.append('file', fileInput.files[0]);
-    
+
     // Adicionar CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     formData.append('csrf_token', csrfToken);
-    
+
     // Mostrar loading
     $('#cardPreview').show();
-    $('#previewContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Validando arquivo...</div>');
-    
+    $('#previewContent').html(`<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Validando primeiro arquivo (${fileInput.files[0].name})...</div>`);
+
     $.ajax({
         url: '/carteira/api/importacao-nao-odoo/validar',
         method: 'POST',
@@ -166,7 +221,7 @@ function validarArquivo() {
         success: function(response) {
             if (response.success) {
                 mostrarPreview(response.preview);
-                
+
                 // Se validação OK, habilita botão de importar
                 if (!response.preview.erros || response.preview.erros.length === 0) {
                     $('#btnImportar').prop('disabled', false);
@@ -279,26 +334,31 @@ function mostrarPreview(preview) {
     $('#previewContent').html(html);
 }
 
-// Submit do formulário
+// ✅ Submit do formulário com MÚLTIPLOS ARQUIVOS
 $('#formImportacao').submit(function(e) {
     e.preventDefault();
-    
+
     const fileInput = document.getElementById('arquivo');
     if (!fileInput.files.length) {
-        toastr.warning('Selecione um arquivo');
+        toastr.warning('Selecione pelo menos um arquivo');
         return;
     }
-    
+
     const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    
+
+    // ✅ Adicionar TODOS os arquivos selecionados
+    for (let i = 0; i < fileInput.files.length; i++) {
+        formData.append('file', fileInput.files[i]);
+    }
+
     // Adicionar CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     formData.append('csrf_token', csrfToken);
-    
+
     // Desabilitar botões
-    $('#btnImportar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
-    
+    const qtdArquivos = fileInput.files.length;
+    $('#btnImportar').prop('disabled', true).html(`<i class="fas fa-spinner fa-spin"></i> Importando ${qtdArquivos} arquivo(s)...`);
+
     $.ajax({
         url: '/carteira/api/importacao-nao-odoo/upload',
         method: 'POST',
@@ -315,76 +375,120 @@ $('#formImportacao').submit(function(e) {
                 $('#formImportacao')[0].reset();
                 $('#btnImportar').prop('disabled', true).html('<i class="fas fa-upload"></i> Importar');
                 $('#cardPreview').hide();
+                $('#arquivosSelecionados').hide();
+            } else if (response.pendente_cadastro) {
+                // ✅ HÁ CLIENTES PENDENTES - MOSTRAR MODAL
+                arquivosParaReimportar = fileInput.files;  // Salvar arquivos para reimportar
+                mostrarModalCadastroClientes(response.clientes_pendentes);
+                $('#btnImportar').prop('disabled', false).html('<i class="fas fa-upload"></i> Importar');
             }
         },
         error: function(xhr) {
-            const error = xhr.responseJSON ? xhr.responseJSON : {error: 'Erro ao importar arquivo'};
+            const error = xhr.responseJSON ? xhr.responseJSON : {error: 'Erro ao importar arquivos'};
             mostrarErro(error);
             $('#btnImportar').prop('disabled', false).html('<i class="fas fa-upload"></i> Importar');
         }
     });
 });
 
-// Mostrar resultado da importação
+// ✅ Mostrar resultado da importação (MÚLTIPLOS ARQUIVOS)
 function mostrarResultado(response) {
     $('#cardResultado').show();
-    
+
     let html = '<div class="alert alert-success">';
     html += `<strong>${response.mensagem}</strong><br>`;
-    html += `Total de itens importados: ${response.pedidos_importados}`;
+    html += `📁 Total de arquivos: ${response.total_arquivos}<br>`;
+    html += `✅ Arquivos processados: ${response.arquivos_processados}<br>`;
+    if (response.arquivos_com_erro > 0) {
+        html += `❌ Arquivos com erro: ${response.arquivos_com_erro}<br>`;
+    }
+    html += `📦 Total de pedidos importados: ${response.total_pedidos_importados}`;
     html += '</div>';
-    
-    if (response.detalhes && response.detalhes.length > 0) {
-        html += '<h6>Detalhes da Importação:</h6>';
-        html += '<table class="table table-sm table-striped">';
-        html += '<thead><tr><th>Pedido</th><th>Produto</th><th>Quantidade</th><th>Valor</th></tr></thead>';
-        html += '<tbody>';
-        response.detalhes.forEach(item => {
-            html += `<tr>
-                <td>${item.num_pedido}</td>
-                <td>${item.cod_produto}</td>
-                <td>${item.quantidade}</td>
-                <td>R$ ${item.valor.toFixed(2)}</td>
-            </tr>`;
+
+    // ✅ Mostrar detalhes por arquivo
+    if (response.detalhes_por_arquivo && response.detalhes_por_arquivo.length > 0) {
+        html += '<h6>Detalhes por Arquivo:</h6>';
+
+        response.detalhes_por_arquivo.forEach((arquivo, index) => {
+            const statusClass = arquivo.success ? 'success' : 'danger';
+            const statusIcon = arquivo.success ? '✅' : '❌';
+
+            html += `<div class="card mb-2">`;
+            html += `<div class="card-header bg-${statusClass} text-white">`;
+            html += `${statusIcon} ${arquivo.nome_arquivo} - ${arquivo.pedidos_importados} pedido(s) importado(s)`;
+            html += `</div>`;
+
+            if (arquivo.erros && arquivo.erros.length > 0) {
+                html += `<div class="card-body">`;
+                html += `<div class="alert alert-danger mb-0">`;
+                html += `<strong>Erros:</strong><ul class="mb-0">`;
+                arquivo.erros.forEach(erro => {
+                    html += `<li>${erro}</li>`;
+                });
+                html += `</ul></div></div>`;
+            }
+
+            if (arquivo.avisos && arquivo.avisos.length > 0) {
+                html += `<div class="card-body">`;
+                html += `<div class="alert alert-warning mb-0">`;
+                html += `<strong>Avisos:</strong><ul class="mb-0">`;
+                arquivo.avisos.forEach(aviso => {
+                    html += `<li>${aviso}</li>`;
+                });
+                html += `</ul></div></div>`;
+            }
+
+            html += `</div>`;
         });
-        html += '</tbody></table>';
     }
-    
-    if (response.avisos && response.avisos.length > 0) {
-        html += '<div class="alert alert-warning mt-3">';
-        html += '<strong>Avisos:</strong><ul>';
-        response.avisos.forEach(aviso => {
-            html += `<li>${aviso}</li>`;
-        });
-        html += '</ul></div>';
-    }
-    
+
     html += '<div class="mt-3">';
     html += '<a href="{{ url_for("carteira.views_nao_odoo.carteira_nao_odoo") }}" class="btn btn-primary">Ver Carteira Não-Odoo</a>';
+
+    // ✅ BOTÃO PARA BAIXAR EXCEL DE ERROS
+    if (response.excel_erros) {
+        html += ' <button class="btn btn-warning" onclick="baixarExcelErros()"><i class="fas fa-download"></i> Baixar Excel com Erros</button>';
+        // Salvar Excel globalmente
+        window.excelErrosBase64 = response.excel_erros;
+    }
+
     html += '</div>';
-    
+
     $('#resultadoContent').html(html);
 }
 
-// Mostrar erro
+// ✅ Mostrar erro (MÚLTIPLOS ARQUIVOS)
 function mostrarErro(error) {
     $('#cardResultado').show();
-    
+
     let html = '<div class="alert alert-danger">';
     html += '<strong>Erro na importação:</strong><br>';
-    
-    if (error.erros && Array.isArray(error.erros)) {
+
+    // ✅ Se houver detalhes por arquivo
+    if (error.detalhes_por_arquivo && error.detalhes_por_arquivo.length > 0) {
+        html += `<p>Total de arquivos: ${error.total_arquivos} | Erros: ${error.arquivos_com_erro}</p>`;
+        html += '</div>';
+
+        error.detalhes_por_arquivo.forEach((arquivo, index) => {
+            if (arquivo.erros && arquivo.erros.length > 0) {
+                html += `<div class="alert alert-danger mt-2">`;
+                html += `<strong>❌ ${arquivo.nome_arquivo}:</strong><ul>`;
+                arquivo.erros.forEach(erro => {
+                    html += `<li>${erro}</li>`;
+                });
+                html += `</ul></div>`;
+            }
+        });
+    } else if (error.erros && Array.isArray(error.erros)) {
         html += '<ul>';
         error.erros.forEach(erro => {
             html += `<li>${erro}</li>`;
         });
-        html += '</ul>';
+        html += '</ul></div>';
     } else {
-        html += error.error || 'Erro desconhecido';
+        html += (error.error || 'Erro desconhecido') + '</div>';
     }
-    
-    html += '</div>';
-    
+
     $('#resultadoContent').html(html);
 }
 
@@ -394,6 +498,271 @@ function limparTudo() {
     $('#btnImportar').prop('disabled', true);
     $('#cardPreview').hide();
     $('#cardResultado').hide();
+}
+
+// ✅ FUNÇÃO PARA MOSTRAR MODAL DE CADASTRO DE CLIENTES
+function mostrarModalCadastroClientes(clientesPendentes) {
+    let html = '';
+
+    clientesPendentes.forEach((cliente, index) => {
+        const dados = cliente.dados_receita;
+
+        html += `
+        <div class="card mb-3" data-cnpj="${cliente.cnpj}">
+            <div class="card-header bg-light">
+                <strong><i class="fas fa-building"></i> Cliente Novo: ${dados.nome || 'N/A'}</strong>
+                <span class="badge badge-info ml-2">Arquivo: ${cliente.arquivo_origem}</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>CNPJ:</strong> ${dados.cnpj || cliente.cnpj}</p>
+                        <p class="mb-1"><strong>Razão Social:</strong> ${dados.nome || 'N/A'}</p>
+                        <p class="mb-1"><strong>Nome Fantasia:</strong> ${dados.fantasia || 'N/A'}</p>
+                        <p class="mb-1"><strong>Situação:</strong> <span class="badge badge-${dados.situacao === 'ATIVA' ? 'success' : 'warning'}">${dados.situacao || 'N/A'}</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>Cidade/UF:</strong> ${dados.municipio || 'N/A'}/${dados.uf || 'N/A'}</p>
+                        <p class="mb-1"><strong>Telefone:</strong> ${dados.telefone || 'N/A'}</p>
+                        <p class="mb-1"><strong>Abertura:</strong> ${dados.abertura || 'N/A'}</p>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label><i class="fas fa-user-tie"></i> Vendedor <span class="text-danger">*</span></label>
+                            <small class="d-block text-muted mb-1">Sugestão do Excel: <strong>${cliente.vendedor_sugerido || 'N/A'}</strong></small>
+                            <select class="form-control vendedor-select" data-cnpj="${cliente.cnpj}" data-sugestao="${cliente.vendedor_sugerido || ''}" required>
+                                <option value="">-- Selecione um vendedor --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label><i class="fas fa-users"></i> Equipe de Vendas <span class="text-danger">*</span></label>
+                            <small class="d-block text-muted mb-1">Sugestão do Excel: <strong>${cliente.equipe_sugerida || 'N/A'}</strong></small>
+                            <select class="form-control equipe-select" data-cnpj="${cliente.cnpj}" data-sugestao="${cliente.equipe_sugerida || ''}" required>
+                                <option value="">-- Selecione uma equipe --</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    });
+
+    $('#clientesPendentesContainer').html(html);
+
+    // ✅ BUSCAR LISTAS DE VENDEDORES E EQUIPES
+    $.get('/carteira/api/listar-vendedores-equipes', function(data) {
+        if (data.success) {
+            // Preencher vendedores
+            $('.vendedor-select').each(function() {
+                const select = $(this);
+                const sugestao = select.data('sugestao');
+
+                data.vendedores.forEach(vendedor => {
+                    const selected = vendedor === sugestao ? 'selected' : '';
+                    select.append(`<option value="${vendedor}" ${selected}>${vendedor}</option>`);
+                });
+            });
+
+            // Preencher equipes
+            $('.equipe-select').each(function() {
+                const select = $(this);
+                const sugestao = select.data('sugestao');
+
+                data.equipes.forEach(equipe => {
+                    const selected = equipe === sugestao ? 'selected' : '';
+                    select.append(`<option value="${equipe}" ${selected}>${equipe}</option>`);
+                });
+            });
+        } else {
+            toastr.error('Erro ao carregar listas de vendedores e equipes');
+        }
+    });
+
+    // Mostrar modal
+    $('#modalCadastrarClientes').modal('show');
+}
+
+// ✅ FUNÇÃO PARA CONFIRMAR CADASTROS E REIMPORTAR
+function confirmarCadastrosEImportar() {
+    const clientes = [];
+    let todosPreenchidos = true;
+
+    // Coletar dados de cada cliente
+    $('.vendedor-select').each(function() {
+        const cnpj = $(this).data('cnpj');
+        const vendedor = $(this).val();
+        const equipe = $(`.equipe-select[data-cnpj="${cnpj}"]`).val();
+
+        if (!vendedor || !equipe) {
+            todosPreenchidos = false;
+            $(this).addClass('is-invalid');
+            $(`.equipe-select[data-cnpj="${cnpj}"]`).addClass('is-invalid');
+            return false;  // Parar loop
+        }
+
+        // Buscar dados_receita do card
+        const card = $(`.card[data-cnpj="${cnpj}"]`);
+
+        // Pegar dados do cliente pendente original
+        const clientePendente = window.clientesPendentesData.find(c => c.cnpj === cnpj);
+
+        clientes.push({
+            cnpj: cnpj,
+            vendedor: vendedor,
+            equipe_vendas: equipe,
+            dados_receita: clientePendente.dados_receita
+        });
+    });
+
+    if (!todosPreenchidos) {
+        toastr.error('Preencha vendedor e equipe para todos os clientes');
+        return;
+    }
+
+    // Desabilitar botão
+    $('#btnConfirmarCadastros').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Cadastrando...');
+
+    // ✅ ENVIAR PARA CADASTRAR CLIENTES
+    $.ajax({
+        url: '/carteira/api/cadastrar-cliente-e-importar',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({clientes: clientes}),
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        success: function(response) {
+            if (response.success && response.reenviar_importacao) {
+                toastr.success(response.mensagem);
+
+                // Fechar modal
+                $('#modalCadastrarClientes').modal('hide');
+
+                // ✅ REIMPORTAR ARQUIVOS AUTOMATICAMENTE
+                setTimeout(() => {
+                    reenviarArquivos();
+                }, 500);
+            } else {
+                toastr.error(response.mensagem || 'Erro ao cadastrar clientes');
+                $('#btnConfirmarCadastros').prop('disabled', false).html('<i class="fas fa-check"></i> Cadastrar Clientes e Importar Pedidos');
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao cadastrar clientes';
+            toastr.error(error);
+            $('#btnConfirmarCadastros').prop('disabled', false).html('<i class="fas fa-check"></i> Cadastrar Clientes e Importar Pedidos');
+        }
+    });
+}
+
+// ✅ FUNÇÃO PARA REENVIAR ARQUIVOS APÓS CADASTRO
+function reenviarArquivos() {
+    if (!arquivosParaReimportar || arquivosParaReimportar.length === 0) {
+        toastr.error('Nenhum arquivo para reimportar');
+        return;
+    }
+
+    const formData = new FormData();
+
+    // Adicionar arquivos salvos
+    for (let i = 0; i < arquivosParaReimportar.length; i++) {
+        formData.append('file', arquivosParaReimportar[i]);
+    }
+
+    // Adicionar CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    formData.append('csrf_token', csrfToken);
+
+    // Mostrar loading
+    toastr.info('Reimportando arquivos com clientes cadastrados...');
+    $('#btnImportar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Reimportando...');
+
+    $.ajax({
+        url: '/carteira/api/importacao-nao-odoo/upload',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(response) {
+            if (response.success) {
+                mostrarResultado(response);
+                toastr.success('Importação concluída com sucesso!');
+
+                // Limpar
+                arquivosParaReimportar = null;
+                $('#formImportacao')[0].reset();
+                $('#btnImportar').prop('disabled', true).html('<i class="fas fa-upload"></i> Importar');
+                $('#cardPreview').hide();
+                $('#arquivosSelecionados').hide();
+            } else if (response.pendente_cadastro) {
+                // Se ainda houver pendências (não deveria acontecer)
+                toastr.warning('Ainda há clientes pendentes de cadastro');
+                mostrarModalCadastroClientes(response.clientes_pendentes);
+                $('#btnImportar').prop('disabled', false).html('<i class="fas fa-upload"></i> Importar');
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON : {error: 'Erro ao reimportar arquivos'};
+            mostrarErro(error);
+            $('#btnImportar').prop('disabled', false).html('<i class="fas fa-upload"></i> Importar');
+        }
+    });
+}
+
+// ✅ Variável global para armazenar dados dos clientes pendentes
+let clientesPendentesData = [];
+
+// ✅ Atualizar mostrarModalCadastroClientes para salvar dados globalmente
+const mostrarModalOriginal = mostrarModalCadastroClientes;
+mostrarModalCadastroClientes = function(clientesPendentes) {
+    window.clientesPendentesData = clientesPendentes;  // Salvar globalmente
+    mostrarModalOriginal(clientesPendentes);
+};
+
+// ✅ FUNÇÃO PARA BAIXAR EXCEL DE ERROS
+function baixarExcelErros() {
+    if (!window.excelErrosBase64) {
+        toastr.error('Excel de erros não disponível');
+        return;
+    }
+
+    try {
+        // Converter base64 para blob
+        const byteCharacters = atob(window.excelErrosBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+        // Criar link de download
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `erros_importacao_${new Date().getTime()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        toastr.success('Excel de erros baixado com sucesso!');
+    } catch (e) {
+        console.error('Erro ao baixar Excel:', e);
+        toastr.error('Erro ao baixar Excel de erros');
+    }
 }
 </script>
 {% endblock %}

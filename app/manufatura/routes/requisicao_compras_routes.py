@@ -151,8 +151,8 @@ def register_requisicao_compras_routes(bp):
                     for num in range(1, self.pages + 1):
                         if (num <= left_edge or
                             (num > self.page - left_current - 1 and
-                             num < self.page + right_current) or
-                            num > self.pages - right_edge):
+                            num < self.page + right_current) or
+                            num > self.pages - right_edge):  # noqa: E129
                             if last + 1 != num:
                                 yield None
                             yield num
