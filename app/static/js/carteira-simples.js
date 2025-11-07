@@ -22,6 +22,7 @@
         carregando: false, // Flag para evitar múltiplas chamadas simultâneas
         modalLoading: null, // Instância única do modal de loading
         saidasNaoVisiveis: {}, // 🆕 Saídas de pedidos NÃO visíveis {cod_produto: [{data, qtd}]}
+        mapaUnificacao: {}, // 🆕 Mapa de códigos unificados {cod_produto: [cod1, cod2, cod3]}
 
         // 🚀 VIRTUAL SCROLLING
         virtualScroll: {
@@ -133,9 +134,11 @@
             state.dados = resultado.dados;
             state.totalItens = resultado.total;
             state.saidasNaoVisiveis = resultado.saidas_nao_visiveis || {};  // 🆕 Capturar saídas não visíveis
+            state.mapaUnificacao = resultado.mapa_unificacao || {};  // 🆕 Capturar mapa de códigos unificados
 
             console.log(`✅ Dados carregados: ${state.dados.length} linhas visíveis`);
             console.log(`✅ Saídas não visíveis: ${Object.keys(state.saidasNaoVisiveis).length} produtos`);
+            console.log(`✅ Mapa de unificação: ${Object.keys(state.mapaUnificacao).length} produtos com códigos unificados`);
 
             renderizarTabela();
             popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
@@ -2338,17 +2341,24 @@
     /**
      * 🆕 COLETA TODAS AS SAÍDAS de um produto (PEDIDOS editáveis + SEPARAÇÕES).
      * ✅ SEM DUPLICAÇÃO: Separações JÁ estão no state.dados.
+     * ✅ COM UNIFICAÇÃO: Busca saídas de TODOS os códigos unificados.
      * Retorna array de saídas: [{data, qtd}, ...]
      */
     function coletarTodasSaidas(codProduto) {
         const saidas = [];
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const hojeStr = hoje.toISOString().split('T')[0];
+
+        // ✅ OBTER CÓDIGOS UNIFICADOS (incluindo o próprio código)
+        const codigosUnificados = state.mapaUnificacao[codProduto] || [codProduto];
 
         // ============================================
         // PARTE 1: COLETAR SAÍDAS VISÍVEIS (state.dados)
         // ============================================
         state.dados.forEach((item, index) => {
-            // Verificar se é o mesmo produto
-            if (item.cod_produto !== codProduto) return;
+            // ✅ CORREÇÃO: Verificar se é QUALQUER código do grupo unificado
+            if (!codigosUnificados.includes(item.cod_produto)) return;
 
             let qtd = 0;
             let data = null;
@@ -2368,8 +2378,19 @@
                 }
             }
 
-            // Se tem qtd E data preenchidas
-            if (qtd > 0 && data) {
+            // ✅ CORREÇÃO: Agrupar separações atrasadas (data < hoje) ou sem data em D0 (hoje)
+            if (qtd > 0) {
+                if (!data) {
+                    // Sem data → D0 (hoje)
+                    data = hojeStr;
+                } else {
+                    const dataExpedicao = new Date(data + 'T00:00:00');
+                    if (dataExpedicao < hoje) {
+                        // Atrasada → D0 (hoje)
+                        data = hojeStr;
+                    }
+                }
+
                 saidas.push({
                     data: data,
                     qtd: qtd
@@ -2379,13 +2400,16 @@
 
         // ============================================
         // PARTE 2: 🆕 ADICIONAR SAÍDAS NÃO VISÍVEIS (backend)
+        // ✅ CORREÇÃO: Buscar saídas de TODOS os códigos unificados
         // ============================================
-        const saidasNaoVisiveis = state.saidasNaoVisiveis[codProduto] || [];
+        codigosUnificados.forEach(codigo => {
+            const saidasNaoVisiveis = state.saidasNaoVisiveis[codigo] || [];
 
-        if (saidasNaoVisiveis.length > 0) {
-            console.log(`   🔧 Adicionando ${saidasNaoVisiveis.length} saída(s) NÃO visível(is) do produto ${codProduto}`);
-            saidas.push(...saidasNaoVisiveis);
-        }
+            if (saidasNaoVisiveis.length > 0) {
+                console.log(`   🔧 Adicionando ${saidasNaoVisiveis.length} saída(s) NÃO visível(is) do produto ${codigo}`);
+                saidas.push(...saidasNaoVisiveis);
+            }
+        });
 
         return saidas;
     }

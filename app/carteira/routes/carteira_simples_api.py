@@ -61,6 +61,52 @@ def validar_numero_json(valor, padrao, permitir_zero=True):
         return padrao
 
 
+def converter_entradas_para_frontend(entradas_dict):
+    """
+    Converte Dict[date, float] para List[Dict[str, Any]] esperado pelo frontend.
+
+    Formato esperado pelo frontend:
+    [
+        {'data': '2025-01-07', 'qtd': 100.0},
+        {'data': '2025-01-08', 'qtd': 200.0}
+    ]
+
+    Args:
+        entradas_dict: Dict[date, float] retornado por ServicoEstoqueSimples
+
+    Returns:
+        List[Dict[str, Any]] no formato esperado pelo frontend
+    """
+    try:
+        if not entradas_dict:
+            return []
+
+        programacao = []
+        for data_entrada, qtd in entradas_dict.items():
+            # Validar data
+            if not isinstance(data_entrada, date):
+                logger.warning(f"Data inválida ignorada: {data_entrada}")
+                continue
+
+            # Validar quantidade
+            qtd_validada = validar_numero_json(qtd, 0, permitir_zero=True)
+
+            if qtd_validada > 0:  # Só incluir se qtd > 0
+                programacao.append({
+                    'data': data_entrada.isoformat(),
+                    'qtd': qtd_validada
+                })
+
+        # Ordenar por data (garantir ordem cronológica)
+        programacao.sort(key=lambda x: x['data'])
+
+        return programacao
+
+    except Exception as e:
+        logger.error(f"Erro ao converter entradas para frontend: {e}")
+        return []
+
+
 @carteira_simples_bp.route('/')
 def index():
     """Renderiza página da carteira simplificada"""
@@ -223,20 +269,30 @@ def obter_dados():
         pallet_map = {p.cod_produto: p for p in palletizacoes}
         tempos['pallet_map'] = time.time() - t1
 
-        # 🆕 CALCULAR QTD_CARTEIRA TOTAL POR PRODUTO (de TODOS os pedidos)
-        qtd_carteira_por_produto = {}
-        resultados_soma = db.session.query(
-            CarteiraPrincipal.cod_produto,
-            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
-        ).filter(
-            CarteiraPrincipal.ativo == True,
-            CarteiraPrincipal.cod_produto.in_(codigos_produtos)
-        ).group_by(
-            CarteiraPrincipal.cod_produto
-        ).all()
+        # 🆕 GERAR MAPA DE CÓDIGOS UNIFICADOS para frontend
+        # Formato: {cod_produto: [cod1, cod2, cod3]} - todos os códigos do mesmo grupo
+        mapa_unificacao = {}
+        for cod_produto in codigos_produtos:
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
+            # Cada código aponta para a lista completa de códigos do grupo
+            mapa_unificacao[cod_produto] = list(codigos_relacionados)
 
-        for cod_prod, qtd_total in resultados_soma:
-            qtd_carteira_por_produto[cod_prod] = float(qtd_total or 0)
+        # 🆕 CALCULAR QTD_CARTEIRA TOTAL POR PRODUTO (✅ COM UNIFICAÇÃO)
+        qtd_carteira_por_produto = {}
+
+        # Para cada código da página, calcular soma de TODOS os códigos unificados
+        for cod_produto in codigos_produtos:
+            codigos_relacionados = mapa_unificacao.get(cod_produto, [cod_produto])
+
+            # Somar quantidades de TODOS os códigos relacionados
+            resultados_soma = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
+            ).filter(
+                CarteiraPrincipal.ativo == True,
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)  # ✅ USA UNIFICAÇÃO!
+            ).scalar()
+
+            qtd_carteira_por_produto[cod_produto] = float(resultados_soma or 0)
 
         # Buscar separações não sincronizadas (batch)
         separacoes = db.session.query(
@@ -288,9 +344,6 @@ def obter_dados():
                 # Pular para próxima etapa
             else:
                 # ✅ MUDANÇA: Calcular APENAS estoque atual (performance 10x melhor)
-                from app.producao.models import ProgramacaoProducao
-                from datetime import date, timedelta
-
                 hoje = date.today()
                 data_fim = hoje + timedelta(days=28)
 
@@ -298,26 +351,17 @@ def obter_dados():
                 for cod_produto in codigos_produtos:
                     estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
 
-                    # Buscar programação de produção (entradas futuras)
-                    programacao_query = db.session.query(
-                        ProgramacaoProducao.data_programacao,
-                        func.sum(ProgramacaoProducao.qtd_programada).label('qtd_total')
-                    ).filter(
-                        ProgramacaoProducao.cod_produto == cod_produto,
-                        ProgramacaoProducao.data_programacao >= hoje,
-                        ProgramacaoProducao.data_programacao <= data_fim
-                    ).group_by(
-                        ProgramacaoProducao.data_programacao
-                    ).all()
+                    # ✅ USAR ServicoEstoqueSimples para buscar programação com UNIFICAÇÃO DE CÓDIGOS
+                    # IMPORTANTE: entrada_em_d_plus_1=False porque frontend já aplica D+1 (linha 2444 JS)
+                    entradas_dict = ServicoEstoqueSimples.calcular_entradas_previstas(
+                        cod_produto,
+                        hoje,
+                        data_fim,
+                        entrada_em_d_plus_1=False  # Frontend aplica D+1, então backend não deve aplicar
+                    )
 
-                    # Converter programação para formato simples
-                    programacao = [
-                        {
-                            'data': prog.data_programacao.isoformat(),
-                            'qtd': float(prog.qtd_total or 0)
-                        }
-                        for prog in programacao_query
-                    ]
+                    # Converter Dict[date, float] → List[Dict[str, Any]] para frontend
+                    programacao = converter_entradas_para_frontend(entradas_dict)
 
                     estoque_map[cod_produto] = {
                         'estoque_atual': estoque_atual,
@@ -393,10 +437,17 @@ def obter_dados():
         ).all()
 
         # ✅ BUSCAR TODAS as separações (SEM filtros de rota/sub-rota) dos produtos
-        # IMPORTANTE: Buscar de TODOS os produtos, não apenas pedidos_da_pagina
+        # ✅ INCLUINDO códigos unificados!
+        codigos_expandidos = set()
+        for cod in codigos_produtos:
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod)
+            codigos_expandidos.update(codigos_relacionados)
+
+        logger.info(f"🔍 Códigos da página: {len(codigos_produtos)} → Expandidos com unificação: {len(codigos_expandidos)}")
+
         separacoes_todas_query = db.session.query(Separacao).filter(
             and_(
-                Separacao.cod_produto.in_(codigos_produtos),
+                Separacao.cod_produto.in_(list(codigos_expandidos)),  # ✅ Busca códigos unificados!
                 Separacao.sincronizado_nf == False
             )
         )
@@ -713,7 +764,8 @@ def obter_dados():
             'limit': limit,
             'offset': offset,
             'dados': dados,
-            'saidas_nao_visiveis': saidas_nao_visiveis  # 🆕 NOVO CAMPO
+            'saidas_nao_visiveis': saidas_nao_visiveis,  # 🆕 Saídas não visíveis
+            'mapa_unificacao': mapa_unificacao  # 🆕 NOVO: Mapa de códigos unificados
         })
 
     except Exception as e:
@@ -758,30 +810,47 @@ def calcular_saidas_nao_visiveis(
         logger.info(f"   Separações filtradas (visíveis): {len(ids_filtradas)}")
 
         # 2. Filtrar separações NÃO VISÍVEIS = TODAS - FILTRADAS
+        # ✅ INCLUIR separações sem data (expedicao is None) - serão agrupadas em hoje
         separacoes_nao_visiveis = [
             sep for sep in separacoes_todas
-            if sep.id not in ids_filtradas and sep.expedicao is not None
+            if sep.id not in ids_filtradas
         ]
 
         logger.info(f"   Separações NÃO visíveis: {len(separacoes_nao_visiveis)}")
 
-        # 3. Agrupar por produto + data
+        # 3. ✅ Agrupar por produto + data COM UNIFICAÇÃO
+        hoje = date.today()
         saidas_por_produto_data = {}
 
         for sep in separacoes_nao_visiveis:
-            cod_prod = sep.cod_produto
-            data_exp = sep.expedicao.isoformat()
+            cod_prod_original = sep.cod_produto
             qtd = float(sep.qtd_saldo or 0)
 
             if qtd <= 0:
                 continue
 
-            chave = (cod_prod, data_exp)
-
-            if chave in saidas_por_produto_data:
-                saidas_por_produto_data[chave] += qtd
+            # ✅ Agrupar separações sem data ou atrasadas em hoje
+            if not sep.expedicao or sep.expedicao < hoje:
+                data_exp = hoje.isoformat()
             else:
-                saidas_por_produto_data[chave] = qtd
+                data_exp = sep.expedicao.isoformat()
+
+            # ✅ ADICIONAR apenas para o "código representante" do grupo (menor código)
+            # Isso evita duplicação quando múltiplos códigos do mesmo grupo estão na página
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_prod_original)
+
+            # Encontrar quais códigos do grupo estão na página
+            codigos_na_pagina = [c for c in codigos_relacionados if c in codigos_produtos]
+
+            if codigos_na_pagina:
+                # Usar o MENOR código como representante (para consistência)
+                codigo_representante = min(codigos_na_pagina)
+
+                chave = (codigo_representante, data_exp)
+                if chave in saidas_por_produto_data:
+                    saidas_por_produto_data[chave] += qtd
+                else:
+                    saidas_por_produto_data[chave] = qtd
 
         # 4. Converter para formato final
         saidas_consolidadas = {}
@@ -790,10 +859,11 @@ def calcular_saidas_nao_visiveis(
             saidas_consolidadas[cod_prod] = []
 
         for (cod_prod, data_exp), qtd in saidas_por_produto_data.items():
-            saidas_consolidadas[cod_prod].append({
-                'data': data_exp,
-                'qtd': qtd
-            })
+            if cod_prod in codigos_produtos:  # ✅ Garantir que código está na página
+                saidas_consolidadas[cod_prod].append({
+                    'data': data_exp,
+                    'qtd': qtd
+                })
 
         # 5. Ordenar por data
         for cod_prod in saidas_consolidadas:
@@ -1075,9 +1145,6 @@ def gerar_separacao():
         produtos_afetados = set()
 
         # 🆕 Calcular estoque atual + programação para produtos afetados
-        from app.producao.models import ProgramacaoProducao
-        from datetime import date, timedelta
-
         hoje = date.today()
         data_fim = hoje + timedelta(days=28)
 
@@ -1087,22 +1154,17 @@ def gerar_separacao():
         for cod_produto in produtos_unicos:
             estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
 
-            # Buscar programação
-            programacao_query = db.session.query(
-                ProgramacaoProducao.data_programacao,
-                func.sum(ProgramacaoProducao.qtd_programada).label('qtd_total')
-            ).filter(
-                ProgramacaoProducao.cod_produto == cod_produto,
-                ProgramacaoProducao.data_programacao >= hoje,
-                ProgramacaoProducao.data_programacao <= data_fim
-            ).group_by(
-                ProgramacaoProducao.data_programacao
-            ).all()
+            # ✅ USAR ServicoEstoqueSimples para buscar programação com UNIFICAÇÃO DE CÓDIGOS
+            # IMPORTANTE: entrada_em_d_plus_1=False porque frontend já aplica D+1
+            entradas_dict = ServicoEstoqueSimples.calcular_entradas_previstas(
+                cod_produto,
+                hoje,
+                data_fim,
+                entrada_em_d_plus_1=False  # Frontend aplica D+1, então backend não deve aplicar
+            )
 
-            programacao = [
-                {'data': prog.data_programacao.isoformat(), 'qtd': float(prog.qtd_total or 0)}
-                for prog in programacao_query
-            ]
+            # Converter Dict[date, float] → List[Dict[str, Any]] para frontend
+            programacao = converter_entradas_para_frontend(entradas_dict)
 
             estoque_map[cod_produto] = {
                 'estoque_atual': estoque_atual,
@@ -1854,9 +1916,6 @@ def adicionar_itens_separacao():
         produtos_afetados = set()
 
         # 🆕 Calcular estoque atual + programação para produtos afetados
-        from app.producao.models import ProgramacaoProducao
-        from datetime import date, timedelta
-
         hoje = date.today()
         data_fim = hoje + timedelta(days=28)
 
@@ -1866,22 +1925,17 @@ def adicionar_itens_separacao():
         for cod_produto in produtos_unicos:
             estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
 
-            # Buscar programação
-            programacao_query = db.session.query(
-                ProgramacaoProducao.data_programacao,
-                func.sum(ProgramacaoProducao.qtd_programada).label('qtd_total')
-            ).filter(
-                ProgramacaoProducao.cod_produto == cod_produto,
-                ProgramacaoProducao.data_programacao >= hoje,
-                ProgramacaoProducao.data_programacao <= data_fim
-            ).group_by(
-                ProgramacaoProducao.data_programacao
-            ).all()
+            # ✅ USAR ServicoEstoqueSimples para buscar programação com UNIFICAÇÃO DE CÓDIGOS
+            # IMPORTANTE: entrada_em_d_plus_1=False porque frontend já aplica D+1
+            entradas_dict = ServicoEstoqueSimples.calcular_entradas_previstas(
+                cod_produto,
+                hoje,
+                data_fim,
+                entrada_em_d_plus_1=False  # Frontend aplica D+1, então backend não deve aplicar
+            )
 
-            programacao = [
-                {'data': prog.data_programacao.isoformat(), 'qtd': float(prog.qtd_total or 0)}
-                for prog in programacao_query
-            ]
+            # Converter Dict[date, float] → List[Dict[str, Any]] para frontend
+            programacao = converter_entradas_para_frontend(entradas_dict)
 
             estoque_map[cod_produto] = {
                 'estoque_atual': estoque_atual,
