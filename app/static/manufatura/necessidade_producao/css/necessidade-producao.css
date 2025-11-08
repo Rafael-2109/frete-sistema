@@ -697,26 +697,28 @@ table.table-necessidade thead th.col-necessidade {
 
 .table-bom-fixed .col-fixed-codigo {
     left: 0;
-    min-width: 100px;
-    width: 100px;
-    max-width: 100px;
+    min-width: 120px;
+    width: 120px;
+    max-width: 120px;
     border-right: 2px solid #dee2e6;
 }
 
 .table-bom-fixed .col-fixed-nome {
-    left: 100px;
-    min-width: 250px;
-    width: 250px;
-    max-width: 250px;
+    left: 120px;
+    min-width: 300px;
+    width: 300px;
+    max-width: 300px;
     border-right: 2px solid #dee2e6;
 }
 
-/* Colunas de projeção D0-D60 */
+/* Colunas de projeção D0-D60 (REDIMENSIONÁVEIS) */
 .table-bom-fixed .col-projecao {
     min-width: 70px;
     width: 70px;
-    max-width: 70px;
     font-size: 0.85rem;
+    position: relative;
+    resize: horizontal;
+    overflow: auto;
 }
 
 /* Header com background fixo */
@@ -726,6 +728,8 @@ table.table-necessidade thead th.col-necessidade {
     background-color: #f8f9fa;
     z-index: 20;
     border-bottom: 2px solid #dee2e6;
+    resize: horizontal;
+    overflow: auto;
 }
 
 /* Header das colunas fixas (maior z-index) */
@@ -742,6 +746,13 @@ table.table-necessidade thead th.col-necessidade {
 .table-bom-fixed tbody tr:hover .col-fixed-codigo,
 .table-bom-fixed tbody tr:hover .col-fixed-nome {
     background-color: #e9ecef;
+}
+
+/* ✅ VALORES NEGATIVOS: Fundo vermelho leve (SEM negrito/texto vermelho) */
+.table-bom-fixed .valor-negativo {
+    background-color: rgba(220, 53, 69, 0.15) !important; /* Vermelho leve */
+    color: inherit !important; /* Mantém cor do texto normal */
+    font-weight: normal !important; /* Remove negrito */
 }
 
 /* 3. ESTILOS PARA ACCORDION DE PROGRAMAÇÃO */

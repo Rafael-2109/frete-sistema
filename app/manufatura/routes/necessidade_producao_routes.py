@@ -557,11 +557,25 @@ def register_necessidade_producao_routes(bp):
             if not cod_produto:
                 return jsonify({'erro': 'Código do produto é obrigatório'}), 400
 
-            # Função recursiva para buscar componentes
-            def buscar_componentes_recursivos(cod_produto_pai, nivel=0, visitados=None):
+            # Função recursiva para buscar componentes COM CONSUMO ACUMULADO
+            def buscar_componentes_recursivos(cod_produto_pai, qtd_pai=1.0, nivel=0, visitados=None):
                 """
-                Busca recursivamente componentes da BOM
-                Retorna lista flat de componentes com nível hierárquico
+                Busca recursivamente componentes da BOM COM CONSUMO ACUMULADO
+
+                Exemplo:
+                Produto A (1 unidade)
+                ├─ Componente B (2kg) - Intermediário
+                │  └─ Componente C (0.5kg por B) → Consumo total: 2*0.5 = 1kg
+                └─ Componente D (3kg) → Consumo total: 3kg
+
+                Args:
+                    cod_produto_pai: Código do produto/componente pai
+                    qtd_pai: Quantidade acumulada do pai (para calcular consumo total)
+                    nivel: Nível na hierarquia (0=raiz)
+                    visitados: Set para evitar loops
+
+                Returns:
+                    Lista de dicts com consumo acumulado
                 """
                 if visitados is None:
                     visitados = set()
@@ -580,31 +594,36 @@ def register_necessidade_producao_routes(bp):
                 ).all()
 
                 for item in bom_items:
+                    cod_componente = item.cod_produto_componente
+                    qtd_unitaria = float(item.qtd_utilizada)
+                    qtd_total_acumulada = qtd_pai * qtd_unitaria  # ✅ CONSUMO ACUMULADO
+
                     # Buscar dados do cadastro
                     cadastro = CadastroPalletizacao.query.filter_by(
-                        cod_produto=item.cod_produto_componente,
+                        cod_produto=cod_componente,
                         ativo=True
                     ).first()
 
+                    # Verificar se é intermediário (tem BOM própria)
+                    eh_intermediario = ListaMateriais.query.filter_by(
+                        cod_produto_produzido=cod_componente,
+                        status='ativo'
+                    ).count() > 0
+
                     componentes_flat.append({
-                        'cod_produto': item.cod_produto_componente,
+                        'cod_produto': cod_componente,
                         'nome_produto': item.nome_produto_componente or (cadastro.nome_produto if cadastro else ''),
-                        'qtd_utilizada': float(item.qtd_utilizada),
+                        'qtd_unitaria': qtd_unitaria,  # ✅ Qtd por unidade do pai direto
+                        'qtd_total': qtd_total_acumulada,  # ✅ Consumo acumulado recursivo
                         'nivel': nivel,
-                        'eh_intermediario': False  # Atualizado depois se tiver sub-componentes
+                        'eh_intermediario': eh_intermediario
                     })
 
-                    # Se o componente também é produzido (tem BOM), buscar recursivamente
-                    if ListaMateriais.query.filter_by(
-                        cod_produto_produzido=item.cod_produto_componente,
-                        status='ativo'
-                    ).count() > 0:
-                        # Marcar como intermediário
-                        componentes_flat[-1]['eh_intermediario'] = True
-
-                        # Buscar sub-componentes
+                    # Se for intermediário, buscar sub-componentes
+                    if eh_intermediario:
                         sub_componentes = buscar_componentes_recursivos(
-                            item.cod_produto_componente,
+                            cod_componente,
+                            qtd_total_acumulada,  # ✅ Propagar quantidade acumulada
                             nivel + 1,
                             visitados
                         )
@@ -612,8 +631,8 @@ def register_necessidade_producao_routes(bp):
 
                 return componentes_flat
 
-            # Buscar componentes recursivamente
-            componentes = buscar_componentes_recursivos(cod_produto)
+            # Buscar componentes recursivamente (começando com qtd=1)
+            componentes = buscar_componentes_recursivos(cod_produto, qtd_pai=1.0)
 
             if not componentes:
                 return jsonify({
@@ -622,47 +641,55 @@ def register_necessidade_producao_routes(bp):
                     'mensagem': 'Produto não possui estrutura (BOM) cadastrada'
                 })
 
-            # Buscar estoque e projeção D0-D60 de cada componente
-            estoque_service = ServicoEstoqueSimples()
+            # ✅ Usar ServicoProjecaoEstoque que já calcula recursivamente!
+            from app.manufatura.services.projecao_estoque_service import ServicoProjecaoEstoque
+
+            servico_projecao = ServicoProjecaoEstoque()
             componentes_com_estoque = []
-            min_producao_possivel = float('inf')  # Inicializa com infinito
+            min_producao_possivel = float('inf')
 
             for comp in componentes:
                 cod_comp = comp['cod_produto']
 
-                # Estoque atual
-                estoque_atual = estoque_service.calcular_estoque_atual(cod_comp)
+                # Buscar projeção completa do componente (já calcula recursivamente!)
+                projecao_comp = servico_projecao.projetar_produto(cod_comp, dias=60)
 
-                # Projeção D0-D60
-                projecao_resultado = estoque_service.calcular_projecao(cod_comp, dias=60)
-                projecao_dias = projecao_resultado.get('projecao', [])
+                # Extrair estoque atual
+                estoque_atual = projecao_comp.get('estoque_inicial', 0)
 
-                # Montar dict de projeção por dia (D0-D60)
+                # Montar dict de projeção D0-D60 (estoque final por dia)
                 projecao_por_dia = {}
-                for dia_dados in projecao_dias:
-                    dia_num = dia_dados.get('dia', 0)
-                    projecao_por_dia[f'D{dia_num}'] = float(dia_dados.get('saldo_final', 0))
+                projecao_diaria = projecao_comp.get('projecao_diaria', [])
+                for dia_dados in projecao_diaria:
+                    # Extrair número do dia da string 'YYYY-MM-DD'
+                    from datetime import date as date_cls
+                    hoje = date_cls.today()
+                    data_dia = date_cls.fromisoformat(dia_dados['data'])
+                    dia_num = (data_dia - hoje).days
+                    if 0 <= dia_num <= 60:
+                        projecao_por_dia[f'D{dia_num}'] = float(dia_dados.get('estoque_final', 0))
 
-                # Calcular quantidade de produto possível de produzir com este componente
-                qtd_utilizada = comp['qtd_utilizada']
-                if qtd_utilizada > 0:
-                    qtd_prod_possivel = estoque_atual / qtd_utilizada
+                # ✅ Calcular quantidade de produto possível usando CONSUMO TOTAL
+                qtd_total = comp['qtd_total']
+                if qtd_total > 0:
+                    qtd_prod_possivel = estoque_atual / qtd_total
                 else:
                     qtd_prod_possivel = 0
 
-                # Atualizar mínimo (gargalo)
-                if qtd_prod_possivel < min_producao_possivel:
+                # Atualizar mínimo (gargalo) - APENAS para componentes NÃO intermediários
+                if not comp['eh_intermediario'] and qtd_prod_possivel < min_producao_possivel:
                     min_producao_possivel = qtd_prod_possivel
 
                 componentes_com_estoque.append({
                     'cod_produto': cod_comp,
                     'nome_produto': comp['nome_produto'],
-                    'qtd_utilizada': qtd_utilizada,
+                    'qtd_unitaria': comp['qtd_unitaria'],
+                    'qtd_total': qtd_total,
                     'nivel': comp['nivel'],
                     'eh_intermediario': comp['eh_intermediario'],
                     'estoque_atual': float(estoque_atual),
                     'qtd_prod_possivel': qtd_prod_possivel,
-                    'projecao': projecao_por_dia  # Dict: {'D0': 100, 'D1': 95, ...}
+                    'projecao': projecao_por_dia  # ✅ Projeção recursiva completa!
                 })
 
             # Se nenhum componente foi encontrado, producao_sku = None

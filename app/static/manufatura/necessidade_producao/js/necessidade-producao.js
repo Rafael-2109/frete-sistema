@@ -693,21 +693,21 @@ async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
 }
 
 function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
-    $('#modal-separacoes-titulo').text(`${dados.nome_produto || codProduto}`);
+    // ✅ 1. Mostrar código + nome no título
+    $('#modal-separacoes-titulo').text(`${codProduto} - ${dados.nome_produto || ''}`);
 
     let html = '';
 
     // ============================================================
-    // 1. TABELA HORIZONTAL DE MOVIMENTAÇÕES (MANTÉM COMO ESTAVA)
+    // 1. TABELA HORIZONTAL DE MOVIMENTAÇÕES
     // ============================================================
     html += '<div class="table-responsive"><table class="table table-sm table-bordered table-hover">';
     html += '<thead><tr><th class="text-start" style="min-width: 120px;">Movimentação</th>';
 
     dados.dias.forEach(dia => {
+        // ✅ 2. CORRIGIR TIMEZONE: Usar string diretamente sem new Date()
         const ehReferencia = dia.data === diaReferencia;
-        const data = new Date(dia.data);
-        const diaNum = data.getDate().toString().padStart(2, '0');
-        const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+        const [ano, mes, diaNum] = dia.data.split('-');  // "2025-01-10" → ["2025", "01", "10"]
         const classe = ehReferencia ? 'table-warning fw-bold' : '';
         html += `<th class="text-center ${classe}" style="min-width: 70px;">${diaNum}/${mes}</th>`;
     });
@@ -748,55 +748,28 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
     html += '</tbody></table></div>';
 
     // ============================================================
-    // 2. NOVO: ACCORDION DE PROGRAMAÇÃO DE PRODUÇÃO (D0-D60)
+    // 2. ACCORDION - FORMULÁRIO ADICIONAR PROGRAMAÇÃO
     // ============================================================
-    html += '<hr class="my-4">';
-    html += '<h6 class="text-primary mb-3"><i class="fas fa-calendar-alt me-2"></i>Programação de Produção (D0-D60)</h6>';
-    html += '<div class="accordion mb-3" id="accordion-programacao-producao">';
-    html += renderizarAccordionProgramacao(dados.programacoes_linhas, codProduto);
-    html += '</div>';
-
-    // ============================================================
-    // 3. NOVO: ACCORDION DE ESTRUTURA DO PRODUTO (BOM)
-    // ============================================================
-    html += '<hr class="my-4">';
-    html += '<div class="accordion mb-3" id="accordion-bom">';
+    html += '<hr class="my-3">';
+    html += '<div class="accordion mb-3" id="accordion-form-programacao">';
     html += `
         <div class="accordion-item">
-            <h2 class="accordion-header" id="heading-bom">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-bom">
-                    <i class="fas fa-sitemap me-2"></i>Estrutura do Produto (BOM)
+            <h2 class="accordion-header" id="heading-form-prog">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-form-prog">
+                    <i class="fas fa-plus-circle me-2 text-success"></i>Adicionar Programação de Produção
                 </button>
             </h2>
-            <div id="collapse-bom" class="accordion-collapse collapse" data-bs-parent="#accordion-bom">
+            <div id="collapse-form-prog" class="accordion-collapse collapse" data-bs-parent="#accordion-form-programacao">
                 <div class="accordion-body">
-                    <div class="d-flex justify-content-end mb-3">
-                        <div class="btn-group btn-group-sm" role="group">
-                            <input type="radio" class="btn-check" name="toggle-bom-${codProduto}" id="toggle-qtd-${codProduto}" checked>
-                            <label class="btn btn-outline-primary" for="toggle-qtd-${codProduto}">Qtd Componentes</label>
-                            <input type="radio" class="btn-check" name="toggle-bom-${codProduto}" id="toggle-prod-${codProduto}">
-                            <label class="btn btn-outline-primary" for="toggle-prod-${codProduto}">Qtd Prod. Possível</label>
-                        </div>
-                    </div>
-                    <div id="tabela-bom-${codProduto}" class="text-center py-3">
-                        <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-2">Carregando estrutura...</p>
-                    </div>
+                    ${renderizarFormularioProgramacaoInline(codProduto, dados.linhas_producao || [])}
                 </div>
             </div>
         </div>
     </div>`;
 
     // ============================================================
-    // 4. NOVO: FORMULÁRIO ADICIONAR PROGRAMAÇÃO
+    // 3. ACCORDION DE PEDIDOS
     // ============================================================
-    html += '<hr class="my-4">';
-    html += renderizarFormularioProgramacao(codProduto, dados.linhas_producao || []);
-
-    // ============================================================
-    // 5. NOVO: ACCORDION DE PEDIDOS (MOVIDO DE ONDE ESTAVA)
-    // ============================================================
-    html += '<hr class="my-4">';
     html += '<div class="accordion mb-3" id="accordion-pedidos-sep">';
     html += `
         <div class="accordion-item">
@@ -832,8 +805,44 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
     } else {
         html += '<div class="alert alert-info mb-0"><i class="fas fa-info-circle me-2"></i>Nenhum pedido não sincronizado</div>';
     }
-
     html += '</div></div></div></div>';
+
+    // ============================================================
+    // 4. ACCORDION DE ESTRUTURA DO PRODUTO (BOM)
+    // ============================================================
+    html += '<div class="accordion mb-3" id="accordion-bom">';
+    html += `
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-bom">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-bom">
+                    <i class="fas fa-sitemap me-2"></i>Estrutura do Produto (Componentes)
+                </button>
+            </h2>
+            <div id="collapse-bom" class="accordion-collapse collapse" data-bs-parent="#accordion-bom">
+                <div class="accordion-body">
+                    <div class="d-flex justify-content-end mb-3">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="toggle-bom-${codProduto}" id="toggle-qtd-${codProduto}" checked>
+                            <label class="btn btn-outline-primary" for="toggle-qtd-${codProduto}">Qtd Componentes</label>
+                            <input type="radio" class="btn-check" name="toggle-bom-${codProduto}" id="toggle-prod-${codProduto}">
+                            <label class="btn btn-outline-primary" for="toggle-prod-${codProduto}">Qtd Prod. Possível</label>
+                        </div>
+                    </div>
+                    <div id="tabela-bom-${codProduto}" class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Carregando estrutura...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+    // ============================================================
+    // 5. ACCORDION DE PROGRAMAÇÃO DE PRODUÇÃO (D0-D60)
+    // ============================================================
+    html += '<div class="accordion mb-3" id="accordion-programacao-producao">';
+    html += renderizarAccordionProgramacao(dados.programacoes_linhas, codProduto);
+    html += '</div>';
 
     $('#modal-separacoes-conteudo').html(html);
 
@@ -901,18 +910,20 @@ function renderizarAccordionProgramacao(programacoesLinhas, codProdutoModal) {
             // Empilhar programações verticalmente (divs)
             programacoes.forEach(prog => {
                 const classeDestaque = prog.eh_produto_modal ? 'produto-destaque' : '';
+                const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
+                const iconeObs = temObs ? ` <i class="fas fa-comment text-muted ms-1" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>` : '';
+
                 html += `
                     <div class="p-2 mb-1 border rounded ${classeDestaque}">
-                        <div class="d-flex justify-content-between">
+                        <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <strong>${prog.cod_produto}</strong> - ${prog.nome_produto || ''}
-                                ${prog.cliente_produto ? `<br><small class="text-muted">Cliente: ${prog.cliente_produto}</small>` : ''}
+                                <strong>${prog.cod_produto}</strong> - ${prog.nome_produto || ''}${iconeObs}
+                                ${prog.cliente_produto ? ` <small class="text-muted ms-2">| Cliente: ${prog.cliente_produto}</small>` : ''}
                             </div>
                             <div class="text-end">
                                 <span class="badge bg-success">${formatarNumero(prog.qtd_programada)}</span>
                             </div>
                         </div>
-                        ${prog.observacao_pcp ? `<small class="text-muted"><i class="fas fa-comment me-1"></i>${prog.observacao_pcp}</small>` : ''}
                     </div>`;
             });
 
@@ -922,6 +933,12 @@ function renderizarAccordionProgramacao(programacoesLinhas, codProdutoModal) {
         html += '</tbody></table></div></div></div>';
         index++;
     }
+
+    // Ativar tooltips
+    setTimeout(() => {
+        const tooltipTriggerList = document.querySelectorAll('#accordion-programacao-producao [data-bs-toggle="tooltip"]');
+        [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+    }, 100);
 
     return html;
 }
@@ -979,6 +996,121 @@ function renderizarFormularioProgramacao(codProduto, linhasProducao) {
 }
 
 /**
+ * Renderiza formulário inline SIMPLIFICADO (dentro de accordion)
+ */
+function renderizarFormularioProgramacaoInline(codProduto, linhasProducao) {
+    return `
+        <form id="form-add-programacao-${codProduto}" class="row g-2">
+            <input type="hidden" name="cod_produto" value="${codProduto}">
+
+            <div class="col-md-2">
+                <label for="data-prog-${codProduto}" class="form-label form-label-sm">Data <span class="text-danger">*</span></label>
+                <input type="date" class="form-control form-control-sm" id="data-prog-${codProduto}" name="data_programacao" required>
+            </div>
+
+            <div class="col-md-3">
+                <label for="linha-prog-${codProduto}" class="form-label form-label-sm">Linha <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" id="linha-prog-${codProduto}" name="linha_producao" required>
+                    <option value="">Selecione...</option>
+                    ${linhasProducao.map(l => `<option value="${l.linha}">${l.linha}</option>`).join('')}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label for="qtd-prog-${codProduto}" class="form-label form-label-sm">Quantidade <span class="text-danger">*</span></label>
+                <input type="number" class="form-control form-control-sm" id="qtd-prog-${codProduto}" name="qtd_programada" step="0.001" min="0" required>
+            </div>
+
+            <div class="col-md-2">
+                <label for="cliente-prog-${codProduto}" class="form-label form-label-sm">Cliente</label>
+                <input type="text" class="form-control form-control-sm" id="cliente-prog-${codProduto}" name="cliente_produto">
+            </div>
+
+            <div class="col-md-3">
+                <label for="obs-prog-${codProduto}" class="form-label form-label-sm">Observações PCP</label>
+                <input type="text" class="form-control form-control-sm" id="obs-prog-${codProduto}" name="observacao_pcp">
+            </div>
+
+            <div class="col-12 text-end">
+                <button type="submit" class="btn btn-success btn-sm">
+                    <i class="fas fa-check me-1"></i>Adicionar Programação
+                </button>
+            </div>
+        </form>
+    `;
+}
+
+/**
+ * Renderiza programação de produção COMPACTA (1 linha por item)
+ * Cliente inline + Observações em tooltip
+ */
+function renderizarProgramacaoProducaoCompacta(programacoesLinhas, codProdutoModal) {
+    if (!programacoesLinhas || Object.keys(programacoesLinhas).length === 0) {
+        return '<div class="alert alert-warning m-3"><i class="fas fa-exclamation-triangle me-2"></i>Nenhuma programação encontrada para as linhas de produção deste produto (D0-D60)</div>';
+    }
+
+    let html = '<table class="table table-sm table-bordered table-hover mb-0">';
+    html += '<thead class="table-light"><tr>';
+    html += '<th style="width: 100px;">Data</th>';
+    html += '<th style="width: 150px;">Linha</th>';
+    html += '<th>Produto</th>';
+    html += '<th style="width: 150px;">Cliente</th>';
+    html += '<th class="text-end" style="width: 100px;">Qtd</th>';
+    html += '</tr></thead><tbody>';
+
+    // Coletar todas as programações e ordenar por data + linha
+    const todasProgramacoes = [];
+    for (const [linha, dadosLinha] of Object.entries(programacoesLinhas)) {
+        const datas = dadosLinha.datas || {};
+        for (const [data, programacoes] of Object.entries(datas)) {
+            programacoes.forEach(prog => {
+                todasProgramacoes.push({
+                    data,
+                    linha,
+                    ...prog
+                });
+            });
+        }
+    }
+
+    // Ordenar por data + linha
+    todasProgramacoes.sort((a, b) => {
+        if (a.data !== b.data) return a.data.localeCompare(b.data);
+        return a.linha.localeCompare(b.linha);
+    });
+
+    // Renderizar todas as programações
+    todasProgramacoes.forEach(prog => {
+        const classeDestaque = prog.eh_produto_modal ? 'produto-destaque' : '';
+        const dataFormatada = new Date(prog.data).toLocaleDateString('pt-BR');
+        const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
+
+        html += `<tr class="${classeDestaque}">`;
+        html += `<td class="text-center">${dataFormatada}</td>`;
+        html += `<td><small>${prog.linha}</small></td>`;
+        html += `<td>`;
+        html += `<strong>${prog.cod_produto}</strong> - ${prog.nome_produto || ''}`;
+        if (temObs) {
+            html += ` <i class="fas fa-comment text-muted" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>`;
+        }
+        html += `</td>`;
+        html += `<td><small class="text-muted">${prog.cliente_produto || '-'}</small></td>`;
+        html += `<td class="text-end"><span class="badge bg-success">${formatarNumero(prog.qtd_programada)}</span></td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+
+    // Ativar tooltips do Bootstrap
+    setTimeout(() => {
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+    }, 100);
+
+    return html;
+}
+
+/**
  * Configura listeners do toggle de BOM e carrega dados ao expandir
  */
 function configurarListenersBOM(codProduto) {
@@ -1024,53 +1156,75 @@ function renderizarTabelaBOM(codProduto, dados, modo) {
         return;
     }
 
-    const componentes = dados.componentes;
+    // ✅ MANTER ORDEM HIERÁRQUICA do backend (não ordenar!)
+    const componentes = dados.componentes;  // Já vem na ordem correta PAI → FILHOS
     const producaoSKU = dados.producao_produto_sku;
+
+    // 🐛 DEBUG: Verificar se qtd_total está vindo do backend
+    console.log('[BOM DEBUG] Componentes recebidos:', componentes);
+    console.log('[BOM DEBUG] Primeiro componente:', componentes[0]);
 
     // Wrapper com scroll lateral
     let html = '<div class="table-bom-wrapper"><table class="table table-sm table-bordered table-hover mb-0 table-bom-fixed">';
 
     // HEADER
     html += '<thead class="table-light"><tr>';
-    html += '<th class="col-fixed-codigo">Código</th>';
-    html += '<th class="col-fixed-nome">Nome</th>';
-    html += '<th class="text-end">Qtd Utilizada</th>';
+    html += '<th class="col-fixed-codigo text-start">Código</th>';
+    html += '<th class="col-fixed-nome text-start">Nome</th>';
+    html += '<th class="text-end">Qtd. Est.</th>';
     html += '<th class="text-end">Estoque Atual</th>';
 
-    // Colunas D0-D60
+    // ✅ 3. Colunas D0-D60 com dd/mm
+    const hoje = new Date();
     for (let i = 0; i <= 60; i++) {
-        html += `<th class="text-end col-projecao">D${i}</th>`;
+        const dataProjecao = new Date(hoje);
+        dataProjecao.setDate(hoje.getDate() + i);
+        const dia = dataProjecao.getDate().toString().padStart(2, '0');
+        const mes = (dataProjecao.getMonth() + 1).toString().padStart(2, '0');
+        html += `<th class="text-end col-projecao" title="D${i}">${dia}/${mes}</th>`;
     }
     html += '</tr></thead><tbody>';
 
     // LINHAS DE COMPONENTES
     componentes.forEach(comp => {
+        const ehIntermediario = comp.eh_intermediario;
+        const classeIntermediario = ehIntermediario ? 'bg-warning bg-opacity-10' : '';  // ✅ Destaque visual
+        const icone = ehIntermediario ? '<i class="fas fa-sitemap text-warning me-1"></i>' : '<i class="fas fa-cube text-muted me-1"></i>';
         const nivel = comp.nivel || 0;
-        const indentacao = '&nbsp;&nbsp;'.repeat(nivel * 2);
-        const icone = comp.eh_intermediario ? '<i class="fas fa-sitemap text-warning me-1"></i>' : '<i class="fas fa-cube text-muted me-1"></i>';
+        const indentacao = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(nivel);  // ✅ Indentação hierárquica
+        const nomeCompleto = comp.nome_produto || '';
+        const nomeExibido = nomeCompleto.length > 35 ? nomeCompleto.substring(0, 35) + '...' : nomeCompleto;
 
-        html += '<tr>';
-        html += `<td class="col-fixed-codigo"><small>${comp.cod_produto}</small></td>`;
-        html += `<td class="col-fixed-nome">${indentacao}${icone}<small>${comp.nome_produto}</small></td>`;
-        html += `<td class="text-end">${formatarNumeroDecimais(comp.qtd_utilizada, 6)}</td>`;
+        html += `<tr class="${classeIntermediario}">`;
+        html += `<td class="col-fixed-codigo text-start"><small>${comp.cod_produto}</small></td>`;
+        // ✅ Tooltip + Indentação
+        html += `<td class="col-fixed-nome text-start" title="${nomeCompleto}" data-bs-toggle="tooltip">${indentacao}${icone}<small>${nomeExibido}</small></td>`;
+
+        // ✅ APENAS qtd_total (consumo acumulado)
+        html += `<td class="text-end"><strong>${formatarNumeroDecimais(comp.qtd_total, 6)}</strong></td>`;
 
         if (modo === 'qtd') {
-            html += `<td class="text-end">${formatarNumero(comp.estoque_atual)}</td>`;
-            // Projeção D0-D60 em quantidade
+            // Estoque Atual
+            const classeEstoque = comp.estoque_atual < 0 ? 'valor-negativo' : '';
+            html += `<td class="text-end ${classeEstoque}">${formatarNumero(comp.estoque_atual)}</td>`;
+
+            // Projeção D0-D60 em quantidade (fundo vermelho se negativo)
             for (let i = 0; i <= 60; i++) {
                 const valor = comp.projecao[`D${i}`] || 0;
-                const cor = valor < 0 ? 'text-danger fw-bold' : '';
-                html += `<td class="text-end col-projecao ${cor}">${formatarNumero(valor)}</td>`;
+                const classeNegativo = valor < 0 ? 'valor-negativo' : '';
+                html += `<td class="text-end col-projecao ${classeNegativo}">${formatarNumero(valor)}</td>`;
             }
         } else {
             // modo === 'prod': Qtd Prod. Possível
-            html += `<td class="text-end text-primary fw-bold">${formatarNumero(comp.qtd_prod_possivel)}</td>`;
-            // Projeção em "qtd prod possível"
+            const classeEstoque = comp.qtd_prod_possivel < 0 ? 'valor-negativo' : '';
+            html += `<td class="text-end ${classeEstoque}">${formatarNumero(comp.qtd_prod_possivel)}</td>`;
+
+            // Projeção em "qtd prod possível" (fundo vermelho se negativo)
             for (let i = 0; i <= 60; i++) {
                 const estoqueProj = comp.projecao[`D${i}`] || 0;
-                const qtdProdPossivel = comp.qtd_utilizada > 0 ? estoqueProj / comp.qtd_utilizada : 0;
-                const cor = qtdProdPossivel < 0 ? 'text-danger fw-bold' : 'text-primary';
-                html += `<td class="text-end col-projecao ${cor}">${formatarNumero(qtdProdPossivel)}</td>`;
+                const qtdProdPossivel = comp.qtd_total > 0 ? estoqueProj / comp.qtd_total : 0;
+                const classeNegativo = qtdProdPossivel < 0 ? 'valor-negativo' : '';
+                html += `<td class="text-end col-projecao ${classeNegativo}">${formatarNumero(qtdProdPossivel)}</td>`;
             }
         }
 
@@ -1080,8 +1234,8 @@ function renderizarTabelaBOM(codProduto, dados, modo) {
     // LINHA ESPECIAL: Produção Produto SKU (gargalo)
     html += '<tr class="table-warning fw-bold">';
     html += '<td class="col-fixed-codigo" colspan="2"><i class="fas fa-exclamation-triangle me-1"></i>Produção Produto SKU (Mínimo)</td>';
-    html += `<td class="text-end">-</td>`;
-    html += `<td class="text-end text-danger">${formatarNumero(producaoSKU)}</td>`;
+    html += `<td class="text-end">-</td>`;  // Qtd. Est.
+    html += `<td class="text-end text-danger">${formatarNumero(producaoSKU)}</td>`;  // Estoque Atual
 
     // Coluna vazia para D0-D60
     for (let i = 0; i <= 60; i++) {
@@ -1092,6 +1246,12 @@ function renderizarTabelaBOM(codProduto, dados, modo) {
     html += '</tbody></table></div>';
 
     $(`#tabela-bom-${codProduto}`).html(html);
+
+    // ✅ Ativar tooltips do Bootstrap na tabela
+    setTimeout(() => {
+        const tooltipTriggerList = document.querySelectorAll('#tabela-bom-' + codProduto + ' [data-bs-toggle="tooltip"]');
+        [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+    }, 100);
 }
 
 /**
