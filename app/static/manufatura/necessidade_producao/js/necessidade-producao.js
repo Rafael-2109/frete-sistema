@@ -695,78 +695,124 @@ async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
 function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
     $('#modal-separacoes-titulo').text(`${dados.nome_produto || codProduto}`);
 
-    // TABELA HORIZONTAL: Dias nas colunas, movimentações nas linhas
-    let html = '<div class="table-responsive"><table class="table table-sm table-bordered table-hover">';
+    let html = '';
 
-    // HEADER com datas
+    // ============================================================
+    // 1. TABELA HORIZONTAL DE MOVIMENTAÇÕES (MANTÉM COMO ESTAVA)
+    // ============================================================
+    html += '<div class="table-responsive"><table class="table table-sm table-bordered table-hover">';
     html += '<thead><tr><th class="text-start" style="min-width: 120px;">Movimentação</th>';
+
     dados.dias.forEach(dia => {
         const ehReferencia = dia.data === diaReferencia;
         const data = new Date(dia.data);
         const diaNum = data.getDate().toString().padStart(2, '0');
         const mes = (data.getMonth() + 1).toString().padStart(2, '0');
         const classe = ehReferencia ? 'table-warning fw-bold' : '';
-
         html += `<th class="text-center ${classe}" style="min-width: 70px;">${diaNum}/${mes}</th>`;
     });
     html += '</tr></thead><tbody>';
 
-    // LINHA 1: Estoque Inicial
+    // Linhas: Est. Inicial, Entradas, Saídas, Est. Final
     html += '<tr><td class="fw-bold bg-light">Est. Inicial</td>';
     dados.dias.forEach(dia => {
-        const ehReferencia = dia.data === diaReferencia;
-        const classe = ehReferencia ? 'table-warning' : '';
+        const classe = dia.data === diaReferencia ? 'table-warning' : '';
         html += `<td class="text-center ${classe}">${Math.round(dia.est_inicial).toLocaleString('pt-BR')}</td>`;
     });
     html += '</tr>';
 
-    // LINHA 2: Entradas
     html += '<tr><td class="fw-bold bg-light">Entradas</td>';
     dados.dias.forEach(dia => {
-        const ehReferencia = dia.data === diaReferencia;
-        const classe = ehReferencia ? 'table-warning' : '';
+        const classe = dia.data === diaReferencia ? 'table-warning' : '';
         const valor = dia.entradas > 0 ? `<span class="text-success fw-bold">+${Math.round(dia.entradas).toLocaleString('pt-BR')}</span>` : '0';
         html += `<td class="text-center ${classe}">${valor}</td>`;
     });
     html += '</tr>';
 
-    // LINHA 3: Saídas
     html += '<tr><td class="fw-bold bg-light">Saídas</td>';
     dados.dias.forEach(dia => {
-        const ehReferencia = dia.data === diaReferencia;
-        const classe = ehReferencia ? 'table-warning' : '';
+        const classe = dia.data === diaReferencia ? 'table-warning' : '';
         const valor = dia.saidas > 0 ? `<span class="text-danger fw-bold">-${Math.round(dia.saidas).toLocaleString('pt-BR')}</span>` : '0';
         html += `<td class="text-center ${classe}">${valor}</td>`;
     });
     html += '</tr>';
 
-    // LINHA 4: Estoque Final
     html += '<tr class="table-primary"><td class="fw-bold">Est. Final</td>';
     dados.dias.forEach(dia => {
-        const ehReferencia = dia.data === diaReferencia;
-        const classe = ehReferencia ? 'table-warning fw-bold' : '';
+        const classe = dia.data === diaReferencia ? 'table-warning fw-bold' : '';
         const valor = Math.round(dia.est_final);
         const cor = valor < 0 ? 'text-danger' : valor === 0 ? 'text-muted' : 'text-dark';
         html += `<td class="text-center fw-bold ${classe} ${cor}">${valor.toLocaleString('pt-BR')}</td>`;
     });
     html += '</tr>';
-
     html += '</tbody></table></div>';
 
-    // SEÇÃO DE PEDIDOS
+    // ============================================================
+    // 2. NOVO: ACCORDION DE PROGRAMAÇÃO DE PRODUÇÃO (D0-D60)
+    // ============================================================
+    html += '<hr class="my-4">';
+    html += '<h6 class="text-primary mb-3"><i class="fas fa-calendar-alt me-2"></i>Programação de Produção (D0-D60)</h6>';
+    html += '<div class="accordion mb-3" id="accordion-programacao-producao">';
+    html += renderizarAccordionProgramacao(dados.programacoes_linhas, codProduto);
+    html += '</div>';
+
+    // ============================================================
+    // 3. NOVO: ACCORDION DE ESTRUTURA DO PRODUTO (BOM)
+    // ============================================================
+    html += '<hr class="my-4">';
+    html += '<div class="accordion mb-3" id="accordion-bom">';
+    html += `
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-bom">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-bom">
+                    <i class="fas fa-sitemap me-2"></i>Estrutura do Produto (BOM)
+                </button>
+            </h2>
+            <div id="collapse-bom" class="accordion-collapse collapse" data-bs-parent="#accordion-bom">
+                <div class="accordion-body">
+                    <div class="d-flex justify-content-end mb-3">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="toggle-bom-${codProduto}" id="toggle-qtd-${codProduto}" checked>
+                            <label class="btn btn-outline-primary" for="toggle-qtd-${codProduto}">Qtd Componentes</label>
+                            <input type="radio" class="btn-check" name="toggle-bom-${codProduto}" id="toggle-prod-${codProduto}">
+                            <label class="btn btn-outline-primary" for="toggle-prod-${codProduto}">Qtd Prod. Possível</label>
+                        </div>
+                    </div>
+                    <div id="tabela-bom-${codProduto}" class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Carregando estrutura...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+    // ============================================================
+    // 4. NOVO: FORMULÁRIO ADICIONAR PROGRAMAÇÃO
+    // ============================================================
+    html += '<hr class="my-4">';
+    html += renderizarFormularioProgramacao(codProduto, dados.linhas_producao || []);
+
+    // ============================================================
+    // 5. NOVO: ACCORDION DE PEDIDOS (MOVIDO DE ONDE ESTAVA)
+    // ============================================================
+    html += '<hr class="my-4">';
+    html += '<div class="accordion mb-3" id="accordion-pedidos-sep">';
+    html += `
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-pedidos-sep">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-pedidos-sep">
+                    <i class="fas fa-clipboard-list me-2"></i>Pedidos Não Sincronizados <span class="badge bg-success ms-2">${dados.pedidos ? dados.pedidos.length : 0}</span>
+                </button>
+            </h2>
+            <div id="collapse-pedidos-sep" class="accordion-collapse collapse" data-bs-parent="#accordion-pedidos-sep">
+                <div class="accordion-body p-0">`;
+
     if (dados.pedidos && dados.pedidos.length > 0) {
-        html += '<hr class="my-4">';
-        html += '<h6 class="text-success mb-3"><i class="fas fa-clipboard-list me-2"></i>Pedidos Não Sincronizados (sincronizado_nf=False)</h6>';
-        html += '<div class="table-responsive"><table class="table table-sm table-bordered table-striped">';
+        html += '<div class="table-responsive"><table class="table table-sm table-bordered table-striped mb-0">';
         html += '<thead class="table-light"><tr>';
-        html += '<th>Pedido</th>';
-        html += '<th>CNPJ</th>';
-        html += '<th>Cliente</th>';
-        html += '<th class="text-end">Qtd</th>';
-        html += '<th>Expedição</th>';
-        html += '<th>Agendamento</th>';
-        html += '<th class="text-center">Confirmado</th>';
-        html += '<th>Dt. Entrega</th>';
+        html += '<th>Pedido</th><th>CNPJ</th><th>Cliente</th><th class="text-end">Qtd</th>';
+        html += '<th>Expedição</th><th>Agendamento</th><th class="text-center">Confirmado</th><th>Dt. Entrega</th>';
         html += '</tr></thead><tbody>';
 
         dados.pedidos.forEach(ped => {
@@ -777,19 +823,353 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
             html += `<td class="text-end">${Math.round(ped.qtd).toLocaleString('pt-BR')}</td>`;
             html += `<td>${ped.expedicao ? new Date(ped.expedicao).toLocaleDateString('pt-BR') : '-'}</td>`;
             html += `<td>${ped.agendamento ? new Date(ped.agendamento).toLocaleDateString('pt-BR') : '-'}</td>`;
-
-            const confirmado = ped.agendamento_confirmado;
-            const badgeConfirmado = confirmado
-                ? '<span class="badge bg-success">Sim</span>'
-                : '<span class="badge bg-secondary">Não</span>';
-            html += `<td class="text-center">${badgeConfirmado}</td>`;
-
+            html += `<td class="text-center">${ped.agendamento_confirmado ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-secondary">Não</span>'}</td>`;
             html += `<td>${ped.data_entrega_pedido ? new Date(ped.data_entrega_pedido).toLocaleDateString('pt-BR') : '-'}</td>`;
             html += '</tr>';
         });
 
         html += '</tbody></table></div>';
+    } else {
+        html += '<div class="alert alert-info mb-0"><i class="fas fa-info-circle me-2"></i>Nenhum pedido não sincronizado</div>';
     }
 
+    html += '</div></div></div></div>';
+
     $('#modal-separacoes-conteudo').html(html);
+
+    // Listeners para BOM toggle e formulário
+    configurarListenersBOM(codProduto);
+    configurarListenersFormularioProgramacao(codProduto, dados.nome_produto);
+}
+
+// ============================================================
+// FUNÇÕES AUXILIARES PARA NOVOS COMPONENTES DO MODAL
+// ============================================================
+
+/**
+ * Renderiza accordion de programação de produção agrupado por linha
+ * Estrutura: Dias nas LINHAS, produtos em divs empilhadas verticalmente
+ */
+function renderizarAccordionProgramacao(programacoesLinhas, codProdutoModal) {
+    if (!programacoesLinhas || Object.keys(programacoesLinhas).length === 0) {
+        return '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>Nenhuma programação encontrada para as linhas de produção deste produto (D0-D60)</div>';
+    }
+
+    let html = '';
+    let index = 0;
+
+    for (const [linha, dadosLinha] of Object.entries(programacoesLinhas)) {
+        const totalProgramado = dadosLinha.total_programado || 0;
+        const datas = dadosLinha.datas || {};
+        const numDias = Object.keys(datas).length;
+
+        html += `
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-prog-${index}">
+                    <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#collapse-prog-${index}">
+                        <div class="d-flex justify-content-between w-100 me-3">
+                            <div><strong>${linha}</strong></div>
+                            <div>
+                                <span class="badge bg-primary me-2">Qtd programada do produto: ${formatarNumero(totalProgramado)}</span>
+                                <span class="badge bg-secondary">${numDias} dias</span>
+                            </div>
+                        </div>
+                    </button>
+                </h2>
+                <div id="collapse-prog-${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}"
+                     data-bs-parent="#accordion-programacao-producao">
+                    <div class="accordion-body p-0">
+                        <table class="table table-sm table-bordered table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 100px;">Data</th>
+                                    <th>Programações</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+        // Ordenar datas
+        const datasOrdenadas = Object.keys(datas).sort();
+
+        datasOrdenadas.forEach(data => {
+            const programacoes = datas[data];
+            const dataFormatada = new Date(data).toLocaleDateString('pt-BR');
+
+            html += `<tr><td class="fw-bold align-top">${dataFormatada}</td><td>`;
+
+            // Empilhar programações verticalmente (divs)
+            programacoes.forEach(prog => {
+                const classeDestaque = prog.eh_produto_modal ? 'produto-destaque' : '';
+                html += `
+                    <div class="p-2 mb-1 border rounded ${classeDestaque}">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>${prog.cod_produto}</strong> - ${prog.nome_produto || ''}
+                                ${prog.cliente_produto ? `<br><small class="text-muted">Cliente: ${prog.cliente_produto}</small>` : ''}
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success">${formatarNumero(prog.qtd_programada)}</span>
+                            </div>
+                        </div>
+                        ${prog.observacao_pcp ? `<small class="text-muted"><i class="fas fa-comment me-1"></i>${prog.observacao_pcp}</small>` : ''}
+                    </div>`;
+            });
+
+            html += '</td></tr>';
+        });
+
+        html += '</tbody></table></div></div></div>';
+        index++;
+    }
+
+    return html;
+}
+
+/**
+ * Renderiza formulário para adicionar programação de produção
+ */
+function renderizarFormularioProgramacao(codProduto, linhasProducao) {
+    return `
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-plus me-2"></i>Adicionar Programação de Produção
+            </div>
+            <div class="card-body">
+                <form id="form-add-programacao-${codProduto}" class="row g-3">
+                    <input type="hidden" name="cod_produto" value="${codProduto}">
+
+                    <div class="col-md-3">
+                        <label for="data-prog-${codProduto}" class="form-label">Data Programação <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control form-control-sm" id="data-prog-${codProduto}" name="data_programacao" required>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label for="linha-prog-${codProduto}" class="form-label">Linha de Produção <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="linha-prog-${codProduto}" name="linha_producao" required>
+                            <option value="">Selecione...</option>
+                            ${linhasProducao.map(l => `<option value="${l.linha}">${l.linha}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="qtd-prog-${codProduto}" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control form-control-sm" id="qtd-prog-${codProduto}" name="qtd_programada" step="0.001" min="0" required>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="cliente-prog-${codProduto}" class="form-label">Cliente/Marca</label>
+                        <input type="text" class="form-control form-control-sm" id="cliente-prog-${codProduto}" name="cliente_produto">
+                    </div>
+
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success btn-sm w-100">
+                            <i class="fas fa-check me-1"></i>Adicionar
+                        </button>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="obs-prog-${codProduto}" class="form-label">Observações PCP</label>
+                        <textarea class="form-control form-control-sm" id="obs-prog-${codProduto}" name="observacao_pcp" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Configura listeners do toggle de BOM e carrega dados ao expandir
+ */
+function configurarListenersBOM(codProduto) {
+    const collapseId = `#collapse-bom`;
+    let dadosBOM = null;
+    let modoAtual = 'qtd'; // 'qtd' ou 'prod'
+
+    // Listener para quando o accordion abrir
+    $(collapseId).on('show.bs.collapse', async function() {
+        if (dadosBOM === null) {
+            // Buscar BOM pela primeira vez
+            try {
+                const response = await fetch(`/manufatura/api/necessidade-producao/bom-recursiva-estoque?cod_produto=${codProduto}`);
+                dadosBOM = await response.json();
+
+                if (dadosBOM.erro) {
+                    $(`#tabela-bom-${codProduto}`).html(`<div class="alert alert-danger">${dadosBOM.erro}</div>`);
+                } else {
+                    renderizarTabelaBOM(codProduto, dadosBOM, modoAtual);
+                }
+            } catch (error) {
+                console.error('[BOM] Erro:', error);
+                $(`#tabela-bom-${codProduto}`).html(`<div class="alert alert-danger">Erro ao carregar BOM: ${error.message}</div>`);
+            }
+        }
+    });
+
+    // Listener para toggle de modo
+    $(`input[name="toggle-bom-${codProduto}"]`).on('change', function() {
+        modoAtual = this.id.includes('qtd') ? 'qtd' : 'prod';
+        if (dadosBOM) {
+            renderizarTabelaBOM(codProduto, dadosBOM, modoAtual);
+        }
+    });
+}
+
+/**
+ * Renderiza tabela de BOM com scroll lateral (código e nome fixos)
+ */
+function renderizarTabelaBOM(codProduto, dados, modo) {
+    if (!dados.componentes || dados.componentes.length === 0) {
+        $(`#tabela-bom-${codProduto}`).html(`<div class="alert alert-info">${dados.mensagem || 'Nenhum componente encontrado'}</div>`);
+        return;
+    }
+
+    const componentes = dados.componentes;
+    const producaoSKU = dados.producao_produto_sku;
+
+    // Wrapper com scroll lateral
+    let html = '<div class="table-bom-wrapper"><table class="table table-sm table-bordered table-hover mb-0 table-bom-fixed">';
+
+    // HEADER
+    html += '<thead class="table-light"><tr>';
+    html += '<th class="col-fixed-codigo">Código</th>';
+    html += '<th class="col-fixed-nome">Nome</th>';
+    html += '<th class="text-end">Qtd Utilizada</th>';
+    html += '<th class="text-end">Estoque Atual</th>';
+
+    // Colunas D0-D60
+    for (let i = 0; i <= 60; i++) {
+        html += `<th class="text-end col-projecao">D${i}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    // LINHAS DE COMPONENTES
+    componentes.forEach(comp => {
+        const nivel = comp.nivel || 0;
+        const indentacao = '&nbsp;&nbsp;'.repeat(nivel * 2);
+        const icone = comp.eh_intermediario ? '<i class="fas fa-sitemap text-warning me-1"></i>' : '<i class="fas fa-cube text-muted me-1"></i>';
+
+        html += '<tr>';
+        html += `<td class="col-fixed-codigo"><small>${comp.cod_produto}</small></td>`;
+        html += `<td class="col-fixed-nome">${indentacao}${icone}<small>${comp.nome_produto}</small></td>`;
+        html += `<td class="text-end">${formatarNumeroDecimais(comp.qtd_utilizada, 6)}</td>`;
+
+        if (modo === 'qtd') {
+            html += `<td class="text-end">${formatarNumero(comp.estoque_atual)}</td>`;
+            // Projeção D0-D60 em quantidade
+            for (let i = 0; i <= 60; i++) {
+                const valor = comp.projecao[`D${i}`] || 0;
+                const cor = valor < 0 ? 'text-danger fw-bold' : '';
+                html += `<td class="text-end col-projecao ${cor}">${formatarNumero(valor)}</td>`;
+            }
+        } else {
+            // modo === 'prod': Qtd Prod. Possível
+            html += `<td class="text-end text-primary fw-bold">${formatarNumero(comp.qtd_prod_possivel)}</td>`;
+            // Projeção em "qtd prod possível"
+            for (let i = 0; i <= 60; i++) {
+                const estoqueProj = comp.projecao[`D${i}`] || 0;
+                const qtdProdPossivel = comp.qtd_utilizada > 0 ? estoqueProj / comp.qtd_utilizada : 0;
+                const cor = qtdProdPossivel < 0 ? 'text-danger fw-bold' : 'text-primary';
+                html += `<td class="text-end col-projecao ${cor}">${formatarNumero(qtdProdPossivel)}</td>`;
+            }
+        }
+
+        html += '</tr>';
+    });
+
+    // LINHA ESPECIAL: Produção Produto SKU (gargalo)
+    html += '<tr class="table-warning fw-bold">';
+    html += '<td class="col-fixed-codigo" colspan="2"><i class="fas fa-exclamation-triangle me-1"></i>Produção Produto SKU (Mínimo)</td>';
+    html += `<td class="text-end">-</td>`;
+    html += `<td class="text-end text-danger">${formatarNumero(producaoSKU)}</td>`;
+
+    // Coluna vazia para D0-D60
+    for (let i = 0; i <= 60; i++) {
+        html += '<td class="col-projecao">-</td>';
+    }
+    html += '</tr>';
+
+    html += '</tbody></table></div>';
+
+    $(`#tabela-bom-${codProduto}`).html(html);
+}
+
+/**
+ * Configura listeners do formulário de adicionar programação
+ */
+function configurarListenersFormularioProgramacao(codProduto, nomeProduto) {
+    $(`#form-add-programacao-${codProduto}`).on('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = {
+            cod_produto: codProduto,
+            data_programacao: $(`#data-prog-${codProduto}`).val(),
+            linha_producao: $(`#linha-prog-${codProduto}`).val(),
+            qtd_programada: parseFloat($(`#qtd-prog-${codProduto}`).val()),
+            cliente_produto: $(`#cliente-prog-${codProduto}`).val(),
+            observacao_pcp: $(`#obs-prog-${codProduto}`).val()
+        };
+
+        // Validação básica
+        if (!formData.data_programacao || !formData.linha_producao || !formData.qtd_programada || formData.qtd_programada <= 0) {
+            alert('Por favor, preencha todos os campos obrigatórios corretamente');
+            return;
+        }
+
+        try {
+            const response = await fetch('/manufatura/api/necessidade-producao/adicionar-programacao', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+
+            const resultado = await response.json();
+
+            if (resultado.erro) {
+                alert(`Erro: ${resultado.erro}`);
+            } else {
+                // Sucesso - Recarregar modal de forma suave
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Programação adicionada!',
+                    text: resultado.mensagem,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+                // Limpar formulário
+                $(`#form-add-programacao-${codProduto}`)[0].reset();
+
+                // Reload suave: re-buscar dados e re-renderizar
+                setTimeout(async () => {
+                    const params = new URLSearchParams({
+                        cod_produto: codProduto,
+                        data_inicio: new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0],
+                        data_fim: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+                        data_referencia: new Date().toISOString().split('T')[0]
+                    });
+
+                    const resp = await fetch(`/manufatura/recursos/api/separacoes-estoque?${params}`);
+                    const dadosAtualizados = await response.json();
+
+                    // Re-renderizar apenas o accordion de programação
+                    const htmlNovo = renderizarAccordionProgramacao(dadosAtualizados.programacoes_linhas, codProduto);
+                    $('#accordion-programacao-producao').html(htmlNovo);
+                }, 2100);
+            }
+        } catch (error) {
+            console.error('[ADD PROGRAMACAO] Erro:', error);
+            alert(`Erro ao adicionar programação: ${error.message}`);
+        }
+    });
+}
+
+/**
+ * Formata número com até 6 casas decimais (formato brasileiro)
+ */
+function formatarNumeroDecimais(num, decimais = 6) {
+    return parseFloat(num || 0).toLocaleString('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: decimais
+    });
 }

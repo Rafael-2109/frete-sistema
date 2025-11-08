@@ -543,3 +543,220 @@ def register_necessidade_producao_routes(bp):
             import logging
             logging.error(f"[RECURSOS] Erro ao buscar recursos produtivos: {str(e)}")
             return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/bom-recursiva-estoque')
+    @login_required
+    def bom_recursiva_estoque():
+        """Retorna estrutura de produto (BOM) recursiva com estoque e projeção D0-D60 dos componentes"""
+        try:
+            from app.manufatura.models import ListaMateriais
+            from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+            from app.producao.models import CadastroPalletizacao
+
+            cod_produto = request.args.get('cod_produto')
+            if not cod_produto:
+                return jsonify({'erro': 'Código do produto é obrigatório'}), 400
+
+            # Função recursiva para buscar componentes
+            def buscar_componentes_recursivos(cod_produto_pai, nivel=0, visitados=None):
+                """
+                Busca recursivamente componentes da BOM
+                Retorna lista flat de componentes com nível hierárquico
+                """
+                if visitados is None:
+                    visitados = set()
+
+                # Evitar loop infinito
+                if cod_produto_pai in visitados:
+                    return []
+
+                visitados.add(cod_produto_pai)
+                componentes_flat = []
+
+                # Buscar componentes diretos
+                bom_items = ListaMateriais.query.filter_by(
+                    cod_produto_produzido=cod_produto_pai,
+                    status='ativo'
+                ).all()
+
+                for item in bom_items:
+                    # Buscar dados do cadastro
+                    cadastro = CadastroPalletizacao.query.filter_by(
+                        cod_produto=item.cod_produto_componente,
+                        ativo=True
+                    ).first()
+
+                    componentes_flat.append({
+                        'cod_produto': item.cod_produto_componente,
+                        'nome_produto': item.nome_produto_componente or (cadastro.nome_produto if cadastro else ''),
+                        'qtd_utilizada': float(item.qtd_utilizada),
+                        'nivel': nivel,
+                        'eh_intermediario': False  # Atualizado depois se tiver sub-componentes
+                    })
+
+                    # Se o componente também é produzido (tem BOM), buscar recursivamente
+                    if ListaMateriais.query.filter_by(
+                        cod_produto_produzido=item.cod_produto_componente,
+                        status='ativo'
+                    ).count() > 0:
+                        # Marcar como intermediário
+                        componentes_flat[-1]['eh_intermediario'] = True
+
+                        # Buscar sub-componentes
+                        sub_componentes = buscar_componentes_recursivos(
+                            item.cod_produto_componente,
+                            nivel + 1,
+                            visitados
+                        )
+                        componentes_flat.extend(sub_componentes)
+
+                return componentes_flat
+
+            # Buscar componentes recursivamente
+            componentes = buscar_componentes_recursivos(cod_produto)
+
+            if not componentes:
+                return jsonify({
+                    'componentes': [],
+                    'producao_produto_sku': None,
+                    'mensagem': 'Produto não possui estrutura (BOM) cadastrada'
+                })
+
+            # Buscar estoque e projeção D0-D60 de cada componente
+            estoque_service = ServicoEstoqueSimples()
+            componentes_com_estoque = []
+            min_producao_possivel = float('inf')  # Inicializa com infinito
+
+            for comp in componentes:
+                cod_comp = comp['cod_produto']
+
+                # Estoque atual
+                estoque_atual = estoque_service.calcular_estoque_atual(cod_comp)
+
+                # Projeção D0-D60
+                projecao_resultado = estoque_service.calcular_projecao(cod_comp, dias=60)
+                projecao_dias = projecao_resultado.get('projecao', [])
+
+                # Montar dict de projeção por dia (D0-D60)
+                projecao_por_dia = {}
+                for dia_dados in projecao_dias:
+                    dia_num = dia_dados.get('dia', 0)
+                    projecao_por_dia[f'D{dia_num}'] = float(dia_dados.get('saldo_final', 0))
+
+                # Calcular quantidade de produto possível de produzir com este componente
+                qtd_utilizada = comp['qtd_utilizada']
+                if qtd_utilizada > 0:
+                    qtd_prod_possivel = estoque_atual / qtd_utilizada
+                else:
+                    qtd_prod_possivel = 0
+
+                # Atualizar mínimo (gargalo)
+                if qtd_prod_possivel < min_producao_possivel:
+                    min_producao_possivel = qtd_prod_possivel
+
+                componentes_com_estoque.append({
+                    'cod_produto': cod_comp,
+                    'nome_produto': comp['nome_produto'],
+                    'qtd_utilizada': qtd_utilizada,
+                    'nivel': comp['nivel'],
+                    'eh_intermediario': comp['eh_intermediario'],
+                    'estoque_atual': float(estoque_atual),
+                    'qtd_prod_possivel': qtd_prod_possivel,
+                    'projecao': projecao_por_dia  # Dict: {'D0': 100, 'D1': 95, ...}
+                })
+
+            # Se nenhum componente foi encontrado, producao_sku = None
+            producao_sku = min_producao_possivel if min_producao_possivel != float('inf') else 0
+
+            return jsonify({
+                'componentes': componentes_com_estoque,
+                'producao_produto_sku': round(producao_sku, 3),
+                'total_componentes': len(componentes_com_estoque)
+            })
+
+        except Exception as e:
+            import logging
+            import traceback
+            logging.error(f"[BOM RECURSIVA] Erro: {str(e)}")
+            logging.error(f"[BOM RECURSIVA] Traceback: {traceback.format_exc()}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/adicionar-programacao', methods=['POST'])
+    @login_required
+    def adicionar_programacao():
+        """Adiciona uma nova programação de produção"""
+        try:
+            from app.producao.models import ProgramacaoProducao
+            from app.manufatura.models import RecursosProducao
+            from datetime import datetime
+
+            dados = request.json
+            cod_produto = dados.get('cod_produto')
+            data_programacao_str = dados.get('data_programacao')
+            linha_producao = dados.get('linha_producao')
+            qtd_programada = dados.get('qtd_programada')
+            cliente_produto = dados.get('cliente_produto')
+            observacao_pcp = dados.get('observacao_pcp')
+
+            # Validações
+            if not all([cod_produto, data_programacao_str, linha_producao, qtd_programada]):
+                return jsonify({'erro': 'Campos obrigatórios: cod_produto, data_programacao, linha_producao, qtd_programada'}), 400
+
+            # Validar data
+            try:
+                data_programacao = datetime.strptime(data_programacao_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'erro': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+
+            # Validar quantidade
+            try:
+                qtd_programada = float(qtd_programada)
+                if qtd_programada <= 0:
+                    return jsonify({'erro': 'Quantidade deve ser maior que zero'}), 400
+            except ValueError:
+                return jsonify({'erro': 'Quantidade inválida'}), 400
+
+            # Validar se a linha de produção existe para este produto
+            recurso = RecursosProducao.query.filter_by(
+                cod_produto=cod_produto,
+                linha_producao=linha_producao,
+                disponivel=True
+            ).first()
+
+            if not recurso:
+                return jsonify({'erro': f'Linha de produção "{linha_producao}" não está disponível para este produto'}), 400
+
+            # Criar programação
+            nova_programacao = ProgramacaoProducao(
+                cod_produto=cod_produto,
+                nome_produto=recurso.nome_produto,
+                data_programacao=data_programacao,
+                linha_producao=linha_producao,
+                qtd_programada=qtd_programada,
+                cliente_produto=cliente_produto,
+                observacao_pcp=observacao_pcp,
+                created_by=current_user.nome if current_user.is_authenticated else 'Sistema'
+            )
+
+            db.session.add(nova_programacao)
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Programação adicionada com sucesso',
+                'programacao': {
+                    'id': nova_programacao.id,
+                    'cod_produto': nova_programacao.cod_produto,
+                    'data_programacao': nova_programacao.data_programacao.strftime('%Y-%m-%d'),
+                    'linha_producao': nova_programacao.linha_producao,
+                    'qtd_programada': float(nova_programacao.qtd_programada)
+                }
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            import logging
+            import traceback
+            logging.error(f"[ADICIONAR PROGRAMACAO] Erro: {str(e)}")
+            logging.error(f"[ADICIONAR PROGRAMACAO] Traceback: {traceback.format_exc()}")
+            return jsonify({'erro': str(e)}), 500

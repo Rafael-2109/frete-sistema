@@ -674,12 +674,65 @@ def api_separacoes_estoque():
                 'data_entrega_pedido': data_entrega.strftime('%Y-%m-%d') if data_entrega else None
             })
 
+        # ✅ NOVO: Buscar programação de produção D0-D60 agrupada por linha
+        from app.manufatura.models import RecursosProducao
+        from datetime import date as date_cls
+
+        hoje = date_cls.today()
+        data_fim_d60 = hoje + timedelta(days=60)
+
+        # Buscar recursos do produto (linhas de produção disponíveis)
+        recursos = RecursosProducao.query.filter_by(
+            cod_produto=cod_produto,
+            disponivel=True
+        ).all()
+
+        # Buscar programações de TODOS os produtos nas linhas onde este produto pode ser produzido
+        linhas_producao = [r.linha_producao for r in recursos]
+        programacoes_linhas = {}
+
+        if linhas_producao:
+            # Buscar programações de hoje até D60 para as linhas
+            programacoes = ProgramacaoProducao.query.filter(
+                ProgramacaoProducao.linha_producao.in_(linhas_producao),
+                ProgramacaoProducao.data_programacao >= hoje,
+                ProgramacaoProducao.data_programacao <= data_fim_d60
+            ).order_by(ProgramacaoProducao.linha_producao, ProgramacaoProducao.data_programacao).all()
+
+            # Agrupar por linha e data
+            for prog in programacoes:
+                if prog.linha_producao not in programacoes_linhas:
+                    programacoes_linhas[prog.linha_producao] = {
+                        'total_programado': 0,
+                        'datas': defaultdict(list)  # data -> [lista de programações]
+                    }
+
+                data_key = prog.data_programacao.strftime('%Y-%m-%d')
+                programacoes_linhas[prog.linha_producao]['datas'][data_key].append({
+                    'cod_produto': prog.cod_produto,
+                    'nome_produto': prog.nome_produto,
+                    'qtd_programada': float(prog.qtd_programada),
+                    'cliente_produto': prog.cliente_produto,
+                    'observacao_pcp': prog.observacao_pcp,
+                    'eh_produto_modal': prog.cod_produto == cod_produto  # Flag para destaque
+                })
+
+                # Somar total programado (apenas do produto do modal)
+                if prog.cod_produto == cod_produto:
+                    programacoes_linhas[prog.linha_producao]['total_programado'] += float(prog.qtd_programada)
+
+            # Converter defaultdict para dict normal
+            for linha in programacoes_linhas:
+                programacoes_linhas[linha]['datas'] = dict(programacoes_linhas[linha]['datas'])
+
         return jsonify({
             'nome_produto': nome_produto,
             'cod_produto': cod_produto,
             'data_referencia': data_referencia,
             'dias': dias,
-            'pedidos': pedidos  # ✅ NOVO
+            'pedidos': pedidos,
+            'programacoes_linhas': programacoes_linhas,  # ✅ NOVO
+            'linhas_producao': [{'linha': r.linha_producao, 'qtd_unidade_por_caixa': r.qtd_unidade_por_caixa} for r in recursos]  # ✅ NOVO
         })
 
     except Exception as e:

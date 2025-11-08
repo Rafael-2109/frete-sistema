@@ -658,3 +658,131 @@ table.table-necessidade thead th.col-necessidade {
     color: #28a745;
     font-weight: bold;
 }
+
+/* ==================================================
+   ESTILOS PARA MODAL DE SEPARAÇÕES E ESTOQUE
+   ================================================== */
+
+/* 1. DESTAQUE PARA PRODUTO DO MODAL NA PROGRAMAÇÃO */
+.produto-destaque {
+    background-color: rgba(40, 167, 69, 0.15) !important; /* Verde leve */
+    border-left: 3px solid #28a745 !important;
+    font-weight: 600 !important;
+}
+
+/* 2. TABELA BOM COM SCROLL LATERAL E COLUNAS FIXAS */
+.table-bom-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+    max-width: 100%;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    position: relative;
+}
+
+.table-bom-fixed {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    margin: 0;
+}
+
+/* Colunas fixas (código e nome) */
+.table-bom-fixed .col-fixed-codigo,
+.table-bom-fixed .col-fixed-nome {
+    position: sticky;
+    background-color: white;
+    z-index: 10;
+}
+
+.table-bom-fixed .col-fixed-codigo {
+    left: 0;
+    min-width: 100px;
+    width: 100px;
+    max-width: 100px;
+    border-right: 2px solid #dee2e6;
+}
+
+.table-bom-fixed .col-fixed-nome {
+    left: 100px;
+    min-width: 250px;
+    width: 250px;
+    max-width: 250px;
+    border-right: 2px solid #dee2e6;
+}
+
+/* Colunas de projeção D0-D60 */
+.table-bom-fixed .col-projecao {
+    min-width: 70px;
+    width: 70px;
+    max-width: 70px;
+    font-size: 0.85rem;
+}
+
+/* Header com background fixo */
+.table-bom-fixed thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 20;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Header das colunas fixas (maior z-index) */
+.table-bom-fixed thead th.col-fixed-codigo,
+.table-bom-fixed thead th.col-fixed-nome {
+    z-index: 30;
+}
+
+/* Ajustes para melhor visualização */
+.table-bom-fixed tbody tr:hover {
+    background-color: #f1f3f5;
+}
+
+.table-bom-fixed tbody tr:hover .col-fixed-codigo,
+.table-bom-fixed tbody tr:hover .col-fixed-nome {
+    background-color: #e9ecef;
+}
+
+/* 3. ESTILOS PARA ACCORDION DE PROGRAMAÇÃO */
+#accordion-programacao-producao .accordion-body {
+    padding: 0;
+}
+
+#accordion-programacao-producao .table {
+    margin-bottom: 0;
+}
+
+/* Divs de programação empilhadas */
+#accordion-programacao-producao .p-2 {
+    transition: all 0.2s ease;
+}
+
+#accordion-programacao-producao .p-2:hover {
+    background-color: #f8f9fa;
+    transform: translateX(2px);
+}
+
+/* 4. ESTILOS PARA FORMULÁRIO DE PROGRAMAÇÃO */
+.card.border-success .card-header {
+    font-weight: 600;
+}
+
+/* 5. RESPONSIVIDADE */
+@media (max-width: 768px) {
+    .table-bom-fixed .col-fixed-nome {
+        min-width: 180px;
+        width: 180px;
+        left: 80px;
+    }
+
+    .table-bom-fixed .col-fixed-codigo {
+        min-width: 80px;
+        width: 80px;
+    }
+
+    .table-bom-fixed .col-projecao {
+        min-width: 60px;
+        width: 60px;
+    }
+}
