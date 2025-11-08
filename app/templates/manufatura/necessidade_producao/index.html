@@ -22,8 +22,9 @@
         </div>
 
         <!-- Filtros Inline -->
-        <div class="d-flex align-items-center gap-2 flex-grow-1 mx-3">
-            <select id="filtro-mes" class="form-select form-select-sm" style="width: 120px;">
+        <div class="d-flex align-items-center gap-2 flex-grow-1 mx-3 flex-wrap">
+            <!-- Período -->
+            <select id="filtro-mes" class="form-select form-select-sm" style="width: 100px;">
                 <option value="1">Jan</option>
                 <option value="2">Fev</option>
                 <option value="3">Mar</option>
@@ -37,10 +38,36 @@
                 <option value="11">Nov</option>
                 <option value="12">Dez</option>
             </select>
-            <select id="filtro-ano" class="form-select form-select-sm" style="width: 90px;"></select>
-            <input type="text" id="filtro-produto" class="form-control form-control-sm" placeholder="Código produto" style="width: 150px;">
+            <select id="filtro-ano" class="form-select form-select-sm" style="width: 80px;"></select>
+
+            <!-- Autocomplete Produto -->
+            <div class="autocomplete-container" style="width: 200px;">
+                <input type="text" id="filtro-produto-busca" class="form-control form-control-sm"
+                       placeholder="Buscar produto..." autocomplete="off">
+                <input type="hidden" id="filtro-cod-produto">
+                <div id="autocomplete-list" class="autocomplete-list"></div>
+            </div>
+
+            <!-- Filtros Select -->
+            <select id="filtro-linha" class="form-select form-select-sm" style="width: 140px;">
+                <option value="">Linha Produção</option>
+            </select>
+            <select id="filtro-marca" class="form-select form-select-sm" style="width: 120px;">
+                <option value="">Marca</option>
+            </select>
+            <select id="filtro-mp" class="form-select form-select-sm" style="width: 100px;">
+                <option value="">MP</option>
+            </select>
+            <select id="filtro-embalagem" class="form-select form-select-sm" style="width: 120px;">
+                <option value="">Embalagem</option>
+            </select>
+
+            <!-- Botões -->
             <button id="btn-calcular" class="btn btn-success btn-sm">
                 <i class="fas fa-calculator me-1"></i>Calcular
+            </button>
+            <button id="btn-limpar-filtros" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-eraser me-1"></i>Limpar
             </button>
         </div>
 

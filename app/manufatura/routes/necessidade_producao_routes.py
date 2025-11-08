@@ -25,9 +25,15 @@ def register_necessidade_producao_routes(bp):
             mes = request.args.get('mes', datetime.now().month, type=int)
             ano = request.args.get('ano', datetime.now().year, type=int)
             cod_produto = request.args.get('cod_produto')
+            linha_producao = request.args.get('linha_producao')
+            marca = request.args.get('marca')
+            mp = request.args.get('mp')
+            embalagem = request.args.get('embalagem')
 
             service = NecessidadeProducaoService()
-            resultado = service.calcular_necessidade_producao(mes, ano, cod_produto)
+            resultado = service.calcular_necessidade_producao(
+                mes, ano, cod_produto, linha_producao, marca, mp, embalagem
+            )
 
             return jsonify(resultado)
 
@@ -276,6 +282,109 @@ def register_necessidade_producao_routes(bp):
         except Exception as e:
             import logging
             logging.error(f"[DETALHES] Erro ao buscar: {str(e)}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/autocomplete-produtos')
+    @login_required
+    def autocomplete_produtos():
+        """Autocomplete para busca de produtos por código ou nome"""
+        try:
+            from app.producao.models import CadastroPalletizacao
+            from sqlalchemy import or_
+
+            termo = request.args.get('termo', '').strip()
+            if not termo or len(termo) < 2:
+                return jsonify([])
+
+            # Buscar produtos que correspondam ao termo (código ou nome)
+            produtos = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.ativo == True,
+                CadastroPalletizacao.produto_produzido == True,
+                or_(
+                    CadastroPalletizacao.cod_produto.ilike(f'%{termo}%'),
+                    CadastroPalletizacao.nome_produto.ilike(f'%{termo}%')
+                )
+            ).limit(20).all()
+
+            resultado = [{
+                'cod_produto': p.cod_produto,
+                'nome_produto': p.nome_produto,
+                'linha_producao': p.linha_producao,
+                'tipo_embalagem': p.tipo_embalagem
+            } for p in produtos]
+
+            return jsonify(resultado)
+
+        except Exception as e:
+            import logging
+            logging.error(f"[AUTOCOMPLETE] Erro: {str(e)}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/filtros-opcoes')
+    @login_required
+    def filtros_opcoes():
+        """Retorna opções disponíveis para filtros de select"""
+        try:
+            from app.producao.models import CadastroPalletizacao
+            from sqlalchemy import func, distinct
+
+            # Filtros ativos (para dependências)
+            linha_producao = request.args.get('linha_producao')
+            marca = request.args.get('marca')
+            mp = request.args.get('mp')
+            embalagem = request.args.get('embalagem')
+
+            # Base query
+            query = db.session.query(CadastroPalletizacao).filter(
+                CadastroPalletizacao.ativo == True,
+                CadastroPalletizacao.produto_produzido == True
+            )
+
+            # Aplicar filtros dependentes
+            if linha_producao:
+                query = query.filter(CadastroPalletizacao.linha_producao == linha_producao)
+            if marca:
+                query = query.filter(CadastroPalletizacao.categoria_produto == marca)
+            if mp:
+                query = query.filter(CadastroPalletizacao.tipo_materia_prima == mp)
+            if embalagem:
+                query = query.filter(CadastroPalletizacao.tipo_embalagem == embalagem)
+
+            # Buscar opções únicas
+            linhas = query.with_entities(
+                distinct(CadastroPalletizacao.linha_producao)
+            ).filter(
+                CadastroPalletizacao.linha_producao.isnot(None)
+            ).order_by(CadastroPalletizacao.linha_producao).all()
+
+            marcas = query.with_entities(
+                distinct(CadastroPalletizacao.categoria_produto)
+            ).filter(
+                CadastroPalletizacao.categoria_produto.isnot(None)
+            ).order_by(CadastroPalletizacao.categoria_produto).all()
+
+            mps = query.with_entities(
+                distinct(CadastroPalletizacao.tipo_materia_prima)
+            ).filter(
+                CadastroPalletizacao.tipo_materia_prima.isnot(None)
+            ).order_by(CadastroPalletizacao.tipo_materia_prima).all()
+
+            embalagens = query.with_entities(
+                distinct(CadastroPalletizacao.tipo_embalagem)
+            ).filter(
+                CadastroPalletizacao.tipo_embalagem.isnot(None)
+            ).order_by(CadastroPalletizacao.tipo_embalagem).all()
+
+            return jsonify({
+                'linhas_producao': [linha[0] for linha in linhas if linha[0]],
+                'marcas': [marca[0] for marca in marcas if marca[0]],
+                'mps': [materia_prima[0] for materia_prima in mps if materia_prima[0]],
+                'embalagens': [emb[0] for emb in embalagens if emb[0]]
+            })
+
+        except Exception as e:
+            import logging
+            logging.error(f"[FILTROS] Erro: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
     @bp.route('/api/necessidade-producao/recursos-produtivos')

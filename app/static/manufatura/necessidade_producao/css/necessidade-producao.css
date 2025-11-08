@@ -425,6 +425,64 @@ table.table-necessidade td.col-criticidade {
 }
 
 /* ==================================================
+   CATEGORIZAÇÃO VISUAL DE GRUPOS DE COLUNAS
+   ================================================== */
+
+/* GRUPO 1: Previsão / Pedidos Inseridos / Saldo Demanda - AZUL */
+table.table-necessidade th.col-previsao,
+table.table-necessidade td.col-previsao,
+table.table-necessidade th.col-pedidos,
+table.table-necessidade td.col-pedidos,
+table.table-necessidade th.col-saldo-demanda,
+table.table-necessidade td.col-saldo-demanda {
+    background-color: rgba(13, 110, 253, 0.04) !important;
+    border-left: 3px solid #0d6efd !important;
+}
+
+table.table-necessidade thead th.col-previsao,
+table.table-necessidade thead th.col-pedidos,
+table.table-necessidade thead th.col-saldo-demanda {
+    background-color: rgba(13, 110, 253, 0.1) !important;
+    font-weight: 700 !important;
+}
+
+/* GRUPO 2: Carteira / Ruptura / Carteira S/ Data - AMARELO */
+table.table-necessidade th.col-carteira,
+table.table-necessidade td.col-carteira,
+table.table-necessidade th.col-ruptura,
+table.table-necessidade td.col-ruptura,
+table.table-necessidade th.col-carteira-sem-data,
+table.table-necessidade td.col-carteira-sem-data {
+    background-color: rgba(255, 193, 7, 0.06) !important;
+    border-left: 3px solid #ffc107 !important;
+}
+
+table.table-necessidade thead th.col-carteira,
+table.table-necessidade thead th.col-ruptura,
+table.table-necessidade thead th.col-carteira-sem-data {
+    background-color: rgba(255, 193, 7, 0.15) !important;
+    font-weight: 700 !important;
+}
+
+/* GRUPO 3: Saldo Vendas / Programação / Necessidade - CINZA */
+table.table-necessidade th.col-saldo,
+table.table-necessidade td.col-saldo,
+table.table-necessidade th.col-programacao,
+table.table-necessidade td.col-programacao,
+table.table-necessidade th.col-necessidade,
+table.table-necessidade td.col-necessidade {
+    background-color: rgba(108, 117, 125, 0.04) !important;
+    border-left: 3px solid #6c757d !important;
+}
+
+table.table-necessidade thead th.col-saldo,
+table.table-necessidade thead th.col-programacao,
+table.table-necessidade thead th.col-necessidade {
+    background-color: rgba(108, 117, 125, 0.1) !important;
+    font-weight: 700 !important;
+}
+
+/* ==================================================
    NÚMEROS COM COR
    ================================================== */
 
@@ -464,6 +522,70 @@ table.table-necessidade td.col-criticidade {
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 999;
+}
+
+/* ==================================================
+   AUTOCOMPLETE - FILTROS DE PRODUTO
+   ================================================== */
+
+.autocomplete-container {
+    position: relative;
+}
+
+.autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: none;
+}
+
+.autocomplete-list.show {
+    display: block;
+}
+
+.autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f3f5;
+    transition: background-color 0.15s;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background-color: #e7f3ff;
+}
+
+.autocomplete-item strong {
+    color: #0d6efd;
+}
+
+.autocomplete-item small {
+    display: block;
+    color: #6c757d;
+    font-size: 0.85em;
+    margin-top: 2px;
+}
+
+.autocomplete-loading {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.autocomplete-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #dc3545;
+    font-style: italic;
 }
 
 /* Customizador de colunas */

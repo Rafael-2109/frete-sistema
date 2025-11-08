@@ -21,10 +21,38 @@ $(document).ready(function() {
     gerarHeadersProjecao();
     carregarPreferenciasColunas();
     carregarTamanhoFonte();
+    carregarFiltrosOpcoes(); // ✅ NOVO: Carregar opções dos filtros
 
     $('#btn-calcular').on('click', calcularNecessidade);
-    $('#filtro-produto').on('keypress', e => e.which === 13 && calcularNecessidade());
+    $('#btn-limpar-filtros').on('click', limparFiltros); // ✅ NOVO
     $('.col-toggle').on('change', () => { aplicarVisibilidadeColunas(); salvarPreferenciasColunas(); });
+
+    // ✅ NOVO: Autocomplete de produto
+    let autocompleteTimer;
+    $('#filtro-produto-busca').on('input', function() {
+        clearTimeout(autocompleteTimer);
+        const termo = $(this).val().trim();
+
+        if (termo.length < 2) {
+            $('#autocomplete-list').removeClass('show').empty();
+            $('#filtro-cod-produto').val('');
+            return;
+        }
+
+        autocompleteTimer = setTimeout(() => buscarProdutosAutocomplete(termo), 300);
+    });
+
+    // ✅ NOVO: Filtros dependentes
+    $('#filtro-linha, #filtro-marca, #filtro-mp, #filtro-embalagem').on('change', function() {
+        carregarFiltrosOpcoes();
+    });
+
+    // ✅ Fechar autocomplete ao clicar fora
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.autocomplete-container').length) {
+            $('#autocomplete-list').removeClass('show');
+        }
+    });
 
     // ✅ Event listeners para ordenação de colunas
     $(document).on('click', '.sortable', function() {
@@ -106,20 +134,159 @@ function gerarHeadersProjecao() {
 }
 
 // ============================================================
+// AUTOCOMPLETE DE PRODUTOS
+// ============================================================
+
+function buscarProdutosAutocomplete(termo) {
+    $.ajax({
+        url: '/manufatura/api/necessidade-producao/autocomplete-produtos',
+        data: { termo },
+        success: (produtos) => {
+            const list = $('#autocomplete-list');
+            list.empty();
+
+            if (!produtos || produtos.length === 0) {
+                list.html('<div class="autocomplete-no-results">Nenhum produto encontrado</div>');
+                list.addClass('show');
+                return;
+            }
+
+            produtos.forEach(p => {
+                const item = $(`
+                    <div class="autocomplete-item" data-cod="${p.cod_produto}">
+                        <strong>${p.cod_produto}</strong>
+                        <small>${p.nome_produto}${p.linha_producao ? ` - ${p.linha_producao}` : ''}</small>
+                    </div>
+                `);
+
+                item.on('click', function() {
+                    $('#filtro-produto-busca').val(`${p.cod_produto} - ${p.nome_produto}`);
+                    $('#filtro-cod-produto').val(p.cod_produto);
+                    list.removeClass('show');
+                });
+
+                list.append(item);
+            });
+
+            list.addClass('show');
+        },
+        error: () => {
+            $('#autocomplete-list').html('<div class="autocomplete-no-results">Erro ao buscar</div>').addClass('show');
+        }
+    });
+}
+
+// ============================================================
+// FILTROS DEPENDENTES
+// ============================================================
+
+function carregarFiltrosOpcoes() {
+    const filtrosAtuais = obterFiltrosAtuais();
+
+    $.ajax({
+        url: '/manufatura/api/necessidade-producao/filtros-opcoes',
+        data: filtrosAtuais,
+        success: (dados) => {
+            // Salvar valores selecionados
+            const linhaAtual = $('#filtro-linha').val();
+            const marcaAtual = $('#filtro-marca').val();
+            const mpAtual = $('#filtro-mp').val();
+            const embalagemAtual = $('#filtro-embalagem').val();
+
+            // Atualizar Linha de Produção
+            $('#filtro-linha').html('<option value="">Linha Produção</option>');
+            dados.linhas_producao.forEach(l => {
+                $('#filtro-linha').append($('<option></option>').val(l).text(l));
+            });
+            if (linhaAtual && dados.linhas_producao.includes(linhaAtual)) {
+                $('#filtro-linha').val(linhaAtual);
+            }
+
+            // Atualizar Marca
+            $('#filtro-marca').html('<option value="">Marca</option>');
+            dados.marcas.forEach(m => {
+                $('#filtro-marca').append($('<option></option>').val(m).text(m));
+            });
+            if (marcaAtual && dados.marcas.includes(marcaAtual)) {
+                $('#filtro-marca').val(marcaAtual);
+            }
+
+            // Atualizar MP
+            $('#filtro-mp').html('<option value="">MP</option>');
+            dados.mps.forEach(mp => {
+                $('#filtro-mp').append($('<option></option>').val(mp).text(mp));
+            });
+            if (mpAtual && dados.mps.includes(mpAtual)) {
+                $('#filtro-mp').val(mpAtual);
+            }
+
+            // Atualizar Embalagem
+            $('#filtro-embalagem').html('<option value="">Embalagem</option>');
+            dados.embalagens.forEach(e => {
+                $('#filtro-embalagem').append($('<option></option>').val(e).text(e));
+            });
+            if (embalagemAtual && dados.embalagens.includes(embalagemAtual)) {
+                $('#filtro-embalagem').val(embalagemAtual);
+            }
+
+            console.log('✅ Filtros atualizados:', dados);
+        },
+        error: (err) => {
+            console.error('❌ Erro ao carregar filtros:', err);
+        }
+    });
+}
+
+function obterFiltrosAtuais() {
+    return {
+        linha_producao: $('#filtro-linha').val() || undefined,
+        marca: $('#filtro-marca').val() || undefined,
+        mp: $('#filtro-mp').val() || undefined,
+        embalagem: $('#filtro-embalagem').val() || undefined
+    };
+}
+
+function limparFiltros() {
+    $('#filtro-produto-busca').val('');
+    $('#filtro-cod-produto').val('');
+    $('#filtro-linha').val('');
+    $('#filtro-marca').val('');
+    $('#filtro-mp').val('');
+    $('#filtro-embalagem').val('');
+    $('#autocomplete-list').removeClass('show');
+    carregarFiltrosOpcoes(); // Recarregar todas as opções
+}
+
+// ============================================================
 // CÁLCULO DE NECESSIDADE
 // ============================================================
 
 function calcularNecessidade() {
     const mes = $('#filtro-mes').val();
     const ano = $('#filtro-ano').val();
-    const cod_produto = $('#filtro-produto').val().trim();
+    const cod_produto = $('#filtro-cod-produto').val().trim(); // ✅ ALTERADO: usar hidden field
+    const linha_producao = $('#filtro-linha').val();
+    const marca = $('#filtro-marca').val();
+    const mp = $('#filtro-mp').val();
+    const embalagem = $('#filtro-embalagem').val();
 
     $('#loading-spinner').removeClass('d-none');
     $('#tbody-necessidade').html('<tr><td colspan="100" class="text-center py-4"><div class="spinner-border spinner-border-sm text-success me-2"></div>Calculando...</td></tr>');
 
+    // ✅ Construir params com filtros
+    const params = {
+        mes,
+        ano,
+        cod_produto: cod_produto || undefined,
+        linha_producao: linha_producao || undefined,
+        marca: marca || undefined,
+        mp: mp || undefined,
+        embalagem: embalagem || undefined
+    };
+
     $.ajax({
         url: '/manufatura/api/necessidade-producao/calcular',
-        data: { mes, ano, cod_produto: cod_produto || undefined },
+        data: params,
         success: buscarProjecoesParaTodos,
         error: () => {
             $('#tbody-necessidade').html('<tr><td colspan="100" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle me-2"></i>Erro ao carregar</td></tr>');

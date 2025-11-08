@@ -30,7 +30,11 @@ class NecessidadeProducaoService:
         self,
         mes: int,
         ano: int,
-        cod_produto: Optional[str] = None
+        cod_produto: Optional[str] = None,
+        linha_producao: Optional[str] = None,
+        marca: Optional[str] = None,
+        mp: Optional[str] = None,
+        embalagem: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Calcula necessidade de produção para produtos.
@@ -55,10 +59,12 @@ class NecessidadeProducaoService:
             Lista de dicionários com dados calculados por produto
         """
         try:
-            logger.info(f"[NECESSIDADE] Calculando para {mes}/{ano}, produto={cod_produto}")
+            logger.info(f"[NECESSIDADE] Calculando para {mes}/{ano}, produto={cod_produto}, linha={linha_producao}, marca={marca}, mp={mp}, embalagem={embalagem}")
 
-            # 1. Obter todos os produtos únicos (considerando unificação)
-            produtos_unificados = self._obter_produtos_unificados(mes, ano, cod_produto)
+            # 1. Obter todos os produtos únicos (considerando unificação e filtros)
+            produtos_unificados = self._obter_produtos_unificados(
+                mes, ano, cod_produto, linha_producao, marca, mp, embalagem
+            )
 
             logger.info(f"[NECESSIDADE] Encontrados {len(produtos_unificados)} produtos únicos após unificação")
 
@@ -147,14 +153,18 @@ class NecessidadeProducaoService:
         self,
         mes: int,
         ano: int,
-        cod_produto: Optional[str] = None
+        cod_produto: Optional[str] = None,
+        linha_producao: Optional[str] = None,
+        marca: Optional[str] = None,
+        mp: Optional[str] = None,
+        embalagem: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Obtém lista de TODOS os produtos produzidos (produto_produzido=True).
-        Não depende de PrevisaoDemanda - busca direto do CadastroPalletizacao.
+        Aplica filtros adicionais de linha, marca, MP e embalagem.
         """
         try:
-            # ✅ Buscar TODOS os produtos com produto_produzido=True
+            # ✅ Buscar produtos com produto_produzido=True e aplicar filtros
             query = db.session.query(
                 CadastroPalletizacao.cod_produto
             ).filter(
@@ -162,10 +172,20 @@ class NecessidadeProducaoService:
                 CadastroPalletizacao.produto_produzido == True
             )
 
+            # Filtro por produto específico
             if cod_produto:
-                # Se filtro por produto específico, filtrar
                 codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
                 query = query.filter(CadastroPalletizacao.cod_produto.in_(codigos_relacionados))
+
+            # ✅ NOVOS FILTROS
+            if linha_producao:
+                query = query.filter(CadastroPalletizacao.linha_producao == linha_producao)
+            if marca:
+                query = query.filter(CadastroPalletizacao.categoria_produto == marca)
+            if mp:
+                query = query.filter(CadastroPalletizacao.tipo_materia_prima == mp)
+            if embalagem:
+                query = query.filter(CadastroPalletizacao.tipo_embalagem == embalagem)
 
             produtos = query.distinct().all()
 
