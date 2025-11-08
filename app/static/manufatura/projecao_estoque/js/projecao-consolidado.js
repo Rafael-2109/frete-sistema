@@ -99,6 +99,9 @@ function renderizarTabela(componentes) {
         tr.innerHTML = `
             <td class="sticky-col-codigo">${comp.cod_produto}</td>
             <td class="sticky-col-produto" title="${comp.nome_produto}">${comp.nome_produto}</td>
+            <td class="text-center col-embalagem">${comp.tipo_embalagem || '-'}</td>
+            <td class="text-center col-mp">${comp.tipo_materia_prima || '-'}</td>
+            <td class="text-center col-marca">${comp.categoria_produto || '-'}</td>
             <td class="text-end col-estoque ${classeValor(comp.estoque_atual)}">${formatarNumero(comp.estoque_atual)}</td>
             <td class="text-end col-consumo ${classeValor(comp.consumo_carteira)}">${formatarNumero(comp.consumo_carteira)}</td>
             <td class="text-end col-saldo ${classeValor(comp.saldo_carteira)}">${formatarNumero(comp.saldo_carteira)}</td>
@@ -151,6 +154,9 @@ function filtrarTabela() {
 function toggleColunas() {
     // Colunas fixas
     const toggles = {
+        'embalagem': document.getElementById('col-embalagem').checked,
+        'mp': document.getElementById('col-mp').checked,
+        'marca': document.getElementById('col-marca').checked,
         'estoque': document.getElementById('col-estoque').checked,
         'consumo': document.getElementById('col-consumo').checked,
         'saldo': document.getElementById('col-saldo').checked,

@@ -135,7 +135,11 @@ class ServicoProjecaoEstoque:
                 'saldo_programacao': round(saldo_programacao, 2),      # ✅ NOVO
                 'qtd_requisicoes': round(qtd_requisicoes, 2),
                 'qtd_pedidos': round(qtd_pedidos, 2),
-                'timeline': timeline  # Array de 61 posições (D0 a D60)
+                'timeline': timeline,  # Array de 61 posições (D0 a D60)
+                # ✅ NOVOS CAMPOS para UI (NÃO incluir linha_producao)
+                'tipo_embalagem': produto.tipo_embalagem,
+                'tipo_materia_prima': produto.tipo_materia_prima,
+                'categoria_produto': produto.categoria_produto
             })
 
         return {

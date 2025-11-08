@@ -35,6 +35,18 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <!-- Colunas Fixas -->
             <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-embalagem" value="embalagem" checked>
+                <label class="form-check-label" for="col-embalagem">Embalagem</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-mp" value="mp" checked>
+                <label class="form-check-label" for="col-mp">MP</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-marca" value="marca" checked>
+                <label class="form-check-label" for="col-marca">Marca</label>
+            </div>
+            <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-estoque" value="estoque" checked>
                 <label class="form-check-label" for="col-estoque">Estoque Atual</label>
             </div>
@@ -109,6 +121,9 @@
                         <tr id="thead-row">
                             <th class="sticky-col-codigo header">Código</th>
                             <th class="sticky-col-produto header">Produto</th>
+                            <th class="text-center col-embalagem">Embalagem</th>
+                            <th class="text-center col-mp">MP</th>
+                            <th class="text-center col-marca">Marca</th>
                             <th class="text-end col-estoque">Estoque<br>Atual</th>
                             <th class="text-end col-consumo">Consumo<br>Carteira</th>
                             <th class="text-end col-saldo">Saldo<br>Carteira</th>

@@ -12,6 +12,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.estoque.models import UnificacaoCodigos
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from app.separacao.models import Separacao
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,13 @@ class NecessidadeProducaoService:
                     codigos_relacionados, mes, ano
                 )
 
+                # ✅ NOVOS CÁLCULOS
+                carteira_sem_data = self._calcular_carteira_sem_data(
+                    codigos_relacionados
+                )
+
+                saldo_demanda = previsao_vendas - pedidos_inseridos
+
                 # Aplicar fórmula de saldo de vendas
                 if previsao_vendas > pedidos_inseridos:
                     saldo_vendas = previsao_vendas - pedidos_inseridos + carteira_pedidos
@@ -102,19 +110,30 @@ class NecessidadeProducaoService:
                 if necessidade_producao < 0:
                     necessidade_producao = 0
 
+                # Calcular Ruptura Carteira
+                ruptura_carteira = estoque_atual - carteira_pedidos
+
                 resultados.append({
                     'cod_produto': cod_unificado,
                     'nome_produto': nome_produto,
                     'codigos_relacionados': codigos_relacionados,
                     'previsao_vendas': float(previsao_vendas),
                     'pedidos_inseridos': float(pedidos_inseridos),
+                    'saldo_demanda': float(saldo_demanda),  # ✅ NOVO
                     'carteira_pedidos': float(carteira_pedidos),
+                    'ruptura_carteira': float(ruptura_carteira),  # ✅ NOVO
+                    'carteira_sem_data': float(carteira_sem_data),  # ✅ NOVO
                     'saldo_vendas': float(saldo_vendas),
                     'estoque_atual': float(estoque_atual),
                     'programacao_producao': float(programacao_producao),
                     'necessidade_producao': float(necessidade_producao),
                     'mes': mes,
-                    'ano': ano
+                    'ano': ano,
+                    # ✅ CAMPOS ADICIONAIS para UI
+                    'tipo_embalagem': produto_info.get('tipo_embalagem'),
+                    'tipo_materia_prima': produto_info.get('tipo_materia_prima'),
+                    'categoria_produto': produto_info.get('categoria_produto'),
+                    'linha_producao': produto_info.get('linha_producao')
                 })
 
             logger.info(f"[NECESSIDADE] Calculado para {len(resultados)} produtos")
@@ -131,23 +150,22 @@ class NecessidadeProducaoService:
         cod_produto: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Obtém lista de produtos únicos considerando unificação de códigos.
-        Retorna apenas o código destino (unificado) para evitar duplicação.
-        Busca o nome do produto de CadastroPalletizacao.
+        Obtém lista de TODOS os produtos produzidos (produto_produzido=True).
+        Não depende de PrevisaoDemanda - busca direto do CadastroPalletizacao.
         """
         try:
-            # Buscar produtos da PrevisaoDemanda do período
+            # ✅ Buscar TODOS os produtos com produto_produzido=True
             query = db.session.query(
-                PrevisaoDemanda.cod_produto
+                CadastroPalletizacao.cod_produto
             ).filter(
-                PrevisaoDemanda.data_mes == mes,
-                PrevisaoDemanda.data_ano == ano
+                CadastroPalletizacao.ativo == True,
+                CadastroPalletizacao.produto_produzido == True
             )
 
             if cod_produto:
-                # Se filtro por produto, considerar códigos relacionados
+                # Se filtro por produto específico, filtrar
                 codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
-                query = query.filter(PrevisaoDemanda.cod_produto.in_(codigos_relacionados))
+                query = query.filter(CadastroPalletizacao.cod_produto.in_(codigos_relacionados))
 
             produtos = query.distinct().all()
 
@@ -161,20 +179,27 @@ class NecessidadeProducaoService:
                     # Obter todos os códigos relacionados ao código unificado
                     codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_unificado)
 
-                    # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao
+                    # Buscar dados do produto no cadastro (já sabemos que existe e produto_produzido=True)
                     cadastro = CadastroPalletizacao.query.filter_by(
-                        cod_produto=cod_unificado_str,
-                        ativo=True
+                        cod_produto=cod_unificado_str
                     ).first()
 
-                    nome_produto = cadastro.nome_produto if cadastro else f'Produto {cod_unificado_str}'
+                    # Por segurança, verificar se encontrou
+                    if not cadastro:
+                        logger.warning(f"[NECESSIDADE] Produto {cod_unificado_str} não encontrado no cadastro (não deveria acontecer)")
+                        continue
 
                     produtos_map[cod_unificado_str] = {
                         'cod_produto': cod_unificado_str,
-                        'nome_produto': nome_produto,
-                        'codigos_relacionados': codigos_relacionados
+                        'nome_produto': cadastro.nome_produto,
+                        'codigos_relacionados': codigos_relacionados,
+                        'tipo_embalagem': cadastro.tipo_embalagem,
+                        'tipo_materia_prima': cadastro.tipo_materia_prima,
+                        'categoria_produto': cadastro.categoria_produto,
+                        'linha_producao': cadastro.linha_producao
                     }
 
+            logger.info(f"[NECESSIDADE] Total de produtos produzidos encontrados: {len(produtos_map)}")
             return list(produtos_map.values())
 
         except Exception as e:
@@ -252,6 +277,36 @@ class NecessidadeProducaoService:
             logger.error(f"[NECESSIDADE] Erro ao calcular carteira pedidos: {str(e)}")
             return 0
 
+    def _calcular_carteira_sem_data(self, codigos_relacionados: List[str]) -> float:
+        """
+        Calcula saldo da carteira SEM separação (Carteira s/ Data).
+        Fórmula: SUM(CarteiraPrincipal.qtd_saldo_produto_pedido) - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+        """
+        try:
+            # Total da carteira
+            total_carteira = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('total')
+            ).filter(
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
+            ).scalar()
+
+            # Total separado (não sincronizado)
+            total_separado = db.session.query(
+                func.sum(Separacao.qtd_saldo).label('total')
+            ).filter(
+                Separacao.cod_produto.in_(codigos_relacionados),
+                Separacao.sincronizado_nf == False
+            ).scalar()
+
+            carteira = float(total_carteira or 0)
+            separado = float(total_separado or 0)
+
+            return carteira - separado
+
+        except Exception as e:
+            logger.error(f"[NECESSIDADE] Erro ao calcular carteira sem data: {str(e)}")
+            return 0
+
     def _calcular_estoque(self, cod_produto: str) -> float:
         """
         Calcula estoque atual usando ServicoEstoqueSimples.
@@ -292,7 +347,7 @@ class NecessidadeProducaoService:
             return float(resultado or 0)
 
         except Exception as e:
-            logger.error(f"[NECESSIDADE] Erro ao calcular programação: {str(e)}")
+            logger.error(f"[NECESSIDADE] Erro ao calcular programação: {str(e)}", exc_info=True)
             return 0
 
     def calcular_projecao_estoque(self, cod_produto: str, dias: int = 60) -> Dict[str, Any]:

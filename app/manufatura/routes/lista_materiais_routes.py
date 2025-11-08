@@ -27,15 +27,15 @@ def register_lista_materiais_routes(bp):
     # ROTAS DE VISUALIZAÇÃO (HTML)
     # ==========================================
 
-    @bp.route('/lista-materiais')
+    @bp.route('/lista-materiais') # type: ignore
     @login_required
-    def lista_materiais_index():
+    def lista_materiais_index(): # type: ignore
         """Tela principal de gestão de estrutura de produtos"""
         return render_template('manufatura/lista_materiais/index.html')
 
-    @bp.route('/lista-materiais/estrutura/<cod_produto>')
+    @bp.route('/lista-materiais/estrutura/<cod_produto>') # type: ignore
     @login_required
-    def lista_materiais_estrutura(cod_produto):
+    def lista_materiais_estrutura(cod_produto): # type: ignore
         """Tela de visualização detalhada da estrutura de um produto"""
         return render_template(
             'manufatura/lista_materiais/estrutura.html',
@@ -46,9 +46,9 @@ def register_lista_materiais_routes(bp):
     # API - CONSULTAS
     # ==========================================
 
-    @bp.route('/api/lista-materiais/<cod_produto>')
+    @bp.route('/api/lista-materiais/<cod_produto>') # type: ignore
     @login_required
-    def listar_estrutura(cod_produto):
+    def listar_estrutura(cod_produto): # type: ignore
         """
         Lista todos os componentes diretos de um produto
 
@@ -156,9 +156,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/explodir/<cod_produto>')
+    @bp.route('/api/lista-materiais/explodir/<cod_produto>') # type: ignore
     @login_required
-    def explodir_estrutura(cod_produto):
+    def explodir_estrutura(cod_produto): # type: ignore
         """
         Explode estrutura BOM completa de um produto (todos os níveis)
 
@@ -213,9 +213,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/validar/<cod_produto>')
+    @bp.route('/api/lista-materiais/validar/<cod_produto>') # type: ignore
     @login_required
-    def validar_estrutura(cod_produto):
+    def validar_estrutura(cod_produto): # type: ignore
         """
         Valida estrutura BOM (detecta loops, inconsistências)
 
@@ -247,9 +247,9 @@ def register_lista_materiais_routes(bp):
     # API - CRUD
     # ==========================================
 
-    @bp.route('/api/lista-materiais', methods=['POST'])
+    @bp.route('/api/lista-materiais', methods=['POST']) # type: ignore
     @login_required
-    def criar_componente():
+    def criar_componente(): # type: ignore
         """
         Cria um novo componente na estrutura de um produto
 
@@ -380,9 +380,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/<int:id>', methods=['PUT'])
+    @bp.route('/api/lista-materiais/<int:id>', methods=['PUT']) # type: ignore
     @login_required
-    def editar_componente(id):
+    def editar_componente(id): # type: ignore
         """
         Edita um componente existente
 
@@ -474,9 +474,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/<int:id>', methods=['DELETE'])
+    @bp.route('/api/lista-materiais/<int:id>', methods=['DELETE']) # type: ignore
     @login_required
-    def deletar_componente(id):
+    def deletar_componente(id): # type: ignore
         """
         Deleta um componente (soft delete - muda status para 'inativo')
 
@@ -529,9 +529,9 @@ def register_lista_materiais_routes(bp):
     # API - HISTÓRICO E AUDITORIA
     # ==========================================
 
-    @bp.route('/api/lista-materiais/historico/<int:lista_materiais_id>')
+    @bp.route('/api/lista-materiais/historico/<int:lista_materiais_id>') # type: ignore
     @login_required
-    def historico_componente(lista_materiais_id):
+    def historico_componente(lista_materiais_id): # type: ignore
         """
         Retorna histórico de alterações de um componente específico
 
@@ -571,9 +571,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/historico-produto/<cod_produto>')
+    @bp.route('/api/lista-materiais/historico-produto/<cod_produto>') # type: ignore
     @login_required
-    def historico_produto(cod_produto):
+    def historico_produto(cod_produto): # type: ignore
         """
         Retorna histórico de alterações de um produto (todas as mudanças na estrutura)
 
@@ -604,9 +604,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/historico-usuario/<usuario>')
+    @bp.route('/api/lista-materiais/historico-usuario/<usuario>') # type: ignore
     @login_required
-    def historico_usuario(usuario):
+    def historico_usuario(usuario): # type: ignore
         """
         Retorna histórico de alterações feitas por um usuário
 
@@ -637,9 +637,9 @@ def register_lista_materiais_routes(bp):
                 'erro': str(e)
             }), 500
 
-    @bp.route('/api/lista-materiais/estatisticas-historico')
+    @bp.route('/api/lista-materiais/estatisticas-historico') # type: ignore
     @login_required
-    def estatisticas_historico_lista_materiais():
+    def estatisticas_historico_lista_materiais(): # type: ignore
         """
         Retorna estatísticas gerais do histórico de lista de materiais
 
@@ -672,9 +672,9 @@ def register_lista_materiais_routes(bp):
     # API - LISTAGENS
     # ==========================================
 
-    @bp.route('/api/lista-materiais/produtos-produzidos')
+    @bp.route('/api/lista-materiais/produtos-produzidos') # type: ignore
     @login_required
-    def listar_produtos_produzidos():
+    def listar_produtos_produzidos(): # type: ignore
         """
         Lista todos os produtos que podem ter estrutura (produto_produzido=True)
 
@@ -782,15 +782,15 @@ def register_lista_materiais_routes(bp):
     # IMPORTAÇÃO / EXPORTAÇÃO
     # ==========================================
 
-    @bp.route('/lista-materiais/importar')
+    @bp.route('/lista-materiais/importar') # type: ignore
     @login_required
-    def importar_lista_materiais():
+    def importar_lista_materiais(): # type: ignore
         """Tela para importar Lista de Materiais via Excel"""
         return render_template('manufatura/lista_materiais/importar.html')
 
-    @bp.route('/lista-materiais/importar', methods=['POST'])
+    @bp.route('/lista-materiais/importar', methods=['POST']) # type: ignore
     @login_required
-    def processar_importacao_lista_materiais():
+    def processar_importacao_lista_materiais(): # type: ignore
         """
         Processar importação de Lista de Materiais via Excel/CSV
 
@@ -955,9 +955,9 @@ def register_lista_materiais_routes(bp):
             flash(f'Erro durante importação: {str(e)}', 'error')
             return redirect(url_for('manufatura.importar_lista_materiais'))
 
-    @bp.route('/lista-materiais/baixar-modelo')
+    @bp.route('/lista-materiais/baixar-modelo') # type: ignore
     @login_required
-    def baixar_modelo_lista_materiais():
+    def baixar_modelo_lista_materiais(): # type: ignore
         """Baixar modelo Excel para importação de Lista de Materiais"""
         try:
             # Dados de exemplo
@@ -1001,9 +1001,9 @@ def register_lista_materiais_routes(bp):
             flash(f'Erro ao gerar modelo: {str(e)}', 'error')
             return redirect(url_for('manufatura.lista_materiais_index'))
 
-    @bp.route('/lista-materiais/exportar-dados')
+    @bp.route('/lista-materiais/exportar-dados') # type: ignore
     @login_required
-    def exportar_dados_lista_materiais():
+    def exportar_dados_lista_materiais(): # type: ignore
         """Exportar dados existentes de Lista de Materiais"""
         try:
             # Buscar dados ativos

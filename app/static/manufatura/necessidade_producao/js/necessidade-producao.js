@@ -3,6 +3,10 @@
 // ==================================================
 
 let dadosCompletos = [];
+let ordenacaoAtual = {
+    campo: null,
+    direcao: 'asc' // 'asc' ou 'desc'
+};
 
 $(document).ready(function() {
     const anoAtual = new Date().getFullYear();
@@ -21,6 +25,14 @@ $(document).ready(function() {
     $('#btn-calcular').on('click', calcularNecessidade);
     $('#filtro-produto').on('keypress', e => e.which === 13 && calcularNecessidade());
     $('.col-toggle').on('change', () => { aplicarVisibilidadeColunas(); salvarPreferenciasColunas(); });
+
+    // ✅ Event listeners para ordenação de colunas
+    $(document).on('click', '.sortable', function() {
+        const campo = $(this).data('field');
+        if (campo) {
+            ordenarTabela(campo);
+        }
+    });
 });
 
 // ============================================================
@@ -140,8 +152,15 @@ function renderizarTabela(dados) {
 
     let html = '';
     dados.forEach(item => {
+        // Calcular classes condicionais
+        const classeSaldoDemanda = item.saldo_demanda < 0 ? 'text-danger' : item.saldo_demanda > 0 ? 'text-success' : '';
+        const classeRuptura = item.ruptura_carteira < 0 ? 'text-danger fw-bold' : '';
+
         html += `<tr>
+            <!-- 1. Código -->
             <td class="sticky-col-codigo"><strong>${item.cod_produto}</strong></td>
+
+            <!-- 2. Produto -->
             <td class="sticky-col-produto">
                 <div class="d-flex align-items-center gap-2">
                     <div class="flex-grow-1">
@@ -165,12 +184,47 @@ function renderizarTabela(dados) {
                     </div>
                 </div>
             </td>
-            <td class="text-end col-previsao">${formatarNumero(item.previsao_vendas)}</td>
-            <td class="text-end col-pedidos">${formatarNumero(item.pedidos_inseridos)}</td>
-            <td class="text-end col-carteira">${formatarNumero(item.carteira_pedidos)}</td>
-            <td class="text-end col-saldo"><strong>${formatarNumero(item.saldo_vendas)}</strong></td>
+
+            <!-- 3. Linha de Produção -->
+            <td class="text-center col-producao">${item.linha_producao || '-'}</td>
+
+            <!-- 4. Marca -->
+            <td class="text-center col-marca">${item.categoria_produto || '-'}</td>
+
+            <!-- 5. Embalagem -->
+            <td class="text-center col-embalagem">${item.tipo_embalagem || '-'}</td>
+
+            <!-- 6. MP -->
+            <td class="text-center col-mp">${item.tipo_materia_prima || '-'}</td>
+
+            <!-- 7. Estoque -->
             <td class="text-end col-estoque">${formatarNumero(item.estoque_atual)}</td>
+
+            <!-- 8. Previsão Vendas -->
+            <td class="text-end col-previsao">${formatarNumero(item.previsao_vendas)}</td>
+
+            <!-- 9. Pedidos Inseridos -->
+            <td class="text-end col-pedidos">${formatarNumero(item.pedidos_inseridos)}</td>
+
+            <!-- 10. Saldo Demanda (NOVO) -->
+            <td class="text-end col-saldo-demanda ${classeSaldoDemanda}">${formatarNumero(item.saldo_demanda)}</td>
+
+            <!-- 11. Carteira Pedidos -->
+            <td class="text-end col-carteira">${formatarNumero(item.carteira_pedidos)}</td>
+
+            <!-- 12. Ruptura Carteira (NOVO) -->
+            <td class="text-end col-ruptura ${classeRuptura}">${formatarNumero(item.ruptura_carteira)}</td>
+
+            <!-- 13. Carteira S/ Data (NOVO) -->
+            <td class="text-end col-carteira-sem-data">${formatarNumero(item.carteira_sem_data)}</td>
+
+            <!-- 14. Saldo Vendas Acumulada -->
+            <td class="text-end col-saldo"><strong>${formatarNumero(item.saldo_vendas)}</strong></td>
+
+            <!-- 15. Programação Produção -->
             <td class="text-end col-programacao">${formatarNumero(item.programacao_producao)}</td>
+
+            <!-- 16. Necessidade C/ Previsão -->
             <td class="text-end col-necessidade ${item.necessidade_producao > 0 ? 'numero-positivo' : 'numero-zero'}"><strong>${formatarNumero(item.necessidade_producao)}</strong></td>`;
 
         for (let i = 0; i <= 60; i++) {
@@ -202,14 +256,25 @@ function renderizarTabela(dados) {
 // ============================================================
 
 function aplicarVisibilidadeColunas() {
+    // Colunas de CadastroPalletizacao
+    $('.col-embalagem').toggle($('#col-embalagem').is(':checked'));
+    $('.col-mp').toggle($('#col-mp').is(':checked'));
+    $('.col-marca').toggle($('#col-marca').is(':checked'));
+    $('.col-producao').toggle($('#col-producao').is(':checked'));
+
+    // Colunas de dados
+    $('.col-estoque').toggle($('#col-estoque').is(':checked'));
     $('.col-previsao').toggle($('#col-previsao').is(':checked'));
     $('.col-pedidos').toggle($('#col-pedidos').is(':checked'));
+    $('.col-saldo-demanda').toggle($('#col-saldo-demanda').is(':checked'));  // ✅ NOVO
     $('.col-carteira').toggle($('#col-carteira').is(':checked'));
+    $('.col-ruptura').toggle($('#col-ruptura').is(':checked'));  // ✅ NOVO
+    $('.col-carteira-sem-data').toggle($('#col-carteira-sem-data').is(':checked'));  // ✅ NOVO
     $('.col-saldo').toggle($('#col-saldo').is(':checked'));
-    $('.col-estoque').toggle($('#col-estoque').is(':checked'));
     $('.col-programacao').toggle($('#col-programacao').is(':checked'));
     $('.col-necessidade').toggle($('#col-necessidade').is(':checked'));
 
+    // Projeção D0-D60
     const mostrar = $('#col-projecao').is(':checked');
     for (let i = 0; i <= 60; i++) $('.col-projecao-d' + i).toggle(mostrar);
 }
@@ -234,11 +299,21 @@ function salvarPreferenciasColunas() {
 
 function carregarPreferenciasColunas() {
     const prefs = localStorage.getItem('necessidade_colunas');
+
     if (prefs) {
         const p = JSON.parse(prefs);
+
+        // ✅ Garantir que novas colunas sejam marcadas por padrão
+        const novasColunas = ['embalagem', 'mp', 'marca', 'producao', 'saldo-demanda', 'ruptura', 'carteira-sem-data'];
+
         $('.col-toggle').each(function() {
             const v = $(this).val();
-            if (p.hasOwnProperty(v)) $(this).prop('checked', p[v]);
+            if (p.hasOwnProperty(v)) {
+                $(this).prop('checked', p[v]);
+            } else if (novasColunas.includes(v)) {
+                // Nova coluna não salva ainda - marcar como checked por padrão
+                $(this).prop('checked', true);
+            }
         });
         aplicarVisibilidadeColunas();
     }
@@ -337,6 +412,67 @@ document.addEventListener('click', function(event) {
         fecharDropdown();
     }
 });
+
+// ============================================================
+// ORDENAÇÃO DE COLUNAS
+// ============================================================
+
+function ordenarTabela(campo) {
+    console.log(`🔄 Ordenando por: ${campo}`);
+
+    // Se clicar na mesma coluna, inverte a direção
+    if (ordenacaoAtual.campo === campo) {
+        ordenacaoAtual.direcao = ordenacaoAtual.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        // Nova coluna, sempre começa em ascendente
+        ordenacaoAtual.campo = campo;
+        ordenacaoAtual.direcao = 'asc';
+    }
+
+    // Ordenar dados
+    dadosCompletos.sort((a, b) => {
+        let valorA = a[campo];
+        let valorB = b[campo];
+
+        // Tratar valores null/undefined como string vazia para campos de texto
+        if (valorA === null || valorA === undefined) valorA = '';
+        if (valorB === null || valorB === undefined) valorB = '';
+
+        // Detectar tipo de dado
+        const isNumero = typeof valorA === 'number' || !isNaN(parseFloat(valorA));
+
+        let comparacao = 0;
+        if (isNumero) {
+            // Comparação numérica
+            const numA = parseFloat(valorA) || 0;
+            const numB = parseFloat(valorB) || 0;
+            comparacao = numA - numB;
+        } else {
+            // Comparação alfabética (case-insensitive)
+            const strA = String(valorA).toLowerCase();
+            const strB = String(valorB).toLowerCase();
+            comparacao = strA.localeCompare(strB, 'pt-BR');
+        }
+
+        return ordenacaoAtual.direcao === 'asc' ? comparacao : -comparacao;
+    });
+
+    // Atualizar ícones visuais
+    atualizarIconesOrdenacao(campo, ordenacaoAtual.direcao);
+
+    // Re-renderizar tabela
+    renderizarTabela(dadosCompletos);
+}
+
+function atualizarIconesOrdenacao(campoAtivo, direcao) {
+    // Resetar todos os ícones
+    $('.sortable .sort-icon').removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+
+    // Atualizar ícone da coluna ativa
+    const icone = $(`.sortable[data-field="${campoAtivo}"] .sort-icon`);
+    icone.removeClass('fa-sort');
+    icone.addClass(direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down');
+}
 
 // ============================================================
 // UTILITÁRIOS

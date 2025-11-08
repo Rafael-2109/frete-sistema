@@ -241,12 +241,27 @@ table.table-necessidade td.col-projecao.positivo {
    COLUNAS DE DADOS
    ================================================== */
 
+/* ✅ COLUNAS DE DADOS - CadastroPalletizacao e Necessidade */
+table.table-necessidade th.col-embalagem,
+table.table-necessidade td.col-embalagem,
+table.table-necessidade th.col-mp,
+table.table-necessidade td.col-mp,
+table.table-necessidade th.col-marca,
+table.table-necessidade td.col-marca,
+table.table-necessidade th.col-producao,
+table.table-necessidade td.col-producao,
 table.table-necessidade th.col-previsao,
 table.table-necessidade td.col-previsao,
 table.table-necessidade th.col-pedidos,
 table.table-necessidade td.col-pedidos,
+table.table-necessidade th.col-saldo-demanda,
+table.table-necessidade td.col-saldo-demanda,
 table.table-necessidade th.col-carteira,
 table.table-necessidade td.col-carteira,
+table.table-necessidade th.col-ruptura,
+table.table-necessidade td.col-ruptura,
+table.table-necessidade th.col-carteira-sem-data,
+table.table-necessidade td.col-carteira-sem-data,
 table.table-necessidade th.col-saldo,
 table.table-necessidade td.col-saldo,
 table.table-necessidade th.col-estoque,
@@ -486,4 +501,38 @@ table.table-necessidade td.col-criticidade {
     transform: scale(1.05);
     transition: all 0.2s;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* ==================================================
+   ORDENAÇÃO DE COLUNAS
+   ================================================== */
+
+/* Headers clicáveis para ordenação */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.sortable:hover {
+    background-color: #e9ecef !important;
+}
+
+.sortable .sort-icon {
+    margin-left: 4px;
+    font-size: 0.75em;
+    opacity: 0.5;
+    transition: opacity 0.2s, color 0.2s;
+}
+
+.sortable:hover .sort-icon {
+    opacity: 1;
+}
+
+/* Ícone ativo quando coluna está ordenada */
+.sortable .sort-icon.fa-sort-up,
+.sortable .sort-icon.fa-sort-down {
+    opacity: 1;
+    color: #28a745;
+    font-weight: bold;
 }

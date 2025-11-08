@@ -54,32 +54,60 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <!-- Colunas Visíveis -->
             <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-embalagem" value="embalagem" checked>
+                <label class="form-check-label" for="col-embalagem">Embalagem</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-mp" value="mp" checked>
+                <label class="form-check-label" for="col-mp">MP</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-marca" value="marca" checked>
+                <label class="form-check-label" for="col-marca">Marca</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-producao" value="producao" checked>
+                <label class="form-check-label" for="col-produção">Linha de<br>Produção</label>
+            </div>
+            <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-previsao" value="previsao" checked>
-                <label class="form-check-label" for="col-previsao">Previsão Vendas</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-pedidos" value="pedidos" checked>
-                <label class="form-check-label" for="col-pedidos">Pedidos Inseridos</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-carteira" value="carteira" checked>
-                <label class="form-check-label" for="col-carteira">Carteira Pedidos</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo" value="saldo" checked>
-                <label class="form-check-label" for="col-saldo">Saldo Vendas</label>
+                <label class="form-check-label" for="col-previsao">Previsão<br>Vendas</label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-estoque" value="estoque" checked>
-                <label class="form-check-label" for="col-estoque">Estoque Atual</label>
+                <label class="form-check-label" for="col-estoque">Estoque<br>Atual</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-pedidos" value="pedidos" checked>
+                <label class="form-check-label" for="col-pedidos">Pedidos<br>Inseridos</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo-demanda" value="saldo-demanda" checked>
+                <label class="form-check-label" for="col-saldo-demanda">Saldo<br>Demanda</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-carteira" value="carteira" checked>
+                <label class="form-check-label" for="col-carteira">Carteira<br>Pedidos</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-ruptura" value="ruptura" checked>
+                <label class="form-check-label" for="col-ruptura">Ruptura<br>Carteira</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-carteira-sem-data" value="carteira-sem-data" checked>
+                <label class="form-check-label" for="col-carteira-sem-data">Carteira<br>S/ Data</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo" value="saldo" checked>
+                <label class="form-check-label" for="col-saldo">Saldo Vendas<br>Acumulada</label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-programacao" value="programacao" checked>
-                <label class="form-check-label" for="col-programacao">Programação</label>
+                <label class="form-check-label" for="col-programacao">Programação<br>Produção</label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-necessidade" value="necessidade" checked>
-                <label class="form-check-label" for="col-necessidade">Necessidade</label>
+                <label class="form-check-label" for="col-necessidade">Necessidade<br>C/ Previsão</label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-projecao" value="projecao" checked>
@@ -126,15 +154,72 @@
                 <table class="table table-necessidade table-hover table-bordered mb-0">
                     <thead>
                         <tr id="thead-row">
-                            <th class="sticky-col-codigo header">Código</th>
-                            <th class="sticky-col-produto header">Produto</th>
-                            <th class="text-end col-previsao">Previsão<br>Vendas</th>
-                            <th class="text-end col-pedidos">Pedidos<br>Inseridos</th>
-                            <th class="text-end col-carteira">Carteira<br>Pedidos</th>
-                            <th class="text-end col-saldo">Saldo<br>Vendas</th>
-                            <th class="text-end col-estoque">Estoque<br>Atual</th>
-                            <th class="text-end col-programacao">Programação</th>
-                            <th class="text-end col-necessidade">Necessidade</th>
+                            <!-- 1. Código -->
+                            <th class="sticky-col-codigo header sortable" data-field="cod_produto">
+                                Código <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 2. Produto -->
+                            <th class="sticky-col-produto header sortable" data-field="nome_produto">
+                                Produto <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 3. Linha de Produção -->
+                            <th class="text-center col-producao sortable" data-field="linha_producao">
+                                Linha de<br>Produção <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 4. Marca -->
+                            <th class="text-center col-marca sortable" data-field="categoria_produto">
+                                Marca <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 5. Embalagem -->
+                            <th class="text-center col-embalagem sortable" data-field="tipo_embalagem">
+                                Embalagem <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 6. MP -->
+                            <th class="text-center col-mp sortable" data-field="tipo_materia_prima">
+                                MP <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 7. Estoque -->
+                            <th class="text-end col-estoque sortable" data-field="estoque_atual">
+                                Estoque<br>Atual <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 8. Previsão Vendas -->
+                            <th class="text-end col-previsao sortable" data-field="previsao_vendas">
+                                Previsão<br>Vendas <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 9. Pedidos Inseridos -->
+                            <th class="text-end col-pedidos sortable" data-field="pedidos_inseridos">
+                                Pedidos<br>Inseridos <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 10. Saldo Demanda (NOVO) -->
+                            <th class="text-end col-saldo-demanda sortable" data-field="saldo_demanda">
+                                Saldo<br>Demanda <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 11. Carteira Pedidos -->
+                            <th class="text-end col-carteira sortable" data-field="carteira_pedidos">
+                                Carteira<br>Pedidos <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 12. Ruptura Carteira (NOVO) -->
+                            <th class="text-end col-ruptura sortable" data-field="ruptura_carteira">
+                                Ruptura<br>Carteira <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 13. Carteira S/ Data (NOVO) -->
+                            <th class="text-end col-carteira-sem-data sortable" data-field="carteira_sem_data">
+                                Carteira<br>S/ Data <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 14. Saldo Vendas Acumulada -->
+                            <th class="text-end col-saldo sortable" data-field="saldo_vendas">
+                                Saldo Vendas<br>Acumulada <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 15. Programação Produção -->
+                            <th class="text-end col-programacao sortable" data-field="programacao_producao">
+                                Programação<br>Produção <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 16. Necessidade C/ Previsão -->
+                            <th class="text-end col-necessidade sortable" data-field="necessidade_producao">
+                                Necessidade<br>C/ Previsão <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <!-- 17. Projeção D0-D60 será inserida dinamicamente pelo JS -->
+                            <!-- 18. Ações -->
                             <th class="text-center">Ações</th>
                         </tr>
                     </thead>

@@ -21,15 +21,15 @@ logger = logging.getLogger(__name__)
 
 def register_historico_routes(bp):
 
-    @bp.route('/historico-pedidos')
+    @bp.route('/historico-pedidos') # type: ignore
     @login_required
-    def historico_pedidos():
+    def historico_pedidos(): # type: ignore
         """Tela de gestão do histórico de pedidos"""
         return render_template('manufatura/historico_pedidos.html')
 
-    @bp.route('/api/historico-pedidos/listar')
+    @bp.route('/api/historico-pedidos/listar') # type: ignore
     @login_required
-    def listar_historico():
+    def listar_historico(): # type: ignore
         """Lista histórico de pedidos com filtros"""
         try:
             # Parâmetros de filtro
@@ -98,9 +98,9 @@ def register_historico_routes(bp):
             logger.error(f"Erro ao listar histórico: {e}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/historico-pedidos/estatisticas')
+    @bp.route('/api/historico-pedidos/estatisticas') # type: ignore
     @login_required
-    def estatisticas_historico():
+    def estatisticas_historico(): # type: ignore
         """Retorna estatísticas do histórico"""
         try:
             data_inicio = request.args.get('data_inicio')
@@ -151,9 +151,9 @@ def register_historico_routes(bp):
             logger.error(f"Erro ao buscar estatísticas: {e}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/historico-pedidos/exportar-excel')
+    @bp.route('/api/historico-pedidos/exportar-excel') # type: ignore
     @login_required
-    def exportar_historico_excel():
+    def exportar_historico_excel(): # type: ignore
         """Exporta histórico para Excel"""
         try:
             # Parâmetros de filtro
@@ -240,9 +240,9 @@ def register_historico_routes(bp):
             logger.error(f"[EXPORTAR] Erro: {e}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/historico-pedidos/sincronizar-odoo', methods=['POST'])
+    @bp.route('/api/historico-pedidos/sincronizar-odoo', methods=['POST']) # type: ignore
     @login_required
-    def sincronizar_odoo():
+    def sincronizar_odoo(): # type: ignore
         """Sincroniza histórico com Odoo (UPSERT)"""
         try:
             dados = request.json
