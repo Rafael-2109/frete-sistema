@@ -63,6 +63,67 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[PROJECAO] Erro ao calcular: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
+    @bp.route('/api/necessidade-producao/projecoes-batch', methods=['POST'])
+    @login_required
+    def projecoes_batch():
+        """
+        🚀 OTIMIZAÇÃO: Retorna projeções de múltiplos produtos em uma única requisição
+        Reduz N requisições HTTP para apenas 1
+
+        Body JSON: {
+            "cod_produtos": ["PROD-001", "PROD-002", ...],
+            "dias": 60  // opcional, default 60
+        }
+
+        Response: {
+            "PROD-001": { projecao: [...] },
+            "PROD-002": { projecao: [...] }
+        }
+        """
+        try:
+            from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+            import logging
+
+            dados = request.json
+
+            # 🐛 DEBUG: Log para ver o que está chegando
+            logging.info(f"[PROJECOES BATCH] request.json recebido: {dados}")
+
+            if not dados:
+                logging.error("[PROJECOES BATCH] request.json está vazio ou None!")
+                return jsonify({'erro': 'Body JSON vazio ou inválido'}), 400
+
+            cod_produtos = dados.get('cod_produtos', [])
+            dias = dados.get('dias', 60)
+
+            logging.info(f"[PROJECOES BATCH] cod_produtos extraído: {cod_produtos}")
+            logging.info(f"[PROJECOES BATCH] dias: {dias}")
+
+            if not cod_produtos or not isinstance(cod_produtos, list):
+                return jsonify({'erro': 'cod_produtos deve ser um array não vazio'}), 400
+
+            # Limitar para evitar sobrecarga (máximo 200 produtos por request)
+            if len(cod_produtos) > 200:
+                return jsonify({'erro': 'Máximo de 200 produtos por requisição'}), 400
+
+            logging.info(f"[PROJECOES BATCH] Calculando {len(cod_produtos)} produtos em paralelo")
+
+            # ✅ USAR calcular_multiplos_produtos() que já faz paralelização interna
+            resultados = ServicoEstoqueSimples.calcular_multiplos_produtos(
+                cod_produtos=cod_produtos,
+                dias=dias,
+                entrada_em_d_plus_1=False
+            )
+
+            logging.info(f"[PROJECOES BATCH] ✅ Concluído: {len(resultados)} projeções retornadas")
+
+            return jsonify(resultados)
+
+        except Exception as e:
+            import logging
+            logging.error(f"[PROJECOES BATCH] Erro: {str(e)}", exc_info=True)
+            return jsonify({'erro': str(e)}), 500
+
     @bp.route('/api/necessidade-producao/programar', methods=['POST'])
     @login_required
     def programar_producao():

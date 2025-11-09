@@ -298,11 +298,89 @@ function calcularNecessidade() {
 function buscarProjecoesParaTodos(dados) {
     if (!dados || !dados.length) { renderizarTabela([]); return; }
 
-    Promise.all(dados.map(item =>
-        $.get('/manufatura/api/necessidade-producao/projecao-estoque', { cod_produto: item.cod_produto })
-            .then(p => { item.projecao = p.projecao || []; return item; })
-            .catch(() => { item.projecao = []; return item; })
-    )).then(d => { dadosCompletos = d; renderizarTabela(d); });
+    // 🚀 OTIMIZAÇÃO: Usar endpoint batch com chunking para >200 produtos
+    const codProdutos = dados.map(item => item.cod_produto);
+    const BATCH_SIZE = 200; // Limite do backend
+
+    console.log(`🚀 [OTIMIZAÇÃO] Buscando ${codProdutos.length} projeções em BATCH`);
+
+    // Dividir em chunks de 200
+    const chunks = [];
+    for (let i = 0; i < codProdutos.length; i += BATCH_SIZE) {
+        chunks.push(codProdutos.slice(i, i + BATCH_SIZE));
+    }
+
+    console.log(`📦 Dividido em ${chunks.length} batches de até ${BATCH_SIZE} produtos`);
+
+    // ✅ Obter CSRF token (necessário para POST requests)
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    if (!csrfToken) {
+        console.error('❌ CSRF token não encontrado!');
+        alert('Erro de segurança: Token CSRF não encontrado. Recarregue a página (F5).');
+        dados.forEach(item => { item.projecao = []; });
+        dadosCompletos = dados;
+        renderizarTabela(dados);
+        return;
+    }
+
+    // Buscar todos os chunks em paralelo
+    const requests = chunks.map(chunk => {
+        return $.ajax({
+            url: '/manufatura/api/necessidade-producao/projecoes-batch',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': csrfToken  // ✅ Enviar CSRF token
+            },
+            data: JSON.stringify({
+                cod_produtos: chunk,
+                dias: 60
+            })
+        });
+    });
+
+    // Aguardar todas as requisições
+    Promise.all(requests)
+        .then(resultados => {
+            console.log(`✅ ${resultados.length} batches recebidos com sucesso!`);
+
+            // Combinar todos os resultados
+            const projecoesBatch = {};
+            resultados.forEach(resultado => {
+                Object.assign(projecoesBatch, resultado);
+            });
+
+            console.log(`✅ Total de projeções combinadas: ${Object.keys(projecoesBatch).length}`);
+
+            // Mapear projeções de volta para os produtos
+            dados.forEach(item => {
+                const projecaoProduto = projecoesBatch[item.cod_produto];
+                if (projecaoProduto && projecaoProduto.projecao) {
+                    item.projecao = projecaoProduto.projecao;
+                } else {
+                    item.projecao = [];
+                }
+            });
+
+            dadosCompletos = dados;
+            renderizarTabela(dados);
+        })
+        .catch(error => {
+            console.error('❌ Erro ao buscar projeções batch:', error);
+
+            if (error.responseJSON) {
+                console.error('🐛 [DEBUG] Erro do servidor:', error.responseJSON);
+                alert(`Erro: ${error.responseJSON.erro || 'Erro desconhecido'}`);
+            } else {
+                alert(`Erro ao buscar projeções: ${error.statusText || 'Erro desconhecido'}`);
+            }
+
+            // Fallback: atribuir projeção vazia para todos
+            dados.forEach(item => { item.projecao = []; });
+            dadosCompletos = dados;
+            renderizarTabela(dados);
+        });
 }
 
 // ============================================================

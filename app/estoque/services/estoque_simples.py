@@ -19,7 +19,7 @@ from app.producao.models import ProgramacaoProducao
 
 logger = logging.getLogger(__name__)
 
-# 🚀 OTIMIZAÇÃO: Cache global com TTL de 30 segundos
+# 🚀 OTIMIZAÇÃO: Cache global com TTL de 10 segundos (reduzido de 30s)
 _cache_ttl = {}  # {chave: timestamp}
 _cache_data = {}  # {chave: dados}
 
@@ -27,12 +27,12 @@ _cache_data = {}  # {chave: dados}
 class ServicoEstoqueSimples:
     """
     Serviço único para todos os cálculos de estoque.
-    Com cache TTL de 30s para otimizar performance.
+    Com cache TTL de 10s para otimizar performance (balanceando freshness vs performance).
     """
 
     @staticmethod
-    def _get_cache(chave: str, ttl_seconds: int = 30):
-        """Obter valor do cache se ainda válido"""
+    def _get_cache(chave: str, ttl_seconds: int = 10):
+        """Obter valor do cache se ainda válido (TTL padrão: 10s)"""
         if chave in _cache_ttl:
             idade = time.time() - _cache_ttl[chave]
             if idade < ttl_seconds:

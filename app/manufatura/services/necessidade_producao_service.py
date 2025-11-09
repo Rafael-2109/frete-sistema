@@ -260,16 +260,25 @@ class NecessidadeProducaoService:
         """
         Calcula pedidos inseridos no mês (faturados ou não).
         SUM(qtd_produto_pedido - qtd_cancelada) do mês.
+
+        🚀 OTIMIZADO: Usa range de datas em vez de extract() para usar índices
         """
         try:
+            from calendar import monthrange
+
+            # Calcular primeiro e último dia do mês
+            primeiro_dia = date(ano, mes, 1)
+            ultimo_dia_num = monthrange(ano, mes)[1]
+            ultimo_dia = date(ano, mes, ultimo_dia_num)
+
             resultado = db.session.query(
                 func.sum(
                     CarteiraPrincipal.qtd_produto_pedido -
                     CarteiraPrincipal.qtd_cancelada_produto_pedido
                 ).label('total')
             ).filter(
-                extract('month', CarteiraPrincipal.data_pedido) == mes,
-                extract('year', CarteiraPrincipal.data_pedido) == ano,
+                CarteiraPrincipal.data_pedido >= primeiro_dia,
+                CarteiraPrincipal.data_pedido <= ultimo_dia,
                 CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
             ).scalar()
 
@@ -351,17 +360,28 @@ class NecessidadeProducaoService:
         - Com data >= hoje (futuras)
 
         SUM(ProgramacaoProducao.qtd_programada).
+
+        🚀 OTIMIZADO: Usa range de datas em vez de extract() para usar índices
         """
         try:
+            from calendar import monthrange
+
             hoje = date.today()
+
+            # Calcular primeiro e último dia do mês
+            primeiro_dia = date(ano, mes, 1)
+            ultimo_dia_num = monthrange(ano, mes)[1]
+            ultimo_dia = date(ano, mes, ultimo_dia_num)
+
+            # ✅ Garantir que primeiro_dia >= hoje para apenas programações futuras
+            data_inicio = max(primeiro_dia, hoje)
 
             resultado = db.session.query(
                 func.sum(ProgramacaoProducao.qtd_programada).label('total')
             ).filter(
                 ProgramacaoProducao.cod_produto.in_(codigos_relacionados),
-                extract('month', ProgramacaoProducao.data_programacao) == mes,
-                extract('year', ProgramacaoProducao.data_programacao) == ano,
-                ProgramacaoProducao.data_programacao >= hoje  # Apenas futuras
+                ProgramacaoProducao.data_programacao >= data_inicio,
+                ProgramacaoProducao.data_programacao <= ultimo_dia
             ).scalar()
 
             return float(resultado or 0)
