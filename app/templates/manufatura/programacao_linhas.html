@@ -145,23 +145,97 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas.js') }}"></script>
+<!-- ✅ IMPORTANTE: Carregar script de necessidade_producao PRIMEIRO (tem a função CORRETA) -->
+<script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/necessidade-producao.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas-agrupamentos.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modal-detalhes-separacao.js') }}"></script>
 
 <!-- ✅ Chamar popularFiltros após carregar dados -->
 <script>
-// Sobrescrever função carregarProgramacaoLinhas para incluir popularFiltros
-const carregarOriginal = carregarProgramacaoLinhas;
-carregarProgramacaoLinhas = async function() {
-    await carregarOriginal();
-    if (programacaoState.linhas && programacaoState.linhas.length > 0) {
-        popularFiltros(programacaoState.linhas);
-        renderizarAgrupamento();
-    }
+// ⚠️ NÃO carregar programacao-linhas.js (tem função antiga)
+// Usar apenas necessidade-producao.js que tem a função COMPLETA com accordions
+
+// Adicionar carregamento manual de dados (sem depender de programacao-linhas.js)
+let programacaoState = {
+    mesAtual: new Date().getMonth() + 1,
+    anoAtual: new Date().getFullYear(),
+    linhas: []
 };
 
-// Função para abrir modal de separações
+$(document).ready(function() {
+    const anoAtual = new Date().getFullYear();
+    const mesAtual = new Date().getMonth() + 1;
+
+    // Preencher anos
+    for (let i = -1; i <= 1; i++) {
+        const ano = anoAtual + i;
+        $('#filtro-ano').append($('<option></option>').val(ano).text(ano).prop('selected', i === 0));
+    }
+
+    // Selecionar mês atual
+    $('#filtro-mes').val(mesAtual);
+
+    // Eventos
+    $('#btn-carregar').on('click', carregarProgramacaoLinhas);
+
+    // Carregar automaticamente
+    carregarProgramacaoLinhas();
+});
+
+async function carregarProgramacaoLinhas() {
+    try {
+        const mes = $('#filtro-mes').val();
+        const ano = $('#filtro-ano').val();
+
+        programacaoState.mesAtual = parseInt(mes);
+        programacaoState.anoAtual = parseInt(ano);
+
+        mostrarLoading(true);
+
+        const params = new URLSearchParams({ mes, ano });
+        const response = await fetch(`/manufatura/recursos/api/programacao-linhas/dados?${params}`);
+
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+
+        const dados = await response.json();
+
+        if (dados.erro) {
+            throw new Error(dados.erro);
+        }
+
+        programacaoState.linhas = dados.linhas || [];
+
+        console.log('[PROGRAMACAO] Dados recebidos:', dados);
+
+        popularFiltros(programacaoState.linhas);
+        renderizarAgrupamento();
+
+    } catch (error) {
+        console.error('[PROGRAMACAO] Erro ao carregar:', error);
+        $('#programacao-container').html(`
+            <div class="text-center text-danger py-5">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Erro ao carregar: ${error.message}
+            </div>
+        `);
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function mostrarLoading(mostrar) {
+    if (mostrar) {
+        $('#loading-spinner').removeClass('d-none');
+        $('#programacao-container').addClass('d-none');
+    } else {
+        $('#loading-spinner').addClass('d-none');
+        $('#programacao-container').removeClass('d-none');
+    }
+}
+
+// ✅ Função para abrir modal (usa a CORRETA de necessidade-producao.js)
 async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
     try {
         console.log(`[MODAL SEPARACOES] Abrindo para produto: ${codProduto}, dia: ${diaClicado}`);
@@ -186,8 +260,13 @@ async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
             throw new Error(dados.erro);
         }
 
+        // ✅ Usar função de necessidade-producao.js (tem accordions completos)
         if (typeof renderizarModalSeparacoes === 'function') {
             renderizarModalSeparacoes(dados, codProduto, diaClicado);
+        } else {
+            console.error('Função renderizarModalSeparacoes não encontrada!');
+            alert('Erro: Função de renderização não carregada');
+            return;
         }
 
         const modal = new bootstrap.Modal(document.getElementById('modalSeparacoesProduto'));
