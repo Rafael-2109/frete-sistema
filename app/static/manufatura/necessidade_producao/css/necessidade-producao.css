@@ -711,6 +711,30 @@ table.table-necessidade thead th.col-necessidade {
    ESTILOS PARA MODAL DE SEPARAÇÕES E ESTOQUE
    ================================================== */
 
+/* ✅ Z-INDEX PARA MODAIS ANINHADOS */
+/* Modal principal (separações) */
+#modalSeparacoesProduto {
+    z-index: 1055 !important;
+}
+
+#modalSeparacoesProduto .modal-backdrop {
+    z-index: 1050 !important;
+}
+
+/* Modal secundário (detalhes) - DEVE FICAR POR CIMA */
+#modalDetalhesSeparacao {
+    z-index: 1060 !important;
+}
+
+#modalDetalhesSeparacao .modal-backdrop {
+    z-index: 1059 !important;
+}
+
+/* Garantir que o backdrop do segundo modal não cubra o modal */
+.modal-backdrop.show:nth-of-type(2) {
+    z-index: 1059 !important;
+}
+
 /* 1. DESTAQUE PARA PRODUTO DO MODAL NA PROGRAMAÇÃO */
 .produto-destaque {
     background-color: rgba(40, 167, 69, 0.15) !important; /* Verde leve */

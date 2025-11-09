@@ -882,7 +882,9 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
         html += '</tr></thead><tbody>';
 
         dados.pedidos.forEach(ped => {
-            html += '<tr>';
+            // ✅ ADICIONAR: onclick na linha para abrir modal de detalhes
+            const separacaoLoteId = ped.separacao_lote_id || '';
+            html += `<tr onclick="abrirModalDetalhesSeparacao('${separacaoLoteId}')" style="cursor: pointer;" title="Clique para ver detalhes">`;
             html += `<td><strong>${ped.num_pedido}</strong></td>`;
             html += `<td><small>${ped.cnpj_cpf || '-'}</small></td>`;
             html += `<td>${ped.raz_social_red || '-'}</td>`;
@@ -1549,3 +1551,4 @@ async function excluirProgramacao(programacaoId) {
         Swal.fire('Erro', `Erro ao excluir: ${error.message}`, 'error');
     }
 }
+

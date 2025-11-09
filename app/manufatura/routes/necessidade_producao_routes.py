@@ -293,9 +293,15 @@ def register_necessidade_producao_routes(bp):
     @bp.route('/api/necessidade-producao/separacao-detalhes')
     @login_required
     def detalhes_separacao():
-        """Retorna detalhes completos de uma separação"""
+        """
+        Retorna detalhes completos de uma separação com dados de embarque e transportadora
+        JOIN com Embarque e EmbarqueItem para pegar transportadora e tipo_carga
+        """
         try:
             from app.separacao.models import Separacao
+            from app.embarques.models import Embarque, EmbarqueItem
+            from app.transportadoras.models import Transportadora
+            from sqlalchemy import func
 
             separacao_lote_id = request.args.get('separacao_lote_id')
             if not separacao_lote_id:
@@ -312,7 +318,41 @@ def register_necessidade_producao_routes(bp):
             # Primeira separação tem dados gerais
             sep_principal = separacoes[0]
 
+            # ✅ Buscar dados de embarque via EmbarqueItem
+            embarque_item = EmbarqueItem.query.filter(
+                EmbarqueItem.separacao_lote_id == separacao_lote_id,
+                EmbarqueItem.status == 'ativo'
+            ).first()
+
+            embarque_info = None
+            transportadora_info = None
+
+            if embarque_item:
+                embarque = Embarque.query.get(embarque_item.embarque_id)
+                if embarque and embarque.status != 'cancelado':
+                    embarque_info = {
+                        'numero': embarque.numero,
+                        'tipo_carga': embarque.tipo_carga,
+                        'data_embarque': embarque.data_embarque.strftime('%Y-%m-%d') if embarque.data_embarque else None,
+                        'data_prevista': embarque.data_prevista_embarque.strftime('%Y-%m-%d') if embarque.data_prevista_embarque else None
+                    }
+
+                    # Buscar transportadora
+                    if embarque.transportadora_id:
+                        transportadora = Transportadora.query.get(embarque.transportadora_id)
+                        if transportadora:
+                            transportadora_info = {
+                                'nome': transportadora.nome,
+                                'cnpj': transportadora.cnpj
+                            }
+
+            # ✅ Calcular totais da separação
+            total_valor = sum(float(sep.valor_saldo or 0) for sep in separacoes)
+            total_peso = sum(float(sep.peso or 0) for sep in separacoes)
+            total_pallet = sum(float(sep.pallet or 0) for sep in separacoes)
+
             resultado = {
+                # Dados básicos
                 'separacao_lote_id': sep_principal.separacao_lote_id,
                 'num_pedido': sep_principal.num_pedido,
                 'cnpj_cpf': sep_principal.cnpj_cpf,
@@ -324,6 +364,17 @@ def register_necessidade_producao_routes(bp):
                 'protocolo': sep_principal.protocolo,
                 'status': sep_principal.status,
                 'observ_ped_1': sep_principal.observ_ped_1,
+
+                # ✅ Totais
+                'total_valor': total_valor,
+                'total_peso': total_peso,
+                'total_pallet': total_pallet,
+
+                # ✅ Dados de embarque
+                'embarque': embarque_info,
+                'transportadora': transportadora_info,
+
+                # Itens
                 'itens': []
             }
 
@@ -342,7 +393,9 @@ def register_necessidade_producao_routes(bp):
 
         except Exception as e:
             import logging
+            import traceback
             logging.error(f"[DETALHES] Erro ao buscar: {str(e)}")
+            logging.error(f"[DETALHES] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
     @bp.route('/api/necessidade-producao/autocomplete-produtos')

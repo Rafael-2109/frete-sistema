@@ -664,6 +664,7 @@ def api_separacoes_estoque():
             data_entrega = carteira_map.get(sep.num_pedido)
 
             pedidos.append({
+                'separacao_lote_id': sep.separacao_lote_id,  # ✅ NOVO: Para abrir modal de detalhes
                 'num_pedido': sep.num_pedido,
                 'cnpj_cpf': sep.cnpj_cpf,
                 'raz_social_red': sep.raz_social_red,

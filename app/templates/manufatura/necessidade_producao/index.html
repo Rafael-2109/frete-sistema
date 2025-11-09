@@ -293,6 +293,9 @@
     </div>
 </div>
 
+<!-- ✅ Modal Detalhes da Separação já está incluído em _modal-pedidos.html (linha 73)
+     Removido daqui para evitar IDs duplicados -->
+
 {% endblock %}
 
 {% block scripts %}
@@ -301,4 +304,5 @@
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modals/modal-projecao.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modals/modal-pedidos.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modals/modal-recursos-produtivos.js') }}"></script>
+<script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modal-detalhes-separacao.js') }}"></script>
 {% endblock %}
