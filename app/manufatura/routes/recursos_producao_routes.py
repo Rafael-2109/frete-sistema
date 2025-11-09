@@ -451,12 +451,15 @@ def api_programacao_linhas_dados():
     """API para buscar dados de todas as linhas com programações"""
     try:
         from app.producao.models import ProgramacaoProducao
+        from app.estoque.models import MovimentacaoEstoque
         from datetime import date, timedelta
         from collections import defaultdict
+        from sqlalchemy import func
 
         # Parâmetros
         mes = request.args.get('mes', type=int)
         ano = request.args.get('ano', type=int)
+        com_historico = request.args.get('com_historico', 'false').lower() == 'true'  # ✅ NOVO parâmetro
 
         if not mes or not ano:
             hoje = date.today()
@@ -479,6 +482,43 @@ def api_programacao_linhas_dados():
 
         linhas_producao = [linha[0] for linha in linhas_query if linha[0]]
 
+        # ✅ NOVO: Buscar dados de produção real se com_historico=True
+        producao_por_linha = {}
+        if com_historico:
+            # Query agrupada: SUM(qtd_movimentacao) por (local_movimentacao, data_movimentacao, cod_produto)
+            # ✅ NORMALIZAÇÃO AGRESSIVA: Remove espaços + TRIM + UPPER para garantir match
+            producao_query = db.session.query(
+                func.replace(func.trim(func.upper(MovimentacaoEstoque.local_movimentacao)), ' ', '').label('linha_normalizada'),
+                MovimentacaoEstoque.data_movimentacao,
+                MovimentacaoEstoque.cod_produto,
+                MovimentacaoEstoque.nome_produto,
+                func.sum(MovimentacaoEstoque.qtd_movimentacao).label('qtd_produzida')
+            ).filter(
+                MovimentacaoEstoque.tipo_movimentacao == 'PRODUÇÃO',
+                MovimentacaoEstoque.data_movimentacao >= data_inicio,
+                MovimentacaoEstoque.data_movimentacao <= data_fim,
+                MovimentacaoEstoque.ativo == True
+            ).group_by(
+                func.replace(func.trim(func.upper(MovimentacaoEstoque.local_movimentacao)), ' ', ''),
+                MovimentacaoEstoque.data_movimentacao,
+                MovimentacaoEstoque.cod_produto,
+                MovimentacaoEstoque.nome_produto
+            ).all()
+
+            # Organizar em dict: {linha: {data: {cod_produto: qtd}}}
+            for linha_norm, data_mov, cod_prod, nome_prod, qtd_prod in producao_query:
+                if linha_norm not in producao_por_linha:
+                    producao_por_linha[linha_norm] = {}
+
+                dia_key = data_mov.strftime('%Y-%m-%d')
+                if dia_key not in producao_por_linha[linha_norm]:
+                    producao_por_linha[linha_norm][dia_key] = {}  # ✅ CORRIGIDO: Criar dict do dia, não sobrescrever linha
+
+                producao_por_linha[linha_norm][dia_key][cod_prod] = {
+                    'qtd_produzida': float(qtd_prod),
+                    'nome_produto': nome_prod
+                }
+
         # Para cada linha, buscar seus dados e programações
         resultado = []
 
@@ -499,8 +539,10 @@ def api_programacao_linhas_dados():
                 ProgramacaoProducao.data_programacao <= data_fim
             ).order_by(ProgramacaoProducao.data_programacao).all()
 
-            # Agrupar programações por data
+            # ✅ NOVO: Agrupar programações por data E identificar produtos já processados
             prog_por_dia = defaultdict(list)
+            produtos_processados = defaultdict(set)  # {dia_key: set(cod_produto)}
+
             for prog in programacoes:
                 dia_key = prog.data_programacao.strftime('%Y-%m-%d')
 
@@ -515,13 +557,62 @@ def api_programacao_linhas_dados():
                 capacidade = float(recurso_produto.capacidade_unidade_minuto) if recurso_produto else float(recurso_exemplo.capacidade_unidade_minuto)
                 qtd_un_caixa = recurso_produto.qtd_unidade_por_caixa if recurso_produto else recurso_exemplo.qtd_unidade_por_caixa
 
+                # ✅ NOVO: Buscar quantidade produzida se com_historico=True
+                qtd_produzida = 0
+                linha_normalizada = linha_nome.strip().upper().replace(' ', '')  # ✅ Remove espaços
+                if com_historico and linha_normalizada in producao_por_linha:
+                    producao_dia = producao_por_linha[linha_normalizada].get(dia_key, {})
+                    if prog.cod_produto in producao_dia:
+                        qtd_produzida = producao_dia[prog.cod_produto]['qtd_produzida']
+
                 prog_por_dia[dia_key].append({
+                    'id': prog.id,  # ✅ Adicionar ID para edição
                     'cod_produto': prog.cod_produto,
                     'nome_produto': prog.nome_produto,
+                    'data_programacao': dia_key,  # ✅ Adicionar data para edição
                     'qtd_programada': float(prog.qtd_programada),
-                    'capacidade_unidade_minuto': capacidade,  # ✅ NOVO
-                    'qtd_unidade_por_caixa': qtd_un_caixa     # ✅ NOVO
+                    'qtd_produzida': qtd_produzida,
+                    'capacidade_unidade_minuto': capacidade,
+                    'qtd_unidade_por_caixa': qtd_un_caixa,
+                    'observacao_pcp': prog.observacao_pcp,  # ✅ Adicionar observação
+                    'cliente_produto': prog.cliente_produto,  # ✅ Adicionar cliente
+                    'is_extra_producao': False  # ✅ Flag: não é produção extra
                 })
+
+                # Marcar produto+dia como processado
+                produtos_processados[dia_key].add(prog.cod_produto)
+
+            # ✅ NOVO: Adicionar itens produzidos que NÃO estavam programados
+            if com_historico:
+                linha_normalizada = linha_nome.strip().upper().replace(' ', '')  # ✅ Remove espaços
+                if linha_normalizada in producao_por_linha:
+                    for dia_key, produtos_dia in producao_por_linha[linha_normalizada].items():
+                        for cod_produto, dados_prod in produtos_dia.items():
+                            # Se produto NÃO estava programado neste dia, adicionar como "extra"
+                            if cod_produto not in produtos_processados.get(dia_key, set()):
+                                # Buscar dados de recursos do produto
+                                recurso_produto = RecursosProducao.query.filter_by(
+                                    cod_produto=cod_produto,
+                                    linha_producao=linha_nome,
+                                    disponivel=True
+                                ).first()
+
+                                capacidade = float(recurso_produto.capacidade_unidade_minuto) if recurso_produto else float(recurso_exemplo.capacidade_unidade_minuto)
+                                qtd_un_caixa = recurso_produto.qtd_unidade_por_caixa if recurso_produto else recurso_exemplo.qtd_unidade_por_caixa
+
+                                prog_por_dia[dia_key].append({
+                                    'id': 0,  # Sem ID pois não tem programação
+                                    'cod_produto': cod_produto,
+                                    'nome_produto': dados_prod['nome_produto'],
+                                    'data_programacao': dia_key,
+                                    'qtd_programada': 0,  # ✅ Zero programado
+                                    'qtd_produzida': dados_prod['qtd_produzida'],  # ✅ Quantidade produzida
+                                    'capacidade_unidade_minuto': capacidade,
+                                    'qtd_unidade_por_caixa': qtd_un_caixa,
+                                    'observacao_pcp': None,
+                                    'cliente_produto': None,
+                                    'is_extra_producao': True  # ✅ Flag: é produção extra (não programada)
+                                })
 
             # Montar objeto da linha
             resultado.append({

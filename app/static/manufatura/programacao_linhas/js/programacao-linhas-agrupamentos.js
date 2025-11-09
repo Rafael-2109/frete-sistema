@@ -446,13 +446,20 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
     const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
     const iconeObs = temObs ? ` <i class="fas fa-comment text-muted ms-1" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>` : '';
 
+    const comHistorico = programacaoState.comHistorico;
+    const isExtraProducao = prog.is_extra_producao || false;  // ✅ NOVO: Flag de produção extra
+
+    // ✅ NOVO: Classes CSS para produção extra (destaque visual)
+    const extraClass = isExtraProducao ? 'border-warning bg-light' : '';
+    const extraBadge = isExtraProducao ? ' <span class="badge bg-warning text-dark ms-2" title="Produção não programada">⚠️ Extra</span>' : '';
+
     let html = `
-        <div class="p-2 mb-1 border rounded programacao-item" data-prog-id="${progId}">
+        <div class="p-2 mb-1 border rounded programacao-item ${extraClass}" data-prog-id="${progId}">
             <div class="d-flex justify-content-between align-items-center gap-2">
                 <div class="flex-grow-1">
                     <strong class="clickable-produto" data-cod="${prog.cod_produto}" style="cursor:pointer; color: #0d6efd;">
                         ${prog.cod_produto}
-                    </strong> - ${prog.nome_produto || ''}${iconeObs}`;
+                    </strong> - ${prog.nome_produto || ''}${iconeObs}${extraBadge}`;
 
     if (mostrarLinha) {
         html += ` <span class="badge bg-info ms-2">${prog.linha_producao}</span>`;
@@ -464,7 +471,46 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
 
     html += `
                 </div>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">`;
+
+    // ✅ NOVO: Se com histórico, mostrar tabela Programado/Produzido/Diferença
+    if (comHistorico) {
+        const qtdProgramada = parseFloat(prog.qtd_programada) || 0;
+        const qtdProduzida = parseFloat(prog.qtd_produzida) || 0;
+        const diferenca = qtdProduzida - qtdProgramada;
+        const percentual = qtdProgramada > 0 ? ((qtdProduzida / qtdProgramada) * 100) : 0;
+
+        // Cores baseadas no percentual
+        let corProducao = 'text-muted';
+        if (qtdProduzida > 0) {
+            if (percentual >= 95) corProducao = 'text-success';
+            else if (percentual >= 80) corProducao = 'text-warning';
+            else corProducao = 'text-danger';
+        }
+
+        html += `
+                    <div class="d-flex align-items-center gap-2" style="font-size: 0.85rem;">
+                        <div class="text-center" style="min-width: 80px;">
+                            <div class="text-muted small">Programado</div>
+                            <strong>${formatarNumero(qtdProgramada, 0)}</strong>
+                        </div>
+                        <div class="text-center ${corProducao}" style="min-width: 80px;">
+                            <div class="text-muted small">Produzido</div>
+                            <strong>${formatarNumero(qtdProduzida, 0)}</strong>
+                        </div>
+                        <div class="text-center" style="min-width: 90px;">
+                            <div class="text-muted small">Diferença</div>
+                            <strong class="${diferenca >= 0 ? 'text-success' : 'text-danger'}">
+                                ${diferenca >= 0 ? '+' : ''}${formatarNumero(diferenca, 0)}
+                            </strong>
+                            <span class="badge ${percentual >= 95 ? 'bg-success' : percentual >= 80 ? 'bg-warning' : 'bg-danger'} ms-1" style="font-size: 0.7rem;">
+                                ${formatarNumero(percentual, 1)}%
+                            </span>
+                        </div>
+                    </div>`;
+    } else {
+        // Modo ORIGINAL (sem histórico)
+        html += `
                     <!-- Input de Data (editável) -->
                     <input type="date" class="form-control form-control-sm input-edit-data"
                            value="${prog.data_programacao}"
@@ -483,7 +529,10 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
                             onclick="excluirProgramacao(${progId})"
                             title="Excluir programação">
                         <i class="fas fa-trash"></i>
-                    </button>
+                    </button>`;
+    }
+
+    html += `
                 </div>
             </div>
         </div>`;
@@ -502,13 +551,58 @@ function renderizarItemPorProduto(prog) {
     const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
     const iconeObs = temObs ? ` <i class="fas fa-comment text-muted ms-1" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>` : '';
 
+    const comHistorico = programacaoState.comHistorico;
+    const isExtraProducao = prog.is_extra_producao || false;  // ✅ NOVO
+
+    // ✅ NOVO: Destaque visual para produção extra
+    const extraClass = isExtraProducao ? 'border-warning bg-light' : '';
+    const extraBadge = isExtraProducao ? ' <span class="badge bg-warning text-dark ms-2" title="Produção não programada">⚠️ Extra</span>' : '';
+
     let html = `
-        <div class="p-2 mb-1 border rounded programacao-item" data-prog-id="${progId}">
+        <div class="p-2 mb-1 border rounded programacao-item ${extraClass}" data-prog-id="${progId}">
             <div class="d-flex justify-content-between align-items-center gap-2">
                 <div class="flex-grow-1">
-                    <strong>${formatarData(prog.data_programacao)}</strong> - ${prog.linha_producao}${iconeObs}
+                    <strong>${formatarData(prog.data_programacao)}</strong> - ${prog.linha_producao}${iconeObs}${extraBadge}
                 </div>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">`;
+
+    // ✅ NOVO: Se com histórico, mostrar Programado/Produzido/Diferença
+    if (comHistorico) {
+        const qtdProgramada = parseFloat(prog.qtd_programada) || 0;
+        const qtdProduzida = parseFloat(prog.qtd_produzida) || 0;
+        const diferenca = qtdProduzida - qtdProgramada;
+        const percentual = qtdProgramada > 0 ? ((qtdProduzida / qtdProgramada) * 100) : 0;
+
+        let corProducao = 'text-muted';
+        if (qtdProduzida > 0) {
+            if (percentual >= 95) corProducao = 'text-success';
+            else if (percentual >= 80) corProducao = 'text-warning';
+            else corProducao = 'text-danger';
+        }
+
+        html += `
+                    <div class="d-flex align-items-center gap-2" style="font-size: 0.85rem;">
+                        <div class="text-center" style="min-width: 80px;">
+                            <div class="text-muted small">Programado</div>
+                            <strong>${formatarNumero(qtdProgramada, 0)}</strong>
+                        </div>
+                        <div class="text-center ${corProducao}" style="min-width: 80px;">
+                            <div class="text-muted small">Produzido</div>
+                            <strong>${formatarNumero(qtdProduzida, 0)}</strong>
+                        </div>
+                        <div class="text-center" style="min-width: 90px;">
+                            <div class="text-muted small">Diferença</div>
+                            <strong class="${diferenca >= 0 ? 'text-success' : 'text-danger'}">
+                                ${diferenca >= 0 ? '+' : ''}${formatarNumero(diferenca, 0)}
+                            </strong>
+                            <span class="badge ${percentual >= 95 ? 'bg-success' : percentual >= 80 ? 'bg-warning' : 'bg-danger'} ms-1" style="font-size: 0.7rem;">
+                                ${formatarNumero(percentual, 1)}%
+                            </span>
+                        </div>
+                    </div>`;
+    } else {
+        // Modo ORIGINAL
+        html += `
                     <!-- Input de Data (editável) -->
                     <input type="date" class="form-control form-control-sm input-edit-data"
                            value="${prog.data_programacao}"
@@ -527,7 +621,10 @@ function renderizarItemPorProduto(prog) {
                             onclick="excluirProgramacao(${progId})"
                             title="Excluir programação">
                         <i class="fas fa-trash"></i>
-                    </button>
+                    </button>`;
+    }
+
+    html += `
                 </div>
             </div>
         </div>`;

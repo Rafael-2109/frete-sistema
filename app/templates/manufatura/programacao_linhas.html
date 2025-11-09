@@ -43,6 +43,16 @@
 
             <span class="mx-1 text-muted">|</span>
 
+            <!-- ✅ TOGGLE C/ HISTÓRICO -->
+            <div class="form-check form-switch d-flex align-items-center gap-2">
+                <input class="form-check-input" type="checkbox" id="toggle-historico" style="cursor: pointer;">
+                <label class="form-check-label" for="toggle-historico" style="cursor: pointer; font-weight: 500;">
+                    C/ Histórico
+                </label>
+            </div>
+
+            <span class="mx-1 text-muted">|</span>
+
             <!-- ✅ 3 BOTÕES DE AGRUPAMENTO -->
             <div class="btn-group" role="group">
                 <input type="radio" class="btn-check" name="agrupamento" id="group-linha" value="linha" checked>
@@ -159,6 +169,7 @@
 let programacaoState = {
     mesAtual: new Date().getMonth() + 1,
     anoAtual: new Date().getFullYear(),
+    comHistorico: false,  // ✅ NOVO
     linhas: []
 };
 
@@ -177,6 +188,7 @@ $(document).ready(function() {
 
     // Eventos
     $('#btn-carregar').on('click', carregarProgramacaoLinhas);
+    $('#toggle-historico').on('change', carregarProgramacaoLinhas);  // ✅ NOVO: Recarregar ao mudar toggle
 
     // Carregar automaticamente
     carregarProgramacaoLinhas();
@@ -186,13 +198,19 @@ async function carregarProgramacaoLinhas() {
     try {
         const mes = $('#filtro-mes').val();
         const ano = $('#filtro-ano').val();
+        const comHistorico = $('#toggle-historico').is(':checked');  // ✅ NOVO
 
         programacaoState.mesAtual = parseInt(mes);
         programacaoState.anoAtual = parseInt(ano);
+        programacaoState.comHistorico = comHistorico;  // ✅ NOVO: Armazenar no state
 
         mostrarLoading(true);
 
-        const params = new URLSearchParams({ mes, ano });
+        const params = new URLSearchParams({
+            mes,
+            ano,
+            com_historico: comHistorico  // ✅ NOVO: Enviar para backend
+        });
         const response = await fetch(`/manufatura/recursos/api/programacao-linhas/dados?${params}`);
 
         if (!response.ok) {
