@@ -10,7 +10,8 @@ import logging
 from app import db
 from app.manufatura.models import (
     PedidoCompras,
-    RequisicaoCompraAlocacao
+    RequisicaoCompraAlocacao,
+    HistoricoPedidoCompras
 )
 from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
 from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
@@ -30,56 +31,143 @@ def index():
     return render_template('manufatura/pedidos_compras/index.html')
 
 
+@pedidos_compras_bp.route('/api/autocomplete-produtos')
+def api_autocomplete_produtos():
+    """
+    API: Autocomplete de produtos para filtro
+    Busca por código OU nome do produto
+    """
+    termo = request.args.get('termo', '').strip()
+
+    if len(termo) < 2:
+        return jsonify([])
+
+    # Buscar produtos (código ou nome) - DISTINCT para evitar duplicatas
+    query = db.session.query(
+        PedidoCompras.cod_produto,
+        PedidoCompras.nome_produto
+    ).filter(
+        PedidoCompras.importado_odoo == True
+    ).filter(
+        db.or_(
+            PedidoCompras.cod_produto.ilike(f'%{termo}%'),
+            PedidoCompras.nome_produto.ilike(f'%{termo}%')
+        )
+    ).distinct().limit(50)
+
+    resultados = query.all()
+
+    produtos = [
+        {
+            'cod_produto': r.cod_produto,
+            'nome_produto': r.nome_produto
+        }
+        for r in resultados
+    ]
+
+    return jsonify(produtos)
+
+
 @pedidos_compras_bp.route('/api/listar')
 def api_listar_pedidos():
     """
-    API: Lista pedidos de compra com filtros
+    API: Lista pedidos de compra AGRUPADOS por num_pedido
+
+    Filtros independentes:
+    - data_criacao_inicio/fim: Filtra por data_pedido_criacao
+    - data_previsao_inicio/fim: Filtra por data_pedido_previsao
+    - cod_produto: Filtra por código do produto
+    - fornecedor: Filtra por razão social
+
+    Retorna cards agrupados com:
+    - Cabeçalho: dados do pedido (num_pedido, fornecedor, datas, status)
+    - Linhas: produtos do pedido
     """
-    # Filtros
+    # Filtros independentes
     cod_produto = request.args.get('cod_produto')
     fornecedor = request.args.get('fornecedor')
-    data_inicio = request.args.get('data_inicio')
-    data_fim = request.args.get('data_fim')
+
+    # Filtro de data de criação
+    data_criacao_inicio = request.args.get('data_criacao_inicio')
+    data_criacao_fim = request.args.get('data_criacao_fim')
+
+    # Filtro de data de previsão
+    data_previsao_inicio = request.args.get('data_previsao_inicio')
+    data_previsao_fim = request.args.get('data_previsao_fim')
+
     limit = request.args.get('limit', 500, type=int)
 
     # Query base
     query = PedidoCompras.query.filter_by(importado_odoo=True)
 
-    # Aplicar filtros
+    # Aplicar filtros independentes
     if cod_produto:
         query = query.filter(PedidoCompras.cod_produto.like(f'%{cod_produto}%'))
 
     if fornecedor:
         query = query.filter(PedidoCompras.raz_social.like(f'%{fornecedor}%'))
 
-    if data_inicio:
-        query = query.filter(PedidoCompras.data_pedido_previsao >= data_inicio)
+    # Filtro de data de CRIAÇÃO
+    if data_criacao_inicio:
+        query = query.filter(PedidoCompras.data_pedido_criacao >= data_criacao_inicio)
 
-    if data_fim:
-        query = query.filter(PedidoCompras.data_pedido_previsao <= data_fim)
+    if data_criacao_fim:
+        query = query.filter(PedidoCompras.data_pedido_criacao <= data_criacao_fim)
 
-    # Executar
-    pedidos = query.order_by(desc(PedidoCompras.data_pedido_previsao)).limit(limit).all()
+    # Filtro de data de PREVISÃO
+    if data_previsao_inicio:
+        query = query.filter(PedidoCompras.data_pedido_previsao >= data_previsao_inicio)
 
-    # Serializar com alocações
-    resultado = []
-    for pedido in pedidos:
-        # Buscar alocações
+    if data_previsao_fim:
+        query = query.filter(PedidoCompras.data_pedido_previsao <= data_previsao_fim)
+
+    # ✅ ORDENAÇÃO: Por data_pedido_criacao DESC (mais recentes primeiro)
+    query_ordenada = query.order_by(
+        desc(PedidoCompras.data_pedido_criacao),
+        PedidoCompras.num_pedido,
+        PedidoCompras.cod_produto
+    )
+
+    # ✅ BUSCAR TODAS as linhas que atendem aos filtros
+    todas_linhas = query_ordenada.all()
+
+    # ✅ AGRUPAR por num_pedido ANTES de paginar
+    pedidos_agrupados = {}
+    total_linhas = len(todas_linhas)
+
+    for linha in todas_linhas:
+        num_pedido = linha.num_pedido
+
+        # Criar card do pedido se não existir
+        if num_pedido not in pedidos_agrupados:
+            pedidos_agrupados[num_pedido] = {
+                # Cabeçalho do card (dados do pedido)
+                'num_pedido': num_pedido,
+                'fornecedor': linha.raz_social,
+                'cnpj_fornecedor': linha.cnpj_fornecedor,
+                'data_criacao': linha.data_pedido_criacao.isoformat() if linha.data_pedido_criacao else None,
+                'data_previsao': linha.data_pedido_previsao.isoformat() if linha.data_pedido_previsao else None,
+                'status_odoo': linha.status_odoo,
+                'tipo_pedido': linha.tipo_pedido,
+
+                # Linhas de produtos
+                'linhas': []
+            }
+
+        # Buscar alocações da linha
         alocacoes = RequisicaoCompraAlocacao.query.filter_by(
-            pedido_compra_id=pedido.id
+            pedido_compra_id=linha.id
         ).all()
 
-        resultado.append({
-            'id': pedido.id,
-            'num_pedido': pedido.num_pedido,
-            'cod_produto': pedido.cod_produto,
-            'nome_produto': pedido.nome_produto,
-            'qtd_pedido': float(pedido.qtd_produto_pedido),
-            'preco_unitario': float(pedido.preco_produto_pedido) if pedido.preco_produto_pedido else 0,
-            'fornecedor': pedido.raz_social,
-            'cnpj_fornecedor': pedido.cnpj_fornecedor,
-            'data_criacao': pedido.data_pedido_criacao.isoformat() if pedido.data_pedido_criacao else None,
-            'data_previsao': pedido.data_pedido_previsao.isoformat() if pedido.data_pedido_previsao else None,
+        # Adicionar linha de produto
+        pedidos_agrupados[num_pedido]['linhas'].append({
+            'id': linha.id,
+            'cod_produto': linha.cod_produto,
+            'nome_produto': linha.nome_produto,
+            'qtd_produto_pedido': float(linha.qtd_produto_pedido),
+            'qtd_recebida': float(linha.qtd_recebida) if linha.qtd_recebida else 0,
+            'preco_produto_pedido': float(linha.preco_produto_pedido) if linha.preco_produto_pedido else 0,
+            'valor_total_linha': float(linha.qtd_produto_pedido * linha.preco_produto_pedido) if linha.preco_produto_pedido else 0,
             'requisicoes_atendidas': [
                 {
                     'num_requisicao': aloc.requisicao.num_requisicao if aloc.requisicao else None,
@@ -92,10 +180,34 @@ def api_listar_pedidos():
             ]
         })
 
+    # ✅ CONVERTER para lista (mantém ordem de criação DESC)
+    todos_pedidos = list(pedidos_agrupados.values())
+    total_pedidos = len(todos_pedidos)
+
+    # ✅ APLICAR PAGINAÇÃO: 20 PEDIDOS por página (não linhas!)
+    page = request.args.get('page', 1, type=int)
+    per_page = 20  # 20 PEDIDOS por página
+
+    import math
+    total_pages = math.ceil(total_pedidos / per_page) if total_pedidos > 0 else 1
+
+    # Calcular slice para paginação
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    pedidos_paginados = todos_pedidos[start_idx:end_idx]
+
     return jsonify({
         'sucesso': True,
-        'total': len(resultado),
-        'pedidos': resultado
+        'total_pedidos': total_pedidos,
+        'total_linhas': total_linhas,
+        'pedidos': pedidos_paginados,
+        'paginacao': {
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'has_prev': page > 1,
+            'has_next': page < total_pages
+        }
     })
 
 
@@ -141,6 +253,104 @@ def api_detalhes_pedido(pedido_id):
                 for aloc in alocacoes
             ]
         }
+    })
+
+
+@pedidos_compras_bp.route('/api/historico/<int:pedido_compra_id>')
+def api_historico_pedido(pedido_compra_id):
+    """
+    API: Retorna TODOS os snapshots de histórico de uma linha de pedido
+
+    Retorna lista ordenada por data (mais recente primeiro) com:
+    - Operação (CRIAR/EDITAR)
+    - Data da alteração
+    - Quem alterou (Odoo/usuário)
+    - Snapshot completo de TODOS os campos
+    """
+    # Verificar se pedido existe
+    pedido = PedidoCompras.query.get_or_404(pedido_compra_id)
+
+    # Buscar TODOS os snapshots ordenados por data (mais recente primeiro)
+    snapshots = HistoricoPedidoCompras.query.filter_by(
+        pedido_compra_id=pedido_compra_id
+    ).order_by(desc(HistoricoPedidoCompras.alterado_em)).all()
+
+    # Serializar snapshots
+    historico = []
+    for snapshot in snapshots:
+        historico.append({
+            'id': snapshot.id,
+            'operacao': snapshot.operacao,
+            'alterado_em': snapshot.alterado_em.isoformat() if snapshot.alterado_em else None,
+            'alterado_por': snapshot.alterado_por,
+            'write_date_odoo': snapshot.write_date_odoo.isoformat() if snapshot.write_date_odoo else None,
+
+            # Snapshot completo
+            'dados': {
+                'num_pedido': snapshot.num_pedido,
+                'num_requisicao': snapshot.num_requisicao,
+                'cnpj_fornecedor': snapshot.cnpj_fornecedor,
+                'raz_social': snapshot.raz_social,
+                'numero_nf': snapshot.numero_nf,
+                'data_pedido_criacao': snapshot.data_pedido_criacao.isoformat() if snapshot.data_pedido_criacao else None,
+                'usuario_pedido_criacao': snapshot.usuario_pedido_criacao,
+                'lead_time_pedido': snapshot.lead_time_pedido,
+                'lead_time_previsto': snapshot.lead_time_previsto,
+                'data_pedido_previsao': snapshot.data_pedido_previsao.isoformat() if snapshot.data_pedido_previsao else None,
+                'data_pedido_entrega': snapshot.data_pedido_entrega.isoformat() if snapshot.data_pedido_entrega else None,
+                'cod_produto': snapshot.cod_produto,
+                'nome_produto': snapshot.nome_produto,
+                'qtd_produto_pedido': float(snapshot.qtd_produto_pedido) if snapshot.qtd_produto_pedido else 0,
+                'qtd_recebida': float(snapshot.qtd_recebida) if snapshot.qtd_recebida else 0,
+                'preco_produto_pedido': float(snapshot.preco_produto_pedido) if snapshot.preco_produto_pedido else 0,
+                'icms_produto_pedido': float(snapshot.icms_produto_pedido) if snapshot.icms_produto_pedido else 0,
+                'pis_produto_pedido': float(snapshot.pis_produto_pedido) if snapshot.pis_produto_pedido else 0,
+                'cofins_produto_pedido': float(snapshot.cofins_produto_pedido) if snapshot.cofins_produto_pedido else 0,
+                'confirmacao_pedido': snapshot.confirmacao_pedido,
+                'confirmado_por': snapshot.confirmado_por,
+                'confirmado_em': snapshot.confirmado_em.isoformat() if snapshot.confirmado_em else None,
+                'status_odoo': snapshot.status_odoo,
+                'tipo_pedido': snapshot.tipo_pedido,
+                'importado_odoo': snapshot.importado_odoo,
+                'odoo_id': snapshot.odoo_id,
+                'criado_em': snapshot.criado_em.isoformat() if snapshot.criado_em else None,
+                'atualizado_em': snapshot.atualizado_em.isoformat() if snapshot.atualizado_em else None,
+            }
+        })
+
+    # Calcular diferenças entre snapshots consecutivos
+    diferencas = []
+    for i in range(len(historico) - 1):
+        snapshot_atual = historico[i]
+        snapshot_anterior = historico[i + 1]
+
+        campos_alterados = []
+        for campo, valor_atual in snapshot_atual['dados'].items():
+            valor_anterior = snapshot_anterior['dados'].get(campo)
+
+            if valor_atual != valor_anterior:
+                campos_alterados.append({
+                    'campo': campo,
+                    'valor_anterior': valor_anterior,
+                    'valor_atual': valor_atual
+                })
+
+        diferencas.append({
+            'snapshot_id': snapshot_atual['id'],
+            'campos_alterados': campos_alterados
+        })
+
+    return jsonify({
+        'sucesso': True,
+        'pedido': {
+            'id': pedido.id,
+            'num_pedido': pedido.num_pedido,
+            'cod_produto': pedido.cod_produto,
+            'nome_produto': pedido.nome_produto
+        },
+        'total_snapshots': len(historico),
+        'historico': historico,
+        'diferencas': diferencas
     })
 
 

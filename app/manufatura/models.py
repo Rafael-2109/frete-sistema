@@ -485,6 +485,118 @@ class HistoricoRequisicaoCompras(db.Model):
         }
 
 
+class HistoricoPedidoCompras(db.Model):
+    """
+    Histórico COMPLETO (snapshot) de Pedidos de Compras
+    Grava TODOS os campos para permitir comparação completa no modal
+    Segue EXATAMENTE o padrão de HistoricoRequisicaoCompras
+    """
+    __tablename__ = 'historico_pedido_compras'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # ================================================
+    # CAMPOS DE CONTROLE DO HISTÓRICO
+    # ================================================
+    pedido_compra_id = db.Column(db.Integer, db.ForeignKey('pedido_compras.id', ondelete='CASCADE'), nullable=False, index=True)
+    operacao = db.Column(db.String(20), nullable=False, index=True)  # 'CRIAR', 'EDITAR'
+    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    alterado_por = db.Column(db.String(100), nullable=False, index=True)  # 'Odoo' ou usuário
+    write_date_odoo = db.Column(db.DateTime, nullable=True)
+
+    # ================================================
+    # SNAPSHOT COMPLETO - MESMOS CAMPOS DO PEDIDOCOMPRAS
+    # ================================================
+
+    # Campos principais
+    num_pedido = db.Column(db.String(30), nullable=False, index=True)
+    num_requisicao = db.Column(db.String(30))
+    cnpj_fornecedor = db.Column(db.String(20))
+    raz_social = db.Column(db.String(255))
+    numero_nf = db.Column(db.String(20))
+
+    # Datas
+    data_pedido_criacao = db.Column(db.Date)
+    usuario_pedido_criacao = db.Column(db.String(100))
+    lead_time_pedido = db.Column(db.Integer)
+    lead_time_previsto = db.Column(db.Integer)
+    data_pedido_previsao = db.Column(db.Date)
+    data_pedido_entrega = db.Column(db.Date)
+
+    # Produto
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto = db.Column(db.String(255))
+
+    # Quantidades e valores
+    qtd_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False)
+    qtd_recebida = db.Column(db.Numeric(15, 3), default=0)
+    preco_produto_pedido = db.Column(db.Numeric(15, 4))
+    icms_produto_pedido = db.Column(db.Numeric(15, 2))
+    pis_produto_pedido = db.Column(db.Numeric(15, 2))
+    cofins_produto_pedido = db.Column(db.Numeric(15, 2))
+
+    # Confirmação
+    confirmacao_pedido = db.Column(db.Boolean, default=False)
+    confirmado_por = db.Column(db.String(100))
+    confirmado_em = db.Column(db.DateTime)
+
+    # Status e tipo
+    status_odoo = db.Column(db.String(20))
+    tipo_pedido = db.Column(db.String(50))
+
+    # Vínculo com Odoo
+    importado_odoo = db.Column(db.Boolean, default=False)
+    odoo_id = db.Column(db.String(50))
+
+    # Datas originais
+    criado_em = db.Column(db.DateTime)
+    atualizado_em = db.Column(db.DateTime)
+
+    __table_args__ = (
+        db.Index('idx_hist_ped_pedido_data', 'pedido_compra_id', 'alterado_em'),
+        db.Index('idx_hist_ped_num_data', 'num_pedido', 'alterado_em'),
+    )
+
+    def to_dict(self):
+        """Serializa para dict"""
+        return {
+            'id': self.id,
+            'pedido_compra_id': self.pedido_compra_id,
+            'operacao': self.operacao,
+            'alterado_em': self.alterado_em.isoformat() if self.alterado_em else None,
+            'alterado_por': self.alterado_por,
+            'write_date_odoo': self.write_date_odoo.isoformat() if self.write_date_odoo else None,
+            'num_pedido': self.num_pedido,
+            'num_requisicao': self.num_requisicao,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'raz_social': self.raz_social,
+            'numero_nf': self.numero_nf,
+            'data_pedido_criacao': self.data_pedido_criacao.isoformat() if self.data_pedido_criacao else None,
+            'usuario_pedido_criacao': self.usuario_pedido_criacao,
+            'lead_time_pedido': self.lead_time_pedido,
+            'lead_time_previsto': self.lead_time_previsto,
+            'data_pedido_previsao': self.data_pedido_previsao.isoformat() if self.data_pedido_previsao else None,
+            'data_pedido_entrega': self.data_pedido_entrega.isoformat() if self.data_pedido_entrega else None,
+            'cod_produto': self.cod_produto,
+            'nome_produto': self.nome_produto,
+            'qtd_produto_pedido': float(self.qtd_produto_pedido) if self.qtd_produto_pedido else 0,
+            'qtd_recebida': float(self.qtd_recebida) if self.qtd_recebida else 0,
+            'preco_produto_pedido': float(self.preco_produto_pedido) if self.preco_produto_pedido else 0,
+            'icms_produto_pedido': float(self.icms_produto_pedido) if self.icms_produto_pedido else 0,
+            'pis_produto_pedido': float(self.pis_produto_pedido) if self.pis_produto_pedido else 0,
+            'cofins_produto_pedido': float(self.cofins_produto_pedido) if self.cofins_produto_pedido else 0,
+            'confirmacao_pedido': self.confirmacao_pedido,
+            'confirmado_por': self.confirmado_por,
+            'confirmado_em': self.confirmado_em.isoformat() if self.confirmado_em else None,
+            'status_odoo': self.status_odoo,
+            'tipo_pedido': self.tipo_pedido,
+            'importado_odoo': self.importado_odoo,
+            'odoo_id': self.odoo_id,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
+        }
+
+
 class LogIntegracao(db.Model):
     __tablename__ = 'log_integracao'
 

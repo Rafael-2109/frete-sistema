@@ -24,7 +24,7 @@ from decimal import Decimal
 from collections import defaultdict
 
 from app import db
-from app.manufatura.models import PedidoCompras
+from app.manufatura.models import PedidoCompras, HistoricoPedidoCompras
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
@@ -533,6 +533,50 @@ class PedidoComprasServiceOtimizado:
         db.session.add(novo_pedido)
         db.session.flush()
 
+        # Criar snapshot completo no histórico (CRIAÇÃO)
+        write_date = pedido_odoo.get('write_date')
+        write_date_dt = datetime.strptime(write_date, '%Y-%m-%d %H:%M:%S') if write_date else None
+
+        historico = HistoricoPedidoCompras(
+            # Controle
+            pedido_compra_id=novo_pedido.id,
+            operacao='CRIAR',
+            alterado_por='Odoo',
+            write_date_odoo=write_date_dt,
+
+            # Snapshot completo - TODOS os campos
+            num_pedido=novo_pedido.num_pedido,
+            num_requisicao=novo_pedido.num_requisicao,
+            cnpj_fornecedor=novo_pedido.cnpj_fornecedor,
+            raz_social=novo_pedido.raz_social,
+            numero_nf=novo_pedido.numero_nf,
+            data_pedido_criacao=novo_pedido.data_pedido_criacao,
+            usuario_pedido_criacao=novo_pedido.usuario_pedido_criacao,
+            lead_time_pedido=novo_pedido.lead_time_pedido,
+            lead_time_previsto=novo_pedido.lead_time_previsto,
+            data_pedido_previsao=novo_pedido.data_pedido_previsao,
+            data_pedido_entrega=novo_pedido.data_pedido_entrega,
+            cod_produto=novo_pedido.cod_produto,
+            nome_produto=novo_pedido.nome_produto,
+            qtd_produto_pedido=novo_pedido.qtd_produto_pedido,
+            qtd_recebida=novo_pedido.qtd_recebida,
+            preco_produto_pedido=novo_pedido.preco_produto_pedido,
+            icms_produto_pedido=novo_pedido.icms_produto_pedido,
+            pis_produto_pedido=novo_pedido.pis_produto_pedido,
+            cofins_produto_pedido=novo_pedido.cofins_produto_pedido,
+            confirmacao_pedido=novo_pedido.confirmacao_pedido,
+            confirmado_por=novo_pedido.confirmado_por,
+            confirmado_em=novo_pedido.confirmado_em,
+            status_odoo=novo_pedido.status_odoo,
+            tipo_pedido=novo_pedido.tipo_pedido,
+            importado_odoo=novo_pedido.importado_odoo,
+            odoo_id=novo_pedido.odoo_id,
+            criado_em=novo_pedido.criado_em,
+            atualizado_em=novo_pedido.atualizado_em
+        )
+
+        db.session.add(historico)
+
         self.logger.info(f"   ✅ Criado: {novo_pedido.num_pedido} - {novo_pedido.cod_produto}")
 
         return novo_pedido
@@ -582,7 +626,51 @@ class PedidoComprasServiceOtimizado:
             alterado = True
 
         if alterado:
+            # Gravar snapshot completo no histórico (após alteração)
+            write_date = pedido_odoo.get('write_date')
+            write_date_dt = datetime.strptime(write_date, '%Y-%m-%d %H:%M:%S') if write_date else None
+
+            historico = HistoricoPedidoCompras(
+                # Controle
+                pedido_compra_id=pedido_existente.id,
+                operacao='EDITAR',
+                alterado_por='Odoo',
+                write_date_odoo=write_date_dt,
+
+                # Snapshot completo - TODOS os campos (estado APÓS alteração)
+                num_pedido=pedido_existente.num_pedido,
+                num_requisicao=pedido_existente.num_requisicao,
+                cnpj_fornecedor=pedido_existente.cnpj_fornecedor,
+                raz_social=pedido_existente.raz_social,
+                numero_nf=pedido_existente.numero_nf,
+                data_pedido_criacao=pedido_existente.data_pedido_criacao,
+                usuario_pedido_criacao=pedido_existente.usuario_pedido_criacao,
+                lead_time_pedido=pedido_existente.lead_time_pedido,
+                lead_time_previsto=pedido_existente.lead_time_previsto,
+                data_pedido_previsao=pedido_existente.data_pedido_previsao,
+                data_pedido_entrega=pedido_existente.data_pedido_entrega,
+                cod_produto=pedido_existente.cod_produto,
+                nome_produto=pedido_existente.nome_produto,
+                qtd_produto_pedido=pedido_existente.qtd_produto_pedido,
+                qtd_recebida=pedido_existente.qtd_recebida,
+                preco_produto_pedido=pedido_existente.preco_produto_pedido,
+                icms_produto_pedido=pedido_existente.icms_produto_pedido,
+                pis_produto_pedido=pedido_existente.pis_produto_pedido,
+                cofins_produto_pedido=pedido_existente.cofins_produto_pedido,
+                confirmacao_pedido=pedido_existente.confirmacao_pedido,
+                confirmado_por=pedido_existente.confirmado_por,
+                confirmado_em=pedido_existente.confirmado_em,
+                status_odoo=pedido_existente.status_odoo,
+                tipo_pedido=pedido_existente.tipo_pedido,
+                importado_odoo=pedido_existente.importado_odoo,
+                odoo_id=pedido_existente.odoo_id,
+                criado_em=pedido_existente.criado_em,
+                atualizado_em=pedido_existente.atualizado_em
+            )
+
+            db.session.add(historico)
             db.session.flush()
+
             self.logger.info(f"   ✅ Atualizado: {pedido_existente.num_pedido}")
 
         return alterado

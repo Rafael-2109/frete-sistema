@@ -2,103 +2,352 @@
 
 {% block title %}Pedidos de Compra{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ========== ACCORDION STYLES ========== */
+    .pedido-accordion {
+        margin-bottom: 0.5rem;
+    }
+    .pedido-accordion .accordion-button {
+        background-color: #d4e4f7;
+        font-weight: 600;
+        padding: 0.75rem 1rem;
+    }
+    .pedido-accordion .accordion-button:not(.collapsed) {
+        background-color: #b3d4fc;
+        color: #000;
+    }
+    .pedido-accordion .accordion-body {
+        padding: 0;
+    }
+
+    /* ========== AUTOCOMPLETE STYLES ========== */
+    .autocomplete-container {
+        position: relative;
+    }
+    .autocomplete-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ced4da;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 400px;  /* ✅ MAIS ALTO */
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        display: none;
+        min-width: 450px;  /* ✅ MAIS LARGO */
+    }
+    .autocomplete-list.show {
+        display: block;
+    }
+    .autocomplete-item {
+        padding: 10px 14px;  /* ✅ MAIS ESPAÇOSO */
+        cursor: pointer;
+        border-bottom: 1px solid #f1f3f5;
+        transition: background-color 0.15s;
+    }
+    .autocomplete-item:hover,
+    .autocomplete-item.active {
+        background-color: #e7f3ff;
+    }
+    .autocomplete-item strong {
+        color: #0d6efd;
+        font-size: 0.95em;  /* ✅ FONTE MAIOR */
+    }
+    .autocomplete-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9em;  /* ✅ FONTE MAIOR */
+        margin-top: 3px;
+    }
+    .autocomplete-loading {
+        padding: 12px;
+        text-align: center;
+        color: #6c757d;
+    }
+    .autocomplete-no-results {
+        padding: 12px;
+        text-align: center;
+        color: #dc3545;
+        font-style: italic;
+    }
+
+    /* ========== TABLE STYLES ========== */
+    .table-linhas {
+        margin-bottom: 0;
+        font-size: 0.9rem;
+    }
+    .table-linhas th {
+        font-weight: 600;
+        background-color: #e6f1fd;
+        padding: 0.6rem 0.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .table-linhas td {
+        padding: 0.6rem 0.5rem;
+        vertical-align: middle;
+    }
+    .linha-produto:hover {
+        background-color: rgba(0,123,255,0.05);
+    }
+    .btn-historico {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    .badge-status {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.6rem;
+    }
+
+    /* ========== PAGINATION STYLES ========== */
+    .pagination {
+        margin-top: 1rem;
+        margin-bottom: 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="row mb-4">
-        <div class="col-md-12">
+
+    <!-- Header -->
+    <div class="row mb-3">
+        <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2><i class="bi bi-cart-check"></i> Pedidos de Compra</h2>
-                    <p class="text-muted">Visualize pedidos confirmados, alocações e requisições atendidas</p>
+                    <p class="text-muted mb-0">Agrupados por número de pedido | Ordenados por data de criação</p>
                 </div>
                 <div>
                     <a href="{{ url_for('pedidos_compras.tela_sincronizacao_manual') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-sync"></i> Importar do Odoo
+                        <i class="fas fa-sync"></i> Sincronizar do Odoo
                     </a>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card mb-4">
+    <!-- Filtros -->
+    <div class="card mb-3">
         <div class="card-body">
+            <h5 class="card-title"><i class="fas fa-filter"></i> Filtros</h5>
             <div class="row g-3">
+                <!-- Autocomplete Produto -->
                 <div class="col-md-3">
-                    <label class="form-label">Produto:</label>
-                    <input type="text" id="filtro-produto" class="form-control" placeholder="Código do produto...">
+                    <label class="form-label">Produto (Código ou Nome):</label>
+                    <div class="autocomplete-container">
+                        <input type="text" id="filtro-produto-busca" class="form-control"
+                               placeholder="Digite código ou nome..." autocomplete="off">
+                        <input type="hidden" id="filtro-cod-produto">
+                        <div id="autocomplete-list" class="autocomplete-list"></div>
+                    </div>
                 </div>
+
+                <!-- Fornecedor -->
                 <div class="col-md-3">
                     <label class="form-label">Fornecedor:</label>
-                    <input type="text" id="filtro-fornecedor" class="form-control" placeholder="Nome do fornecedor...">
+                    <input type="text" id="filtro-fornecedor" class="form-control" placeholder="Nome...">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Data Início:</label>
-                    <input type="date" id="filtro-data-inicio" class="form-control">
+
+                <!-- Data Criação -->
+                <div class="col-md-3">
+                    <label class="form-label">Criação (De - Até):</label>
+                    <div class="input-group">
+                        <input type="date" id="filtro-criacao-inicio" class="form-control">
+                        <input type="date" id="filtro-criacao-fim" class="form-control">
+                    </div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Data Fim:</label>
-                    <input type="date" id="filtro-data-fim" class="form-control">
+
+                <!-- Data Previsão -->
+                <div class="col-md-3">
+                    <label class="form-label">Previsão (De - Até):</label>
+                    <div class="input-group">
+                        <input type="date" id="filtro-previsao-inicio" class="form-control">
+                        <input type="date" id="filtro-previsao-fim" class="form-control">
+                    </div>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" onclick="filtrarPedidos()">
+            </div>
+
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button class="btn btn-primary" onclick="filtrarPedidos(1)">
                         <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <button class="btn btn-secondary ms-2" onclick="limparFiltros()">
+                        <i class="bi bi-eraser"></i> Limpar
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <div id="loading" class="text-center py-5 d-none">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-2">Carregando pedidos...</p>
-            </div>
+    <!-- Loading -->
+    <div id="loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">Carregando pedidos...</p>
+    </div>
 
-            <div class="table-responsive">
-                <table class="table table-hover table-sm">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Pedido</th>
-                            <th>Produto</th>
-                            <th class="text-end">Quantidade</th>
-                            <th class="text-end">Preço Un.</th>
-                            <th>Fornecedor</th>
-                            <th>Data Previsão</th>
-                            <th>Requisições Atendidas</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-pedidos"></tbody>
-                </table>
+    <!-- Contadores -->
+    <div id="contadores" class="mb-3 d-none">
+        <span class="badge bg-primary fs-6" id="badge-total-pedidos"></span>
+        <span class="badge bg-secondary fs-6 ms-2" id="badge-total-linhas"></span>
+    </div>
+
+    <!-- Accordion de Pedidos -->
+    <div id="accordion-pedidos" class="accordion"></div>
+
+    <!-- Paginação -->
+    <nav id="paginacao-container" class="d-none">
+        <ul class="pagination justify-content-center" id="paginacao-lista"></ul>
+    </nav>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="card d-none">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Nenhum pedido encontrado</p>
+            <a href="{{ url_for('pedidos_compras.tela_sincronizacao_manual') }}" class="btn btn-primary">
+                <i class="fas fa-sync"></i> Sincronizar do Odoo
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal de Histórico -->
+<div class="modal fade" id="modalHistorico" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-history"></i> Histórico de Alterações
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="historico-loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Carregando histórico...</p>
+                </div>
+                <div id="historico-content" class="d-none"></div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => filtrarPedidos());
+// Variáveis globais
+let autocompleteTimer;
+let paginaAtual = 1;
 
-function filtrarPedidos() {
+// Carregar pedidos ao abrir página
+document.addEventListener('DOMContentLoaded', () => {
+    filtrarPedidos(1);
+
+    // Fechar autocomplete ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.autocomplete-container')) {
+            document.getElementById('autocomplete-list').classList.remove('show');
+        }
+    });
+});
+
+// ========== AUTOCOMPLETE ==========
+document.getElementById('filtro-produto-busca').addEventListener('input', function() {
+    clearTimeout(autocompleteTimer);
+    const termo = this.value.trim();
+
+    if (termo.length < 2) {
+        document.getElementById('autocomplete-list').classList.remove('show');
+        document.getElementById('autocomplete-list').innerHTML = '';
+        document.getElementById('filtro-cod-produto').value = '';
+        return;
+    }
+
+    autocompleteTimer = setTimeout(() => buscarProdutosAutocomplete(termo), 300);
+});
+
+function buscarProdutosAutocomplete(termo) {
+    const list = document.getElementById('autocomplete-list');
+    list.innerHTML = '<div class="autocomplete-loading">Buscando...</div>';
+    list.classList.add('show');
+
+    fetch(`/manufatura/pedidos-compras/api/autocomplete-produtos?termo=${encodeURIComponent(termo)}`)
+        .then(res => res.json())
+        .then(produtos => {
+            list.innerHTML = '';
+
+            if (!produtos || produtos.length === 0) {
+                list.innerHTML = '<div class="autocomplete-no-results">Nenhum produto encontrado</div>';
+                return;
+            }
+
+            produtos.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.innerHTML = `
+                    <strong>${p.cod_produto}</strong>
+                    <small>${p.nome_produto}</small>
+                `;
+
+                item.addEventListener('click', () => {
+                    document.getElementById('filtro-produto-busca').value = `${p.cod_produto} - ${p.nome_produto}`;
+                    document.getElementById('filtro-cod-produto').value = p.cod_produto;
+                    list.classList.remove('show');
+                });
+
+                list.appendChild(item);
+            });
+        })
+        .catch(err => {
+            console.error(err);
+            list.innerHTML = '<div class="autocomplete-no-results">Erro ao buscar</div>';
+        });
+}
+
+// ========== FILTROS E PAGINAÇÃO ==========
+function filtrarPedidos(page = 1) {
+    paginaAtual = page;
     const params = new URLSearchParams();
-    const produto = document.getElementById('filtro-produto').value;
+
+    const codProduto = document.getElementById('filtro-cod-produto').value;
     const fornecedor = document.getElementById('filtro-fornecedor').value;
-    const dataInicio = document.getElementById('filtro-data-inicio').value;
-    const dataFim = document.getElementById('filtro-data-fim').value;
+    const criacaoInicio = document.getElementById('filtro-criacao-inicio').value;
+    const criacaoFim = document.getElementById('filtro-criacao-fim').value;
+    const previsaoInicio = document.getElementById('filtro-previsao-inicio').value;
+    const previsaoFim = document.getElementById('filtro-previsao-fim').value;
 
-    if (produto) params.append('cod_produto', produto);
+    if (codProduto) params.append('cod_produto', codProduto);
     if (fornecedor) params.append('fornecedor', fornecedor);
-    if (dataInicio) params.append('data_inicio', dataInicio);
-    if (dataFim) params.append('data_fim', dataFim);
+    if (criacaoInicio) params.append('data_criacao_inicio', criacaoInicio);
+    if (criacaoFim) params.append('data_criacao_fim', criacaoFim);
+    if (previsaoInicio) params.append('data_previsao_inicio', previsaoInicio);
+    if (previsaoFim) params.append('data_previsao_fim', previsaoFim);
+    params.append('page', page);
+    params.append('per_page', 20);
 
+    // Mostrar loading
     document.getElementById('loading').classList.remove('d-none');
-    document.getElementById('tbody-pedidos').innerHTML = '';
+    document.getElementById('accordion-pedidos').innerHTML = '';
+    document.getElementById('contadores').classList.add('d-none');
+    document.getElementById('paginacao-container').classList.add('d-none');
+    document.getElementById('empty-state').classList.add('d-none');
 
     fetch(`/manufatura/pedidos-compras/api/listar?${params}`)
         .then(res => res.json())
         .then(data => {
             document.getElementById('loading').classList.add('d-none');
-            if (data.sucesso) renderizarPedidos(data.pedidos);
-            else alert('Erro ao carregar pedidos');
+
+            if (data.sucesso && data.pedidos.length > 0) {
+                renderizarPedidosAccordion(data.pedidos, data.total_pedidos, data.total_linhas);
+                renderizarPaginacao(data.paginacao);
+            } else {
+                document.getElementById('empty-state').classList.remove('d-none');
+            }
         })
         .catch(err => {
             document.getElementById('loading').classList.add('d-none');
@@ -107,47 +356,272 @@ function filtrarPedidos() {
         });
 }
 
-function renderizarPedidos(pedidos) {
-    const tbody = document.getElementById('tbody-pedidos');
+function limparFiltros() {
+    document.getElementById('filtro-produto-busca').value = '';
+    document.getElementById('filtro-cod-produto').value = '';
+    document.getElementById('filtro-fornecedor').value = '';
+    document.getElementById('filtro-criacao-inicio').value = '';
+    document.getElementById('filtro-criacao-fim').value = '';
+    document.getElementById('filtro-previsao-inicio').value = '';
+    document.getElementById('filtro-previsao-fim').value = '';
+    filtrarPedidos(1);
+}
 
-    if (pedidos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum pedido encontrado</td></tr>';
+// ========== RENDERIZAR ACCORDION ==========
+function renderizarPedidosAccordion(pedidos, totalPedidos, totalLinhas) {
+    // Atualizar contadores
+    document.getElementById('contadores').classList.remove('d-none');
+    document.getElementById('badge-total-pedidos').textContent = `${totalPedidos} pedidos`;
+    document.getElementById('badge-total-linhas').textContent = `${totalLinhas} linhas`;
+
+    const container = document.getElementById('accordion-pedidos');
+    container.innerHTML = '';
+
+    pedidos.forEach((pedido, index) => {
+        const accordionItem = criarAccordionPedido(pedido, index);
+        container.appendChild(accordionItem);
+    });
+}
+
+function criarAccordionPedido(pedido, index) {
+    const div = document.createElement('div');
+    div.className = 'accordion-item pedido-accordion';
+
+    // Badge de status
+    let statusBadge = '';
+    if (pedido.status_odoo) {
+        const statusMap = {
+            'draft': 'secondary',
+            'sent': 'info',
+            'to approve': 'warning',
+            'purchase': 'success',
+            'done': 'primary',
+            'cancel': 'danger'
+        };
+        const cor = statusMap[pedido.status_odoo] || 'secondary';
+        statusBadge = `<span class="badge bg-${cor} badge-status ms-2">${pedido.status_odoo}</span>`;
+    }
+
+    const collapseId = `collapse-${index}`;
+
+    div.innerHTML = `
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                <div class="d-flex justify-content-between align-items-center w-100">
+                    <div>
+                        <strong>${pedido.num_pedido}</strong>
+                        ${pedido.tipo_pedido ? `<span class="badge bg-light text-dark ms-2">${pedido.tipo_pedido}</span>` : ''}
+                    </div>
+                    <div class="text-end me-3">
+                        <strong>${pedido.fornecedor || '-'}</strong>
+                        <br>
+                        <small class="text-muted">
+                            Criado: ${pedido.data_criacao ? new Date(pedido.data_criacao).toLocaleDateString('pt-BR') : '-'}
+                            ${pedido.data_previsao ? ` | Previsão: ${new Date(pedido.data_previsao).toLocaleDateString('pt-BR')}` : ''}
+                        </small>
+                        ${statusBadge}
+                    </div>
+                </div>
+            </button>
+        </h2>
+        <div id="${collapseId}" class="accordion-collapse collapse">
+            <div class="accordion-body">
+                <table class="table table-linhas table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">Código</th>
+                            <th>Produto</th>
+                            <th class="text-end" style="width: 100px;">Qtd Pedido</th>
+                            <th class="text-end" style="width: 100px;">Qtd Recebida</th>
+                            <th class="text-end" style="width: 110px;">Preço Un.</th>
+                            <th class="text-end" style="width: 110px;">Valor Total</th>
+                            <th style="width: 150px;">Requisições</th>
+                            <th style="width: 100px;" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedido.linhas.map(linha => criarLinhaHTML(linha)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    return div;
+}
+
+function criarLinhaHTML(linha) {
+    // Badge de recebimento
+    let badgeRecebimento = '-';
+    if (linha.qtd_recebida > 0) {
+        const percentual = ((linha.qtd_recebida / linha.qtd_produto_pedido) * 100).toFixed(1);
+        if (linha.qtd_recebida >= linha.qtd_produto_pedido) {
+            badgeRecebimento = `<span class="badge bg-success">Recebido (100%)</span>`;
+        } else {
+            badgeRecebimento = `<span class="badge bg-warning text-dark">Parcial (${percentual}%)</span>`;
+        }
+    }
+
+    // Requisições
+    let requisicoesHTML = '-';
+    if (linha.requisicoes_atendidas && linha.requisicoes_atendidas.length > 0) {
+        requisicoesHTML = '<ul class="list-unstyled mb-0 small">';
+        linha.requisicoes_atendidas.forEach(req => {
+            requisicoesHTML += `
+                <li>
+                    <span class="badge bg-info">${req.num_requisicao}</span>
+                    ${req.qtd_alocada.toFixed(2)} un
+                    <span class="text-muted">(${req.percentual.toFixed(1)}%)</span>
+                </li>
+            `;
+        });
+        requisicoesHTML += '</ul>';
+    }
+
+    return `
+        <tr class="linha-produto">
+            <td><strong>${linha.cod_produto}</strong></td>
+            <td>
+                <span class="text-truncate d-inline-block" style="max-width: 350px;" title="${linha.nome_produto}">
+                    ${linha.nome_produto}
+                </span>
+            </td>
+            <td class="text-end"><strong>${linha.qtd_produto_pedido.toFixed(2)}</strong></td>
+            <td class="text-end">${linha.qtd_recebida.toFixed(2)}</td>
+            <td class="text-end">R$ ${linha.preco_produto_pedido.toFixed(2)}</td>
+            <td class="text-end"><strong>R$ ${linha.valor_total_linha.toFixed(2)}</strong></td>
+            <td>${requisicoesHTML}</td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-outline-primary btn-historico"
+                        onclick="abrirHistorico(${linha.id}, '${linha.cod_produto}', '${linha.nome_produto}')"
+                        title="Ver histórico de alterações">
+                    <i class="fas fa-history"></i>
+                </button>
+            </td>
+        </tr>
+    `;
+}
+
+// ========== PAGINAÇÃO ==========
+function renderizarPaginacao(paginacao) {
+    if (paginacao.total_pages <= 1) {
+        document.getElementById('paginacao-container').classList.add('d-none');
         return;
     }
 
-    pedidos.forEach(pedido => {
-        let requisicoesHTML = '';
-        if (pedido.requisicoes_atendidas.length > 0) {
-            requisicoesHTML = '<ul class="list-unstyled mb-0 small">';
-            pedido.requisicoes_atendidas.forEach(req => {
-                requisicoesHTML += `
-                    <li>
-                        <span class="badge bg-info">${req.num_requisicao}</span>
-                        ${req.qtd_alocada.toFixed(2)} un
-                        <span class="text-muted">(${req.percentual.toFixed(1)}%)</span>
-                    </li>
-                `;
-            });
-            requisicoesHTML += '</ul>';
-        } else {
-            requisicoesHTML = '<span class="text-muted">-</span>';
-        }
+    document.getElementById('paginacao-container').classList.remove('d-none');
+    const lista = document.getElementById('paginacao-lista');
+    lista.innerHTML = '';
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${pedido.num_pedido}</strong></td>
-            <td>
-                <strong>${pedido.cod_produto}</strong><br>
-                <small class="text-muted">${pedido.nome_produto}</small>
-            </td>
-            <td class="text-end">${pedido.qtd_pedido.toFixed(2)}</td>
-            <td class="text-end">R$ ${pedido.preco_unitario.toFixed(2)}</td>
-            <td>${pedido.fornecedor || '-'}</td>
-            <td>${pedido.data_previsao ? new Date(pedido.data_previsao).toLocaleDateString('pt-BR') : '-'}</td>
-            <td>${requisicoesHTML}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+    // Botão Anterior
+    const liPrev = document.createElement('li');
+    liPrev.className = `page-item ${!paginacao.has_prev ? 'disabled' : ''}`;
+    liPrev.innerHTML = `<a class="page-link" href="#" onclick="filtrarPedidos(${paginacao.page - 1}); return false;">Anterior</a>`;
+    lista.appendChild(liPrev);
+
+    // Páginas
+    const startPage = Math.max(1, paginacao.page - 2);
+    const endPage = Math.min(paginacao.total_pages, paginacao.page + 2);
+
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === paginacao.page ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="filtrarPedidos(${i}); return false;">${i}</a>`;
+        lista.appendChild(li);
+    }
+
+    // Botão Próximo
+    const liNext = document.createElement('li');
+    liNext.className = `page-item ${!paginacao.has_next ? 'disabled' : ''}`;
+    liNext.innerHTML = `<a class="page-link" href="#" onclick="filtrarPedidos(${paginacao.page + 1}); return false;">Próximo</a>`;
+    lista.appendChild(liNext);
+}
+
+// ========== HISTÓRICO ==========
+function abrirHistorico(pedidoCompraId, codProduto, nomeProduto) {
+    const modal = new bootstrap.Modal(document.getElementById('modalHistorico'));
+    modal.show();
+
+    document.getElementById('historico-loading').classList.remove('d-none');
+    document.getElementById('historico-content').classList.add('d-none');
+
+    fetch(`/manufatura/pedidos-compras/api/historico/${pedidoCompraId}`)
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('historico-loading').classList.add('d-none');
+            document.getElementById('historico-content').classList.remove('d-none');
+
+            if (data.sucesso) {
+                renderizarHistorico(data, codProduto, nomeProduto);
+            } else {
+                document.getElementById('historico-content').innerHTML = '<p class="text-danger">Erro ao carregar histórico</p>';
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('historico-loading').classList.add('d-none');
+            document.getElementById('historico-content').classList.remove('d-none');
+            document.getElementById('historico-content').innerHTML = '<p class="text-danger">Erro ao carregar histórico</p>';
+        });
+}
+
+function renderizarHistorico(data, codProduto, nomeProduto) {
+    const content = document.getElementById('historico-content');
+
+    let html = `
+        <div class="mb-3">
+            <h6><strong>Produto:</strong> ${codProduto} - ${nomeProduto}</h6>
+            <p class="text-muted mb-0">Total de snapshots: ${data.total_snapshots}</p>
+        </div>
+        <hr>
+    `;
+
+    if (data.historico.length === 0) {
+        html += '<p class="text-muted">Nenhum histórico encontrado</p>';
+    } else {
+        data.historico.forEach((snapshot, index) => {
+            const diferencaItem = data.diferencas.find(d => d.snapshot_id === snapshot.id);
+            const camposAlterados = diferencaItem ? diferencaItem.campos_alterados : [];
+
+            html += `
+                <div class="card mb-3 ${snapshot.operacao === 'CRIAR' ? 'border-success' : 'border-primary'}">
+                    <div class="card-header ${snapshot.operacao === 'CRIAR' ? 'bg-success' : 'bg-primary'} text-white">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>${snapshot.operacao}</strong></span>
+                            <span>${new Date(snapshot.alterado_em).toLocaleString('pt-BR')}</span>
+                        </div>
+                        <small>Por: ${snapshot.alterado_por}</small>
+                    </div>
+                    <div class="card-body">
+                        ${camposAlterados.length > 0 ? `
+                            <h6 class="text-danger">Campos Alterados:</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Campo</th>
+                                        <th>Valor Anterior</th>
+                                        <th>Valor Atual</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${camposAlterados.map(campo => `
+                                        <tr>
+                                            <td><strong>${campo.campo}</strong></td>
+                                            <td class="text-danger"><del>${campo.valor_anterior || '-'}</del></td>
+                                            <td class="text-success"><strong>${campo.valor_atual || '-'}</strong></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        ` : '<p class="text-muted">Snapshot inicial (sem alterações)</p>'}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    content.innerHTML = html;
 }
 </script>
 {% endblock %}
