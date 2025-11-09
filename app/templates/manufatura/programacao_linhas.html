@@ -21,7 +21,8 @@
 
         <!-- Filtros Inline -->
         <div class="d-flex align-items-center gap-2 flex-wrap">
-            <select id="filtro-mes" class="form-select form-select-sm" style="width: 120px;">
+            <!-- Período -->
+            <select id="filtro-mes" class="form-select form-select-sm" style="width: 110px;">
                 <option value="1">Janeiro</option>
                 <option value="2">Fevereiro</option>
                 <option value="3">Março</option>
@@ -35,27 +36,50 @@
                 <option value="11">Novembro</option>
                 <option value="12">Dezembro</option>
             </select>
-            <select id="filtro-ano" class="form-select form-select-sm" style="width: 90px;"></select>
+            <select id="filtro-ano" class="form-select form-select-sm" style="width: 80px;"></select>
             <button id="btn-carregar" class="btn btn-success btn-sm">
                 <i class="fas fa-sync me-1"></i>Carregar
             </button>
 
-            <!-- ✅ TOGGLE DE VISUALIZAÇÃO -->
+            <span class="mx-1 text-muted">|</span>
+
+            <!-- ✅ 3 BOTÕES DE AGRUPAMENTO -->
             <div class="btn-group" role="group">
-                <input type="radio" class="btn-check" name="visualizacao" id="view-accordion" value="accordion" checked>
-                <label class="btn btn-outline-primary btn-sm" for="view-accordion" title="Visualização em Cards">
-                    <i class="fas fa-th-large"></i> Cards
+                <input type="radio" class="btn-check" name="agrupamento" id="group-linha" value="linha" checked>
+                <label class="btn btn-outline-primary btn-sm" for="group-linha" title="Agrupar por Linha de Produção">
+                    <i class="fas fa-industry"></i> Por Linha
                 </label>
-                <input type="radio" class="btn-check" name="visualizacao" id="view-table" value="table">
-                <label class="btn btn-outline-primary btn-sm" for="view-table" title="Visualização em Tabela">
-                    <i class="fas fa-table"></i> Tabela
+                <input type="radio" class="btn-check" name="agrupamento" id="group-dia" value="dia">
+                <label class="btn btn-outline-primary btn-sm" for="group-dia" title="Agrupar por Dia">
+                    <i class="fas fa-calendar-day"></i> Por Dia
+                </label>
+                <input type="radio" class="btn-check" name="agrupamento" id="group-produto" value="produto">
+                <label class="btn btn-outline-primary btn-sm" for="group-produto" title="Agrupar por Produto">
+                    <i class="fas fa-boxes"></i> Por Produto
                 </label>
             </div>
 
-            <button id="btn-expandir-todos" class="btn btn-outline-secondary btn-sm" style="display:none;">
+            <span class="mx-1 text-muted">|</span>
+
+            <!-- ✅ FILTROS DINÂMICOS -->
+            <select id="filtro-linha" class="form-select form-select-sm" style="width: 150px;">
+                <option value="">Todas as linhas</option>
+            </select>
+            <select id="filtro-produto" class="form-select form-select-sm" style="width: 150px;">
+                <option value="">Todos os produtos</option>
+            </select>
+            <input type="date" id="filtro-data" class="form-control form-control-sm" style="width: 140px;" placeholder="Filtrar data">
+
+            <button id="btn-limpar-filtros" class="btn btn-outline-secondary btn-sm" title="Limpar filtros">
+                <i class="fas fa-eraser"></i>
+            </button>
+
+            <span class="mx-1 text-muted">|</span>
+
+            <button id="btn-expandir-todos" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-expand-alt me-1"></i>Expandir
             </button>
-            <button id="btn-colapsar-todos" class="btn btn-outline-secondary btn-sm" style="display:none;">
+            <button id="btn-colapsar-todos" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-compress-alt me-1"></i>Colapsar
             </button>
         </div>
@@ -67,10 +91,15 @@
 
     <!-- Card Principal -->
     <div class="card shadow">
-        <div class="card-header bg-light">
-            <i class="fas fa-industry me-2"></i>
-            Linhas de Produção
-            <span id="total-linhas" class="badge bg-success ms-2">0 linhas</span>
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-industry me-2"></i>
+                <span id="titulo-agrupamento">Programação por Linha</span>
+            </div>
+            <div>
+                <span id="total-programacoes" class="badge bg-success">0 programações</span>
+                <span id="total-grupos" class="badge bg-primary ms-2">0 grupos</span>
+            </div>
         </div>
         <div class="card-body p-0">
             <div id="loading-spinner" class="text-center py-5 d-none">
@@ -78,17 +107,12 @@
                 <p class="mt-2 text-muted">Carregando...</p>
             </div>
 
-            <!-- ✅ VISUALIZAÇÃO EM ACCORDION (Cards) -->
-            <div id="accordion-linhas" class="accordion">
+            <!-- ✅ CONTAINER ÚNICO PARA TODOS OS AGRUPAMENTOS (estilo modal) -->
+            <div id="programacao-container" class="p-3">
                 <div class="text-center text-muted py-5">
                     <i class="fas fa-info-circle me-2"></i>
                     Selecione o mês e clique em "Carregar"
                 </div>
-            </div>
-
-            <!-- ✅ VISUALIZAÇÃO EM TABELA (Estilo modalSeparacoes) -->
-            <div id="table-view" class="d-none">
-                <!-- Será renderizado dinamicamente pelo JS -->
             </div>
         </div>
     </div>
@@ -122,24 +146,32 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas.js') }}"></script>
-<script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas-table-view.js') }}"></script>
+<script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas-agrupamentos.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modal-detalhes-separacao.js') }}"></script>
 
-<!-- ✅ Script para funções compartilhadas do modal -->
+<!-- ✅ Chamar popularFiltros após carregar dados -->
 <script>
-// Função para abrir modal de separações (reutilizada de necessidade_producao)
+// Sobrescrever função carregarProgramacaoLinhas para incluir popularFiltros
+const carregarOriginal = carregarProgramacaoLinhas;
+carregarProgramacaoLinhas = async function() {
+    await carregarOriginal();
+    if (programacaoState.linhas && programacaoState.linhas.length > 0) {
+        popularFiltros(programacaoState.linhas);
+        renderizarAgrupamento();
+    }
+};
+
+// Função para abrir modal de separações
 async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
     try {
         console.log(`[MODAL SEPARACOES] Abrindo para produto: ${codProduto}, dia: ${diaClicado}`);
 
-        // Calcular período: 7 dias antes + dia + 7 dias depois
         const dataClicada = new Date(diaClicado);
         const dataInicio = new Date(dataClicada);
         dataInicio.setDate(dataInicio.getDate() - 7);
         const dataFim = new Date(dataClicada);
         dataFim.setDate(dataFim.getDate() + 7);
 
-        // Buscar dados do backend
         const params = new URLSearchParams({
             cod_produto: codProduto,
             data_inicio: dataInicio.toISOString().split('T')[0],
@@ -154,12 +186,10 @@ async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
             throw new Error(dados.erro);
         }
 
-        // Renderizar modal (função deve existir em programacao-linhas.js)
         if (typeof renderizarModalSeparacoes === 'function') {
             renderizarModalSeparacoes(dados, codProduto, diaClicado);
         }
 
-        // Mostrar modal
         const modal = new bootstrap.Modal(document.getElementById('modalSeparacoesProduto'));
         modal.show();
 
