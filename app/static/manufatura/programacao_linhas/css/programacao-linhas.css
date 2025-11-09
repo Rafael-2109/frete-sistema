@@ -291,3 +291,51 @@
 #loading-spinner {
     min-height: 200px;
 }
+
+/* ============================================================
+   VISUALIZAÇÃO EM TABELA
+   ============================================================ */
+
+#table-view {
+    min-height: 400px;
+}
+
+#table-view .table {
+    margin-bottom: 0;
+}
+
+#table-view .clickable-produto {
+    color: #0d6efd;
+    transition: all 0.2s;
+}
+
+#table-view .clickable-produto:hover {
+    color: #0a58ca;
+    font-weight: 500;
+    text-decoration: underline !important;
+}
+
+#table-view code.clickable-produto {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+}
+
+#table-view code.clickable-produto:hover {
+    background-color: #e7f1ff;
+    border-color: #0d6efd;
+}
+
+/* Botões de ação na tabela */
+.btn-xs {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+/* Toggle de visualização */
+.btn-check:checked + label {
+    background-color: #0d6efd;
+    color: white;
+}

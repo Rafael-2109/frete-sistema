@@ -20,7 +20,7 @@
         </div>
 
         <!-- Filtros Inline -->
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <select id="filtro-mes" class="form-select form-select-sm" style="width: 120px;">
                 <option value="1">Janeiro</option>
                 <option value="2">Fevereiro</option>
@@ -39,11 +39,24 @@
             <button id="btn-carregar" class="btn btn-success btn-sm">
                 <i class="fas fa-sync me-1"></i>Carregar
             </button>
-            <button id="btn-expandir-todos" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-expand-alt me-1"></i>Expandir Todos
+
+            <!-- ✅ TOGGLE DE VISUALIZAÇÃO -->
+            <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="visualizacao" id="view-accordion" value="accordion" checked>
+                <label class="btn btn-outline-primary btn-sm" for="view-accordion" title="Visualização em Cards">
+                    <i class="fas fa-th-large"></i> Cards
+                </label>
+                <input type="radio" class="btn-check" name="visualizacao" id="view-table" value="table">
+                <label class="btn btn-outline-primary btn-sm" for="view-table" title="Visualização em Tabela">
+                    <i class="fas fa-table"></i> Tabela
+                </label>
+            </div>
+
+            <button id="btn-expandir-todos" class="btn btn-outline-secondary btn-sm" style="display:none;">
+                <i class="fas fa-expand-alt me-1"></i>Expandir
             </button>
-            <button id="btn-colapsar-todos" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-compress-alt me-1"></i>Colapsar Todos
+            <button id="btn-colapsar-todos" class="btn btn-outline-secondary btn-sm" style="display:none;">
+                <i class="fas fa-compress-alt me-1"></i>Colapsar
             </button>
         </div>
 
@@ -52,7 +65,7 @@
         </a>
     </div>
 
-    <!-- Card com Accordions das Linhas -->
+    <!-- Card Principal -->
     <div class="card shadow">
         <div class="card-header bg-light">
             <i class="fas fa-industry me-2"></i>
@@ -65,12 +78,17 @@
                 <p class="mt-2 text-muted">Carregando...</p>
             </div>
 
-            <!-- Accordion das Linhas -->
+            <!-- ✅ VISUALIZAÇÃO EM ACCORDION (Cards) -->
             <div id="accordion-linhas" class="accordion">
                 <div class="text-center text-muted py-5">
                     <i class="fas fa-info-circle me-2"></i>
                     Selecione o mês e clique em "Carregar"
                 </div>
+            </div>
+
+            <!-- ✅ VISUALIZAÇÃO EM TABELA (Estilo modalSeparacoes) -->
+            <div id="table-view" class="d-none">
+                <!-- Será renderizado dinamicamente pelo JS -->
             </div>
         </div>
     </div>
@@ -79,7 +97,7 @@
 
 <!-- Modal de Separações e Estoque -->
 <div class="modal fade" id="modalSeparacoesProduto" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-dialog-scrollable" style="max-width: 95vw;">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title" id="modal-separacoes-titulo">Separações e Estoque</h5>
@@ -97,8 +115,58 @@
     </div>
 </div>
 
+<!-- Incluir modais de pedidos (contém modalDetalhesSeparacao) -->
+{% include 'manufatura/necessidade_producao/modals/_modal-pedidos.html' %}
+
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas.js') }}"></script>
+<script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas-table-view.js') }}"></script>
+<script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modal-detalhes-separacao.js') }}"></script>
+
+<!-- ✅ Script para funções compartilhadas do modal -->
+<script>
+// Função para abrir modal de separações (reutilizada de necessidade_producao)
+async function abrirModalSeparacoesProduto(codProduto, diaClicado) {
+    try {
+        console.log(`[MODAL SEPARACOES] Abrindo para produto: ${codProduto}, dia: ${diaClicado}`);
+
+        // Calcular período: 7 dias antes + dia + 7 dias depois
+        const dataClicada = new Date(diaClicado);
+        const dataInicio = new Date(dataClicada);
+        dataInicio.setDate(dataInicio.getDate() - 7);
+        const dataFim = new Date(dataClicada);
+        dataFim.setDate(dataFim.getDate() + 7);
+
+        // Buscar dados do backend
+        const params = new URLSearchParams({
+            cod_produto: codProduto,
+            data_inicio: dataInicio.toISOString().split('T')[0],
+            data_fim: dataFim.toISOString().split('T')[0],
+            data_referencia: diaClicado
+        });
+
+        const response = await fetch(`/manufatura/recursos/api/separacoes-estoque?${params}`);
+        const dados = await response.json();
+
+        if (dados.erro) {
+            throw new Error(dados.erro);
+        }
+
+        // Renderizar modal (função deve existir em programacao-linhas.js)
+        if (typeof renderizarModalSeparacoes === 'function') {
+            renderizarModalSeparacoes(dados, codProduto, diaClicado);
+        }
+
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalSeparacoesProduto'));
+        modal.show();
+
+    } catch (error) {
+        console.error('[MODAL SEPARACOES] Erro:', error);
+        alert(`Erro ao carregar separações: ${error.message}`);
+    }
+}
+</script>
 {% endblock %}
