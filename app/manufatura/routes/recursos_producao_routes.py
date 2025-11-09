@@ -709,6 +709,8 @@ def api_separacoes_estoque():
 
                 data_key = prog.data_programacao.strftime('%Y-%m-%d')
                 programacoes_linhas[prog.linha_producao]['datas'][data_key].append({
+                    'id': prog.id,  # ✅ NOVO: ID para edição/exclusão
+                    'data_programacao': data_key,  # ✅ NOVO: Data para edição
                     'cod_produto': prog.cod_produto,
                     'nome_produto': prog.nome_produto,
                     'qtd_programada': float(prog.qtd_programada),

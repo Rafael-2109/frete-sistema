@@ -787,3 +787,99 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[ADICIONAR PROGRAMACAO] Erro: {str(e)}")
             logging.error(f"[ADICIONAR PROGRAMACAO] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/editar-programacao/<int:programacao_id>', methods=['PUT'])
+    @login_required
+    def editar_programacao(programacao_id):
+        """Edita uma programação de produção existente"""
+        try:
+            from app.producao.models import ProgramacaoProducao
+            from datetime import datetime
+
+            # Buscar programação
+            programacao = ProgramacaoProducao.query.get(programacao_id)
+            if not programacao:
+                return jsonify({'erro': 'Programação não encontrada'}), 404
+
+            dados = request.json
+            data_programacao_str = dados.get('data_programacao')
+            qtd_programada = dados.get('qtd_programada')
+
+            # Validar e atualizar data
+            if data_programacao_str:
+                try:
+                    programacao.data_programacao = datetime.strptime(data_programacao_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'erro': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+
+            # Validar e atualizar quantidade
+            if qtd_programada is not None:
+                try:
+                    qtd_programada = float(qtd_programada)
+                    if qtd_programada <= 0:
+                        return jsonify({'erro': 'Quantidade deve ser maior que zero'}), 400
+                    programacao.qtd_programada = qtd_programada
+                except ValueError:
+                    return jsonify({'erro': 'Quantidade inválida'}), 400
+
+            # Atualizar auditoria
+            programacao.updated_by = current_user.nome if current_user.is_authenticated else 'Sistema'
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Programação atualizada com sucesso',
+                'programacao': {
+                    'id': programacao.id,
+                    'cod_produto': programacao.cod_produto,
+                    'data_programacao': programacao.data_programacao.strftime('%Y-%m-%d'),
+                    'qtd_programada': float(programacao.qtd_programada)
+                }
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            import logging
+            import traceback
+            logging.error(f"[EDITAR PROGRAMACAO] Erro: {str(e)}")
+            logging.error(f"[EDITAR PROGRAMACAO] Traceback: {traceback.format_exc()}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/necessidade-producao/excluir-programacao/<int:programacao_id>', methods=['DELETE'])
+    @login_required
+    def excluir_programacao(programacao_id):
+        """Exclui uma programação de produção"""
+        try:
+            from app.producao.models import ProgramacaoProducao
+
+            # Buscar programação
+            programacao = ProgramacaoProducao.query.get(programacao_id)
+            if not programacao:
+                return jsonify({'erro': 'Programação não encontrada'}), 404
+
+            # Guardar dados antes de excluir (para retornar no response)
+            cod_produto = programacao.cod_produto
+            data_programacao = programacao.data_programacao.strftime('%Y-%m-%d')
+
+            # Excluir
+            db.session.delete(programacao)
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Programação excluída com sucesso',
+                'programacao_excluida': {
+                    'id': programacao_id,
+                    'cod_produto': cod_produto,
+                    'data_programacao': data_programacao
+                }
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            import logging
+            import traceback
+            logging.error(f"[EXCLUIR PROGRAMACAO] Erro: {str(e)}")
+            logging.error(f"[EXCLUIR PROGRAMACAO] Traceback: {traceback.format_exc()}")
+            return jsonify({'erro': str(e)}), 500

@@ -100,6 +100,54 @@
 }
 
 /* ==================================================
+   ESTILOS DE EDIÇÃO DE PROGRAMAÇÃO
+   ================================================== */
+
+/* Inputs editáveis inline */
+.input-edit-data,
+.input-edit-qtd {
+    border: 1px solid #e0e0e0;
+    transition: all 0.2s ease;
+}
+
+.input-edit-data:hover,
+.input-edit-qtd:hover {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.1rem rgba(40, 167, 69, 0.25);
+}
+
+.input-edit-data:focus,
+.input-edit-qtd:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* Animação de sucesso ao salvar */
+@keyframes flashSuccess {
+    0%, 100% { background-color: transparent; }
+    50% { background-color: rgba(40, 167, 69, 0.2); }
+}
+
+.flash-success {
+    animation: flashSuccess 1.5s ease;
+}
+
+/* Item de programação */
+.programacao-item {
+    transition: all 0.3s ease;
+}
+
+.programacao-item:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Destaque do produto modal */
+.produto-destaque {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+}
+
+/* ==================================================
    SOBRESCREVER BOOTSTRAP 5 - MÁXIMA PRIORIDADE
    ================================================== */
 

@@ -649,6 +649,21 @@ function formatarNumero(num) {
     return parseFloat(num || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+/**
+ * Formata data no formato YYYY-MM-DD para DD/MM/YYYY SEM problemas de timezone
+ * @param {string} dataISO - Data no formato YYYY-MM-DD
+ * @returns {string} Data formatada em DD/MM/YYYY
+ */
+function formatarDataSemTimezone(dataISO) {
+    if (!dataISO) return '-';
+
+    // Extrair componentes da string diretamente (sem criar objeto Date)
+    const [ano, mes, dia] = dataISO.split('-');
+
+    // Retornar no formato DD/MM/YYYY
+    return `${dia}/${mes}/${ano}`;
+}
+
 // ============================================================
 // MODAL DE SEPARAÇÕES E ESTOQUE (Reutilizado de programacao-linhas)
 // ============================================================
@@ -794,10 +809,10 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
             html += `<td><small>${ped.cnpj_cpf || '-'}</small></td>`;
             html += `<td>${ped.raz_social_red || '-'}</td>`;
             html += `<td class="text-end">${Math.round(ped.qtd).toLocaleString('pt-BR')}</td>`;
-            html += `<td>${ped.expedicao ? new Date(ped.expedicao).toLocaleDateString('pt-BR') : '-'}</td>`;
-            html += `<td>${ped.agendamento ? new Date(ped.agendamento).toLocaleDateString('pt-BR') : '-'}</td>`;
+            html += `<td>${ped.expedicao ? formatarDataSemTimezone(ped.expedicao) : '-'}</td>`;
+            html += `<td>${ped.agendamento ? formatarDataSemTimezone(ped.agendamento) : '-'}</td>`;
             html += `<td class="text-center">${ped.agendamento_confirmado ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-secondary">Não</span>'}</td>`;
-            html += `<td>${ped.data_entrega_pedido ? new Date(ped.data_entrega_pedido).toLocaleDateString('pt-BR') : '-'}</td>`;
+            html += `<td>${ped.data_entrega_pedido ? formatarDataSemTimezone(ped.data_entrega_pedido) : '-'}</td>`;
             html += '</tr>';
         });
 
@@ -903,25 +918,44 @@ function renderizarAccordionProgramacao(programacoesLinhas, codProdutoModal) {
 
         datasOrdenadas.forEach(data => {
             const programacoes = datas[data];
-            const dataFormatada = new Date(data).toLocaleDateString('pt-BR');
+            const dataFormatada = formatarDataSemTimezone(data);  // ✅ CORRIGIDO: sem timezone
 
             html += `<tr><td class="fw-bold align-top">${dataFormatada}</td><td>`;
 
-            // Empilhar programações verticalmente (divs)
+            // Empilhar programações verticalmente (divs) COM EDIÇÃO
             programacoes.forEach(prog => {
                 const classeDestaque = prog.eh_produto_modal ? 'produto-destaque' : '';
                 const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
                 const iconeObs = temObs ? ` <i class="fas fa-comment text-muted ms-1" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>` : '';
+                const progId = prog.id || 0;
 
                 html += `
-                    <div class="p-2 mb-1 border rounded ${classeDestaque}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
+                    <div class="p-2 mb-1 border rounded ${classeDestaque} programacao-item" data-prog-id="${progId}">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <div class="flex-grow-1">
                                 <strong>${prog.cod_produto}</strong> - ${prog.nome_produto || ''}${iconeObs}
                                 ${prog.cliente_produto ? ` <small class="text-muted ms-2">| Cliente: ${prog.cliente_produto}</small>` : ''}
                             </div>
-                            <div class="text-end">
-                                <span class="badge bg-success">${formatarNumero(prog.qtd_programada)}</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <!-- Input de Data (editável) -->
+                                <input type="date" class="form-control form-control-sm input-edit-data"
+                                       value="${prog.data_programacao}"
+                                       onchange="salvarEdicaoProgramacao(${progId}, this.value, null)"
+                                       style="width: 140px;" title="Alterar data">
+
+                                <!-- Input de Quantidade (editável) -->
+                                <input type="number" class="form-control form-control-sm input-edit-qtd text-end"
+                                       value="${prog.qtd_programada}"
+                                       onchange="salvarEdicaoProgramacao(${progId}, null, this.value)"
+                                       step="0.001" min="0"
+                                       style="width: 100px;" title="Alterar quantidade">
+
+                                <!-- Botão Excluir -->
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="excluirProgramacao(${progId})"
+                                        title="Excluir programação">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>
                     </div>`;
@@ -1082,7 +1116,7 @@ function renderizarProgramacaoProducaoCompacta(programacoesLinhas, codProdutoMod
     // Renderizar todas as programações
     todasProgramacoes.forEach(prog => {
         const classeDestaque = prog.eh_produto_modal ? 'produto-destaque' : '';
-        const dataFormatada = new Date(prog.data).toLocaleDateString('pt-BR');
+        const dataFormatada = formatarDataSemTimezone(prog.data);  // ✅ CORRIGIDO: sem timezone
         const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
 
         html += `<tr class="${classeDestaque}">`;
@@ -1332,4 +1366,108 @@ function formatarNumeroDecimais(num, decimais = 6) {
         minimumFractionDigits: 0,
         maximumFractionDigits: decimais
     });
+}
+
+// ============================================================
+// FUNÇÕES DE EDIÇÃO E EXCLUSÃO DE PROGRAMAÇÃO
+// ============================================================
+
+/**
+ * Salva edição de programação (data ou quantidade)
+ */
+async function salvarEdicaoProgramacao(programacaoId, novaData, novaQtd) {
+    try {
+        console.log(`[EDITAR PROG] ID: ${programacaoId}, Data: ${novaData}, Qtd: ${novaQtd}`);
+
+        // Preparar dados para enviar
+        const dados = {};
+        if (novaData) dados.data_programacao = novaData;
+        if (novaQtd) dados.qtd_programada = parseFloat(novaQtd);
+
+        // Enviar requisição PUT
+        const response = await fetch(`/manufatura/api/necessidade-producao/editar-programacao/${programacaoId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+
+        const resultado = await response.json();
+
+        if (resultado.erro) {
+            alert(`Erro: ${resultado.erro}`);
+            // Reverter campo para valor original (recarregar modal)
+            return;
+        }
+
+        // Sucesso - mostrar feedback visual
+        const item = document.querySelector(`.programacao-item[data-prog-id="${programacaoId}"]`);
+        if (item) {
+            item.classList.add('flash-success');
+            setTimeout(() => item.classList.remove('flash-success'), 1500);
+        }
+
+        console.log(`✅ Programação ${programacaoId} atualizada com sucesso`);
+
+    } catch (error) {
+        console.error('[EDITAR PROG] Erro:', error);
+        alert(`Erro ao salvar alteração: ${error.message}`);
+    }
+}
+
+/**
+ * Exclui uma programação de produção
+ */
+async function excluirProgramacao(programacaoId) {
+    try {
+        // Confirmação
+        const confirmar = await Swal.fire({
+            title: 'Confirmar exclusão?',
+            text: 'Esta ação não poderá ser desfeita.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sim, excluir',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!confirmar.isConfirmed) {
+            return;
+        }
+
+        // Enviar requisição DELETE
+        const response = await fetch(`/manufatura/api/necessidade-producao/excluir-programacao/${programacaoId}`, {
+            method: 'DELETE'
+        });
+
+        const resultado = await response.json();
+
+        if (resultado.erro) {
+            Swal.fire('Erro', resultado.erro, 'error');
+            return;
+        }
+
+        // Sucesso - remover item da UI com animação
+        const item = document.querySelector(`.programacao-item[data-prog-id="${programacaoId}"]`);
+        if (item) {
+            item.style.transition = 'opacity 0.3s, transform 0.3s';
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(20px)';
+            setTimeout(() => item.remove(), 300);
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Excluído!',
+            text: 'Programação removida com sucesso',
+            timer: 2000,
+            showConfirmButton: false
+        });
+
+        console.log(`✅ Programação ${programacaoId} excluída com sucesso`);
+
+    } catch (error) {
+        console.error('[EXCLUIR PROG] Erro:', error);
+        Swal.fire('Erro', `Erro ao excluir: ${error.message}`, 'error');
+    }
 }
