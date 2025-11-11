@@ -412,6 +412,7 @@ function criarAccordionPedido(pedido, index) {
                     <div>
                         <strong>${pedido.num_pedido}</strong>
                         ${pedido.tipo_pedido ? `<span class="badge bg-light text-dark ms-2">${pedido.tipo_pedido}</span>` : ''}
+                        ${pedido.company_id ? `<br><small class="text-primary"><i class="fas fa-building"></i> ${pedido.company_id}</small>` : ''}
                     </div>
                     <div class="text-end me-3">
                         <strong>${pedido.fornecedor || '-'}</strong>

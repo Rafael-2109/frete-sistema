@@ -294,7 +294,7 @@ class RequisicaoComprasService:
         Returns:
             Dict com múltiplos índices para busca rápida:
             - 'por_odoo_id': {odoo_id: RequisicaoCompras}
-            - 'por_req_produto': {(num_requisicao, cod_produto): RequisicaoCompras}
+            - 'por_req_produto_empresa': {(num_requisicao, cod_produto, company_id): RequisicaoCompras}
         """
         self.logger.info("🚀 Carregando requisições existentes em batch...")
 
@@ -303,16 +303,17 @@ class RequisicaoComprasService:
             importado_odoo=True
         ).all()
 
-        # Criar 2 índices para busca rápida O(1)
+        # ✅ ATUALIZADO: Criar 2 índices para busca rápida O(1) incluindo company_id
         cache = {
             'por_odoo_id': {},      # odoo_id -> RequisicaoCompras
-            'por_req_produto': {}   # (num_requisicao, cod_produto) -> RequisicaoCompras
+            'por_req_produto_empresa': {}   # (num_requisicao, cod_produto, company_id) -> RequisicaoCompras
         }
 
         for req in todas_requisicoes:
             if req.odoo_id:
                 cache['por_odoo_id'][req.odoo_id] = req
-            cache['por_req_produto'][(req.num_requisicao, req.cod_produto)] = req
+            # ✅ ATUALIZADO: Incluir company_id na chave
+            cache['por_req_produto_empresa'][(req.num_requisicao, req.cod_produto, req.company_id)] = req
 
         self.logger.info(f"   ✅ {len(todas_requisicoes)} requisições carregadas em memória")
 
@@ -443,13 +444,18 @@ class RequisicaoComprasService:
             odoo_id = str(linha_odoo['id'])
             num_requisicao = req_odoo['name']
 
+            # ✅ NOVO: Extrair company_id do Odoo
+            company_name = None
+            if req_odoo.get('company_id'):
+                company_name = req_odoo['company_id'][1] if len(req_odoo['company_id']) > 1 else None
+
             # 🚀 Busca no CACHE em vez de 2 queries
             requisicao_existente = requisicoes_existentes_cache['por_odoo_id'].get(odoo_id)
 
             if not requisicao_existente:
-                # Verificar por (num_requisicao, cod_produto)
-                requisicao_existente = requisicoes_existentes_cache['por_req_produto'].get(
-                    (num_requisicao, cod_produto)
+                # ✅ ATUALIZADO: Verificar por (num_requisicao, cod_produto, company_id)
+                requisicao_existente = requisicoes_existentes_cache['por_req_produto_empresa'].get(
+                    (num_requisicao, cod_produto, company_name)
                 )
 
             if requisicao_existente:
@@ -468,7 +474,8 @@ class RequisicaoComprasService:
                 # 🚀 Atualizar CACHE com nova requisição
                 if nova_req.odoo_id:
                     requisicoes_existentes_cache['por_odoo_id'][nova_req.odoo_id] = nova_req
-                requisicoes_existentes_cache['por_req_produto'][(nova_req.num_requisicao, nova_req.cod_produto)] = nova_req
+                # ✅ ATUALIZADO: Incluir company_id na chave do cache
+                requisicoes_existentes_cache['por_req_produto_empresa'][(nova_req.num_requisicao, nova_req.cod_produto, nova_req.company_id)] = nova_req
 
                 return {'processado': True, 'nova': True, 'atualizada': False}
 
@@ -498,10 +505,16 @@ class RequisicaoComprasService:
         nome_produto = produto_odoo['name']
         num_requisicao = req_odoo['name']
 
-        # 🔴 VERIFICAÇÃO ADICIONAL: Checar se já existe por (num_requisicao + cod_produto)
+        # ✅ NOVO: Extrair company_id (nome da empresa)
+        company_name = None
+        if req_odoo.get('company_id'):
+            company_name = req_odoo['company_id'][1] if len(req_odoo['company_id']) > 1 else None
+
+        # 🔴 VERIFICAÇÃO ADICIONAL: Checar se já existe por (num_requisicao + cod_produto + company_id)
         requisicao_duplicada = RequisicaoCompras.query.filter_by(
             num_requisicao=num_requisicao,
-            cod_produto=cod_produto
+            cod_produto=cod_produto,
+            company_id=company_name
         ).first()
 
         if requisicao_duplicada:
@@ -541,6 +554,7 @@ class RequisicaoComprasService:
         # Criar objeto
         requisicao = RequisicaoCompras(
             num_requisicao=num_requisicao,
+            company_id=company_name,  # ✅ NOVO: Empresa compradora
             data_requisicao_criacao=data_requisicao_criacao,
             usuario_requisicao_criacao=req_odoo['requested_by'][1] if req_odoo.get('requested_by') else None,
             data_requisicao_solicitada=data_requisicao_solicitada,
@@ -581,6 +595,7 @@ class RequisicaoComprasService:
 
             # Snapshot completo - TODOS os campos
             num_requisicao=requisicao.num_requisicao,
+            company_id=requisicao.company_id,  # ✅ NOVO
             data_requisicao_criacao=requisicao.data_requisicao_criacao,
             usuario_requisicao_criacao=requisicao.usuario_requisicao_criacao,
             lead_time_requisicao=requisicao.lead_time_requisicao,
@@ -682,6 +697,7 @@ class RequisicaoComprasService:
 
             # Snapshot completo - TODOS os campos (estado APÓS alteração)
             num_requisicao=requisicao_existente.num_requisicao,
+            company_id=requisicao_existente.company_id,  # ✅ NOVO
             data_requisicao_criacao=requisicao_existente.data_requisicao_criacao,
             usuario_requisicao_criacao=requisicao_existente.usuario_requisicao_criacao,
             lead_time_requisicao=requisicao_existente.lead_time_requisicao,

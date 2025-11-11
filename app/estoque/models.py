@@ -2,7 +2,7 @@
 import os
 if 'postgres' in os.getenv('DATABASE_URL', ''):
     try:
-        import psycopg2
+        import psycopg2 # type: ignore
         from psycopg2 import extensions
         DATE = extensions.new_type((1082,), "DATE", extensions.DATE)
         extensions.register_type(DATE)
@@ -15,13 +15,9 @@ if 'postgres' in os.getenv('DATABASE_URL', ''):
 from app import db
 from app.utils.timezone import agora_brasil
 import logging
-from app.producao.models import ProgramacaoProducao
-from sqlalchemy import cast, Date
 
 logger = logging.getLogger(__name__)
 
-# MIGRADO: SaldoEstoque movido para camada de compatibilidade (02/09/2025)
-# Para usar SaldoEstoque, importe de: from app.estoque.services.compatibility_layer import SaldoEstoqueCompativel as SaldoEstoque
 
 class MovimentacaoEstoque(db.Model):
     """

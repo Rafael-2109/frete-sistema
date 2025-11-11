@@ -446,6 +446,11 @@ class AlocacaoComprasServiceOtimizado:
         if write_date_str:
             write_date_odoo = datetime.strptime(write_date_str, '%Y-%m-%d %H:%M:%S')
 
+        # ✅ NOVO: Extrair company_id (nome da empresa)
+        company_name = None
+        if alocacao_odoo.get('company_id'):
+            company_name = alocacao_odoo['company_id'][1] if len(alocacao_odoo['company_id']) > 1 else None
+
         # Criar objeto
         nova_alocacao = RequisicaoCompraAlocacao(
             # FKs
@@ -460,6 +465,7 @@ class AlocacaoComprasServiceOtimizado:
             # Produto
             cod_produto=cod_produto,
             nome_produto=nome_produto,
+            company_id=company_name,  # ✅ NOVO: Empresa compradora
 
             # Quantidades
             qtd_alocada=qtd_alocada,

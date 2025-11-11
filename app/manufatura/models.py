@@ -178,6 +178,7 @@ class RequisicaoCompras(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     num_requisicao = db.Column(db.String(30), nullable=False, index=True)  # ✅ REMOVIDO unique=True
+    company_id = db.Column(db.String(100), nullable=True, index=True)  # ✅ NOVO: Empresa compradora
     data_requisicao_criacao = db.Column(db.Date, nullable=False)
     usuario_requisicao_criacao = db.Column(db.String(100))
     lead_time_requisicao = db.Column(db.Integer)
@@ -205,9 +206,10 @@ class RequisicaoCompras(db.Model):
     observacoes_odoo = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # ✅ Constraint única: requisição + produto (permite múltiplas linhas por requisição)
+    # ✅ Constraint única: requisição + produto + empresa (permite múltiplas linhas por requisição)
     __table_args__ = (
-        db.UniqueConstraint('num_requisicao', 'cod_produto', name='uq_requisicao_produto'),
+        db.UniqueConstraint('num_requisicao', 'cod_produto', 'company_id', name='uq_requisicao_produto_empresa'),
+        db.Index('idx_requisicao_empresa', 'company_id', 'num_requisicao'),  # ✅ Índice para filtros
     )
 
 
@@ -216,6 +218,7 @@ class PedidoCompras(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     num_pedido = db.Column(db.String(30), nullable=False, index=True)  # ✅ CORRIGIDO: Removido unique=True
+    company_id = db.Column(db.String(100), nullable=True, index=True)  # ✅ NOVO: Empresa compradora
     num_requisicao = db.Column(db.String(30), index=True)  # ✅ REMOVIDO ForeignKey - agora apenas informativo
     cnpj_fornecedor = db.Column(db.String(20), index=True)
     raz_social = db.Column(db.String(255))
@@ -251,9 +254,10 @@ class PedidoCompras(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # ✅ ADICIONADO
 
-    # ✅ CORRIGIDO: Constraint composta para permitir múltiplos produtos no mesmo pedido
+    # ✅ CORRIGIDO: Constraint composta para permitir múltiplos produtos no mesmo pedido + empresa
     __table_args__ = (
-        db.UniqueConstraint('num_pedido', 'cod_produto', name='uq_pedido_compras_num_cod_produto'),
+        db.UniqueConstraint('num_pedido', 'cod_produto', 'company_id', name='uq_pedido_compras_num_cod_produto_empresa'),
+        db.Index('idx_pedido_empresa', 'company_id', 'num_pedido'),  # ✅ Índice para filtros
     )
 
     # ✅ Relacionamento removido - num_requisicao agora é apenas campo informativo
@@ -414,6 +418,7 @@ class HistoricoRequisicaoCompras(db.Model):
 
     # Campos principais
     num_requisicao = db.Column(db.String(30), nullable=False, index=True)
+    company_id = db.Column(db.String(100), nullable=True)  # ✅ NOVO: Empresa compradora
     data_requisicao_criacao = db.Column(db.Date, nullable=False)
     usuario_requisicao_criacao = db.Column(db.String(100))
     lead_time_requisicao = db.Column(db.Integer)
@@ -462,6 +467,7 @@ class HistoricoRequisicaoCompras(db.Model):
             'alterado_por': self.alterado_por,
             'write_date_odoo': self.write_date_odoo.isoformat() if self.write_date_odoo else None,
             'num_requisicao': self.num_requisicao,
+            'company_id': self.company_id,  # ✅ NOVO
             'data_requisicao_criacao': self.data_requisicao_criacao.isoformat() if self.data_requisicao_criacao else None,
             'usuario_requisicao_criacao': self.usuario_requisicao_criacao,
             'lead_time_requisicao': self.lead_time_requisicao,
@@ -510,6 +516,7 @@ class HistoricoPedidoCompras(db.Model):
 
     # Campos principais
     num_pedido = db.Column(db.String(30), nullable=False, index=True)
+    company_id = db.Column(db.String(100), nullable=True)  # ✅ NOVO: Empresa compradora
     num_requisicao = db.Column(db.String(30))
     cnpj_fornecedor = db.Column(db.String(20))
     raz_social = db.Column(db.String(255))
@@ -567,6 +574,7 @@ class HistoricoPedidoCompras(db.Model):
             'alterado_por': self.alterado_por,
             'write_date_odoo': self.write_date_odoo.isoformat() if self.write_date_odoo else None,
             'num_pedido': self.num_pedido,
+            'company_id': self.company_id,  # ✅ NOVO
             'num_requisicao': self.num_requisicao,
             'cnpj_fornecedor': self.cnpj_fornecedor,
             'raz_social': self.raz_social,
@@ -659,6 +667,9 @@ class RequisicaoCompraAlocacao(db.Model):
 
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     nome_produto = db.Column(db.String(255), nullable=True)
+
+    # ✅ NOVO: Empresa compradora (denormalizado para performance)
+    company_id = db.Column(db.String(100), nullable=True, index=True)
 
     # ================================================
     # QUANTIDADES (conforme Odoo)

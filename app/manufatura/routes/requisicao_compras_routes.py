@@ -32,6 +32,9 @@ def register_requisicao_compras_routes(bp):
             data_inicio = request.args.get('data_inicio', '').strip()
             data_fim = request.args.get('data_fim', '').strip()
             num_requisicao = request.args.get('num_requisicao', '').strip()
+            # ✅ NOVO: Filtros de data de necessidade
+            data_necessidade_inicio = request.args.get('data_necessidade_inicio', '').strip()
+            data_necessidade_fim = request.args.get('data_necessidade_fim', '').strip()
 
             # Query base
             query = RequisicaoCompras.query
@@ -54,6 +57,15 @@ def register_requisicao_compras_routes(bp):
                 data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d').date()
                 query = query.filter(RequisicaoCompras.data_requisicao_criacao <= data_fim_dt)
 
+            # ✅ NOVO: Filtro por data de necessidade
+            if data_necessidade_inicio:
+                data_necessidade_inicio_dt = datetime.strptime(data_necessidade_inicio, '%Y-%m-%d').date()
+                query = query.filter(RequisicaoCompras.data_necessidade >= data_necessidade_inicio_dt)
+
+            if data_necessidade_fim:
+                data_necessidade_fim_dt = datetime.strptime(data_necessidade_fim, '%Y-%m-%d').date()
+                query = query.filter(RequisicaoCompras.data_necessidade <= data_necessidade_fim_dt)
+
             # Ordenar por data de criação DESC + num_requisicao
             query = query.order_by(
                 RequisicaoCompras.data_requisicao_criacao.desc(),
@@ -67,6 +79,7 @@ def register_requisicao_compras_routes(bp):
             # ✅ AGRUPAR por num_requisicao
             requisicoes_agrupadas = defaultdict(lambda: {
                 'num_requisicao': None,
+                'company_id': None,  # ✅ ADICIONADO
                 'data_criacao': None,
                 'usuario': None,
                 'status': None,
@@ -78,6 +91,7 @@ def register_requisicao_compras_routes(bp):
                     # Primeira linha desta requisição - preencher cabeçalho
                     requisicoes_agrupadas[linha.num_requisicao].update({
                         'num_requisicao': linha.num_requisicao,
+                        'company_id': linha.company_id,  # ✅ ADICIONADO
                         'data_criacao': linha.data_requisicao_solicitada or linha.data_requisicao_criacao,
                         'usuario': linha.usuario_requisicao_criacao,
                         'status': linha.status
@@ -118,6 +132,7 @@ def register_requisicao_compras_routes(bp):
                     'qtd': linha.qtd_produto_requisicao,
                     'data_necessidade': linha.data_necessidade,
                     'purchase_state': linha.purchase_state,
+                    'company_id': linha.company_id,  # ✅ ADICIONADO
                     'pedido': pedido_info
                 })
 
@@ -174,7 +189,9 @@ def register_requisicao_compras_routes(bp):
                     'status': status,
                     'data_inicio': data_inicio,
                     'data_fim': data_fim,
-                    'num_requisicao': num_requisicao
+                    'num_requisicao': num_requisicao,
+                    'data_necessidade_inicio': data_necessidade_inicio,  # ✅ NOVO
+                    'data_necessidade_fim': data_necessidade_fim  # ✅ NOVO
                 }
             )
 

@@ -117,16 +117,33 @@
                             </div>
                             <div class="col-md-2">
                                 <div class="mb-3">
-                                    <label for="data_inicio" class="form-label">Data Início</label>
+                                    <label for="data_inicio" class="form-label">Data Criação (De)</label>
                                     <input type="date" class="form-control" id="data_inicio" name="data_inicio"
                                            value="{{ filtros.data_inicio or '' }}">
                                 </div>
                             </div>
                             <div class="col-md-2">
                                 <div class="mb-3">
-                                    <label for="data_fim" class="form-label">Data Fim</label>
+                                    <label for="data_fim" class="form-label">Data Criação (Até)</label>
                                     <input type="date" class="form-control" id="data_fim" name="data_fim"
                                            value="{{ filtros.data_fim or '' }}">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- ✅ NOVA LINHA: Filtros de Data de Necessidade -->
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="data_necessidade_inicio" class="form-label">Data Necessidade (De)</label>
+                                    <input type="date" class="form-control" id="data_necessidade_inicio" name="data_necessidade_inicio"
+                                           value="{{ filtros.data_necessidade_inicio or '' }}">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="data_necessidade_fim" class="form-label">Data Necessidade (Até)</label>
+                                    <input type="date" class="form-control" id="data_necessidade_fim" name="data_necessidade_fim"
+                                           value="{{ filtros.data_necessidade_fim or '' }}">
                                 </div>
                             </div>
                         </div>
@@ -163,6 +180,9 @@
                         <div>
                             <strong class="fs-6">{{ req.num_requisicao }}</strong>
                             <span class="text-muted">- Criada em: {{ req.data_criacao.strftime('%d/%m/%Y') if req.data_criacao else '-' }}</span>
+                            {% if req.company_id %}
+                            <br><small class="text-primary"><i class="fas fa-building"></i> {{ req.company_id }}</small>
+                            {% endif %}
                         </div>
                         <div class="text-end">
                             <small class="text-muted">{{ req.usuario or 'Sistema' }}</small>

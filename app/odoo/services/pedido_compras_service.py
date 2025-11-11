@@ -302,17 +302,17 @@ class PedidoComprasServiceOtimizado:
             importado_odoo=True
         ).all()
 
-        # ✅ CORRIGIDO: Criar índice por chave composta (num_pedido, cod_produto)
+        # ✅ ATUALIZADO: Criar índice por chave composta (num_pedido, cod_produto, company_id)
         cache = {
             'por_odoo_id': {},           # odoo_id -> PedidoCompras (para compatibilidade)
-            'por_chave_composta': {}     # "num_pedido|cod_produto" -> PedidoCompras
+            'por_chave_composta': {}     # "num_pedido|cod_produto|company_id" -> PedidoCompras
         }
 
         for pedido in todos_pedidos:
             if pedido.odoo_id:
                 cache['por_odoo_id'][pedido.odoo_id] = pedido
-            # Criar chave composta usando constraint real do banco
-            chave = f"{pedido.num_pedido}|{pedido.cod_produto}"
+            # ✅ ATUALIZADO: Criar chave composta incluindo company_id
+            chave = f"{pedido.num_pedido}|{pedido.cod_produto}|{pedido.company_id}"
             cache['por_chave_composta'][chave] = pedido
 
         self.logger.info(f"   ✅ {len(todos_pedidos)} pedidos carregados em memória")
@@ -431,12 +431,17 @@ class PedidoComprasServiceOtimizado:
                 return {'processado': False, 'nova': False, 'atualizada': False}
 
             # PASSO 2: Verificar se já existe no CACHE
-            # ✅ CORRIGIDO: Usar ID do PEDIDO + cod_produto (constraint real)
+            # ✅ ATUALIZADO: Usar ID do PEDIDO + cod_produto + company_id (constraint real)
             odoo_id_pedido = str(pedido_odoo['id'])
             num_pedido = pedido_odoo['name']
 
-            # Criar chave composta para busca
-            chave_composta = f"{num_pedido}|{cod_produto}"
+            # ✅ NOVO: Extrair company_id (nome da empresa)
+            company_name = None
+            if pedido_odoo.get('company_id'):
+                company_name = pedido_odoo['company_id'][1] if len(pedido_odoo['company_id']) > 1 else None
+
+            # ✅ ATUALIZADO: Criar chave composta incluindo company_id
+            chave_composta = f"{num_pedido}|{cod_produto}|{company_name}"
 
             # 🚀 Busca no CACHE por chave composta
             pedido_existente = pedidos_existentes_cache['por_chave_composta'].get(chave_composta)
@@ -457,7 +462,8 @@ class PedidoComprasServiceOtimizado:
                 # 🚀 Atualizar CACHE com novo pedido usando chave composta
                 if novo_pedido.odoo_id:
                     pedidos_existentes_cache['por_odoo_id'][novo_pedido.odoo_id] = novo_pedido
-                chave_nova = f"{novo_pedido.num_pedido}|{novo_pedido.cod_produto}"
+                # ✅ ATUALIZADO: Incluir company_id na chave
+                chave_nova = f"{novo_pedido.num_pedido}|{novo_pedido.cod_produto}|{novo_pedido.company_id}"
                 pedidos_existentes_cache['por_chave_composta'][chave_nova] = novo_pedido
 
                 return {'processado': True, 'nova': True, 'atualizada': False}
@@ -497,10 +503,16 @@ class PedidoComprasServiceOtimizado:
                 linha_odoo['date_planned'], '%Y-%m-%d %H:%M:%S'
             ).date()
 
+        # ✅ NOVO: Extrair company_id (nome da empresa)
+        company_name = None
+        if pedido_odoo.get('company_id'):
+            company_name = pedido_odoo['company_id'][1] if len(pedido_odoo['company_id']) > 1 else None
+
         # Criar objeto
         novo_pedido = PedidoCompras(
             # Identificação
             num_pedido=pedido_odoo['name'],
+            company_id=company_name,  # ✅ NOVO: Empresa compradora
             odoo_id=str(linha_odoo['id']),
 
             # Fornecedor
@@ -546,6 +558,7 @@ class PedidoComprasServiceOtimizado:
 
             # Snapshot completo - TODOS os campos
             num_pedido=novo_pedido.num_pedido,
+            company_id=novo_pedido.company_id,  # ✅ NOVO
             num_requisicao=novo_pedido.num_requisicao,
             cnpj_fornecedor=novo_pedido.cnpj_fornecedor,
             raz_social=novo_pedido.raz_social,
@@ -639,6 +652,7 @@ class PedidoComprasServiceOtimizado:
 
                 # Snapshot completo - TODOS os campos (estado APÓS alteração)
                 num_pedido=pedido_existente.num_pedido,
+                company_id=pedido_existente.company_id,  # ✅ NOVO
                 num_requisicao=pedido_existente.num_requisicao,
                 cnpj_fornecedor=pedido_existente.cnpj_fornecedor,
                 raz_social=pedido_existente.raz_social,

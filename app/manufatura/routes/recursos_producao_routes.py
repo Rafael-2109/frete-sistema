@@ -644,6 +644,7 @@ def api_separacoes_estoque():
     try:
         from app.separacao.models import Separacao
         from app.producao.models import CadastroPalletizacao
+        from app.estoque.models import UnificacaoCodigos
         from datetime import datetime, timedelta
         from collections import defaultdict
 
@@ -659,6 +660,9 @@ def api_separacoes_estoque():
         data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
         data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
 
+        # ✅ UNIFICAÇÃO: Obter todos os códigos relacionados
+        codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
+
         # Buscar nome do produto
         cadastro = CadastroPalletizacao.query.filter_by(
             cod_produto=cod_produto,
@@ -666,9 +670,9 @@ def api_separacoes_estoque():
         ).first()
         nome_produto = cadastro.nome_produto if cadastro else cod_produto
 
-        # Buscar separações no período (saídas: sincronizado_nf=False)
+        # ✅ CORRIGIDO: Buscar separações usando códigos relacionados
         separacoes = Separacao.query.filter(
-            Separacao.cod_produto == cod_produto,
+            Separacao.cod_produto.in_(codigos_relacionados),
             Separacao.expedicao >= data_inicio,
             Separacao.expedicao <= data_fim,
             Separacao.sincronizado_nf == False
@@ -681,10 +685,10 @@ def api_separacoes_estoque():
                 dia_key = sep.expedicao.strftime('%Y-%m-%d')
                 saidas_por_dia[dia_key] += float(sep.qtd_saldo or 0)
 
-        # Buscar programações (entradas)
+        # ✅ CORRIGIDO: Buscar programações usando códigos relacionados
         from app.producao.models import ProgramacaoProducao
         programacoes = ProgramacaoProducao.query.filter(
-            ProgramacaoProducao.cod_produto == cod_produto,
+            ProgramacaoProducao.cod_produto.in_(codigos_relacionados),
             ProgramacaoProducao.data_programacao >= data_inicio,
             ProgramacaoProducao.data_programacao <= data_fim
         ).all()
@@ -728,9 +732,9 @@ def api_separacoes_estoque():
         # ✅ BUSCAR PEDIDOS (Separacao com sincronizado_nf=False no período)
         from app.carteira.models import CarteiraPrincipal
 
-        # Buscar separações detalhadas
+        # ✅ CORRIGIDO: Buscar separações detalhadas usando códigos relacionados
         separacoes_detalhadas = Separacao.query.filter(
-            Separacao.cod_produto == cod_produto,
+            Separacao.cod_produto.in_(codigos_relacionados),
             Separacao.expedicao >= data_inicio,
             Separacao.expedicao <= data_fim,
             Separacao.sincronizado_nf == False
@@ -740,9 +744,10 @@ def api_separacoes_estoque():
         pedidos_numeros = [sep.num_pedido for sep in separacoes_detalhadas]
         carteira_map = {}
         if pedidos_numeros:
+            # ✅ CORRIGIDO: Buscar carteira usando códigos relacionados
             carteira_items = CarteiraPrincipal.query.filter(
                 CarteiraPrincipal.num_pedido.in_(pedidos_numeros),
-                CarteiraPrincipal.cod_produto == cod_produto
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
             ).all()
 
             # Criar mapa: num_pedido -> data_entrega_pedido
@@ -773,10 +778,11 @@ def api_separacoes_estoque():
         hoje = date_cls.today()
         data_fim_d60 = hoje + timedelta(days=60)
 
-        # Buscar recursos do produto (linhas de produção disponíveis)
-        recursos = RecursosProducao.query.filter_by(
-            cod_produto=cod_produto,
-            disponivel=True
+        # ✅ CORRIGIDO: Buscar recursos considerando códigos relacionados
+        # Como RecursosProducao pode ter registros para cada código, buscar por todos
+        recursos = RecursosProducao.query.filter(
+            RecursosProducao.cod_produto.in_(codigos_relacionados),
+            RecursosProducao.disponivel == True
         ).all()
 
         # Buscar programações de TODOS os produtos nas linhas onde este produto pode ser produzido
@@ -808,11 +814,11 @@ def api_separacoes_estoque():
                     'qtd_programada': float(prog.qtd_programada),
                     'cliente_produto': prog.cliente_produto,
                     'observacao_pcp': prog.observacao_pcp,
-                    'eh_produto_modal': prog.cod_produto == cod_produto  # Flag para destaque
+                    'eh_produto_modal': prog.cod_produto in codigos_relacionados  # ✅ CORRIGIDO: Usar códigos relacionados
                 })
 
-                # Somar total programado (apenas do produto do modal)
-                if prog.cod_produto == cod_produto:
+                # ✅ CORRIGIDO: Somar total programado para TODOS os códigos relacionados
+                if prog.cod_produto in codigos_relacionados:
                     programacoes_linhas[prog.linha_producao]['total_programado'] += float(prog.qtd_programada)
 
             # Converter defaultdict para dict normal

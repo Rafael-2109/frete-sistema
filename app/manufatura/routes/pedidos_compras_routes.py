@@ -143,6 +143,7 @@ def api_listar_pedidos():
             pedidos_agrupados[num_pedido] = {
                 # Cabeçalho do card (dados do pedido)
                 'num_pedido': num_pedido,
+                'company_id': linha.company_id,  # ✅ NOVO: Empresa compradora
                 'fornecedor': linha.raz_social,
                 'cnpj_fornecedor': linha.cnpj_fornecedor,
                 'data_criacao': linha.data_pedido_criacao.isoformat() if linha.data_pedido_criacao else None,
@@ -228,6 +229,7 @@ def api_detalhes_pedido(pedido_id):
         'pedido': {
             'id': pedido.id,
             'num_pedido': pedido.num_pedido,
+            'company_id': pedido.company_id,  # ✅ NOVO: Empresa compradora
             'cod_produto': pedido.cod_produto,
             'nome_produto': pedido.nome_produto,
             'qtd_pedido': float(pedido.qtd_produto_pedido),
@@ -288,6 +290,7 @@ def api_historico_pedido(pedido_compra_id):
             # Snapshot completo
             'dados': {
                 'num_pedido': snapshot.num_pedido,
+                'company_id': snapshot.company_id,  # ✅ NOVO: Empresa compradora
                 'num_requisicao': snapshot.num_requisicao,
                 'cnpj_fornecedor': snapshot.cnpj_fornecedor,
                 'raz_social': snapshot.raz_social,
