@@ -302,24 +302,9 @@ AUTH_PAGE_TEMPLATE = """
     }
     </script>
 
-    <div class="card">
-        <h2>🎯 Importar NF Individual</h2>
-        <p>Buscar e importar uma NF específica com validações completas:</p>
-        <div style="margin: 10px 0;">
-            <label>Número da NF:</label>
-            <input type="text" id="numeroNFIndividual" placeholder="Ex: 3706" style="padding: 5px; margin-right: 10px; width: 150px;">
-
-            <button class="btn btn-primary" onclick="buscarNFIndividual()">
-                🔍 Buscar e Validar
-            </button>
-        </div>
-        <div id="loadingNFIndividual" style="display: none; text-align: center; padding: 20px;">
-            ⏳ Buscando NF...
-        </div>
-    </div>
-
     <script>
     // ========== IMPORTAÇÃO INDIVIDUAL DE NF ==========
+    // ✅ CORRIGIDO: Script movido para ANTES do botão para evitar "function is not defined"
     function buscarNFIndividual() {
         const numeroNF = document.getElementById('numeroNFIndividual').value.trim();
         if (!numeroNF) {
@@ -417,6 +402,22 @@ AUTH_PAGE_TEMPLATE = """
     }
     // ========== FIM IMPORTAÇÃO INDIVIDUAL ==========
     </script>
+
+    <div class="card">
+        <h2>🎯 Importar NF Individual</h2>
+        <p>Buscar e importar uma NF específica com validações completas:</p>
+        <div style="margin: 10px 0;">
+            <label>Número da NF:</label>
+            <input type="text" id="numeroNFIndividual" placeholder="Ex: 3706" style="padding: 5px; margin-right: 10px; width: 150px;">
+
+            <button class="btn btn-primary" onclick="buscarNFIndividual()">
+                🔍 Buscar e Validar
+            </button>
+        </div>
+        <div id="loadingNFIndividual" style="display: none; text-align: center; padding: 20px;">
+            ⏳ Buscando NF...
+        </div>
+    </div>
     {% endif %}
     {% endif %}
 
@@ -538,6 +539,8 @@ def index():
     status = request.args.get('status')
     status_type = request.args.get('status_type', 'success')
 
+    from flask_wtf.csrf import generate_csrf
+
     return render_template_string(
         AUTH_PAGE_TEMPLATE,
         tokens_clientes=tokens_clientes,
@@ -547,7 +550,8 @@ def index():
         status=status,
         status_type=status_type,
         datetime=datetime,
-        timedelta=timedelta
+        timedelta=timedelta,
+        csrf_token=generate_csrf  # ✅ CORRIGIDO: Adiciona função csrf_token para processar {{ csrf_token() }}
     )
 
 @oauth_bp.route('/authorize/<api_type>')

@@ -55,9 +55,9 @@ ALTER TABLE pedido_compras
 ADD COLUMN atualizado_em TIMESTAMP DEFAULT NOW()
 
 # Atualiza registros existentes
-UPDATE pedido_compras
-SET atualizado_em = criado_em
-WHERE atualizado_em IS NULL
+UPDATE separacao
+SET cnpj_cpf = '67.702.647/0001-36'
+WHERE separacao_lote_id = 'LOTE_77DBFDA3';
 ```
 
 ### 2. Script SQL (para Render):

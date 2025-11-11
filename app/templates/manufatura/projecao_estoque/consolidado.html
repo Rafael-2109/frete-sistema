@@ -75,6 +75,14 @@
                 <label class="form-check-label" for="col-pedidos">Qtd Pedidos</label>
             </div>
             <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-atrasados" value="atrasados" checked>
+                <label class="form-check-label" for="col-atrasados">Qtd Atrasados</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input col-toggle" type="checkbox" id="col-detalhes" value="detalhes" checked>
+                <label class="form-check-label" for="col-detalhes">Detalhes</label>
+            </div>
+            <div class="form-check form-check-inline">
                 <input class="form-check-input col-toggle" type="checkbox" id="col-projecao" value="projecao" checked>
                 <label class="form-check-label" for="col-projecao"><strong>Projeção D0-D60</strong></label>
             </div>
@@ -131,6 +139,8 @@
                             <th class="text-end col-saldo-prog">Saldo<br>Programação</th>
                             <th class="text-end col-requisicoes">Qtd<br>Requisições</th>
                             <th class="text-end col-pedidos">Qtd<br>Pedidos</th>
+                            <th class="text-end col-atrasados">Qtd<br>Atrasados</th>
+                            <th class="text-center col-detalhes">Detalhes</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-projecao">
@@ -142,6 +152,77 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <div class="modal fade" id="modalDetalhes" tabindex="-1" aria-labelledby="modalDetalhesLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalDetalhesLabel">
+                        <i class="fas fa-list me-2"></i>
+                        Detalhes de Requisições e Pedidos
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Produto:</strong> <span id="modal-produto"></span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Requisição</th>
+                                    <th>Pedido</th>
+                                    <th>Fornecedor</th>
+                                    <th class="text-end">Saldo</th>
+                                    <th>Data Chegada</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-tbody">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card border-warning">
+                                    <div class="card-body p-2">
+                                        <small class="text-muted">Total Requisições (no prazo)</small>
+                                        <h6 class="mb-0" id="modal-total-req">0,00</h6>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-info">
+                                    <div class="card-body p-2">
+                                        <small class="text-muted">Total Pedidos (no prazo)</small>
+                                        <h6 class="mb-0" id="modal-total-ped">0,00</h6>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-danger">
+                                    <div class="card-body p-2">
+                                        <small class="text-muted">Total Atrasados</small>
+                                        <h6 class="mb-0 text-danger" id="modal-total-atr">0,00</h6>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                </div>
             </div>
         </div>
     </div>

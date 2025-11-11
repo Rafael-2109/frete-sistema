@@ -114,11 +114,8 @@ class ServicoProjecaoEstoque:
             # ✅ NOVO: Saldo Programação
             saldo_programacao = float(estoque_atual) - consumo_programacao
 
-            # Qtd em Requisições
-            qtd_requisicoes = self._calcular_qtd_requisicoes(cod_produto)
-
-            # Qtd em Pedidos
-            qtd_pedidos = self._calcular_qtd_pedidos(cod_produto)
+            # ✅ NOVO: Detalhes Mesclados (requisições + pedidos) com separação de atrasados
+            detalhes = self._calcular_detalhes_mesclados(cod_produto)
 
             # Projeção D0-D60 (timeline completa)
             entradas = self._calcular_entradas(cod_produto, data_inicio, data_fim)
@@ -131,12 +128,15 @@ class ServicoProjecaoEstoque:
                 'estoque_atual': round(float(estoque_atual), 2),
                 'consumo_carteira': round(consumo_carteira, 2),
                 'saldo_carteira': round(saldo_carteira, 2),
-                'consumo_programacao': round(consumo_programacao, 2),  # ✅ NOVO
-                'saldo_programacao': round(saldo_programacao, 2),      # ✅ NOVO
-                'qtd_requisicoes': round(qtd_requisicoes, 2),
-                'qtd_pedidos': round(qtd_pedidos, 2),
+                'consumo_programacao': round(consumo_programacao, 2),
+                'saldo_programacao': round(saldo_programacao, 2),
+                # ✅ NOVO: Quantidades excluindo atrasados
+                'qtd_requisicoes': detalhes['qtd_requisicoes_no_prazo'],
+                'qtd_pedidos': detalhes['qtd_pedidos_no_prazo'],
+                'qtd_atrasados': detalhes['qtd_atrasados'],
+                'detalhes_mesclados': detalhes['detalhes_mesclados'],
                 'timeline': timeline,  # Array de 61 posições (D0 a D60)
-                # ✅ NOVOS CAMPOS para UI (NÃO incluir linha_producao)
+                # ✅ CAMPOS para UI
                 'tipo_embalagem': produto.tipo_embalagem,
                 'tipo_materia_prima': produto.tipo_materia_prima,
                 'categoria_produto': produto.categoria_produto
@@ -302,40 +302,51 @@ class ServicoProjecaoEstoque:
         data_fim: date
     ) -> List[Dict]:
         """
-        Calcula entradas: Pedidos confirmados + Saldo de requisições
+        Calcula entradas: Pedidos (saldo não recebido) + Requisições (saldo não alocado)
+
+        LÓGICA SEM DUPLICAÇÃO:
+        - Pedidos: qtd_produto_pedido - qtd_recebida (apenas o que ainda vai entrar)
+        - Requisições: qtd_produto_requisicao - SUM(qtd_alocada) (apenas o que não virou pedido)
         """
         entradas = []
 
-        # PARTE 1: Pedidos Confirmados (✅ excluindo cancelados)
+        # PARTE 1: Pedidos de Compras - SALDO NÃO RECEBIDO
+        # Considera apenas: status != 'cancel', 'done' E saldo > 0
         pedidos = PedidoCompras.query.filter(
             PedidoCompras.cod_produto == cod_produto,
             PedidoCompras.importado_odoo == True,
             PedidoCompras.data_pedido_previsao.isnot(None),
             PedidoCompras.data_pedido_previsao.between(data_inicio, data_fim),
-            PedidoCompras.status_odoo != 'cancel'  # ✅ NÃO considerar cancelados
+            PedidoCompras.status_odoo.notin_(['cancel', 'done'])  # ✅ Excluir cancelados E concluídos
         ).all()
 
         for pedido in pedidos:
-            entradas.append({
-                'data': pedido.data_pedido_previsao,
-                'quantidade': float(pedido.qtd_produto_pedido),
-                'tipo': 'PEDIDO',
-                'origem': pedido.num_pedido,
-                'fornecedor': pedido.raz_social
-            })
+            # ✅ NOVO: Calcular saldo não recebido
+            saldo_pedido = pedido.qtd_produto_pedido - (pedido.qtd_recebida or Decimal('0'))
 
-        # PARTE 2: Saldos de Requisições (✅ excluindo rejeitadas/canceladas)
+            if saldo_pedido > 0:
+                entradas.append({
+                    'data': pedido.data_pedido_previsao,
+                    'quantidade': float(saldo_pedido),
+                    'tipo': 'PEDIDO',
+                    'origem': pedido.num_pedido,
+                    'fornecedor': pedido.raz_social,
+                    'status': pedido.status_odoo  # ✅ NOVO: Para exibição
+                })
+
+        # PARTE 2: Requisições de Compras - SALDO NÃO ALOCADO
+        # Considera apenas: status ativo E não rejeitadas E saldo > 0
         requisicoes = RequisicaoCompras.query.filter(
             RequisicaoCompras.cod_produto == cod_produto,
             RequisicaoCompras.importado_odoo == True,
             RequisicaoCompras.data_necessidade.isnot(None),
             RequisicaoCompras.data_necessidade.between(data_inicio, data_fim),
             RequisicaoCompras.status.in_(['Aprovada', 'Aguardando Aprovação']),
-            RequisicaoCompras.status_requisicao != 'rejected'  # ✅ NÃO considerar rejeitadas
+            RequisicaoCompras.status_requisicao != 'rejected'
         ).all()
 
         for requisicao in requisicoes:
-            # Calcular saldo não atendido
+            # ✅ Calcular saldo não alocado (não virou pedido ainda)
             qtd_alocada_total = db.session.query(
                 func.sum(RequisicaoCompraAlocacao.qtd_alocada)
             ).filter(
@@ -350,7 +361,8 @@ class ServicoProjecaoEstoque:
                     'quantidade': float(saldo),
                     'tipo': 'SALDO_REQUISICAO',
                     'origem': requisicao.num_requisicao,
-                    'fornecedor': None
+                    'fornecedor': None,
+                    'status': requisicao.status  # ✅ NOVO: Para exibição
                 })
 
         return sorted(entradas, key=lambda x: x['data'])
@@ -809,6 +821,159 @@ class ServicoProjecaoEstoque:
                 consumo_total += qtd_necessaria
 
         return consumo_total
+
+    def _calcular_detalhes_mesclados(self, cod_produto: str) -> Dict[str, Any]:
+        """
+        Retorna detalhes MESCLADOS de requisições e pedidos, separando atrasados
+
+        Lógica:
+        1. Busca requisições com saldo não alocado
+        2. Busca pedidos com saldo não recebido
+        3. Para cada requisição, busca alocações para vincular pedidos
+        4. Mescla tudo em ordem cronológica
+        5. Separa atrasados (data < hoje)
+
+        Retorna:
+            {
+                'detalhes_mesclados': [lista ordenada por data],
+                'qtd_atrasados': float,
+                'qtd_requisicoes_no_prazo': float,
+                'qtd_pedidos_no_prazo': float
+            }
+        """
+        hoje = date.today()
+        detalhes_mesclados = []
+        qtd_atrasados = 0.0
+        qtd_requisicoes_no_prazo = 0.0
+        qtd_pedidos_no_prazo = 0.0
+
+        # PARTE 1: Buscar REQUISIÇÕES com saldo não alocado
+        requisicoes = RequisicaoCompras.query.filter(
+            RequisicaoCompras.cod_produto == cod_produto,
+            RequisicaoCompras.importado_odoo == True,
+            RequisicaoCompras.status.in_(['Aprovada', 'Aguardando Aprovação']),
+            RequisicaoCompras.status_requisicao != 'rejected'
+        ).all()
+
+        pedidos_ja_processados = set()  # IDs de pedidos já vinculados
+
+        for req in requisicoes:
+            # Calcular saldo não alocado
+            qtd_alocada_total = db.session.query(
+                func.sum(RequisicaoCompraAlocacao.qtd_alocada)
+            ).filter(
+                RequisicaoCompraAlocacao.requisicao_compra_id == req.id
+            ).scalar() or Decimal('0')
+
+            saldo_req = req.qtd_produto_requisicao - qtd_alocada_total
+
+            if saldo_req > 0:
+                # Buscar alocações desta requisição
+                alocacoes = RequisicaoCompraAlocacao.query.filter(
+                    RequisicaoCompraAlocacao.requisicao_compra_id == req.id
+                ).all()
+
+                # Se tem alocações, mostrar pedidos vinculados
+                if alocacoes:
+                    for alocacao in alocacoes:
+                        if alocacao.pedido and alocacao.pedido.id not in pedidos_ja_processados:
+                            pedido = alocacao.pedido
+                            saldo_pedido = pedido.qtd_produto_pedido - (pedido.qtd_recebida or Decimal('0'))
+
+                            if saldo_pedido > 0:
+                                data_chegada = pedido.data_pedido_previsao or req.data_necessidade
+                                atrasado = data_chegada < hoje if data_chegada else False
+
+                                item = {
+                                    'tipo': 'PEDIDO',
+                                    'tipo_origem': 'REQUISICAO',  # Veio de requisição
+                                    'num_requisicao': req.num_requisicao,
+                                    'num_pedido': pedido.num_pedido,
+                                    'fornecedor': pedido.raz_social,
+                                    'saldo': round(float(saldo_pedido), 2),
+                                    'data_chegada': data_chegada.isoformat() if data_chegada else None,
+                                    'status_pedido': pedido.status_odoo,
+                                    'status_requisicao': req.status,
+                                    'atrasado': atrasado
+                                }
+
+                                detalhes_mesclados.append(item)
+                                pedidos_ja_processados.add(pedido.id)
+
+                                if atrasado:
+                                    qtd_atrasados += item['saldo']
+                                else:
+                                    qtd_pedidos_no_prazo += item['saldo']
+
+                # Se tem saldo não alocado, mostrar como requisição pura
+                if saldo_req > qtd_alocada_total:
+                    data_chegada = req.data_necessidade
+                    atrasado = data_chegada < hoje if data_chegada else False
+
+                    item = {
+                        'tipo': 'REQUISICAO',
+                        'tipo_origem': 'REQUISICAO',
+                        'num_requisicao': req.num_requisicao,
+                        'num_pedido': None,
+                        'fornecedor': None,
+                        'saldo': round(float(saldo_req), 2),
+                        'data_chegada': data_chegada.isoformat() if data_chegada else None,
+                        'status_pedido': None,
+                        'status_requisicao': req.status,
+                        'atrasado': atrasado
+                    }
+
+                    detalhes_mesclados.append(item)
+
+                    if atrasado:
+                        qtd_atrasados += item['saldo']
+                    else:
+                        qtd_requisicoes_no_prazo += item['saldo']
+
+        # PARTE 2: Buscar PEDIDOS que NÃO vieram de requisições
+        pedidos_sem_requisicao = PedidoCompras.query.filter(
+            PedidoCompras.cod_produto == cod_produto,
+            PedidoCompras.importado_odoo == True,
+            PedidoCompras.status_odoo.notin_(['cancel', 'done']),
+            ~PedidoCompras.id.in_(pedidos_ja_processados) if pedidos_ja_processados else True
+        ).all()
+
+        for pedido in pedidos_sem_requisicao:
+            saldo_pedido = pedido.qtd_produto_pedido - (pedido.qtd_recebida or Decimal('0'))
+
+            if saldo_pedido > 0:
+                data_chegada = pedido.data_pedido_previsao
+                atrasado = data_chegada < hoje if data_chegada else False
+
+                item = {
+                    'tipo': 'PEDIDO',
+                    'tipo_origem': 'DIRETO',  # Pedido direto (sem requisição)
+                    'num_requisicao': None,
+                    'num_pedido': pedido.num_pedido,
+                    'fornecedor': pedido.raz_social,
+                    'saldo': round(float(saldo_pedido), 2),
+                    'data_chegada': data_chegada.isoformat() if data_chegada else None,
+                    'status_pedido': pedido.status_odoo,
+                    'status_requisicao': None,
+                    'atrasado': atrasado
+                }
+
+                detalhes_mesclados.append(item)
+
+                if atrasado:
+                    qtd_atrasados += item['saldo']
+                else:
+                    qtd_pedidos_no_prazo += item['saldo']
+
+        # Ordenar por data de chegada
+        detalhes_mesclados.sort(key=lambda x: x['data_chegada'] or '9999-12-31')
+
+        return {
+            'detalhes_mesclados': detalhes_mesclados,
+            'qtd_atrasados': round(qtd_atrasados, 2),
+            'qtd_requisicoes_no_prazo': round(qtd_requisicoes_no_prazo, 2),
+            'qtd_pedidos_no_prazo': round(qtd_pedidos_no_prazo, 2)
+        }
 
     def _calcular_qtd_requisicoes(self, cod_produto: str) -> float:
         """

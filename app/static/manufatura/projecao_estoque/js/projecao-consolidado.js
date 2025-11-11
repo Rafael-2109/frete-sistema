@@ -109,6 +109,12 @@ function renderizarTabela(componentes) {
             <td class="text-end col-saldo-prog ${classeValor(comp.saldo_programacao)}">${formatarNumero(comp.saldo_programacao)}</td>
             <td class="text-end col-requisicoes">${formatarNumero(comp.qtd_requisicoes)}</td>
             <td class="text-end col-pedidos">${formatarNumero(comp.qtd_pedidos)}</td>
+            <td class="text-end col-atrasados ${comp.qtd_atrasados > 0 ? 'text-danger fw-bold' : ''}">${formatarNumero(comp.qtd_atrasados)}</td>
+            <td class="text-center col-detalhes">
+                <button class="btn btn-sm btn-outline-primary" onclick="abrirModalDetalhes('${comp.cod_produto}', '${escaparHtml(comp.nome_produto)}')">
+                    <i class="fas fa-list"></i>
+                </button>
+            </td>
         `;
 
         // Colunas de projeção D0-D60
@@ -164,6 +170,8 @@ function toggleColunas() {
         'saldo-prog': document.getElementById('col-saldo-prog').checked,
         'requisicoes': document.getElementById('col-requisicoes').checked,
         'pedidos': document.getElementById('col-pedidos').checked,
+        'atrasados': document.getElementById('col-atrasados').checked,
+        'detalhes': document.getElementById('col-detalhes').checked,
         'projecao': document.getElementById('col-projecao').checked
     };
 
@@ -236,4 +244,86 @@ function mostrarLoading(mostrar) {
     } else {
         spinner.classList.add('d-none');
     }
+}
+
+// ============================================================
+// MODAL DE DETALHES
+// ============================================================
+
+function abrirModalDetalhes(codProduto, nomeProduto) {
+    // Buscar dados do componente
+    const comp = dadosComponentes.find(c => c.cod_produto === codProduto);
+
+    if (!comp) {
+        alert('Componente não encontrado');
+        return;
+    }
+
+    // Preencher informações do modal
+    document.getElementById('modal-produto').textContent = `${codProduto} - ${nomeProduto}`;
+    document.getElementById('modal-total-req').textContent = formatarNumero(comp.qtd_requisicoes);
+    document.getElementById('modal-total-ped').textContent = formatarNumero(comp.qtd_pedidos);
+    document.getElementById('modal-total-atr').textContent = formatarNumero(comp.qtd_atrasados);
+
+    // Renderizar detalhes mesclados
+    const tbody = document.getElementById('modal-tbody');
+    tbody.innerHTML = '';
+
+    if (!comp.detalhes_mesclados || comp.detalhes_mesclados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum detalhe disponível</td></tr>';
+    } else {
+        comp.detalhes_mesclados.forEach(item => {
+            const tr = document.createElement('tr');
+
+            // Aplicar classe de atrasado
+            if (item.atrasado) {
+                tr.classList.add('table-danger');
+            }
+
+            // Tipo
+            const badgeTipo = item.tipo === 'PEDIDO' ?
+                '<span class="badge bg-info">Pedido</span>' :
+                '<span class="badge bg-warning text-dark">Requisição</span>';
+
+            // Origem
+            let badgeOrigem = '';
+            if (item.tipo_origem === 'REQUISICAO') {
+                badgeOrigem = '<small class="text-muted">(de Req)</small>';
+            } else if (item.tipo_origem === 'DIRETO') {
+                badgeOrigem = '<small class="text-success">(Direto)</small>';
+            }
+
+            tr.innerHTML = `
+                <td>${badgeTipo} ${badgeOrigem}</td>
+                <td>${item.num_requisicao || '-'}</td>
+                <td>${item.num_pedido || '-'}</td>
+                <td><small>${item.fornecedor || '-'}</small></td>
+                <td class="text-end fw-bold">${item.saldo.toFixed(2).replace('.', ',')}</td>
+                <td>${item.data_chegada ? formatarData(item.data_chegada) : '-'}${item.atrasado ? ' <span class="badge bg-danger">ATRASADO</span>' : ''}</td>
+                <td><small>${item.status_pedido || item.status_requisicao || '-'}</small></td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+    modal.show();
+}
+
+function formatarData(dataISO) {
+    if (!dataISO) return '-';
+
+    const [ano, mes, dia] = dataISO.split('-');
+    return `${dia}/${mes}/${ano}`;
+}
+
+function escaparHtml(texto) {
+    return texto
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }

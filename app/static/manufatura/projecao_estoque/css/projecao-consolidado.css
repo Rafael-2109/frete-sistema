@@ -159,6 +159,8 @@ thead .sticky-col-produto {
 }
 
 /* Tamanhos de fonte */
+
+/* XS (Very Small) */
 body.font-very-small .table-projecao {
     font-size: 0.65rem;
 }
@@ -169,6 +171,16 @@ body.font-very-small .col-projecao {
     max-width: 50px;
 }
 
+body.font-very-small .col-detalhes .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.65rem;
+}
+
+body.font-very-small .col-detalhes .btn i {
+    font-size: 0.65rem;
+}
+
+/* S (Small) */
 body.font-small .table-projecao {
     font-size: 0.75rem;
 }
@@ -177,10 +189,30 @@ body.font-small .col-projecao {
     font-size: 0.65rem;
 }
 
+body.font-small .col-detalhes .btn {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+body.font-small .col-detalhes .btn i {
+    font-size: 0.75rem;
+}
+
+/* M (Medium) - Padrão */
 body.font-medium .table-projecao {
     font-size: 0.85rem;
 }
 
+body.font-medium .col-detalhes .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+body.font-medium .col-detalhes .btn i {
+    font-size: 0.85rem;
+}
+
+/* L (Large) */
 body.font-large .table-projecao {
     font-size: 0.95rem;
 }
@@ -189,6 +221,15 @@ body.font-large .col-projecao {
     font-size: 0.85rem;
     min-width: 70px;
     max-width: 70px;
+}
+
+body.font-large .col-detalhes .btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.95rem;
+}
+
+body.font-large .col-detalhes .btn i {
+    font-size: 0.95rem;
 }
 
 /* Hover em linhas */

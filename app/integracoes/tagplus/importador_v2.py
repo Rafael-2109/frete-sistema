@@ -363,7 +363,6 @@ class ImportadorTagPlusV2:
                 empresa_endereco_ent=dados.get('razao_social', dados.get('nome', '')),
                 
                 # Controle
-                origem='TagPlus',
                 criado_em=datetime.utcnow()
             )
             
