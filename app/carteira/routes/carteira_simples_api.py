@@ -107,6 +107,64 @@ def converter_entradas_para_frontend(entradas_dict):
         return []
 
 
+def atualizar_embarque_item_por_separacao(separacao_lote_id):
+    """
+    Atualiza EmbarqueItem quando uma Separacao do lote é modificada
+    Recalcula peso, valor e pallets somando todas as Separacoes do lote
+
+    Args:
+        separacao_lote_id: ID do lote de separação
+
+    Returns:
+        bool: True se atualizou, False se não encontrou EmbarqueItem
+    """
+    try:
+        if not separacao_lote_id:
+            return False
+
+        # Buscar EmbarqueItem correspondente (apenas ativos)
+        embarque_item = EmbarqueItem.query.filter_by(
+            separacao_lote_id=separacao_lote_id,
+            status='ativo'
+        ).first()
+
+        if not embarque_item:
+            logger.debug(f"[EMBARQUE] Lote {separacao_lote_id} não está embarcado")
+            return False
+
+        # Buscar TODAS as Separacoes deste lote
+        separacoes_lote = Separacao.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).all()
+
+        if not separacoes_lote:
+            logger.warning(f"[EMBARQUE] ⚠️ Lote {separacao_lote_id} sem separações - zerando EmbarqueItem")
+            embarque_item.peso = 0
+            embarque_item.valor = 0
+            embarque_item.pallets = 0
+        else:
+            # Recalcular totais somando todas as separações do lote
+            embarque_item.peso = sum(float(s.peso or 0) for s in separacoes_lote)
+            embarque_item.valor = sum(float(s.valor_saldo or 0) for s in separacoes_lote)
+            embarque_item.pallets = sum(float(s.pallet or 0) for s in separacoes_lote)
+
+            logger.info(
+                f"[EMBARQUE] ✅ EmbarqueItem ID={embarque_item.id} atualizado: "
+                f"Peso={embarque_item.peso:.2f}, Valor={embarque_item.valor:.2f}, "
+                f"Pallets={embarque_item.pallets:.2f} (baseado em {len(separacoes_lote)} separações)"
+            )
+
+        # Commit das alterações (o trigger do banco atualizará o Embarque automaticamente)
+        db.session.commit()
+
+        return True
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[EMBARQUE] ❌ Erro ao atualizar EmbarqueItem do lote {separacao_lote_id}: {e}", exc_info=True)
+        return False
+
+
 @carteira_simples_bp.route('/')
 def index():
     """Renderiza página da carteira simplificada"""
@@ -1028,6 +1086,17 @@ def gerar_separacao():
         # Gerar lote_id único
         lote_id = gerar_lote_id()
 
+        # 🔧 DETERMINAR tipo_envio CORRETAMENTE: verificar se está separando TODOS os produtos
+        from app.carteira.utils.separacao_utils import determinar_tipo_envio
+
+        # Buscar produtos na carteira para validação
+        produtos_carteira = {}
+        for item in CarteiraPrincipal.query.filter_by(num_pedido=num_pedido, ativo=True).all():
+            produtos_carteira[item.cod_produto] = item
+
+        tipo_envio_correto = determinar_tipo_envio(num_pedido, produtos, produtos_carteira)
+        logger.info(f"✅ tipo_envio determinado: {tipo_envio_correto} para pedido {num_pedido}")
+
         separacoes_criadas = []
 
         for produto in produtos:
@@ -1123,7 +1192,7 @@ def gerar_separacao():
                 agendamento=agendamento,
                 protocolo=protocolo,
                 pedido_cliente=item_carteira.pedido_cliente,
-                tipo_envio='total',  # Pode ser ajustado conforme lógica
+                tipo_envio=tipo_envio_correto,  # 🔧 CORRIGIDO: Usa determinar_tipo_envio()
                 status='ABERTO',
                 sincronizado_nf=False,
                 criado_em=agora_brasil()
@@ -1306,7 +1375,7 @@ def atualizar_qtd_separacao():
             logger.info(f"🗑️ Deletando separação ID={separacao_id} (qtd=0)")
 
             # Guardar dados antes de deletar (para retornar ao frontend)
-            cod_produto_deletado = separacao.cod_produto
+            separacao_lote_id_deletado = separacao.separacao_lote_id
             separacao_deletada = {
                 'id': separacao.id,
                 'num_pedido': separacao.num_pedido,
@@ -1321,6 +1390,9 @@ def atualizar_qtd_separacao():
             # DELETAR do banco de dados
             db.session.delete(separacao)
             db.session.commit()
+
+            # ✅ ATUALIZAR EmbarqueItem se esta separação estiver embarcada
+            atualizar_embarque_item_por_separacao(separacao_lote_id_deletado)
 
             logger.info(f"✅ Separação ID={separacao_id} deletada com sucesso")
 
@@ -1349,6 +1421,9 @@ def atualizar_qtd_separacao():
         separacao.pallet = pallet_calculado
 
         db.session.commit()
+
+        # ✅ ATUALIZAR EmbarqueItem se esta separação estiver embarcada
+        atualizar_embarque_item_por_separacao(separacao.separacao_lote_id)
 
         # Retornar dados atualizados
         return jsonify({

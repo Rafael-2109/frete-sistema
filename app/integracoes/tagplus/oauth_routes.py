@@ -360,7 +360,7 @@ AUTH_PAGE_TEMPLATE = """
                     </div>
                     <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; display: flex; gap: 10px; justify-content: flex-end;">
                         <button onclick="fecharModalNFIndividual()" class="btn" style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Fechar</button>
-                        ${validacoes.faturamento_produto ? '<button disabled class="btn" style="background: #ccc; color: #666; padding: 10px 20px; border: none; border-radius: 5px; cursor: not-allowed;">✅ Já Importada</button>' : '<button onclick="importarNFIndividual(\'' + nf.id + '\')" class="btn btn-success" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">📥 Importar NF</button>'}
+                        ${validacoes.faturamento_produto ? '<button disabled class="btn" style="background: #ccc; color: #666; padding: 10px 20px; border: none; border-radius: 5px; cursor: not-allowed;">✅ Já Importada</button>' : `<button onclick="importarNFIndividual('${nf.id}')" class="btn btn-success" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">📥 Importar NF</button>`}
                     </div>
                 </div>
             </div>

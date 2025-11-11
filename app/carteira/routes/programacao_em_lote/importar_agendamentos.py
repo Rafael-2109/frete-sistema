@@ -474,6 +474,20 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                     logger.info(f"Pedido {num_pedido} não tem produtos com saldo disponível")
                     continue
 
+                # 🔧 DETERMINAR tipo_envio CORRETAMENTE
+                from app.carteira.utils.separacao_utils import determinar_tipo_envio
+
+                # Preparar lista de produtos no formato esperado
+                produtos_lote = [{'cod_produto': p['item'].cod_produto, 'quantidade': p['qtd']} for p in produtos_com_saldo]
+
+                # Buscar produtos na carteira
+                produtos_carteira = {}
+                for item in CarteiraPrincipal.query.filter_by(num_pedido=num_pedido, ativo=True).all():
+                    produtos_carteira[item.cod_produto] = item
+
+                tipo_envio_correto = determinar_tipo_envio(num_pedido, produtos_lote, produtos_carteira)
+                logger.info(f"✅ tipo_envio determinado: {tipo_envio_correto} para pedido {num_pedido} (importação)")
+
                 # Criar uma Separacao para cada produto com saldo
                 for produto_info in produtos_com_saldo:
                     item = produto_info['item']
@@ -497,7 +511,7 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                         agendamento_confirmado=confirmado,
                         agendamento=data_agendamento if confirmado else None,
                         expedicao=data_expedicao if confirmado else None,
-                        tipo_envio='total',
+                        tipo_envio=tipo_envio_correto,  # 🔧 CORRIGIDO: Usa determinar_tipo_envio()
                         status='ABERTO',  # Status para agendamentos importados
                         sincronizado_nf=False,
                         nf_cd=False,
