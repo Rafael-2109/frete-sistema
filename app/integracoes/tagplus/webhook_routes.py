@@ -89,7 +89,10 @@ def webhook_nfe():
         data_array = dados.get('data', [])
         nfe_id = data_array[0].get('id') if data_array and len(data_array) > 0 else None
 
+        # 🔍 LOG DETALHADO: Payload completo recebido
         logger.info(f"📦 WEBHOOK NFE | Event Type: {event_type} | NFe ID: {nfe_id}")
+        logger.debug(f"🔍 Payload completo recebido: {dados}")
+        logger.debug(f"🔍 Campo 'data': {data_array}")
 
         # ⚠️ TagPlus envia apenas ID - precisa buscar dados completos via API
         if not nfe_id:

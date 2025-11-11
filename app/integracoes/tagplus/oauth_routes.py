@@ -304,8 +304,8 @@ AUTH_PAGE_TEMPLATE = """
 
     <script>
     // ========== IMPORTAÇÃO INDIVIDUAL DE NF ==========
-    // ✅ CORRIGIDO: Script movido para ANTES do botão para evitar "function is not defined"
-    function buscarNFIndividual() {
+    // ✅ Script com funções globais carregado antes do HTML
+    window.buscarNFIndividual = function() {
         const numeroNF = document.getElementById('numeroNFIndividual').value.trim();
         if (!numeroNF) {
             alert('❌ Por favor, informe o número da NF');
@@ -331,7 +331,7 @@ AUTH_PAGE_TEMPLATE = """
             });
     }
 
-    function mostrarModalNFIndividual(data) {
+    window.mostrarModalNFIndividual = function(data) {
         const nf = data.nf;
         const validacoes = data.validacoes;
         const modalHTML = `
@@ -349,13 +349,13 @@ AUTH_PAGE_TEMPLATE = """
                     </div>
                     <div style="margin: 20px 0;"><h3 style="margin-bottom: 10px;">🔍 Status de Validações</h3>
                         <div style="padding: 10px; margin: 5px 0; border-radius: 5px; background: ${validacoes.faturamento_produto ? '#d4edda' : '#fff3cd'}; border-left: 4px solid ${validacoes.faturamento_produto ? '#28a745' : '#ffc107'};">
-                            <strong>FaturamentoProduto:</strong> ${validacoes.faturamento_produto ? '✅ Já importada (' + validacoes.faturamento_produto_count + ' item/ns)' : '⚠️ Não importada'}
+                            <strong>FaturamentoProduto:</strong> ${validacoes.faturamento_produto ? '✅ Já importada (' + validacoes.faturamento_produto_count + ' itens)' : '⚠️ Não importada'}
                         </div>
                         <div style="padding: 10px; margin: 5px 0; border-radius: 5px; background: ${validacoes.embarque_item ? '#d4edda' : '#f8f9fa'}; border-left: 4px solid ${validacoes.embarque_item ? '#28a745' : '#6c757d'};">
                             <strong>EmbarqueItem:</strong> ${validacoes.embarque_item ? '✅ Vinculada (Embarque #' + validacoes.embarque_numero + ')' : 'ℹ️ Não vinculada a embarque'}
                         </div>
                         <div style="padding: 10px; margin: 5px 0; border-radius: 5px; background: ${validacoes.movimentacao_estoque_com_lote ? '#d4edda' : '#f8f9fa'}; border-left: 4px solid ${validacoes.movimentacao_estoque_com_lote ? '#28a745' : '#6c757d'};">
-                            <strong>MovimentacaoEstoque:</strong> ${validacoes.movimentacao_estoque_com_lote ? '✅ Com lote preenchido (' + validacoes.movimentacao_count + ' movimentação/ões)' : 'ℹ️ Sem movimentações com lote'}
+                            <strong>MovimentacaoEstoque:</strong> ${validacoes.movimentacao_estoque_com_lote ? '✅ Com lote preenchido (' + validacoes.movimentacao_count + ' movimentações)' : 'ℹ️ Sem movimentações com lote'}
                         </div>
                     </div>
                     <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; display: flex; gap: 10px; justify-content: flex-end;">
@@ -368,12 +368,12 @@ AUTH_PAGE_TEMPLATE = """
         document.body.insertAdjacentHTML('beforeend', modalHTML);
     }
 
-    function fecharModalNFIndividual() {
+    window.fecharModalNFIndividual = function() {
         const modal = document.getElementById('modalNFIndividual');
         if (modal) modal.remove();
     }
 
-    function importarNFIndividual(nfId) {
+    window.importarNFIndividual = function(nfId) {
         if (!confirm('Confirma a importação desta NF?\\n\\nSerão executadas todas as validações do processo normal de importação.')) return;
         event.target.disabled = true;
         event.target.textContent = '⏳ Importando...';
