@@ -1516,14 +1516,15 @@ class CarteiraService:
         usar_filtro_pendente=True,
         modo_incremental=False,
         minutos_janela=40,
-        primeira_execucao=False
+        primeira_execucao=False,
+        pedidos_especificos=None
     ):
         """
         🚀 SINCRONIZAÇÃO INTELIGENTE COM GESTÃO DE QUANTIDADES
-        
+
         Versão completa que substitui sincronizar_carteira_odoo() com todas as
         funcionalidades originais MAIS gestão inteligente de quantidades.
-        
+
         FLUXO COMPLETO:
         1. Carrega estado atual em memória
         2. Busca dados novos do Odoo
@@ -1531,12 +1532,13 @@ class CarteiraService:
         4. Aplica mudanças respeitando hierarquia
         5. Substitui carteira com dados atualizados
         6. Verificação pós-sincronização com alertas
-        
+
         Args:
             usar_filtro_pendente (bool): Se True, filtra apenas itens com saldo > 0
             modo_incremental (bool): Se True, busca apenas registros alterados no período
             minutos_janela (int): Janela de tempo em minutos para modo incremental
-            
+            pedidos_especificos (list): Lista de números de pedidos específicos para sincronizar
+
         Returns:
             dict: Resultado completo compatível com sincronizar_carteira_odoo()
         """
@@ -1674,6 +1676,7 @@ class CarteiraService:
             resultado_odoo = self.obter_carteira_pendente(
                 modo_incremental=modo_incremental,
                 minutos_janela=janela,
+                pedidos_especificos=pedidos_especificos
             )
 
             if not resultado_odoo['sucesso']:

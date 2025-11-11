@@ -74,41 +74,41 @@ class ImportadorPedidoNFEspecifico:
 
             try:
                 # 1. Verificar se pedido já existe
-                existe = CarteiraPrincipal.query.filter_by(num_pedido=numero_pedido).first()
-                if existe:
-                    logger.warning(f"⚠️ Pedido {numero_pedido} já existe na carteira!")
+                itens_existentes = CarteiraPrincipal.query.filter_by(num_pedido=numero_pedido).all()
+                if itens_existentes:
+                    total_existentes = len(itens_existentes)
+                    logger.warning(f"⚠️ Pedido {numero_pedido} já existe na carteira com {total_existentes} item(ns)!")
                     logger.info("ℹ️ O script irá atualizar os dados existentes...")
+                else:
+                    logger.info(f"ℹ️ Pedido {numero_pedido} não existe na carteira, será criado...")
 
-                # 2. Buscar pedido no Odoo
-                logger.info(f"📡 Buscando pedido {numero_pedido} no Odoo...")
-                resultado = self.carteira_service.obter_carteira_pendente(
+                # 2. Sincronizar pedido específico do Odoo
+                logger.info(f"📡 Buscando e sincronizando pedido {numero_pedido} do Odoo...")
+                resultado_sync = self.carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(
+                    usar_filtro_pendente=False,  # Buscar mesmo se saldo zerado
+                    modo_incremental=False,      # Sincronização completa do pedido
                     pedidos_especificos=[numero_pedido]
                 )
 
-                if not resultado['sucesso']:
+                if not resultado_sync.get('sucesso', False):
                     return {
                         'sucesso': False,
-                        'erro': resultado.get('erro', 'Erro ao buscar pedido no Odoo'),
+                        'erro': resultado_sync.get('erro', 'Erro ao sincronizar pedido do Odoo'),
                         'pedido': numero_pedido
                     }
 
-                if not resultado['dados']:
+                # 3. Verificar se pedido foi realmente importado
+                itens_apos_sync = CarteiraPrincipal.query.filter_by(num_pedido=numero_pedido).all()
+                if not itens_apos_sync:
                     return {
                         'sucesso': False,
-                        'erro': f'Pedido {numero_pedido} não encontrado no Odoo',
+                        'erro': f'Pedido {numero_pedido} não encontrado no Odoo após sincronização',
                         'pedido': numero_pedido,
                         'mensagem': 'Verifique se o número está correto e se o pedido está ativo no Odoo'
                     }
 
-                total_linhas = len(resultado['dados'])
-                logger.info(f"✅ Pedido encontrado! Total de linhas: {total_linhas}")
-
-                # 3. Sincronizar com o sistema
-                logger.info(f"🔄 Sincronizando {total_linhas} linhas do pedido...")
-                resultado_sync = self.carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(
-                    dados_novos=resultado['dados'],
-                    usuario='Script Importação Manual'
-                )
+                total_linhas = len(itens_apos_sync)
+                logger.info(f"✅ Pedido sincronizado! Total de linhas: {total_linhas}")
 
                 # 4. Preparar resultado
                 return {
