@@ -27,7 +27,7 @@ from app import db
 from app.estoque.models import MovimentacaoEstoque
 from app.manufatura.models import PedidoCompras
 from app.producao.models import CadastroPalletizacao
-from app.odoo.utils.connection import OdooConnection
+from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class EntradaMaterialService:
 
     def __init__(self):
         """Inicializa conexão com Odoo"""
-        self.odoo = OdooConnection()
+        self.odoo = get_odoo_connection()
 
     def _eh_fornecedor_grupo(self, cnpj: str) -> bool:
         """
