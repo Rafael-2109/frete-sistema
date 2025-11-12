@@ -261,11 +261,11 @@ class EntradaMaterialService:
                 'res.partner',
                 'read',
                 [[partner_id]],
-                {'fields': ['l10n_br_cnpj_cpf', 'vat']}
+                {'fields': ['l10n_br_cnpj']}  # ✅ Campo correto confirmado pelo usuário
             )
 
             if partner and len(partner) > 0:
-                return partner[0].get('l10n_br_cnpj_cpf') or partner[0].get('vat')
+                return partner[0].get('l10n_br_cnpj')
 
             return None
 
@@ -290,15 +290,14 @@ class EntradaMaterialService:
                 'id',
                 'picking_id',
                 'product_id',
-                'product_uom_qty',
-                'quantity',
-                'quantity_done',
+                'product_uom_qty',  # ✅ Demanda (quantidade planejada) - confirmado
+                'quantity',          # ✅ Quantidade realizada - confirmado
                 'product_uom',
                 'date',
                 'state',
                 'origin',
                 'purchase_line_id'
-            ]
+            ]  # ✅ Removido 'quantity_done' que não existe no seu Odoo
 
             movimentos = self.odoo.execute_kw(
                 'stock.move',
@@ -358,8 +357,8 @@ class EntradaMaterialService:
             logger.debug(f"   ⏭️  Produto {cod_produto} não é comprado - PULANDO")
             return {'novo': False}
 
-        # 3. Quantidade recebida
-        qtd_recebida = Decimal(str(movimento.get('quantity_done', 0)))
+        # 3. Quantidade recebida (usar 'quantity' = quantidade realizada)
+        qtd_recebida = Decimal(str(movimento.get('quantity', 0)))  # ✅ Campo correto
         if qtd_recebida <= 0:
             logger.warning(f"⚠️  Movimento {move_id} com quantidade zero - PULANDO")
             return {'novo': False}
