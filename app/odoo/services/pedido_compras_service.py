@@ -104,21 +104,25 @@ class PedidoComprasServiceOtimizado:
                     'tempo_execucao': (datetime.now() - inicio).total_seconds()
                 }
 
-            # PASSO 2: 🚀 BATCH LOADING de todas as linhas (1 query)
+            # PASSO 2: 🚀 BATCH LOADING de fornecedores (1 query)
+            fornecedores_cache = self._buscar_fornecedores_batch(pedidos_odoo)
+
+            # PASSO 3: 🚀 BATCH LOADING de todas as linhas (1 query)
             todas_linhas = self._buscar_todas_linhas_batch(pedidos_odoo)
 
-            # PASSO 3: 🚀 BATCH LOADING de todos os produtos (1 query)
+            # PASSO 4: 🚀 BATCH LOADING de todos os produtos (1 query)
             produtos_cache = self._buscar_todos_produtos_batch(todas_linhas)
 
-            # PASSO 4: 🚀 CACHE de pedidos existentes (1 query)
+            # PASSO 5: 🚀 CACHE de pedidos existentes (1 query)
             pedidos_existentes_cache = self._carregar_pedidos_existentes()
 
-            # PASSO 5: Processar pedidos com cache
+            # PASSO 6: Processar pedidos com cache
             resultado = self._processar_pedidos_otimizado(
                 pedidos_odoo,
                 todas_linhas,
                 produtos_cache,
-                pedidos_existentes_cache
+                pedidos_existentes_cache,
+                fornecedores_cache
             )
 
             # PASSO 6: 🗑️ Detectar pedidos EXCLUÍDOS do Odoo (marcar como cancelados)
@@ -137,6 +141,7 @@ class PedidoComprasServiceOtimizado:
             self.logger.info(f"   Pedidos novos: {resultado['pedidos_novos']}")
             self.logger.info(f"   Pedidos atualizados: {resultado['pedidos_atualizados']}")
             self.logger.info(f"   Pedidos cancelados (exclusão): {resultado['pedidos_cancelados_exclusao']}")
+            self.logger.info(f"   Pedidos grupo ignorados: {resultado.get('pedidos_grupo_ignorados', 0)}")
             self.logger.info(f"   Linhas processadas: {resultado['linhas_processadas']}")
             self.logger.info(f"   Linhas ignoradas: {resultado['linhas_ignoradas']}")
             self.logger.info("=" * 80)
@@ -158,6 +163,33 @@ class PedidoComprasServiceOtimizado:
                 'erro': str(e),
                 'tempo_execucao': (datetime.now() - inicio).total_seconds()
             }
+
+    # CNPJs de empresas do grupo (estoque consolidado - não importar)
+    CNPJS_GRUPO = ['61.724.241', '18.467.441']
+
+    def _eh_fornecedor_grupo(self, cnpj: str) -> bool:
+        """
+        Verifica se o CNPJ é de uma empresa do grupo
+
+        Args:
+            cnpj: CNPJ do fornecedor
+
+        Returns:
+            True se for empresa do grupo
+        """
+        if not cnpj:
+            return False
+
+        # Remove formatação
+        cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '').strip()
+
+        # Verifica se começa com algum CNPJ do grupo
+        for cnpj_grupo in self.CNPJS_GRUPO:
+            cnpj_grupo_limpo = cnpj_grupo.replace('.', '')
+            if cnpj_limpo.startswith(cnpj_grupo_limpo):
+                return True
+
+        return False
 
     def _buscar_pedidos_odoo(
         self,
@@ -201,6 +233,47 @@ class PedidoComprasServiceOtimizado:
         self.logger.info(f"✅ Encontrados {len(pedidos)} pedidos")
 
         return pedidos
+
+    def _buscar_fornecedores_batch(self, pedidos_odoo: List[Dict]) -> Dict[int, Dict]:
+        """
+        🚀 OTIMIZAÇÃO: Busca CNPJs dos fornecedores em batch (1 query para todos)
+
+        Args:
+            pedidos_odoo: Lista de pedidos
+
+        Returns:
+            Dict mapeando partner_id -> dados do fornecedor (id, CNPJ, nome)
+        """
+        self.logger.info("🚀 Carregando fornecedores em batch...")
+
+        # Coletar todos os partner_ids únicos
+        partner_ids = list(set([
+            p['partner_id'][0] for p in pedidos_odoo
+            if p.get('partner_id')
+        ]))
+
+        if not partner_ids:
+            self.logger.info("   ⚠️  Nenhum fornecedor encontrado")
+            return {}
+
+        # 🚀 UMA ÚNICA QUERY para buscar TODOS os fornecedores
+        self.logger.info(f"   Buscando {len(partner_ids)} fornecedores em 1 query...")
+        try:
+            fornecedores = self.connection.read(
+                'res.partner',
+                partner_ids,
+                fields=['id', 'l10n_br_cnpj_cpf', 'vat', 'name']
+            )
+
+            # Mapear por ID
+            fornecedores_dict = {f['id']: f for f in fornecedores}
+
+            self.logger.info(f"   ✅ {len(fornecedores)} fornecedores carregados")
+            return fornecedores_dict
+
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao buscar fornecedores: {e}")
+            return {}
 
     def _buscar_todas_linhas_batch(self, pedidos_odoo: List[Dict]) -> Dict[int, List[Dict]]:
         """
@@ -324,7 +397,8 @@ class PedidoComprasServiceOtimizado:
         pedidos_odoo: List[Dict],
         linhas_por_pedido: Dict[int, List[Dict]],
         produtos_cache: Dict[int, Dict],
-        pedidos_existentes_cache: Dict[str, Dict]
+        pedidos_existentes_cache: Dict[str, Dict],
+        fornecedores_cache: Dict[int, Dict]
     ) -> Dict[str, int]:
         """
         Processa pedidos usando CACHE (sem queries adicionais)
@@ -333,9 +407,27 @@ class PedidoComprasServiceOtimizado:
         pedidos_atualizados = 0
         linhas_processadas = 0
         linhas_ignoradas = 0
+        pedidos_grupo_ignorados = 0
 
         for pedido_odoo in pedidos_odoo:
             try:
+                # 🛡️ FILTRO: Verificar se fornecedor é empresa do grupo
+                partner_id = pedido_odoo['partner_id'][0] if pedido_odoo.get('partner_id') else None
+                if partner_id:
+                    fornecedor = fornecedores_cache.get(partner_id)
+                    if fornecedor:
+                        # Pegar CNPJ (prioridade l10n_br_cnpj_cpf, depois vat)
+                        cnpj = fornecedor.get('l10n_br_cnpj_cpf') or fornecedor.get('vat') or ''
+
+                        if self._eh_fornecedor_grupo(cnpj):
+                            self.logger.info(
+                                f"   ⚠️  Pedido {pedido_odoo['name']} do fornecedor "
+                                f"{fornecedor.get('name')} (CNPJ: {cnpj[:15]}...) "
+                                f"- EMPRESA DO GRUPO - IGNORADO"
+                            )
+                            pedidos_grupo_ignorados += 1
+                            continue  # Pula este pedido
+
                 self.logger.info(f"📋 Processando pedido {pedido_odoo['name']}...")
 
                 # Buscar linhas no CACHE
@@ -375,11 +467,16 @@ class PedidoComprasServiceOtimizado:
                 self.logger.error(f"❌ Erro ao processar pedido {pedido_odoo.get('name')}: {e}")
                 continue
 
+        # Log final com filtros aplicados
+        if pedidos_grupo_ignorados > 0:
+            self.logger.info(f"🛡️  {pedidos_grupo_ignorados} pedidos de empresas do grupo foram ignorados")
+
         return {
             'pedidos_novos': pedidos_novos,
             'pedidos_atualizados': pedidos_atualizados,
             'linhas_processadas': linhas_processadas,
-            'linhas_ignoradas': linhas_ignoradas
+            'linhas_ignoradas': linhas_ignoradas,
+            'pedidos_grupo_ignorados': pedidos_grupo_ignorados
         }
 
     def _processar_linha_otimizada(

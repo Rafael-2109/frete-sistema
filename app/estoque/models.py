@@ -47,6 +47,12 @@ class MovimentacaoEstoque(db.Model):
     status_nf = db.Column(db.String(20), nullable=True)  # FATURADO, CANCELADO
     codigo_embarque = db.Column(db.Integer, db.ForeignKey('embarques.id', ondelete='SET NULL'), nullable=True)
 
+    # Campos Odoo - Rastreabilidade de Entradas de Compras
+    odoo_picking_id = db.Column(db.String(50), nullable=True, index=True)  # ID do stock.picking no Odoo
+    odoo_move_id = db.Column(db.String(50), nullable=True, index=True)     # ID do stock.move no Odoo
+    purchase_line_id = db.Column(db.String(50), nullable=True)             # ID da linha de pedido Odoo (purchase.order.line)
+    pedido_compras_id = db.Column(db.Integer, db.ForeignKey('pedido_compras.id', ondelete='SET NULL'), nullable=True)  # FK para PedidoCompras local
+
     # Observações (mantido para compatibilidade)
     observacao = db.Column(db.Text, nullable=True)
 
@@ -58,7 +64,7 @@ class MovimentacaoEstoque(db.Model):
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
 
-    # Índices compostos para performance  
+    # Índices compostos para performance
     __table_args__ = (
         db.Index('idx_movimentacao_produto_data', 'cod_produto', 'data_movimentacao'),
         db.Index('idx_movimentacao_tipo_data', 'tipo_movimentacao', 'data_movimentacao'),
@@ -67,6 +73,8 @@ class MovimentacaoEstoque(db.Model):
         db.Index('idx_movimentacao_pedido', 'num_pedido'),
         db.Index('idx_movimentacao_tipo_origem', 'tipo_origem'),
         db.Index('idx_movimentacao_status_nf', 'status_nf'),
+        db.Index('idx_movimentacao_odoo_picking', 'odoo_picking_id'),
+        db.Index('idx_movimentacao_odoo_move', 'odoo_move_id'),
     )
 
     def __repr__(self):

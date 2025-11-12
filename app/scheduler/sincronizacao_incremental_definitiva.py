@@ -38,6 +38,7 @@ STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 5760))
 JANELA_REQUISICOES = int(os.environ.get('JANELA_REQUISICOES', 90))  # 90 minutos
 JANELA_PEDIDOS = int(os.environ.get('JANELA_PEDIDOS', 90))  # 90 minutos (mesma janela)
 JANELA_ALOCACOES = int(os.environ.get('JANELA_ALOCACOES', 90))  # 90 minutos (mesma janela)
+DIAS_ENTRADAS = int(os.environ.get('DIAS_ENTRADAS', 7))  # 7 dias para entradas de materiais
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -47,6 +48,7 @@ carteira_service = None
 requisicao_service = None
 pedido_service = None
 alocacao_service = None
+entrada_material_service = None
 
 
 def inicializar_services():
@@ -55,7 +57,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -64,6 +66,7 @@ def inicializar_services():
         from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
         from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
         from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
+        from app.odoo.services.entrada_material_service import EntradaMaterialService
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -71,6 +74,7 @@ def inicializar_services():
         requisicao_service = RequisicaoComprasService()
         pedido_service = PedidoComprasServiceOtimizado()
         alocacao_service = AlocacaoComprasServiceOtimizado()
+        entrada_material_service = EntradaMaterialService()
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -85,7 +89,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -97,10 +101,11 @@ def executar_sincronizacao():
     logger.info(f"   - Requisições: janela={JANELA_REQUISICOES}min")
     logger.info(f"   - Pedidos: janela={JANELA_PEDIDOS}min")
     logger.info(f"   - Alocações: janela={JANELA_ALOCACOES}min")
+    logger.info(f"   - Entradas: dias={DIAS_ENTRADAS}")
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -472,6 +477,65 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar conexões antes de Entradas
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes das Entradas")
+        except Exception as e:
+            pass
+
+        # 7️⃣ ENTRADAS DE MATERIAIS - com retry
+        sucesso_entradas = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📥 Sincronizando Entradas de Materiais (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Dias retroativos: {DIAS_ENTRADAS}")
+
+                # Usar service já instanciado
+                resultado_entradas = entrada_material_service.importar_entradas(
+                    dias_retroativos=DIAS_ENTRADAS,
+                    limite=None
+                )
+
+                if resultado_entradas.get("sucesso"):
+                    sucesso_entradas = True
+                    logger.info("✅ Entradas de materiais sincronizadas com sucesso!")
+                    logger.info(f"   - Recebimentos processados: {resultado_entradas.get('recebimentos_processados', 0)}")
+                    logger.info(f"   - Movimentações criadas: {resultado_entradas.get('movimentacoes_criadas', 0)}")
+                    logger.info(f"   - Movimentações atualizadas: {resultado_entradas.get('movimentacoes_atualizadas', 0)}")
+                    logger.info(f"   - Fornecedores grupo ignorados: {resultado_entradas.get('fornecedores_grupo_ignorados', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_entradas.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Entradas: {erro}")
+
+                    if "SSL" in str(erro) or "connection" in str(erro).lower():
+                        if tentativa < MAX_RETRIES:
+                            logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                            sleep(RETRY_DELAY)
+                            from app.odoo.services.entrada_material_service import EntradaMaterialService
+                            entrada_material_service = EntradaMaterialService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar entradas: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.odoo.services.entrada_material_service import EntradaMaterialService
+                        entrada_material_service = EntradaMaterialService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -481,12 +545,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas])
 
-        if total_sucesso == 6:
+        if total_sucesso == 7:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 4:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/6 módulos OK")
+        elif total_sucesso >= 5:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/7 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -499,8 +563,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Pedidos: FALHOU")
             if not sucesso_alocacoes:
                 logger.info("   ❌ Alocações: FALHOU")
+            if not sucesso_entradas:
+                logger.info("   ❌ Entradas de Materiais: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/6 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/7 módulos OK")
         logger.info("=" * 60)
 
 
