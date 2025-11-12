@@ -445,25 +445,28 @@ class CarteiraService:
             # FILTRO ADICIONAL: Não buscar pedidos criados antes de 15/07/2025
             data_corte_minima = '2025-07-15'
 
-            # Aplicar o filtro de data mínima SEMPRE
-            if data_inicio:
-                # Se data_inicio for posterior a 15/07/2025, usar data_inicio
-                # Senão, usar 15/07/2025
-                if data_inicio >= data_corte_minima:
-                    domain.append(('order_id.create_date', '>=', data_inicio))
-                else:
-                    logger.warning(f"Data início {data_inicio} anterior a {data_corte_minima}, usando data de corte mínima")
-                    domain.append(('order_id.create_date', '>=', data_corte_minima))
-            else:
-                # Sem data_inicio especificada, aplicar data de corte mínima
-                domain.append(('order_id.create_date', '>=', data_corte_minima))
-
-                logger.info(f"Aplicando filtro automático: create_date >= {data_corte_minima}")
-
-            if data_fim:
-                domain.append(('order_id.create_date', '<=', data_fim))
+            # ⚠️ REGRA: Se pedidos_especificos fornecido, NÃO aplicar filtro de data automático
             if pedidos_especificos:
+                # Quando pedidos específicos são fornecidos, filtrar APENAS por eles
                 domain.append(('order_id.name', 'in', pedidos_especificos))
+                logger.info(f"🎯 Filtrando APENAS {len(pedidos_especificos)} pedido(s) específico(s): {pedidos_especificos}")
+            else:
+                # Aplicar o filtro de data mínima APENAS quando não há pedidos específicos
+                if data_inicio:
+                    # Se data_inicio for posterior a 15/07/2025, usar data_inicio
+                    # Senão, usar 15/07/2025
+                    if data_inicio >= data_corte_minima:
+                        domain.append(('order_id.create_date', '>=', data_inicio))
+                    else:
+                        logger.warning(f"Data início {data_inicio} anterior a {data_corte_minima}, usando data de corte mínima")
+                        domain.append(('order_id.create_date', '>=', data_corte_minima))
+                else:
+                    # Sem data_inicio especificada, aplicar data de corte mínima
+                    domain.append(('order_id.create_date', '>=', data_corte_minima))
+                    logger.info(f"Aplicando filtro automático: create_date >= {data_corte_minima}")
+
+                if data_fim:
+                    domain.append(('order_id.create_date', '<=', data_fim))
             
             # Campos básicos necessários
             campos_basicos = ['id', 'order_id', 'product_id', 'product_uom', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
