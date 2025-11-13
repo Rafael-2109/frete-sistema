@@ -404,6 +404,35 @@ function criarAccordionPedido(pedido, index) {
 
     const collapseId = `collapse-${index}`;
 
+    // Botões de NF (PDF/XML)
+    let botoesNF = '';
+    if (pedido.nf_pdf_path || pedido.nf_xml_path) {
+        botoesNF = '<div class="btn-group btn-group-sm me-2" role="group">';
+        if (pedido.nf_pdf_path) {
+            botoesNF += `
+                <a href="/manufatura/pedidos-compras/nf/pdf/${pedido.id}"
+                   target="_blank"
+                   class="btn btn-danger"
+                   title="Ver PDF da NF ${pedido.nf_numero || ''}"
+                   onclick="event.stopPropagation();">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </a>
+            `;
+        }
+        if (pedido.nf_xml_path) {
+            botoesNF += `
+                <a href="/manufatura/pedidos-compras/nf/xml/${pedido.id}"
+                   target="_blank"
+                   class="btn btn-success"
+                   title="Ver XML da NF ${pedido.nf_numero || ''}"
+                   onclick="event.stopPropagation();">
+                    <i class="fas fa-file-code"></i> XML
+                </a>
+            `;
+        }
+        botoesNF += '</div>';
+    }
+
     div.innerHTML = `
         <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
@@ -414,14 +443,17 @@ function criarAccordionPedido(pedido, index) {
                         ${pedido.tipo_pedido ? `<span class="badge bg-light text-dark ms-2">${pedido.tipo_pedido}</span>` : ''}
                         ${pedido.company_id ? `<br><small class="text-primary"><i class="fas fa-building"></i> ${pedido.company_id}</small>` : ''}
                     </div>
-                    <div class="text-end me-3">
-                        <strong>${pedido.fornecedor || '-'}</strong>
-                        <br>
-                        <small class="text-muted">
-                            Criado: ${pedido.data_criacao ? new Date(pedido.data_criacao).toLocaleDateString('pt-BR') : '-'}
-                            ${pedido.data_previsao ? ` | Previsão: ${new Date(pedido.data_previsao).toLocaleDateString('pt-BR')}` : ''}
-                        </small>
-                        ${statusBadge}
+                    <div class="d-flex align-items-center">
+                        ${botoesNF}
+                        <div class="text-end">
+                            <strong>${pedido.fornecedor || '-'}</strong>
+                            <br>
+                            <small class="text-muted">
+                                Criado: ${pedido.data_criacao ? new Date(pedido.data_criacao).toLocaleDateString('pt-BR') : '-'}
+                                ${pedido.data_previsao ? ` | Previsão: ${new Date(pedido.data_previsao).toLocaleDateString('pt-BR')}` : ''}
+                            </small>
+                            ${statusBadge}
+                        </div>
                     </div>
                 </div>
             </button>

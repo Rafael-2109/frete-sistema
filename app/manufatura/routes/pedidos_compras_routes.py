@@ -1,7 +1,7 @@
 """
 Routes para Pedidos de Compra
 """
-from flask import Blueprint, render_template, jsonify, request, flash, redirect, url_for
+from flask import Blueprint, render_template, jsonify, request, flash, redirect, url_for, send_file
 from flask_login import login_required
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta
@@ -15,6 +15,8 @@ from app.manufatura.models import (
 )
 from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
 from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
+from app.utils.file_storage import get_file_storage
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +144,7 @@ def api_listar_pedidos():
         if num_pedido not in pedidos_agrupados:
             pedidos_agrupados[num_pedido] = {
                 # Cabeçalho do card (dados do pedido)
+                'id': linha.id,  # ✅ ID para links
                 'num_pedido': num_pedido,
                 'company_id': linha.company_id,  # ✅ NOVO: Empresa compradora
                 'fornecedor': linha.raz_social,
@@ -150,6 +153,15 @@ def api_listar_pedidos():
                 'data_previsao': linha.data_pedido_previsao.isoformat() if linha.data_pedido_previsao else None,
                 'status_odoo': linha.status_odoo,
                 'tipo_pedido': linha.tipo_pedido,
+
+                # ✅ NOVO: Dados da NF
+                'nf_pdf_path': linha.nf_pdf_path,
+                'nf_xml_path': linha.nf_xml_path,
+                'nf_numero': linha.nf_numero,
+                'nf_serie': linha.nf_serie,
+                'nf_chave_acesso': linha.nf_chave_acesso,
+                'nf_data_emissao': linha.nf_data_emissao.isoformat() if linha.nf_data_emissao else None,
+                'nf_valor_total': float(linha.nf_valor_total) if linha.nf_valor_total else None,
 
                 # Linhas de produtos
                 'linhas': []
@@ -455,3 +467,74 @@ def executar_sincronizacao_manual():
         logger.error(f"[PEDIDOS] Erro na sincronização manual: {e}")
         flash(f'❌ Erro ao executar sincronização: {str(e)}', 'danger')
         return redirect(url_for('pedidos_compras.tela_sincronizacao_manual'))
+
+
+@pedidos_compras_bp.route('/nf/<tipo>/<int:pedido_id>')
+@login_required
+def visualizar_nf(tipo, pedido_id):
+    """
+    Visualizar PDF ou XML da NF de um pedido de compra
+
+    Args:
+        tipo: 'pdf' ou 'xml'
+        pedido_id: ID do pedido de compra
+    """
+    try:
+        # Buscar pedido
+        pedido = PedidoCompras.query.get_or_404(pedido_id)
+
+        # Verificar tipo solicitado
+        if tipo == 'pdf':
+            file_path = pedido.nf_pdf_path
+            filename = f"NF_{pedido.nf_numero or pedido.num_pedido}.pdf"
+            mimetype = 'application/pdf'
+        elif tipo == 'xml':
+            file_path = pedido.nf_xml_path
+            filename = f"NF_{pedido.nf_numero or pedido.num_pedido}.xml"
+            mimetype = 'application/xml'
+        else:
+            flash('Tipo de arquivo inválido', 'danger')
+            return redirect(url_for('pedidos_compras.index'))
+
+        if not file_path:
+            flash(f'❌ {tipo.upper()} da NF não disponível para este pedido', 'warning')
+            return redirect(url_for('pedidos_compras.index'))
+
+        # Obter FileStorage
+        file_storage = get_file_storage()
+
+        # Se for S3, redirecionar para URL assinada
+        if file_storage.use_s3 and not file_path.startswith('uploads/'):
+            url = file_storage.get_file_url(file_path)
+            if url:
+                return redirect(url)
+            else:
+                flash(f'❌ Erro ao gerar URL do {tipo.upper()}', 'danger')
+                return redirect(url_for('pedidos_compras.index'))
+
+        # Se for local, servir arquivo
+        else:
+            import os
+            from flask import current_app
+
+            # Remover prefixo 'uploads/' se houver
+            if file_path.startswith('uploads/'):
+                file_path = file_path[8:]  # Remove 'uploads/'
+
+            full_path = os.path.join(current_app.root_path, 'static', 'uploads', file_path)
+
+            if not os.path.exists(full_path):
+                flash(f'❌ Arquivo {tipo.upper()} não encontrado', 'danger')
+                return redirect(url_for('pedidos_compras.index'))
+
+            return send_file(
+                full_path,
+                mimetype=mimetype,
+                as_attachment=False,  # Visualizar no navegador
+                download_name=filename
+            )
+
+    except Exception as e:
+        logger.error(f"Erro ao visualizar {tipo} da NF: {e}")
+        flash(f'❌ Erro ao abrir {tipo.upper()}: {str(e)}', 'danger')
+        return redirect(url_for('pedidos_compras.index'))

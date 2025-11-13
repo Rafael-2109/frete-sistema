@@ -254,10 +254,22 @@ class PedidoCompras(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # ✅ ADICIONADO
 
+    # ✅ NOVO: Campos para Documento Fiscal Eletrônico (DFe) - NF de entrada
+    dfe_id = db.Column(db.String(50), nullable=True, index=True)           # ID do l10n_br_ciel_it_account.dfe no Odoo
+    nf_pdf_path = db.Column(db.String(500), nullable=True)                 # Caminho S3/local do PDF
+    nf_xml_path = db.Column(db.String(500), nullable=True)                 # Caminho S3/local do XML
+    nf_chave_acesso = db.Column(db.String(44), nullable=True, index=True)  # Chave de acesso NFe (44 dígitos)
+    nf_numero = db.Column(db.String(20), nullable=True)                    # Número da NF
+    nf_serie = db.Column(db.String(10), nullable=True)                     # Série da NF
+    nf_data_emissao = db.Column(db.Date, nullable=True)                    # Data de emissão da NF
+    nf_valor_total = db.Column(db.Numeric(15, 2), nullable=True)           # Valor total da NF
+
     # ✅ CORRIGIDO: Constraint composta para permitir múltiplos produtos no mesmo pedido + empresa
     __table_args__ = (
         db.UniqueConstraint('num_pedido', 'cod_produto', 'company_id', name='uq_pedido_compras_num_cod_produto_empresa'),
         db.Index('idx_pedido_empresa', 'company_id', 'num_pedido'),  # ✅ Índice para filtros
+        db.Index('idx_pedido_dfe', 'dfe_id'),                        # ✅ Índice para buscas por DFe
+        db.Index('idx_pedido_chave_acesso', 'nf_chave_acesso'),      # ✅ Índice para buscas por chave NFe
     )
 
     # ✅ Relacionamento removido - num_requisicao agora é apenas campo informativo
