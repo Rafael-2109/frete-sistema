@@ -53,41 +53,27 @@
     }
 
     .module-icon {
-        font-size: 3.5rem;
-        margin-bottom: 1.5rem;
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
         color: var(--module-color);
         opacity: 0.9;
     }
 
     .module-title {
-        font-size: 1.4rem;
+        font-size: 1.1rem;
         font-weight: 700;
-        margin-bottom: 0.75rem;
+        margin-bottom: 0;
         color: #2c3e50;
     }
 
-    .module-description {
-        color: #6c757d;
-        font-size: 0.95rem;
-        margin-bottom: 1rem;
-        line-height: 1.5;
-    }
-
-    .module-status {
-        font-size: 0.85rem;
-        padding: 0.4rem 0.8rem;
-        border-radius: 20px;
+    /* Classes removidas - cards compactos sem descrição e badges */
+    .section-title {
+        font-size: 1rem;
         font-weight: 600;
-    }
-
-    .status-active {
-        background: #d4edda;
-        color: #155724;
-    }
-
-    .status-new {
-        background: #fff3cd;
-        color: #856404;
+        color: #6c757d;
+        margin-bottom: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .page-header {
@@ -125,185 +111,134 @@
         <p>Sistema de Planejamento e Controle da Produção</p>
     </div>
 
-    <!-- Cards de Módulos -->
-    <div class="row g-4">
-
-        <!-- Card: Previsão de Demanda -->
-        <div class="col-xl-6 col-lg-6 col-md-12">
-            <div class="module-card planning" onclick="window.location.href='{{ url_for('manufatura.previsao_demanda') }}'">
-                <div class="card-body p-4 text-center">
-                    <div class="module-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <h3 class="module-title">Previsão de Demanda</h3>
-                    <p class="module-description">
-                        Gerencie previsões de vendas por grupo empresarial e analise históricos de demanda.
-                        Compare médias históricas, demanda ativa e demanda realizada.
-                    </p>
-                    <span class="module-status status-active">
-                        <i class="fas fa-check-circle me-1"></i>
-                        Funcional
-                    </span>
-                </div>
-            </div>
+    <!-- 🚀 SEÇÃO: OPERAÇÃO DIÁRIA -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <h5 class="section-title">
+                <i class="fas fa-bolt me-2"></i>Operação Diária
+            </h5>
         </div>
+    </div>
 
-        <!-- Card: Necessidade de Produção -->
+    <div class="row g-3 mb-4">
+
+        <!-- Card: Projeção de PA -->
         <div class="col-xl-6 col-lg-6 col-md-12">
             <div class="module-card production" onclick="window.location.href='{{ url_for('manufatura.necessidade_producao') }}'">
-                <div class="card-body p-4 text-center">
+                <div class="card-body p-3 text-center">
                     <div class="module-icon">
                         <i class="fas fa-cogs"></i>
                     </div>
-                    <h3 class="module-title">Necessidade de Produção</h3>
-                    <p class="module-description">
-                        Analise a necessidade de produção baseada em previsões, carteira de pedidos e estoque atual.
-                        Visualize projeções de estoque D0-D60 e programe produção.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
+                    <h3 class="module-title">Projeção de PA</h3>
                 </div>
             </div>
         </div>
 
-        <!-- Card: Recursos de Produção -->
-        <div class="col-xl-6 col-lg-6 col-md-12">
-            <div class="module-card production" onclick="window.location.href='{{ url_for('recursos_producao.listar') }}'">
-                <div class="card-body p-4 text-center">
-                    <div class="module-icon">
-                        <i class="fas fa-industry"></i>
-                    </div>
-                    <h3 class="module-title">Recursos de Produção</h3>
-                    <p class="module-description">
-                        Gerencie capacidades produtivas, linhas de produção e eficiências.
-                        Cadastre múltiplas linhas por produto e controle disponibilidade.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card: Histórico de Pedidos -->
-        <div class="col-xl-6 col-lg-6 col-md-12">
-            <div class="module-card planning" onclick="window.location.href='{{ url_for('manufatura.historico_pedidos') }}'">
-                <div class="card-body p-4 text-center">
-                    <div class="module-icon">
-                        <i class="fas fa-history"></i>
-                    </div>
-                    <h3 class="module-title">Histórico de Pedidos</h3>
-                    <p class="module-description">
-                        Visualize e gerencie o histórico de pedidos importados do Odoo.
-                        Exporte dados e sincronize pedidos por período para análise de demanda.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card: Lista de Materiais (BOM) -->
-        <div class="col-xl-6 col-lg-6 col-md-12">
-            <div class="module-card structure" onclick="window.location.href='{{ url_for('manufatura.lista_materiais_index') }}'">
-                <div class="card-body p-4 text-center">
-                    <div class="module-icon">
-                        <i class="fas fa-sitemap"></i>
-                    </div>
-                    <h3 class="module-title">Lista de Materiais (BOM)</h3>
-                    <p class="module-description">
-                        Gerencie a estrutura de produtos (Bill of Materials). Cadastre componentes,
-                        visualize hierarquias, exploda estruturas e valide dependências.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card: Programação por Linha -->
+        <!-- Card: Programação de Produção -->
         <div class="col-xl-6 col-lg-6 col-md-12">
             <div class="module-card production" onclick="window.location.href='{{ url_for('recursos_producao.programacao_linhas') }}'">
-                <div class="card-body p-4 text-center">
+                <div class="card-body p-3 text-center">
                     <div class="module-icon">
                         <i class="fas fa-calendar-alt"></i>
                     </div>
-                    <h3 class="module-title">Programação por Linha</h3>
-                    <p class="module-description">
-                        Visualize a programação de produção de todas as linhas em calendários.
-                        Acompanhe ocupação, SKU/hora e recursos por linha de produção.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
+                    <h3 class="module-title">Programação de Produção</h3>
                 </div>
             </div>
         </div>
 
-        <!-- Card: Requisições de Compras -->
-        <div class="col-xl-6 col-lg-6 col-md-12">
-            <div class="module-card purchasing" onclick="window.location.href='{{ url_for('manufatura.listar_requisicoes') }}'">
-                <div class="card-body p-4 text-center">
-                    <div class="module-icon">
-                        <i class="fas fa-clipboard-list"></i>
-                    </div>
-                    <h3 class="module-title">Requisições de Compras</h3>
-                    <p class="module-description">
-                        Visualize e gerencie requisições de compras importadas do Odoo.
-                        Acompanhe status, histórico de alterações e sincronize dados por período.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card: Pedidos de Compra -->
-        <div class="col-xl-6 col-lg-6 col-md-12">
-            <div class="module-card purchasing" onclick="window.location.href='{{ url_for('pedidos_compras.index') }}'">
-                <div class="card-body p-4 text-center">
-                    <div class="module-icon">
-                        <i class="fas fa-cart-plus"></i>
-                    </div>
-                    <h3 class="module-title">Pedidos de Compra</h3>
-                    <p class="module-description">
-                        Visualize pedidos de compra confirmados com fornecedores.
-                        Veja alocações, requisições atendidas e datas de previsão de entrega.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card: Projeção de Estoque -->
+        <!-- Card: Projeção de MP -->
         <div class="col-xl-6 col-lg-6 col-md-12">
             <div class="module-card planning" onclick="window.location.href='{{ url_for('projecao_estoque.index') }}'">
-                <div class="card-body p-4 text-center">
+                <div class="card-body p-3 text-center">
                     <div class="module-icon">
                         <i class="fas fa-chart-area"></i>
                     </div>
-                    <h3 class="module-title">Projeção de Estoque</h3>
-                    <p class="module-description">
-                        Projete estoque de componentes para 60 dias.
-                        Entradas (pedidos + requisições) vs Saídas (consumo por BOM). Detecta rupturas.
-                    </p>
-                    <span class="module-status status-new">
-                        <i class="fas fa-star me-1"></i>
-                        Nova Funcionalidade
-                    </span>
+                    <h3 class="module-title">Projeção de MP</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Requisições de Compra -->
+        <div class="col-xl-6 col-lg-6 col-md-12">
+            <div class="module-card purchasing" onclick="window.location.href='{{ url_for('manufatura.listar_requisicoes') }}'">
+                <div class="card-body p-3 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h3 class="module-title">Requisições de Compra</h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ⚙️ SEÇÃO: CONFIGURAÇÕES -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <h5 class="section-title">
+                <i class="fas fa-cog me-2"></i>Configurações e Cadastros
+            </h5>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- Card: Previsão de Vendas -->
+        <div class="col-xl-4 col-lg-6 col-md-12">
+            <div class="module-card planning" onclick="window.location.href='{{ url_for('manufatura.previsao_demanda') }}'">
+                <div class="card-body p-3 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="module-title">Previsão de Vendas</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Estrutura de Produtos -->
+        <div class="col-xl-4 col-lg-6 col-md-12">
+            <div class="module-card structure" onclick="window.location.href='{{ url_for('manufatura.lista_materiais_index') }}'">
+                <div class="card-body p-3 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-sitemap"></i>
+                    </div>
+                    <h3 class="module-title">Estrutura de Produtos</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Capacidade das Linhas -->
+        <div class="col-xl-4 col-lg-6 col-md-12">
+            <div class="module-card production" onclick="window.location.href='{{ url_for('recursos_producao.listar') }}'">
+                <div class="card-body p-3 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-industry"></i>
+                    </div>
+                    <h3 class="module-title">Capacidade das Linhas</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Pedidos Faturados -->
+        <div class="col-xl-4 col-lg-6 col-md-12">
+            <div class="module-card planning" onclick="window.location.href='{{ url_for('manufatura.historico_pedidos') }}'">
+                <div class="card-body p-3 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3 class="module-title">Pedidos Faturados</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Pedidos Confirmados -->
+        <div class="col-xl-4 col-lg-6 col-md-12">
+            <div class="module-card purchasing" onclick="window.location.href='{{ url_for('pedidos_compras.index') }}'">
+                <div class="card-body p-3 text-center">
+                    <div class="module-icon">
+                        <i class="fas fa-cart-plus"></i>
+                    </div>
+                    <h3 class="module-title">Pedidos Confirmados</h3>
                 </div>
             </div>
         </div>

@@ -21,7 +21,6 @@ import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional
-from sqlalchemy import and_
 
 from app import db
 from app.estoque.models import MovimentacaoEstoque
@@ -395,7 +394,18 @@ class EntradaMaterialService:
 
             return {'novo': False}
 
-        # 7. Criar nova movimentação
+        # 7. Extrair purchase_line_id (apenas o ID numérico)
+        purchase_line_id_value = None
+        purchase_line_data = movimento.get('purchase_line_id')
+
+        if purchase_line_data:
+            # Odoo retorna tupla [ID, Nome]
+            if isinstance(purchase_line_data, (list, tuple)) and len(purchase_line_data) > 0:
+                purchase_line_id_value = str(purchase_line_data[0])  # Apenas o ID
+            else:
+                purchase_line_id_value = str(purchase_line_data)
+
+        # 8. Criar nova movimentação
         logger.info(f"   ✨ Criando nova movimentação: {cod_produto} - {qtd_recebida}")
 
         movimentacao = MovimentacaoEstoque(
@@ -416,7 +426,7 @@ class EntradaMaterialService:
             # Odoo - Rastreabilidade
             odoo_picking_id=picking_id,
             odoo_move_id=move_id,
-            purchase_line_id=str(movimento.get('purchase_line_id')) if movimento.get('purchase_line_id') else None,
+            purchase_line_id=purchase_line_id_value,
             pedido_compras_id=pedido_local.id if pedido_local else None,
 
             # Observação
