@@ -100,6 +100,43 @@ class CteService:
 
             logger.info(f"📦 Total de CTes encontrados: {len(ctes)}")
 
+            # ✅ OTIMIZAÇÃO 1: Buscar TODAS as referências de NFs de uma vez (batch read)
+            logger.info("🚀 Coletando todos os refs_ids para batch read...")
+            todos_refs_ids = []
+            for cte_data in ctes:
+                refs_ids = cte_data.get('refs_ids')
+                if refs_ids and isinstance(refs_ids, (list, tuple)):
+                    todos_refs_ids.extend(refs_ids)
+
+            # Remover duplicatas
+            todos_refs_ids = list(set(todos_refs_ids))
+            logger.info(f"   📊 Total de referências únicas: {len(todos_refs_ids)}")
+
+            # Buscar todas as referências de uma vez
+            mapa_refs = {}
+            if todos_refs_ids:
+                try:
+                    logger.info(f"   📡 Buscando {len(todos_refs_ids)} referências do Odoo em batch...")
+                    referencias_batch = self.odoo.read(
+                        'l10n_br_ciel_it_account.dfe.referencia',
+                        todos_refs_ids,
+                        ['infdoc_infnfe_chave']
+                    )
+
+                    # Criar mapa {ref_id: numero_nf}
+                    for ref in referencias_batch:
+                        ref_id = ref.get('id')
+                        chave_nf = ref.get('infdoc_infnfe_chave')
+
+                        if chave_nf and len(chave_nf) == 44:
+                            numero_nf = chave_nf[25:34]
+                            numero_nf_limpo = str(int(numero_nf))
+                            mapa_refs[ref_id] = numero_nf_limpo
+
+                    logger.info(f"   ✅ Mapa de referências criado: {len(mapa_refs)} NFs")
+                except Exception as e:
+                    logger.error(f"   ❌ Erro ao buscar referências em batch: {e}")
+
             # 2. Processar cada CTe
             for cte_data in ctes:
                 try:
@@ -107,7 +144,7 @@ class CteService:
                     numero_cte = cte_data.get('nfe_infnfe_ide_nnf', '')
                     logger.info(f"\n📋 Processando CTe: {numero_cte} (DFe ID {dfe_id})")
 
-                    estatisticas = self._processar_cte(cte_data)
+                    estatisticas = self._processar_cte(cte_data, mapa_refs)
 
                     # Verificar se foi ignorado
                     if estatisticas.get('ignorado'):
@@ -254,12 +291,13 @@ class CteService:
             logger.error(f"❌ Erro ao buscar CTes do Odoo: {e}")
             return []
 
-    def _processar_cte(self, cte_data: Dict) -> Dict:
+    def _processar_cte(self, cte_data: Dict, mapa_refs: Dict = None) -> Dict:
         """
         Processa um CTe e cria/atualiza ConhecimentoTransporte
 
         Args:
             cte_data: Dados do CTe do Odoo
+            mapa_refs: Mapa {ref_id: numero_nf} para evitar N+1
 
         Returns:
             Dict com estatísticas
@@ -323,8 +361,8 @@ class CteService:
         invoice_ids = self._extract_relation_list(cte_data.get('invoice_ids'))
         purchase_fiscal_id = self._extract_relation_id(cte_data.get('purchase_fiscal_id'))
 
-        # Extrair números de NFs das referências
-        numeros_nfs = self._extrair_numeros_nfs(cte_data.get('refs_ids'))
+        # ✅ OTIMIZAÇÃO: Extrair números de NFs do mapa (batch) ao invés de chamar Odoo
+        numeros_nfs = self._extrair_numeros_nfs_do_mapa(cte_data.get('refs_ids'), mapa_refs)
 
         # Baixar e salvar PDF/XML
         pdf_path, xml_path = self._salvar_arquivos_cte(cte_data)
@@ -448,42 +486,37 @@ class CteService:
         pdf_base64 = cte_data.get('l10n_br_pdf_dfe')
         if pdf_base64 and pdf_base64 != False:
             try:
+                logger.info(f"   📄 Decodificando PDF base64...")
                 pdf_bytes = base64.b64decode(pdf_base64)
+                logger.info(f"   📄 PDF decodificado: {len(pdf_bytes)} bytes")
 
-                # Salvar temporariamente para passar ao storage
-                import tempfile
-                import os as os_module
+                # ✅ OTIMIZAÇÃO: Usar BytesIO ao invés de arquivo temporário em disco
+                from werkzeug.datastructures import FileStorage as WerkzeugFileStorage
 
-                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as tmp:
-                    tmp.write(pdf_bytes)
-                    tmp_path = tmp.name
+                pdf_stream = BytesIO(pdf_bytes)
+                file_storage_obj = WerkzeugFileStorage(
+                    stream=pdf_stream,
+                    filename=f"{chave_acesso}.pdf",
+                    content_type='application/pdf'
+                )
 
-                try:
-                    # Abrir como FileStorage para compatibilidade
-                    from werkzeug.datastructures import FileStorage as WerkzeugFileStorage
+                logger.info(f"   ☁️  Enviando para S3: pasta={pasta_base}, arquivo={chave_acesso}.pdf")
+                pdf_path = self.file_storage.save_file(
+                    file=file_storage_obj,
+                    folder=pasta_base,
+                    allowed_extensions=['pdf']
+                )
 
-                    with open(tmp_path, 'rb') as f:
-                        file_storage_obj = WerkzeugFileStorage(
-                            stream=f,
-                            filename=f"{chave_acesso}.pdf",
-                            content_type='application/pdf'
-                        )
-
-                        pdf_path = self.file_storage.save_file(
-                            file=file_storage_obj,
-                            folder=pasta_base,
-                            allowed_extensions=['pdf']
-                        )
-
-                        if pdf_path:
-                            logger.info(f"   ✅ PDF salvo: {pdf_path}")
-                finally:
-                    # Remover arquivo temporário
-                    if os_module.path.exists(tmp_path):
-                        os_module.remove(tmp_path)
+                if pdf_path:
+                    logger.info(f"   ✅ PDF salvo no S3: {pdf_path}")
+                else:
+                    logger.error(f"   ❌ save_file retornou None!")
 
             except Exception as e:
                 logger.error(f"   ❌ Erro ao salvar PDF: {e}")
+                logger.exception("   📋 Traceback completo:")
+        else:
+            logger.warning(f"   ⚠️  PDF não disponível no Odoo (campo vazio ou False)")
 
         # Salvar XML
         xml_base64 = cte_data.get('l10n_br_xml_dfe')
@@ -491,37 +524,24 @@ class CteService:
             try:
                 xml_bytes = base64.b64decode(xml_base64)
 
-                # Salvar temporariamente para passar ao storage
-                import tempfile
-                import os as os_module
+                # ✅ OTIMIZAÇÃO: Usar BytesIO ao invés de arquivo temporário em disco
+                from werkzeug.datastructures import FileStorage as WerkzeugFileStorage
 
-                with tempfile.NamedTemporaryFile(mode='wb', suffix='.xml', delete=False) as tmp:
-                    tmp.write(xml_bytes)
-                    tmp_path = tmp.name
+                xml_stream = BytesIO(xml_bytes)
+                file_storage_obj = WerkzeugFileStorage(
+                    stream=xml_stream,
+                    filename=f"{chave_acesso}.xml",
+                    content_type='application/xml'
+                )
 
-                try:
-                    # Abrir como FileStorage para compatibilidade
-                    from werkzeug.datastructures import FileStorage as WerkzeugFileStorage
+                xml_path = self.file_storage.save_file(
+                    file=file_storage_obj,
+                    folder=pasta_base,
+                    allowed_extensions=['xml']
+                )
 
-                    with open(tmp_path, 'rb') as f:
-                        file_storage_obj = WerkzeugFileStorage(
-                            stream=f,
-                            filename=f"{chave_acesso}.xml",
-                            content_type='application/xml'
-                        )
-
-                        xml_path = self.file_storage.save_file(
-                            file=file_storage_obj,
-                            folder=pasta_base,
-                            allowed_extensions=['xml']
-                        )
-
-                        if xml_path:
-                            logger.info(f"   ✅ XML salvo: {xml_path}")
-                finally:
-                    # Remover arquivo temporário
-                    if os_module.path.exists(tmp_path):
-                        os_module.remove(tmp_path)
+                if xml_path:
+                    logger.info(f"   ✅ XML salvo: {xml_path}")
 
             except Exception as e:
                 logger.error(f"   ❌ Erro ao salvar XML: {e}")
@@ -603,8 +623,45 @@ class CteService:
             return json.dumps(relation_data)
         return None
 
+    @staticmethod
+    def _extrair_numeros_nfs_do_mapa(refs_ids, mapa_refs):
+        """
+        ✅ OTIMIZADO: Extrai números de NFs do mapa pré-carregado (sem chamada ao Odoo)
+
+        Args:
+            refs_ids: Lista de IDs de referências deste CTe
+            mapa_refs: Dicionário {ref_id: numero_nf} pré-carregado
+
+        Returns:
+            str: String com números de NFs separados por vírgula (ex: "141768,141769,141770")
+        """
+        if not refs_ids or not isinstance(refs_ids, (list, tuple)) or len(refs_ids) == 0:
+            return None
+
+        if not mapa_refs:
+            # Fallback: se mapa não foi criado, retornar None
+            logger.warning("   ⚠️  Mapa de referências não disponível")
+            return None
+
+        numeros_nfs = []
+
+        for ref_id in refs_ids:
+            numero_nf = mapa_refs.get(ref_id)
+            if numero_nf:
+                numeros_nfs.append(numero_nf)
+
+        if numeros_nfs:
+            nfs_string = ",".join(numeros_nfs)
+            logger.info(f"   📄 NFs extraídas do mapa: {nfs_string}")
+            return nfs_string
+
+        return None
+
     def _extrair_numeros_nfs(self, refs_ids):
         """
+        ⚠️ DEPRECATED: Mantido para compatibilidade, mas não é mais usado
+        Use _extrair_numeros_nfs_do_mapa() para melhor performance
+
         Busca as referências de NFs no Odoo e extrai os números das NFs
 
         Args:

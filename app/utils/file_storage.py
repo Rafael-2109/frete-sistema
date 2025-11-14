@@ -8,6 +8,8 @@ import mimetypes
 try:
     import boto3
     from botocore.exceptions import ClientError
+    from botocore.config import Config
+    from boto3.s3.transfer import TransferConfig
     S3_AVAILABLE = True
 except ImportError:
     S3_AVAILABLE = False
@@ -20,15 +22,31 @@ class FileStorage:
     
     def __init__(self):
         self.use_s3 = current_app.config.get('USE_S3', False) and S3_AVAILABLE
-        
+
         if self.use_s3:
+            # ✅ OTIMIZAÇÃO: Configurar timeouts e retries
+            config = Config(
+                connect_timeout=10,  # Timeout de conexão: 10 segundos
+                read_timeout=30,     # Timeout de leitura: 30 segundos
+                retries={'max_attempts': 2}  # Máximo 2 tentativas
+            )
+
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=current_app.config.get('AWS_ACCESS_KEY_ID'),
                 aws_secret_access_key=current_app.config.get('AWS_SECRET_ACCESS_KEY'),
-                region_name=current_app.config.get('AWS_REGION', 'us-east-1')
+                region_name=current_app.config.get('AWS_REGION', 'us-east-1'),
+                config=config  # ✅ Aplicar configuração
             )
             self.bucket_name = current_app.config.get('S3_BUCKET_NAME')
+
+            # ✅ OTIMIZAÇÃO: Configurar TransferConfig para uploads mais rápidos
+            self.transfer_config = TransferConfig(
+                multipart_threshold=8 * 1024 * 1024,  # 8MB - arquivos maiores usam multipart
+                max_concurrency=10,  # Até 10 threads para upload paralelo
+                multipart_chunksize=8 * 1024 * 1024,  # 8MB por chunk
+                use_threads=True
+            )
     
     def save_file(self, file, folder, filename=None, allowed_extensions=None):
         """
@@ -76,15 +94,15 @@ class FileStorage:
             return None
     
     def _save_to_s3(self, file, file_path):
-        """Salva arquivo no S3"""
+        """Salva arquivo no S3 com otimizações de performance"""
         try:
             # 🛠️ CORREÇÃO: Suporte a BytesIO e FileStorage
             file_name = getattr(file, 'filename', None) or getattr(file, 'name', None)
-            
+
             # Determina content type
             content_type = mimetypes.guess_type(file_name)[0] or 'application/octet-stream' if file_name else 'application/octet-stream'
-            
-            # Upload para S3
+
+            # ✅ OTIMIZAÇÃO: Upload para S3 com TransferConfig
             self.s3_client.upload_fileobj(
                 file,
                 self.bucket_name,
@@ -92,13 +110,14 @@ class FileStorage:
                 ExtraArgs={
                     'ContentType': content_type,
                     'ACL': 'private'  # Arquivos privados por padrão
-                }
+                },
+                Config=self.transfer_config  # ✅ Usar configuração otimizada
             )
-            
+
             # 🆕 CORRIGIDO: Retorna apenas o caminho, sem prefixo
             # Isso mantém consistência com o banco de dados
             return file_path
-            
+
         except ClientError as e:
             current_app.logger.error(f"Erro S3: {str(e)}")
             raise
