@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}CTe {{ cte.numero_cte }}/{{ cte.serie_cte }} - Detalhes{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('cte.listar_ctes') }}">CTes</a></li>
+                    <li class="breadcrumb-item active">CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">
+                    <i class="fas fa-file-invoice"></i> CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}
+                </h2>
+                <div>
+                    <a href="{{ url_for('cte.listar_ctes') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Coluna Principal -->
+        <div class="col-md-8">
+            <!-- Dados Principais -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados Principais</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="text-muted small">Chave de Acesso</label>
+                            <div><strong>{{ cte.chave_acesso or '-' }}</strong></div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="text-muted small">Número CTe</label>
+                            <div><strong>{{ cte.numero_cte }}</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="text-muted small">Data Emissão</label>
+                            <div>{{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else '-' }}</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="text-muted small">Data Entrada</label>
+                            <div>{{ cte.data_entrada.strftime('%d/%m/%Y') if cte.data_entrada else '-' }}</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="text-muted small">Status Odoo</label>
+                            <div>
+                                <span class="badge bg-{{ 'success' if cte.odoo_status_codigo == '06' else 'secondary' }}">
+                                    {{ cte.odoo_status_descricao or '-' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Valor Total</label>
+                            <div><strong class="text-success">R$ {{ "%.2f"|format(cte.valor_total or 0) }}</strong></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Valor ICMS</label>
+                            <div><strong class="text-info">R$ {{ "%.2f"|format(cte.valor_icms or 0) }}</strong></div>
+                        </div>
+                    </div>
+
+                    {% if cte.numeros_nfs %}
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="text-muted small">Notas Fiscais Contidas no CTe ({{ cte.numeros_nfs.split(',') | length }})</label>
+                            <div>
+                                {% for nf in cte.numeros_nfs.split(',') %}
+                                <span class="badge bg-primary d-inline-block mb-1 me-1">NF {{ nf }}</span>
+                                {% if loop.index % 5 == 0 %}<br>{% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Transportadora (Emitente) -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-truck"></i> Transportadora (Emitente)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="text-muted small">Razão Social</label>
+                            <div><strong>{{ cte.nome_emitente or '-' }}</strong></div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="text-muted small">CNPJ</label>
+                            <div>{{ cte.formatar_cnpj(cte.cnpj_emitente) if cte.cnpj_emitente else '-' }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Partes Envolvidas -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-users"></i> Partes Envolvidas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">CNPJ Remetente</label>
+                            <div><strong>{{ cte.formatar_cnpj(cte.cnpj_remetente) if cte.cnpj_remetente else '-' }}</strong></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">CNPJ Destinatário</label>
+                            <div><strong>{{ cte.formatar_cnpj(cte.cnpj_destinatario) if cte.cnpj_destinatario else '-' }}</strong></div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">CNPJ Expedidor</label>
+                            <div>{{ cte.formatar_cnpj(cte.cnpj_expedidor) if cte.cnpj_expedidor else '-' }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Tomador</label>
+                            <div>
+                                {% if cte.tomador == '0' or cte.tomador == '1' %}
+                                    Remetente<br>
+                                    <small class="text-muted">{{ cte.formatar_cnpj(cte.cnpj_remetente) if cte.cnpj_remetente else '-' }}</small>
+                                {% elif cte.tomador == '2' %}
+                                    Expedidor<br>
+                                    <small class="text-muted">{{ cte.formatar_cnpj(cte.cnpj_expedidor) if cte.cnpj_expedidor else '-' }}</small>
+                                {% elif cte.tomador == '3' %}
+                                    Recebedor<br>
+                                    <small class="text-muted">{{ cte.formatar_cnpj(cte.cnpj_destinatario) if cte.cnpj_destinatario else '-' }}</small>
+                                {% elif cte.tomador == '4' %}
+                                    Destinatário<br>
+                                    <small class="text-muted">{{ cte.formatar_cnpj(cte.cnpj_destinatario) if cte.cnpj_destinatario else '-' }}</small>
+                                {% else %}
+                                    {{ cte.tomador or '-' }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Coluna Lateral -->
+        <div class="col-md-4">
+            <!-- Vínculo com Frete -->
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-link"></i> Vínculo com Frete</h5>
+                </div>
+                <div class="card-body">
+                    {% if cte.frete_id %}
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-check-circle"></i> <strong>Vinculado</strong>
+                        <hr>
+                        <p class="mb-2"><strong>Frete ID:</strong> {{ cte.frete_id }}</p>
+                        <p class="mb-2"><strong>Vinculado em:</strong> {{ cte.vinculado_em.strftime('%d/%m/%Y %H:%M') if cte.vinculado_em else '-' }}</p>
+                        <p class="mb-2"><strong>Vinculado por:</strong> {{ cte.vinculado_por or '-' }}</p>
+                        <p class="mb-0">
+                            <strong>Tipo:</strong>
+                            <span class="badge bg-{{ 'warning' if cte.vinculado_manualmente else 'info' }}">
+                                {{ 'Manual' if cte.vinculado_manualmente else 'Automático' }}
+                            </span>
+                        </p>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('fretes.detalhar_frete', id=cte.frete_id) }}" class="btn btn-primary">
+                            <i class="fas fa-eye"></i> Ver Frete
+                        </a>
+                        <form method="POST" action="{{ url_for('cte.desvincular_frete', cte_id=cte.id) }}"
+                              onsubmit="return confirm('Tem certeza que deseja desvincular este CTe do frete?');">
+                            <button type="submit" class="btn btn-danger w-100">
+                                <i class="fas fa-unlink"></i> Desvincular
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mb-3">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Não Vinculado</strong>
+                        <p class="mb-0 mt-2">Este CTe ainda não está vinculado a nenhum frete do sistema.</p>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('cte.vincular_frete', cte_id=cte.id) }}">
+                        <div class="mb-3">
+                            <label for="frete_id" class="form-label">ID do Frete</label>
+                            <input type="number" name="frete_id" id="frete_id" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-link"></i> Vincular ao Frete
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Arquivos -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file"></i> Arquivos</h5>
+                </div>
+                <div class="card-body">
+                    {% if cte.cte_pdf_path %}
+                    <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}" class="btn btn-danger w-100 mb-2" target="_blank">
+                        <i class="fas fa-file-pdf"></i> Visualizar PDF
+                    </a>
+                    {% else %}
+                    <button class="btn btn-secondary w-100 mb-2" disabled>
+                        <i class="fas fa-file-pdf"></i> PDF Não Disponível
+                    </button>
+                    {% endif %}
+
+                    {% if cte.cte_xml_path %}
+                    <a href="{{ url_for('cte.visualizar_xml', cte_id=cte.id) }}" class="btn btn-success w-100">
+                        <i class="fas fa-file-code"></i> Baixar XML
+                    </a>
+                    {% else %}
+                    <button class="btn btn-secondary w-100" disabled>
+                        <i class="fas fa-file-code"></i> XML Não Disponível
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Dados Odoo -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-database"></i> Dados Odoo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="text-muted small">DFe ID</label>
+                        <div><strong>{{ cte.dfe_id }}</strong></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted small">Nome Odoo</label>
+                        <div>{{ cte.odoo_name or '-' }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted small">Tipo Pedido</label>
+                        <div>{{ cte.tipo_pedido or '-' }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted small">Partner ID</label>
+                        <div>{{ cte.odoo_partner_id or '-' }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted small">Importado em</label>
+                        <div>{{ cte.importado_em.strftime('%d/%m/%Y %H:%M') if cte.importado_em else '-' }}</div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="text-muted small">Atualizado em</label>
+                        <div>{{ cte.atualizado_em.strftime('%d/%m/%Y %H:%M') if cte.atualizado_em else '-' }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

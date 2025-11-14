@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+
+{% block title %}CTes (Conhecimentos de Transporte) - Sistema de Fretes{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+    }
+
+    .status-concluido { background-color: #d1fae5; color: #065f46; }
+    .status-rateio { background-color: #fef3c7; color: #92400e; }
+    .status-po { background-color: #dbeafe; color: #1e40af; }
+    .status-ciencia { background-color: #e0e7ff; color: #3730a3; }
+    .status-sincronizado { background-color: #f3f4f6; color: #374151; }
+    .status-rascunho { background-color: #fee2e2; color: #991b1b; }
+    .status-rejeitado { background-color: #fecaca; color: #7f1d1d; }
+
+    .vinculado-badge { background-color: #d1fae5; color: #065f46; }
+    .nao-vinculado-badge { background-color: #fee2e2; color: #991b1b; }
+
+    .card-stat {
+        border-left: 4px solid;
+        transition: transform 0.2s;
+    }
+
+    .card-stat:hover {
+        transform: translateY(-2px);
+    }
+
+    .btn-action {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">
+                    <i class="fas fa-file-invoice"></i> CTes (Conhecimentos de Transporte)
+                </h2>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSincronizar">
+                    <i class="fas fa-sync"></i> Sincronizar com Odoo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card card-stat border-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1">Total de CTes</p>
+                            <h3 class="mb-0">{{ total_ctes }}</h3>
+                        </div>
+                        <div class="text-primary">
+                            <i class="fas fa-file-invoice fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card card-stat border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1">CTes Vinculados</p>
+                            <h3 class="mb-0">{{ ctes_vinculados }}</h3>
+                        </div>
+                        <div class="text-success">
+                            <i class="fas fa-link fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card card-stat border-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1">Não Vinculados</p>
+                            <h3 class="mb-0">{{ ctes_nao_vinculados }}</h3>
+                        </div>
+                        <div class="text-warning">
+                            <i class="fas fa-unlink fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card card-stat border-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1">Valor Não Vinculado</p>
+                            <h3 class="mb-0">R$ {{ "%.2f"|format(valor_total_nao_vinculados) }}</h3>
+                        </div>
+                        <div class="text-info">
+                            <i class="fas fa-dollar-sign fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-filter"></i> Filtros
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('cte.listar_ctes') }}">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label for="status" class="form-label">Status</label>
+                        <select name="status" id="status" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="06" {% if filtro_status == '06' %}selected{% endif %}>Concluído</option>
+                            <option value="05" {% if filtro_status == '05' %}selected{% endif %}>Rateio</option>
+                            <option value="04" {% if filtro_status == '04' %}selected{% endif %}>PO</option>
+                            <option value="03" {% if filtro_status == '03' %}selected{% endif %}>Ciência</option>
+                            <option value="02" {% if filtro_status == '02' %}selected{% endif %}>Sincronizado</option>
+                            <option value="01" {% if filtro_status == '01' %}selected{% endif %}>Rascunho</option>
+                            <option value="07" {% if filtro_status == '07' %}selected{% endif %}>Rejeitado</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label for="transportadora" class="form-label">Transportadora</label>
+                        <input type="text" name="transportadora" id="transportadora" class="form-control"
+                               value="{{ filtro_transportadora }}" placeholder="Nome ou CNPJ">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="data_inicio" class="form-label">Data Início</label>
+                        <input type="date" name="data_inicio" id="data_inicio" class="form-control"
+                               value="{{ filtro_data_inicio }}">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="data_fim" class="form-label">Data Fim</label>
+                        <input type="date" name="data_fim" id="data_fim" class="form-control"
+                               value="{{ filtro_data_fim }}">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="vinculado" class="form-label">Vinculado?</label>
+                        <select name="vinculado" id="vinculado" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="sim" {% if filtro_vinculado == 'sim' %}selected{% endif %}>Sim</option>
+                            <option value="nao" {% if filtro_vinculado == 'nao' %}selected{% endif %}>Não</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-1 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de CTes -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i> Lista de CTes
+                <span class="badge bg-secondary ms-2">{{ paginacao.total }} registros</span>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>CTe</th>
+                            <th>Data Emissão</th>
+                            <th>Transportadora</th>
+                            <th>CNPJ Remetente</th>
+                            <th>CNPJ Destinatário</th>
+                            <th>Notas Fiscais</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th>Vinculado</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cte in ctes %}
+                        <tr>
+                            <td>
+                                <strong>{{ cte.numero_cte }}</strong><br>
+                                <small class="text-muted">{{ cte.odoo_name }}</small>
+                            </td>
+                            <td>{{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else '-' }}</td>
+                            <td>
+                                {{ cte.nome_emitente }}<br>
+                                <small class="text-muted">{{ cte.formatar_cnpj(cte.cnpj_emitente) }}</small>
+                            </td>
+                            <td>{{ cte.formatar_cnpj(cte.cnpj_remetente) if cte.cnpj_remetente else '-' }}</td>
+                            <td>{{ cte.formatar_cnpj(cte.cnpj_destinatario) if cte.cnpj_destinatario else '-' }}</td>
+                            <td>
+                                {% if cte.numeros_nfs %}
+                                    {% for nf in cte.numeros_nfs.split(',')[:3] %}
+                                    <span class="badge bg-secondary d-block mb-1" style="font-size: 0.7rem;">{{ nf }}</span>
+                                    {% endfor %}
+                                    {% if cte.numeros_nfs.split(',') | length > 3 %}
+                                    <span class="badge bg-info d-block" style="font-size: 0.7rem;">+{{ cte.numeros_nfs.split(',') | length - 3 }} mais</span>
+                                    {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>R$ {{ "%.2f"|format(cte.valor_total or 0) }}</strong>
+                            </td>
+                            <td>
+                                {% if cte.odoo_status_descricao %}
+                                <span class="status-badge status-{{ cte.odoo_status_codigo or 'default' }}">
+                                    {{ cte.odoo_status_descricao }}
+                                </span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if cte.frete_id %}
+                                <span class="status-badge vinculado-badge">
+                                    <i class="fas fa-check"></i> Frete #{{ cte.frete_id }}
+                                </span>
+                                {% else %}
+                                <span class="status-badge nao-vinculado-badge">
+                                    <i class="fas fa-times"></i> Não
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.id) }}"
+                                       class="btn btn-sm btn-info btn-action" title="Ver Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if cte.cte_pdf_path %}
+                                    <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
+                                       class="btn btn-sm btn-danger btn-action" title="Ver PDF" target="_blank">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if cte.cte_xml_path %}
+                                    <a href="{{ url_for('cte.visualizar_xml', cte_id=cte.id) }}"
+                                       class="btn btn-sm btn-success btn-action" title="Baixar XML">
+                                        <i class="fas fa-file-code"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                Nenhum CTe encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Paginação -->
+        {% if paginacao.pages > 1 %}
+        <div class="card-footer">
+            <nav>
+                <ul class="pagination mb-0 justify-content-center">
+                    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('cte.listar_ctes', page=paginacao.prev_num, **request.args.to_dict(flat=False)) if paginacao.has_prev else '#' }}">
+                            Anterior
+                        </a>
+                    </li>
+
+                    {% for page_num in range(1, paginacao.pages + 1) %}
+                        {% if page_num <= 3 or page_num > paginacao.pages - 3 or (page_num >= paginacao.page - 1 and page_num <= paginacao.page + 1) %}
+                            <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('cte.listar_ctes', page=page_num, **request.args.to_dict(flat=False)) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% elif page_num == 4 or page_num == paginacao.pages - 3 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('cte.listar_ctes', page=paginacao.next_num, **request.args.to_dict(flat=False)) if paginacao.has_next else '#' }}">
+                            Próxima
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Sincronizar -->
+<div class="modal fade" id="modalSincronizar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sync"></i> Sincronizar CTes do Odoo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('cte.sincronizar_ctes') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="dias_retroativos" class="form-label">Dias Retroativos</label>
+                        <input type="number" name="dias_retroativos" id="dias_retroativos"
+                               class="form-control" value="30" min="1" max="365" required>
+                        <small class="form-text text-muted">
+                            Quantos dias para trás buscar CTes (padrão: 30 dias)
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="limite" class="form-label">Limite (opcional)</label>
+                        <input type="number" name="limite" id="limite"
+                               class="form-control" placeholder="Deixe vazio para buscar todos" min="1">
+                        <small class="form-text text-muted">
+                            Limite de registros para importar (opcional)
+                        </small>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Atenção:</strong> A sincronização pode demorar alguns minutos dependendo da quantidade de CTes.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sync"></i> Sincronizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

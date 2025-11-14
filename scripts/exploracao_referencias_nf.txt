@@ -1,0 +1,50 @@
+====================================================================================================
+EXPLORAÇÃO: RELACIONAMENTO DFe → REFERÊNCIAS DE NFs
+Data: 13/11/2025 19:50:24
+====================================================================================================
+
+CTe ID: 33034
+Chave CTe: 35251121498155000170570010000025641000026852
+Campo de relacionamento: refs_ids
+Total de referências: 4
+
+CAMPO DA CHAVE NF: infdoc_infnfe_chave
+
+CHAVES DE NF:
+  - 35251161724241000330550010001417681004039610
+  - 35251161724241000330550010001417691004039986
+  - 35251161724241000330550010001417701004040012
+  - 35251161724241000330550010001417711004040036
+
+NÚMEROS DE NF EXTRAÍDOS:
+  - 141768
+  - 141769
+  - 141770
+  - 141771
+
+FORMATO STRING: 141768,141769,141770,141771
+FORMATO JSON: ['141768', '141769', '141770', '141771']
+
+ESTRUTURA DO MODELO dfe.referencia:
+  message_is_follower                                | Is Follower                              | boolean
+  message_follower_ids                               | Followers                                | one2many
+  message_partner_ids                                | Followers (Partners)                     | many2many
+  message_ids                                        | Messages                                 | one2many
+  has_message                                        | Has Message                              | boolean
+  message_needaction                                 | Action Needed                            | boolean
+  message_needaction_counter                         | Number of Actions                        | integer
+  message_has_error                                  | Message Delivery error                   | boolean
+  message_has_error_counter                          | Number of errors                         | integer
+  message_attachment_count                           | Attachment Count                         | integer
+  rating_ids                                         | Ratings                                  | one2many
+  website_message_ids                                | Website Messages                         | one2many
+  message_has_sms_error                              | SMS Delivery error                       | boolean
+  company_id                                         | Empresa                                  | many2one
+  dfe_id                                             | Documento                                | many2one
+  infdoc_infnfe_chave                                | Chave                                    | char
+  id                                                 | ID                                       | integer
+  display_name                                       | Display Name                             | char
+  create_uid                                         | Created by                               | many2one
+  create_date                                        | Created on                               | datetime
+  write_uid                                          | Last Updated by                          | many2one
+  write_date                                         | Last Updated on                          | datetime

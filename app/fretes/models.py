@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_brasil
 
 class Frete(db.Model):
     """
@@ -390,3 +391,200 @@ class FreteLancado(db.Model):
 
     embarque = db.relationship('Embarque', backref='fretes_lancados')
     transportadora = db.relationship('Transportadora')
+
+
+class ConhecimentoTransporte(db.Model):
+    """
+    Modelo para registrar Conhecimentos de Transporte (CTe) do Odoo
+    e vincular com fretes do sistema
+
+    FONTE: Modelo l10n_br_ciel_it_account.dfe do Odoo (campo is_cte=True)
+    FILTRO ODOO: ["&", "|", ("active", "=", True), ("active", "=", False), ("is_cte", "=", True)]
+    """
+    __tablename__ = 'conhecimento_transporte'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # ================================================
+    # VÍNCULO COM ODOO
+    # ================================================
+    dfe_id = db.Column(db.String(50), nullable=False, unique=True, index=True)  # ID do DFe no Odoo
+    odoo_ativo = db.Column(db.Boolean, default=True)  # Campo 'active' do Odoo
+    odoo_name = db.Column(db.String(100), nullable=True)  # Campo 'name' do Odoo (ex: DFE/2025/15797)
+
+    # Status do Odoo (selection)
+    # Valores: 01-Rascunho, 02-Sincronizado, 03-Ciência/Confirmado, 04-PO, 05-Rateio, 06-Concluído, 07-Rejeitado
+    odoo_status_codigo = db.Column(db.String(2), nullable=True, index=True)  # Código (ex: '06')
+    odoo_status_descricao = db.Column(db.String(50), nullable=True)  # Descrição (ex: 'Concluído')
+
+    # ================================================
+    # DADOS DO CTe (campos do DFe do Odoo)
+    # ================================================
+    # Chave e Numeração
+    chave_acesso = db.Column(db.String(44), nullable=True, unique=True, index=True)  # protnfe_infnfe_chnfe
+    numero_cte = db.Column(db.String(20), nullable=True, index=True)    # nfe_infnfe_ide_nnf
+    serie_cte = db.Column(db.String(10), nullable=True)                 # nfe_infnfe_ide_serie
+
+    # Datas
+    data_emissao = db.Column(db.Date, nullable=True, index=True)        # nfe_infnfe_ide_dhemi
+    data_entrada = db.Column(db.Date, nullable=True)                    # l10n_br_data_entrada
+
+    # Valores
+    valor_total = db.Column(db.Numeric(15, 2), nullable=True)           # nfe_infnfe_total_icmstot_vnf
+    valor_frete = db.Column(db.Numeric(15, 2), nullable=True)           # nfe_infnfe_total_icms_vfrete
+    valor_icms = db.Column(db.Numeric(15, 2), nullable=True)            # nfe_infnfe_total_icms_vicms
+
+    # Vencimento (será preenchido posteriormente via fatura)
+    vencimento = db.Column(db.Date, nullable=True)
+
+    # Emissor (Transportadora)
+    cnpj_emitente = db.Column(db.String(20), nullable=True, index=True) # nfe_infnfe_emit_cnpj
+    nome_emitente = db.Column(db.String(255), nullable=True)            # nfe_infnfe_emit_xnome
+    ie_emitente = db.Column(db.String(20), nullable=True)               # nfe_infnfe_emit_ie
+
+    # Destinatário (Cliente que recebe a mercadoria)
+    cnpj_destinatario = db.Column(db.String(20), nullable=True, index=True)  # nfe_infnfe_dest_cnpj
+
+    # Remetente (Quem envia a mercadoria)
+    cnpj_remetente = db.Column(db.String(20), nullable=True, index=True)     # nfe_infnfe_rem_cnpj
+
+    # Expedidor (Se houver)
+    cnpj_expedidor = db.Column(db.String(20), nullable=True)            # nfe_infnfe_exped_cnpj
+
+    # Municípios (para rastreio de rotas)
+    municipio_inicio = db.Column(db.String(10), nullable=True)          # cte_infcte_ide_cmunini (código IBGE)
+    municipio_fim = db.Column(db.String(10), nullable=True)             # cte_infcte_ide_cmunfim (código IBGE)
+
+    # Tomador do serviço
+    tomador = db.Column(db.String(1), nullable=True)                    # cte_infcte_ide_toma3_toma (1-Remetente, 2-Expedidor, 3-Recebedor, 4-Destinatário)
+
+    # Dados Adicionais
+    informacoes_complementares = db.Column(db.Text, nullable=True)      # nfe_infnfe_infadic_infcpl
+
+    # Tipo de pedido Odoo
+    tipo_pedido = db.Column(db.String(20), nullable=True)               # l10n_br_tipo_pedido (ex: 'servico')
+
+    # Números das NFs contidas no CTe (extraídos de refs_ids)
+    numeros_nfs = db.Column(db.Text, nullable=True)                     # String separada por vírgula: "141768,141769,141770,141771"
+
+    # ================================================
+    # ARQUIVOS (PDF/XML)
+    # ================================================
+    cte_pdf_path = db.Column(db.String(500), nullable=True)  # Caminho S3/local do PDF
+    cte_xml_path = db.Column(db.String(500), nullable=True)  # Caminho S3/local do XML
+    cte_pdf_nome_arquivo = db.Column(db.String(255), nullable=True)  # l10n_br_pdf_dfe_fname
+    cte_xml_nome_arquivo = db.Column(db.String(255), nullable=True)  # l10n_br_xml_dfe_fname
+
+    # ================================================
+    # RELACIONAMENTOS ODOO (para referência futura)
+    # ================================================
+    odoo_partner_id = db.Column(db.Integer, nullable=True)  # ID do partner no Odoo (transportadora)
+    odoo_invoice_ids = db.Column(db.Text, nullable=True)    # JSON: lista de IDs de invoices
+    odoo_purchase_fiscal_id = db.Column(db.Integer, nullable=True)  # ID da compra fiscal no Odoo
+
+    # ================================================
+    # VÍNCULO COM FRETE DO SISTEMA
+    # ================================================
+    frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'), nullable=True, index=True)
+    vinculado_manualmente = db.Column(db.Boolean, default=False)  # Se foi vinculado manualmente
+    vinculado_em = db.Column(db.DateTime, nullable=True)
+    vinculado_por = db.Column(db.String(100), nullable=True)
+
+    # Relacionamento
+    frete = db.relationship('Frete', backref='conhecimentos_transporte', lazy=True)
+
+    # ================================================
+    # AUDITORIA
+    # ================================================
+    importado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    importado_por = db.Column(db.String(100), default='Sistema Odoo')
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+    ativo = db.Column(db.Boolean, default=True, index=True)
+
+    # ================================================
+    # ÍNDICES
+    # ================================================
+    __table_args__ = (
+        db.Index('idx_cte_chave_acesso', 'chave_acesso'),
+        db.Index('idx_cte_numero_serie', 'numero_cte', 'serie_cte'),
+        db.Index('idx_cte_cnpj_emitente', 'cnpj_emitente'),
+        db.Index('idx_cte_cnpj_remetente', 'cnpj_remetente'),
+        db.Index('idx_cte_cnpj_destinatario', 'cnpj_destinatario'),
+        db.Index('idx_cte_data_emissao', 'data_emissao'),
+        db.Index('idx_cte_frete', 'frete_id'),
+        db.Index('idx_cte_status', 'odoo_status_codigo'),
+    )
+
+    def __repr__(self):
+        return f'<CTe {self.numero_cte}/{self.serie_cte} - {self.nome_emitente}>'
+
+    def to_dict(self):
+        """Serializa o CTe para JSON"""
+        return {
+            'id': self.id,
+            'dfe_id': self.dfe_id,
+            'odoo_name': self.odoo_name,
+            'odoo_status_codigo': self.odoo_status_codigo,
+            'odoo_status_descricao': self.odoo_status_descricao,
+            'chave_acesso': self.chave_acesso,
+            'numero_cte': self.numero_cte,
+            'serie_cte': self.serie_cte,
+            'data_emissao': self.data_emissao.isoformat() if self.data_emissao else None,
+            'valor_total': float(self.valor_total) if self.valor_total else 0,
+            'valor_frete': float(self.valor_frete) if self.valor_frete else 0,
+            'valor_icms': float(self.valor_icms) if self.valor_icms else 0,
+            'cnpj_emitente': self.cnpj_emitente,
+            'nome_emitente': self.nome_emitente,
+            'cnpj_destinatario': self.cnpj_destinatario,
+            'cnpj_remetente': self.cnpj_remetente,
+            'frete_id': self.frete_id,
+            'cte_pdf_path': self.cte_pdf_path,
+            'cte_xml_path': self.cte_xml_path,
+            'vinculado_manualmente': self.vinculado_manualmente,
+            'importado_em': self.importado_em.isoformat() if self.importado_em else None
+        }
+
+    @staticmethod
+    def get_status_descricao(codigo):
+        """
+        Retorna a descrição do status baseado no código
+
+        Valores do Odoo (l10n_br_status):
+        01-Rascunho, 02-Sincronizado, 03-Ciência/Confirmado,
+        04-PO, 05-Rateio, 06-Concluído, 07-Rejeitado
+        """
+        status_map = {
+            '01': 'Rascunho',
+            '02': 'Sincronizado',
+            '03': 'Ciência/Confirmado',
+            '04': 'PO',
+            '05': 'Rateio',
+            '06': 'Concluído',
+            '07': 'Rejeitado'
+        }
+        return status_map.get(codigo, 'Desconhecido')
+
+    @staticmethod
+    def formatar_cnpj(cnpj):
+        """
+        Formata CNPJ para o padrão XX.XXX.XXX/XXXX-XX
+
+        Args:
+            cnpj: CNPJ sem formatação (14 dígitos)
+
+        Returns:
+            str: CNPJ formatado ou original se inválido
+        """
+        if not cnpj:
+            return ''
+
+        # Remover caracteres não numéricos
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+
+        # Validar tamanho
+        if len(cnpj_limpo) != 14:
+            return cnpj  # Retornar original se inválido
+
+        # Formatar: XX.XXX.XXX/XXXX-XX
+        return f"{cnpj_limpo[0:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"

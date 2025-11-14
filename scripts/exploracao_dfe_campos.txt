@@ -1,0 +1,129 @@
+====================================================================================================
+LISTA COMPLETA DE CAMPOS DO MODELO l10n_br_ciel_it_account.dfe
+Data: 13/11/2025 19:24:48
+====================================================================================================
+
+TOTAL DE CAMPOS: 92
+
+====================================================================================================
+CAMPOS DE TEXTO (char/text): 33
+====================================================================================================
+  activity_exception_icon                                      | Icon                                     | char
+  activity_summary                                             | Next Activity Summary                    | char
+  activity_type_icon                                           | Activity Type Icon                       | char
+  cte_infcte_ide_cmunfim                                       | Município de Destino                     | char
+  cte_infcte_ide_cmunini                                       | Município de Origem                      | char
+  cte_infcte_ide_toma3_toma                                    | Tomador                                  | char
+  display_name                                                 | Display Name                             | char
+  justificativa                                                | Justificativa                            | text
+  l10n_br_body_xml_dfe                                         | Conteudo XML                             | text
+  l10n_br_pdf_dfe_fname                                        | Arquivo DANFE DF-e                       | char
+  l10n_br_xml_body_dfe                                         | Body XML DF-e                            | text
+  l10n_br_xml_dfe_fname                                        | Arquivo XML DF-e                         | char
+  name                                                         | Número                                   | char
+  nfe_infnfe_dest_cnpj                                         | CNPJ Destinatário                        | char
+  nfe_infnfe_dest_uf                                           | UF Destinatário                          | char
+  nfe_infnfe_emit_cnpj                                         | CNPJ Emitente                            | char
+  nfe_infnfe_emit_cpf                                          | CPF Emitente                             | char
+  nfe_infnfe_emit_crt                                          | Regime Tributário                        | char
+  nfe_infnfe_emit_ie                                           | IE Emitente                              | char
+  nfe_infnfe_emit_uf                                           | UF Emitente                              | char
+  nfe_infnfe_emit_xnome                                        | Razao Social                             | char
+  nfe_infnfe_exped_cnpj                                        | CNPJ Expedidor                           | char
+  nfe_infnfe_ide_finnfe                                        | Finalidade de emissão                    | char
+  nfe_infnfe_ide_nnf                                           | Número da Nota                           | char
+  nfe_infnfe_ide_serie                                         | Série da Nota                            | char
+  nfe_infnfe_infadic_infcpl                                    | Dados Adicionais                         | char
+  nfe_infnfe_rem_cnpj                                          | CNPJ Remetente                           | char
+  nfe_infnfe_total_icms_vicmsdeson                             | ICMS Desonerado                          | char
+  payment_reference                                            | Referencia de Pagamento                  | char
+  protnfe_infnfe_chnfe                                         | Chave de Acesso                          | char
+  protnfe_infprot_digval                                       | Digito Validador                         | char
+  protnfe_infprot_nprot                                        | Protocolo                                | char
+  x_studio_pedido_de_venda_referncia                           | Pedido de Venda (Referência)             | char
+
+
+====================================================================================================
+CAMPOS NUMÉRICOS (integer/float/monetary): 18
+====================================================================================================
+  id                                                           | ID                                       | integer
+  l10n_br_numero_parcelas                                      | Número de Parcelas                       | integer
+  message_attachment_count                                     | Attachment Count                         | integer
+  message_has_error_counter                                    | Number of errors                         | integer
+  message_needaction_counter                                   | Number of Actions                        | integer
+  nfe_infnfe_total_icms_vbc                                    | BC ICMS                                  | float
+  nfe_infnfe_total_icms_vbcst                                  | BC ICMS ST                               | float
+  nfe_infnfe_total_icms_vcofins                                | Valor COFINS                             | float
+  nfe_infnfe_total_icms_vdesc                                  | Valor do Desconto                        | float
+  nfe_infnfe_total_icms_vfrete                                 | Valor do Frete                           | float
+  nfe_infnfe_total_icms_vicms                                  | Valor ICMS                               | float
+  nfe_infnfe_total_icms_vipi                                   | Valor IPI                                | float
+  nfe_infnfe_total_icms_voutro                                 | Outras Despesas Acessórias               | float
+  nfe_infnfe_total_icms_vpis                                   | Valor PIS                                | float
+  nfe_infnfe_total_icms_vseg                                   | Valor do Seguro                          | float
+  nfe_infnfe_total_icms_vst                                    | Valor ICMS ST                            | float
+  nfe_infnfe_total_icmstot_vnf                                 | Valor da Nota                            | float
+  nfe_infnfe_total_icmstot_vprod                               | Valor dos Produtos                       | float
+
+
+====================================================================================================
+CAMPOS DE DATA (date/datetime): 6
+====================================================================================================
+  activity_date_deadline                                       | Next Activity Deadline                   | date
+  create_date                                                  | Created on                               | datetime
+  l10n_br_data_entrada                                         | Data de Lançamento                       | date
+  my_activity_date_deadline                                    | My Activity Deadline                     | date
+  nfe_infnfe_ide_dhemi                                         | Data de Emissão                          | date
+  write_date                                                   | Last Updated on                          | datetime
+
+
+====================================================================================================
+CAMPOS BOOLEAN: 7
+====================================================================================================
+  active                                                       | Ativo                                    | boolean
+  has_message                                                  | Has Message                              | boolean
+  is_cte                                                       | CT-e                                     | boolean
+  message_has_error                                            | Message Delivery error                   | boolean
+  message_has_sms_error                                        | SMS Delivery error                       | boolean
+  message_is_follower                                          | Is Follower                              | boolean
+  message_needaction                                           | Action Needed                            | boolean
+
+
+====================================================================================================
+CAMPOS DE RELACIONAMENTO (many2one/one2many/many2many): 20
+====================================================================================================
+  activity_calendar_event_id                                   | Next Activity Calendar Event   | many2one        | → calendar.event
+  activity_ids                                                 | Activities                     | one2many        | → mail.activity
+  activity_type_id                                             | Next Activity Type             | many2one        | → mail.activity.type
+  activity_user_id                                             | Responsible User               | many2one        | → res.users
+  company_id                                                   | Empresa                        | many2one        | → res.company
+  create_uid                                                   | Created by                     | many2one        | → res.users
+  dups_ids                                                     | Pagamentos                     | one2many        | → l10n_br_ciel_it_account.dfe.pagamento
+  invoice_ids                                                  | Faturas                        | one2many        | → account.move
+  lines_ids                                                    | Itens                          | one2many        | → l10n_br_ciel_it_account.dfe.line
+  message_follower_ids                                         | Followers                      | one2many        | → mail.followers
+  message_ids                                                  | Messages                       | one2many        | → mail.message
+  message_partner_ids                                          | Followers (Partners)           | many2many       | → res.partner
+  partner_dest_id                                              | Destinatário                   | many2one        | → res.partner
+  partner_id                                                   | Emitente                       | many2one        | → res.partner
+  purchase_fiscal_id                                           | Pedido de Compra (Escrituração) | many2one        | → purchase.order
+  purchase_id                                                  | Pedido de Compra               | many2one        | → purchase.order
+  rating_ids                                                   | Ratings                        | one2many        | → rating.rating
+  refs_ids                                                     | Referências                    | one2many        | → l10n_br_ciel_it_account.dfe.referencia
+  website_message_ids                                          | Website Messages               | one2many        | → mail.message
+  write_uid                                                    | Last Updated by                | many2one        | → res.users
+
+
+====================================================================================================
+OUTROS CAMPOS: 8
+====================================================================================================
+  activity_exception_decoration                                | Activity Exception Decoration            | selection
+  activity_state                                               | Activity State                           | selection
+  l10n_br_pdf_dfe                                              | DANFE DF-e                               | binary
+  l10n_br_situacao_dfe                                         | Situação DF-e                            | selection
+  l10n_br_status                                               | Situação                                 | selection
+  l10n_br_tipo_pedido                                          | Tipo de Pedido                           | selection
+  l10n_br_xml_dfe                                              | XML DF-e                                 | binary
+  situacao_manifesto                                           | Manifesto                                | selection
+
+

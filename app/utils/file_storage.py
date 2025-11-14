@@ -105,30 +105,31 @@ class FileStorage:
     
     def _save_locally(self, file, file_path):
         """Salva arquivo localmente"""
-        # Cria diretório se não existir
-        local_folder = os.path.join(current_app.root_path, 'static', 'uploads', file_path.split('/')[0])
-        os.makedirs(local_folder, exist_ok=True)
-        
-        # Salva arquivo
-        full_path = os.path.join(local_folder, os.path.basename(file_path))
+        # 🔴 CORRIGIDO: Criar TODA a estrutura de pastas, não só a primeira
+        full_path = os.path.join(current_app.root_path, 'static', 'uploads', file_path)
+
+        # Criar diretórios intermediários se não existirem
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+        # Salvar arquivo no caminho completo
         file.save(full_path)
-        
+
         # Retorna caminho relativo para templates
         return f"uploads/{file_path}"
     
     def get_file_url(self, file_path):
         """
         Gera URL para acessar arquivo
-        
+
         Args:
             file_path: Caminho do arquivo retornado por save_file()
-        
+
         Returns:
             str: URL para acesso ao arquivo
         """
         if not file_path:
             return None
-        
+
         # 🆕 CORRIGIDO: Detecta automaticamente se é S3 ou local
         if self.use_s3 and not file_path.startswith('uploads/'):
             # Sistema S3 ativo e não é arquivo local antigo
@@ -141,7 +142,7 @@ class FileStorage:
                     # Arquivo S3 sem prefixo
                     bucket_name = self.bucket_name
                     object_key = file_path
-                
+
                 # Gera URL assinada (válida por 1 hora)
                 url = self.s3_client.generate_presigned_url(
                     'get_object',
@@ -155,14 +156,17 @@ class FileStorage:
         else:
             # Para arquivos locais ou sistema S3 desativado
             try:
-                # Remove prefixo s3:// se existir (fallback)
+                # 🔴 CORRIGIDO: Arquivo local já vem com "uploads/" do save_file()
+                # Então basta passar direto para url_for sem duplicar
                 if file_path.startswith('s3://'):
-                    # Converte para caminho local
+                    # Fallback: Converte S3 para caminho local
                     local_path = '/'.join(file_path.split('/')[3:])
                     return url_for('static', filename=f'uploads/{local_path}')
                 else:
+                    # Arquivo local: já vem no formato "uploads/pasta/arquivo.ext"
                     return url_for('static', filename=file_path)
-            except Exception:
+            except Exception as e:
+                current_app.logger.error(f"Erro ao gerar URL local para {file_path}: {str(e)}")
                 return None
     
     def delete_file(self, file_path):
