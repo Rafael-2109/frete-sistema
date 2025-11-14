@@ -38,6 +38,7 @@ STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 5760))
 JANELA_REQUISICOES = int(os.environ.get('JANELA_REQUISICOES', 90))  # 90 minutos
 JANELA_PEDIDOS = int(os.environ.get('JANELA_PEDIDOS', 90))  # 90 minutos (mesma janela)
 JANELA_ALOCACOES = int(os.environ.get('JANELA_ALOCACOES', 90))  # 90 minutos (mesma janela)
+JANELA_CTES = int(os.environ.get('JANELA_CTES', 90))  # ✅ 90 minutos para CTes
 DIAS_ENTRADAS = int(os.environ.get('DIAS_ENTRADAS', 7))  # 7 dias para entradas de materiais
 MAX_RETRIES = 3
 RETRY_DELAY = 5
@@ -49,6 +50,7 @@ requisicao_service = None
 pedido_service = None
 alocacao_service = None
 entrada_material_service = None
+cte_service = None  # ✅ Service de CTes
 
 
 def inicializar_services():
@@ -57,7 +59,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -67,6 +69,7 @@ def inicializar_services():
         from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
         from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
         from app.odoo.services.entrada_material_service import EntradaMaterialService
+        from app.odoo.services.cte_service import CteService  # ✅ Service de CTes
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -75,6 +78,7 @@ def inicializar_services():
         pedido_service = PedidoComprasServiceOtimizado()
         alocacao_service = AlocacaoComprasServiceOtimizado()
         entrada_material_service = EntradaMaterialService()
+        cte_service = CteService()  # ✅ Instanciar service de CTes
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -89,7 +93,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -101,11 +105,12 @@ def executar_sincronizacao():
     logger.info(f"   - Requisições: janela={JANELA_REQUISICOES}min")
     logger.info(f"   - Pedidos: janela={JANELA_PEDIDOS}min")
     logger.info(f"   - Alocações: janela={JANELA_ALOCACOES}min")
+    logger.info(f"   - CTes: janela={JANELA_CTES}min")  # ✅ Adicionar CTes ao log
     logger.info(f"   - Entradas: dias={DIAS_ENTRADAS}")
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -536,6 +541,64 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes dos CTes")
+        except Exception as e:
+            pass
+
+        # 7️⃣ CTes - com retry
+        sucesso_ctes = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📄 Sincronizando CTes (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_CTES} minutos")
+
+                # Usar service já instanciado
+                resultado_ctes = cte_service.importar_ctes(
+                    minutos_janela=JANELA_CTES
+                )
+
+                if resultado_ctes.get("sucesso"):
+                    sucesso_ctes = True
+                    logger.info("✅ CTes sincronizados com sucesso!")
+                    logger.info(f"   - Novos: {resultado_ctes.get('ctes_novos', 0)}")
+                    logger.info(f"   - Atualizados: {resultado_ctes.get('ctes_atualizados', 0)}")
+                    logger.info(f"   - Ignorados: {resultado_ctes.get('ctes_ignorados', 0)}")
+                    logger.info(f"   - Processados: {resultado_ctes.get('ctes_processados', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erros = resultado_ctes.get('erros', [])
+                    logger.error(f"❌ Erro CTes: {erros[0] if erros else 'Erro desconhecido'}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        # Reinicializar service
+                        from app.odoo.services.cte_service import CteService
+                        cte_service = CteService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar CTes: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.odoo.services.cte_service import CteService
+                        cte_service = CteService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -545,12 +608,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes])
 
-        if total_sucesso == 7:
+        if total_sucesso == 8:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 5:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/7 módulos OK")
+        elif total_sucesso >= 6:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/8 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -565,8 +628,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Alocações: FALHOU")
             if not sucesso_entradas:
                 logger.info("   ❌ Entradas de Materiais: FALHOU")
+            if not sucesso_ctes:
+                logger.info("   ❌ CTes: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/7 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/8 módulos OK")
         logger.info("=" * 60)
 
 

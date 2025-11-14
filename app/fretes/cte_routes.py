@@ -118,11 +118,15 @@ def listar_ctes():
     )
 
 
-@cte_bp.route('/sincronizar', methods=['POST'])
+@cte_bp.route('/sincronizar', methods=['GET', 'POST'])
 @login_required
 @require_financeiro()
 def sincronizar_ctes():
     """Sincroniza CTes do Odoo"""
+
+    # Se for GET, redirecionar para listagem
+    if request.method == 'GET':
+        return redirect(url_for('cte.listar_ctes'))
 
     try:
         # Parâmetros

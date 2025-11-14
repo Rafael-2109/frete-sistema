@@ -61,14 +61,16 @@ class CteService:
     def importar_ctes(
         self,
         dias_retroativos: int = 30,
-        limite: Optional[int] = None
+        limite: Optional[int] = None,
+        minutos_janela: Optional[int] = None
     ) -> Dict:
         """
         Importa CTes do Odoo
 
         Args:
-            dias_retroativos: Quantos dias para trás buscar (padrão: 30)
+            dias_retroativos: Quantos dias para trás buscar (padrão: 30) - Usado se minutos_janela=None
             limite: Limite de registros (None = todos)
+            minutos_janela: Se especificado, busca CTes atualizados nos últimos X minutos (incremental)
 
         Returns:
             Dict com estatísticas da importação
@@ -88,10 +90,18 @@ class CteService:
 
         try:
             # 1. Buscar CTes do Odoo
-            data_inicio = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
-            logger.info(f"📅 Buscando CTes desde {data_inicio}")
-
-            ctes = self._buscar_ctes_odoo(data_inicio, limite)
+            if minutos_janela:
+                # ✅ SINCRONIZAÇÃO INCREMENTAL: Últimos X minutos
+                data_inicio = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"🔄 Sincronização Incremental: Últimos {minutos_janela} minutos")
+                logger.info(f"📅 Buscando CTes atualizados desde {data_inicio}")
+                ctes = self._buscar_ctes_odoo(data_inicio, limite, usar_write_date=True)
+            else:
+                # 📅 SINCRONIZAÇÃO INICIAL: Últimos X dias
+                data_inicio = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+                logger.info(f"📅 Sincronização Inicial: Últimos {dias_retroativos} dias")
+                logger.info(f"📅 Buscando CTes desde {data_inicio}")
+                ctes = self._buscar_ctes_odoo(data_inicio, limite, usar_write_date=False)
 
             if not ctes:
                 logger.warning("⚠️  Nenhum CTe encontrado no Odoo")
@@ -188,7 +198,8 @@ class CteService:
     def _buscar_ctes_odoo(
         self,
         data_inicio: str,
-        limite: Optional[int]
+        limite: Optional[int] = None,
+        usar_write_date: bool = False
     ) -> List[Dict]:
         """
         Busca CTes no Odoo
@@ -196,23 +207,39 @@ class CteService:
         Filtro: ["&", "|", ("active", "=", True), ("active", "=", False), ("is_cte", "=", True)]
 
         Args:
-            data_inicio: Data mínima (YYYY-MM-DD)
+            data_inicio: Data mínima (YYYY-MM-DD HH:MM:SS para write_date, YYYY-MM-DD para emissão)
             limite: Limite de registros
+            usar_write_date: Se True, usa write_date (data de atualização). Se False, usa data de emissão
 
         Returns:
             Lista de CTes
         """
         try:
-            # Filtro conforme especificado
-            filtros = [
-                "&",
-                "|",
-                ("active", "=", True),
-                ("active", "=", False),
-                ("is_cte", "=", True),
-                # Filtrar por data de emissão se disponível
-                ("nfe_infnfe_ide_dhemi", ">=", data_inicio)
-            ]
+            # Filtro base
+            if usar_write_date:
+                # ✅ SINCRONIZAÇÃO INCREMENTAL: Usar write_date (data de atualização)
+                filtros = [
+                    "&",
+                    "&",
+                    "|",
+                    ("active", "=", True),
+                    ("active", "=", False),
+                    ("is_cte", "=", True),
+                    ("write_date", ">=", data_inicio)  # Filtro por atualização
+                ]
+                logger.info(f"   Filtro: is_cte=True AND write_date >= {data_inicio}")
+            else:
+                # 📅 SINCRONIZAÇÃO INICIAL: Usar data de emissão
+                filtros = [
+                    "&",
+                    "&",
+                    "|",
+                    ("active", "=", True),
+                    ("active", "=", False),
+                    ("is_cte", "=", True),
+                    ("nfe_infnfe_ide_dhemi", ">=", data_inicio)  # Filtro por emissão
+                ]
+                logger.info(f"   Filtro: is_cte=True AND data_emissao >= {data_inicio}")
 
             campos = [
                 'id',
@@ -409,6 +436,9 @@ class CteService:
             cte_existente.atualizado_em = datetime.now()
             cte_existente.atualizado_por = 'Sistema Odoo'
 
+            # ✅ Calcular e gravar flag tomador_e_empresa
+            cte_existente.tomador_e_empresa = cte_existente.calcular_tomador_e_empresa()
+
             return {'novo': False}
 
         else:
@@ -450,6 +480,9 @@ class CteService:
                 numeros_nfs=numeros_nfs,
                 importado_por='Sistema Odoo'
             )
+
+            # ✅ Calcular e gravar flag tomador_e_empresa
+            cte.tomador_e_empresa = cte.calcular_tomador_e_empresa()
 
             db.session.add(cte)
 

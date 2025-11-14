@@ -179,6 +179,7 @@ class Frete(db.Model):
         Busca CTes relacionados do Odoo baseado em:
         1. Pelo menos 1 NF em comum entre frete e CTe
         2. Prefixo do CNPJ da transportadora (primeiros 8 dígitos: XX.XXX.XXX)
+        3. ✅ Tomador deve ser a empresa (CNPJ começa com 61.724.241)
 
         Returns:
             list: Lista de ConhecimentoTransporte relacionados
@@ -207,13 +208,15 @@ class Frete(db.Model):
         # 1. Tenham prefixo CNPJ da transportadora batendo
         # 2. Tenham pelo menos 1 NF em comum
         # 3. Estejam ativos
+        # 4. ✅ Tomador seja a empresa
         from sqlalchemy import and_, or_
 
         ctes_relacionados = ConhecimentoTransporte.query.filter(
             and_(
                 ConhecimentoTransporte.ativo == True,
                 ConhecimentoTransporte.cnpj_emitente.isnot(None),
-                ConhecimentoTransporte.numeros_nfs.isnot(None)
+                ConhecimentoTransporte.numeros_nfs.isnot(None),
+                ConhecimentoTransporte.tomador_e_empresa == True  # ✅ FILTRO ADICIONADO
             )
         ).all()
 
@@ -521,6 +524,9 @@ class ConhecimentoTransporte(db.Model):
     # Tomador do serviço
     tomador = db.Column(db.String(1), nullable=True)                    # cte_infcte_ide_toma3_toma (1-Remetente, 2-Expedidor, 3-Recebedor, 4-Destinatário)
 
+    # ✅ Flag indicando se o tomador é a empresa (CNPJ começa com 61.724.241)
+    tomador_e_empresa = db.Column(db.Boolean, default=False, nullable=False, index=True)
+
     # Dados Adicionais
     informacoes_complementares = db.Column(db.Text, nullable=True)      # nfe_infnfe_infadic_infcpl
 
@@ -651,3 +657,36 @@ class ConhecimentoTransporte(db.Model):
 
         # Formatar: XX.XXX.XXX/XXXX-XX
         return f"{cnpj_limpo[0:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
+
+    def calcular_tomador_e_empresa(self, prefixo_cnpj='61724241'):
+        """
+        Calcula se o tomador do CTe é a empresa (CNPJ começa com 61.724.241)
+
+        Args:
+            prefixo_cnpj: Prefixo do CNPJ da empresa (8 primeiros dígitos, sem formatação)
+
+        Returns:
+            bool: True se o tomador for a empresa, False caso contrário
+        """
+        if not self.tomador:
+            return False
+
+        # Mapa código tomador -> campo CNPJ
+        mapa_tomador = {
+            '0': self.cnpj_remetente,  # Remetente
+            '1': self.cnpj_remetente,  # Remetente
+            '2': self.cnpj_expedidor,  # Expedidor
+            '3': self.cnpj_destinatario,  # Recebedor
+            '4': self.cnpj_destinatario,  # Destinatário
+        }
+
+        cnpj_tomador = mapa_tomador.get(self.tomador)
+
+        if not cnpj_tomador:
+            return False
+
+        # Limpar CNPJ (remover formatação)
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj_tomador))
+
+        # Verificar se começa com o prefixo (primeiros 8 dígitos)
+        return cnpj_limpo.startswith(prefixo_cnpj)
