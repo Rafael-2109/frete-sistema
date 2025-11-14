@@ -160,9 +160,9 @@ class Frete(db.Model):
         """
         if not self.valor_considerado or not self.valor_pago:
             return False, "Valores não informados"
-        
+
         diferenca = abs(self.valor_considerado - self.valor_pago)
-        
+
         if diferenca <= 5.00:
             if self.considerar_diferenca:
                 return True, f"Diferença de R$ {diferenca:.2f} será lançada (flag ativa)"
@@ -173,6 +173,69 @@ class Frete(db.Model):
                 return True, f"Diferença de R$ {diferenca:.2f} aprovada"
             else:
                 return False, f"Diferença de R$ {diferenca:.2f} requer aprovação"
+
+    def buscar_ctes_relacionados(self):
+        """
+        Busca CTes relacionados do Odoo baseado em:
+        1. Pelo menos 1 NF em comum entre frete e CTe
+        2. Prefixo do CNPJ da transportadora (primeiros 8 dígitos: XX.XXX.XXX)
+
+        Returns:
+            list: Lista de ConhecimentoTransporte relacionados
+        """
+        if not self.numeros_nfs or not self.transportadora:
+            return []
+
+        # Extrair lista de NFs do frete
+        nfs_frete = [nf.strip() for nf in self.numeros_nfs.split(',') if nf.strip()]
+
+        if not nfs_frete:
+            return []
+
+        # Extrair prefixo do CNPJ da transportadora (primeiros 8 dígitos)
+        # Formato: XX.XXX.XXX/XXXX-XX -> pegar XX.XXX.XXX
+        cnpj_transportadora = self.transportadora.cnpj or ''
+        # Remover formatação e pegar primeiros 8 dígitos
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj_transportadora))
+
+        if len(cnpj_limpo) < 8:
+            return []
+
+        prefixo_cnpj = cnpj_limpo[:8]  # Primeiros 8 dígitos
+
+        # Buscar CTes que:
+        # 1. Tenham prefixo CNPJ da transportadora batendo
+        # 2. Tenham pelo menos 1 NF em comum
+        # 3. Estejam ativos
+        from sqlalchemy import and_, or_
+
+        ctes_relacionados = ConhecimentoTransporte.query.filter(
+            and_(
+                ConhecimentoTransporte.ativo == True,
+                ConhecimentoTransporte.cnpj_emitente.isnot(None),
+                ConhecimentoTransporte.numeros_nfs.isnot(None)
+            )
+        ).all()
+
+        # Filtrar em Python (mais eficiente que LIKE no SQL para múltiplas NFs)
+        ctes_validos = []
+
+        for cte in ctes_relacionados:
+            # Verificar prefixo CNPJ
+            cnpj_cte_limpo = ''.join(filter(str.isdigit, cte.cnpj_emitente or ''))
+            if len(cnpj_cte_limpo) < 8 or cnpj_cte_limpo[:8] != prefixo_cnpj:
+                continue
+
+            # Verificar se tem pelo menos 1 NF em comum
+            nfs_cte = [nf.strip() for nf in (cte.numeros_nfs or '').split(',') if nf.strip()]
+
+            # Interseção de NFs
+            nfs_comuns = set(nfs_frete) & set(nfs_cte)
+
+            if nfs_comuns:
+                ctes_validos.append(cte)
+
+        return ctes_validos
 
     def __repr__(self):
         return f'<Frete {self.id} - {self.nome_cliente} - CTe: {self.numero_cte}>'

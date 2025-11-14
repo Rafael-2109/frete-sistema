@@ -1,7 +1,7 @@
 """
 Routes para Pedidos de Compra
 """
-from flask import Blueprint, render_template, jsonify, request, flash, redirect, url_for, send_file
+from flask import Blueprint, render_template, jsonify, request, flash, redirect, url_for
 from flask_login import login_required
 from sqlalchemy import desc
 from datetime import date, datetime, timedelta
@@ -486,12 +486,8 @@ def visualizar_nf(tipo, pedido_id):
         # Verificar tipo solicitado
         if tipo == 'pdf':
             file_path = pedido.nf_pdf_path
-            filename = f"NF_{pedido.nf_numero or pedido.num_pedido}.pdf"
-            mimetype = 'application/pdf'
         elif tipo == 'xml':
             file_path = pedido.nf_xml_path
-            filename = f"NF_{pedido.nf_numero or pedido.num_pedido}.xml"
-            mimetype = 'application/xml'
         else:
             flash('Tipo de arquivo inválido', 'danger')
             return redirect(url_for('pedidos_compras.index'))
@@ -500,39 +496,16 @@ def visualizar_nf(tipo, pedido_id):
             flash(f'❌ {tipo.upper()} da NF não disponível para este pedido', 'warning')
             return redirect(url_for('pedidos_compras.index'))
 
-        # Obter FileStorage
+        # Obter FileStorage e gerar URL
         file_storage = get_file_storage()
+        file_url = file_storage.get_file_url(file_path)
 
-        # Se for S3, redirecionar para URL assinada
-        if file_storage.use_s3 and not file_path.startswith('uploads/'):
-            url = file_storage.get_file_url(file_path)
-            if url:
-                return redirect(url)
-            else:
-                flash(f'❌ Erro ao gerar URL do {tipo.upper()}', 'danger')
-                return redirect(url_for('pedidos_compras.index'))
+        if not file_url:
+            flash(f'❌ Arquivo {tipo.upper()} não encontrado no storage', 'warning')
+            return redirect(url_for('pedidos_compras.index'))
 
-        # Se for local, servir arquivo
-        else:
-            import os
-            from flask import current_app
-
-            # Remover prefixo 'uploads/' se houver
-            if file_path.startswith('uploads/'):
-                file_path = file_path[8:]  # Remove 'uploads/'
-
-            full_path = os.path.join(current_app.root_path, 'static', 'uploads', file_path)
-
-            if not os.path.exists(full_path):
-                flash(f'❌ Arquivo {tipo.upper()} não encontrado', 'danger')
-                return redirect(url_for('pedidos_compras.index'))
-
-            return send_file(
-                full_path,
-                mimetype=mimetype,
-                as_attachment=False,  # Visualizar no navegador
-                download_name=filename
-            )
+        # Redirecionar para a URL do arquivo (S3 assinada ou estática local)
+        return redirect(file_url)
 
     except Exception as e:
         logger.error(f"Erro ao visualizar {tipo} da NF: {e}")

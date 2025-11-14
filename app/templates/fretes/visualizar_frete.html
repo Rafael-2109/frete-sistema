@@ -177,6 +177,48 @@
                         <span class="text-muted">Nenhuma nota fiscal informada</span>
                         {% endif %}
                     </div>
+
+                    <hr>
+
+                    <!-- CTes Relacionados do Odoo -->
+                    <h6><i class="fas fa-file-invoice"></i> CTes Relacionados (Odoo)</h6>
+                    <div class="bg-light p-3 rounded">
+                        {% if ctes_relacionados and ctes_relacionados|length > 0 %}
+                        <p class="text-muted small mb-2">
+                            <i class="fas fa-info-circle"></i> CTes importados do Odoo com NFs em comum e mesmo prefixo de CNPJ da transportadora
+                        </p>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for cte in ctes_relacionados %}
+                            <div class="btn-group mb-1" role="group">
+                                <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.id) }}"
+                                   class="btn btn-sm btn-outline-success"
+                                   title="CTe {{ cte.numero_cte }}/{{ cte.serie_cte }} - {{ cte.nome_emitente }} - R$ {{ '%.2f'|format(cte.valor_total or 0) }}"
+                                   target="_blank">
+                                    <i class="fas fa-external-link-alt"></i>
+                                    CTe {{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}
+                                    <span class="badge bg-success ms-1" style="color: white;">R$ {{ "%.2f"|format(cte.valor_total or 0) }}</span>
+                                </a>
+                                {% if cte.cte_pdf_path %}
+                                <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
+                                   class="btn btn-sm btn-danger"
+                                   title="Baixar PDF do CTe {{ cte.numero_cte }}"
+                                   target="_blank">
+                                    <i class="fas fa-file-pdf"></i>
+                                </a>
+                                {% else %}
+                                <button class="btn btn-sm btn-secondary" disabled title="PDF não disponível">
+                                    <i class="fas fa-file-pdf"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-info-circle"></i> Nenhum CTe do Odoo encontrado com NFs em comum e prefixo CNPJ da transportadora
+                        </p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 

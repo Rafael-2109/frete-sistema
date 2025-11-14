@@ -419,21 +419,25 @@ def processar_lancamento_frete():
 def visualizar_frete(frete_id):
     """Visualiza detalhes de um frete específico"""
     from app.fretes.email_models import EmailAnexado
-    
+
     frete = Frete.query.get_or_404(frete_id)
     despesas_extras = DespesaExtra.query.filter_by(frete_id=frete_id).all()
     movimentacoes_conta = ContaCorrenteTransportadora.query.filter_by(frete_id=frete_id).all()
-    
+
     # Buscar emails anexados às despesas deste frete
     emails_anexados = EmailAnexado.query.join(DespesaExtra).filter(
         DespesaExtra.frete_id == frete_id
     ).all()
-    
+
+    # Buscar CTes relacionados do Odoo
+    ctes_relacionados = frete.buscar_ctes_relacionados()
+
     return render_template('fretes/visualizar_frete.html',
                          frete=frete,
                          despesas_extras=despesas_extras,
                          movimentacoes_conta=movimentacoes_conta,
-                         emails_anexados=emails_anexados)
+                         emails_anexados=emails_anexados,
+                         ctes_relacionados=ctes_relacionados)
 
 @fretes_bp.route('/<int:frete_id>/editar', methods=['GET', 'POST'])
 @login_required
