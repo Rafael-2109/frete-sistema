@@ -80,7 +80,7 @@
         </div>
 
         <div class="alert alert-light border">
-            <strong>Valor da Carga:</strong> R$ {{ '%.2f'|format(resultado.valor_carga) }}
+            <strong>Valor da Carga:</strong> {{ '%.2f'|format(resultado.valor_carga) }}
         </div>
     </div>
     {% endif %}
@@ -114,8 +114,8 @@
                             <span class="badge bg-success">{{ f.tipo }}</span>
                             {% endif %}
                         </td>
-                        <td class="fw-bold">R$ {{ '%.2f'|format(f.valor_total) }}</td>
-                        <td>R$ {{ '%.2f'|format(f.valor_total / resultado.peso_utilizado) }}</td>
+                        <td class="fw-bold">{{ '%.2f'|format(f.valor_total) }}</td>
+                        <td>{{ '%.2f'|format(f.valor_total / resultado.peso_utilizado) }}</td>
                         <td>{{ '%.1f'|format(f.valor_total / resultado.valor_carga * 100) }}%</td>
                     </tr>
                     {% endfor %}

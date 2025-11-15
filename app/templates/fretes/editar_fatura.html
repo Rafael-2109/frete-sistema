@@ -113,11 +113,11 @@
                         </div>
                         <div class="col-md-3">
                             <strong style="color: black;">Valores:</strong><br>
-                            <small style="color: black;">Fretes: R$ {{ "%.2f"|format(fatura.valor_total_fretes())
+                            <small style="color: black;">Fretes: {{ (fatura.valor_total_fretes()|moeda_carteira)
                                 }}</small>
                             {% if fatura.total_despesas_extras() > 0 %}
-                            <br><small style="color: black;">Despesas: R$ {{
-                                "%.2f"|format(fatura.valor_total_despesas_extras()) }}</small>
+                            <br><small style="color: black;">Despesas: {{
+                                (fatura.valor_total_despesas_extras()|moeda_carteira) }}</small>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
@@ -169,7 +169,7 @@
                         <tr>
                             <td>{{ frete.numero_cte or 'Pendente' }}</td>
                             <td>{{ frete.nome_cliente }}</td>
-                            <td>R$ {{ "%.2f"|format(frete.valor_cte or 0) }}</td>
+                            <td>{{ (frete.valor_cte or 0)|moeda_carteira }}</td>
                             <td>
                                 {% if frete.status == 'CONFERIDO' %}
                                 <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
@@ -226,7 +226,7 @@
                                 </a>
                             </td>
                             <td>{{ despesa.numero_documento or 'Pendente' }}</td>
-                            <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                            <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                             <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else
                                 'N/A' }}</td>
                         </tr>

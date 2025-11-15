@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoria Odoo - Frete #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-history"></i> Auditoria do Lançamento no Odoo
+                <span class="badge bg-secondary">#{{ frete.id }}</span>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Frete
+            </a>
+        </div>
+    </div>
+
+    <!-- Resumo do Lançamento -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i> Resumo do Lançamento
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center p-3 border rounded">
+                                <i class="fas fa-tasks fa-2x text-primary mb-2"></i>
+                                <h4>{{ auditorias|length }}</h4>
+                                <small class="text-muted">Total de Etapas</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3 border rounded">
+                                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                <h4 class="text-success">{{ etapas_sucesso }}</h4>
+                                <small class="text-muted">Sucessos</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3 border rounded">
+                                <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                                <h4 class="text-danger">{{ etapas_erro }}</h4>
+                                <small class="text-muted">Erros</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3 border rounded">
+                                <i class="fas fa-clock fa-2x text-info mb-2"></i>
+                                <h4 class="text-info">{{ (total_tempo_ms / 1000)|moeda_carteira }}s</h4>
+                                <small class="text-muted">Tempo Total</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p class="mb-1"><strong>Frete:</strong> #{{ frete.id }}</p>
+                            <p class="mb-1"><strong>Cliente:</strong> {{ frete.nome_cliente[:50] }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="mb-1"><strong>DFe ID:</strong> {{ frete.odoo_dfe_id or 'N/A' }}</p>
+                            <p class="mb-1"><strong>Purchase Order:</strong> {{ frete.odoo_purchase_order_id or 'N/A' }}</p>
+                            <p class="mb-1"><strong>Invoice:</strong> {{ frete.odoo_invoice_id or 'N/A' }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="mb-1"><strong>Lançado em:</strong> {{ frete.lancado_odoo_em.strftime('%d/%m/%Y %H:%M:%S') if frete.lancado_odoo_em else 'N/A' }}</p>
+                            <p class="mb-1"><strong>Lançado por:</strong> {{ frete.lancado_odoo_por or 'N/A' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline de Etapas -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list-ol"></i> Timeline de Execução ({{ auditorias|length }} etapas)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% for auditoria in auditorias %}
+                    <div class="card mb-3 {% if auditoria.status == 'SUCESSO' %}border-success{% else %}border-danger{% endif %}">
+                        <div class="card-header {% if auditoria.status == 'SUCESSO' %}bg-success{% else %}bg-danger{% endif %} text-white">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <h6 class="mb-0">
+                                        {% if auditoria.status == 'SUCESSO' %}
+                                        <i class="fas fa-check-circle"></i>
+                                        {% else %}
+                                        <i class="fas fa-times-circle"></i>
+                                        {% endif %}
+                                        Etapa {{ auditoria.etapa }} - {{ auditoria.etapa_descricao }}
+                                    </h6>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <small>
+                                        <i class="fas fa-clock"></i>
+                                        {{ auditoria.tempo_execucao_ms or 0 }}ms
+                                    </small>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <small>
+                                        <i class="fas fa-calendar"></i>
+                                        {{ auditoria.executado_em.strftime('%d/%m/%Y %H:%M:%S') if auditoria.executado_em else 'N/A' }}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <strong>Modelo Odoo:</strong><br>
+                                    <code class="small">{{ auditoria.modelo_odoo }}</code>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Ação:</strong><br>
+                                    <span class="badge bg-info">{{ auditoria.acao }}</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Método:</strong><br>
+                                    {% if auditoria.metodo_odoo %}
+                                    <code class="small">{{ auditoria.metodo_odoo }}</code>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Executado por:</strong><br>
+                                    {{ auditoria.executado_por }}
+                                </div>
+                            </div>
+
+                            {% if auditoria.mensagem %}
+                            <div class="alert {% if auditoria.status == 'SUCESSO' %}alert-success{% else %}alert-danger{% endif %} mb-3">
+                                <strong>Mensagem:</strong> {{ auditoria.mensagem }}
+                            </div>
+                            {% endif %}
+
+                            {% if auditoria.erro_detalhado %}
+                            <div class="alert alert-danger">
+                                <strong><i class="fas fa-exclamation-triangle"></i> Erro Detalhado:</strong>
+                                <pre class="mb-0 mt-2" style="font-size: 12px; max-height: 200px; overflow-y: auto;">{{ auditoria.erro_detalhado }}</pre>
+                            </div>
+                            {% endif %}
+
+                            {% if auditoria.campos_alterados %}
+                            <div class="mb-2">
+                                <strong>Campos Alterados:</strong>
+                                <div class="mt-1">
+                                    {% for campo in auditoria.campos_alterados.split(',') %}
+                                    <span class="badge bg-secondary me-1">{{ campo }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Dados Antes/Depois (Colapsável) -->
+                            {% if auditoria.dados_antes or auditoria.dados_depois %}
+                            <div class="accordion" id="accordion-{{ auditoria.id }}">
+                                <!-- Dados Antes -->
+                                {% if auditoria.dados_antes %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading-antes-{{ auditoria.id }}">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#collapse-antes-{{ auditoria.id }}" aria-expanded="false">
+                                            <i class="fas fa-database me-2"></i> Dados ANTES
+                                        </button>
+                                    </h2>
+                                    <div id="collapse-antes-{{ auditoria.id }}" class="accordion-collapse collapse"
+                                         data-bs-parent="#accordion-{{ auditoria.id }}">
+                                        <div class="accordion-body">
+                                            <pre class="bg-light p-2" style="font-size: 11px; max-height: 300px; overflow-y: auto;">{{ auditoria.dados_antes }}</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                <!-- Dados Depois -->
+                                {% if auditoria.dados_depois %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading-depois-{{ auditoria.id }}">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#collapse-depois-{{ auditoria.id }}" aria-expanded="false">
+                                            <i class="fas fa-database me-2"></i> Dados DEPOIS
+                                        </button>
+                                    </h2>
+                                    <div id="collapse-depois-{{ auditoria.id }}" class="accordion-collapse collapse"
+                                         data-bs-parent="#accordion-{{ auditoria.id }}">
+                                        <div class="accordion-body">
+                                            <pre class="bg-light p-2" style="font-size: 11px; max-height: 300px; overflow-y: auto;">{{ auditoria.dados_depois }}</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

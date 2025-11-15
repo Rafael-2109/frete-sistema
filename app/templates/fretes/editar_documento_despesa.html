@@ -34,7 +34,7 @@
                             <p><strong>Tipo:</strong> {{ despesa.tipo_despesa }}</p>
                             <p><strong>Setor:</strong> {{ despesa.setor_responsavel }}</p>
                             <p><strong>Motivo:</strong> {{ despesa.motivo_despesa }}</p>
-                            <p><strong>Valor:</strong> R$ {{ "%.2f"|format(despesa.valor_despesa) }}</p>
+                            <p><strong>Valor:</strong> {{ (despesa.valor_despesa)|moeda_carteira }}</p>
                         </div>
                         <div class="col-md-6">
                             <h5 class="text-muted">Fatura Vinculada</h5>

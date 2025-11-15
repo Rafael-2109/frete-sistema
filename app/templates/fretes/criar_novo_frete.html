@@ -79,8 +79,8 @@
                             </div>
                             <div class="col-md-6">
                                 <h6><i class="fas fa-weight"></i> Totais</h6>
-                                <p><strong>Peso Total:</strong> {{ "%.2f"|format(frete_data.peso_total) }} kg</p>
-                                <p><strong>Valor Total NFs:</strong> R$ {{ "%.2f"|format(frete_data.valor_total_nfs) }}
+                                <p><strong>Peso Total:</strong> {{ (frete_data.peso_total)|moeda_carteira }} kg</p>
+                                <p><strong>Valor Total NFs:</strong> {{ (frete_data.valor_total_nfs)|moeda_carteira }}
                                 </p>
                                 <p><strong>Tipo de Carga:</strong>
                                     <span

@@ -268,7 +268,7 @@
                         
                         <dt class="col-5">Valor:</dt>
                         <dd class="col-7">
-                            <strong class="text-primary">R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong>
+                            <strong class="text-primary">{{ (despesa.valor_despesa)|moeda_carteira }}</strong>
                         </dd>
                         
                         <dt class="col-5">Documento:</dt>

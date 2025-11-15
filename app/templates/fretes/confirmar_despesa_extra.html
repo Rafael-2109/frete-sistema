@@ -43,7 +43,7 @@
                             <h6 class="text-primary">Documento e Valores</h6>
                             <p><strong>Tipo Documento:</strong> {{ despesa_data.tipo_documento }}</p>
                             <p><strong>Número Documento:</strong> {{ despesa_data.numero_documento }}</p>
-                            <p><strong>Valor:</strong> R$ {{ "%.2f"|format(despesa_data.valor_despesa) }}</p>
+                            <p><strong>Valor:</strong> {{ (despesa_data.valor_despesa)|moeda_carteira }}</p>
                             {% if despesa_data.vencimento_despesa %}
                                 <p><strong>Vencimento:</strong> {{ despesa_data.vencimento_despesa }}</p>
                             {% endif %}
@@ -142,7 +142,7 @@
                                 <tr>
                                     <td>{{ fatura.numero_fatura }}</td>
                                     <td>{{ fatura.data_emissao | formatar_data_segura if fatura.data_emissao else 'N/A' }}</td>
-                                    <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
+                                    <td>{{ (fatura.valor_total_fatura)|moeda_carteira }}</td>
                                     <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else 'N/A' }}</td>
                                 </tr>
                                 {% endfor %}
@@ -177,7 +177,7 @@
                     <p><strong>Embarque:</strong> 
                         <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">#{{ frete.embarque.numero }}</a>
                     </p>
-                    <p><strong>Valor Cotado:</strong> R$ {{ "%.2f"|format(frete.valor_cotado) }}</p>
+                    <p><strong>Valor Cotado:</strong> {{ (frete.valor_cotado)|moeda_carteira }}</p>
                     <p><strong>Status:</strong> 
                         <span class="badge 
                             {% if frete.status == 'APROVADO' %}badge-success

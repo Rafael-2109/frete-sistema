@@ -38,7 +38,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>Valor Fatura:</strong><br>
-                    <span class="h5 text-primary">R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</span>
+                    <span class="h5 text-primary">{{ (fatura.valor_total_fatura)|moeda_carteira }}</span>
                 </div>
                 <div class="col-md-3">
                     <strong>Status:</strong><br>
@@ -61,23 +61,23 @@
             <div class="row">
                 <div class="col-md-3">
                     <h6>Valor da Fatura</h6>
-                    <h4 class="text-primary">R$ {{ "%.2f"|format(analise_valores.valor_fatura) }}</h4>
+                    <h4 class="text-primary">{{ (analise_valores.valor_fatura)|moeda_carteira }}</h4>
                 </div>
                 <div class="col-md-3">
                     <h6>Valor Cotado</h6>
-                    <h4 class="text-secondary">R$ {{ "%.2f"|format(analise_valores.valor_cotado) }}</h4>
+                    <h4 class="text-secondary">{{ (analise_valores.valor_cotado)|moeda_carteira }}</h4>
                 </div>
                 <div class="col-md-3">
                     <h6>Total CTe</h6>
-                    <h4 class="text-secondary">R$ {{ "%.2f"|format(analise_valores.valor_total_cte) }}</h4>
+                    <h4 class="text-secondary">{{ (analise_valores.valor_total_cte)|moeda_carteira }}</h4>
                 </div>
                 <div class="col-md-3">
                     <h6>Total Considerado</h6>
-                    <h4 class="text-warning">R$ {{ "%.2f"|format(analise_valores.valor_total_considerado) }}</h4>
+                    <h4 class="text-warning">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</h4>
                 </div>
                 <div class="col-md-3">
                     <h6>Total Pago <small>(Prioridade)</small></h6>
-                    <h4 class="text-success">R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }}</h4>
+                    <h4 class="text-success">{{ (analise_valores.valor_total_pago)|moeda_carteira }}</h4>
                 </div>
             </div>
 
@@ -88,18 +88,18 @@
                     <h6>Diferença Fatura vs CTe:</h6>
                     {% if analise_valores.fatura_dentro_tolerancia %}
                     <span class="badge bg-success badge-lg" style="color: white; background-color: #28a745;">
-                        R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Dentro da tolerância ≤ R$ 1,00)
+                        {{ (analise_valores.diferenca_fatura_cte)|moeda_carteira }} (Dentro da tolerância ≤ R$ 1,00)
                     </span>
                     {% else %}
                     <span class="badge bg-danger badge-lg" style="color: white; background-color: #dc3545;">
-                        R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Acima da tolerância > R$ 1,00)
+                        {{ (analise_valores.diferenca_fatura_cte)|moeda_carteira }} (Acima da tolerância > R$ 1,00)
                     </span>
                     {% endif %}
                 </div>
                 <div class="col-md-6">
                     <strong style="color: black;">Diferença Considerado vs Pago:</strong><br>
-                    <span class="h5" style="color: black;">R$ {{
-                        "%.2f"|format(analise_valores.diferenca_considerado_pago) }}</span>
+                    <span class="h5" style="color: black;">{{
+                        (analise_valores.diferenca_considerado_pago)|moeda_carteira }}</span>
                 </div>
             </div>
         </div>
@@ -143,11 +143,11 @@
                                 <br><small class="text-muted">{{ doc.descricao }}</small>
                                 {% endif %}
                             </td>
-                            <td class="text-right">R$ {{ "%.2f"|format(doc.valor_cotado) }}</td>
-                            <td class="text-right">R$ {{ "%.2f"|format(doc.valor_cte) }}</td>
-                            <td class="text-right">R$ {{ "%.2f"|format(doc.valor_considerado) }}</td>
+                            <td class="text-right">{{ (doc.valor_cotado)|moeda_carteira }}</td>
+                            <td class="text-right">{{ (doc.valor_cte)|moeda_carteira }}</td>
+                            <td class="text-right">{{ (doc.valor_considerado)|moeda_carteira }}</td>
                             <td class="text-right">
-                                <strong>R$ {{ "%.2f"|format(doc.valor_pago) }}</strong>
+                                <strong>{{ (doc.valor_pago)|moeda_carteira }}</strong>
                             </td>
                             <td class="text-center">
                                 {% if doc.status == 'LANÇADO' %}
@@ -174,9 +174,9 @@
                     <tfoot class="bg-light">
                         <tr>
                             <th colspan="2">TOTAIS:</th>
-                            <th class="text-right">R$ {{ "%.2f"|format(analise_valores.valor_total_cte) }}</th>
-                            <th class="text-right">R$ {{ "%.2f"|format(analise_valores.valor_total_considerado) }}</th>
-                            <th class="text-right"><strong>R$ {{ "%.2f"|format(analise_valores.valor_total_pago)
+                            <th class="text-right">{{ (analise_valores.valor_total_cte)|moeda_carteira }}</th>
+                            <th class="text-right">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</th>
+                            <th class="text-right"><strong>{{ (analise_valores.valor_total_pago)|moeda_carteira
                                     }}</strong></th>
                             <th colspan="2"></th>
                         </tr>
@@ -239,7 +239,7 @@
                                     %.2f"|format(analise_valores.valor_total_pago) }}" required>
                             </div>
                             <small class="form-text text-muted">
-                                Sugerido: R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }} (Total Pago)
+                                Sugerido: {{ (analise_valores.valor_total_pago)|moeda_carteira }} (Total Pago)
                             </small>
                         </div>
                     </div>

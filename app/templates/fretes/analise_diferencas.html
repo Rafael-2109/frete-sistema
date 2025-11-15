@@ -46,7 +46,7 @@
                     {% endif %}
 
                     {% if configuracao_info.tem_ajuste_minimo %}
-                    <span class="badge bg-danger">Ajuste de mínimo: R$ {{ "%.2f"|format(configuracao_info.valor_ajuste)
+                    <span class="badge bg-danger">Ajuste de mínimo: {{ (configuracao_info.valor_ajuste)|moeda_carteira
                         }}</span>
                     {% endif %}
                 </small>
@@ -78,8 +78,8 @@
                         </div>
                         <div class="col-md-3">
                             <strong>Dados Físicos:</strong><br>
-                            Peso: {{ "%.2f"|format(frete.peso_total) }} kg<br>
-                            <small class="text-muted">Valor NFs: R$ {{ "%.2f"|format(frete.valor_total_nfs) }}</small>
+                            Peso: {{ (frete.peso_total)|moeda_carteira }} kg<br>
+                            <small class="text-muted">Valor NFs: {{ (frete.valor_total_nfs)|moeda_carteira }}</small>
                         </div>
                         <div class="col-md-3">
                             <strong>Tabela Usada:</strong><br>
@@ -174,11 +174,11 @@
                                         {% if componente.unidade == 'R$' %}
                                         <span class="badge bg-light"
                                             style="background-color: #a8d5ff; color: #0a3d16 !important;">
-                                            R$ {{ "%.2f"|format(componente.valor_calculado) }}
+                                            {{ (componente.valor_calculado)|moeda_carteira }}
                                         </span>
                                         {% else %}
                                         <span class="badge bg-primary text-white" style="background-color: #007bff;">
-                                            {{ "%.2f"|format(componente.valor_calculado) }} {{ componente.unidade }}
+                                            {{ (componente.valor_calculado)|moeda_carteira }} {{ componente.unidade }}
                                         </span>
                                         {% endif %}
                                     </td>
@@ -240,27 +240,27 @@
                             <td style="text-align: right;">
                                 <span class="badge bg-light"
                                     style="background-color: #d4edda; color: #155724 !important;">
-                                    R$ {{ "%.2f"|format(resumo_cotacao.total_liquido) }}
+                                    {{ (resumo_cotacao.total_liquido)|moeda_carteira }}
                                 </span>
                             </td>
                         </tr>
                         <tr>
                             <td><strong>% ICMS:</strong></td>
                             <td style="text-align: right;">
-                                {{ "%.2f"|format(resumo_cotacao.percentual_icms*100) }}%
+                                {{ (resumo_cotacao.percentual_icms*100)|moeda_carteira }}%
                             </td>
                         </tr>
                         <tr>
                             <td><strong>Valor ICMS:</strong></td>
                             <td style="text-align: right;">
-                                R$ {{ "%.2f"|format(resumo_cotacao.valor_icms) }}
+                                {{ (resumo_cotacao.valor_icms)|moeda_carteira }}
                             </td>
                         </tr>
                         <tr class="table-success">
                             <td><strong>Total Bruto Final:</strong></td>
                             <td style="text-align: right;">
                                 <h5 class="mb-0">
-                                    R$ {{ "%.2f"|format(resumo_cotacao.total_bruto) }}
+                                    {{ (resumo_cotacao.total_bruto)|moeda_carteira }}
                                 </h5>
                             </td>
                         </tr>

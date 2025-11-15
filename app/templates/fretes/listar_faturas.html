@@ -120,7 +120,7 @@
                                 {{ fatura.transportadora.razao_social[:30] }}...
                             </td>
                             <td>{{ fatura.data_emissao | formatar_data_segura if fatura.data_emissao else '-' }}</td>
-                            <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
+                            <td>{{ (fatura.valor_total_fatura)|moeda_carteira }}</td>
                             <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else '-' }}</td>
                             <td>
                                 {% if fatura.status_conferencia == 'PENDENTE' %}
@@ -140,7 +140,7 @@
                                 </span>
                                 {% if fatura.total_fretes() > 0 %}
                                 <br><small class="text-muted">
-                                    R$ {{ "%.2f"|format(fatura.valor_total_fretes()) }}
+                                    {{ (fatura.valor_total_fretes()|moeda_carteira) }}
                                 </small>
                                 {% endif %}
                                 <!-- ✅ DESPESAS EXTRAS USANDO MÉTODOS DO MODEL -->
@@ -149,7 +149,7 @@
                                     {{ fatura.total_despesas_extras() }} despesa(s)
                                 </span>
                                 <br><small class="text-muted">
-                                    R$ {{ "%.2f"|format(fatura.valor_total_despesas_extras()) }}
+                                    {{ (fatura.valor_total_despesas_extras()|moeda_carteira) }}
                                 </small>
                                 {% endif %}
                             </td>

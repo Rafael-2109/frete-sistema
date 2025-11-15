@@ -1,0 +1,28 @@
+{
+  "po_id": 31085,
+  "po_data": {
+    "id": 31085,
+    "name": "C2512194",
+    "state": "draft",
+    "team_id": [
+      119,
+      "Lançamento Frete"
+    ],
+    "payment_provider_id": [
+      30,
+      "Transferência Bancária"
+    ],
+    "partner_id": [
+      205683,
+      "TRANSMENEZES TRANSPORTES RODOVIARIOS"
+    ],
+    "date_order": "2025-11-14 12:00:00",
+    "amount_total": 211.22
+  },
+  "team": null,
+  "payment_provider": {
+    "id": 92,
+    "name": "Transferência Bancária",
+    "code": "custom"
+  }
+}

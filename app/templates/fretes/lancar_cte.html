@@ -34,8 +34,8 @@
                                 {% for fatura in faturas_disponiveis %}
                                 <option value="{{ fatura.id }}" {% if fatura_preselecionada_id and
                                     fatura.id==fatura_preselecionada_id %}selected{% endif %}>
-                                    {{ fatura.numero_fatura }} - {{ fatura.transportadora.razao_social }} - R$ {{
-                                    "%.2f"|format(fatura.valor_total_fatura) }}
+                                    {{ fatura.numero_fatura }} - {{ fatura.transportadora.razao_social }} - {{
+                                    (fatura.valor_total_fatura)|moeda_carteira }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -173,7 +173,7 @@
                                             style="color: #212529; background-color: #ffc107;">Pendente</span>
                                         {% endif %}
                                     </td>
-                                    <td>R$ {{ "%.2f"|format(frete.valor_cotado) }}</td>
+                                    <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                                     <td>
                                         {% if frete.status == 'PENDENTE' %}
                                         <span class="badge bg-warning"

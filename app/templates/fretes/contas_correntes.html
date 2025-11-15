@@ -34,7 +34,7 @@
             <div class="card bg-danger text-white">
                 <div class="card-body">
                     <h5><i class="fas fa-plus-circle"></i> Total Créditos</h5>
-                    <h3>R$ {{ "%.2f"|format(contas_correntes|sum(attribute='total_creditos')) }}</h3>
+                    <h3>{{ contas_correntes|sum(attribute='total_creditos')|moeda_carteira }}</h3>
                     <small>(Transportadoras nos devem)</small>
                 </div>
             </div>
@@ -43,7 +43,7 @@
             <div class="card bg-success text-white">
                 <div class="card-body">
                     <h5><i class="fas fa-minus-circle"></i> Total Débitos</h5>
-                    <h3>R$ {{ "%.2f"|format(contas_correntes|sum(attribute='total_debitos')) }}</h3>
+                    <h3>{{ contas_correntes|sum(attribute='total_debitos')|moeda_carteira }}</h3>
                     <small>(Nós devemos a elas)</small>
                 </div>
             </div>
@@ -53,7 +53,7 @@
                 <div class="card-body">
                     <h5><i class="fas fa-calculator"></i> Saldo Geral</h5>
                     {% set saldo_geral = contas_correntes|sum(attribute='saldo_atual') %}
-                    <h3>R$ {{ "%.2f"|format(saldo_geral) }}</h3>
+                    <h3>{{ saldo_geral|moeda_carteira }}</h3>
                     <small>
                         {% if saldo_geral > 0 %}
                         (Transportadoras devem)
@@ -90,7 +90,7 @@
                             </td>
                             <td class="text-right">
                                 <span class="badge bg-danger" style="color: white; background-color: #dc3545;">
-                                    R$ {{ "%.2f"|format(conta.total_creditos) }}
+                                    {{ conta.total_creditos|moeda_carteira }}
                                 </span>
                                 <small class="text-muted d-block">
                                     (Nos devem)
@@ -98,7 +98,7 @@
                             </td>
                             <td class="text-right">
                                 <span class="badge bg-success" style="color: white; background-color: #28a745;">
-                                    R$ {{ "%.2f"|format(conta.total_debitos) }}
+                                    {{ conta.total_debitos|moeda_carteira }}
                                 </span>
                                 <small class="text-muted d-block">
                                     (Devemos a elas)
@@ -107,14 +107,14 @@
                             <td class="text-right">
                                 {% if conta.saldo_atual > 0 %}
                                 <span class="badge bg-danger" style="color: white; background-color: #dc3545;">
-                                    R$ {{ "%.2f"|format(conta.saldo_atual) }}
+                                    {{ conta.saldo_atual|moeda_carteira }}
                                 </span>
                                 <small class="text-muted d-block" style="color: black !important;">
                                     (Eles nos devem)
                                 </small>
                                 {% elif conta.saldo_atual < 0 %} <span class="badge bg-success"
                                     style="color: white; background-color: #28a745;">
-                                    R$ {{ "%.2f"|format(conta.saldo_atual|abs) }}
+                                    {{ conta.saldo_atual|abs|moeda_carteira }}
                                     </span>
                                     <small class="text-muted d-block" style="color: black !important;">
                                         (Nós devemos)

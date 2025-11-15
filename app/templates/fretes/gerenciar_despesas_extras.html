@@ -221,7 +221,7 @@
                                         <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
                                             despesa.tipo_despesa }}</span>
                                     </td>
-                                    <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                                    <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                                     <td>{{ despesa.vencimento_despesa | formatar_data_segura if
                                         despesa.vencimento_despesa else 'N/A' }}</td>
                                     <td>{{ despesa.criado_em | formatar_data_hora_brasil }}</td>
@@ -342,7 +342,7 @@
                                             style="color: white; background-color: #28a745;">{{ despesa.tipo_despesa
                                             }}</span>
                                     </td>
-                                    <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                                    <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                                     <td>
                                         {% if despesa.observacoes and 'Fatura:' in despesa.observacoes %}
                                         {% set fatura_info =

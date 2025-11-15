@@ -43,39 +43,18 @@ def valor_br(valor, decimais=2):
     Uso no template: {{ meu_valor|valor_br }}
     Uso com decimais: {{ meu_valor|valor_br(0) }} -> 1.234
 
-    ⚠️ GARANTIA DE DECIMAIS: Sempre retorna com casas decimais especificadas
+    ✅ MÉTODO COMPROVADO: Mesma lógica de carteira/utils/formatters.py
     """
     if valor is None or valor == '':
         return f"0,{'0' * decimais}"
 
     try:
-        # Converter para float se necessário
-        valor_num = float(valor) if not isinstance(valor, (int, float)) else valor
-
-        # Formatar com decimais explícitos
-        valor_str = f"{valor_num:.{decimais}f}"  # Ex: "182301.00"
-
-        # Separar parte inteira e decimal
-        partes = valor_str.split('.')
-        inteiro = partes[0]
-        decimal = partes[1] if len(partes) > 1 else '0' * decimais
-
-        # Adicionar separador de milhares (ponto) a cada 3 dígitos
-        if len(inteiro) > 3:
-            inteiro_formatado = ''
-            for i, digito in enumerate(reversed(inteiro)):
-                if i > 0 and i % 3 == 0:
-                    inteiro_formatado = '.' + inteiro_formatado
-                inteiro_formatado = digito + inteiro_formatado
+        # ✅ MÉTODO COMPROVADO (mesmo da carteira que funciona)
+        valor_float = float(valor)
+        if decimais == 0:
+            return f"{valor_float:,.0f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         else:
-            inteiro_formatado = inteiro
-
-        # Retornar no formato brasileiro
-        if decimais > 0:
-            return f"{inteiro_formatado},{decimal}"
-        else:
-            return inteiro_formatado
-
+            return f"{valor_float:,.{decimais}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except (ValueError, TypeError):
         return f"0,{'0' * decimais}"
 

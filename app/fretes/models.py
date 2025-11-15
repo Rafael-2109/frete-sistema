@@ -63,14 +63,21 @@ class Frete(db.Model):
     
     # Fatura de frete (uma fatura pode ter N fretes)
     fatura_frete_id = db.Column(db.Integer, db.ForeignKey('faturas_frete.id'))
-    
+
+    # Vínculos com Odoo
+    odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)  # ID do DFe no Odoo
+    odoo_purchase_order_id = db.Column(db.Integer, nullable=True, index=True)  # ID do PO no Odoo
+    odoo_invoice_id = db.Column(db.Integer, nullable=True, index=True)  # ID da Invoice no Odoo
+    lancado_odoo_em = db.Column(db.DateTime, nullable=True)  # Data/hora do lançamento no Odoo
+    lancado_odoo_por = db.Column(db.String(100), nullable=True)  # Usuário que lançou no Odoo
+
     # Status e aprovação
-    status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE, EM_TRATATIVA, APROVADO, REJEITADO, PAGO, CANCELADO
+    status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE, EM_TRATATIVA, APROVADO, REJEITADO, PAGO, CANCELADO, LANCADO_ODOO
     requer_aprovacao = db.Column(db.Boolean, default=False)
     aprovado_por = db.Column(db.String(100))
     aprovado_em = db.Column(db.DateTime)
     observacoes_aprovacao = db.Column(db.Text)
-    
+
     # Controle
     considerar_diferenca = db.Column(db.Boolean, default=False)  # Para lançar na conta corrente mesmo com diferença até R$ 5,00
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -690,3 +697,90 @@ class ConhecimentoTransporte(db.Model):
 
         # Verificar se começa com o prefixo (primeiros 8 dígitos)
         return cnpj_limpo.startswith(prefixo_cnpj)
+
+
+class LancamentoFreteOdooAuditoria(db.Model):
+    """
+    Tabela de auditoria para lançamentos de frete no Odoo
+    Registra TODAS as etapas e alterações durante o processo de lançamento
+    """
+    __tablename__ = 'lancamento_frete_odoo_auditoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificação do lançamento
+    frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'), nullable=True, index=True)
+    cte_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)
+    chave_cte = db.Column(db.String(44), nullable=False, index=True)
+
+    # IDs do Odoo gerados
+    dfe_id = db.Column(db.Integer, nullable=True)  # ID do DFe no Odoo
+    purchase_order_id = db.Column(db.Integer, nullable=True)  # ID do PO no Odoo
+    invoice_id = db.Column(db.Integer, nullable=True)  # ID da Invoice no Odoo
+
+    # Etapa do processo (1-16 conforme documentação)
+    etapa = db.Column(db.Integer, nullable=False, index=True)
+    etapa_descricao = db.Column(db.String(255), nullable=False)
+
+    # Modelo e ação Odoo
+    modelo_odoo = db.Column(db.String(100), nullable=False)  # l10n_br_ciel_it_account.dfe, purchase.order, account.move
+    metodo_odoo = db.Column(db.String(100), nullable=True)  # action_gerar_po_dfe, button_confirm, action_post, etc
+    acao = db.Column(db.String(50), nullable=False)  # create, write, execute_method
+
+    # Dados ANTES da alteração (JSON)
+    dados_antes = db.Column(db.Text, nullable=True)  # JSON com valores antes
+
+    # Dados DEPOIS da alteração (JSON)
+    dados_depois = db.Column(db.Text, nullable=True)  # JSON com valores depois
+
+    # Campos específicos alterados
+    campos_alterados = db.Column(db.Text, nullable=True)  # Lista de campos separados por vírgula
+
+    # Status da etapa
+    status = db.Column(db.String(20), nullable=False, default='SUCESSO')  # SUCESSO, ERRO, AVISO
+    mensagem = db.Column(db.Text, nullable=True)  # Mensagem de sucesso ou erro
+    erro_detalhado = db.Column(db.Text, nullable=True)  # Stack trace se houver erro
+
+    # Contexto adicional
+    contexto_odoo = db.Column(db.Text, nullable=True)  # JSON com contexto usado
+
+    # Tempo de execução
+    tempo_execucao_ms = db.Column(db.Integer, nullable=True)  # Tempo em milissegundos
+
+    # Auditoria
+    executado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    executado_por = db.Column(db.String(100), nullable=False)  # Usuário que executou
+    ip_usuario = db.Column(db.String(50), nullable=True)  # IP do usuário
+
+    # Relacionamentos
+    frete = db.relationship('Frete', backref='auditorias_odoo', lazy=True)
+    cte = db.relationship('ConhecimentoTransporte', backref='auditorias_odoo', lazy=True)
+
+    def __repr__(self):
+        return f'<LancamentoFreteOdooAuditoria Etapa {self.etapa} - {self.status}>'
+
+    def to_dict(self):
+        """Serializa para JSON"""
+        import json
+        return {
+            'id': self.id,
+            'frete_id': self.frete_id,
+            'cte_id': self.cte_id,
+            'chave_cte': self.chave_cte,
+            'dfe_id': self.dfe_id,
+            'purchase_order_id': self.purchase_order_id,
+            'invoice_id': self.invoice_id,
+            'etapa': self.etapa,
+            'etapa_descricao': self.etapa_descricao,
+            'modelo_odoo': self.modelo_odoo,
+            'metodo_odoo': self.metodo_odoo,
+            'acao': self.acao,
+            'dados_antes': json.loads(self.dados_antes) if self.dados_antes else None,
+            'dados_depois': json.loads(self.dados_depois) if self.dados_depois else None,
+            'campos_alterados': self.campos_alterados.split(',') if self.campos_alterados else [],
+            'status': self.status,
+            'mensagem': self.mensagem,
+            'tempo_execucao_ms': self.tempo_execucao_ms,
+            'executado_em': self.executado_em.isoformat() if self.executado_em else None,
+            'executado_por': self.executado_por
+        }

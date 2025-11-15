@@ -61,10 +61,10 @@
                                 <td title="{{ frete.transportadora.razao_social }}">
                                     {{ frete.transportadora.razao_social[:25] }}
                                 </td>
-                                <td>R$ {{ "%.2f"|format(frete.valor_cotado) }}</td>
+                                <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                                 <td>
                                     {% if frete.valor_cte %}
-                                        R$ {{ "%.2f"|format(frete.valor_cte) }}
+                                        {{ (frete.valor_cte)|moeda_carteira }}
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
@@ -73,7 +73,7 @@
                                     {% if frete.valor_cte and frete.valor_cotado %}
                                         {% set diferenca = frete.diferenca_cotado_cte() %}
                                         <span class="{% if diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
-                                            {% if diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(diferenca) }}
+                                            {% if diferenca > 0 %}+{% endif %}{{ (diferenca)|moeda_carteira }}
                                         </span>
                                         <br>
                                         <small class="text-muted">

@@ -84,7 +84,7 @@
                                         {{ frete.transportadora.razao_social[:25] }}{% if frete.transportadora.razao_social|length > 25 %}...{% endif %}
                                     </td>
                                     <td>
-                                        <strong>R$ {{ "%.2f"|format(frete.valor_cotado) }}</strong>
+                                        <strong>{{ (frete.valor_cotado)|moeda_carteira }}</strong>
                                         <br>
                                         <small class="text-muted">{{ frete.quantidade_nfs }} NF(s)</small>
                                     </td>

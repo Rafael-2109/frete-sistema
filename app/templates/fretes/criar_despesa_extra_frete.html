@@ -183,7 +183,7 @@
                     </p>
                     <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social[:30] }}{% if
                         frete.transportadora.razao_social|length > 30 %}...{% endif %}</p>
-                    <p><strong>Valor Cotado:</strong> R$ {{ "%.2f"|format(frete.valor_cotado) }}</p>
+                    <p><strong>Valor Cotado:</strong> {{ (frete.valor_cotado)|moeda_carteira }}</p>
                     {% if frete.numero_cte %}
                     <p><strong>CTe:</strong> {{ frete.numero_cte }}</p>
                     {% else %}

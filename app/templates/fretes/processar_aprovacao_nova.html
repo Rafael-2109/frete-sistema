@@ -76,7 +76,7 @@
                             <div class="card bg-light">
                                 <div class="card-body">
                                     <h6 class="text-muted">Cotado</h6>
-                                    <h5 class="text-primary">R$ {{ "%.2f"|format(frete.valor_cotado) }}</h5>
+                                    <h5 class="text-primary">{{ (frete.valor_cotado)|moeda_carteira }}</h5>
                                 </div>
                             </div>
                         </div>
@@ -86,7 +86,7 @@
                                     <h6 class="text-muted">Considerado</h6>
                                     <h5 class="text-info">
                                         {% if frete.valor_considerado %}
-                                        R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                        {{ (frete.valor_considerado)|moeda_carteira }}
                                         {% else %}
                                         -
                                         {% endif %}
@@ -100,7 +100,7 @@
                                     <h6 class="text-muted">Pago</h6>
                                     <h5 class="text-success">
                                         {% if frete.valor_pago %}
-                                        R$ {{ "%.2f"|format(frete.valor_pago) }}
+                                        {{ (frete.valor_pago)|moeda_carteira }}
                                         {% else %}
                                         -
                                         {% endif %}
@@ -154,17 +154,17 @@
                             <div class="row mt-3">
                                 <div class="col-md-4 text-center">
                                     <strong>Valor Considerado</strong><br>
-                                    <span class="h4 text-info">R$ {{ "%.2f"|format(caso_a.valor_considerado) }}</span>
+                                    <span class="h4 text-info">{{ (caso_a.valor_considerado)|moeda_carteira }}</span>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <strong>Valor Cotado</strong><br>
-                                    <span class="h4 text-primary">R$ {{ "%.2f"|format(caso_a.valor_cotado) }}</span>
+                                    <span class="h4 text-primary">{{ (caso_a.valor_cotado)|moeda_carteira }}</span>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <strong>Diferença</strong><br>
                                     <span
                                         class="h4 {% if caso_a.diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
-                                        {% if caso_a.diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(caso_a.diferenca)
+                                        {% if caso_a.diferenca > 0 %}+{% endif %}{{ (caso_a.diferenca)|moeda_carteira
                                         }}
                                     </span>
                                 </div>
@@ -188,17 +188,17 @@
                             <div class="row mt-3">
                                 <div class="col-md-4 text-center">
                                     <strong>Valor Pago</strong><br>
-                                    <span class="h4 text-success">R$ {{ "%.2f"|format(caso_b.valor_pago) }}</span>
+                                    <span class="h4 text-success">{{ (caso_b.valor_pago)|moeda_carteira }}</span>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <strong>Valor Considerado</strong><br>
-                                    <span class="h4 text-info">R$ {{ "%.2f"|format(caso_b.valor_considerado) }}</span>
+                                    <span class="h4 text-info">{{ (caso_b.valor_considerado)|moeda_carteira }}</span>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <strong>Diferença</strong><br>
                                     <span
                                         class="h4 {% if caso_b.diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
-                                        {% if caso_b.diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(caso_b.diferenca)
+                                        {% if caso_b.diferenca > 0 %}+{% endif %}{{ (caso_b.diferenca)|moeda_carteira
                                         }}
                                     </span>
                                 </div>
@@ -211,11 +211,11 @@
                                     <label class="form-check-label" for="lancar_diferenca">
                                         <strong>
                                             {% if caso_b.diferenca > 0 %}
-                                            Lançar um DÉBITO da transportadora de R$ {{ "%.2f"|format(caso_b.diferenca)
+                                            Lançar um DÉBITO da transportadora de {{ (caso_b.diferenca)|moeda_carteira
                                             }}
                                             {% else %}
-                                            Lançar um CRÉDITO da transportadora de R$ {{
-                                            "%.2f"|format(abs(caso_b.diferenca)) }}
+                                            Lançar um CRÉDITO da transportadora de {{
+                                            (abs(caso_b.diferenca)|moeda_carteira) }}
                                             {% endif %}
                                         </strong>
                                     </label>

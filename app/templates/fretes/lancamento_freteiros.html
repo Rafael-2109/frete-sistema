@@ -139,7 +139,7 @@
                                             <div class="ms-3" id="indicadores_embarque_{{ embarque_id }}">
                                                 <small class="text-muted fw-bold">
                                                     {% if peso_total_calc > 0 %}
-                                                        R$ {{ "{:.2f}".format(valor_considerado_total_calc / peso_total_calc) }}/kg
+                                                        {{ "{:.2f}".format(valor_considerado_total_calc / peso_total_calc) }}/kg
                                                     {% else %}
                                                         R$ 0,00/kg
                                                     {% endif %}
@@ -232,14 +232,14 @@
                                                     <small>{{ "{:,.0f}".format(peso_frete) }} kg</small>
                                                 </td>
                                                 <td style="text-align: right;">
-                                                    <small>R$ {{ "{:,.2f}".format(valor_nf_frete) }}</small>
+                                                    <small>{{ "{:,.2f}".format(valor_nf_frete) }}</small>
                                                 </td>
                                                 <td style="text-align: right;">
-                                                    <small>R$ {{ "{:,.2f}".format(valor_cotado_frete) }}</small>
+                                                    <small>{{ "{:,.2f}".format(valor_cotado_frete) }}</small>
                                                 </td>
                                                 <td style="text-align: right;">
                                                     <strong class="valor-considerado-individual" data-frete-id="{{ frete.id }}">
-                                                        R$ {{ "{:,.2f}".format(valor_considerado_frete) }}
+                                                        {{ "{:,.2f}".format(valor_considerado_frete) }}
                                                     </strong>
                                                 </td>
                                             </tr>
@@ -255,13 +255,13 @@
                                                     <span class="text-muted fw-bold">{{ "{:,.0f}".format(peso_total_embarque) }} kg</span>
                                                 </td>
                                                 <td style="text-align: right;" id="valor_nf_total_embarque_{{ embarque_id }}">
-                                                    <span class="text-muted fw-bold">R$ {{ "{:,.2f}".format(valor_nf_total_embarque) }}</span>
+                                                    <span class="text-muted fw-bold">{{ "{:,.2f}".format(valor_nf_total_embarque) }}</span>
                                                 </td>
                                                 <td style="text-align: right;" id="valor_cotado_total_embarque_{{ embarque_id }}">
-                                                    <span class="text-muted fw-bold">R$ {{ "{:,.2f}".format(valor_cotado_total_embarque) }}</span>
+                                                    <span class="text-muted fw-bold">{{ "{:,.2f}".format(valor_cotado_total_embarque) }}</span>
                                                 </td>
                                                 <td style="text-align: right;" id="valor_considerado_total_embarque_{{ embarque_id }}">
-                                                    <span class="text-muted fw-bold">R$ {{ "{:,.2f}".format(valor_considerado_total_embarque) }}</span>
+                                                    <span class="text-muted fw-bold">{{ "{:,.2f}".format(valor_considerado_total_embarque) }}</span>
                                                 </td>
                                             </tr>
 
@@ -312,7 +312,7 @@
                                                             </small>
                                                         </td>
                                                         <td class="text-end">
-                                                            <small>R$ {{ "{:,.2f}".format(despesa.valor_despesa) }}</small>
+                                                            <small>{{ "{:,.2f}".format(despesa.valor_despesa) }}</small>
                                                         </td>
                                                         <td class="text-end">
                                                             <div class="input-group input-group-sm">
@@ -365,13 +365,13 @@
                                                 <strong>{{ "{:,.0f}".format(dados.peso_total or 0) }} kg</strong>
                                             </td>
                                             <td style="text-align: right;" id="valor_nf_total_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>R$ {{ "{:,.2f}".format(dados.valor_nf_total or 0) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.valor_nf_total or 0) }}</strong>
                                             </td>
                                             <td style="text-align: right;" id="valor_cotado_total_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>R$ {{ "{:,.2f}".format(dados.valor_cotado_total or 0) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.valor_cotado_total or 0) }}</strong>
                                             </td>
                                             <td style="text-align: right;" id="valor_considerado_fretes_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>R$ {{ "{:,.2f}".format(dados.total_valor - (dados.despesas_extras | sum(attribute='valor_despesa') if dados.despesas_extras else 0)) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.total_valor - (dados.despesas_extras | sum(attribute='valor_despesa') if dados.despesas_extras else 0)) }}</strong>
                                             </td>
                                             <td style="text-align: right;" id="valor_despesas_transportadora_{{ dados.freteiro.id }}">
                                                 {% set total_despesas = 0 %}
@@ -380,10 +380,10 @@
                                                         {% set total_despesas = total_despesas + (embarque_data.despesas_extras | sum(attribute='valor_despesa')) %}
                                                     {% endif %}
                                                 {% endfor %}
-                                                <strong>R$ {{ "{:,.2f}".format(total_despesas) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(total_despesas) }}</strong>
                                             </td>
                                             <td style="text-align: right; background-color: #198754; color: white;" id="valor_total_final_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>R$ {{ "{:,.2f}".format(dados.total_valor) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.total_valor) }}</strong>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -397,7 +397,7 @@
                                         <strong>R$/kg Médio:</strong> 
                                         <span id="reais_por_kg_transportadora_{{ dados.freteiro.id }}_display">
                                             {% if dados.peso_total and dados.peso_total > 0 %}
-                                                R$ {{ "{:.2f}".format(dados.total_valor / dados.peso_total) }}/kg
+                                                {{ "{:.2f}".format(dados.total_valor / dados.peso_total) }}/kg
                                             {% else %}
                                                 R$ 0,00/kg
                                             {% endif %}

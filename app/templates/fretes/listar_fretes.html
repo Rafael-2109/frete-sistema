@@ -120,6 +120,7 @@
                             <th>Valor Considerado</th>
                             <th>Valor Pago</th>
                             <th>Status</th>
+                            <th>Odoo</th>
                             <th>Criado em</th>
                             <th>Ações</th>
                         </tr>
@@ -155,15 +156,15 @@
                                 <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td>R$ {{ "%.2f"|format(frete.valor_cotado) }}</td>
+                            <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                             <td>
                                 {% if frete.valor_cte %}
-                                R$ {{ "%.2f"|format(frete.valor_cte) }}
+                                {{ (frete.valor_cte)|moeda_carteira }}
                                 {% if frete.valor_cotado %}
                                 {% set diferenca = frete.diferenca_cotado_cte() %}
                                 {% if diferenca != 0 %}
                                 <br><small class="{% if diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
-                                    {% if diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(diferenca) }}
+                                    {% if diferenca > 0 %}+{% endif %}{{ (diferenca)|moeda_carteira }}
                                 </small>
                                 {% endif %}
                                 {% endif %}
@@ -173,14 +174,14 @@
                             </td>
                             <td>
                                 {% if frete.valor_considerado %}
-                                R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                {{ (frete.valor_considerado)|moeda_carteira }}
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if frete.valor_pago %}
-                                R$ {{ "%.2f"|format(frete.valor_pago) }}
+                                {{ (frete.valor_pago)|moeda_carteira }}
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -210,6 +211,22 @@
                                 {% else %}
                                 <span class="badge bg-secondary" style="background-color: #6c757d; color: white;">{{
                                     frete.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if frete.odoo_invoice_id %}
+                                    <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}#odoo-status"
+                                       title="Lançado no Odoo - Invoice ID: {{ frete.odoo_invoice_id }}"
+                                       class="text-decoration-none">
+                                        <span class="badge bg-success" style="background-color: #28a745; color: white;">
+                                            <i class="fas fa-check-circle"></i> OK
+                                        </span>
+                                    </a>
+                                {% else %}
+                                    <span class="badge bg-warning" style="background-color: #ffc107; color: #212529;"
+                                          title="Ainda não lançado no Odoo">
+                                        <i class="fas fa-clock"></i> Pendente
+                                    </span>
                                 {% endif %}
                             </td>
                             <td>{{ frete.criado_em | formatar_data_segura }}</td>

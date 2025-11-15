@@ -43,7 +43,7 @@
                         <div class="col-md-6">
                             <p><strong>Documento Atual:</strong> {{ despesa.tipo_documento }}</p>
                             <p><strong>Número:</strong> {{ despesa.numero_documento }}</p>
-                            <p><strong>Valor Atual:</strong> R$ {{ "%.2f"|format(despesa.valor_despesa) }}</p>
+                            <p><strong>Valor Atual:</strong> {{ (despesa.valor_despesa)|moeda_carteira }}</p>
                             <p><strong>Vencimento Atual:</strong> {{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</p>
                         </div>
                     </div>
@@ -79,7 +79,7 @@
                                         <option value="{{ fatura.id }}">
                                             {{ fatura.numero_fatura }} - 
                                             {{ fatura.data_emissao | formatar_data_segura if fatura.data_emissao else 'S/Data' }} - 
-                                            R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}
+                                            {{ (fatura.valor_total_fatura)|moeda_carteira }}
                                             {% if fatura.vencimento %} - Venc: {{ fatura.vencimento | formatar_data_segura }}{% endif %}
                                         </option>
                                     {% endfor %}
@@ -188,7 +188,7 @@
                     <p><strong>Embarque:</strong> 
                         <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">#{{ frete.embarque.numero }}</a>
                     </p>
-                    <p><strong>Valor Cotado:</strong> R$ {{ "%.2f"|format(frete.valor_cotado) }}</p>
+                    <p><strong>Valor Cotado:</strong> {{ (frete.valor_cotado)|moeda_carteira }}</p>
                 </div>
             </div>
 
@@ -214,7 +214,7 @@
                                 {% for fatura in faturas_disponiveis %}
                                 <tr>
                                     <td>{{ fatura.numero_fatura }}</td>
-                                    <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
+                                    <td>{{ (fatura.valor_total_fatura)|moeda_carteira }}</td>
                                     <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else 'N/A' }}</td>
                                 </tr>
                                 {% endfor %}

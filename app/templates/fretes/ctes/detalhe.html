@@ -70,11 +70,11 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="text-muted small">Valor Total</label>
-                            <div><strong class="text-success">R$ {{ "%.2f"|format(cte.valor_total or 0) }}</strong></div>
+                            <div><strong class="text-success">{{ (cte.valor_total or 0)|moeda_carteira }}</strong></div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="text-muted small">Valor ICMS</label>
-                            <div><strong class="text-info">R$ {{ "%.2f"|format(cte.valor_icms or 0) }}</strong></div>
+                            <div><strong class="text-info">{{ (cte.valor_icms or 0)|moeda_carteira }}</strong></div>
                         </div>
                     </div>
 

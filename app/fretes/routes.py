@@ -554,6 +554,145 @@ def editar_frete(frete_id):
     
     return render_template('fretes/editar_frete.html', form=form, frete=frete)
 
+
+@fretes_bp.route('/<int:frete_id>/lancar-odoo', methods=['POST'])
+@login_required
+@require_financeiro()
+def lancar_frete_odoo(frete_id):
+    """
+    Lança frete no Odoo (processo completo de 16 etapas)
+    """
+    try:
+        from app.fretes.services import LancamentoOdooService
+        from app.fretes.models import ConhecimentoTransporte
+
+        # Buscar frete
+        frete = Frete.query.get_or_404(frete_id)
+
+        # Verificar se já foi lançado
+        if frete.odoo_invoice_id:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Frete já foi lançado no Odoo',
+                'erro': f'Invoice ID: {frete.odoo_invoice_id}'
+            }), 400
+
+        # Buscar CTe relacionado pela chave
+        cte = None
+        chave_cte = None
+
+        # Tentar buscar CTe relacionado
+        ctes_relacionados = frete.buscar_ctes_relacionados()
+
+        if not ctes_relacionados:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Nenhum CTe relacionado encontrado',
+                'erro': 'É necessário ter um CTe vinculado para lançar no Odoo'
+            }), 400
+
+        if len(ctes_relacionados) > 1:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': f'Múltiplos CTes encontrados ({len(ctes_relacionados)})',
+                'erro': 'Por favor, vincule manualmente o CTe correto antes de lançar'
+            }), 400
+
+        cte = ctes_relacionados[0]
+        chave_cte = cte.chave_acesso
+
+        if not chave_cte or len(chave_cte) != 44:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Chave do CTe inválida',
+                'erro': f'Chave possui {len(chave_cte) if chave_cte else 0} caracteres (esperado 44)'
+            }), 400
+
+        # Obter data de vencimento (do JSON ou do frete)
+        data = request.get_json() or {}
+        data_vencimento = data.get('data_vencimento')
+
+        if data_vencimento:
+            from datetime import datetime
+            try:
+                data_vencimento = datetime.strptime(data_vencimento, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Data de vencimento inválida',
+                    'erro': 'Formato esperado: YYYY-MM-DD'
+                }), 400
+
+        # Criar service e executar lançamento
+        service = LancamentoOdooService(
+            usuario_nome=current_user.username,
+            usuario_ip=request.remote_addr
+        )
+
+        logger.info(f"Iniciando lançamento de frete {frete_id} no Odoo - CTe: {chave_cte}")
+
+        resultado = service.lancar_frete_odoo(
+            frete_id=frete_id,
+            cte_chave=chave_cte,
+            data_vencimento=data_vencimento
+        )
+
+        # Retornar resultado
+        if resultado['sucesso']:
+            logger.info(f"Frete {frete_id} lançado com sucesso no Odoo")
+            flash(f'Frete lançado com sucesso! {resultado["etapas_concluidas"]}/16 etapas concluídas', 'success')
+
+            return jsonify(resultado), 200
+        else:
+            logger.error(f"Erro ao lançar frete {frete_id}: {resultado['erro']}")
+
+            return jsonify(resultado), 500
+
+    except Exception as e:
+        logger.error(f"Erro ao lançar frete no Odoo: {e}")
+        import traceback
+        traceback.print_exc()
+
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Erro inesperado ao lançar frete',
+            'erro': str(e)
+        }), 500
+
+
+@fretes_bp.route('/<int:frete_id>/auditoria-odoo')
+@login_required
+def auditoria_odoo(frete_id):
+    """
+    Exibe a auditoria completa do lançamento no Odoo
+    """
+    from app.fretes.models import LancamentoFreteOdooAuditoria
+
+    # Buscar frete
+    frete = Frete.query.get_or_404(frete_id)
+
+    # Buscar auditorias ordenadas por etapa
+    auditorias = LancamentoFreteOdooAuditoria.query.filter_by(
+        frete_id=frete_id
+    ).order_by(LancamentoFreteOdooAuditoria.etapa).all()
+
+    if not auditorias:
+        flash('Nenhuma auditoria encontrada para este frete. Ele ainda não foi lançado no Odoo.', 'warning')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
+
+    # Calcular estatísticas
+    total_tempo_ms = sum(a.tempo_execucao_ms or 0 for a in auditorias)
+    etapas_sucesso = sum(1 for a in auditorias if a.status == 'SUCESSO')
+    etapas_erro = sum(1 for a in auditorias if a.status == 'ERRO')
+
+    return render_template('fretes/auditoria_odoo.html',
+                         frete=frete,
+                         auditorias=auditorias,
+                         total_tempo_ms=total_tempo_ms,
+                         etapas_sucesso=etapas_sucesso,
+                         etapas_erro=etapas_erro)
+
+
 @fretes_bp.route('/analise-diferencas/<int:frete_id>')
 @login_required
 def analise_diferencas(frete_id):
@@ -2801,10 +2940,11 @@ def listar_contas_correntes():
         # Calcula saldo para cada transportadora
         contas_correntes = []
         for tp in transportadoras_com_conta:
-            total_creditos = tp.total_creditos or 0
-            total_debitos = tp.total_debitos or 0
+            # ✅ CONVERSÃO EXPLÍCITA: Decimal -> float para garantir formatação correta no template
+            total_creditos = float(tp.total_creditos or 0)
+            total_debitos = float(tp.total_debitos or 0)
             saldo_atual = total_debitos - total_creditos  # Positivo = transportadora deve para empresa
-            
+
             contas_correntes.append({
                 'transportadora_id': tp.id,
                 'transportadora_nome': tp.razao_social,

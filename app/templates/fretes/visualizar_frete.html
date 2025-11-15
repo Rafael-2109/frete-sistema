@@ -55,6 +55,17 @@
                 <i class="fas fa-truck"></i> Ver Embarque
             </a>
 
+            <!-- Botão Lançar no Odoo -->
+            {% if not frete.odoo_invoice_id %}
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalLancarOdoo">
+                <i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-success" disabled title="Já lançado no Odoo">
+                <i class="fas fa-check-circle"></i> Lançado no Odoo
+            </button>
+            {% endif %}
+
             {% if not frete.fatura_frete or frete.fatura_frete.status_conferencia != 'CONFERIDO' %}
             <!-- ✅ NOVO: Botão Cancelar CTe (fluxo reverso) -->
             {% if frete.numero_cte %}
@@ -128,8 +139,8 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h6><i class="fas fa-weight"></i> Totais das NFs</h6>
-                            <p><strong>Peso Total:</strong> {{ "%.2f"|format(frete.peso_total) }} kg</p>
-                            <p><strong>Valor Total:</strong> R$ {{ "%.2f"|format(frete.valor_total_nfs) }}</p>
+                            <p><strong>Peso Total:</strong> {{ (frete.peso_total)|moeda_carteira }} kg</p>
+                            <p><strong>Valor Total:</strong> {{ (frete.valor_total_nfs)|moeda_carteira }}</p>
                             <p><strong>Quantidade de NFs:</strong> {{ frete.quantidade_nfs }}</p>
                         </div>
                         <div class="col-md-6">
@@ -153,7 +164,7 @@
                                     {{ frete.fatura_frete.numero_fatura }}
                                 </a>
                             </p>
-                            <p><strong>Valor Fatura:</strong> R$ {{ "%.2f"|format(frete.fatura_frete.valor_total_fatura)
+                            <p><strong>Valor Fatura:</strong> {{ (frete.fatura_frete.valor_total_fatura)|moeda_carteira
                                 }}</p>
                             {% else %}
                             <p class="text-muted">Não vinculado a fatura</p>
@@ -192,11 +203,11 @@
                             <div class="btn-group mb-1" role="group">
                                 <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.id) }}"
                                    class="btn btn-sm btn-outline-success"
-                                   title="CTe {{ cte.numero_cte }}/{{ cte.serie_cte }} - {{ cte.nome_emitente }} - R$ {{ '%.2f'|format(cte.valor_total or 0) }}"
+                                   title="CTe {{ cte.numero_cte }}/{{ cte.serie_cte }} - {{ cte.nome_emitente }} - {{ (cte.valor_total or 0)|moeda_carteira }}"
                                    target="_blank">
                                     <i class="fas fa-external-link-alt"></i>
                                     CTe {{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}
-                                    <span class="badge bg-success ms-1" style="color: white;">R$ {{ "%.2f"|format(cte.valor_total or 0) }}</span>
+                                    <span class="badge bg-success ms-1" style="color: white;">{{ (cte.valor_total or 0)|moeda_carteira }}</span>
                                 </a>
                                 {% if cte.cte_pdf_path %}
                                 <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
@@ -233,25 +244,25 @@
                     <div class="row">
                         <div class="col-md-6">
                             <p><strong>Nome da Tabela:</strong> {{ frete.tabela_nome_tabela or 'N/A' }}</p>
-                            <p><strong>Valor por Kg:</strong> R$ {{ "%.4f"|format(frete.tabela_valor_kg) if
+                            <p><strong>Valor por Kg:</strong> {{ (frete.tabela_valor_kg)|moeda_carteira(4) if
                                 frete.tabela_valor_kg else 'N/A' }}</p>
-                            <p><strong>Percentual Valor:</strong> {{ "%.2f"|format(frete.tabela_percentual_valor) if
+                            <p><strong>Percentual Valor:</strong> {{ (frete.tabela_percentual_valor)|moeda_carteira if
                                 frete.tabela_percentual_valor else 'N/A' }}%</p>
-                            <p><strong>Frete Mínimo Peso:</strong> R$ {{ "%.2f"|format(frete.tabela_frete_minimo_peso)
+                            <p><strong>Frete Mínimo Peso:</strong> {{ (frete.tabela_frete_minimo_peso)|moeda_carteira
                                 if frete.tabela_frete_minimo_peso else 'N/A' }}</p>
-                            <p><strong>Frete Mínimo Valor:</strong> R$ {{ "%.2f"|format(frete.tabela_frete_minimo_valor)
+                            <p><strong>Frete Mínimo Valor:</strong> {{ (frete.tabela_frete_minimo_valor)|moeda_carteira
                                 if frete.tabela_frete_minimo_valor else 'N/A' }}</p>
                         </div>
                         <div class="col-md-6">
-                            <p><strong>GRIS:</strong> {{ "%.2f"|format(frete.tabela_percentual_gris) if
+                            <p><strong>GRIS:</strong> {{ (frete.tabela_percentual_gris)|moeda_carteira if
                                 frete.tabela_percentual_gris else 'N/A' }}%</p>
-                            <p><strong>ADV:</strong> {{ "%.2f"|format(frete.tabela_percentual_adv) if
+                            <p><strong>ADV:</strong> {{ (frete.tabela_percentual_adv)|moeda_carteira if
                                 frete.tabela_percentual_adv else 'N/A' }}%</p>
-                            <p><strong>RCA:</strong> {{ "%.2f"|format(frete.tabela_percentual_rca) if
+                            <p><strong>RCA:</strong> {{ (frete.tabela_percentual_rca)|moeda_carteira if
                                 frete.tabela_percentual_rca else 'N/A' }}%</p>
-                            <p><strong>Pedágio/100kg:</strong> R$ {{ "%.2f"|format(frete.tabela_pedagio_por_100kg) if
+                            <p><strong>Pedágio/100kg:</strong> {{ (frete.tabela_pedagio_por_100kg)|moeda_carteira if
                                 frete.tabela_pedagio_por_100kg else 'N/A' }}</p>
-                            <p><strong>Valor Despacho:</strong> R$ {{ "%.2f"|format(frete.tabela_valor_despacho) if
+                            <p><strong>Valor Despacho:</strong> {{ (frete.tabela_valor_despacho)|moeda_carteira if
                                 frete.tabela_valor_despacho else 'N/A' }}</p>
                         </div>
                     </div>
@@ -270,25 +281,25 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="font-weight-bold text-primary">Valor Cotado</label>
-                        <div class="h4 text-primary">R$ {{ "%.2f"|format(frete.valor_cotado) }}</div>
+                        <div class="h4 text-primary">{{ (frete.valor_cotado)|moeda_carteira }}</div>
                         <small class="text-muted">Calculado pela tabela</small>
                     </div>
 
                     {% if frete.valor_cte %}
                     <div class="mb-3">
                         <label class="font-weight-bold text-info">Valor CTe</label>
-                        <div class="h4 text-info">R$ {{ "%.2f"|format(frete.valor_cte) }}</div>
+                        <div class="h4 text-info">{{ (frete.valor_cte)|moeda_carteira }}</div>
                         <small class="text-muted">Cobrado pela transportadora</small>
                         {% if frete.valor_cotado %}
                         {% set diferenca_cte = frete.diferenca_cotado_cte() %}
                         {% if diferenca_cte != 0 %}
                         <div class="mt-1">
                             {% if diferenca_cte > 0 %}
-                            <span class="badge bg-danger" style="color: white; background-color: #dc3545;">+R$ {{
-                                "%.2f"|format(diferenca_cte) }}</span>
+                            <span class="badge bg-danger" style="color: white; background-color: #dc3545;">+{{
+                                (diferenca_cte)|moeda_carteira }}</span>
                             {% else %}
-                            <span class="badge bg-success" style="color: white; background-color: #28a745;">R$ {{
-                                "%.2f"|format(diferenca_cte) }}</span>
+                            <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
+                                (diferenca_cte)|moeda_carteira }}</span>
                             {% endif %}
                             <small class="text-muted d-block">
                                 {% if diferenca_cte > 0 %}Acima{% else %}Abaixo{% endif %} do cotado
@@ -309,7 +320,7 @@
                     {% if frete.valor_considerado %}
                     <div class="mb-3">
                         <label class="font-weight-bold text-success">Valor Considerado</label>
-                        <div class="h4 text-success">R$ {{ "%.2f"|format(frete.valor_considerado) }}</div>
+                        <div class="h4 text-success">{{ (frete.valor_considerado)|moeda_carteira }}</div>
                         <small class="text-muted">Valor válido definido</small>
                     </div>
                     {% endif %}
@@ -317,18 +328,18 @@
                     {% if frete.valor_pago %}
                     <div class="mb-3">
                         <label class="font-weight-bold text-dark">Valor Pago</label>
-                        <div class="h4 text-dark">R$ {{ "%.2f"|format(frete.valor_pago) }}</div>
+                        <div class="h4 text-dark">{{ (frete.valor_pago)|moeda_carteira }}</div>
                         <small class="text-muted">Valor efetivamente pago</small>
                         {% if frete.valor_considerado %}
                         {% set diferenca_pago = frete.diferenca_considerado_pago() %}
                         {% if diferenca_pago != 0 %}
                         <div class="mt-1">
                             {% if diferenca_pago > 0 %}
-                            <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">+R$ {{
-                                "%.2f"|format(diferenca_pago) }}</span>
+                            <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">+{{
+                                (diferenca_pago)|moeda_carteira }}</span>
                             {% else %}
-                            <span class="badge bg-info" style="color: white; background-color: #17a2b8;">R$ {{
-                                "%.2f"|format(diferenca_pago) }}</span>
+                            <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
+                                (diferenca_pago)|moeda_carteira }}</span>
                             {% endif %}
                             <small class="text-muted d-block">
                                 Diferença para conta corrente
@@ -358,6 +369,64 @@
                     <div class="alert alert-warning">
                         <small><i class="fas fa-exclamation-triangle"></i> Diferença desconsiderada</small>
                     </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Card Status Odoo -->
+            <div class="card mb-4" id="odoo-status">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cloud"></i> Status Odoo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if frete.odoo_invoice_id %}
+                        <!-- LANÇADO -->
+                        <div class="alert alert-success mb-3" style="background-color: #d4edda; border-color: #c3e6cb;">
+                            <i class="fas fa-check-circle"></i> <strong>Lançado no Odoo</strong>
+                        </div>
+
+                        <div class="mb-2">
+                            <small class="text-muted">DFe ID:</small>
+                            <div><strong>{{ frete.odoo_dfe_id or 'N/A' }}</strong></div>
+                        </div>
+
+                        <div class="mb-2">
+                            <small class="text-muted">Purchase Order ID:</small>
+                            <div><strong>{{ frete.odoo_purchase_order_id or 'N/A' }}</strong></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted">Invoice ID:</small>
+                            <div><strong>{{ frete.odoo_invoice_id }}</strong></div>
+                        </div>
+
+                        <hr>
+
+                        <div class="mb-2">
+                            <small class="text-muted">Lançado em:</small>
+                            <div>{{ frete.lancado_odoo_em.strftime('%d/%m/%Y %H:%M') if frete.lancado_odoo_em else 'N/A' }}</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted">Lançado por:</small>
+                            <div>{{ frete.lancado_odoo_por or 'N/A' }}</div>
+                        </div>
+
+                        <a href="{{ url_for('fretes.auditoria_odoo', frete_id=frete.id) }}"
+                           class="btn btn-sm btn-outline-primary w-100">
+                            <i class="fas fa-history"></i> Ver Auditoria Completa
+                        </a>
+
+                    {% else %}
+                        <!-- NÃO LANÇADO -->
+                        <div class="alert alert-warning mb-0" style="background-color: #fff3cd; border-color: #ffeaa7;">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Ainda não lançado no Odoo</strong>
+                            <p class="mb-0 mt-2">
+                                <small>Use o botão "Lançar no Odoo" no topo da página para iniciar o processo de lançamento.</small>
+                            </p>
+                        </div>
                     {% endif %}
                 </div>
             </div>
@@ -472,7 +541,7 @@
                                         <span class="text-muted">N/A</span>
                                         {% endif %}
                                     </td>
-                                    <td>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</td>
+                                    <td>{{ (despesa.valor_despesa)|moeda_carteira }}</td>
                                     <td>{{ despesa.vencimento_despesa | formatar_data_segura if
                                         despesa.vencimento_despesa else 'N/A' }}</td>
                                     <td>
@@ -546,7 +615,7 @@
                             <tfoot>
                                 <tr class="font-weight-bold">
                                     <td colspan="7">Total Despesas Extras:</td>
-                                    <td>R$ {{ "%.2f"|format(despesas_extras|sum(attribute='valor_despesa')) }}</td>
+                                    <td>{{ (despesas_extras|sum(attribute='valor_despesa')|moeda_carteira) }}</td>
                                     <td></td>
                                     <td></td>
                                 </tr>
@@ -604,7 +673,7 @@
                                     <td>
                                         <small>
                                             {{ email.despesa_extra.tipo_despesa }}<br>
-                                            R$ {{ "%.2f"|format(email.despesa_extra.valor_despesa) }}
+                                            {{ (email.despesa_extra.valor_despesa)|moeda_carteira }}
                                         </small>
                                     </td>
                                     <td>
@@ -692,7 +761,7 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ mov.descricao }}</td>
-                                    <td>R$ {{ "%.2f"|format(mov.valor_diferenca) }}</td>
+                                    <td>{{ (mov.valor_diferenca)|moeda_carteira }}</td>
                                     <td>
                                         {% if mov.status == 'ATIVO' %}
                                         <span class="badge bg-warning"
@@ -853,5 +922,157 @@ document.getElementById('formAnexarEmail').addEventListener('submit', function(e
         btnSubmit.innerHTML = '<i class="fas fa-upload"></i> Anexar Email';
     });
 });
+
+// ========================================
+// MODAL E LÓGICA DE LANÇAMENTO NO ODOO
+// ========================================
+
+// Função para lançar frete no Odoo
+function lancarFreteOdoo() {
+    const modal = document.getElementById('modalLancarOdoo');
+    const btnLancar = document.getElementById('btnLancarOdoo');
+    const dataVencimento = document.getElementById('dataVencimentoOdoo').value;
+    const progressContainer = document.getElementById('progressLancamento');
+    const progressBar = progressContainer.querySelector('.progress-bar');
+    const progressText = document.getElementById('progressText');
+
+    // Validação
+    if (!dataVencimento) {
+        alert('Por favor, informe a data de vencimento');
+        return;
+    }
+
+    // Desabilitar botão e mostrar progresso
+    btnLancar.disabled = true;
+    btnLancar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Lançando...';
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Iniciando lançamento...';
+
+    // Fazer requisição
+    fetch('{{ url_for("fretes.lancar_frete_odoo", frete_id=frete.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            data_vencimento: dataVencimento
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Atualizar progresso
+            const etapas = data.etapas_concluidas || 0;
+            const percentual = Math.round((etapas / 16) * 100);
+            progressBar.style.width = percentual + '%';
+            progressBar.classList.remove('bg-primary');
+            progressBar.classList.add('bg-success');
+            progressText.textContent = `✅ ${data.mensagem}`;
+
+            // Mostrar sucesso
+            alert(`✅ Lançamento concluído com sucesso!\n\nEtapas: ${etapas}/16\nDFe ID: ${data.dfe_id}\nPO ID: ${data.purchase_order_id}\nInvoice ID: ${data.invoice_id}`);
+
+            // Recarregar página após 2 segundos
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            // Mostrar erro
+            progressBar.classList.remove('bg-primary');
+            progressBar.classList.add('bg-danger');
+            progressText.textContent = `❌ ${data.mensagem}`;
+
+            alert(`❌ Erro no lançamento:\n\n${data.mensagem}\n\nDetalhes: ${data.erro || 'N/A'}\n\nEtapas concluídas: ${data.etapas_concluidas || 0}/16`);
+
+            // Reabilitar botão
+            btnLancar.disabled = false;
+            btnLancar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo';
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        progressBar.classList.remove('bg-primary');
+        progressBar.classList.add('bg-danger');
+        progressText.textContent = '❌ Erro na comunicação';
+
+        alert('❌ Erro ao lançar frete no Odoo:\n\n' + error);
+
+        // Reabilitar botão
+        btnLancar.disabled = false;
+        btnLancar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo';
+    });
+}
 </script>
+
+<!-- Modal Lançamento Odoo -->
+<div class="modal fade" id="modalLancarOdoo" tabindex="-1" aria-labelledby="modalLancarOdooLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLancarOdooLabel">
+                    <i class="fas fa-cloud-upload-alt"></i> Lançar Frete no Odoo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Processo Automatizado</strong><br>
+                    Este processo executará automaticamente <strong>16 etapas</strong> no Odoo:
+                    <ul class="mt-2 mb-0">
+                        <li>Lançamento no DF-e (6 etapas)</li>
+                        <li>Criação e confirmação do Purchase Order (5 etapas)</li>
+                        <li>Criação da Invoice (2 etapas)</li>
+                        <li>Confirmação final da Invoice (3 etapas)</li>
+                    </ul>
+                </div>
+
+                {% if frete.vencimento %}
+                <div class="alert alert-success">
+                    <i class="fas fa-calendar-check"></i>
+                    Vencimento atual do frete: <strong>{{ frete.vencimento.strftime('%d/%m/%Y') }}</strong>
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label for="dataVencimentoOdoo" class="form-label">
+                        <i class="fas fa-calendar"></i> Data de Vencimento
+                    </label>
+                    <input type="date"
+                           class="form-control"
+                           id="dataVencimentoOdoo"
+                           {% if frete.vencimento %}
+                           value="{{ frete.vencimento.strftime('%Y-%m-%d') }}"
+                           {% endif %}
+                           required>
+                    <small class="form-text text-muted">
+                        Data em que o frete deverá ser pago no Odoo
+                    </small>
+                </div>
+
+                <!-- Barra de Progresso -->
+                <div id="progressLancamento" style="display: none;">
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                             role="progressbar"
+                             style="width: 0%">
+                        </div>
+                    </div>
+                    <p id="progressText" class="text-center text-muted mb-0"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success" id="btnLancarOdoo" onclick="lancarFreteOdoo()">
+                    <i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

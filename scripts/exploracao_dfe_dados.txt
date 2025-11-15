@@ -1,7 +1,7 @@
 ====================================================================================================
 DADOS COMPLETOS DE UM CTe REAL DO ODOO
 CTe ID: 33010
-Data: 13/11/2025 19:24:48
+Data: 14/11/2025 20:12:16
 ====================================================================================================
 
 active                                                       = True
@@ -29,7 +29,7 @@ invoice_ids                                                  = [404885] (1 itens
 is_cte                                                       = True
 justificativa                                                = False
 l10n_br_body_xml_dfe                                         = <cteProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/cte"><CTe xmlns="http://www.portalfisca... (8271 caracteres)
-l10n_br_data_entrada                                         = 2025-11-13
+l10n_br_data_entrada                                         = 2025-11-14
 l10n_br_numero_parcelas                                      = 0
 l10n_br_pdf_dfe                                              = JVBERi0xLjQNCiWAgYKDDQoxIDAgb2JqDQo8PCAvQ3JlYXRvciA8Pg0KL0NyZWF0aW9uRGF0ZSA8NDQzYTMyMzAzMjM1MzEzMTMx... (44476 caracteres)
 l10n_br_pdf_dfe_fname                                        = 35251138402404000265570010000001171188192945-nfe.pdf
@@ -45,7 +45,7 @@ message_follower_ids                                         = [] (0 itens)
 message_has_error                                            = False
 message_has_error_counter                                    = 0
 message_has_sms_error                                        = False
-message_ids                                                  = [12088356, 12088352, 12065970, 12065873, 12065726, 12065725] (6 itens)
+message_ids                                                  = [12116322, 12088356, 12088352, 12065970, 12065873, 12065726, 12065725] (7 itens)
 message_is_follower                                          = False
 message_needaction                                           = False
 message_needaction_counter                                   = 0
@@ -93,6 +93,6 @@ rating_ids                                                   = [] (0 itens)
 refs_ids                                                     = [15312] (1 itens)
 situacao_manifesto                                           = ciencia
 website_message_ids                                          = [] (0 itens)
-write_date                                                   = 2025-11-13 19:49:25
+write_date                                                   = 2025-11-14 21:58:15
 write_uid                                                    = [695, 'Talita de Lê Lima']
 x_studio_pedido_de_venda_referncia                           = False

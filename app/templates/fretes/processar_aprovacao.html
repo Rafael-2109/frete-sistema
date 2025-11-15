@@ -54,7 +54,7 @@
                             <div class="card bg-light">
                                 <div class="card-body text-center">
                                     <h6 class="text-muted">Valor Cotado</h6>
-                                    <h4 class="text-primary">R$ {{ "%.2f"|format(frete.valor_cotado) }}</h4>
+                                    <h4 class="text-primary">{{ (frete.valor_cotado)|moeda_carteira }}</h4>
                                 </div>
                             </div>
                         </div>
@@ -64,7 +64,7 @@
                                     <h6 class="text-muted">Valor CTe</h6>
                                     <h4 class="text-info">
                                         {% if frete.valor_cte %}
-                                        R$ {{ "%.2f"|format(frete.valor_cte) }}
+                                        {{ (frete.valor_cte)|moeda_carteira }}
                                         {% else %}
                                         -
                                         {% endif %}
@@ -78,7 +78,7 @@
                                     <h6 class="text-muted">Valor Considerado</h6>
                                     <h4 class="text-warning">
                                         {% if frete.valor_considerado %}
-                                        R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                        {{ (frete.valor_considerado)|moeda_carteira }}
                                         {% else %}
                                         -
                                         {% endif %}
@@ -92,7 +92,7 @@
                                     <h6 class="text-muted">Valor Pago</h6>
                                     <h4 class="text-dark">
                                         {% if frete.valor_pago %}
-                                        R$ {{ "%.2f"|format(frete.valor_pago) }}
+                                        {{ (frete.valor_pago)|moeda_carteira }}
                                         {% else %}
                                         -
                                         {% endif %}
@@ -184,7 +184,7 @@
                     {% set diff_cte = frete.diferenca_cotado_cte() %}
                     <p><strong>CTe - Cotado:</strong><br>
                         <span class="{% if diff_cte > 0 %}text-danger{% elif diff_cte < 0 %}text-success{% endif %}">
-                            {% if diff_cte > 0 %}+{% endif %}R$ {{ "%.2f"|format(diff_cte) }}
+                            {% if diff_cte > 0 %}+{% endif %}{{ (diff_cte)|moeda_carteira }}
                         </span>
                     </p>
                     {% endif %}
@@ -193,7 +193,7 @@
                     {% set diff_pago = frete.diferenca_considerado_pago() %}
                     <p><strong>Pago - Considerado:</strong><br>
                         <span class="{% if diff_pago > 0 %}text-danger{% elif diff_pago < 0 %}text-success{% endif %}">
-                            {% if diff_pago > 0 %}+{% endif %}R$ {{ "%.2f"|format(diff_pago) }}
+                            {% if diff_pago > 0 %}+{% endif %}{{ (diff_pago)|moeda_carteira }}
                         </span>
                     </p>
                     {% endif %}

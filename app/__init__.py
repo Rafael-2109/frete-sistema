@@ -448,19 +448,12 @@ def create_app(config_name=None):
             return "R$ 0,00"
 
         try:
+            # ✅ MÉTODO COMPROVADO (mesmo da carteira/utils/formatters.py)
             valor_float = float(valor)
             if decimais == 0:
-                return f"R$ {valor_float:,.0f}".replace(",", ".")
+                return f"R$ {valor_float:,.0f}".replace(',', 'X').replace('.', ',').replace('X', '.')
             else:
-                valor_formatado = f"{valor_float:,.{decimais}f}"
-                # Converte para padrão brasileiro
-                partes = valor_formatado.split(".")
-                if len(partes) == 2:
-                    inteira = partes[0].replace(",", ".")
-                    decimal = partes[1]
-                    return f"R$ {inteira},{decimal}"
-                else:
-                    return f"R$ {valor_formatado.replace(',', '.')}"
+                return f"R$ {valor_float:,.{decimais}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         except (ValueError, TypeError):
             return "R$ 0,00"
 

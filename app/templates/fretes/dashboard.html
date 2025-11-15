@@ -219,7 +219,7 @@
                                             </a>
                                         </td>
                                         <td>{{ frete.transportadora.razao_social[:20] }}...</td>
-                                        <td>R$ {{ "%.2f"|format(frete.valor_cotado) }}</td>
+                                        <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                                         <td>
                                             {% if frete.status == 'PENDENTE' %}
                                                 <span class="badge" style="background-color: #ffc107; color: #212529;">Pendente</span>
