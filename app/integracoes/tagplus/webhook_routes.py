@@ -100,18 +100,36 @@ def webhook_nfe():
             return jsonify({'erro': 'ID da NFe não fornecido'}), 400
 
         # 🔄 BUSCAR DADOS COMPLETOS DA NFE VIA API (TagPlus envia apenas ID)
+        # IMPORTANTE: TagPlus envia webhook ANTES da NFe estar disponível na API
+        # Implementamos retry com delay exponencial
         try:
             from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
+            import time
+
             importador = ImportadorTagPlusV2()
 
-            # Buscar NFe completa pela API usando método privado
-            nfe_completa = importador._buscar_nfe_detalhada(nfe_id)
+            # Buscar NFe com retry (máx 3 tentativas com delay crescente)
+            nfe_completa = None
+            max_tentativas = 3
+            delays = [1, 3, 5]  # segundos de espera entre tentativas
 
+            for tentativa in range(max_tentativas):
+                nfe_completa = importador._buscar_nfe_detalhada(nfe_id)
+
+                if nfe_completa:
+                    logger.info(f"✅ NFe {nfe_completa.get('numero', 'S/N')} buscada com sucesso (tentativa {tentativa + 1})")
+                    break
+
+                # Se não encontrou e ainda tem tentativas
+                if tentativa < max_tentativas - 1:
+                    delay = delays[tentativa]
+                    logger.warning(f"⏳ NFe ID {nfe_id} não disponível ainda, aguardando {delay}s... (tentativa {tentativa + 1}/{max_tentativas})")
+                    time.sleep(delay)
+
+            # Se após todas tentativas não encontrou
             if not nfe_completa:
-                logger.error(f"❌ NFe ID {nfe_id} não encontrada na API TagPlus")
-                return jsonify({'erro': 'NFe não encontrada na API'}), 404
-
-            logger.info(f"✅ NFe {nfe_completa.get('numero', 'S/N')} buscada com sucesso via API")
+                logger.error(f"❌ NFe ID {nfe_id} não encontrada na API TagPlus após {max_tentativas} tentativas")
+                return jsonify({'erro': 'NFe não encontrada na API após múltiplas tentativas'}), 404
 
         except Exception as e:
             logger.error(f"❌ Erro ao buscar NFe {nfe_id} via API: {e}")

@@ -453,12 +453,17 @@ def editar_frete(frete_id):
         return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
     
     form = FreteForm(obj=frete)
-    
+
+    # ✅ NOVO: Buscar CTes relacionados para sugestão (sempre busca, permite trocar CTe)
+    ctes_sugeridos = frete.buscar_ctes_relacionados()
+    if ctes_sugeridos:
+        current_app.logger.info(f"🔍 Encontrados {len(ctes_sugeridos)} CTes sugeridos para frete #{frete.id}")
+
     # ✅ CORREÇÃO: Auto-preencher vencimento da fatura
     if frete.fatura_frete and frete.fatura_frete.vencimento and not frete.vencimento:
         frete.vencimento = frete.fatura_frete.vencimento
         form.vencimento.data = frete.fatura_frete.vencimento
-    
+
     if form.validate_on_submit():
         frete.numero_cte = form.numero_cte.data
         # ✅ REMOVIDO: data_emissao_cte (conforme solicitado)
@@ -552,7 +557,10 @@ def editar_frete(frete_id):
             # Fallback: comportamento original
             return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
     
-    return render_template('fretes/editar_frete.html', form=form, frete=frete)
+    return render_template('fretes/editar_frete.html',
+                         form=form,
+                         frete=frete,
+                         ctes_sugeridos=ctes_sugeridos)
 
 
 @fretes_bp.route('/<int:frete_id>/lancar-odoo', methods=['POST'])

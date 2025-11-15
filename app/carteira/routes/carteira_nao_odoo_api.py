@@ -62,8 +62,8 @@ def listar_carteira():
                 palletizacao = CadastroPalletizacao.query.filter_by(
                     cod_produto=item.cod_produto
                 ).first()
-                if palletizacao and palletizacao.descricao:
-                    nome_produto = palletizacao.descricao
+                if palletizacao and palletizacao.nome_produto:
+                    nome_produto = palletizacao.nome_produto
             except Exception as e:
                 logger.warning(f"Erro ao buscar produto {item.cod_produto}: {e}")
             
@@ -125,6 +125,96 @@ def listar_carteira():
         
     except Exception as e:
         logger.error(f"Erro ao listar carteira não-Odoo: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@carteira_nao_odoo_api.route('/api/carteira-nao-odoo/<int:id>/quantidade', methods=['PUT'])
+@login_required
+def atualizar_qtd_pedido(id):
+    """Atualiza quantidade do pedido de um item"""
+    try:
+        # Buscar item da CarteiraCopia
+        item_copia = CarteiraCopia.query.get_or_404(id)
+
+        data = request.get_json()
+        nova_qtd_pedido = float(data.get('qtd_produto_pedido', 0))
+
+        # Validações
+        if nova_qtd_pedido < 0:
+            return jsonify({
+                'success': False,
+                'error': 'Quantidade do pedido não pode ser negativa'
+            }), 400
+
+        # Verificar quantidade mínima (já faturado + cancelado + embarque cotado)
+        qtd_embarque_cotado = 0
+        try:
+            separacoes_cotadas = db.session.query(
+                func.sum(Separacao.qtd_saldo)
+            ).join(
+                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                and_(
+                    Separacao.num_pedido == item_copia.num_pedido,
+                    Separacao.cod_produto == item_copia.cod_produto,
+                    Pedido.status == 'COTADO'
+                )
+            ).scalar()
+
+            qtd_embarque_cotado = float(separacoes_cotadas or 0)
+        except Exception as e:
+            logger.warning(f"Erro ao verificar embarques cotados: {e}")
+
+        # Calcular mínimo permitido
+        min_permitido = float(item_copia.baixa_produto_pedido or 0) + \
+            float(item_copia.qtd_cancelada_produto_pedido or 0) + \
+            qtd_embarque_cotado
+
+        if nova_qtd_pedido < min_permitido:
+            return jsonify({
+                'success': False,
+                'error': f'Quantidade não pode ser menor que {min_permitido:.3f} (já faturado/cancelado/embarcado)',
+                'minimo_permitido': min_permitido
+            }), 400
+
+        # Atualizar CarteiraCopia
+        item_copia.qtd_produto_pedido = nova_qtd_pedido
+        item_copia.qtd_saldo_produto_pedido = nova_qtd_pedido - \
+            float(item_copia.qtd_cancelada_produto_pedido or 0) - \
+            float(item_copia.baixa_produto_pedido or 0)
+        item_copia.qtd_saldo_produto_calculado = item_copia.qtd_saldo_produto_pedido
+        item_copia.updated_by = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+
+        # Atualizar também na CarteiraPrincipal
+        item_principal = CarteiraPrincipal.query.filter(
+            and_(
+                CarteiraPrincipal.num_pedido == item_copia.num_pedido,
+                CarteiraPrincipal.cod_produto == item_copia.cod_produto
+            )
+        ).first()
+
+        if item_principal:
+            item_principal.qtd_produto_pedido = nova_qtd_pedido
+            item_principal.qtd_saldo_produto_pedido = item_copia.qtd_saldo_produto_pedido
+            item_principal.updated_by = item_copia.updated_by
+
+            logger.info(f"Atualizado CarteiraPrincipal: {item_principal.num_pedido}/{item_principal.cod_produto}")
+
+        # Commit das alterações
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Quantidade do pedido atualizada com sucesso',
+            'qtd_produto_pedido': nova_qtd_pedido,
+            'qtd_saldo': float(item_copia.qtd_saldo_produto_pedido)
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar quantidade do pedido: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -228,64 +318,50 @@ def atualizar_qtd_cancelada(id):
 @login_required
 def atualizar_faturamento():
     """
-    Atualiza baixa_produto_pedido baseado no faturamento
-    Esta função será chamada após importação de faturamento
+    Recalcula qtd_saldo_produto_calculado baseado no faturamento
+
+    NOTA: baixa_produto_pedido é calculada AUTOMATICAMENTE via property,
+    esta função apenas atualiza os campos dependentes.
     """
     try:
-        from app.faturamento.models import FaturamentoProduto
-        
-        # Buscar todos os faturamentos que têm origem (número do pedido)
-        faturamentos = FaturamentoProduto.query.filter(
-            FaturamentoProduto.origem.isnot(None),
-            FaturamentoProduto.origem != ''
-        ).all()
-        
+        # Buscar todos os itens da CarteiraCopia que podem ter faturamento
+        items_copia = CarteiraCopia.query.filter_by(ativo=True).all()
+
         atualizacoes = 0
-        
-        for fat in faturamentos:
-            # Buscar item correspondente na CarteiraCopia
-            item_copia = CarteiraCopia.query.filter(
+
+        for item_copia in items_copia:
+            # baixa_produto_pedido é calculada automaticamente via property
+            # Apenas recalcular qtd_saldo_produto_calculado
+            item_copia.qtd_saldo_produto_calculado = (
+                float(item_copia.qtd_produto_pedido or 0) -
+                float(item_copia.qtd_cancelada_produto_pedido or 0) -
+                float(item_copia.baixa_produto_pedido or 0)  # Lê property calculada
+            )
+
+            atualizacoes += 1
+
+            # Sincronizar com CarteiraPrincipal se existir
+            item_principal = CarteiraPrincipal.query.filter(
                 and_(
-                    CarteiraCopia.num_pedido == fat.origem,
-                    CarteiraCopia.cod_produto == fat.cod_produto
+                    CarteiraPrincipal.num_pedido == item_copia.num_pedido,
+                    CarteiraPrincipal.cod_produto == item_copia.cod_produto
                 )
             ).first()
-            
-            if item_copia:
-                # Atualizar baixa (somar quantidade faturada)
-                qtd_anterior = float(item_copia.baixa_produto_pedido or 0)
-                qtd_faturada = float(fat.qtd_produto_faturado or 0)
-                
-                item_copia.baixa_produto_pedido = qtd_anterior + qtd_faturada
-                item_copia.qtd_saldo_produto_calculado = (
-                    float(item_copia.qtd_produto_pedido or 0) - 
-                    float(item_copia.qtd_cancelada_produto_pedido or 0) - 
-                    item_copia.baixa_produto_pedido
-                )
-                
-                atualizacoes += 1
-                
-                # Atualizar também na CarteiraPrincipal
-                item_principal = CarteiraPrincipal.query.filter(
-                    and_(
-                        CarteiraPrincipal.num_pedido == fat.origem,
-                        CarteiraPrincipal.cod_produto == fat.cod_produto
-                    )
-                ).first()
-                
-                if item_principal:
-                    item_principal.qtd_saldo_produto_pedido = float(item_principal.qtd_saldo_produto_pedido or 0) - qtd_faturada
-        
+
+            if item_principal:
+                # Atualizar saldo da principal baseado no calculado da cópia
+                item_principal.qtd_saldo_produto_pedido = item_copia.qtd_saldo_produto_calculado
+
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
-            'message': f'{atualizacoes} itens atualizados com faturamento'
+            'message': f'{atualizacoes} itens recalculados com sucesso'
         })
-        
+
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao atualizar faturamento: {e}")
+        logger.error(f"Erro ao recalcular saldos: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

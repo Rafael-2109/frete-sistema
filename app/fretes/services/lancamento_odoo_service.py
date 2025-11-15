@@ -317,24 +317,56 @@ class LancamentoOdooService:
             current_app.logger.info(f"✅ DFe validado: Status PO (04), pode ser lançado")
 
             # ========================================
-            # ETAPA 2: Atualizar data de entrada
+            # ETAPA 2: Atualizar data de entrada E payment_reference
             # ========================================
             hoje = date.today().strftime('%Y-%m-%d')
+
+            # Preparar dados para atualização
+            dados_atualizacao = {'l10n_br_data_entrada': hoje}
+
+            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+            if frete.fatura_frete_id and frete.fatura_frete:
+                referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+
+                # Buscar valor atual ANTES de atualizar
+                try:
+                    dfe_atual = self.odoo.read(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        ['payment_reference']
+                    )
+                    payment_ref_atual = dfe_atual[0].get('payment_reference', '') if dfe_atual else ''
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao ler payment_reference atual: {e}")
+                    payment_ref_atual = ''
+
+                # Só adiciona ao dict se for diferente ou vazio
+                if payment_ref_atual != referencia_fatura:
+                    dados_atualizacao['payment_reference'] = referencia_fatura
+                    current_app.logger.info(
+                        f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao DFe {dfe_id} "
+                        f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
+                    )
+                else:
+                    current_app.logger.info(
+                        f"✅ payment_reference já está correto: '{referencia_fatura}'"
+                    )
 
             sucesso, _, erro = self._executar_com_auditoria(
                 funcao=lambda: self.odoo.write(
                     'l10n_br_ciel_it_account.dfe',
                     [dfe_id],
-                    {'l10n_br_data_entrada': hoje}
+                    dados_atualizacao
                 ),
                 frete_id=frete_id,
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=2,
-                etapa_descricao="Atualizar data de entrada",
+                etapa_descricao="Atualizar data de entrada e payment_reference",
                 modelo_odoo='l10n_br_ciel_it_account.dfe',
                 acao='write',
-                dfe_id=dfe_id
+                dfe_id=dfe_id,
+                campos_alterados=list(dados_atualizacao.keys())
             )
 
             if not sucesso:
@@ -498,27 +530,59 @@ class LancamentoOdooService:
             current_app.logger.info(f"Purchase Order criado: ID {purchase_order_id}")
 
             # ========================================
-            # ETAPA 7: Atualizar campos do PO
+            # ETAPA 7: Atualizar campos do PO (incluindo partner_ref)
             # ========================================
+            # Preparar dados para atualização
+            dados_po = {
+                'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
+                'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
+                'company_id': self.COMPANY_NACOM_GOYA_CD_ID
+            }
+
+            # ✅ ADICIONAR partner_ref com número da fatura (se houver)
+            if frete.fatura_frete_id and frete.fatura_frete:
+                referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+
+                # Buscar valor atual ANTES de atualizar
+                try:
+                    po_atual = self.odoo.read(
+                        'purchase.order',
+                        [purchase_order_id],
+                        ['partner_ref']
+                    )
+                    partner_ref_atual = po_atual[0].get('partner_ref', '') if po_atual else ''
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao ler partner_ref atual: {e}")
+                    partner_ref_atual = ''
+
+                # Só adiciona ao dict se for diferente ou vazio
+                if partner_ref_atual != referencia_fatura:
+                    dados_po['partner_ref'] = referencia_fatura
+                    current_app.logger.info(
+                        f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao PO {purchase_order_id} "
+                        f"(partner_ref: '{partner_ref_atual}' -> '{referencia_fatura}')"
+                    )
+                else:
+                    current_app.logger.info(
+                        f"✅ partner_ref já está correto: '{referencia_fatura}'"
+                    )
+
             sucesso, _, erro = self._executar_com_auditoria(
                 funcao=lambda: self.odoo.write(
                     'purchase.order',
                     [purchase_order_id],
-                    {
-                        'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
-                        'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
-                        'company_id': self.COMPANY_NACOM_GOYA_CD_ID
-                    }
+                    dados_po
                 ),
                 frete_id=frete_id,
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=7,
-                etapa_descricao="Atualizar team_id, payment_provider_id e company_id",
+                etapa_descricao="Atualizar team_id, payment_provider_id, company_id e partner_ref",
                 modelo_odoo='purchase.order',
                 acao='write',
                 dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id
+                purchase_order_id=purchase_order_id,
+                campos_alterados=list(dados_po.keys())
             )
 
             if not sucesso:
@@ -720,28 +784,60 @@ class LancamentoOdooService:
             resultado['etapas_concluidas'] = 12
 
             # ========================================
-            # ETAPA 13: Configurar campos da Invoice
+            # ETAPA 13: Configurar campos da Invoice (incluindo payment_reference)
             # ========================================
+            # Preparar dados para atualização
+            dados_invoice = {
+                'l10n_br_compra_indcom': 'out',
+                'l10n_br_situacao_nf': 'autorizado',
+                'invoice_date_due': data_vencimento_str
+            }
+
+            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+            if frete.fatura_frete_id and frete.fatura_frete:
+                referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+
+                # Buscar valor atual ANTES de atualizar
+                try:
+                    invoice_atual = self.odoo.read(
+                        'account.move',
+                        [invoice_id],
+                        ['payment_reference']
+                    )
+                    payment_ref_atual = invoice_atual[0].get('payment_reference', '') if invoice_atual else ''
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao ler payment_reference atual: {e}")
+                    payment_ref_atual = ''
+
+                # Só adiciona ao dict se for diferente ou vazio
+                if payment_ref_atual != referencia_fatura:
+                    dados_invoice['payment_reference'] = referencia_fatura
+                    current_app.logger.info(
+                        f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} à Invoice {invoice_id} "
+                        f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
+                    )
+                else:
+                    current_app.logger.info(
+                        f"✅ payment_reference já está correto: '{referencia_fatura}'"
+                    )
+
             sucesso, _, erro = self._executar_com_auditoria(
                 funcao=lambda: self.odoo.write(
                     'account.move',
                     [invoice_id],
-                    {
-                        'l10n_br_compra_indcom': 'out',
-                        'l10n_br_situacao_nf': 'autorizado',
-                        'invoice_date_due': data_vencimento_str
-                    }
+                    dados_invoice
                 ),
                 frete_id=frete_id,
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=13,
-                etapa_descricao="Configurar campos da Invoice",
+                etapa_descricao="Configurar campos da Invoice e payment_reference",
                 modelo_odoo='account.move',
                 acao='write',
                 dfe_id=dfe_id,
                 purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id
+                invoice_id=invoice_id,
+                campos_alterados=list(dados_invoice.keys())
             )
 
             if not sucesso:

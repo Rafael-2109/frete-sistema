@@ -160,15 +160,20 @@ class ImportadorPedidosNaoOdoo:
                 # Tratamento especial para data
                 if campo == 'data_entrega':
                     try:
-                        # Tentar converter para data se for string
-                        if isinstance(valor, str) and '/' in valor:
-                            data_obj = datetime.strptime(valor, '%d/%m/%Y')
-                            dados[campo] = data_obj.date()
+                        # Tentar converter para data se for string com formato dd/mm/yyyy
+                        if isinstance(valor, str):
+                            if '/' in valor:
+                                data_obj = datetime.strptime(valor, '%d/%m/%Y')
+                                dados[campo] = data_obj.date()
+                            else:
+                                # Se é texto sem data (ex: "imediato", "IMEDIATA"), ignorar
+                                logger.warning(f"Campo data_entrega contém texto '{valor}' - ignorando")
+                                dados[campo] = None
                         else:
                             dados[campo] = valor
                     except Exception as e:
-                        logger.error(f"Erro ao converter data: {e}")
-                        dados[campo] = valor
+                        logger.error(f"Erro ao converter data '{valor}': {e}")
+                        dados[campo] = None  # Usar None ao invés de valor inválido
                 else:
                     dados[campo] = valor
             else:
@@ -398,18 +403,30 @@ class ImportadorPedidosNaoOdoo:
                 if pedido_existente and not pode_substituir:
                     self.avisos.append(f"Pedido {num_pedido} produto {produto['cod_produto']} já existe - pulando")
                     continue
-                
+
+                # ✅ BUSCAR NOME DO PRODUTO NO CADASTRO DE PALLETIZACAO
+                nome_produto = f"Produto {produto['cod_produto']}"  # Default
+                try:
+                    from app.producao.models import CadastroPalletizacao
+                    palletizacao = CadastroPalletizacao.query.filter_by(
+                        cod_produto=produto['cod_produto']
+                    ).first()
+                    if palletizacao and palletizacao.nome_produto:
+                        nome_produto = palletizacao.nome_produto
+                except Exception as e:
+                    logger.warning(f"Erro ao buscar nome do produto {produto['cod_produto']}: {e}")
+
                 # Criar novo registro
                 novo_pedido = CarteiraCopia(
                     # Chaves principais
                     num_pedido=num_pedido,
                     cod_produto=produto['cod_produto'],
-                    
+
                     # Dados do pedido
                     pedido_cliente=dados_cabecalho.get('pedido_cliente'),
                     data_pedido=data_atual.date(),
                     cnpj_cpf=cnpj_formatado,
-                    
+
                     # Dados do cliente (do cadastro)
                     raz_social=cliente.raz_social,
                     raz_social_red=cliente.raz_social_red,
@@ -417,9 +434,9 @@ class ImportadorPedidosNaoOdoo:
                     estado=cliente.estado,
                     vendedor=cliente.vendedor,
                     equipe_vendas=cliente.equipe_vendas,
-                    
+
                     # Dados do produto
-                    nome_produto=f"Produto {produto['cod_produto']}",  # Será atualizado depois
+                    nome_produto=nome_produto,  # ✅ AGORA vem do CadastroPalletizacao
                     qtd_produto_pedido=produto['qtd_produto_pedido'],
                     qtd_saldo_produto_pedido=produto['qtd_produto_pedido'],
                     preco_produto_pedido=produto['preco_produto_pedido'],
@@ -440,9 +457,9 @@ class ImportadorPedidosNaoOdoo:
                     
                     # Status
                     status_pedido='Pedido de venda',
-                    
+
                     # Controle
-                    baixa_produto_pedido=0,
+                    # baixa_produto_pedido é calculado automaticamente via property (FaturamentoProduto)
                     qtd_saldo_produto_calculado=produto['qtd_produto_pedido'],
                     
                     # Auditoria
@@ -506,8 +523,8 @@ class ImportadorPedidosNaoOdoo:
                 palletizacao = CadastroPalletizacao.query.filter_by(
                     cod_produto=pedido_copia.cod_produto
                 ).first()
-                if palletizacao and palletizacao.descricao:
-                    nome_produto = palletizacao.descricao
+                if palletizacao and palletizacao.nome_produto:
+                    nome_produto = palletizacao.nome_produto
             except Exception as e:
                 logger.warning(f"Erro ao buscar produto {pedido_copia.cod_produto}: {e}")
             

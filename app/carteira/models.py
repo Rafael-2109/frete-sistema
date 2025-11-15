@@ -1,7 +1,3 @@
-# Modelos do módulo carteira
-# FaturamentoPorProduto foi movido para app/faturamento/models.py
-
-# TODO: Implementar modelos específicos do módulo carteira conforme necessário 
 
 from app import db
 from datetime import datetime, timezone
@@ -256,7 +252,9 @@ class CarteiraCopia(db.Model):
     telefone_endereco_ent = db.Column(db.String(50), nullable=True)
     
     # 💰 CONTROLE DE FATURAMENTO (ESPECÍFICO DA CÓPIA)
-    _baixa_produto_pedido_old = db.Column('baixa_produto_pedido', db.Numeric(15, 3), default=0, nullable=False)  # Campo legado
+    # IMPORTANTE: Campo físico no banco, NÃO deve ser atualizado manualmente
+    # Use a property baixa_produto_pedido (calculada dinamicamente do FaturamentoProduto)
+    _baixa_produto_pedido_old = db.Column('baixa_produto_pedido', db.Numeric(15, 3), default=0, nullable=False)
     qtd_saldo_produto_calculado = db.Column(db.Numeric(15, 3), nullable=False)  # Calculado: qtd - cancelado - baixa
     
     # 🛡️ AUDITORIA

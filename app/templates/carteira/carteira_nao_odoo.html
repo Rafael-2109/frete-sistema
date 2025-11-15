@@ -233,11 +233,15 @@ function renderizarTabela(items) {
                     <td>${item.equipe_vendas || '-'}</td>
                     <td>${item.cod_produto}</td>
                     <td>${item.nome_produto}</td>
-                    <td class="text-right">${formatarNumero(item.qtd_produto_pedido)}</td>
-                    <td class="text-right">
-                        <a href="#" onclick="editarQtdCancelada(${item.id})" title="Clique para editar">
-                            ${formatarNumero(item.qtd_cancelada_produto_pedido)}
-                        </a>
+                    <td class="text-right editable-cell" onclick="editarCampoInline(${item.id}, 'qtd_produto_pedido', ${item.qtd_produto_pedido}, event)"
+                        title="Clique para editar" style="cursor: pointer;">
+                        <span class="valor-display">${formatarNumero(item.qtd_produto_pedido)}</span>
+                        <input type="number" class="form-control form-control-sm valor-input" style="display:none;" step="0.001" min="0">
+                    </td>
+                    <td class="text-right editable-cell" onclick="editarCampoInline(${item.id}, 'qtd_cancelada', ${item.qtd_cancelada_produto_pedido}, event)"
+                        title="Clique para editar" style="cursor: pointer;">
+                        <span class="valor-display">${formatarNumero(item.qtd_cancelada_produto_pedido)}</span>
+                        <input type="number" class="form-control form-control-sm valor-input" style="display:none;" step="0.001" min="0">
                     </td>
                     <td class="text-right">${formatarNumero(item.baixa_produto_pedido)}</td>
                     <td class="text-right font-weight-bold">${formatarNumero(item.qtd_saldo_produto_pedido)}</td>
@@ -420,5 +424,139 @@ function salvarQtdCancelada() {
 function atualizarTabela() {
     carregarCarteira();
 }
+
+// ✅ EDIÇÃO INLINE DE CAMPOS
+function editarCampoInline(itemId, campo, valorAtual, event) {
+    event.stopPropagation();
+
+    const cell = $(event.currentTarget);
+    const display = cell.find('.valor-display');
+    const input = cell.find('.valor-input');
+
+    // Mostrar input e esconder display
+    display.hide();
+    input.show().val(valorAtual).focus();
+
+    // Selecionar texto
+    input[0].select();
+
+    // Salvar ao perder foco
+    input.off('blur').on('blur', function() {
+        salvarCampoInline(itemId, campo, $(this).val(), cell, valorAtual);
+    });
+
+    // Salvar ao pressionar Enter
+    input.off('keypress').on('keypress', function(e) {
+        if (e.which === 13) {
+            salvarCampoInline(itemId, campo, $(this).val(), cell, valorAtual);
+        }
+    });
+
+    // Cancelar ao pressionar ESC
+    input.off('keydown').on('keydown', function(e) {
+        if (e.which === 27) {
+            cancelarEdicaoInline(cell, valorAtual);
+        }
+    });
+}
+
+function cancelarEdicaoInline(cell, valorAtual) {
+    const display = cell.find('.valor-display');
+    const input = cell.find('.valor-input');
+
+    input.hide();
+    display.show();
+}
+
+function salvarCampoInline(itemId, campo, novoValor, cell, valorAntigo) {
+    novoValor = parseFloat(novoValor) || 0;
+
+    // Se não mudou, apenas cancelar
+    if (novoValor === valorAntigo) {
+        cancelarEdicaoInline(cell, valorAntigo);
+        return;
+    }
+
+    // Buscar item completo
+    const item = dadosCarteira.find(i => i.id === itemId);
+    if (!item) {
+        toastr.error('Item não encontrado');
+        cancelarEdicaoInline(cell, valorAntigo);
+        return;
+    }
+
+    // Validações específicas por campo
+    if (campo === 'qtd_cancelada') {
+        const maxCancelada = item.qtd_produto_pedido - item.baixa_produto_pedido - (item.qtd_embarque || 0);
+        if (novoValor > maxCancelada) {
+            toastr.error(`Quantidade cancelada não pode exceder ${formatarNumero(maxCancelada)}`);
+            cancelarEdicaoInline(cell, valorAntigo);
+            return;
+        }
+
+        // Chamar endpoint de cancelamento
+        $.ajax({
+            url: `/carteira/api/carteira-nao-odoo/${itemId}/cancelar`,
+            method: 'PUT',
+            data: JSON.stringify({ qtd_cancelada: novoValor }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    toastr.success('Quantidade cancelada atualizada');
+                    carregarCarteira(); // Recarregar para atualizar saldo
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao atualizar';
+                toastr.error(error);
+                cancelarEdicaoInline(cell, valorAntigo);
+            }
+        });
+    } else if (campo === 'qtd_produto_pedido') {
+        // Validar quantidade mínima
+        const minima = item.baixa_produto_pedido + item.qtd_cancelada_produto_pedido + (item.qtd_embarque || 0);
+        if (novoValor < minima) {
+            toastr.error(`Quantidade não pode ser menor que ${formatarNumero(minima)} (já faturado/cancelado/embarcado)`);
+            cancelarEdicaoInline(cell, valorAntigo);
+            return;
+        }
+
+        // Chamar endpoint para atualizar quantidade
+        $.ajax({
+            url: `/carteira/api/carteira-nao-odoo/${itemId}/quantidade`,
+            method: 'PUT',
+            data: JSON.stringify({ qtd_produto_pedido: novoValor }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    toastr.success('Quantidade atualizada');
+                    carregarCarteira(); // Recarregar para atualizar saldo
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao atualizar';
+                toastr.error(error);
+                cancelarEdicaoInline(cell, valorAntigo);
+            }
+        });
+    }
+}
 </script>
+
+<style>
+.editable-cell {
+    background-color: #f8f9fa;
+    transition: background-color 0.2s;
+}
+
+.editable-cell:hover {
+    background-color: #e9ecef;
+}
+
+.editable-cell .valor-input {
+    width: 100%;
+    text-align: right;
+    padding: 2px 4px;
+}
+</style>
 {% endblock %}
