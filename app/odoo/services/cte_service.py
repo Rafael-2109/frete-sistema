@@ -236,28 +236,26 @@ class CteService:
             # Filtro base
             if usar_write_date:
                 # ✅ SINCRONIZAÇÃO INCREMENTAL: Usar write_date (data de atualização)
+                # ✅ CORREÇÃO: Buscar APENAS active=True para evitar duplicatas
                 filtros = [
                     "&",
                     "&",
-                    "|",
-                    ("active", "=", True),
-                    ("active", "=", False),
+                    ("active", "=", True),  # ✅ APENAS ativos
                     ("is_cte", "=", True),
                     ("write_date", ">=", data_inicio)  # Filtro por atualização
                 ]
-                logger.info(f"   Filtro: is_cte=True AND write_date >= {data_inicio}")
+                logger.info(f"   Filtro: is_cte=True AND active=True AND write_date >= {data_inicio}")
             else:
                 # 📅 SINCRONIZAÇÃO INICIAL: Usar data de emissão
+                # ✅ CORREÇÃO: Buscar APENAS active=True para evitar duplicatas
                 filtros = [
                     "&",
                     "&",
-                    "|",
-                    ("active", "=", True),
-                    ("active", "=", False),
+                    ("active", "=", True),  # ✅ APENAS ativos
                     ("is_cte", "=", True),
                     ("nfe_infnfe_ide_dhemi", ">=", data_inicio)  # Filtro por emissão
                 ]
-                logger.info(f"   Filtro: is_cte=True AND data_emissao >= {data_inicio}")
+                logger.info(f"   Filtro: is_cte=True AND active=True AND data_emissao >= {data_inicio}")
 
             campos = [
                 'id',
@@ -355,19 +353,18 @@ class CteService:
         """
         try:
             # ✅ Filtro com período usando WRITE_DATE (data de atualização no Odoo)
+            # ✅ CORREÇÃO: Buscar APENAS active=True para evitar duplicatas
             filtros = [
                 "&",
                 "&",
                 "&",
-                "|",
-                ("active", "=", True),
-                ("active", "=", False),
+                ("active", "=", True),  # ✅ APENAS ativos
                 ("is_cte", "=", True),
                 ("write_date", ">=", data_inicio),
                 ("write_date", "<=", f"{data_fim} 23:59:59")  # Até o final do dia
             ]
 
-            logger.info(f"   Filtro: is_cte=True AND write_date ENTRE {data_inicio} 00:00:00 E {data_fim} 23:59:59")
+            logger.info(f"   Filtro: is_cte=True AND active=True AND write_date ENTRE {data_inicio} 00:00:00 E {data_fim} 23:59:59")
 
             # Usar mesmos campos do método _buscar_ctes_odoo
             campos = [
@@ -410,11 +407,34 @@ class CteService:
         """
         dfe_id = str(cte_data.get('id'))
 
-        # Verificar se já existe
-        cte_existente = ConhecimentoTransporte.query.filter_by(dfe_id=dfe_id).first()
-
-        # Extrair dados do Odoo
+        # Extrair chave de acesso PRIMEIRO (é a UNIQUE constraint)
         chave_acesso = cte_data.get('protnfe_infnfe_chnfe')
+
+        # ✅ CORREÇÃO: Verificar PRIMEIRO por chave_acesso (UNIQUE constraint)
+        # Isso evita erro de duplicate key quando Odoo tem múltiplos DFes com mesma chave
+        cte_existente = None
+
+        if chave_acesso:
+            cte_existente = ConhecimentoTransporte.query.filter_by(
+                chave_acesso=chave_acesso
+            ).first()
+
+            if cte_existente:
+                logger.info(f"   ✅ CTe encontrado por chave_acesso: ID {cte_existente.id} (DFe {cte_existente.dfe_id})")
+
+                # ⚠️ Se DFe ID diferente, Odoo tem múltiplos DFes com mesma chave
+                if cte_existente.dfe_id != dfe_id:
+                    logger.warning(f"   ⚠️ Mesma chave com DFe IDs diferentes!")
+                    logger.warning(f"      - DFe no banco: {cte_existente.dfe_id}")
+                    logger.warning(f"      - DFe do Odoo: {dfe_id}")
+                    logger.warning(f"      - Atualizando com dados do novo DFe")
+
+        # Se não encontrou por chave, buscar por dfe_id (fallback)
+        if not cte_existente:
+            cte_existente = ConhecimentoTransporte.query.filter_by(dfe_id=dfe_id).first()
+
+            if cte_existente:
+                logger.info(f"   ✅ CTe encontrado por dfe_id: ID {cte_existente.id}")
         numero_cte = cte_data.get('nfe_infnfe_ide_nnf')
         serie_cte = cte_data.get('nfe_infnfe_ide_serie')
         odoo_name = cte_data.get('name')

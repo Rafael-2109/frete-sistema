@@ -10,8 +10,8 @@ DATA: 13/11/2025
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
-from sqlalchemy import and_, or_, desc, func
+from datetime import datetime
+from sqlalchemy import or_, desc, func
 import logging
 from io import BytesIO
 
@@ -38,6 +38,7 @@ def listar_ctes():
 
     # Filtros
     filtro_status = request.args.get('status', '')
+    filtro_numero_nf = request.args.get('numero_nf', '').strip()
     filtro_transportadora = request.args.get('transportadora', '')
     filtro_data_inicio = request.args.get('data_inicio', '')
     filtro_data_fim = request.args.get('data_fim', '')
@@ -52,6 +53,39 @@ def listar_ctes():
     # Aplicar filtros
     if filtro_status:
         query = query.filter_by(odoo_status_codigo=filtro_status)
+
+    # ✅ Filtro por Número NF (busca no campo numeros_nfs que é CSV)
+    # Inclui CTes complementares através do CTe original
+    if filtro_numero_nf:
+        # Subquery: CTes que contêm essa NF (CTes normais)
+        # Usar aliased para fazer LEFT JOIN com cte_original
+        from sqlalchemy.orm import aliased
+        CteOriginal = aliased(ConhecimentoTransporte)
+
+        query = query.outerjoin(
+            CteOriginal,
+            ConhecimentoTransporte.cte_complementa_id == CteOriginal.id
+        ).filter(
+            or_(
+                # ✅ CASO 1: CTe normal com NF própria
+                # NF no início: "123,..."
+                ConhecimentoTransporte.numeros_nfs.like(f'{filtro_numero_nf},%'),
+                # NF no meio: "...,123,..."
+                ConhecimentoTransporte.numeros_nfs.like(f'%,{filtro_numero_nf},%'),
+                # NF no final: "...,123"
+                ConhecimentoTransporte.numeros_nfs.like(f'%,{filtro_numero_nf}'),
+                # NF sozinha: "123"
+                ConhecimentoTransporte.numeros_nfs == filtro_numero_nf,
+
+                # ✅ CASO 2: CTe complementar cujo CTe ORIGINAL tem a NF
+                # (CTe complementar não tem NF própria, busca no original)
+                CteOriginal.numeros_nfs.like(f'{filtro_numero_nf},%'),
+                CteOriginal.numeros_nfs.like(f'%,{filtro_numero_nf},%'),
+                CteOriginal.numeros_nfs.like(f'%,{filtro_numero_nf}'),
+                CteOriginal.numeros_nfs == filtro_numero_nf
+            )
+        )
+        logger.info(f"🔍 Filtrando CTes (incluindo complementares) por NF: {filtro_numero_nf}")
 
     if filtro_transportadora:
         query = query.filter(
@@ -111,6 +145,7 @@ def listar_ctes():
         ctes_vinculados=ctes_vinculados,
         valor_total_nao_vinculados=valor_total_nao_vinculados,
         filtro_status=filtro_status,
+        filtro_numero_nf=filtro_numero_nf,
         filtro_transportadora=filtro_transportadora,
         filtro_data_inicio=filtro_data_inicio,
         filtro_data_fim=filtro_data_fim,

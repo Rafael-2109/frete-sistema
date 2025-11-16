@@ -2,14 +2,25 @@
 Formatadores e utilitários de apresentação
 """
 
-def formatar_moeda(valor):
-    """Formata valor monetário"""
+def formatar_moeda(valor, casas_decimais=2):
+    """
+    Formata valor monetário
+
+    Args:
+        valor: Valor a ser formatado
+        casas_decimais: Número de casas decimais (padrão: 2)
+
+    Returns:
+        String formatada como moeda brasileira
+    """
     if valor is None:
-        return "R$ 0,00"
+        zeros = '0' * casas_decimais
+        return f"R$ 0,{zeros}"
     try:
-        return f"R$ {float(valor):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"R$ {float(valor):,.{casas_decimais}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except Exception:
-        return "R$ 0,00"
+        zeros = '0' * casas_decimais
+        return f"R$ 0,{zeros}"
 
 
 def formatar_peso(peso):

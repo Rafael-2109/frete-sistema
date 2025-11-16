@@ -145,6 +145,12 @@
                         </select>
                     </div>
 
+                    <div class="col-md-2">
+                        <label for="numero_nf" class="form-label">Número NF</label>
+                        <input type="text" name="numero_nf" id="numero_nf" class="form-control"
+                               value="{{ filtro_numero_nf }}" placeholder="Ex: 12345">
+                    </div>
+
                     <div class="col-md-3">
                         <label for="transportadora" class="form-label">Transportadora</label>
                         <input type="text" name="transportadora" id="transportadora" class="form-control"
@@ -262,7 +268,19 @@
                                 </div>
                             </td>
                             <td>
-                                {% if cte.numeros_nfs %}
+                                {% if cte.tipo_cte == '1' and cte.cte_original and cte.cte_original.numeros_nfs %}
+                                    {# CTe Complementar: exibir NFs do CTe original #}
+                                    <small class="text-muted d-block mb-1" style="font-size: 0.65rem;">
+                                        <i class="fas fa-info-circle"></i> NFs do CTe {{ cte.cte_original.numero_cte }}:
+                                    </small>
+                                    {% for nf in cte.cte_original.numeros_nfs.split(',')[:7] %}
+                                    <span class="badge bg-warning text-dark d-block mb-1" style="font-size: 0.7rem;">{{ nf }}</span>
+                                    {% endfor %}
+                                    {% if cte.cte_original.numeros_nfs.split(',') | length > 7 %}
+                                    <span class="badge bg-info d-block" style="font-size: 0.7rem;">+{{ cte.cte_original.numeros_nfs.split(',') | length - 7 }} mais</span>
+                                    {% endif %}
+                                {% elif cte.numeros_nfs %}
+                                    {# CTe Normal: exibir NFs próprias #}
                                     {% for nf in cte.numeros_nfs.split(',')[:7] %}
                                     <span class="badge bg-secondary d-block mb-1" style="font-size: 0.7rem;">{{ nf }}</span>
                                     {% endfor %}
