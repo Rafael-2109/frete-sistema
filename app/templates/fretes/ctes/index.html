@@ -337,17 +337,59 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('cte.sincronizar_ctes') }}">
+            <form method="POST" action="{{ url_for('cte.sincronizar_ctes') }}" id="formSincronizacao">
                 <div class="modal-body">
-                    <div class="mb-3">
+                    <!-- Seletor de Modo -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Modo de Sincronização</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="modo_sinc" id="modoDias" value="dias" checked>
+                            <label class="btn btn-outline-primary" for="modoDias">
+                                <i class="fas fa-calendar-day"></i> Dias Retroativos
+                            </label>
+
+                            <input type="radio" class="btn-check" name="modo_sinc" id="modoPeriodo" value="periodo">
+                            <label class="btn btn-outline-primary" for="modoPeriodo">
+                                <i class="fas fa-calendar-alt"></i> Período Personalizado
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Opção 1: Dias Retroativos -->
+                    <div id="secaoDias" class="mb-3">
                         <label for="dias_retroativos" class="form-label">Dias Retroativos</label>
                         <input type="number" name="dias_retroativos" id="dias_retroativos"
-                               class="form-control" value="30" min="1" max="365" required>
+                               class="form-control" value="30" min="1" max="365">
                         <small class="form-text text-muted">
                             Quantos dias para trás buscar CTes (padrão: 30 dias)
                         </small>
                     </div>
 
+                    <!-- Opção 2: Período Personalizado (De/Até) -->
+                    <div id="secaoPeriodo" class="mb-3" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="data_inicio_modal" class="form-label">De (Data Início) <span class="text-danger">*</span></label>
+                                <input type="date" name="data_inicio" id="data_inicio_modal" class="form-control">
+                                <small class="form-text text-muted">
+                                    Data inicial do período
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_fim_modal" class="form-label">Até (Data Fim) <span class="text-danger">*</span></label>
+                                <input type="date" name="data_fim" id="data_fim_modal" class="form-control">
+                                <small class="form-text text-muted">
+                                    Data final do período
+                                </small>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning mt-2 mb-0" style="font-size: 0.875rem;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Filtro por write_date:</strong> Busca CTes <strong>atualizados</strong> no Odoo entre as datas informadas (não usa data de emissão).
+                        </div>
+                    </div>
+
+                    <!-- Limite (sempre disponível) -->
                     <div class="mb-3">
                         <label for="limite" class="form-label">Limite (opcional)</label>
                         <input type="number" name="limite" id="limite"
@@ -372,4 +414,133 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formSincronizacao = document.getElementById('formSincronizacao');
+    const modoDias = document.getElementById('modoDias');
+    const modoPeriodo = document.getElementById('modoPeriodo');
+    const secaoDias = document.getElementById('secaoDias');
+    const secaoPeriodo = document.getElementById('secaoPeriodo');
+    const diasRetroativos = document.getElementById('dias_retroativos');
+    const dataInicio = document.getElementById('data_inicio_modal');
+    const dataFim = document.getElementById('data_fim_modal');
+
+    // ✅ DEBUG: Verificar se elementos foram encontrados
+    console.log('🔍 Elementos encontrados:');
+    console.log('   formSincronizacao:', formSincronizacao);
+    console.log('   modoDias:', modoDias);
+    console.log('   modoPeriodo:', modoPeriodo);
+    console.log('   dataInicio:', dataInicio);
+    console.log('   dataFim:', dataFim);
+
+    if (!formSincronizacao || !modoDias || !modoPeriodo || !dataInicio || !dataFim) {
+        console.error('❌ ERRO: Alguns elementos não foram encontrados!');
+        return;
+    }
+
+    // Variável para rastrear o modo atual
+    let modoAtual = 'dias'; // Começa em 'dias' porque modoDias está checked por padrão
+
+    // Função para alternar entre os modos
+    function alternarModo() {
+        const novoModo = modoDias.checked ? 'dias' : 'periodo';
+        console.log('🔄 alternarModo() - Modo anterior:', modoAtual, '→ Novo modo:', novoModo);
+
+        // Só fazer algo se realmente mudou de modo
+        if (modoAtual === novoModo && modoAtual !== null) {
+            console.log('   ⏭️ Mesmo modo, nada a fazer');
+            return;
+        }
+
+        // ✅ CORREÇÃO: Limpar campos do modo ANTERIOR antes de trocar
+        if (modoAtual === 'periodo') {
+            console.log('   🧹 Limpando campos do período (saindo deste modo)');
+            dataInicio.value = '';
+            dataFim.value = '';
+        } else if (modoAtual === 'dias') {
+            console.log('   🧹 Limpando campo dias retroativos (saindo deste modo)');
+            diasRetroativos.value = '';
+        }
+
+        modoAtual = novoModo;
+
+        if (modoDias.checked) {
+            // Modo Dias Retroativos
+            console.log('   ✅ Ativando modo: Dias Retroativos');
+            secaoDias.style.display = 'block';
+            secaoPeriodo.style.display = 'none';
+            diasRetroativos.required = true;
+            dataInicio.required = false;
+            dataFim.required = false;
+        } else {
+            // Modo Período Personalizado
+            console.log('   ✅ Ativando modo: Período Personalizado');
+            secaoDias.style.display = 'none';
+            secaoPeriodo.style.display = 'block';
+            diasRetroativos.required = false;
+            dataInicio.required = true;
+            dataFim.required = true;
+        }
+    }
+
+    // Event listeners para os radio buttons
+    modoDias.addEventListener('change', alternarModo);
+    modoPeriodo.addEventListener('change', alternarModo);
+
+    // Validação customizada antes do submit
+    formSincronizacao.addEventListener('submit', function(e) {
+        if (modoPeriodo.checked) {
+            // Debug: mostrar valores no console
+            console.log('🔍 Validando período personalizado...');
+            console.log('   dataInicio.value:', dataInicio.value);
+            console.log('   dataFim.value:', dataFim.value);
+
+            // Validar se ambas as datas estão preenchidas
+            if (!dataInicio.value || !dataFim.value) {
+                e.preventDefault();
+                alert('⚠️ Por favor, preencha ambas as datas (De e Até) para o período personalizado.\n\nDebug:\nDe: "' + dataInicio.value + '"\nAté: "' + dataFim.value + '"');
+                return false;
+            }
+
+            // Validar se data início é menor ou igual a data fim
+            const inicio = new Date(dataInicio.value);
+            const fim = new Date(dataFim.value);
+
+            if (inicio > fim) {
+                e.preventDefault();
+                alert('⚠️ A data inicial não pode ser posterior à data final.');
+                return false;
+            }
+        } else {
+            // Validar se dias retroativos está preenchido
+            if (!diasRetroativos.value || diasRetroativos.value <= 0) {
+                e.preventDefault();
+                alert('⚠️ Por favor, informe a quantidade de dias retroativos (mínimo: 1).');
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    // ✅ IMPORTANTE: Resetar modo quando o modal for aberto
+    const modalSincronizar = document.getElementById('modalSincronizar');
+    if (modalSincronizar) {
+        modalSincronizar.addEventListener('show.bs.modal', function() {
+            console.log('🔓 Modal abrindo - resetando para modo inicial');
+            // Resetar para modo dias
+            modoDias.checked = true;
+            modoPeriodo.checked = false;
+            modoAtual = null; // Forçar re-execução de alternarModo
+            alternarModo();
+        });
+    }
+
+    // Inicializar o estado correto ao carregar a página
+    alternarModo();
+});
+</script>
 {% endblock %}

@@ -563,6 +563,67 @@ def editar_frete(frete_id):
                          ctes_sugeridos=ctes_sugeridos)
 
 
+@fretes_bp.route('/<int:frete_id>/vincular-cte/<int:cte_id>', methods=['POST'])
+@login_required
+def vincular_cte_ao_frete(frete_id, cte_id):
+    """
+    Vincula um ConhecimentoTransporte ao Frete via FK
+    Chamado via AJAX quando usuário clica em "Usar este CTe"
+    """
+    try:
+        from app.fretes.models import ConhecimentoTransporte
+        from datetime import datetime
+
+        # Buscar frete e CTe
+        frete = Frete.query.get_or_404(frete_id)
+        cte = ConhecimentoTransporte.query.get_or_404(cte_id)
+
+        # ✅ VALIDAÇÃO: CTe já vinculado a outro frete?
+        if cte.frete_id and cte.frete_id != frete_id:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Este CTe já está vinculado ao frete #{cte.frete_id}'
+            }), 400
+
+        # ✅ DESVINCULAR CTes antigos deste frete (se houver)
+        ConhecimentoTransporte.query.filter_by(frete_id=frete_id).update({
+            'frete_id': None,
+            'vinculado_manualmente': False,
+            'vinculado_em': None,
+            'vinculado_por': None
+        })
+
+        # ✅ VINCULAR novo CTe
+        cte.frete_id = frete_id
+        cte.vinculado_manualmente = True
+        cte.vinculado_em = datetime.utcnow()
+        cte.vinculado_por = current_user.nome
+
+        db.session.commit()
+
+        current_app.logger.info(
+            f"✅ CTe {cte.numero_cte} vinculado ao frete #{frete_id} por {current_user.nome}"
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'CTe {cte.numero_cte} vinculado com sucesso!',
+            'cte': {
+                'numero': cte.numero_cte,
+                'serie': cte.serie_cte,
+                'valor_frete': float(cte.valor_frete) if cte.valor_frete else 0
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"❌ Erro ao vincular CTe ao frete: {str(e)}")
+        return jsonify({
+            'sucesso': False,
+            'erro': f'Erro ao vincular CTe: {str(e)}'
+        }), 500
+
+
 @fretes_bp.route('/<int:frete_id>/lancar-odoo', methods=['POST'])
 @login_required
 @require_financeiro()

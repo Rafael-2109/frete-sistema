@@ -129,18 +129,40 @@ def sincronizar_ctes():
         return redirect(url_for('cte.listar_ctes'))
 
     try:
-        # Parâmetros
-        dias_retroativos = request.form.get('dias_retroativos', 30, type=int)
+        # Parâmetros base
         limite = request.form.get('limite', None, type=int)
 
-        logger.info(f"Iniciando sincronização de CTes - Dias: {dias_retroativos}, Limite: {limite}")
+        # ✅ LÓGICA DE ESCOLHA: Período personalizado OU Dias retroativos
+        data_inicio = request.form.get('data_inicio', '').strip()
+        data_fim = request.form.get('data_fim', '').strip()
+        dias_retroativos = request.form.get('dias_retroativos', type=int)
 
-        # Executar sincronização
-        service = CteService()
-        resultado = service.importar_ctes(
-            dias_retroativos=dias_retroativos,
-            limite=limite
-        )
+        # Determinar qual modo usar
+        if data_inicio and data_fim:
+            # 🔹 MODO PERÍODO PERSONALIZADO (com write_date)
+            logger.info(f"Iniciando sincronização de CTes - Período: {data_inicio} até {data_fim}, Limite: {limite}")
+
+            # Executar sincronização com período
+            service = CteService()
+            resultado = service.importar_ctes(
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+                limite=limite
+            )
+        elif dias_retroativos:
+            # 🔹 MODO DIAS RETROATIVOS
+            logger.info(f"Iniciando sincronização de CTes - Dias: {dias_retroativos}, Limite: {limite}")
+
+            # Executar sincronização com dias retroativos
+            service = CteService()
+            resultado = service.importar_ctes(
+                dias_retroativos=dias_retroativos,
+                limite=limite
+            )
+        else:
+            # ❌ NENHUM PARÂMETRO VÁLIDO
+            flash('❌ Informe os dias retroativos OU o período (De/Até)', 'danger')
+            return redirect(url_for('cte.listar_ctes'))
 
         if resultado['sucesso']:
             flash(

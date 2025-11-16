@@ -21,6 +21,139 @@
         </ol>
     </nav>
 
+    <!-- ⚠️ AVISO: CTe já vinculado via FK -->
+    {% if frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0 %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <h5 class="alert-heading">
+            <i class="fas fa-link"></i> CTe Vinculado ao Frete
+        </h5>
+        <p class="mb-0">
+            Este frete já está vinculado ao CTe:
+            {% for cte_vinc in frete.conhecimentos_transporte %}
+                <strong>{{ cte_vinc.numero_cte }}{% if cte_vinc.serie_cte %}/{{ cte_vinc.serie_cte }}{% endif %}</strong>
+                ({{ (cte_vinc.valor_frete or 0)|moeda_carteira }})
+                {% if cte_vinc.vinculado_manualmente %}
+                    <span class="badge bg-info">Vinculado Manualmente</span>
+                {% endif %}
+                {% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- ✅ NOVO: Sugestões de CTe (SOLUÇÃO 3 - COMBO/HÍBRIDA) -->
+    {% if ctes_sugeridos %}
+        {% if ctes_sugeridos|length == 1 %}
+            {# Alerta para 1 CTe encontrado #}
+            {% set cte = ctes_sugeridos[0] %}
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <h5 class="alert-heading">
+                    <i class="fas fa-lightbulb"></i> CTe Sugerido Encontrado!
+                </h5>
+                <p class="mb-2">
+                    Encontramos 1 CTe do Odoo que corresponde a este frete:
+                </p>
+                <div class="card border-primary mb-2">
+                    <div class="card-body py-2">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <strong>CTe {{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}</strong><br>
+                                <small class="text-muted">
+                                    Emitente: {{ cte.nome_emitente }}<br>
+                                    Emissão: {{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else 'N/A' }}<br>
+                                    Valor Total: {{ (cte.valor_total or 0)|moeda_carteira }}<br>
+                                    Valor Frete: {{ (cte.valor_frete or 0)|moeda_carteira }}
+                                </small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button type="button"
+                                        class="btn btn-success btn-sm mb-1"
+                                        onclick="preencherCTe({{ cte.id }}, '{{ cte.numero_cte }}', {{ cte.valor_frete or 0 }})">
+                                    <i class="fas fa-check"></i> Usar este CTe
+                                </button>
+                                {% if cte.cte_pdf_path %}
+                                <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
+                                   class="btn btn-danger btn-sm mb-1"
+                                   target="_blank">
+                                    <i class="fas fa-file-pdf"></i> Ver PDF
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% else %}
+            {# Tabela para múltiplos CTes #}
+            <div class="card mb-4 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> CTes Sugeridos ({{ ctes_sugeridos|length }} encontrados)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        Encontramos {{ ctes_sugeridos|length }} CTes do Odoo com NFs em comum e mesmo prefixo de CNPJ.
+                        Clique em "Usar" para preencher automaticamente.
+                    </p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>CTe</th>
+                                    <th>Emitente</th>
+                                    <th>Emissão</th>
+                                    <th>Valor Frete</th>
+                                    <th>Status Odoo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cte in ctes_sugeridos %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}</strong>
+                                    </td>
+                                    <td>{{ cte.nome_emitente }}</td>
+                                    <td>{{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else 'N/A' }}</td>
+                                    <td>{{ (cte.valor_frete or 0)|moeda_carteira }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ cte.odoo_status_descricao or 'N/A' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button"
+                                                class="btn btn-success btn-sm"
+                                                onclick="preencherCTe({{ cte.id }}, '{{ cte.numero_cte }}', {{ cte.valor_frete or 0 }})">
+                                            <i class="fas fa-check"></i> Usar
+                                        </button>
+                                        {% if cte.cte_pdf_path %}
+                                        <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
+                                           class="btn btn-danger btn-sm"
+                                           target="_blank">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </a>
+                                        {% endif %}
+                                        <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.id) }}"
+                                           class="btn btn-info btn-sm"
+                                           target="_blank">
+                                            <i class="fas fa-info-circle"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
     <div class="row">
         <!-- Formulário de edição -->
         <div class="col-md-8">
@@ -31,7 +164,7 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST">
+                    <form method="POST" id="form-cte">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         {{ form.hidden_tag() }}
 
@@ -296,6 +429,9 @@
     </div>
 </div>
 
+<!-- SweetAlert2 CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const valorCotado = parseFloat('{{ frete.valor_cotado }}');
@@ -432,5 +568,89 @@ document.addEventListener('DOMContentLoaded', function() {
     // Calcular na carga inicial
     calcularDiferencas();
 });
+
+// ✅ NOVO: Função para preencher CTe selecionado E vincular via FK
+function preencherCTe(cte_id, numero_cte, valor_frete) {
+    // Preencher número do CTe
+    const numeroCteInput = document.getElementById('numero_cte');
+    numeroCteInput.value = numero_cte;
+
+    // Preencher valor CTe (converter para formato brasileiro)
+    const valorCteInput = document.getElementById('valor_cte');
+    const valorFormatado = parseFloat(valor_frete).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+    valorCteInput.value = valorFormatado;
+
+    // ✅ NÃO preenche valor_considerado (decisão do usuário)
+
+    // ✅ VINCULAR CTe ao frete via AJAX
+    const freteId = {{ frete.id }};
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+    fetch(`/fretes/${freteId}/vincular-cte/${cte_id}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Feedback visual com SweetAlert
+            Swal.fire({
+                icon: 'success',
+                title: 'CTe Selecionado e Vinculado!',
+                html: `<p>Dados do CTe <strong>${numero_cte}</strong> foram preenchidos e vinculados ao frete:</p>
+                       <ul class="text-start">
+                           <li>Número CTe: <strong>${numero_cte}</strong></li>
+                           <li>Valor CTe: <strong>R$ ${valorFormatado}</strong></li>
+                           <li><span class="badge bg-success">Vinculado via FK</span></li>
+                       </ul>
+                       <p class="text-muted small mt-2">⚠️ Revise os valores e preencha o Valor Considerado antes de salvar.</p>`,
+                timer: 5000,
+                showConfirmButton: true,
+                confirmButtonText: 'OK, entendi'
+            });
+        } else {
+            // Erro na vinculação
+            Swal.fire({
+                icon: 'warning',
+                title: 'Dados Preenchidos',
+                html: `<p>Campos preenchidos, mas houve um problema na vinculação:</p>
+                       <p class="text-danger">${data.erro}</p>
+                       <p class="text-muted small">Os dados foram preenchidos no formulário.</p>`,
+                showConfirmButton: true
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao vincular CTe:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro na Vinculação',
+            text: 'Não foi possível vincular o CTe, mas os dados foram preenchidos no formulário.',
+            showConfirmButton: true
+        });
+    });
+
+    // Scroll para o formulário
+    document.getElementById('form-cte').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Destacar campos preenchidos
+    numeroCteInput.classList.add('border-success', 'border-2');
+    valorCteInput.classList.add('border-success', 'border-2');
+
+    // Remover destaque após 5 segundos
+    setTimeout(() => {
+        numeroCteInput.classList.remove('border-success', 'border-2');
+        valorCteInput.classList.remove('border-success', 'border-2');
+    }, 5000);
+
+    // Recalcular diferenças
+    calcularDiferencas();
+}
 </script>
 {% endblock %} 

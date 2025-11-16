@@ -60,17 +60,21 @@ class CteService:
 
     def importar_ctes(
         self,
-        dias_retroativos: int = 30,
+        dias_retroativos: Optional[int] = None,
         limite: Optional[int] = None,
-        minutos_janela: Optional[int] = None
+        minutos_janela: Optional[int] = None,
+        data_inicio: Optional[str] = None,
+        data_fim: Optional[str] = None
     ) -> Dict:
         """
         Importa CTes do Odoo
 
         Args:
-            dias_retroativos: Quantos dias para trás buscar (padrão: 30) - Usado se minutos_janela=None
+            dias_retroativos: Quantos dias para trás buscar (padrão: 30) - Usado se data_inicio=None
             limite: Limite de registros (None = todos)
             minutos_janela: Se especificado, busca CTes atualizados nos últimos X minutos (incremental)
+            data_inicio: Data início do período (formato: YYYY-MM-DD) - Prioridade sobre dias_retroativos
+            data_fim: Data fim do período (formato: YYYY-MM-DD) - Opcional
 
         Returns:
             Dict com estatísticas da importação
@@ -92,16 +96,29 @@ class CteService:
             # 1. Buscar CTes do Odoo
             if minutos_janela:
                 # ✅ SINCRONIZAÇÃO INCREMENTAL: Últimos X minutos
-                data_inicio = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+                data_calc = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
                 logger.info(f"🔄 Sincronização Incremental: Últimos {minutos_janela} minutos")
-                logger.info(f"📅 Buscando CTes atualizados desde {data_inicio}")
-                ctes = self._buscar_ctes_odoo(data_inicio, limite, usar_write_date=True)
+                logger.info(f"📅 Buscando CTes atualizados desde {data_calc}")
+                ctes = self._buscar_ctes_odoo(data_calc, limite, usar_write_date=True)
+            elif data_inicio:
+                # ✅ SINCRONIZAÇÃO POR PERÍODO PERSONALIZADO
+                logger.info(f"📅 Sincronização por Período Personalizado")
+                logger.info(f"   Data Início: {data_inicio}")
+                if data_fim:
+                    logger.info(f"   Data Fim: {data_fim}")
+                    ctes = self._buscar_ctes_odoo_periodo(data_inicio, data_fim, limite)
+                else:
+                    # Se só tem data_inicio, buscar até hoje usando write_date
+                    logger.info(f"   Data Fim: Hoje")
+                    data_hoje = datetime.now().strftime('%Y-%m-%d')
+                    ctes = self._buscar_ctes_odoo_periodo(data_inicio, data_hoje, limite)
             else:
-                # 📅 SINCRONIZAÇÃO INICIAL: Últimos X dias
-                data_inicio = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
-                logger.info(f"📅 Sincronização Inicial: Últimos {dias_retroativos} dias")
-                logger.info(f"📅 Buscando CTes desde {data_inicio}")
-                ctes = self._buscar_ctes_odoo(data_inicio, limite, usar_write_date=False)
+                # 📅 SINCRONIZAÇÃO INICIAL: Últimos X dias (padrão: 30)
+                dias = dias_retroativos if dias_retroativos else 30
+                data_calc = (datetime.now() - timedelta(days=dias)).strftime('%Y-%m-%d')
+                logger.info(f"📅 Sincronização Inicial: Últimos {dias} dias")
+                logger.info(f"📅 Buscando CTes desde {data_calc}")
+                ctes = self._buscar_ctes_odoo(data_calc, limite, usar_write_date=False)
 
             if not ctes:
                 logger.warning("⚠️  Nenhum CTe encontrado no Odoo")
@@ -316,6 +333,67 @@ class CteService:
 
         except Exception as e:
             logger.error(f"❌ Erro ao buscar CTes do Odoo: {e}")
+            return []
+
+    def _buscar_ctes_odoo_periodo(
+        self,
+        data_inicio: str,
+        data_fim: str,
+        limite: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Busca CTes no Odoo por período usando write_date (data de atualização)
+
+        Args:
+            data_inicio: Data inicial (YYYY-MM-DD)
+            data_fim: Data final (YYYY-MM-DD)
+            limite: Limite de registros
+
+        Returns:
+            Lista de CTes
+        """
+        try:
+            # ✅ Filtro com período usando WRITE_DATE (data de atualização no Odoo)
+            filtros = [
+                "&",
+                "&",
+                "&",
+                "|",
+                ("active", "=", True),
+                ("active", "=", False),
+                ("is_cte", "=", True),
+                ("write_date", ">=", data_inicio),
+                ("write_date", "<=", f"{data_fim} 23:59:59")  # Até o final do dia
+            ]
+
+            logger.info(f"   Filtro: is_cte=True AND write_date ENTRE {data_inicio} 00:00:00 E {data_fim} 23:59:59")
+
+            # Usar mesmos campos do método _buscar_ctes_odoo
+            campos = [
+                'id', 'name', 'active', 'l10n_br_status', 'l10n_br_data_entrada', 'l10n_br_tipo_pedido',
+                'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
+                'nfe_infnfe_ide_dhemi', 'nfe_infnfe_total_icmstot_vnf', 'nfe_infnfe_total_icms_vfrete',
+                'nfe_infnfe_total_icms_vicms', 'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome',
+                'nfe_infnfe_emit_ie', 'nfe_infnfe_dest_cnpj', 'nfe_infnfe_rem_cnpj', 'nfe_infnfe_exped_cnpj',
+                'cte_infcte_ide_cmunini', 'cte_infcte_ide_cmunfim', 'cte_infcte_ide_toma3_toma',
+                'nfe_infnfe_infadic_infcpl', 'l10n_br_pdf_dfe', 'l10n_br_pdf_dfe_fname',
+                'l10n_br_xml_dfe', 'l10n_br_xml_dfe_fname', 'partner_id', 'invoice_ids',
+                'purchase_fiscal_id', 'refs_ids'
+            ]
+
+            logger.info(f"   📡 Chamando Odoo search_read...")
+            ctes = self.odoo.search_read(
+                'l10n_br_ciel_it_account.dfe',
+                filtros,
+                campos,
+                limit=limite if limite else None
+            )
+
+            logger.info(f"   ✅ Retornados: {len(ctes) if ctes else 0} CTes")
+            return ctes or []
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar CTes por período do Odoo: {e}")
             return []
 
     def _processar_cte(self, cte_data: Dict, mapa_refs: Dict = None) -> Dict:
