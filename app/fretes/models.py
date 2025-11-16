@@ -544,6 +544,19 @@ class ConhecimentoTransporte(db.Model):
     numeros_nfs = db.Column(db.Text, nullable=True)                     # String separada por vírgula: "141768,141769,141770,141771"
 
     # ================================================
+    # CTe COMPLEMENTAR - RELACIONAMENTO
+    # ================================================
+    # Tipo do CTe: NORMAL (0), COMPLEMENTAR (1), ANULACAO (2), SUBSTITUTO (3)
+    tipo_cte = db.Column(db.String(1), nullable=True, index=True, default='0')
+
+    # Se for CTe complementar, armazena chave e ID do CTe original
+    cte_complementa_chave = db.Column(db.String(44), nullable=True, index=True)  # Chave do CTe complementado
+    cte_complementa_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)
+
+    # Motivo do complemento (extraído de xObs quando disponível)
+    motivo_complemento = db.Column(db.Text, nullable=True)
+
+    # ================================================
     # ARQUIVOS (PDF/XML)
     # ================================================
     cte_pdf_path = db.Column(db.String(500), nullable=True)  # Caminho S3/local do PDF
@@ -566,8 +579,17 @@ class ConhecimentoTransporte(db.Model):
     vinculado_em = db.Column(db.DateTime, nullable=True)
     vinculado_por = db.Column(db.String(100), nullable=True)
 
-    # Relacionamento
+    # Relacionamentos
     frete = db.relationship('Frete', backref='conhecimentos_transporte', lazy=True)
+
+    # Relacionamento self-referencial para CTes complementares
+    cte_original = db.relationship(
+        'ConhecimentoTransporte',
+        remote_side=[id],
+        foreign_keys=[cte_complementa_id],
+        backref=db.backref('ctes_complementares', lazy='dynamic'),
+        lazy=True
+    )
 
     # ================================================
     # AUDITORIA
@@ -590,6 +612,9 @@ class ConhecimentoTransporte(db.Model):
         db.Index('idx_cte_data_emissao', 'data_emissao'),
         db.Index('idx_cte_frete', 'frete_id'),
         db.Index('idx_cte_status', 'odoo_status_codigo'),
+        db.Index('idx_cte_tipo', 'tipo_cte'),
+        db.Index('idx_cte_complementa_chave', 'cte_complementa_chave'),
+        db.Index('idx_cte_complementa_id', 'cte_complementa_id'),
     )
 
     def __repr__(self):
@@ -620,6 +645,42 @@ class ConhecimentoTransporte(db.Model):
             'vinculado_manualmente': self.vinculado_manualmente,
             'importado_em': self.importado_em.isoformat() if self.importado_em else None
         }
+
+    @property
+    def eh_complementar(self):
+        """Verifica se é um CTe complementar"""
+        return self.tipo_cte == '1'
+
+    @property
+    def tipo_cte_descricao(self):
+        """Retorna descrição do tipo de CTe"""
+        tipos = {
+            '0': 'Normal',
+            '1': 'Complementar',
+            '2': 'Anulação',
+            '3': 'Substituto'
+        }
+        return tipos.get(self.tipo_cte, 'Normal')
+
+    def get_cte_relacionados(self):
+        """Retorna todos os CTes relacionados (original + complementares)"""
+        relacionados = []
+
+        # Se for complementar, busca o original
+        if self.eh_complementar and self.cte_original:
+            relacionados.append({
+                'tipo': 'original',
+                'cte': self.cte_original
+            })
+
+        # Busca complementares deste CTe
+        for cte_comp in self.ctes_complementares:
+            relacionados.append({
+                'tipo': 'complementar',
+                'cte': cte_comp
+            })
+
+        return relacionados
 
     @staticmethod
     def get_status_descricao(codigo):

@@ -43,6 +43,7 @@ import json
 from app import db
 from app.fretes.models import ConhecimentoTransporte, Frete
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.cte_xml_parser import extrair_info_complementar
 from app.utils.file_storage import get_file_storage
 
 logger = logging.getLogger(__name__)
@@ -476,6 +477,49 @@ class CteService:
         pdf_nome = cte_data.get('l10n_br_pdf_dfe_fname')
         xml_nome = cte_data.get('l10n_br_xml_dfe_fname')
 
+        # ================================================
+        # 🆕 PROCESSAR CTe COMPLEMENTAR (extrair do XML)
+        # ================================================
+        tipo_cte = '0'  # Padrão: Normal
+        cte_complementa_chave = None
+        cte_complementa_id = None
+        motivo_complemento = None
+
+        # Tentar extrair informações de CTe complementar do XML
+        xml_base64 = cte_data.get('l10n_br_xml_dfe')
+        if xml_base64:
+            try:
+                # Decodificar base64
+                xml_bytes = base64.b64decode(xml_base64)
+
+                # Tentar UTF-8 primeiro, depois ISO-8859-1 (Latin-1)
+                try:
+                    xml_content = xml_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    xml_content = xml_bytes.decode('iso-8859-1')
+
+                info_comp = extrair_info_complementar(xml_content)
+
+                if info_comp:
+                    tipo_cte = '1'  # CTe Complementar
+                    cte_complementa_chave = info_comp.get('chave_cte_original')
+                    motivo_complemento = info_comp.get('motivo')
+
+                    # Tentar buscar o CTe original no banco pela chave
+                    if cte_complementa_chave:
+                        cte_original = ConhecimentoTransporte.query.filter_by(
+                            chave_acesso=cte_complementa_chave
+                        ).first()
+
+                        if cte_original:
+                            cte_complementa_id = cte_original.id
+                            logger.info(f"   🔗 CTe Complementar vinculado ao CTe #{cte_original.id} ({cte_original.numero_cte})")
+                        else:
+                            logger.warning(f"   ⚠️  CTe original não encontrado: {cte_complementa_chave}")
+
+            except Exception as e:
+                logger.warning(f"   ⚠️  Erro ao processar XML para CTe complementar: {e}")
+
         if cte_existente:
             # Atualizar
             logger.info(f"   🔄 Atualizando CTe existente: {numero_cte}")
@@ -511,6 +555,13 @@ class CteService:
             cte_existente.odoo_invoice_ids = invoice_ids
             cte_existente.odoo_purchase_fiscal_id = purchase_fiscal_id
             cte_existente.numeros_nfs = numeros_nfs
+
+            # 🆕 Atualizar campos de CTe complementar
+            cte_existente.tipo_cte = tipo_cte
+            cte_existente.cte_complementa_chave = cte_complementa_chave
+            cte_existente.cte_complementa_id = cte_complementa_id
+            cte_existente.motivo_complemento = motivo_complemento
+
             cte_existente.atualizado_em = datetime.now()
             cte_existente.atualizado_por = 'Sistema Odoo'
 
@@ -556,6 +607,11 @@ class CteService:
                 odoo_invoice_ids=invoice_ids,
                 odoo_purchase_fiscal_id=purchase_fiscal_id,
                 numeros_nfs=numeros_nfs,
+                # 🆕 Campos de CTe complementar
+                tipo_cte=tipo_cte,
+                cte_complementa_chave=cte_complementa_chave,
+                cte_complementa_id=cte_complementa_id,
+                motivo_complemento=motivo_complemento,
                 importado_por='Sistema Odoo'
             )
 

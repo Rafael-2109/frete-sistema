@@ -195,12 +195,12 @@
                 <table class="table table-hover table-striped mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>CTe</th>
-                            <th>Data Emissão</th>
+                            <th>CTe / Data</th>
+                            <th>Tipo</th>
                             <th>Transportadora</th>
-                            <th>CNPJ Remetente</th>
-                            <th>CNPJ Destinatário</th>
+                            <th>Remetente / Destinatário</th>
                             <th>Notas Fiscais</th>
+                            <th>Motivo</th>
                             <th>Valor Total</th>
                             <th>Status</th>
                             <th>Vinculado</th>
@@ -211,26 +211,86 @@
                         {% for cte in ctes %}
                         <tr>
                             <td>
-                                <strong>{{ cte.numero_cte }}</strong><br>
+                                <span class="badge bg-light text-dark" style="font-size: 0.75rem;">
+                                    {{ cte.data_emissao.strftime('%d/%m/%y') if cte.data_emissao else '-' }}
+                                </span>
+                                <br>
+                                <strong>{{ cte.numero_cte }}</strong>
+                                <br>
                                 <small class="text-muted">{{ cte.odoo_name }}</small>
                             </td>
-                            <td>{{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else '-' }}</td>
+                            <td>
+                                {% if cte.tipo_cte == '1' %}
+                                <span class="badge bg-warning text-dark" title="CTe Complementar">
+                                    <i class="fas fa-plus-circle"></i> Compl.
+                                </span>
+                                {% if cte.cte_original %}
+                                <br>
+                                <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.cte_original.id) }}"
+                                   class="btn btn-sm btn-outline-primary mt-1"
+                                   style="font-size: 0.7rem; padding: 0.15rem 0.4rem;"
+                                   title="Ver CTe Original">
+                                    <i class="fas fa-arrow-left"></i> {{ cte.cte_original.numero_cte }}
+                                </a>
+                                {% endif %}
+                                {% elif cte.tipo_cte == '2' %}
+                                <span class="badge bg-danger" title="CTe de Anulação">
+                                    <i class="fas fa-ban"></i> Anulação
+                                </span>
+                                {% elif cte.tipo_cte == '3' %}
+                                <span class="badge bg-info" title="CTe Substituto">
+                                    <i class="fas fa-exchange-alt"></i> Subst.
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary" title="CTe Normal">
+                                    <i class="fas fa-file-alt"></i> Normal
+                                </span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {{ cte.nome_emitente }}<br>
                                 <small class="text-muted">{{ cte.formatar_cnpj(cte.cnpj_emitente) }}</small>
                             </td>
-                            <td>{{ cte.formatar_cnpj(cte.cnpj_remetente) if cte.cnpj_remetente else '-' }}</td>
-                            <td>{{ cte.formatar_cnpj(cte.cnpj_destinatario) if cte.cnpj_destinatario else '-' }}</td>
+                            <td>
+                                <div class="mb-1">
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">Rem:</small>
+                                    <strong style="font-size: 0.85rem;">{{ cte.formatar_cnpj(cte.cnpj_remetente) if cte.cnpj_remetente else '-' }}</strong>
+                                </div>
+                                <div>
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">Dest:</small>
+                                    <strong style="font-size: 0.85rem;">{{ cte.formatar_cnpj(cte.cnpj_destinatario) if cte.cnpj_destinatario else '-' }}</strong>
+                                </div>
+                            </td>
                             <td>
                                 {% if cte.numeros_nfs %}
-                                    {% for nf in cte.numeros_nfs.split(',')[:3] %}
+                                    {% for nf in cte.numeros_nfs.split(',')[:7] %}
                                     <span class="badge bg-secondary d-block mb-1" style="font-size: 0.7rem;">{{ nf }}</span>
                                     {% endfor %}
-                                    {% if cte.numeros_nfs.split(',') | length > 3 %}
-                                    <span class="badge bg-info d-block" style="font-size: 0.7rem;">+{{ cte.numeros_nfs.split(',') | length - 3 }} mais</span>
+                                    {% if cte.numeros_nfs.split(',') | length > 7 %}
+                                    <span class="badge bg-info d-block" style="font-size: 0.7rem;">+{{ cte.numeros_nfs.split(',') | length - 7 }} mais</span>
                                     {% endif %}
                                 {% else %}
                                 -
+                                {% endif %}
+                            </td>
+                            <td style="max-width: 250px;">
+                                {% if cte.tipo_cte == '1' and cte.motivo_complemento %}
+                                <small class="d-block"
+                                       style="overflow: hidden;
+                                              display: -webkit-box;
+                                              -webkit-line-clamp: 3;
+                                              line-clamp: 3;
+                                              -webkit-box-orient: vertical;
+                                              line-height: 1.4em;
+                                              max-height: 4.2em;
+                                              word-break: break-word;
+                                              overflow-wrap: break-word;
+                                              white-space: normal;"
+                                       title="{{ cte.motivo_complemento }}">
+                                    {{ cte.motivo_complemento }}
+                                </small>
+                                {% else %}
+                                <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -279,7 +339,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
+                            <td colspan="10" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
                                 Nenhum CTe encontrado
                             </td>

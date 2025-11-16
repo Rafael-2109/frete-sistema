@@ -94,6 +94,129 @@
                 </div>
             </div>
 
+            <!-- CTe Complementar / Original -->
+            {% if cte.tipo_cte == '1' or (cte.ctes_complementares and cte.ctes_complementares.count() > 0) %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        {% if cte.tipo_cte == '1' %}
+                        <i class="fas fa-plus-circle"></i> CTe Complementar
+                        {% else %}
+                        <i class="fas fa-list"></i> CTes Complementares
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if cte.tipo_cte == '1' %}
+                    <!-- Este CTe É um complementar -->
+                    <div class="alert alert-warning mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Este é um CTe Complementar</strong> - complementa outro CTe existente.
+                    </div>
+
+                    {% if cte.cte_original %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="text-muted small">CTe Original</label>
+                            <div>
+                                <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.cte_original.id) }}"
+                                   class="btn btn-outline-primary">
+                                    <i class="fas fa-arrow-left"></i> CTe {{ cte.cte_original.numero_cte }}/{{ cte.cte_original.serie_cte }}
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Valor do CTe Original</label>
+                            <div><strong class="text-success">{{ (cte.cte_original.valor_total or 0)|moeda_carteira }}</strong></div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        CTe original não encontrado no sistema.
+                        <br><small>Chave: {{ cte.cte_complementa_chave }}</small>
+                    </div>
+                    {% endif %}
+
+                    {% if cte.motivo_complemento %}
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="text-muted small">Motivo do Complemento</label>
+                            <div class="alert alert-info mb-0" style="white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word;">
+                                {{ cte.motivo_complemento }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <!-- Este CTe TEM complementares -->
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Este CTe possui {{ cte.ctes_complementares.count() }} complemento(s)</strong>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>CTe Complementar</th>
+                                    <th>Data Emissão</th>
+                                    <th>Motivo</th>
+                                    <th>Valor</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cte_comp in cte.ctes_complementares %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ cte_comp.numero_cte }}/{{ cte_comp.serie_cte }}</strong>
+                                    </td>
+                                    <td>{{ cte_comp.data_emissao.strftime('%d/%m/%Y') if cte_comp.data_emissao else '-' }}</td>
+                                    <td style="max-width: 300px;">
+                                        <small class="d-block"
+                                               style="white-space: normal;
+                                                      word-break: break-word;
+                                                      overflow-wrap: break-word;"
+                                               title="{{ cte_comp.motivo_complemento }}">
+                                            {{ cte_comp.motivo_complemento or '-' }}
+                                        </small>
+                                    </td>
+                                    <td><strong class="text-success">{{ (cte_comp.valor_total or 0)|moeda_carteira }}</strong></td>
+                                    <td>
+                                        <a href="{{ url_for('cte.detalhar_cte', cte_id=cte_comp.id) }}"
+                                           class="btn btn-sm btn-info"
+                                           title="Ver Detalhes">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                <tr class="table-secondary">
+                                    <td colspan="3" class="text-end"><strong>Total Complementares:</strong></td>
+                                    <td colspan="2">
+                                        <strong class="text-success">
+                                            {{ (cte.ctes_complementares | sum(attribute='valor_total') or 0)|moeda_carteira }}
+                                        </strong>
+                                    </td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td colspan="3" class="text-end"><strong>Valor Total (Original + Complementares):</strong></td>
+                                    <td colspan="2">
+                                        <strong class="text-primary">
+                                            {{ ((cte.valor_total or 0) + (cte.ctes_complementares | sum(attribute='valor_total') or 0))|moeda_carteira }}
+                                        </strong>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Transportadora (Emitente) -->
             <div class="card mb-4">
                 <div class="card-header bg-success text-white">
