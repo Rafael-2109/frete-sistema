@@ -166,7 +166,13 @@
                 Lançamento Freteiros
             </a>
         </div>
-        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.analises') }}" class="btn btn-info btn-lg btn-block">
+                <i class="fas fa-chart-bar"></i><br>
+                Análises
+            </a>
+        </div>
+
         {% if fretes_sem_nfs > 0 %}
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}" 

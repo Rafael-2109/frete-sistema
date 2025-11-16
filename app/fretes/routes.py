@@ -64,6 +64,155 @@ def index():
                          fretes_sem_nfs=fretes_sem_nfs,
                          fretes_recentes=fretes_recentes)
 
+
+@fretes_bp.route('/analises')
+@login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
+def analises():
+    """
+    Página de análises de fretes com gráficos e filtros
+    """
+    from app.fretes.services.analises_service import (
+        analise_por_uf,
+        analise_por_transportadora,
+        analise_por_cidade,
+        analise_por_subrota,
+        analise_por_cliente,
+        analise_por_mes,
+        analise_por_modalidade
+    )
+
+    # Capturar filtros da URL
+    data_inicio_str = request.args.get('data_inicio', '')
+    data_fim_str = request.args.get('data_fim', '')
+    transportadora_id = request.args.get('transportadora_id', '')
+    uf = request.args.get('uf', '')
+    status = request.args.get('status', '')
+    tipo_analise = request.args.get('tipo_analise', 'uf')  # uf, cidade, subrota, transportadora, cliente, mes, modalidade
+
+    # Converter datas
+    data_inicio = None
+    data_fim = None
+
+    try:
+        if data_inicio_str:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+    except ValueError:
+        flash('Data inicial inválida. Use o formato AAAA-MM-DD.', 'warning')
+
+    try:
+        if data_fim_str:
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+    except ValueError:
+        flash('Data final inválida. Use o formato AAAA-MM-DD.', 'warning')
+
+    # Converter IDs para int
+    transportadora_id_int = None
+    if transportadora_id:
+        try:
+            transportadora_id_int = int(transportadora_id)
+        except ValueError:
+            pass
+
+    # Executar análises baseado no tipo
+    dados = []
+
+    if tipo_analise == 'uf':
+        dados = analise_por_uf(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            transportadora_id=transportadora_id_int,
+            status=status
+        )
+    elif tipo_analise == 'cidade':
+        dados = analise_por_cidade(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            transportadora_id=transportadora_id_int,
+            uf=uf,
+            status=status
+        )
+    elif tipo_analise == 'subrota':
+        dados = analise_por_subrota(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            transportadora_id=transportadora_id_int,
+            uf=uf,
+            status=status
+        )
+    elif tipo_analise == 'transportadora':
+        dados = analise_por_transportadora(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            uf=uf,
+            status=status
+        )
+    elif tipo_analise == 'cliente':
+        dados = analise_por_cliente(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            transportadora_id=transportadora_id_int,
+            uf=uf,
+            status=status
+        )
+    elif tipo_analise == 'mes':
+        dados = analise_por_mes(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            transportadora_id=transportadora_id_int,
+            uf=uf,
+            status=status
+        )
+    elif tipo_analise == 'modalidade':
+        dados = analise_por_modalidade(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            transportadora_id=transportadora_id_int,
+            uf=uf,
+            status=status
+        )
+
+    # Buscar dados para os gráficos principais (independente do filtro)
+    # Gráfico 1: Por UF
+    dados_uf = analise_por_uf(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        transportadora_id=transportadora_id_int,
+        status=status
+    )
+
+    # Gráfico 2: Por Transportadora
+    dados_transportadora = analise_por_transportadora(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        uf=uf,
+        status=status
+    )
+
+    # Listar transportadoras para o filtro
+    transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
+
+    # Lista de UFs únicas
+    ufs = db.session.query(Frete.uf_destino).distinct().order_by(Frete.uf_destino).all()
+    ufs = [uf[0] for uf in ufs]
+
+    return render_template(
+        'fretes/analises.html',
+        dados=dados,
+        dados_uf=dados_uf,
+        dados_transportadora=dados_transportadora,
+        transportadoras=transportadoras,
+        ufs=ufs,
+        # Filtros aplicados
+        data_inicio=data_inicio_str,
+        data_fim=data_fim_str,
+        transportadora_id=transportadora_id,
+        uf=uf,
+        status=status,
+        tipo_analise=tipo_analise
+    )
+
+
 @fretes_bp.route('/listar')
 @login_required
 @require_financeiro()  # 🔒 BLOQUEADO para vendedores

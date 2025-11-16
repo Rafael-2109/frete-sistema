@@ -1,22 +1,18 @@
-import io
 import pandas as pd
 import openpyxl
 import tempfile
 import os
 from datetime import datetime
 from io import BytesIO
-from werkzeug.utils import secure_filename
 from sqlalchemy import inspect
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response, send_file
-from flask_login import login_required, current_user
+from flask_login import login_required
 
 from app import db
 from app.localidades.forms import CidadeForm
 from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
-from app.utils.auth_decorators import require_admin
 from app.permissions.decorators import check_permission as require_permission
-from app.utils.timezone import agora_brasil
 
 localidades_bp = Blueprint('localidades', __name__, url_prefix='/localidades')
 
@@ -276,10 +272,6 @@ def processar_importacao_rotas():
     """Processar importação de cadastro de rotas"""
     try:
         import pandas as pd
-        import tempfile
-        import os
-        from datetime import datetime
-        from werkzeug.utils import secure_filename
         from flask import flash, redirect, url_for, request
         
         if 'arquivo' not in request.files:
@@ -341,7 +333,7 @@ def processar_importacao_rotas():
                 # ✅ VALIDAR UF (deve existir no cadastro de cidades)
                 cidade_existe = Cidade.query.filter_by(uf=cod_uf).first()
                 if not cidade_existe:
-                    erros.append(f"Linha {index + 1}: UF '{cod_uf}' não existe no cadastro de cidades")
+                    erros.append(f"Linha {index + 1}: UF '{cod_uf}' não existe no cadastro de cidades") # type: ignore
                     continue
                 
                 # Verificar se já existe
@@ -363,7 +355,7 @@ def processar_importacao_rotas():
                     rotas_importadas += 1
                 
             except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
+                erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
         
         # Commit das alterações
@@ -404,8 +396,6 @@ def processar_importacao_sub_rotas():
         import pandas as pd
         import tempfile
         import os
-        from datetime import datetime
-        from werkzeug.utils import secure_filename
         from flask import flash, redirect, url_for, request
         
         if 'arquivo' not in request.files:
@@ -472,7 +462,7 @@ def processar_importacao_sub_rotas():
                     Cidade.nome.ilike(nome_cidade)
                 ).first()
                 if not cidade_existe:
-                    erros.append(f"Linha {index + 1}: Combinação '{nome_cidade}/{cod_uf}' não existe no cadastro de cidades")
+                    erros.append(f"Linha {index + 1}: Combinação '{nome_cidade}/{cod_uf}' não existe no cadastro de cidades") # type: ignore
                     continue
                 
                 # ✅ USAR O NOME REAL DA CIDADE DO BANCO para garantir consistência
@@ -498,7 +488,7 @@ def processar_importacao_sub_rotas():
                     sub_rotas_importadas += 1
                 
             except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
+                erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
         
         # Commit das alterações
