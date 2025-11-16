@@ -2,7 +2,7 @@
 
 {% block title %}Análises de Fretes{% endblock %}
 
-{% block extra_css %}
+{% block styles %}
 <style>
     .chart-container {
         position: relative;
@@ -170,9 +170,7 @@
                     <h5 class="mb-0"><i class="fas fa-map-marked-alt"></i> Análise por UF</h5>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="chartUF"></canvas>
-                    </div>
+                    <div id="chartUF" style="width: 100%; height: 400px;"></div>
                 </div>
             </div>
         </div>
@@ -183,9 +181,7 @@
                     <h5 class="mb-0"><i class="fas fa-truck"></i> Análise por Transportadora</h5>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="chartTransportadora"></canvas>
-                    </div>
+                    <div id="chartTransportadora" style="width: 100%; height: 400px;"></div>
                 </div>
             </div>
         </div>
@@ -293,182 +289,176 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% block scripts %}
+<!-- Google Charts -->
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 
-<script>
+<script type="text/javascript">
 // Auto-submit form quando mudar tipo de análise
-document.querySelectorAll('input[name="tipo_analise"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-        document.getElementById('formFiltros').submit();
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[name="tipo_analise"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            document.getElementById('formFiltros').submit();
+        });
     });
 });
 
-// Dados dos gráficos vindos do backend
-const dadosUF = {{ dados_uf | tojson }};
-const dadosTransportadora = {{ dados_transportadora | tojson }};
+// ========== DADOS DO BACKEND ==========
+var dadosUF = {{ dados_uf | tojson | safe }};
+var dadosTransportadora = {{ dados_transportadora | tojson | safe }};
 
-// Gráfico por UF
-const ctxUF = document.getElementById('chartUF').getContext('2d');
-const chartUF = new Chart(ctxUF, {
-    type: 'bar',
-    data: {
-        labels: dadosUF.map(d => d.uf),
-        datasets: [
-            {
-                label: '% s/ Valor NF',
-                data: dadosUF.map(d => d.percentual_valor),
-                backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1,
-                yAxisID: 'y'
-            },
-            {
-                label: 'R$/KG',
-                data: dadosUF.map(d => d.valor_por_kg),
-                backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                borderWidth: 1,
-                yAxisID: 'y1'
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-            mode: 'index',
-            intersect: false,
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    afterLabel: function(context) {
-                        const index = context.dataIndex;
-                        const item = dadosUF[index];
-                        return [
-                            `Fretes: ${item.qtd_fretes}`,
-                            `Custo: R$ ${item.total_custo.toFixed(2)}`,
-                            `Valor NF: R$ ${item.valor_nf.toFixed(2)}`,
-                            `Peso: ${item.peso.toFixed(2)} KG`
-                        ];
-                    }
-                }
-            },
-            legend: {
-                position: 'top',
-            }
-        },
-        scales: {
-            y: {
-                type: 'linear',
-                display: true,
-                position: 'left',
-                title: {
-                    display: true,
-                    text: '% sobre Valor NF'
-                }
-            },
-            y1: {
-                type: 'linear',
-                display: true,
-                position: 'right',
-                title: {
-                    display: true,
-                    text: 'R$/KG'
-                },
-                grid: {
-                    drawOnChartArea: false,
-                }
-            }
-        }
-    }
-});
+console.log('📊 Dados UF:', dadosUF);
+console.log('📊 Dados Transportadora:', dadosTransportadora);
 
-// Gráfico por Transportadora
-const ctxTransportadora = document.getElementById('chartTransportadora').getContext('2d');
-const chartTransportadora = new Chart(ctxTransportadora, {
-    type: 'bar',
-    data: {
-        labels: dadosTransportadora.map(d => {
-            // Truncar nome longo para exibição
-            const nome = d.transportadora;
-            return nome.length > 20 ? nome.substring(0, 20) + '...' : nome;
-        }),
-        datasets: [
-            {
-                label: '% s/ Valor NF',
-                data: dadosTransportadora.map(d => d.percentual_valor),
-                backgroundColor: 'rgba(75, 192, 192, 0.7)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1,
-                yAxisID: 'y'
-            },
-            {
-                label: 'R$/KG',
-                data: dadosTransportadora.map(d => d.valor_por_kg),
-                backgroundColor: 'rgba(255, 159, 64, 0.7)',
-                borderColor: 'rgba(255, 159, 64, 1)',
-                borderWidth: 1,
-                yAxisID: 'y1'
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-            mode: 'index',
-            intersect: false,
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    title: function(context) {
-                        const index = context[0].dataIndex;
-                        return dadosTransportadora[index].transportadora;
-                    },
-                    afterLabel: function(context) {
-                        const index = context.dataIndex;
-                        const item = dadosTransportadora[index];
-                        return [
-                            `Fretes: ${item.qtd_fretes}`,
-                            `Custo: R$ ${item.total_custo.toFixed(2)}`,
-                            `Valor NF: R$ ${item.valor_nf.toFixed(2)}`,
-                            `Peso: ${item.peso.toFixed(2)} KG`
-                        ];
-                    }
-                }
-            },
-            legend: {
-                position: 'top',
-            }
-        },
-        scales: {
-            y: {
-                type: 'linear',
-                display: true,
-                position: 'left',
-                title: {
-                    display: true,
-                    text: '% sobre Valor NF'
-                }
-            },
-            y1: {
-                type: 'linear',
-                display: true,
-                position: 'right',
-                title: {
-                    display: true,
-                    text: 'R$/KG'
-                },
-                grid: {
-                    drawOnChartArea: false,
-                }
-            }
-        }
+// ========== CARREGAR GOOGLE CHARTS ==========
+google.charts.load('current', {'packages':['corechart', 'bar']});
+google.charts.setOnLoadCallback(desenharGraficos);
+
+function desenharGraficos() {
+    desenharGraficoUF();
+    desenharGraficoTransportadora();
+}
+
+// ========== GRÁFICO POR UF ==========
+function desenharGraficoUF() {
+    var container = document.getElementById('chartUF');
+
+    if (!dadosUF || dadosUF.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Nenhum dado disponível para o período selecionado.</div>';
+        return;
     }
+
+    // Preparar dados para Google Charts
+    var data = new google.visualization.DataTable();
+    data.addColumn('string', 'UF');
+    data.addColumn('number', '% s/ Valor NF');
+    data.addColumn({type: 'string', role: 'tooltip', p: {html: true}});
+    data.addColumn('number', 'R$/KG');
+    data.addColumn({type: 'string', role: 'tooltip', p: {html: true}});
+
+    dadosUF.forEach(function(item) {
+        var tooltipPercentual = '<div style="padding:10px;">' +
+            '<strong>' + item.uf + '</strong><br>' +
+            '<b>% s/ Valor NF:</b> ' + item.percentual_valor.toFixed(2) + '%<br>' +
+            '<b>Fretes:</b> ' + item.qtd_fretes + '<br>' +
+            '<b>Custo Total:</b> R$ ' + item.total_custo.toFixed(2) + '<br>' +
+            '<b>Valor NF:</b> R$ ' + item.valor_nf.toFixed(2) + '<br>' +
+            '<b>Peso:</b> ' + item.peso.toFixed(2) + ' KG' +
+            '</div>';
+
+        var tooltipRsKg = '<div style="padding:10px;">' +
+            '<strong>' + item.uf + '</strong><br>' +
+            '<b>R$/KG:</b> R$ ' + item.valor_por_kg.toFixed(2) + '<br>' +
+            '<b>Fretes:</b> ' + item.qtd_fretes + '<br>' +
+            '<b>Custo Total:</b> R$ ' + item.total_custo.toFixed(2) + '<br>' +
+            '<b>Valor NF:</b> R$ ' + item.valor_nf.toFixed(2) + '<br>' +
+            '<b>Peso:</b> ' + item.peso.toFixed(2) + ' KG' +
+            '</div>';
+
+        data.addRow([
+            item.uf,
+            item.percentual_valor,
+            tooltipPercentual,
+            item.valor_por_kg,
+            tooltipRsKg
+        ]);
+    });
+
+    var options = {
+        title: 'Análise por UF',
+        width: '100%',
+        height: 400,
+        series: {
+            0: {targetAxisIndex: 0, color: '#3498db'},
+            1: {targetAxisIndex: 1, color: '#e74c3c'}
+        },
+        vAxes: {
+            0: {title: '% sobre Valor NF'},
+            1: {title: 'R$/KG'}
+        },
+        hAxis: {title: 'UF'},
+        tooltip: {isHtml: true},
+        legend: {position: 'top'}
+    };
+
+    var chart = new google.visualization.ColumnChart(container);
+    chart.draw(data, options);
+}
+
+// ========== GRÁFICO POR TRANSPORTADORA ==========
+function desenharGraficoTransportadora() {
+    var container = document.getElementById('chartTransportadora');
+
+    if (!dadosTransportadora || dadosTransportadora.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Nenhum dado disponível para o período selecionado.</div>';
+        return;
+    }
+
+    // Preparar dados para Google Charts
+    var data = new google.visualization.DataTable();
+    data.addColumn('string', 'Transportadora');
+    data.addColumn('number', '% s/ Valor NF');
+    data.addColumn({type: 'string', role: 'tooltip', p: {html: true}});
+    data.addColumn('number', 'R$/KG');
+    data.addColumn({type: 'string', role: 'tooltip', p: {html: true}});
+
+    dadosTransportadora.forEach(function(item) {
+        // Truncar nome longo
+        var nomeExibicao = item.transportadora.length > 20
+            ? item.transportadora.substring(0, 20) + '...'
+            : item.transportadora;
+
+        var tooltipPercentual = '<div style="padding:10px;">' +
+            '<strong>' + item.transportadora + '</strong><br>' +
+            '<b>% s/ Valor NF:</b> ' + item.percentual_valor.toFixed(2) + '%<br>' +
+            '<b>Fretes:</b> ' + item.qtd_fretes + '<br>' +
+            '<b>Custo Total:</b> R$ ' + item.total_custo.toFixed(2) + '<br>' +
+            '<b>Valor NF:</b> R$ ' + item.valor_nf.toFixed(2) + '<br>' +
+            '<b>Peso:</b> ' + item.peso.toFixed(2) + ' KG' +
+            '</div>';
+
+        var tooltipRsKg = '<div style="padding:10px;">' +
+            '<strong>' + item.transportadora + '</strong><br>' +
+            '<b>R$/KG:</b> R$ ' + item.valor_por_kg.toFixed(2) + '<br>' +
+            '<b>Fretes:</b> ' + item.qtd_fretes + '<br>' +
+            '<b>Custo Total:</b> R$ ' + item.total_custo.toFixed(2) + '<br>' +
+            '<b>Valor NF:</b> R$ ' + item.valor_nf.toFixed(2) + '<br>' +
+            '<b>Peso:</b> ' + item.peso.toFixed(2) + ' KG' +
+            '</div>';
+
+        data.addRow([
+            nomeExibicao,
+            item.percentual_valor,
+            tooltipPercentual,
+            item.valor_por_kg,
+            tooltipRsKg
+        ]);
+    });
+
+    var options = {
+        title: 'Análise por Transportadora',
+        width: '100%',
+        height: 400,
+        series: {
+            0: {targetAxisIndex: 0, color: '#2ecc71'},
+            1: {targetAxisIndex: 1, color: '#f39c12'}
+        },
+        vAxes: {
+            0: {title: '% sobre Valor NF'},
+            1: {title: 'R$/KG'}
+        },
+        hAxis: {title: 'Transportadora', slantedText: true, slantedTextAngle: 45},
+        tooltip: {isHtml: true},
+        legend: {position: 'top'}
+    };
+
+    var chart = new google.visualization.ColumnChart(container);
+    chart.draw(data, options);
+}
+
+// Redesenhar gráficos ao redimensionar janela
+window.addEventListener('resize', function() {
+    desenharGraficos();
 });
 </script>
 {% endblock %}
