@@ -538,7 +538,7 @@ class ConhecimentoTransporte(db.Model):
     informacoes_complementares = db.Column(db.Text, nullable=True)      # nfe_infnfe_infadic_infcpl
 
     # Tipo de pedido Odoo
-    tipo_pedido = db.Column(db.String(20), nullable=True)               # l10n_br_tipo_pedido (ex: 'servico')
+    tipo_pedido = db.Column(db.String(50), nullable=True)               # l10n_br_tipo_pedido (ex: 'servico', 'serv-industrializacao')
 
     # Números das NFs contidas no CTe (extraídos de refs_ids)
     numeros_nfs = db.Column(db.Text, nullable=True)                     # String separada por vírgula: "141768,141769,141770,141771"

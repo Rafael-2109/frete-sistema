@@ -213,6 +213,176 @@ def analises():
     )
 
 
+@fretes_bp.route('/analises/api/data')
+@login_required
+@require_financeiro()
+def analises_api_data():
+    """
+    API para drill-down dinâmico
+    Query params:
+        - filters: JSON string com filtros aplicados
+        - group_by: Dimensão para agrupar
+        - incluir_transportadora: true/false (default: true)
+        - incluir_freteiro: true/false (default: true)
+
+    Exemplo:
+        /analises/api/data?filters=[{"type":"uf","value":"SP"}]&group_by=mes&incluir_transportadora=true&incluir_freteiro=false
+    """
+    from app.fretes.services.analises_service import analise_dinamica
+    import json
+
+    # Parsear filtros
+    filters_json = request.args.get('filters', '[]')
+    try:
+        filtros = json.loads(filters_json)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Erro ao parsear filtros: {str(e)}'}), 400
+
+    group_by = request.args.get('group_by', 'uf')
+
+    # Parsear checkboxes (default: ambos marcados)
+    incluir_transportadora = request.args.get('incluir_transportadora', 'true').lower() == 'true'
+    incluir_freteiro = request.args.get('incluir_freteiro', 'true').lower() == 'true'
+
+    # Validar group_by
+    valid_dimensions = ['uf', 'transportadora', 'modalidade', 'mes', 'subrota', 'cliente']
+    if group_by not in valid_dimensions:
+        return jsonify({'success': False, 'error': 'Dimensão inválida'}), 400
+
+    try:
+        # Buscar dados
+        dados = analise_dinamica(
+            filtros=filtros,
+            group_by=group_by,
+            incluir_transportadora=incluir_transportadora,
+            incluir_freteiro=incluir_freteiro
+        )
+
+        return jsonify({
+            'success': True,
+            'filtros_aplicados': filtros,
+            'agrupado_por': group_by,
+            'incluir_transportadora': incluir_transportadora,
+            'incluir_freteiro': incluir_freteiro,
+            'dados': dados
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Erro ao buscar dados: {str(e)}'}), 500
+
+
+@fretes_bp.route('/analises/api/export-excel')
+@login_required
+@require_financeiro()
+def analises_api_export_excel():
+    """
+    Exporta os dados da análise atual para Excel
+    Query params:
+        - filters: JSON string com filtros aplicados
+        - group_by: Dimensão para agrupar
+        - incluir_transportadora: true/false (default: true)
+        - incluir_freteiro: true/false (default: true)
+    """
+    from app.fretes.services.analises_service import analise_dinamica
+    import json
+    import pandas as pd
+    from io import BytesIO
+    from flask import send_file
+
+    # Parsear filtros
+    filters_json = request.args.get('filters', '[]')
+    try:
+        filtros = json.loads(filters_json)
+    except Exception as e:
+        flash(f'Erro ao parsear filtros: {str(e)}', 'danger')
+        return redirect(url_for('fretes.analises'))
+
+    group_by = request.args.get('group_by', 'uf')
+
+    # Parsear checkboxes (default: ambos marcados)
+    incluir_transportadora = request.args.get('incluir_transportadora', 'true').lower() == 'true'
+    incluir_freteiro = request.args.get('incluir_freteiro', 'true').lower() == 'true'
+
+    # Validar group_by
+    valid_dimensions = ['uf', 'transportadora', 'modalidade', 'mes', 'subrota', 'cliente']
+    if group_by not in valid_dimensions:
+        flash('Dimensão inválida', 'danger')
+        return redirect(url_for('fretes.analises'))
+
+    try:
+        # Buscar dados
+        dados = analise_dinamica(
+            filtros=filtros,
+            group_by=group_by,
+            incluir_transportadora=incluir_transportadora,
+            incluir_freteiro=incluir_freteiro
+        )
+
+        if not dados:
+            flash('Nenhum dado disponível para exportação', 'warning')
+            return redirect(url_for('fretes.analises'))
+
+        # Preparar DataFrame
+        df_data = []
+        for item in dados:
+            df_data.append({
+                'Dimensão': item['label'],
+                'Qtd Fretes': item['qtd_fretes'],
+                'Frete Bruto (R$)': item['valor_frete_bruto'],  # Frete bruto
+                'ICMS (R$)': item['total_icms'],
+                'PIS/COFINS (R$)': item['total_pis_cofins'],
+                'Frete Líquido (R$)': item['valor_frete'],  # Frete líquido (já calculado)
+                'Despesas (R$)': item['valor_despesa'],
+                'Custo Total (R$)': item['total_custo'],
+                'Valor NF (R$)': item['valor_nf'],
+                'Peso (KG)': item['peso'],
+                '% s/ Valor': item['percentual_valor'],
+                'R$/KG': item['valor_por_kg']
+            })
+
+        df = pd.DataFrame(df_data)
+
+        # Criar arquivo Excel em memória
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Análise')
+
+            # Formatar colunas
+            worksheet = writer.sheets['Análise']
+
+            # Ajustar largura das colunas
+            for idx, col in enumerate(df.columns):
+                max_length = max(
+                    df[col].astype(str).map(len).max(),
+                    len(col)
+                )
+                worksheet.column_dimensions[chr(65 + idx)].width = max_length + 2
+
+        output.seek(0)
+
+        # Gerar nome do arquivo baseado nos filtros
+        filter_names = '_'.join([f"{f['type']}-{f['value']}" for f in filtros]) if filtros else 'todos'
+        filename = f"analise_fretes_{group_by}_{filter_names}.xlsx"
+
+        # Sanitizar nome do arquivo
+        import re
+        filename = re.sub(r'[^\w\-_\.]', '_', filename)
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        flash(f'Erro ao exportar dados: {str(e)}', 'danger')
+        return redirect(url_for('fretes.analises'))
+
+
 @fretes_bp.route('/listar')
 @login_required
 @require_financeiro()  # 🔒 BLOQUEADO para vendedores

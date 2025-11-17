@@ -47,6 +47,34 @@ def calcular_metricas(valor_frete, valor_despesa, valor_nf, peso):
     }
 
 
+def calcular_frete_liquido_agregado(valor_frete_bruto, icms_total, pis_cofins_total):
+    """
+    Calcula o frete líquido a partir dos valores agregados
+
+    Fórmula correta:
+    Frete Líquido = (Valor Bruto - ICMS) - PIS/COFINS
+    Ou: Frete Líquido = (Valor Bruto - ICMS) * (1 - 0.0925)
+
+    Nota: PIS/COFINS já foi calculado sobre a base (valor_bruto - ICMS),
+    então basta subtrair ambos.
+
+    Args:
+        valor_frete_bruto: Soma total de Frete.valor_considerado
+        icms_total: Soma total de ICMS descontado
+        pis_cofins_total: Soma total de PIS/COFINS descontado (já calculado sobre base líquida de ICMS)
+
+    Returns:
+        float: Frete líquido total
+    """
+    # Base após ICMS
+    base_apos_icms = valor_frete_bruto - icms_total
+
+    # Frete Líquido = Base - PIS/COFINS
+    frete_liquido = base_apos_icms - pis_cofins_total
+
+    return round(frete_liquido, 2)
+
+
 def analise_por_uf(data_inicio=None, data_fim=None, transportadora_id=None, status=None):
     """
     Análise agregada por UF
@@ -518,5 +546,291 @@ def analise_por_modalidade(data_inicio=None, data_fim=None, transportadora_id=No
             'qtd_fretes': row.qtd_fretes,
             **metricas
         })
+
+    return dados
+
+
+def analise_dinamica(filtros=None, group_by='uf', incluir_transportadora=True, incluir_freteiro=True):
+    """
+    Análise dinâmica que aceita array de filtros e agrupa por qualquer dimensão
+
+    Args:
+        filtros: [{'type': 'uf', 'value': 'SP'}, {'type': 'mes', 'value': '02/2025'}]
+        group_by: 'uf' | 'transportadora' | 'modalidade' | 'mes' | 'subrota' | 'cliente'
+        incluir_transportadora: Se True, inclui transportadoras (freteiro=False)
+        incluir_freteiro: Se True, inclui freteiros (freteiro=True)
+
+    Returns:
+        list: Dados agregados pela dimensão escolhida com frete líquido calculado
+    """
+    # Subquery para despesas extras
+    subq_despesas = db.session.query(
+        DespesaExtra.frete_id,
+        func.sum(DespesaExtra.valor_despesa).label('total_despesas')
+    ).group_by(DespesaExtra.frete_id).subquery()
+
+    # Definir campos de agrupamento baseado no group_by
+    if group_by == 'uf':
+        group_field = Frete.uf_destino
+        label_field = 'uf'
+        needs_join = None
+    elif group_by == 'transportadora':
+        group_field = Transportadora.razao_social
+        label_field = 'transportadora'
+        needs_join = 'transportadora'
+    elif group_by == 'modalidade':
+        group_field = Frete.modalidade
+        label_field = 'modalidade'
+        needs_join = None
+    elif group_by == 'mes':
+        # Para mês, precisamos agrupar por ano e mês
+        label_field = 'periodo'
+        needs_join = None
+    elif group_by == 'subrota':
+        group_field = CadastroSubRota.sub_rota
+        label_field = 'sub_rota'
+        needs_join = 'subrota'
+    elif group_by == 'cliente':
+        group_field = Frete.nome_cliente
+        label_field = 'cliente'
+        needs_join = None
+    else:
+        # Default para UF
+        group_field = Frete.uf_destino
+        label_field = 'uf'
+        needs_join = None
+
+    # Calcular ICMS: Se (freteiro=False OU freteiro IS NULL) E optante=False
+    # ICMS = (tabela_icms_proprio OR tabela_icms_destino) / 100 * valor_considerado
+    # Campos estão como PERCENTUAL (ex: 12), precisa dividir por 100
+    # IMPORTANTE: freteiro NULL é tratado como transportadora (não freteiro)
+    icms_calc = case(
+        (
+            db.and_(
+                db.or_(
+                    Transportadora.freteiro == False,
+                    Transportadora.freteiro.is_(None)
+                ),
+                db.or_(
+                    Transportadora.optante == False,
+                    Transportadora.optante.is_(None)
+                )
+            ),
+            (func.coalesce(Frete.tabela_icms_proprio, Frete.tabela_icms_destino, 0) / 100.0) * Frete.valor_considerado
+        ),
+        else_=0
+    )
+
+    # Calcular Base para PIS/COFINS: valor_considerado - ICMS
+    # PIS/COFINS = (valor_considerado - ICMS) * 0.0925
+    # Aplica em todos que NÃO são freteiros (freteiro=False OU freteiro IS NULL)
+    pis_cofins_calc = case(
+        (
+            db.or_(
+                Transportadora.freteiro == False,
+                Transportadora.freteiro.is_(None)
+            ),
+            (Frete.valor_considerado - icms_calc) * 0.0925
+        ),
+        else_=0
+    )
+
+    # Construir query base
+    if group_by == 'mes':
+        # Query especial para mês
+        query = db.session.query(
+            extract('year', Frete.criado_em).label('ano'),
+            extract('month', Frete.criado_em).label('mes'),
+            func.count(Frete.id).label('qtd_fretes'),
+            func.sum(Frete.valor_considerado).label('total_frete'),
+            func.sum(func.coalesce(subq_despesas.c.total_despesas, 0)).label('total_despesa'),
+            func.sum(Frete.valor_total_nfs).label('total_valor_nf'),
+            func.sum(Frete.peso_total).label('total_peso'),
+            func.sum(icms_calc).label('total_icms'),
+            func.sum(pis_cofins_calc).label('total_pis_cofins')
+        )
+    else:
+        query = db.session.query(
+            group_field.label('dimensao'),
+            func.count(Frete.id).label('qtd_fretes'),
+            func.sum(Frete.valor_considerado).label('total_frete'),
+            func.sum(func.coalesce(subq_despesas.c.total_despesas, 0)).label('total_despesa'),
+            func.sum(Frete.valor_total_nfs).label('total_valor_nf'),
+            func.sum(Frete.peso_total).label('total_peso'),
+            func.sum(icms_calc).label('total_icms'),
+            func.sum(pis_cofins_calc).label('total_pis_cofins')
+        )
+
+    # Aplicar joins necessários
+    query = query.outerjoin(subq_despesas, Frete.id == subq_despesas.c.frete_id)
+
+    # SEMPRE fazer JOIN com Transportadora (necessário para cálculos de ICMS/PIS/COFINS)
+    query = query.join(Transportadora, Frete.transportadora_id == Transportadora.id)
+
+    # Join adicional para subrota se necessário
+    if needs_join == 'subrota':
+        query = query.outerjoin(
+            CadastroSubRota,
+            db.and_(
+                Frete.uf_destino == CadastroSubRota.cod_uf,
+                Frete.cidade_destino == CadastroSubRota.nome_cidade,
+                CadastroSubRota.ativa == True
+            )
+        )
+
+    # Aplicar filtro dos checkboxes (Transportadora/Freteiro)
+    # IMPORTANTE: NULL em freteiro é tratado como transportadora
+    if not incluir_transportadora and not incluir_freteiro:
+        # Se nenhum checkbox marcado, retornar vazio
+        query = query.filter(db.false())
+    elif incluir_transportadora and not incluir_freteiro:
+        # Apenas transportadoras (freteiro=False OU freteiro IS NULL)
+        query = query.filter(
+            db.or_(
+                Transportadora.freteiro == False,
+                Transportadora.freteiro.is_(None)
+            )
+        )
+    elif not incluir_transportadora and incluir_freteiro:
+        # Apenas freteiros (freteiro=True)
+        query = query.filter(Transportadora.freteiro == True)
+    # else: ambos marcados, não aplicar filtro (traz tudo)
+
+    # Aplicar filtros dinamicamente
+    if filtros:
+        for filtro in filtros:
+            filter_type = filtro['type']
+            filter_value = filtro['value']
+
+            if filter_type == 'uf':
+                query = query.filter(Frete.uf_destino == filter_value)
+            elif filter_type == 'transportadora':
+                # Filtrar pela razão social da transportadora
+                # JOIN já foi feito anteriormente (linha ~666), não precisa adicionar novamente
+                query = query.filter(Transportadora.razao_social == filter_value)
+            elif filter_type == 'modalidade':
+                query = query.filter(Frete.modalidade == filter_value)
+            elif filter_type == 'mes':
+                # Formato esperado: "02/2025" ou "Fev/2025"
+                if '/' in filter_value:
+                    parts = filter_value.split('/')
+                    mes_parte = parts[0]
+                    ano_parte = parts[1]
+
+                    # Converter nome do mês para número se necessário
+                    meses_map = {
+                        'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4, 'Mai': 5, 'Jun': 6,
+                        'Jul': 7, 'Ago': 8, 'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+                    }
+
+                    try:
+                        # Tentar converter diretamente
+                        mes_num = int(mes_parte)
+                    except ValueError:
+                        # Se falhar, tentar pelo mapa de nomes
+                        mes_num = meses_map.get(mes_parte, 1)
+
+                    ano_num = int(ano_parte)
+
+                    query = query.filter(
+                        extract('month', Frete.criado_em) == mes_num,
+                        extract('year', Frete.criado_em) == ano_num
+                    )
+            elif filter_type == 'subrota':
+                query = query.filter(CadastroSubRota.sub_rota == filter_value)
+                # Garantir que o join existe
+                if needs_join != 'subrota':
+                    query = query.outerjoin(
+                        CadastroSubRota,
+                        db.and_(
+                            Frete.uf_destino == CadastroSubRota.cod_uf,
+                            Frete.cidade_destino == CadastroSubRota.nome_cidade,
+                            CadastroSubRota.ativa == True
+                        )
+                    )
+            elif filter_type == 'cliente':
+                query = query.filter(Frete.nome_cliente == filter_value)
+
+    # Agrupar e ordenar
+    if group_by == 'mes':
+        query = query.group_by('ano', 'mes').order_by('ano', 'mes')
+    else:
+        query = query.group_by('dimensao').order_by('dimensao')
+
+    # Executar query
+    resultados = query.all()
+
+    # Processar resultados
+    dados = []
+
+    if group_by == 'mes':
+        meses = {
+            1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+            7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+        }
+
+        for row in resultados:
+            # Calcular frete líquido
+            frete_liquido = calcular_frete_liquido_agregado(
+                valor_frete_bruto=row.total_frete,
+                icms_total=row.total_icms,
+                pis_cofins_total=row.total_pis_cofins
+            )
+
+            # Calcular métricas usando frete líquido
+            metricas = calcular_metricas(
+                valor_frete=frete_liquido,  # Usar frete líquido
+                valor_despesa=row.total_despesa,
+                valor_nf=row.total_valor_nf,
+                peso=row.total_peso
+            )
+
+            mes_nome = meses.get(int(row.mes), str(row.mes))
+            periodo = f"{mes_nome}/{int(row.ano)}"
+
+            dados.append({
+                'label': periodo,
+                'ano': int(row.ano),
+                'mes': int(row.mes),
+                'mes_nome': mes_nome,
+                'periodo': periodo,
+                'qtd_fretes': row.qtd_fretes,
+                'valor_frete_bruto': round(row.total_frete, 2),  # Incluir frete bruto
+                'total_icms': round(row.total_icms, 2),
+                'total_pis_cofins': round(row.total_pis_cofins, 2),
+                **metricas
+            })
+    else:
+        for row in resultados:
+            # Calcular frete líquido
+            frete_liquido = calcular_frete_liquido_agregado(
+                valor_frete_bruto=row.total_frete,
+                icms_total=row.total_icms,
+                pis_cofins_total=row.total_pis_cofins
+            )
+
+            # Calcular métricas usando frete líquido
+            metricas = calcular_metricas(
+                valor_frete=frete_liquido,  # Usar frete líquido
+                valor_despesa=row.total_despesa,
+                valor_nf=row.total_valor_nf,
+                peso=row.total_peso
+            )
+
+            # Tratar valores None
+            label = str(row.dimensao) if row.dimensao else 'NÃO INFORMADO'
+
+            # Tratamento especial para sub-rota
+            if group_by == 'subrota' and not row.dimensao:
+                label = 'SEM SUB-ROTA'
+
+            dados.append({
+                'label': label,
+                'qtd_fretes': row.qtd_fretes,
+                'valor_frete_bruto': round(row.total_frete, 2),  # Incluir frete bruto
+                'total_icms': round(row.total_icms, 2),
+                'total_pis_cofins': round(row.total_pis_cofins, 2),
+                **metricas
+            })
 
     return dados

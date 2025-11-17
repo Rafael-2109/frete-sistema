@@ -1,0 +1,370 @@
+/* ========================================
+   ANÁLISES DE FRETES - DRILL-DOWN DINÂMICO
+   ======================================== */
+
+/* ========== BREADCRUMB DRILL-DOWN ========== */
+.drill-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-weight: 500;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.breadcrumb-item:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.breadcrumb-item i {
+    color: #007bff;
+}
+
+.breadcrumb-item .btn-remove {
+    background: transparent;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 0 5px;
+    margin-left: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.breadcrumb-item .btn-remove:hover {
+    color: #a02622;
+    transform: scale(1.2);
+}
+
+.breadcrumb-current {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.breadcrumb-current i {
+    color: white;
+}
+
+/* ========== MENU CONTEXTUAL DE DRILL-DOWN ========== */
+.drill-context-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    min-width: 220px;
+    max-width: 300px;
+}
+
+.drill-context-menu .menu-header {
+    padding: 12px 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+    font-size: 14px;
+    color: #495057;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.drill-context-menu .menu-items {
+    padding: 5px 0;
+}
+
+.drill-context-menu .menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 15px;
+    border: none;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 14px;
+    color: #212529;
+}
+
+.drill-context-menu .menu-item:hover {
+    background: #f8f9fa;
+}
+
+.drill-context-menu .menu-item i {
+    margin-right: 10px;
+    color: #007bff;
+    width: 20px;
+    text-align: center;
+}
+
+/* ========== CARDS DE MÉTRICAS ========== */
+#metrics-cards {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.metric-card {
+    background: white;
+    border-left: 4px solid #007bff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    flex: 1;
+    min-width: 140px;
+    transition: all 0.3s;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.metric-card:nth-child(1) {
+    border-left-color: #28a745;
+}
+
+.metric-card:nth-child(2) {
+    border-left-color: #17a2b8;
+}
+
+.metric-card:nth-child(3) {
+    border-left-color: #ffc107;
+}
+
+.metric-card:nth-child(4) {
+    border-left-color: #dc3545;
+}
+
+.metric-card:nth-child(5) {
+    border-left-color: #6f42c1;
+}
+
+.metric-card:nth-child(6) {
+    border-left-color: #fd7e14;
+}
+
+.metric-label {
+    font-size: 11px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.metric-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #212529;
+}
+
+/* ========== BOTÕES DE DIMENSÃO ========== */
+.dimension-btn {
+    transition: all 0.2s;
+}
+
+.dimension-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.dimension-btn i {
+    margin-right: 5px;
+}
+
+/* ========== TABELA DRILL-DOWN ========== */
+.table-row-drillable {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.table-row-drillable:hover {
+    background: #f8f9fa !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transform: scale(1.01);
+}
+
+#drill-table {
+    font-size: 14px;
+}
+
+#drill-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+#drill-table tbody td {
+    vertical-align: middle;
+}
+
+/* ========== BADGES ========== */
+.badge-percentual {
+    font-size: 12px;
+    padding: 5px 10px;
+    font-weight: 600;
+}
+
+/* ========== LOADING OVERLAY ========== */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+}
+
+.loading-spinner {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.loading-spinner .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border-width: 0.3em;
+}
+
+.loading-spinner p {
+    margin-top: 15px;
+    margin-bottom: 0;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* ========== TABS CUSTOMIZADAS ========== */
+.nav-tabs .nav-link {
+    font-weight: 600;
+    color: #6c757d;
+    border: none;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    border-bottom-color: #dee2e6;
+}
+
+.nav-tabs .nav-link.active {
+    color: #007bff;
+    background: transparent;
+    border-color: transparent;
+    border-bottom-color: #007bff;
+}
+
+/* ========== BOTÃO DE EXPORTAÇÃO ========== */
+.btn-export-excel {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 100;
+}
+
+/* ========== RESPONSIVIDADE ========== */
+@media (max-width: 992px) {
+    #metrics-cards {
+        flex-wrap: wrap;
+    }
+
+    .metric-card {
+        min-width: calc(50% - 10px);
+    }
+}
+
+@media (max-width: 768px) {
+    .drill-breadcrumb {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .metric-card {
+        min-width: 100%;
+    }
+
+    .dimension-btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    #drill-table {
+        font-size: 12px;
+    }
+
+    .btn-export-excel {
+        position: static;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+}
+
+/* ========== ANIMAÇÕES ========== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* ========== GRÁFICO ========== */
+#drill-chart {
+    min-height: 400px;
+}
+
+/* ========== ESTADO VAZIO ========== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: #dee2e6;
+    margin-bottom: 20px;
+}
+
+.empty-state h5 {
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+.empty-state p {
+    color: #6c757d;
+}
