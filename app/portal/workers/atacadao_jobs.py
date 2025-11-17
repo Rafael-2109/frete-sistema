@@ -5,7 +5,7 @@ Executados em worker dedicado via Redis Queue
 
 import logging
 from datetime import datetime
-import json
+
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,6 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 # Atualizar registros no banco de dados
                 if resultado.get('protocolo'):
                     # Importar modelo Pedido
-                    from app.pedidos.models import Pedido
                     
                     separacoes = Separacao.query.filter_by(
                         separacao_lote_id=dados_agendamento.get('lote_id')
@@ -141,25 +140,19 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                         except Exception as e:
                             logger.error(f"Erro ao converter data: {e}")
                     
-                    # Atualizar Separacao
-                    for sep in separacoes:
-                        sep.protocolo = resultado.get('protocolo')
-                        sep.agendamento_confirmado = False  # Status aguardando confirmação
-                        if data_agendamento_convertida:
-                            sep.agendamento = data_agendamento_convertida
-                    
-                    # Atualizar Pedido correspondente
-                    pedido = Pedido.query.filter_by(
+                    # Atualizar Separacao diretamente (Pedido é VIEW, não atualizar)
+                    update_data = {
+                        'protocolo': resultado.get('protocolo'),
+                        'agendamento_confirmado': False  # Status aguardando confirmação
+                    }
+                    if data_agendamento_convertida:
+                        update_data['agendamento'] = data_agendamento_convertida
+
+                    Separacao.query.filter_by(
                         separacao_lote_id=dados_agendamento.get('lote_id')
-                    ).first()
-                    
-                    if pedido:
-                        pedido.protocolo = resultado.get('protocolo')
-                        if data_agendamento_convertida:
-                            pedido.agendamento = data_agendamento_convertida
-                        logger.info(f"[Worker] ✅ Atualizado Pedido {pedido.num_pedido} com protocolo {resultado.get('protocolo')}")
-                    else:
-                        logger.warning(f"[Worker] ⚠️ Pedido não encontrado para lote {dados_agendamento.get('lote_id')}")
+                    ).update(update_data)
+
+                    logger.info(f"[Worker] ✅ Atualizado lote {dados_agendamento.get('lote_id')} com protocolo {resultado.get('protocolo')}")
                 
                 # Log de sucesso
                 log_sucesso = PortalLog(
@@ -236,7 +229,7 @@ def verificar_status_protocolo_atacadao(protocolo):
     Returns:
         dict: Status do protocolo
     """
-    from app import create_app, db
+    from app import create_app
     from app.portal.atacadao.playwright_client import AtacadaoPlaywrightClient
 
     app = create_app()
@@ -278,6 +271,9 @@ def reprocessar_integracao_erro(integracao_id):
     Returns:
         dict: Resultado do reprocessamento
     """
+    from app import create_app
+    from app.portal.models import PortalIntegracao
+    
     app = create_app()
     
     with app.app_context():

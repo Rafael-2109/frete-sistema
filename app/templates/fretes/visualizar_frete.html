@@ -191,23 +191,122 @@
 
                     <hr>
 
-                    <!-- CTes Relacionados do Odoo -->
-                    <h6><i class="fas fa-file-invoice"></i> CTes Relacionados (Odoo)</h6>
+                    <!-- ✅ SEÇÃO DESTACADA: CTes Vinculados -->
+                    <h6><i class="fas fa-link"></i> CTes Vinculados ao Frete</h6>
+                    {% if ctes_vinculados and ctes_vinculados|length > 0 %}
+                        {% for cte in ctes_vinculados %}
+                        <div class="alert {% if loop.index == 1 %}alert-success{% else %}alert-info{% endif %} mb-2" role="alert"
+                             style="border-left: 4px solid {% if loop.index == 1 %}#28a745{% else %}#17a2b8{% endif %};">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="alert-heading mb-2">
+                                        <i class="fas fa-{% if loop.index == 1 %}check-circle{% else %}info-circle{% endif %}"></i>
+                                        CTe {% if loop.index == 1 %}Principal{% else %}#{{ loop.index }}{% endif %}
+                                        {% if cte.vinculado_manualmente %}
+                                        <span class="badge bg-primary ms-2" title="Vinculado manualmente em {{ cte.vinculado_em | formatar_data_segura if cte.vinculado_em else 'N/A' }}">
+                                            <i class="fas fa-hand-pointer"></i> Manual
+                                        </span>
+                                        {% endif %}
+                                        {% if cte.tipo_cte %}
+                                        <span class="badge bg-secondary ms-1">{{ cte.tipo_cte_descricao }}</span>
+                                        {% endif %}
+                                        {% if cte.odoo_status_descricao %}
+                                        <span class="badge bg-{% if cte.odoo_status_codigo == '06' %}success{% elif cte.odoo_status_codigo == '01' %}secondary{% else %}warning{% endif %} ms-1">
+                                            {{ cte.odoo_status_descricao }}
+                                        </span>
+                                        {% endif %}
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p class="mb-1"><strong>Número/Série:</strong> {{ cte.numero_cte }}/{{ cte.serie_cte }}</p>
+                                            <p class="mb-1"><strong>Chave:</strong> <code class="text-dark small">{{ cte.chave_acesso }}</code></p>
+                                            <p class="mb-1"><strong>Emitente:</strong> {{ cte.nome_emitente }}</p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p class="mb-1"><strong>Valor Total:</strong> <span class="badge bg-success">{{ (cte.valor_total or 0)|moeda_carteira }}</span></p>
+                                            <p class="mb-1"><strong>Data Emissão:</strong> {{ cte.data_emissao | formatar_data_segura if cte.data_emissao else 'N/A' }}</p>
+                                            {% if cte.vencimento %}
+                                            <p class="mb-1"><strong>Vencimento:</strong> {{ cte.vencimento | formatar_data_segura }}</p>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% if cte.numeros_nfs %}
+                                    <p class="mb-0 mt-1"><strong>NFs:</strong>
+                                        {% set cte_nfs = cte.numeros_nfs.split(',') %}
+                                        {% for nf in cte_nfs[:5] %}
+                                        {% if nf.strip() %}
+                                        <span class="badge bg-secondary me-1">{{ nf.strip() }}</span>
+                                        {% endif %}
+                                        {% endfor %}
+                                        {% if cte_nfs|length > 5 %}<span class="text-muted small">+{{ cte_nfs|length - 5 }} NFs</span>{% endif %}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                <div class="ms-3 text-end">
+                                    <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.id) }}"
+                                       class="btn btn-{% if loop.index == 1 %}success{% else %}info{% endif %} btn-sm mb-1 d-block"
+                                       target="_blank"
+                                       title="Ver detalhes completos do CTe">
+                                        <i class="fas fa-external-link-alt"></i> Ver CTe
+                                    </a>
+                                    {% if cte.cte_pdf_path %}
+                                    <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
+                                       class="btn btn-danger btn-sm d-block"
+                                       target="_blank"
+                                       title="Baixar PDF do CTe">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% if ctes_vinculados|length > 1 %}
+                        <div class="alert alert-warning mb-3" role="alert">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> Este frete possui {{ ctes_vinculados|length }} CTes vinculados. Verifique se está correto ou se há duplicação.
+                        </div>
+                        {% endif %}
+                    {% else %}
+                    <div class="alert alert-warning mb-3" role="alert" style="border-left: 4px solid #ffc107;">
+                        <h6 class="alert-heading mb-2">
+                            <i class="fas fa-exclamation-triangle"></i> Nenhum CTe Vinculado
+                        </h6>
+                        <p class="mb-0">
+                            Este frete ainda não possui um CTe vinculado diretamente.
+                            {% if ctes_relacionados and ctes_relacionados|length > 0 %}
+                            Verifique os CTes relacionados abaixo ou edite o frete para vincular manualmente.
+                            {% else %}
+                            Use o botão "Editar Frete" para vincular um CTe manualmente.
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    <!-- CTes Relacionados do Odoo (Sugestões) -->
+                    {% if ctes_relacionados and ctes_relacionados|length > 0 %}
+                    <h6 class="mt-3"><i class="fas fa-search"></i> Outros CTes Relacionados (Sugestões)</h6>
                     <div class="bg-light p-3 rounded">
-                        {% if ctes_relacionados and ctes_relacionados|length > 0 %}
                         <p class="text-muted small mb-2">
                             <i class="fas fa-info-circle"></i> CTes importados do Odoo com NFs em comum e mesmo prefixo de CNPJ da transportadora
                         </p>
                         <div class="d-flex flex-wrap gap-2">
                             {% for cte in ctes_relacionados %}
+                            {% set ja_vinculado = ctes_vinculados and cte in ctes_vinculados %}
+                            {% if not ja_vinculado %}
                             <div class="btn-group mb-1" role="group">
                                 <a href="{{ url_for('cte.detalhar_cte', cte_id=cte.id) }}"
-                                   class="btn btn-sm btn-outline-success"
-                                   title="CTe {{ cte.numero_cte }}/{{ cte.serie_cte }} - {{ cte.nome_emitente }} - {{ (cte.valor_total or 0)|moeda_carteira }}"
+                                   class="btn btn-sm btn-outline-info d-flex align-items-center"
+                                   title="CTe {{ cte.numero_cte }}/{{ cte.serie_cte }} - {{ cte.nome_emitente }} - {{ (cte.valor_total or 0)|moeda_carteira }}{% if cte.odoo_status_descricao %} - {{ cte.odoo_status_descricao }}{% endif %}"
                                    target="_blank">
-                                    <i class="fas fa-external-link-alt"></i>
+                                    <i class="fas fa-external-link-alt me-1"></i>
                                     CTe {{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}
-                                    <span class="badge bg-success ms-1" style="color: white;">{{ (cte.valor_total or 0)|moeda_carteira }}</span>
+                                    <span class="badge bg-info ms-1" style="color: white;">{{ (cte.valor_total or 0)|moeda_carteira }}</span>
+                                    {% if cte.odoo_status_descricao %}
+                                    <span class="badge bg-{% if cte.odoo_status_codigo == '06' %}success{% elif cte.odoo_status_codigo == '01' %}secondary{% else %}warning{% endif %} ms-1" style="color: white;">
+                                        {{ cte.odoo_status_descricao }}
+                                    </span>
+                                    {% endif %}
                                 </a>
                                 {% if cte.cte_pdf_path %}
                                 <a href="{{ url_for('cte.visualizar_pdf', cte_id=cte.id) }}"
@@ -222,14 +321,11 @@
                                 </button>
                                 {% endif %}
                             </div>
+                            {% endif %}
                             {% endfor %}
                         </div>
-                        {% else %}
-                        <p class="text-muted mb-0">
-                            <i class="fas fa-info-circle"></i> Nenhum CTe do Odoo encontrado com NFs em comum e prefixo CNPJ da transportadora
-                        </p>
-                        {% endif %}
                     </div>
+                    {% endif %}
                 </div>
             </div>
 

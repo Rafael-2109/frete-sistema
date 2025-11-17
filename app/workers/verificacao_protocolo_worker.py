@@ -68,19 +68,16 @@ def processar_verificacao_protocolo():
                                 
                                 # Atualizar no banco se confirmado
                                 if resultado['confirmado'] and lote_id:
-                                    # Atualizar Pedido
-                                    pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
-                                    if pedido:
-                                        pedido.agendamento = datetime.strptime(resultado['data_agendamento'], '%Y-%m-%d').date()
-                                        
-                                        # Atualizar Separações
-                                        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
-                                        for sep in separacoes:
-                                            sep.agendamento_confirmado = True
-                                            sep.agendamento = pedido.agendamento
-                                        
-                                        db.session.commit()
-                                        logger.info(f"✅ Banco atualizado para lote {lote_id}")
+                                    # Atualizar Separações diretamente (Pedido é VIEW, não atualizar)
+                                    data_agend_obj = datetime.strptime(resultado['data_agendamento'], '%Y-%m-%d').date()
+
+                                    Separacao.query.filter_by(separacao_lote_id=lote_id).update({
+                                        'agendamento_confirmado': True,
+                                        'agendamento': data_agend_obj
+                                    })
+
+                                    db.session.commit()
+                                    logger.info(f"✅ Banco atualizado para lote {lote_id}")
                                 
                                 logger.info(f"✅ Protocolo {protocolo}: Data {resultado['data_agendamento']}, Confirmado: {resultado['confirmado']}")
                             else:

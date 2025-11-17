@@ -31,7 +31,7 @@
             Este frete já está vinculado ao CTe:
             {% for cte_vinc in frete.conhecimentos_transporte %}
                 <strong>{{ cte_vinc.numero_cte }}{% if cte_vinc.serie_cte %}/{{ cte_vinc.serie_cte }}{% endif %}</strong>
-                ({{ (cte_vinc.valor_frete or 0)|moeda_carteira }})
+                ({{ (cte_vinc.valor_total or 0)|moeda_carteira }})
                 {% if cte_vinc.vinculado_manualmente %}
                     <span class="badge bg-info">Vinculado Manualmente</span>
                 {% endif %}
@@ -63,13 +63,12 @@
                                     Emitente: {{ cte.nome_emitente }}<br>
                                     Emissão: {{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else 'N/A' }}<br>
                                     Valor Total: {{ (cte.valor_total or 0)|moeda_carteira }}<br>
-                                    Valor Frete: {{ (cte.valor_frete or 0)|moeda_carteira }}
                                 </small>
                             </div>
                             <div class="col-md-4 text-end">
                                 <button type="button"
                                         class="btn btn-success btn-sm mb-1"
-                                        onclick="preencherCTe({{ cte.id }}, '{{ cte.numero_cte }}', {{ cte.valor_frete or 0 }})">
+                                        onclick="preencherCTe({{ cte.id }}, '{{ cte.numero_cte }}', {{ cte.valor_total or 0 }})">
                                     <i class="fas fa-check"></i> Usar este CTe
                                 </button>
                                 {% if cte.cte_pdf_path %}
@@ -128,7 +127,7 @@
                                     <td>
                                         <button type="button"
                                                 class="btn btn-success btn-sm"
-                                                onclick="preencherCTe({{ cte.id }}, '{{ cte.numero_cte }}', {{ cte.valor_frete or 0 }})">
+                                                onclick="preencherCTe({{ cte.id }}, '{{ cte.numero_cte }}', {{ cte.valor_total or 0 }})">
                                             <i class="fas fa-check"></i> Usar
                                         </button>
                                         {% if cte.cte_pdf_path %}
@@ -241,13 +240,24 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     {{ form.valor_cte.label(class="form-label font-weight-bold text-info") }}
+                                    {% if frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0 %}
+                                    <span class="badge bg-success ms-2">
+                                        <i class="fas fa-lock"></i> Bloqueado - CTe Vinculado
+                                    </span>
+                                    {% endif %}
                                     <div class="input-group">
                                         <div class="input-group-prepend">
                                             <span class="input-group-text">R$</span>
                                         </div>
-                                        {{ form.valor_cte(class="form-control", id="valor_cte") }}
+                                        {{ form.valor_cte(class="form-control", id="valor_cte", readonly=(frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0)) }}
                                     </div>
-                                    <small class="text-muted">{{ form.valor_cte.description }}</small>
+                                    <small class="text-muted">
+                                        {% if frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0 %}
+                                        <i class="fas fa-info-circle"></i> Campo bloqueado pois há CTe vinculado. O valor vem do CTe automaticamente.
+                                        {% else %}
+                                        {{ form.valor_cte.description }}
+                                        {% endif %}
+                                    </small>
                                     {% if form.valor_cte.errors %}
                                         {% for error in form.valor_cte.errors %}
                                             <div class="text-danger small">{{ error }}</div>

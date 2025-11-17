@@ -748,15 +748,20 @@ def visualizar_frete(frete_id):
         DespesaExtra.frete_id == frete_id
     ).all()
 
-    # Buscar CTes relacionados do Odoo
+    # Buscar CTes relacionados do Odoo (sugestões)
     ctes_relacionados = frete.buscar_ctes_relacionados()
+
+    # ✅ BUSCAR CTes VINCULADOS (usa backref 'conhecimentos_transporte')
+    # Retorna TODOS os CTes com frete_id = frete.id
+    ctes_vinculados = frete.conhecimentos_transporte if frete.conhecimentos_transporte else []
 
     return render_template('fretes/visualizar_frete.html',
                          frete=frete,
                          despesas_extras=despesas_extras,
                          movimentacoes_conta=movimentacoes_conta,
                          emails_anexados=emails_anexados,
-                         ctes_relacionados=ctes_relacionados)
+                         ctes_relacionados=ctes_relacionados,
+                         ctes_vinculados=ctes_vinculados)
 
 @fretes_bp.route('/<int:frete_id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -952,7 +957,6 @@ def lancar_frete_odoo(frete_id):
     """
     try:
         from app.fretes.services import LancamentoOdooService
-        from app.fretes.models import ConhecimentoTransporte
 
         # Buscar frete
         frete = Frete.query.get_or_404(frete_id)

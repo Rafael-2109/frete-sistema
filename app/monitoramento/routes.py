@@ -2322,12 +2322,17 @@ def sincronizar_agendamento_pedido(entrega):
             .order_by(AgendamentoEntrega.criado_em.desc()).first()
         
         if ultimo_agendamento:
-            # Transferir dados do agendamento para o pedido
-            pedido.agendamento = ultimo_agendamento.data_agendada
-            pedido.protocolo = ultimo_agendamento.protocolo_agendamento
-            
+            # Transferir dados do agendamento para as Separações (não para VIEW Pedido)
+            Separacao.query.filter_by(
+                separacao_lote_id=pedido.separacao_lote_id,
+                num_pedido=pedido.num_pedido
+            ).update({
+                'agendamento': ultimo_agendamento.data_agendada,
+                'protocolo': ultimo_agendamento.protocolo_agendamento
+            })
+
             # ✅ NÃO limpar expedição aqui - apenas no evento "NF no CD"
-            
+
             db.session.commit()
             return True, f"Pedido {pedido.num_pedido} atualizado com agendamento"
         else:

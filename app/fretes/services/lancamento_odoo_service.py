@@ -598,30 +598,48 @@ class LancamentoOdooService:
             # ========================================
             # ETAPA 8: Atualizar impostos do PO
             # ========================================
+            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+            try:
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 8: {e}")
+
             try:
                 self.odoo.execute_kw(
                     'purchase.order',
                     'onchange_l10n_br_calcular_imposto',
                     [[purchase_order_id]]
                 )
-            except Exception:
-                # Ignorar erro de serialização (método executa corretamente)
-                pass
+            except Exception as e:
+                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                current_app.logger.warning(
+                    f"⚠️ ETAPA 8 falhou (não crítico): {e.__class__.__name__}. "
+                    f"Impostos podem precisar ajuste manual no Odoo."
+                )
 
-            self._registrar_auditoria(
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=8,
-                etapa_descricao="Atualizar impostos do Purchase Order",
-                modelo_odoo='purchase.order',
-                metodo_odoo='onchange_l10n_br_calcular_imposto',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem='Impostos atualizados (erro de serialização ignorado)',
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id
-            )
+            try:
+                self._registrar_auditoria(
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=8,
+                    etapa_descricao="Atualizar impostos do Purchase Order",
+                    modelo_odoo='purchase.order',
+                    metodo_odoo='onchange_l10n_br_calcular_imposto',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem='Impostos atualizados (erro de serialização ignorado)',
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id
+                )
+            except Exception as e:
+                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                current_app.logger.error(
+                    f"❌ Erro ao registrar auditoria ETAPA 8 (não crítico): {e}"
+                )
+                # Reconectar sessão se perdeu conexão
+                db.session.rollback()
+                db.session.remove()
 
             resultado['etapas_concluidas'] = 8
 
@@ -759,30 +777,49 @@ class LancamentoOdooService:
             # ========================================
             # ETAPA 12: Atualizar impostos da Invoice
             # ========================================
+            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+            try:
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 12: {e}")
+
             try:
                 self.odoo.execute_kw(
                     'account.move',
                     'onchange_l10n_br_calcular_imposto',
                     [[invoice_id]]
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                current_app.logger.warning(
+                    f"⚠️ ETAPA 12 falhou (não crítico): {e.__class__.__name__}. "
+                    f"Impostos podem precisar ajuste manual no Odoo."
+                )
 
-            self._registrar_auditoria(
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=12,
-                etapa_descricao="Atualizar impostos da Invoice",
-                modelo_odoo='account.move',
-                metodo_odoo='onchange_l10n_br_calcular_imposto',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem='Impostos atualizados',
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id
-            )
+            try:
+                self._registrar_auditoria(
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=12,
+                    etapa_descricao="Atualizar impostos da Invoice",
+                    modelo_odoo='account.move',
+                    metodo_odoo='onchange_l10n_br_calcular_imposto',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem='Impostos atualizados',
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id
+                )
+            except Exception as e:
+                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                current_app.logger.error(
+                    f"❌ Erro ao registrar auditoria ETAPA 12 (não crítico): {e}"
+                )
+                # Reconectar sessão se perdeu conexão
+                db.session.rollback()
+                db.session.remove()
 
             resultado['etapas_concluidas'] = 12
 
@@ -853,30 +890,49 @@ class LancamentoOdooService:
             # ========================================
             # ETAPA 14: Atualizar impostos novamente
             # ========================================
+            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+            try:
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 14: {e}")
+
             try:
                 self.odoo.execute_kw(
                     'account.move',
                     'onchange_l10n_br_calcular_imposto_btn',
                     [[invoice_id]]
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                current_app.logger.warning(
+                    f"⚠️ ETAPA 14 falhou (não crítico): {e.__class__.__name__}. "
+                    f"Impostos podem precisar ajuste manual no Odoo."
+                )
 
-            self._registrar_auditoria(
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=14,
-                etapa_descricao="Atualizar impostos da Invoice (final)",
-                modelo_odoo='account.move',
-                metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem='Impostos atualizados',
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id
-            )
+            try:
+                self._registrar_auditoria(
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=14,
+                    etapa_descricao="Atualizar impostos da Invoice (final)",
+                    modelo_odoo='account.move',
+                    metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem='Impostos atualizados',
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id
+                )
+            except Exception as e:
+                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                current_app.logger.error(
+                    f"❌ Erro ao registrar auditoria ETAPA 14 (não crítico): {e}"
+                )
+                # Reconectar sessão se perdeu conexão
+                db.session.rollback()
+                db.session.remove()
 
             resultado['etapas_concluidas'] = 14
 
