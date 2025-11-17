@@ -195,9 +195,23 @@ class OdooConnection:
         kwargs = {}
         if fields:
             kwargs['fields'] = fields
-        
+
         return self.execute_kw(model, 'read', [ids], kwargs)
-    
+
+    def write(self, model: str, ids: list, values: dict) -> bool:
+        """
+        Atualiza registros no Odoo
+
+        Args:
+            model: Nome do modelo Odoo (ex: 'purchase.order')
+            ids: Lista de IDs a atualizar
+            values: Dicionário com campos e valores a atualizar
+
+        Returns:
+            True se sucesso, False caso contrário
+        """
+        return self.execute_kw(model, 'write', [ids, values])
+
     def buscar_registro_por_id(self, model: str, record_id: int, fields: Optional[list] = None) -> Optional[Dict]:
         """
         Busca um único registro por ID
