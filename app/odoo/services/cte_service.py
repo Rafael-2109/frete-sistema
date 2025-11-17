@@ -57,7 +57,19 @@ class CteService:
     def __init__(self):
         """Inicializa conexão com Odoo"""
         self.odoo = get_odoo_connection()
-        self.file_storage = get_file_storage()
+        self._file_storage = None  # ✅ Lazy loading - só instancia quando necessário
+
+    @property
+    def file_storage(self):
+        """
+        Lazy loading do file storage (precisa de app context)
+
+        FileStorage precisa de current_app.config, então só instanciamos
+        quando for realmente usar (já estará dentro do app_context)
+        """
+        if self._file_storage is None:
+            self._file_storage = get_file_storage()
+        return self._file_storage
 
     def importar_ctes(
         self,
