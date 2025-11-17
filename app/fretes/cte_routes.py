@@ -318,7 +318,7 @@ def vincular_frete(cte_id):
             cte_id=cte_id,
             frete_id=frete_id,
             manual=True,
-            usuario=current_user.username if current_user else 'Sistema'
+            usuario=current_user.nome if current_user else 'Sistema'
         )
 
         if sucesso:
@@ -352,7 +352,7 @@ def desvincular_frete(cte_id):
         cte.vinculado_em = None
         cte.vinculado_por = None
         cte.atualizado_em = datetime.now()
-        cte.atualizado_por = current_user.username if current_user else 'Sistema'
+        cte.atualizado_por = current_user.nome if current_user else 'Sistema'
 
         db.session.commit()
 

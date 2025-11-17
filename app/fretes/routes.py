@@ -1013,7 +1013,7 @@ def lancar_frete_odoo(frete_id):
 
         # Criar service e executar lançamento
         service = LancamentoOdooService(
-            usuario_nome=current_user.username,
+            usuario_nome=current_user.nome,
             usuario_ip=request.remote_addr
         )
 
