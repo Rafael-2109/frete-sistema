@@ -136,7 +136,8 @@ class LancamentoOdooService:
         contexto_odoo: Optional[Dict] = None,
         dfe_id: Optional[int] = None,
         purchase_order_id: Optional[int] = None,
-        invoice_id: Optional[int] = None
+        invoice_id: Optional[int] = None,
+        campos_alterados: Optional[List[str]] = None
     ) -> Tuple[bool, Any, Optional[str]]:
         """
         Executa função com auditoria automática
@@ -165,7 +166,8 @@ class LancamentoOdooService:
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id,
                 purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id
+                invoice_id=invoice_id,
+                campos_alterados=campos_alterados
             )
 
             return True, resultado, None
@@ -191,7 +193,8 @@ class LancamentoOdooService:
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id,
                 purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id
+                invoice_id=invoice_id,
+                campos_alterados=campos_alterados
             )
 
             return False, None, erro_msg
