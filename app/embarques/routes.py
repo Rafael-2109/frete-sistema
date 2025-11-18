@@ -69,7 +69,18 @@ def apagar_fretes_sem_cte_embarque(embarque_id):
 @require_embarques()  # 🔒 VENDEDORES: Apenas com dados próprios
 def visualizar_embarque(id):
     embarque = Embarque.query.get_or_404(id)
-    
+
+    # 🔄 SINCRONIZAÇÃO AUTOMÁTICA: Atualiza totais do embarque com dados de NF ou Separacao
+    from app.embarques.services.sync_totais_service import sincronizar_totais_embarque
+    resultado_sync = sincronizar_totais_embarque(embarque)
+
+    if resultado_sync.get('success'):
+        logger.info(f"[VISUALIZAR] ✅ Embarque #{embarque.numero} sincronizado: "
+                   f"{resultado_sync['itens_atualizados']} itens atualizados")
+    else:
+        logger.warning(f"[VISUALIZAR] ⚠️ Erro na sincronização do embarque #{embarque.numero}: "
+                      f"{resultado_sync.get('error')}")
+
     # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
     if current_user.perfil == 'vendedor':
         # Verifica se o vendedor tem permissão para ver este embarque
@@ -2469,4 +2480,49 @@ def download_pdf_protocolo(protocolo, filename):
         return jsonify({
             'success': False,
             'message': f'Erro ao baixar PDF: {str(e)}'
+        }), 500
+
+
+@embarques_bp.route('/api/sincronizar-totais/<int:embarque_id>', methods=['POST'])
+@login_required
+@require_embarques()
+def api_sincronizar_totais(embarque_id):
+    """
+    🔄 API: Sincroniza totais do embarque com dados de NF ou Separacao
+
+    OBJETIVO:
+        Atualizar EmbarqueItem.peso, valor, pallets com dados reais de:
+        1. FaturamentoProduto (se NF validada)
+        2. Separacao (se NF não validada)
+
+    RETORNO:
+        JSON com detalhes da sincronização
+
+    TESTE:
+        curl -X POST http://localhost:5000/embarques/api/sincronizar-totais/123
+    """
+    try:
+        from app.embarques.services.sync_totais_service import sincronizar_totais_embarque
+
+        # Verifica se embarque existe
+        embarque = Embarque.query.get(embarque_id)
+        if not embarque:
+            return jsonify({
+                'success': False,
+                'error': f'Embarque {embarque_id} não encontrado'
+            }), 404
+
+        # Executa sincronização
+        resultado = sincronizar_totais_embarque(embarque)
+
+        if resultado.get('success'):
+            return jsonify(resultado), 200
+        else:
+            return jsonify(resultado), 500
+
+    except Exception as e:
+        logger.error(f"[API] Erro ao sincronizar embarque {embarque_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
