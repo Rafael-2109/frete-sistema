@@ -2,6 +2,7 @@
 Rotas para Gerenciamento de CTes (Conhecimentos de Transporte)
 ===============================================================
 
+
 Rotas para listar, sincronizar e visualizar CTes importados do Odoo
 
 AUTOR: Sistema de Fretes
