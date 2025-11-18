@@ -950,15 +950,43 @@ class LancamentoOdooService:
             resultado['etapas_concluidas'] = 15
 
             # ========================================
-            # ETAPA 16: Atualizar frete no sistema
+            # ETAPA 16: Atualizar frete E criar vínculo bidirecional com CTe
             # ========================================
             try:
+                # Atualizar campos do Frete
                 frete.odoo_dfe_id = dfe_id
                 frete.odoo_purchase_order_id = purchase_order_id
                 frete.odoo_invoice_id = invoice_id
                 frete.lancado_odoo_em = datetime.now()
                 frete.lancado_odoo_por = self.usuario_nome
                 frete.status = 'LANCADO_ODOO'
+
+                # ✅ CRIAR VÍNCULO BIDIRECIONAL Frete ↔ CTe
+                if cte:
+                    # Frete → CTe
+                    if not frete.frete_cte_id:
+                        frete.frete_cte_id = cte.id
+                        current_app.logger.info(f"🔗 Vinculando Frete → CTe: frete_cte_id = {cte.id}")
+
+                    # CTe → Frete
+                    if not cte.frete_id:
+                        cte.frete_id = frete_id
+                        cte.vinculado_em = datetime.now()
+                        cte.vinculado_por = self.usuario_nome
+                        current_app.logger.info(f"🔗 Vinculando CTe → Frete: frete_id = {frete_id}")
+
+                    # ✅ Atualizar IDs do Odoo no CTe (redundância para consultas)
+                    cte.odoo_purchase_fiscal_id = purchase_order_id
+
+                    # odoo_invoice_ids é JSON (lista)
+                    import json
+                    if cte.odoo_invoice_ids:
+                        invoice_list = json.loads(cte.odoo_invoice_ids)
+                        if invoice_id not in invoice_list:
+                            invoice_list.append(invoice_id)
+                            cte.odoo_invoice_ids = json.dumps(invoice_list)
+                    else:
+                        cte.odoo_invoice_ids = json.dumps([invoice_id])
 
                 db.session.commit()
 
@@ -967,11 +995,11 @@ class LancamentoOdooService:
                     cte_id=cte_id,
                     chave_cte=cte_chave,
                     etapa=16,
-                    etapa_descricao="Atualizar frete no sistema local",
-                    modelo_odoo='fretes (local)',
+                    etapa_descricao="Atualizar frete e vincular com CTe",
+                    modelo_odoo='fretes + conhecimento_transporte (local)',
                     acao='write',
                     status='SUCESSO',
-                    mensagem='Frete atualizado com IDs do Odoo',
+                    mensagem='Frete atualizado com IDs do Odoo + vínculo bidirecional criado',
                     dfe_id=dfe_id,
                     purchase_order_id=purchase_order_id,
                     invoice_id=invoice_id
@@ -993,7 +1021,7 @@ class LancamentoOdooService:
             resultado['auditoria'] = self.auditoria_logs
 
             # Log de sucesso final
-            tempo_total = time.time() - inicio
+            tempo_total = time.time() - inicio_total
             logging.info(
                 f"[LANCAMENTO_CTE] ✅ CONCLUÍDO | "
                 f"Frete ID: {frete_id} | "

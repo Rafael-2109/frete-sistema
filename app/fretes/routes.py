@@ -973,25 +973,37 @@ def lancar_frete_odoo(frete_id):
         cte = None
         chave_cte = None
 
-        # Tentar buscar CTe relacionado
-        ctes_relacionados = frete.buscar_ctes_relacionados()
+        # ✅ PRIORIDADE 1: Vínculo explícito (frete_cte_id)
+        if frete.frete_cte_id:
+            cte = frete.cte
+            if cte:
+                chave_cte = cte.chave_acesso
+                logger.info(f"✅ Usando CTe vinculado explicitamente: {cte.numero_cte} (ID {cte.id})")
+            else:
+                logger.warning(f"⚠️ frete_cte_id={frete.frete_cte_id} mas CTe não encontrado")
 
-        if not ctes_relacionados:
-            return jsonify({
-                'sucesso': False,
-                'mensagem': 'Nenhum CTe relacionado encontrado',
-                'erro': 'É necessário ter um CTe vinculado para lançar no Odoo'
-            }), 400
+        # ✅ FALLBACK: Busca automática por NFs + CNPJ
+        if not cte:
+            logger.info("🔍 Buscando CTe por NFs em comum + CNPJ...")
+            ctes_relacionados = frete.buscar_ctes_relacionados()
 
-        if len(ctes_relacionados) > 1:
-            return jsonify({
-                'sucesso': False,
-                'mensagem': f'Múltiplos CTes encontrados ({len(ctes_relacionados)})',
-                'erro': 'Por favor, vincule manualmente o CTe correto antes de lançar'
-            }), 400
+            if not ctes_relacionados:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Nenhum CTe relacionado encontrado',
+                    'erro': 'É necessário ter um CTe vinculado para lançar no Odoo'
+                }), 400
 
-        cte = ctes_relacionados[0]
-        chave_cte = cte.chave_acesso
+            if len(ctes_relacionados) > 1:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': f'Múltiplos CTes encontrados ({len(ctes_relacionados)})',
+                    'erro': 'Por favor, vincule manualmente o CTe correto antes de lançar'
+                }), 400
+
+            cte = ctes_relacionados[0]
+            chave_cte = cte.chave_acesso
+            logger.info(f"✅ CTe encontrado automaticamente: {cte.numero_cte} (ID {cte.id})")
 
         if not chave_cte or len(chave_cte) != 44:
             return jsonify({

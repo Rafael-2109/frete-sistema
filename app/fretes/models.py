@@ -64,6 +64,9 @@ class Frete(db.Model):
     # Fatura de frete (uma fatura pode ter N fretes)
     fatura_frete_id = db.Column(db.Integer, db.ForeignKey('faturas_frete.id'))
 
+    # Vínculo com ConhecimentoTransporte (CTe local)
+    frete_cte_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)
+
     # Vínculos com Odoo
     odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)  # ID do DFe no Odoo
     odoo_purchase_order_id = db.Column(db.Integer, nullable=True, index=True)  # ID do PO no Odoo
@@ -90,6 +93,7 @@ class Frete(db.Model):
     transportadora = db.relationship('Transportadora', backref='fretes')
     fatura_frete = db.relationship('FaturaFrete', backref='fretes')
     despesas_extras = db.relationship('DespesaExtra', backref='frete', cascade='all, delete-orphan')
+    cte = db.relationship('ConhecimentoTransporte', foreign_keys=[frete_cte_id], backref='frete_vinculado')
 
     def diferenca_cotado_cte(self):
         """Retorna a diferença entre valor cotado e valor CTe"""
@@ -216,7 +220,7 @@ class Frete(db.Model):
         # 2. Tenham pelo menos 1 NF em comum
         # 3. Estejam ativos
         # 4. ✅ Tomador seja a empresa
-        from sqlalchemy import and_, or_
+        from sqlalchemy import and_
 
         ctes_relacionados = ConhecimentoTransporte.query.filter(
             and_(
