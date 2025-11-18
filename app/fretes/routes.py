@@ -972,7 +972,7 @@ def lancar_frete_odoo(frete_id):
         # Buscar CTe relacionado pela chave
         cte = None
         chave_cte = None
-
+ 
         # ✅ PRIORIDADE 1: Vínculo explícito (frete_cte_id)
         if frete.frete_cte_id:
             cte = frete.cte
