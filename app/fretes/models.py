@@ -584,7 +584,7 @@ class ConhecimentoTransporte(db.Model):
     vinculado_por = db.Column(db.String(100), nullable=True)
 
     # Relacionamentos
-    frete = db.relationship('Frete', backref='conhecimentos_transporte', lazy=True)
+    frete = db.relationship('Frete', foreign_keys=[frete_id], backref='conhecimentos_transporte', lazy=True)
 
     # Relacionamento self-referencial para CTes complementares
     cte_original = db.relationship(
