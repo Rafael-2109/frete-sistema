@@ -139,7 +139,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h6><i class="fas fa-weight"></i> Totais das NFs</h6>
-                            <p><strong>Peso Total:</strong> {{ (frete.peso_total)|moeda_carteira }} kg</p>
+                            <p><strong>Peso Total:</strong> {{ frete.peso_total|numero_br(2) }} kg</p>
                             <p><strong>Valor Total:</strong> {{ (frete.valor_total_nfs)|moeda_carteira }}</p>
                             <p><strong>Quantidade de NFs:</strong> {{ frete.quantidade_nfs }}</p>
                         </div>
@@ -340,23 +340,23 @@
                     <div class="row">
                         <div class="col-md-6">
                             <p><strong>Nome da Tabela:</strong> {{ frete.tabela_nome_tabela or 'N/A' }}</p>
-                            <p><strong>Valor por Kg:</strong> {{ (frete.tabela_valor_kg)|moeda_carteira(4) if
+                            <p><strong>Valor por Kg:</strong> {{ frete.tabela_valor_kg|moeda_carteira if
                                 frete.tabela_valor_kg else 'N/A' }}</p>
-                            <p><strong>Percentual Valor:</strong> {{ (frete.tabela_percentual_valor)|moeda_carteira if
+                            <p><strong>Percentual Valor:</strong> {{ frete.tabela_percentual_valor|numero_br(4) if
                                 frete.tabela_percentual_valor else 'N/A' }}%</p>
-                            <p><strong>Frete Mínimo Peso:</strong> {{ (frete.tabela_frete_minimo_peso)|moeda_carteira
-                                if frete.tabela_frete_minimo_peso else 'N/A' }}</p>
-                            <p><strong>Frete Mínimo Valor:</strong> {{ (frete.tabela_frete_minimo_valor)|moeda_carteira
+                            <p><strong>Frete Mínimo Peso:</strong> {{ frete.tabela_frete_minimo_peso|numero_br(2) if
+                                frete.tabela_frete_minimo_peso else 'N/A' }} kg</p>
+                            <p><strong>Frete Mínimo Valor:</strong> {{ frete.tabela_frete_minimo_valor|moeda_carteira
                                 if frete.tabela_frete_minimo_valor else 'N/A' }}</p>
                         </div>
                         <div class="col-md-6">
-                            <p><strong>GRIS:</strong> {{ (frete.tabela_percentual_gris)|moeda_carteira if
+                            <p><strong>GRIS:</strong> {{ frete.tabela_percentual_gris|numero_br(4) if
                                 frete.tabela_percentual_gris else 'N/A' }}%</p>
-                            <p><strong>ADV:</strong> {{ (frete.tabela_percentual_adv)|moeda_carteira if
+                            <p><strong>ADV:</strong> {{ frete.tabela_percentual_adv|numero_br(4) if
                                 frete.tabela_percentual_adv else 'N/A' }}%</p>
-                            <p><strong>RCA:</strong> {{ (frete.tabela_percentual_rca)|moeda_carteira if
+                            <p><strong>RCA:</strong> {{ frete.tabela_percentual_rca|numero_br(4) if
                                 frete.tabela_percentual_rca else 'N/A' }}%</p>
-                            <p><strong>Pedágio/100kg:</strong> {{ (frete.tabela_pedagio_por_100kg)|moeda_carteira if
+                            <p><strong>Pedágio/100kg:</strong> {{ frete.tabela_pedagio_por_100kg|moeda_carteira if
                                 frete.tabela_pedagio_por_100kg else 'N/A' }}</p>
                             <p><strong>Valor Despacho:</strong> {{ (frete.tabela_valor_despacho)|moeda_carteira if
                                 frete.tabela_valor_despacho else 'N/A' }}</p>

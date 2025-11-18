@@ -61,7 +61,8 @@ class OdooConnection:
                 
                 self._common = xmlrpc.client.ServerProxy(
                     f'{self.url}/xmlrpc/2/common',
-                    context=self.ssl_context
+                    context=self.ssl_context,
+                    allow_none=True  # ✅ Permite None nos retornos do Odoo
                 )
                 logger.info("✅ Conexão common estabelecida com Odoo")
             except Exception as e:
@@ -78,7 +79,8 @@ class OdooConnection:
                 
                 self._models = xmlrpc.client.ServerProxy(
                     f'{self.url}/xmlrpc/2/object',
-                    context=self.ssl_context
+                    context=self.ssl_context,
+                    allow_none=True  # ✅ Permite None nos retornos do Odoo
                 )
                 logger.info("✅ Conexão models estabelecida com Odoo")
             except Exception as e:

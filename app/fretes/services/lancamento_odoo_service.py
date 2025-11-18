@@ -17,6 +17,7 @@ ETAPAS:
 """
 
 import json
+import logging
 import time
 import traceback
 from datetime import datetime, date
@@ -43,6 +44,7 @@ class LancamentoOdooService:
     TEAM_LANCAMENTO_FRETE_ID = 119
     PAYMENT_PROVIDER_TRANSFERENCIA_ID = 30
     COMPANY_NACOM_GOYA_CD_ID = 4
+    PICKING_TYPE_CD_RECEBIMENTO_ID = 13  # ✅ CD: Recebimento (CD)
 
     def __init__(self, usuario_nome: str, usuario_ip: Optional[str] = None):
         """
@@ -145,11 +147,18 @@ class LancamentoOdooService:
         Returns:
             (sucesso, resultado, mensagem_erro)
         """
+        # ✅ LOG VISUAL: Início da etapa
+        current_app.logger.info(f"⏳ [ETAPA {etapa:02d}] {etapa_descricao}...")
+
         inicio = time.time()
 
         try:
             resultado = funcao()
             tempo_ms = int((time.time() - inicio) * 1000)
+
+            # ✅ LOG VISUAL: Sucesso com tempo
+            tempo_formatado = f"{tempo_ms}ms" if tempo_ms < 1000 else f"{tempo_ms/1000:.1f}s"
+            current_app.logger.info(f"✅ [ETAPA {etapa:02d}] Concluída em {tempo_formatado}")
 
             self._registrar_auditoria(
                 frete_id=frete_id,
@@ -176,6 +185,10 @@ class LancamentoOdooService:
             tempo_ms = int((time.time() - inicio) * 1000)
             erro_msg = str(e)
             erro_trace = traceback.format_exc()
+
+            # ❌ LOG VISUAL: Erro com tempo
+            tempo_formatado = f"{tempo_ms}ms" if tempo_ms < 1000 else f"{tempo_ms/1000:.1f}s"
+            current_app.logger.error(f"❌ [ETAPA {etapa:02d}] FALHOU em {tempo_formatado}: {erro_msg}")
 
             self._registrar_auditoria(
                 frete_id=frete_id,
@@ -226,6 +239,14 @@ class LancamentoOdooService:
                 'erro': str (se houver)
             }
         """
+        # 🚀 LOG VISUAL: Início do lançamento
+        inicio_total = time.time()
+        current_app.logger.info("="*80)
+        current_app.logger.info(f"🚀 INICIANDO LANÇAMENTO ODOO - Frete #{frete_id}")
+        current_app.logger.info(f"📄 Chave CTe: {cte_chave}")
+        current_app.logger.info(f"👤 Usuário: {self.usuario_nome}")
+        current_app.logger.info("="*80)
+
         resultado = {
             'sucesso': False,
             'mensagem': '',
@@ -533,13 +554,14 @@ class LancamentoOdooService:
             current_app.logger.info(f"Purchase Order criado: ID {purchase_order_id}")
 
             # ========================================
-            # ETAPA 7: Atualizar campos do PO (incluindo partner_ref)
+            # ETAPA 7: Atualizar campos do PO (incluindo partner_ref e picking_type_id)
             # ========================================
             # Preparar dados para atualização
             dados_po = {
                 'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
                 'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
-                'company_id': self.COMPANY_NACOM_GOYA_CD_ID
+                'company_id': self.COMPANY_NACOM_GOYA_CD_ID,
+                'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
             }
 
             # ✅ ADICIONAR partner_ref com número da fatura (se houver)
@@ -580,7 +602,7 @@ class LancamentoOdooService:
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=7,
-                etapa_descricao="Atualizar team_id, payment_provider_id, company_id e partner_ref",
+                etapa_descricao="Atualizar team_id, payment_provider_id, company_id, picking_type_id e partner_ref",
                 modelo_odoo='purchase.order',
                 acao='write',
                 dfe_id=dfe_id,
@@ -596,51 +618,11 @@ class LancamentoOdooService:
             resultado['etapas_concluidas'] = 7
 
             # ========================================
-            # ETAPA 8: Atualizar impostos do PO
+            # ETAPA 8: Atualizar impostos do PO - ❌ DESABILITADA
             # ========================================
-            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
-            try:
-                db.session.commit()
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 8: {e}")
-
-            try:
-                self.odoo.execute_kw(
-                    'purchase.order',
-                    'onchange_l10n_br_calcular_imposto',
-                    [[purchase_order_id]]
-                )
-            except Exception as e:
-                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
-                current_app.logger.warning(
-                    f"⚠️ ETAPA 8 falhou (não crítico): {e.__class__.__name__}. "
-                    f"Impostos podem precisar ajuste manual no Odoo."
-                )
-
-            try:
-                self._registrar_auditoria(
-                    frete_id=frete_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=8,
-                    etapa_descricao="Atualizar impostos do Purchase Order",
-                    modelo_odoo='purchase.order',
-                    metodo_odoo='onchange_l10n_br_calcular_imposto',
-                    acao='execute_method',
-                    status='SUCESSO',
-                    mensagem='Impostos atualizados (erro de serialização ignorado)',
-                    dfe_id=dfe_id,
-                    purchase_order_id=purchase_order_id
-                )
-            except Exception as e:
-                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
-                current_app.logger.error(
-                    f"❌ Erro ao registrar auditoria ETAPA 8 (não crítico): {e}"
-                )
-                # Reconectar sessão se perdeu conexão
-                db.session.rollback()
-                db.session.remove()
-
+            # ⚠️ REMOVIDO: Método onchange_l10n_br_calcular_imposto estava zerando valores do PO
+            # Os impostos serão calculados automaticamente pelo Odoo ao confirmar o PO
+            current_app.logger.info("⏭️ ETAPA 8 (atualizar impostos PO) PULADA - impostos calculados automaticamente")
             resultado['etapas_concluidas'] = 8
 
             # ========================================
@@ -1010,7 +992,17 @@ class LancamentoOdooService:
             resultado['mensagem'] = f'Lançamento concluído com sucesso! {resultado["etapas_concluidas"]}/16 etapas'
             resultado['auditoria'] = self.auditoria_logs
 
-            current_app.logger.info(f"Lançamento concluído com sucesso para frete {frete_id}")
+            # Log de sucesso final
+            tempo_total = time.time() - inicio
+            logging.info(
+                f"[LANCAMENTO_CTE] ✅ CONCLUÍDO | "
+                f"Frete ID: {frete_id} | "
+                f"DFe: {dfe_id} | PO: {purchase_order_id} | Invoice: {invoice_id} | "
+                f"Chave: {cte_chave[:8] if cte_chave else 'N/A'}... | "
+                f"Tempo total: {tempo_total:.2f}s | "
+                f"Etapas: {resultado['etapas_concluidas']}/16"
+            )
+            resultado['tempo_total'] = f"{tempo_total:.2f}s"
 
             return resultado
 

@@ -78,7 +78,7 @@
                         </div>
                         <div class="col-md-3">
                             <strong>Dados Físicos:</strong><br>
-                            Peso: {{ (frete.peso_total)|moeda_carteira }} kg<br>
+                            Peso: {{ frete.peso_total|numero_br(2) }} kg<br>
                             <small class="text-muted">Valor NFs: {{ (frete.valor_total_nfs)|moeda_carteira }}</small>
                         </div>
                         <div class="col-md-3">
@@ -247,7 +247,7 @@
                         <tr>
                             <td><strong>% ICMS:</strong></td>
                             <td style="text-align: right;">
-                                {{ (resumo_cotacao.percentual_icms*100)|moeda_carteira }}%
+                                {{ (resumo_cotacao.percentual_icms*100)|numero_br(2) }}%
                             </td>
                         </tr>
                         <tr>

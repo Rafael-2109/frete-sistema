@@ -381,7 +381,7 @@
                             {{ frete.tipo_carga }}
                         </span>
                     </p>
-                    <p><strong>Peso Total:</strong> {{ (frete.peso_total)|moeda_carteira }} kg</p>
+                    <p><strong>Peso Total:</strong> {{ frete.peso_total|numero_br(2) }} kg</p>
                     <p><strong>Valor NFs:</strong> {{ (frete.valor_total_nfs)|moeda_carteira }}</p>
                     <p><strong>Qtd NFs:</strong> {{ frete.quantidade_nfs }}</p>
                 </div>

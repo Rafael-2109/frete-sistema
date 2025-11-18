@@ -36,18 +36,21 @@ def valor_br_filter(value, decimais=2):
         return 'R$ 0,00'
 
 @tabelas_bp.app_template_filter('numero_br')
-def numero_br_filter(value):
+def numero_br_filter(value, decimais=2):
     """Filtro Jinja2 para formatar números no padrão brasileiro"""
     if value is None or value == '':
-        return '0,00'
-    
+        return '0' + (',' + '0' * decimais if decimais > 0 else '')
+
     try:
         valor_float = float(value)
-        valor_formatado = f"{valor_float:,.2f}"
-        valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
-        return valor_formatado
+        if decimais == 0:
+            return f"{valor_float:,.0f}".replace(',', '.')
+        else:
+            valor_formatado = f"{valor_float:,.{decimais}f}"
+            valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
+            return valor_formatado
     except (ValueError, TypeError):
-        return '0,00'
+        return '0' + (',' + '0' * decimais if decimais > 0 else '')
 
 @tabelas_bp.app_template_filter('peso_br')
 def peso_br_filter(value):
