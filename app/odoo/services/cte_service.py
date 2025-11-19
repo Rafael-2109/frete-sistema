@@ -45,6 +45,7 @@ from app.fretes.models import ConhecimentoTransporte, Frete
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.cte_xml_parser import extrair_info_complementar
 from app.utils.file_storage import get_file_storage
+from app.utils.timezone import agora_utc
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +110,14 @@ class CteService:
             # 1. Buscar CTes do Odoo
             if minutos_janela:
                 # ✅ SINCRONIZAÇÃO INCREMENTAL: Últimos X minutos
-                data_calc = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+                # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() (Odoo grava write_date em UTC)
+                momento_atual = agora_utc()
+                data_calc_utc = momento_atual - timedelta(minutes=minutos_janela)
+                data_calc = data_calc_utc.strftime('%Y-%m-%d %H:%M:%S')
+
                 logger.info(f"🔄 Sincronização Incremental: Últimos {minutos_janela} minutos")
-                logger.info(f"📅 Buscando CTes atualizados desde {data_calc}")
+                logger.info(f"🕐 Horário UTC atual: {momento_atual.strftime('%Y-%m-%d %H:%M:%S')}")
+                logger.info(f"📅 Buscando CTes atualizados desde: {data_calc} UTC")
                 ctes = self._buscar_ctes_odoo(data_calc, limite, usar_write_date=True)
             elif data_inicio:
                 # ✅ SINCRONIZAÇÃO POR PERÍODO PERSONALIZADO
@@ -122,15 +128,19 @@ class CteService:
                     ctes = self._buscar_ctes_odoo_periodo(data_inicio, data_fim, limite)
                 else:
                     # Se só tem data_inicio, buscar até hoje usando write_date
-                    logger.info(f"   Data Fim: Hoje")
-                    data_hoje = datetime.now().strftime('%Y-%m-%d')
+                    # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc()
+                    logger.info(f"   Data Fim: Hoje (UTC)")
+                    data_hoje = agora_utc().strftime('%Y-%m-%d')
                     ctes = self._buscar_ctes_odoo_periodo(data_inicio, data_hoje, limite)
             else:
                 # 📅 SINCRONIZAÇÃO INICIAL: Últimos X dias (padrão: 30)
+                # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc()
                 dias = dias_retroativos if dias_retroativos else 30
-                data_calc = (datetime.now() - timedelta(days=dias)).strftime('%Y-%m-%d')
+                momento_atual = agora_utc()
+                data_calc = (momento_atual - timedelta(days=dias)).strftime('%Y-%m-%d')
                 logger.info(f"📅 Sincronização Inicial: Últimos {dias} dias")
-                logger.info(f"📅 Buscando CTes desde {data_calc}")
+                logger.info(f"🕐 Horário UTC atual: {momento_atual.strftime('%Y-%m-%d %H:%M:%S')}")
+                logger.info(f"📅 Buscando CTes desde: {data_calc} UTC")
                 ctes = self._buscar_ctes_odoo(data_calc, limite, usar_write_date=False)
 
             if not ctes:
@@ -594,7 +604,8 @@ class CteService:
             cte_existente.cte_complementa_id = cte_complementa_id
             cte_existente.motivo_complemento = motivo_complemento
 
-            cte_existente.atualizado_em = datetime.now()
+            # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() para timestamps internos
+            cte_existente.atualizado_em = agora_utc()
             cte_existente.atualizado_por = 'Sistema Odoo'
 
             # ✅ Calcular e gravar flag tomador_e_empresa
@@ -675,7 +686,8 @@ class CteService:
         cnpj_limpo = cnpj_emitente.replace('.', '').replace('/', '').replace('-', '') if cnpj_emitente else 'sem_cnpj'
 
         # Organizar em pastas por data
-        data_hoje = datetime.now()
+        # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() para organização de pastas
+        data_hoje = agora_utc()
         pasta_base = f"ctes/{data_hoje.year}/{data_hoje.month:02d}/{cnpj_limpo}"
 
         # Chave de acesso para nome do arquivo
@@ -775,9 +787,10 @@ class CteService:
 
             cte.frete_id = frete_id
             cte.vinculado_manualmente = manual
-            cte.vinculado_em = datetime.now()
+            # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() para timestamps internos
+            cte.vinculado_em = agora_utc()
             cte.vinculado_por = usuario or 'Sistema'
-            cte.atualizado_em = datetime.now()
+            cte.atualizado_em = agora_utc()
 
             db.session.commit()
 

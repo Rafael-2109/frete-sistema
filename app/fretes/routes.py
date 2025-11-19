@@ -961,13 +961,104 @@ def lancar_frete_odoo(frete_id):
         # Buscar frete
         frete = Frete.query.get_or_404(frete_id)
 
-        # Verificar se já foi lançado
+        # ========================================
+        # VALIDAÇÃO ROBUSTA: Verificar status REAL do DFe no Odoo
+        # ========================================
         if frete.odoo_invoice_id:
-            return jsonify({
-                'sucesso': False,
-                'mensagem': 'Frete já foi lançado no Odoo',
-                'erro': f'Invoice ID: {frete.odoo_invoice_id}'
-            }), 400
+            logger.info(f"⚠️ Frete {frete_id} possui odoo_invoice_id={frete.odoo_invoice_id}. Verificando status real no Odoo...")
+
+            # Buscar CTe relacionado para obter chave de acesso
+            cte_temp = None
+            chave_temp = None
+
+            if frete.frete_cte_id:
+                cte_temp = frete.cte
+                if cte_temp:
+                    chave_temp = cte_temp.chave_acesso
+
+            if not chave_temp:
+                # Tentar buscar automaticamente
+                ctes_temp = frete.buscar_ctes_relacionados()
+                if ctes_temp:
+                    cte_temp = ctes_temp[0]
+                    chave_temp = cte_temp.chave_acesso
+
+            # Se encontrou CTe, verificar status no Odoo
+            if chave_temp and len(chave_temp) == 44:
+                try:
+                    from app.odoo.utils.connection import get_odoo_connection
+                    odoo = get_odoo_connection()
+
+                    if odoo.authenticate():
+                        logger.info(f"🔍 Consultando DFe no Odoo - Chave: {chave_temp[:8]}...{chave_temp[-8:]}")
+
+                        dfe_data = odoo.search_read(
+                            'l10n_br_ciel_it_account.dfe',
+                            [('protnfe_infnfe_chnfe', '=', chave_temp)],
+                            fields=['id', 'l10n_br_status'],
+                            limit=1
+                        )
+
+                        if dfe_data:
+                            dfe_info = dfe_data[0]
+                            status_odoo = dfe_info.get('l10n_br_status')
+                            dfe_id_odoo = dfe_info.get('id')
+
+                            status_map = {
+                                '01': 'Rascunho',
+                                '02': 'Sincronizado',
+                                '03': 'Ciência/Confirmado',
+                                '04': 'PO',
+                                '05': 'Rateio',
+                                '06': 'Concluído',
+                                '07': 'Rejeitado'
+                            }
+                            status_nome = status_map.get(status_odoo, f'Desconhecido ({status_odoo})')
+
+                            logger.info(f"📊 Status do DFe no Odoo: {status_nome} (código: {status_odoo})")
+
+                            # ✅ SE STATUS = '04' (PO), significa que o lançamento foi cancelado/revertido
+                            if status_odoo == '04':
+                                logger.warning(
+                                    f"🔄 INCONSISTÊNCIA DETECTADA: Frete {frete_id} possui Invoice ID local "
+                                    f"mas DFe voltou para status PO no Odoo. Limpando campos para permitir relançamento..."
+                                )
+
+                                # Limpar campos do frete
+                                frete.odoo_dfe_id = None
+                                frete.odoo_purchase_order_id = None
+                                frete.odoo_invoice_id = None
+                                frete.lancado_odoo_em = None
+                                frete.lancado_odoo_por = None
+
+                                # Atualizar status do CTe local se necessário
+                                if cte_temp:
+                                    cte_temp.odoo_status_codigo = status_odoo
+                                    cte_temp.odoo_status_descricao = status_nome
+
+                                db.session.commit()
+
+                                logger.info(f"✅ Campos limpos com sucesso. Prosseguindo com o lançamento...")
+
+                            else:
+                                # Status diferente de PO - frete realmente foi lançado
+                                logger.info(f"✅ Confirmado: DFe possui status '{status_nome}' no Odoo (lançamento válido)")
+                                return jsonify({
+                                    'sucesso': False,
+                                    'mensagem': f'Frete já foi lançado no Odoo',
+                                    'erro': f'Status do DFe: {status_nome} | Invoice ID: {frete.odoo_invoice_id} | DFe ID: {dfe_id_odoo}'
+                                }), 400
+                        else:
+                            logger.warning(f"⚠️ DFe não encontrado no Odoo com chave {chave_temp[:8]}...")
+                    else:
+                        logger.error("❌ Falha na autenticação com Odoo")
+
+                except Exception as e:
+                    logger.error(f"❌ Erro ao verificar status no Odoo: {e}")
+                    # Em caso de erro na verificação, permite tentar lançar
+                    logger.warning("⚠️ Erro na validação do Odoo. Permitindo tentativa de lançamento...")
+            else:
+                logger.warning(f"⚠️ CTe não encontrado ou chave inválida. Permitindo tentativa de lançamento...")
 
         # Buscar CTe relacionado pela chave
         cte = None

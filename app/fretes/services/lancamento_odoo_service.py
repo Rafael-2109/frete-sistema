@@ -59,6 +59,51 @@ class LancamentoOdooService:
         self.odoo = None
         self.auditoria_logs = []
 
+    def _rollback_frete_odoo(self, frete_id: int, etapas_concluidas: int) -> bool:
+        """
+        Faz rollback dos campos Odoo do frete em caso de erro
+
+        Args:
+            frete_id: ID do frete
+            etapas_concluidas: Número de etapas concluídas antes do erro
+
+        Returns:
+            True se rollback foi executado, False caso contrário
+        """
+        try:
+            frete = Frete.query.get(frete_id)
+            if not frete:
+                return False
+
+            # ✅ SÓ FAZ ROLLBACK SE NÃO CONCLUIU TODAS AS ETAPAS (16)
+            if frete.status != 'LANCADO_ODOO' or etapas_concluidas < 16:
+                current_app.logger.warning(
+                    f"🔄 ROLLBACK: Limpando campos Odoo do frete {frete_id} "
+                    f"(Etapas concluídas: {etapas_concluidas}/16)"
+                )
+
+                frete.odoo_dfe_id = None
+                frete.odoo_purchase_order_id = None
+                frete.odoo_invoice_id = None
+                frete.lancado_odoo_em = None
+                frete.lancado_odoo_por = None
+
+                # Manter status original ou definir como erro
+                if frete.status == 'LANCADO_ODOO':
+                    frete.status = 'PENDENTE'
+
+                db.session.commit()
+                current_app.logger.info(f"✅ Rollback concluído com sucesso")
+                return True
+            else:
+                current_app.logger.info(f"⏭️ Rollback não necessário - lançamento estava completo")
+                return False
+
+        except Exception as rollback_error:
+            current_app.logger.error(f"❌ Erro ao executar rollback: {rollback_error}")
+            db.session.rollback()
+            return False
+
     def _registrar_auditoria(
         self,
         frete_id: Optional[int],
@@ -310,6 +355,7 @@ class LancamentoOdooService:
             if not sucesso or not dfe_data:
                 resultado['erro'] = erro or "CTe não encontrado no Odoo"
                 resultado['mensagem'] = f"Erro na etapa 1: {resultado['erro']}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             dfe = dfe_data[0]
@@ -336,6 +382,7 @@ class LancamentoOdooService:
 
                 resultado['erro'] = f'CTe possui status "{status_nome}" - Apenas CTes com status "PO" (04) podem ser lançados'
                 resultado['mensagem'] = f'Erro: {resultado["erro"]}'
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             current_app.logger.info(f"✅ DFe validado: Status PO (04), pode ser lançado")
@@ -396,6 +443,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 2: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 2
@@ -422,6 +470,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 3: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 3
@@ -433,6 +482,7 @@ class LancamentoOdooService:
             if not line_ids:
                 resultado['erro'] = "DFe não possui linhas"
                 resultado['mensagem'] = "Erro na etapa 4: DFe não possui linhas"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             line_id = line_ids[0]
@@ -460,6 +510,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 4: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 4
@@ -471,6 +522,7 @@ class LancamentoOdooService:
             if not dups_ids:
                 resultado['erro'] = "DFe não possui pagamentos"
                 resultado['mensagem'] = "Erro na etapa 5: DFe não possui pagamentos"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             dup_id = dups_ids[0]
@@ -494,6 +546,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 5: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 5
@@ -525,6 +578,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 6: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 6
@@ -548,6 +602,7 @@ class LancamentoOdooService:
             if not purchase_order_id:
                 resultado['erro'] = "Purchase Order não foi criado"
                 resultado['mensagem'] = "Erro: PO não foi criado após executar action_gerar_po_dfe"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['purchase_order_id'] = purchase_order_id
@@ -613,6 +668,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 7: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 7
@@ -651,6 +707,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 9: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 9
@@ -686,6 +743,7 @@ class LancamentoOdooService:
                 if not sucesso:
                     resultado['erro'] = erro
                     resultado['mensagem'] = f"Erro na etapa 10: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                     return resultado
             else:
                 self._registrar_auditoria(
@@ -728,6 +786,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 11: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 11
@@ -751,6 +810,7 @@ class LancamentoOdooService:
             if not invoice_id:
                 resultado['erro'] = "Invoice não foi criada"
                 resultado['mensagem'] = "Erro: Invoice não foi criada"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['invoice_id'] = invoice_id
@@ -865,6 +925,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 13: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 13
@@ -945,6 +1006,7 @@ class LancamentoOdooService:
             if not sucesso:
                 resultado['erro'] = erro
                 resultado['mensagem'] = f"Erro na etapa 15: {erro}"
+                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                 return resultado
 
             resultado['etapas_concluidas'] = 15
@@ -1040,6 +1102,11 @@ class LancamentoOdooService:
 
             current_app.logger.error(f"Erro no lançamento: {erro_msg}")
             current_app.logger.error(erro_trace)
+
+            # ========================================
+            # ROLLBACK AUTOMÁTICO: Limpar campos do Frete em caso de erro
+            # ========================================
+            resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
 
             resultado['erro'] = erro_msg
             resultado['mensagem'] = f"Erro no lançamento: {erro_msg}"
