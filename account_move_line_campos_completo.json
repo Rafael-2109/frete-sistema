@@ -1,0 +1,2336 @@
+{
+  "modelo": "account.move.line",
+  "total_campos": 315,
+  "data_analise": "2025-11-18T20:55:54.488063",
+  "categorias": {
+    "campos_custom": 3,
+    "campos_data": 15,
+    "campos_numericos": 141,
+    "campos_relacionais": 60,
+    "campos_texto": 34,
+    "campos_booleanos": 24,
+    "campos_outros": 38
+  },
+  "campos_detalhados": {
+    "custom": {
+      "x_studio_tipo_de_documento_fiscal": {
+        "readonly": true,
+        "required": false,
+        "string": "Tipo de Documento Fiscal",
+        "type": "selection"
+      },
+      "x_studio_status_de_pagamento": {
+        "readonly": true,
+        "required": false,
+        "string": "Status de Pagamento",
+        "type": "selection"
+      },
+      "x_studio_nf_e": {
+        "readonly": true,
+        "required": false,
+        "string": "NF-e",
+        "type": "char"
+      }
+    },
+    "data": {
+      "activity_date_deadline": {
+        "readonly": true,
+        "required": false,
+        "string": "Next Activity Deadline",
+        "type": "date"
+      },
+      "my_activity_date_deadline": {
+        "readonly": true,
+        "required": false,
+        "string": "My Activity Deadline",
+        "type": "date"
+      },
+      "date": {
+        "readonly": true,
+        "required": false,
+        "string": "Date",
+        "type": "date"
+      },
+      "invoice_date": {
+        "readonly": true,
+        "required": false,
+        "string": "Invoice/Bill Date",
+        "type": "date"
+      },
+      "date_maturity": {
+        "help": "This field is used for payable and receivable journal entries. You can put the limit date for the payment of this line.",
+        "readonly": false,
+        "required": false,
+        "string": "Due Date",
+        "type": "date"
+      },
+      "discount_date": {
+        "help": "Last date at which the discounted amount must be paid in order for the Early Payment Discount to be granted",
+        "readonly": false,
+        "required": false,
+        "string": "Discount Date",
+        "type": "date"
+      },
+      "payment_date": {
+        "readonly": true,
+        "required": false,
+        "string": "Payment Date",
+        "type": "date"
+      },
+      "create_date": {
+        "readonly": true,
+        "required": false,
+        "string": "Created on",
+        "type": "datetime"
+      },
+      "write_date": {
+        "readonly": true,
+        "required": false,
+        "string": "Last Updated on",
+        "type": "datetime"
+      },
+      "deferred_start_date": {
+        "help": "Date at which the deferred expense/revenue starts",
+        "readonly": false,
+        "required": false,
+        "string": "Start Date",
+        "type": "date"
+      },
+      "deferred_end_date": {
+        "help": "Date at which the deferred expense/revenue ends",
+        "readonly": false,
+        "required": false,
+        "string": "End Date",
+        "type": "date"
+      },
+      "expected_pay_date": {
+        "help": "Expected payment date as manually set through the customer statement(e.g: if you had the customer on the phone and want to remember the date he promised he would pay)",
+        "readonly": false,
+        "required": false,
+        "string": "Expected Date",
+        "type": "date"
+      },
+      "last_followup_date": {
+        "readonly": false,
+        "required": false,
+        "string": "Latest Follow-up",
+        "type": "date"
+      },
+      "next_action_date": {
+        "help": "Date where the next action should be taken for a receivable item. Usually, automatically set when sending reminders through the customer statement.",
+        "readonly": false,
+        "required": false,
+        "string": "Next Action Date",
+        "type": "date"
+      },
+      "l10n_br_cobranca_data_desconto": {
+        "readonly": false,
+        "required": false,
+        "string": "Data Limite p/ Desconto",
+        "type": "date"
+      }
+    },
+    "numericos": {
+      "message_needaction_counter": {
+        "help": "Number of messages requiring action",
+        "readonly": true,
+        "required": false,
+        "string": "Number of Actions",
+        "type": "integer"
+      },
+      "message_has_error_counter": {
+        "help": "Number of messages with delivery error",
+        "readonly": true,
+        "required": false,
+        "string": "Number of errors",
+        "type": "integer"
+      },
+      "message_attachment_count": {
+        "readonly": true,
+        "required": false,
+        "string": "Attachment Count",
+        "type": "integer"
+      },
+      "analytic_precision": {
+        "readonly": false,
+        "required": false,
+        "string": "Analytic Precision",
+        "type": "integer"
+      },
+      "sequence": {
+        "readonly": false,
+        "required": false,
+        "string": "Sequence",
+        "type": "integer"
+      },
+      "debit": {
+        "readonly": false,
+        "required": false,
+        "string": "Debit",
+        "type": "monetary"
+      },
+      "credit": {
+        "readonly": false,
+        "required": false,
+        "string": "Credit",
+        "type": "monetary"
+      },
+      "balance": {
+        "readonly": false,
+        "required": false,
+        "string": "Balance",
+        "type": "monetary"
+      },
+      "cumulated_balance": {
+        "help": "Cumulated balance depending on the domain and the order chosen in the view.",
+        "readonly": true,
+        "required": false,
+        "string": "Cumulated Balance",
+        "type": "monetary"
+      },
+      "currency_rate": {
+        "help": "Currency rate from company currency to document currency.",
+        "readonly": true,
+        "required": false,
+        "string": "Currency Rate",
+        "type": "float"
+      },
+      "amount_currency": {
+        "help": "The amount expressed in an optional other currency if it is a multi-currency entry.",
+        "readonly": false,
+        "required": false,
+        "string": "Amount in Currency",
+        "type": "monetary"
+      },
+      "tax_base_amount": {
+        "readonly": true,
+        "required": false,
+        "string": "Base Amount",
+        "type": "monetary"
+      },
+      "amount_residual": {
+        "help": "The residual amount on a journal item expressed in the company currency.",
+        "readonly": true,
+        "required": false,
+        "string": "Residual Amount",
+        "type": "monetary"
+      },
+      "amount_residual_currency": {
+        "help": "The residual amount on a journal item expressed in its currency (possibly not the company currency).",
+        "readonly": true,
+        "required": false,
+        "string": "Residual Amount in Currency",
+        "type": "monetary"
+      },
+      "quantity": {
+        "help": "The optional quantity expressed by this line, eg: number of product sold. The quantity is not a legal requirement but is very useful for some reports.",
+        "readonly": false,
+        "required": false,
+        "string": "Quantity",
+        "type": "float"
+      },
+      "price_unit": {
+        "readonly": false,
+        "required": false,
+        "string": "Unit Price",
+        "type": "float"
+      },
+      "price_subtotal": {
+        "readonly": true,
+        "required": false,
+        "string": "Subtotal",
+        "type": "monetary"
+      },
+      "price_total": {
+        "readonly": true,
+        "required": false,
+        "string": "Total",
+        "type": "monetary"
+      },
+      "discount": {
+        "readonly": false,
+        "required": false,
+        "string": "Discount (%)",
+        "type": "float"
+      },
+      "discount_amount_currency": {
+        "readonly": false,
+        "required": false,
+        "string": "Discount amount in Currency",
+        "type": "monetary"
+      },
+      "discount_balance": {
+        "readonly": false,
+        "required": false,
+        "string": "Discount Balance",
+        "type": "monetary"
+      },
+      "id": {
+        "readonly": true,
+        "required": false,
+        "string": "ID",
+        "type": "integer"
+      },
+      "non_deductible_tax_value": {
+        "readonly": true,
+        "required": false,
+        "string": "Non Deductible Tax Value",
+        "type": "monetary"
+      },
+      "l10n_br_frete": {
+        "readonly": false,
+        "required": false,
+        "string": "Frete",
+        "type": "float"
+      },
+      "l10n_br_seguro": {
+        "readonly": false,
+        "required": false,
+        "string": "Seguro",
+        "type": "float"
+      },
+      "l10n_br_despesas_acessorias": {
+        "readonly": false,
+        "required": false,
+        "string": "Despesas Acessórias",
+        "type": "float"
+      },
+      "l10n_br_desc_valor": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor do Desconto",
+        "type": "float"
+      },
+      "l10n_br_prod_valor": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor do Produto",
+        "type": "float"
+      },
+      "l10n_br_unit_tax": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor Unitário com Imposto",
+        "type": "float"
+      },
+      "l10n_br_unit_nfe": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor Unitário do Item da NF",
+        "type": "float"
+      },
+      "l10n_br_total_nfe": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor Total do Item da NF",
+        "type": "float"
+      },
+      "l10n_br_total_tributos": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor dos Tributos",
+        "type": "float"
+      },
+      "l10n_br_icms_reducao_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota de Redução da BC do ICMS (%)",
+        "type": "float"
+      },
+      "l10n_br_icms_diferido_valor_operacao": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS da Operação",
+        "type": "float"
+      },
+      "l10n_br_icms_diferido_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ICMS Diferido (%)",
+        "type": "float"
+      },
+      "l10n_br_icms_diferido_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS Diferido",
+        "type": "float"
+      },
+      "l10n_br_icms_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do ICMS",
+        "type": "float"
+      },
+      "l10n_br_icms_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ICMS (%)",
+        "type": "float"
+      },
+      "l10n_br_icms_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_icms_valor_isento": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS (Isento/Não Tributável)",
+        "type": "float"
+      },
+      "l10n_br_icms_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS (Outros)",
+        "type": "float"
+      },
+      "l10n_br_icms_valor_desonerado": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS (Desonerado)",
+        "type": "float"
+      },
+      "l10n_br_icms_valor_credito_presumido": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor do ICMS (Crédito Presumido)",
+        "type": "float"
+      },
+      "l10n_br_icms_valor_efetivo": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor do ICMS (Efetivo)",
+        "type": "float"
+      },
+      "l10n_br_icms_dest_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do ICMS UF Destino",
+        "type": "float"
+      },
+      "l10n_br_icms_dest_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ICMS UF Destino (%)",
+        "type": "float"
+      },
+      "l10n_br_icms_inter_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ICMS Interestadual (%)",
+        "type": "float"
+      },
+      "l10n_br_icms_inter_participacao": {
+        "readonly": false,
+        "required": false,
+        "string": "Participação da Aliquota do ICMS Interestadual (%)",
+        "type": "float"
+      },
+      "l10n_br_icms_dest_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS UF Destino",
+        "type": "float"
+      },
+      "l10n_br_icms_remet_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS UF Remetente",
+        "type": "float"
+      },
+      "l10n_br_icms_credito_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Alíquota aplicável de cálculo do crédito (Simples Nacional)",
+        "type": "float"
+      },
+      "l10n_br_icms_credito_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor crédito do ICMS que pode ser aproveitado",
+        "type": "float"
+      },
+      "l10n_br_fcp_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base do Fundo de Combate a Pobreza",
+        "type": "float"
+      },
+      "l10n_br_fcp_dest_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do Fundo de Combate a Pobreza (%)",
+        "type": "float"
+      },
+      "l10n_br_fcp_dest_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Fundo de Combate a Pobreza",
+        "type": "float"
+      },
+      "l10n_br_fcp_st_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base do Fundo de Combate a Pobreza retido por ST",
+        "type": "float"
+      },
+      "l10n_br_fcp_st_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do Fundo de Combate a Pobreza (%) retido por ST",
+        "type": "float"
+      },
+      "l10n_br_fcp_st_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Fundo de Combate a Pobreza retido por ST",
+        "type": "float"
+      },
+      "l10n_br_fcp_st_ant_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base do Fundo de Combate a Pobreza retido anteriormente por ST",
+        "type": "float"
+      },
+      "l10n_br_fcp_st_ant_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do Fundo de Combate a Pobreza (%) retido anteriormente por ST",
+        "type": "float"
+      },
+      "l10n_br_fcp_st_ant_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Fundo de Combate a Pobreza retido anteriormente por ST",
+        "type": "float"
+      },
+      "l10n_br_icmsst_reducao_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota de Redução da BC do ICMSST (%)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_mva": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota da Margem de Valor Adicionado do ICMSST (%)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do ICMSST",
+        "type": "float"
+      },
+      "l10n_br_icmsst_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ICMSST (%)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMSST",
+        "type": "float"
+      },
+      "l10n_br_icmsst_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMSST (Outros)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_valor_proprio": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMSST (Próprio)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_retido_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do ICMSST Retido",
+        "type": "float"
+      },
+      "l10n_br_icmsst_retido_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Alíquota suportada pelo Consumidor Final (%)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_substituto_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS próprio do Substituto",
+        "type": "float"
+      },
+      "l10n_br_icmsst_substituto_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMS próprio do Substituto (Outros)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_retido_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMSST Retido",
+        "type": "float"
+      },
+      "l10n_br_icmsst_retido_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ICMSST Retido (Outros)",
+        "type": "float"
+      },
+      "l10n_br_icmsst_base_propria_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Alíquota da Base de Cálculo da Operação Própria",
+        "type": "float"
+      },
+      "l10n_br_ipi_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do IPI",
+        "type": "float"
+      },
+      "l10n_br_ipi_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do IPI (%)",
+        "type": "float"
+      },
+      "l10n_br_ipi_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IPI (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ipi_valor_isento": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IPI (Isento/Não Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ipi_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IPI (Outros)",
+        "type": "float"
+      },
+      "l10n_br_iof_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IOF",
+        "type": "float"
+      },
+      "l10n_br_ipi_selo_quantidade": {
+        "readonly": false,
+        "required": false,
+        "string": "Quantidade de selo de controle",
+        "type": "integer"
+      },
+      "l10n_br_pis_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do PIS",
+        "type": "float"
+      },
+      "l10n_br_pis_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do PIS (%)",
+        "type": "float"
+      },
+      "l10n_br_pis_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do PIS (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_pis_valor_isento": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do PIS (Isento/Não Tributável)",
+        "type": "float"
+      },
+      "l10n_br_pis_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do PIS (Outros)",
+        "type": "float"
+      },
+      "l10n_br_cofins_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do Cofins",
+        "type": "float"
+      },
+      "l10n_br_cofins_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do Cofins (%)",
+        "type": "float"
+      },
+      "l10n_br_cofins_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Cofins (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_cofins_valor_isento": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Cofins (Isento/Não Tributável)",
+        "type": "float"
+      },
+      "l10n_br_cofins_valor_outros": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Cofins (Outros)",
+        "type": "float"
+      },
+      "l10n_br_is_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do IS",
+        "type": "float"
+      },
+      "l10n_br_is_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do IS (%)",
+        "type": "float"
+      },
+      "l10n_br_is_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IS (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ibscbs_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do IBS/CBS",
+        "type": "float"
+      },
+      "l10n_br_ibs_uf_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do IBS UF (%)",
+        "type": "float"
+      },
+      "l10n_br_ibs_mun_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do IBS Município (%)",
+        "type": "float"
+      },
+      "l10n_br_ibs_uf_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IBS UF (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ibs_mun_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IBS Município (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ibs_valor": {
+        "readonly": true,
+        "required": false,
+        "string": "Valor do IBS (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_cbs_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do CBS (%)",
+        "type": "float"
+      },
+      "l10n_br_cbs_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do CBS (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ii_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do II",
+        "type": "float"
+      },
+      "l10n_br_ii_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do II (%)",
+        "type": "float"
+      },
+      "l10n_br_ii_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do II (Tributável)",
+        "type": "float"
+      },
+      "l10n_br_ii_valor_aduaneira": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do II (Aduaneira)",
+        "type": "float"
+      },
+      "l10n_br_ii_valor_afrmm": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do II (AFRMM)",
+        "type": "float"
+      },
+      "l10n_br_iss_deducao": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Dedução para efeito de Base de Cálculo do ISS",
+        "type": "float"
+      },
+      "l10n_br_iss_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do ISS",
+        "type": "float"
+      },
+      "l10n_br_iss_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ISS (%)",
+        "type": "float"
+      },
+      "l10n_br_iss_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ISS",
+        "type": "float"
+      },
+      "l10n_br_irpj_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do IRPJ",
+        "type": "float"
+      },
+      "l10n_br_irpj_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do IRPJ (%)",
+        "type": "float"
+      },
+      "l10n_br_irpj_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IRPJ",
+        "type": "float"
+      },
+      "l10n_br_csll_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do CSLL",
+        "type": "float"
+      },
+      "l10n_br_csll_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do CSLL (%)",
+        "type": "float"
+      },
+      "l10n_br_csll_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do CSLL",
+        "type": "float"
+      },
+      "l10n_br_irpj_ret_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do IRPJ Retido",
+        "type": "float"
+      },
+      "l10n_br_irpj_ret_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do IRPJ Retido (%)",
+        "type": "float"
+      },
+      "l10n_br_irpj_ret_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do IRPJ Retido",
+        "type": "float"
+      },
+      "l10n_br_inss_ret_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do INSS Retido",
+        "type": "float"
+      },
+      "l10n_br_inss_ret_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do INSS Retido (%)",
+        "type": "float"
+      },
+      "l10n_br_inss_ret_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do INSS Retido",
+        "type": "float"
+      },
+      "l10n_br_iss_ret_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do ISS Retido",
+        "type": "float"
+      },
+      "l10n_br_iss_ret_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do ISS Retido (%)",
+        "type": "float"
+      },
+      "l10n_br_iss_ret_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do ISS Retido",
+        "type": "float"
+      },
+      "l10n_br_csll_ret_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do CSLL Retido",
+        "type": "float"
+      },
+      "l10n_br_csll_ret_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do CSLL (%) Retido",
+        "type": "float"
+      },
+      "l10n_br_csll_ret_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do CSLL Retido",
+        "type": "float"
+      },
+      "l10n_br_pis_ret_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do PIS Retido",
+        "type": "float"
+      },
+      "l10n_br_pis_ret_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do PIS (%) Retido",
+        "type": "float"
+      },
+      "l10n_br_pis_ret_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do PIS Retido",
+        "type": "float"
+      },
+      "l10n_br_cofins_ret_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor da Base de Cálculo do Cofins Retido",
+        "type": "float"
+      },
+      "l10n_br_cofins_ret_aliquota": {
+        "readonly": false,
+        "required": false,
+        "string": "Aliquota do Cofins (%) Retido",
+        "type": "float"
+      },
+      "l10n_br_cofins_ret_valor": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor do Cofins Retido",
+        "type": "float"
+      },
+      "l10n_br_cobranca_parcela": {
+        "readonly": false,
+        "required": false,
+        "string": "Parcela",
+        "type": "integer"
+      },
+      "l10n_br_cobranca_valor_desconto": {
+        "readonly": false,
+        "required": false,
+        "string": "Valor Desconto",
+        "type": "float"
+      },
+      "desconto_concedido": {
+        "readonly": true,
+        "required": false,
+        "string": "Desconto Concedido",
+        "type": "float"
+      },
+      "desconto_concedido_percentual": {
+        "readonly": true,
+        "required": false,
+        "string": "Desconto Concedido (%)",
+        "type": "float"
+      },
+      "indice_comissao": {
+        "readonly": true,
+        "required": false,
+        "string": "Índice de Comissão",
+        "type": "float"
+      }
+    },
+    "relacionais": {
+      "activity_ids": {
+        "readonly": false,
+        "relation": "mail.activity",
+        "required": false,
+        "string": "Activities",
+        "type": "one2many"
+      },
+      "activity_user_id": {
+        "readonly": true,
+        "relation": "res.users",
+        "required": false,
+        "string": "Responsible User",
+        "type": "many2one"
+      },
+      "activity_type_id": {
+        "readonly": false,
+        "relation": "mail.activity.type",
+        "required": false,
+        "string": "Next Activity Type",
+        "type": "many2one"
+      },
+      "activity_calendar_event_id": {
+        "readonly": true,
+        "relation": "calendar.event",
+        "required": false,
+        "string": "Next Activity Calendar Event",
+        "type": "many2one"
+      },
+      "message_follower_ids": {
+        "readonly": false,
+        "relation": "mail.followers",
+        "required": false,
+        "string": "Followers",
+        "type": "one2many"
+      },
+      "message_partner_ids": {
+        "readonly": false,
+        "relation": "res.partner",
+        "required": false,
+        "string": "Followers (Partners)",
+        "type": "many2many"
+      },
+      "message_ids": {
+        "readonly": false,
+        "relation": "mail.message",
+        "required": false,
+        "string": "Messages",
+        "type": "one2many"
+      },
+      "rating_ids": {
+        "readonly": false,
+        "relation": "rating.rating",
+        "required": false,
+        "string": "Ratings",
+        "type": "one2many"
+      },
+      "website_message_ids": {
+        "help": "Website communication history",
+        "readonly": false,
+        "relation": "mail.message",
+        "required": false,
+        "string": "Website Messages",
+        "type": "one2many"
+      },
+      "distribution_analytic_account_ids": {
+        "readonly": true,
+        "relation": "account.analytic.account",
+        "required": false,
+        "string": "Distribution Analytic Account",
+        "type": "many2many"
+      },
+      "move_id": {
+        "readonly": true,
+        "relation": "account.move",
+        "required": true,
+        "string": "Journal Entry",
+        "type": "many2one"
+      },
+      "journal_id": {
+        "readonly": true,
+        "relation": "account.journal",
+        "required": false,
+        "string": "Journal",
+        "type": "many2one"
+      },
+      "company_id": {
+        "readonly": true,
+        "relation": "res.company",
+        "required": false,
+        "string": "Company",
+        "type": "many2one"
+      },
+      "company_currency_id": {
+        "readonly": true,
+        "relation": "res.currency",
+        "required": false,
+        "string": "Company Currency",
+        "type": "many2one"
+      },
+      "account_id": {
+        "readonly": false,
+        "relation": "account.account",
+        "required": false,
+        "string": "Account",
+        "type": "many2one"
+      },
+      "currency_id": {
+        "readonly": false,
+        "relation": "res.currency",
+        "required": true,
+        "string": "Currency",
+        "type": "many2one"
+      },
+      "partner_id": {
+        "readonly": false,
+        "relation": "res.partner",
+        "required": false,
+        "string": "Partner",
+        "type": "many2one"
+      },
+      "reconcile_model_id": {
+        "readonly": true,
+        "relation": "account.reconcile.model",
+        "required": false,
+        "string": "Reconciliation Model",
+        "type": "many2one"
+      },
+      "payment_id": {
+        "help": "The payment that created this entry",
+        "readonly": true,
+        "relation": "account.payment",
+        "required": false,
+        "string": "Originator Payment",
+        "type": "many2one"
+      },
+      "statement_line_id": {
+        "help": "The statement line that created this entry",
+        "readonly": true,
+        "relation": "account.bank.statement.line",
+        "required": false,
+        "string": "Originator Statement Line",
+        "type": "many2one"
+      },
+      "statement_id": {
+        "help": "The bank statement used for bank reconciliation",
+        "readonly": true,
+        "relation": "account.bank.statement",
+        "required": false,
+        "string": "Statement",
+        "type": "many2one"
+      },
+      "tax_ids": {
+        "readonly": false,
+        "relation": "account.tax",
+        "required": false,
+        "string": "Taxes",
+        "type": "many2many"
+      },
+      "group_tax_id": {
+        "readonly": false,
+        "relation": "account.tax",
+        "required": false,
+        "string": "Originator Group of Taxes",
+        "type": "many2one"
+      },
+      "tax_line_id": {
+        "help": "Indicates that this journal item is a tax line",
+        "readonly": true,
+        "relation": "account.tax",
+        "required": false,
+        "string": "Originator Tax",
+        "type": "many2one"
+      },
+      "tax_group_id": {
+        "readonly": true,
+        "relation": "account.tax.group",
+        "required": false,
+        "string": "Originator tax group",
+        "type": "many2one"
+      },
+      "tax_repartition_line_id": {
+        "help": "Tax distribution line that caused the creation of this move line, if any",
+        "readonly": true,
+        "relation": "account.tax.repartition.line",
+        "required": false,
+        "string": "Originator Tax Distribution Line",
+        "type": "many2one"
+      },
+      "tax_tag_ids": {
+        "help": "Tags assigned to this line by the tax creating it, if any. It determines its impact on financial reports.",
+        "readonly": false,
+        "relation": "account.account.tag",
+        "required": false,
+        "string": "Tags",
+        "type": "many2many"
+      },
+      "full_reconcile_id": {
+        "readonly": true,
+        "relation": "account.full.reconcile",
+        "required": false,
+        "string": "Matching",
+        "type": "many2one"
+      },
+      "matched_debit_ids": {
+        "help": "Debit journal items that are matched with this journal item.",
+        "readonly": true,
+        "relation": "account.partial.reconcile",
+        "required": false,
+        "string": "Matched Debits",
+        "type": "one2many"
+      },
+      "matched_credit_ids": {
+        "help": "Credit journal items that are matched with this journal item.",
+        "readonly": true,
+        "relation": "account.partial.reconcile",
+        "required": false,
+        "string": "Matched Credits",
+        "type": "one2many"
+      },
+      "account_root_id": {
+        "readonly": true,
+        "relation": "account.root",
+        "required": false,
+        "string": "Account Root",
+        "type": "many2one"
+      },
+      "product_id": {
+        "readonly": false,
+        "relation": "product.product",
+        "required": false,
+        "string": "Product",
+        "type": "many2one"
+      },
+      "product_uom_id": {
+        "readonly": false,
+        "relation": "uom.uom",
+        "required": false,
+        "string": "Unit of Measure",
+        "type": "many2one"
+      },
+      "product_uom_category_id": {
+        "help": "Conversion between Units of Measure can only occur if they belong to the same category. The conversion will be made based on the ratios.",
+        "readonly": true,
+        "relation": "uom.category",
+        "required": false,
+        "string": "Category",
+        "type": "many2one"
+      },
+      "analytic_line_ids": {
+        "readonly": false,
+        "relation": "account.analytic.line",
+        "required": false,
+        "string": "Analytic lines",
+        "type": "one2many"
+      },
+      "create_uid": {
+        "readonly": true,
+        "relation": "res.users",
+        "required": false,
+        "string": "Created by",
+        "type": "many2one"
+      },
+      "write_uid": {
+        "readonly": true,
+        "relation": "res.users",
+        "required": false,
+        "string": "Last Updated by",
+        "type": "many2one"
+      },
+      "move_attachment_ids": {
+        "readonly": true,
+        "relation": "ir.attachment",
+        "required": false,
+        "string": "Move Attachment",
+        "type": "one2many"
+      },
+      "purchase_line_id": {
+        "readonly": false,
+        "relation": "purchase.order.line",
+        "required": false,
+        "string": "Purchase Order Line",
+        "type": "many2one"
+      },
+      "purchase_order_id": {
+        "readonly": true,
+        "relation": "purchase.order",
+        "required": false,
+        "string": "Purchase Order",
+        "type": "many2one"
+      },
+      "stock_valuation_layer_ids": {
+        "readonly": false,
+        "relation": "stock.valuation.layer",
+        "required": false,
+        "string": "Stock Valuation Layer",
+        "type": "one2many"
+      },
+      "cogs_origin_id": {
+        "readonly": false,
+        "relation": "account.move.line",
+        "required": false,
+        "string": "Cogs Origin",
+        "type": "many2one"
+      },
+      "sale_line_ids": {
+        "readonly": true,
+        "relation": "sale.order.line",
+        "required": false,
+        "string": "Sales Order Lines",
+        "type": "many2many"
+      },
+      "asset_ids": {
+        "readonly": false,
+        "relation": "account.asset",
+        "required": false,
+        "string": "Related Assets",
+        "type": "many2many"
+      },
+      "followup_line_id": {
+        "readonly": false,
+        "relation": "account_followup.followup.line",
+        "required": false,
+        "string": "Follow-up Level",
+        "type": "many2one"
+      },
+      "dfe_line_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.dfe.line",
+        "required": false,
+        "string": "Item Documento Fiscal",
+        "type": "many2one"
+      },
+      "l10n_br_operacao_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.operacao",
+        "required": false,
+        "string": "Operação",
+        "type": "many2one"
+      },
+      "l10n_br_cfop_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.cfop",
+        "required": false,
+        "string": "CFOP",
+        "type": "many2one"
+      },
+      "l10n_br_mensagem_fiscal_ids": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.mensagem.fiscal",
+        "required": false,
+        "string": "Observação Fiscal",
+        "type": "many2many"
+      },
+      "l10n_br_informacao_adicional_produto_ids": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.mensagem.fiscal",
+        "required": false,
+        "string": "Informação Adicional do Produto",
+        "type": "many2many"
+      },
+      "l10n_br_ncm_id": {
+        "readonly": true,
+        "relation": "l10n_br_ciel_it_account.ncm",
+        "required": false,
+        "string": "NCM",
+        "type": "many2one"
+      },
+      "l10n_br_is_classtrib_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.classificacao.tributaria.is",
+        "required": false,
+        "string": "Classificação Tributária do IS",
+        "type": "many2one"
+      },
+      "l10n_br_ibscbs_classtrib_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.classificacao.tributaria.ibscbs",
+        "required": false,
+        "string": "Classificação Tributária do IBS/CBS",
+        "type": "many2one"
+      },
+      "l10n_br_di_adicao_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.di.adicao",
+        "required": false,
+        "string": "DI/Adição",
+        "type": "many2one"
+      },
+      "l10n_br_arquivo_cobranca_escritural_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.arquivo.cobranca.escritural",
+        "required": false,
+        "string": "Arquivo Remessa Manual",
+        "type": "many2one"
+      },
+      "l10n_br_cobranca_parcela_manual_linha_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.payment.parcela.manual.linhas",
+        "required": false,
+        "string": "Parcela Personalizada",
+        "type": "many2one"
+      },
+      "payment_provider_id": {
+        "readonly": false,
+        "relation": "payment.provider",
+        "required": false,
+        "string": "Forma de Pagamento",
+        "type": "many2one"
+      },
+      "l10n_br_dados_pagamento_id": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.dados.pagamento",
+        "required": false,
+        "string": "Dados de Pagamento (CNAB)",
+        "type": "one2many"
+      },
+      "l10n_br_icms_ajuste_ids": {
+        "readonly": false,
+        "relation": "l10n_br_ciel_it_account.icms.ajuste.line",
+        "required": false,
+        "string": "Ajuste de ICMS",
+        "type": "one2many"
+      },
+      "sale_line_id": {
+        "readonly": false,
+        "relation": "sale.order.line",
+        "required": false,
+        "string": "Sale Line",
+        "type": "many2one"
+      }
+    },
+    "texto": {
+      "activity_type_icon": {
+        "help": "Font awesome icon e.g. fa-tasks",
+        "readonly": true,
+        "required": false,
+        "string": "Activity Type Icon",
+        "type": "char"
+      },
+      "activity_summary": {
+        "readonly": false,
+        "required": false,
+        "string": "Next Activity Summary",
+        "type": "char"
+      },
+      "activity_exception_icon": {
+        "help": "Icon to indicate an exception activity.",
+        "readonly": true,
+        "required": false,
+        "string": "Icon",
+        "type": "char"
+      },
+      "move_name": {
+        "readonly": true,
+        "required": false,
+        "string": "Number",
+        "type": "char"
+      },
+      "ref": {
+        "readonly": true,
+        "required": false,
+        "string": "Reference",
+        "type": "char"
+      },
+      "name": {
+        "readonly": false,
+        "required": false,
+        "string": "Label",
+        "type": "char"
+      },
+      "matching_number": {
+        "help": "Matching number for this line, 'P' if it is only partially reconcile, or the name of the full reconcile if it exists.",
+        "readonly": false,
+        "required": false,
+        "string": "Matching #",
+        "type": "char"
+      },
+      "display_name": {
+        "readonly": true,
+        "required": false,
+        "string": "Display Name",
+        "type": "char"
+      },
+      "invoice_origin": {
+        "help": "The document(s) that generated the invoice.",
+        "readonly": true,
+        "required": false,
+        "string": "Origin",
+        "type": "char"
+      },
+      "l10n_br_cfop_codigo": {
+        "readonly": true,
+        "required": false,
+        "string": "Código CFOP",
+        "type": "char"
+      },
+      "l10n_br_informacao_adicional": {
+        "readonly": false,
+        "required": false,
+        "string": "Informações Adicionais",
+        "type": "text"
+      },
+      "l10n_br_pedido_compra": {
+        "readonly": false,
+        "required": false,
+        "string": "Pedido de Compra do Cliente",
+        "type": "char"
+      },
+      "l10n_br_item_pedido_compra": {
+        "readonly": false,
+        "required": false,
+        "string": "Item Pedido de Compra do Cliente",
+        "type": "char"
+      },
+      "l10n_br_registro_exportacao": {
+        "readonly": false,
+        "required": false,
+        "string": "Registro de Exportação",
+        "type": "char"
+      },
+      "l10n_br_chave_nfe_exportacao": {
+        "readonly": false,
+        "required": false,
+        "string": "Chave NF-e Recebida p/ Exportação",
+        "type": "char"
+      },
+      "l10n_br_drawback": {
+        "readonly": false,
+        "required": false,
+        "string": "Número Drawback",
+        "type": "char"
+      },
+      "l10n_br_codigo_servico": {
+        "readonly": true,
+        "required": false,
+        "string": "Código Serviço",
+        "type": "char"
+      },
+      "l10n_br_codigo_tributacao_servico": {
+        "readonly": true,
+        "required": false,
+        "string": "Código Tributação Serviço",
+        "type": "char"
+      },
+      "l10n_br_tipo_pedido_str": {
+        "readonly": true,
+        "required": false,
+        "string": "Tipo de Pedido",
+        "type": "char"
+      },
+      "l10n_br_codigo_beneficio": {
+        "readonly": false,
+        "required": false,
+        "string": "Código do Benefício Fiscal",
+        "type": "char"
+      },
+      "l10n_br_icmsst_uf": {
+        "readonly": false,
+        "required": false,
+        "string": "UF para qual é devido o ICMSST",
+        "type": "char"
+      },
+      "l10n_br_ipi_cnpj": {
+        "readonly": false,
+        "required": false,
+        "string": "CNPJ do produtor da mercadoria",
+        "type": "char"
+      },
+      "l10n_br_ipi_selo_codigo": {
+        "readonly": false,
+        "required": false,
+        "string": "Código do selo de controle IPI",
+        "type": "char"
+      },
+      "l10n_br_ipi_enq": {
+        "readonly": false,
+        "required": false,
+        "string": "Código Enquadramento",
+        "type": "char"
+      },
+      "l10n_br_nat_rec": {
+        "readonly": false,
+        "required": false,
+        "string": "Natureza da Receita",
+        "type": "char"
+      },
+      "l10n_br_cobranca_idintegracao": {
+        "readonly": false,
+        "required": false,
+        "string": "Id Integração",
+        "type": "char"
+      },
+      "l10n_br_cobranca_arquivo_remessa": {
+        "readonly": false,
+        "required": false,
+        "string": "Arquivo Remessa Automática",
+        "type": "char"
+      },
+      "l10n_br_cobranca_numero_cartao": {
+        "readonly": false,
+        "required": false,
+        "string": "Número do Cartão",
+        "type": "char"
+      },
+      "l10n_br_cobranca_autorizacao_cartao": {
+        "readonly": false,
+        "required": false,
+        "string": "Autorização",
+        "type": "char"
+      },
+      "l10n_br_cobranca_nsu_cartao": {
+        "readonly": false,
+        "required": false,
+        "string": "NSU",
+        "type": "char"
+      },
+      "l10n_br_cobranca_protocolo": {
+        "readonly": false,
+        "required": false,
+        "string": "Protocolo",
+        "type": "char"
+      },
+      "l10n_br_cobranca_nossonumero": {
+        "readonly": false,
+        "required": false,
+        "string": "Nosso Numero",
+        "type": "char"
+      },
+      "l10n_br_cobranca_situacao_mensagem": {
+        "readonly": false,
+        "required": false,
+        "string": "Mensagem",
+        "type": "char"
+      },
+      "l10n_br_pdf_boleto_fname": {
+        "readonly": true,
+        "required": false,
+        "string": "Arquivo Boleto",
+        "type": "char"
+      }
+    },
+    "booleanos": {
+      "message_is_follower": {
+        "readonly": true,
+        "required": false,
+        "string": "Is Follower",
+        "type": "boolean"
+      },
+      "has_message": {
+        "readonly": true,
+        "required": false,
+        "string": "Has Message",
+        "type": "boolean"
+      },
+      "message_needaction": {
+        "help": "If checked, new messages require your attention.",
+        "readonly": true,
+        "required": false,
+        "string": "Action Needed",
+        "type": "boolean"
+      },
+      "message_has_error": {
+        "help": "If checked, some messages have a delivery error.",
+        "readonly": true,
+        "required": false,
+        "string": "Message Delivery error",
+        "type": "boolean"
+      },
+      "message_has_sms_error": {
+        "help": "If checked, some messages have a delivery error.",
+        "readonly": true,
+        "required": false,
+        "string": "SMS Delivery error",
+        "type": "boolean"
+      },
+      "is_storno": {
+        "help": "Utility field to express whether the journal item is subject to storno accounting",
+        "readonly": true,
+        "required": false,
+        "string": "Company Storno Accounting",
+        "type": "boolean"
+      },
+      "is_same_currency": {
+        "readonly": true,
+        "required": false,
+        "string": "Is Same Currency",
+        "type": "boolean"
+      },
+      "tax_tag_invert": {
+        "readonly": false,
+        "required": false,
+        "string": "Invert Tags",
+        "type": "boolean"
+      },
+      "reconciled": {
+        "readonly": true,
+        "required": false,
+        "string": "Reconciled",
+        "type": "boolean"
+      },
+      "is_account_reconcile": {
+        "help": "Check this box if this account allows invoices & payments matching of journal items.",
+        "readonly": true,
+        "required": false,
+        "string": "Account Reconcile",
+        "type": "boolean"
+      },
+      "compute_all_tax_dirty": {
+        "readonly": true,
+        "required": false,
+        "string": "Compute All Tax Dirty",
+        "type": "boolean"
+      },
+      "epd_dirty": {
+        "readonly": true,
+        "required": false,
+        "string": "Epd Dirty",
+        "type": "boolean"
+      },
+      "discount_allocation_dirty": {
+        "readonly": true,
+        "required": false,
+        "string": "Discount Allocation Dirty",
+        "type": "boolean"
+      },
+      "blocked": {
+        "help": "You can check this box to mark this journal item as a litigation with the associated partner",
+        "readonly": false,
+        "required": false,
+        "string": "No Follow-up",
+        "type": "boolean"
+      },
+      "is_refund": {
+        "readonly": true,
+        "required": false,
+        "string": "Is Refund",
+        "type": "boolean"
+      },
+      "has_deferred_moves": {
+        "readonly": true,
+        "required": false,
+        "string": "Has Deferred Moves",
+        "type": "boolean"
+      },
+      "has_abnormal_deferred_dates": {
+        "readonly": true,
+        "required": false,
+        "string": "Has Abnormal Deferred Dates",
+        "type": "boolean"
+      },
+      "is_downpayment": {
+        "readonly": false,
+        "required": false,
+        "string": "Is Downpayment",
+        "type": "boolean"
+      },
+      "is_landed_costs_line": {
+        "readonly": false,
+        "required": false,
+        "string": "Is Landed Costs Line",
+        "type": "boolean"
+      },
+      "l10n_br_operacao_manual": {
+        "readonly": false,
+        "required": false,
+        "string": "Definir Operação Manual",
+        "type": "boolean"
+      },
+      "l10n_br_unit_tax_recompute": {
+        "readonly": false,
+        "required": false,
+        "string": "Recompute Unit Tax",
+        "type": "boolean"
+      },
+      "l10n_br_imposto_auto": {
+        "readonly": false,
+        "required": false,
+        "string": "Calcular Impostos Automaticamente",
+        "type": "boolean"
+      },
+      "l10n_br_calcular_imposto": {
+        "readonly": true,
+        "required": false,
+        "string": "Calcular Impostos",
+        "type": "boolean"
+      },
+      "l10n_br_paga": {
+        "readonly": false,
+        "required": false,
+        "string": "Parcela Paga?",
+        "type": "boolean"
+      }
+    },
+    "outros": {
+      "activity_state": {
+        "help": "Status based on activities\nOverdue: Due date is already passed\nToday: Activity date is today\nPlanned: Future activities.",
+        "readonly": true,
+        "required": false,
+        "string": "Activity State",
+        "type": "selection"
+      },
+      "activity_exception_decoration": {
+        "help": "Type of the exception activity on record.",
+        "readonly": true,
+        "required": false,
+        "string": "Activity Exception Decoration",
+        "type": "selection"
+      },
+      "analytic_distribution": {
+        "readonly": false,
+        "required": false,
+        "string": "Analytic Distribution",
+        "type": "json"
+      },
+      "analytic_distribution_search": {
+        "readonly": false,
+        "required": false,
+        "string": "Analytic Distribution Search",
+        "type": "json",
+        "searchable": false
+      },
+      "parent_state": {
+        "readonly": true,
+        "required": false,
+        "string": "Status",
+        "type": "selection"
+      },
+      "move_type": {
+        "readonly": true,
+        "required": false,
+        "string": "Type",
+        "type": "selection"
+      },
+      "account_type": {
+        "help": "Account Type is used for information purpose, to generate country-specific legal reports, and set the rules to close a fiscal year and generate opening entries.",
+        "readonly": true,
+        "required": false,
+        "string": "Internal Type",
+        "type": "selection"
+      },
+      "account_internal_group": {
+        "readonly": true,
+        "required": false,
+        "string": "Internal Group",
+        "type": "selection"
+      },
+      "display_type": {
+        "readonly": false,
+        "required": true,
+        "string": "Display Type",
+        "type": "selection"
+      },
+      "tax_calculation_rounding_method": {
+        "readonly": true,
+        "required": false,
+        "string": "Tax calculation rounding method",
+        "type": "selection"
+      },
+      "term_key": {
+        "readonly": true,
+        "required": false,
+        "string": "Term Key",
+        "type": "binary"
+      },
+      "tax_key": {
+        "readonly": true,
+        "required": false,
+        "string": "Tax Key",
+        "type": "binary"
+      },
+      "compute_all_tax": {
+        "readonly": true,
+        "required": false,
+        "string": "Compute All Tax",
+        "type": "binary"
+      },
+      "epd_key": {
+        "readonly": true,
+        "required": false,
+        "string": "Epd Key",
+        "type": "binary"
+      },
+      "epd_needed": {
+        "readonly": true,
+        "required": false,
+        "string": "Epd Needed",
+        "type": "binary"
+      },
+      "discount_allocation_key": {
+        "readonly": true,
+        "required": false,
+        "string": "Discount Allocation Key",
+        "type": "binary"
+      },
+      "discount_allocation_needed": {
+        "readonly": true,
+        "required": false,
+        "string": "Discount Allocation Needed",
+        "type": "binary"
+      },
+      "can_be_paid": {
+        "readonly": true,
+        "required": false,
+        "string": "Release to Pay",
+        "type": "selection"
+      },
+      "product_type": {
+        "help": "A storable product is a product for which you manage stock. The Inventory app has to be installed.\nA consumable product is a product for which stock is not managed.\nA service is a non-material product you provide.",
+        "readonly": true,
+        "required": false,
+        "string": "Product Type",
+        "type": "selection"
+      },
+      "l10n_br_origem": {
+        "readonly": false,
+        "required": false,
+        "string": "Origem do Produto",
+        "type": "selection"
+      },
+      "l10n_br_compra_indcom": {
+        "readonly": false,
+        "required": false,
+        "string": "Destinação de Uso",
+        "type": "selection"
+      },
+      "l10n_br_tipo_pedido": {
+        "readonly": true,
+        "required": false,
+        "string": "Tipo de Pedido (saída)",
+        "type": "selection"
+      },
+      "l10n_br_tipo_pedido_entrada": {
+        "readonly": true,
+        "required": false,
+        "string": "Tipo de Pedido (entrada)",
+        "type": "selection"
+      },
+      "l10n_br_icms_modalidade_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Modalidade de Determinação da BC do ICMS",
+        "type": "selection"
+      },
+      "l10n_br_icms_cst": {
+        "readonly": false,
+        "required": false,
+        "string": "Código de Situação Tributária do ICMS",
+        "type": "selection"
+      },
+      "l10n_br_icms_motivo_desonerado": {
+        "readonly": false,
+        "required": false,
+        "string": "Motivo Desoneração do ICMS",
+        "type": "selection"
+      },
+      "l10n_br_icmsst_modalidade_base": {
+        "readonly": false,
+        "required": false,
+        "string": "Modalidade de Determinação da BC do ICMSST",
+        "type": "selection"
+      },
+      "l10n_br_ipi_cst": {
+        "readonly": false,
+        "required": false,
+        "string": "Código de Situação Tributária do IPI",
+        "type": "selection"
+      },
+      "l10n_br_pis_cst": {
+        "readonly": false,
+        "required": false,
+        "string": "Código de Situação Tributária do PIS",
+        "type": "selection"
+      },
+      "l10n_br_cofins_cst": {
+        "readonly": false,
+        "required": false,
+        "string": "Código de Situação Tributária do Cofins",
+        "type": "selection"
+      },
+      "l10n_br_is_cst": {
+        "readonly": false,
+        "required": false,
+        "string": "Código de Situação Tributária do IS",
+        "type": "selection"
+      },
+      "l10n_br_ibscbs_cst": {
+        "readonly": false,
+        "required": false,
+        "string": "Código de Situação Tributária do IBS/CBS",
+        "type": "selection"
+      },
+      "l10n_br_nat_bc_cred": {
+        "readonly": false,
+        "required": false,
+        "string": "Natureza da Base de Cálculo dos Créditos",
+        "type": "selection"
+      },
+      "l10n_br_cobranca_transmissao": {
+        "readonly": false,
+        "required": false,
+        "string": "Tipo Transmissão",
+        "type": "selection"
+      },
+      "l10n_br_meio": {
+        "readonly": true,
+        "required": false,
+        "string": "Meio de Pagamento",
+        "type": "selection"
+      },
+      "l10n_br_cobranca_situacao": {
+        "readonly": false,
+        "required": false,
+        "string": "Situação",
+        "type": "selection"
+      },
+      "l10n_br_cobranca_tipo_desconto": {
+        "readonly": false,
+        "required": false,
+        "string": "Tipo Desconto",
+        "type": "selection"
+      },
+      "l10n_br_pdf_boleto": {
+        "readonly": false,
+        "required": false,
+        "string": "Boleto",
+        "type": "binary"
+      }
+    }
+  },
+  "lista_completa_campos": [
+    "account_id",
+    "account_internal_group",
+    "account_root_id",
+    "account_type",
+    "activity_calendar_event_id",
+    "activity_date_deadline",
+    "activity_exception_decoration",
+    "activity_exception_icon",
+    "activity_ids",
+    "activity_state",
+    "activity_summary",
+    "activity_type_icon",
+    "activity_type_id",
+    "activity_user_id",
+    "amount_currency",
+    "amount_residual",
+    "amount_residual_currency",
+    "analytic_distribution",
+    "analytic_distribution_search",
+    "analytic_line_ids",
+    "analytic_precision",
+    "asset_ids",
+    "balance",
+    "blocked",
+    "can_be_paid",
+    "cogs_origin_id",
+    "company_currency_id",
+    "company_id",
+    "compute_all_tax",
+    "compute_all_tax_dirty",
+    "create_date",
+    "create_uid",
+    "credit",
+    "cumulated_balance",
+    "currency_id",
+    "currency_rate",
+    "date",
+    "date_maturity",
+    "debit",
+    "deferred_end_date",
+    "deferred_start_date",
+    "desconto_concedido",
+    "desconto_concedido_percentual",
+    "dfe_line_id",
+    "discount",
+    "discount_allocation_dirty",
+    "discount_allocation_key",
+    "discount_allocation_needed",
+    "discount_amount_currency",
+    "discount_balance",
+    "discount_date",
+    "display_name",
+    "display_type",
+    "distribution_analytic_account_ids",
+    "epd_dirty",
+    "epd_key",
+    "epd_needed",
+    "expected_pay_date",
+    "followup_line_id",
+    "full_reconcile_id",
+    "group_tax_id",
+    "has_abnormal_deferred_dates",
+    "has_deferred_moves",
+    "has_message",
+    "id",
+    "indice_comissao",
+    "invoice_date",
+    "invoice_origin",
+    "is_account_reconcile",
+    "is_downpayment",
+    "is_landed_costs_line",
+    "is_refund",
+    "is_same_currency",
+    "is_storno",
+    "journal_id",
+    "l10n_br_arquivo_cobranca_escritural_id",
+    "l10n_br_calcular_imposto",
+    "l10n_br_cbs_aliquota",
+    "l10n_br_cbs_valor",
+    "l10n_br_cfop_codigo",
+    "l10n_br_cfop_id",
+    "l10n_br_chave_nfe_exportacao",
+    "l10n_br_cobranca_arquivo_remessa",
+    "l10n_br_cobranca_autorizacao_cartao",
+    "l10n_br_cobranca_data_desconto",
+    "l10n_br_cobranca_idintegracao",
+    "l10n_br_cobranca_nossonumero",
+    "l10n_br_cobranca_nsu_cartao",
+    "l10n_br_cobranca_numero_cartao",
+    "l10n_br_cobranca_parcela",
+    "l10n_br_cobranca_parcela_manual_linha_id",
+    "l10n_br_cobranca_protocolo",
+    "l10n_br_cobranca_situacao",
+    "l10n_br_cobranca_situacao_mensagem",
+    "l10n_br_cobranca_tipo_desconto",
+    "l10n_br_cobranca_transmissao",
+    "l10n_br_cobranca_valor_desconto",
+    "l10n_br_codigo_beneficio",
+    "l10n_br_codigo_servico",
+    "l10n_br_codigo_tributacao_servico",
+    "l10n_br_cofins_aliquota",
+    "l10n_br_cofins_base",
+    "l10n_br_cofins_cst",
+    "l10n_br_cofins_ret_aliquota",
+    "l10n_br_cofins_ret_base",
+    "l10n_br_cofins_ret_valor",
+    "l10n_br_cofins_valor",
+    "l10n_br_cofins_valor_isento",
+    "l10n_br_cofins_valor_outros",
+    "l10n_br_compra_indcom",
+    "l10n_br_csll_aliquota",
+    "l10n_br_csll_base",
+    "l10n_br_csll_ret_aliquota",
+    "l10n_br_csll_ret_base",
+    "l10n_br_csll_ret_valor",
+    "l10n_br_csll_valor",
+    "l10n_br_dados_pagamento_id",
+    "l10n_br_desc_valor",
+    "l10n_br_despesas_acessorias",
+    "l10n_br_di_adicao_id",
+    "l10n_br_drawback",
+    "l10n_br_fcp_base",
+    "l10n_br_fcp_dest_aliquota",
+    "l10n_br_fcp_dest_valor",
+    "l10n_br_fcp_st_aliquota",
+    "l10n_br_fcp_st_ant_aliquota",
+    "l10n_br_fcp_st_ant_base",
+    "l10n_br_fcp_st_ant_valor",
+    "l10n_br_fcp_st_base",
+    "l10n_br_fcp_st_valor",
+    "l10n_br_frete",
+    "l10n_br_ibs_mun_aliquota",
+    "l10n_br_ibs_mun_valor",
+    "l10n_br_ibs_uf_aliquota",
+    "l10n_br_ibs_uf_valor",
+    "l10n_br_ibs_valor",
+    "l10n_br_ibscbs_base",
+    "l10n_br_ibscbs_classtrib_id",
+    "l10n_br_ibscbs_cst",
+    "l10n_br_icms_ajuste_ids",
+    "l10n_br_icms_aliquota",
+    "l10n_br_icms_base",
+    "l10n_br_icms_credito_aliquota",
+    "l10n_br_icms_credito_valor",
+    "l10n_br_icms_cst",
+    "l10n_br_icms_dest_aliquota",
+    "l10n_br_icms_dest_base",
+    "l10n_br_icms_dest_valor",
+    "l10n_br_icms_diferido_aliquota",
+    "l10n_br_icms_diferido_valor",
+    "l10n_br_icms_diferido_valor_operacao",
+    "l10n_br_icms_inter_aliquota",
+    "l10n_br_icms_inter_participacao",
+    "l10n_br_icms_modalidade_base",
+    "l10n_br_icms_motivo_desonerado",
+    "l10n_br_icms_reducao_base",
+    "l10n_br_icms_remet_valor",
+    "l10n_br_icms_valor",
+    "l10n_br_icms_valor_credito_presumido",
+    "l10n_br_icms_valor_desonerado",
+    "l10n_br_icms_valor_efetivo",
+    "l10n_br_icms_valor_isento",
+    "l10n_br_icms_valor_outros",
+    "l10n_br_icmsst_aliquota",
+    "l10n_br_icmsst_base",
+    "l10n_br_icmsst_base_propria_aliquota",
+    "l10n_br_icmsst_modalidade_base",
+    "l10n_br_icmsst_mva",
+    "l10n_br_icmsst_reducao_base",
+    "l10n_br_icmsst_retido_aliquota",
+    "l10n_br_icmsst_retido_base",
+    "l10n_br_icmsst_retido_valor",
+    "l10n_br_icmsst_retido_valor_outros",
+    "l10n_br_icmsst_substituto_valor",
+    "l10n_br_icmsst_substituto_valor_outros",
+    "l10n_br_icmsst_uf",
+    "l10n_br_icmsst_valor",
+    "l10n_br_icmsst_valor_outros",
+    "l10n_br_icmsst_valor_proprio",
+    "l10n_br_ii_aliquota",
+    "l10n_br_ii_base",
+    "l10n_br_ii_valor",
+    "l10n_br_ii_valor_aduaneira",
+    "l10n_br_ii_valor_afrmm",
+    "l10n_br_imposto_auto",
+    "l10n_br_informacao_adicional",
+    "l10n_br_informacao_adicional_produto_ids",
+    "l10n_br_inss_ret_aliquota",
+    "l10n_br_inss_ret_base",
+    "l10n_br_inss_ret_valor",
+    "l10n_br_iof_valor",
+    "l10n_br_ipi_aliquota",
+    "l10n_br_ipi_base",
+    "l10n_br_ipi_cnpj",
+    "l10n_br_ipi_cst",
+    "l10n_br_ipi_enq",
+    "l10n_br_ipi_selo_codigo",
+    "l10n_br_ipi_selo_quantidade",
+    "l10n_br_ipi_valor",
+    "l10n_br_ipi_valor_isento",
+    "l10n_br_ipi_valor_outros",
+    "l10n_br_irpj_aliquota",
+    "l10n_br_irpj_base",
+    "l10n_br_irpj_ret_aliquota",
+    "l10n_br_irpj_ret_base",
+    "l10n_br_irpj_ret_valor",
+    "l10n_br_irpj_valor",
+    "l10n_br_is_aliquota",
+    "l10n_br_is_base",
+    "l10n_br_is_classtrib_id",
+    "l10n_br_is_cst",
+    "l10n_br_is_valor",
+    "l10n_br_iss_aliquota",
+    "l10n_br_iss_base",
+    "l10n_br_iss_deducao",
+    "l10n_br_iss_ret_aliquota",
+    "l10n_br_iss_ret_base",
+    "l10n_br_iss_ret_valor",
+    "l10n_br_iss_valor",
+    "l10n_br_item_pedido_compra",
+    "l10n_br_meio",
+    "l10n_br_mensagem_fiscal_ids",
+    "l10n_br_nat_bc_cred",
+    "l10n_br_nat_rec",
+    "l10n_br_ncm_id",
+    "l10n_br_operacao_id",
+    "l10n_br_operacao_manual",
+    "l10n_br_origem",
+    "l10n_br_paga",
+    "l10n_br_pdf_boleto",
+    "l10n_br_pdf_boleto_fname",
+    "l10n_br_pedido_compra",
+    "l10n_br_pis_aliquota",
+    "l10n_br_pis_base",
+    "l10n_br_pis_cst",
+    "l10n_br_pis_ret_aliquota",
+    "l10n_br_pis_ret_base",
+    "l10n_br_pis_ret_valor",
+    "l10n_br_pis_valor",
+    "l10n_br_pis_valor_isento",
+    "l10n_br_pis_valor_outros",
+    "l10n_br_prod_valor",
+    "l10n_br_registro_exportacao",
+    "l10n_br_seguro",
+    "l10n_br_tipo_pedido",
+    "l10n_br_tipo_pedido_entrada",
+    "l10n_br_tipo_pedido_str",
+    "l10n_br_total_nfe",
+    "l10n_br_total_tributos",
+    "l10n_br_unit_nfe",
+    "l10n_br_unit_tax",
+    "l10n_br_unit_tax_recompute",
+    "last_followup_date",
+    "matched_credit_ids",
+    "matched_debit_ids",
+    "matching_number",
+    "message_attachment_count",
+    "message_follower_ids",
+    "message_has_error",
+    "message_has_error_counter",
+    "message_has_sms_error",
+    "message_ids",
+    "message_is_follower",
+    "message_needaction",
+    "message_needaction_counter",
+    "message_partner_ids",
+    "move_attachment_ids",
+    "move_id",
+    "move_name",
+    "move_type",
+    "my_activity_date_deadline",
+    "name",
+    "next_action_date",
+    "non_deductible_tax_value",
+    "parent_state",
+    "partner_id",
+    "payment_date",
+    "payment_id",
+    "payment_provider_id",
+    "price_subtotal",
+    "price_total",
+    "price_unit",
+    "product_id",
+    "product_type",
+    "product_uom_category_id",
+    "product_uom_id",
+    "purchase_line_id",
+    "purchase_order_id",
+    "quantity",
+    "rating_ids",
+    "reconcile_model_id",
+    "reconciled",
+    "ref",
+    "sale_line_id",
+    "sale_line_ids",
+    "sequence",
+    "statement_id",
+    "statement_line_id",
+    "stock_valuation_layer_ids",
+    "tax_base_amount",
+    "tax_calculation_rounding_method",
+    "tax_group_id",
+    "tax_ids",
+    "tax_key",
+    "tax_line_id",
+    "tax_repartition_line_id",
+    "tax_tag_ids",
+    "tax_tag_invert",
+    "term_key",
+    "website_message_ids",
+    "write_date",
+    "write_uid",
+    "x_studio_nf_e",
+    "x_studio_status_de_pagamento",
+    "x_studio_tipo_de_documento_fiscal"
+  ]
+}

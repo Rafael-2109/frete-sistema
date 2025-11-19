@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}Contas a Receber{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-export {
+        border-left: 4px solid #28a745;
+        transition: all 0.3s ease;
+    }
+
+    .card-export:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+
+    .btn-export {
+        min-width: 150px;
+    }
+
+    .info-box {
+        background: #f8f9fa;
+        border-left: 4px solid #007bff;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .rule-list {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 15px;
+        margin-top: 15px;
+    }
+
+    .rule-list li {
+        padding: 5px 0;
+    }
+
+    .badge-rule {
+        font-size: 0.9em;
+        padding: 5px 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-file-invoice-dollar"></i>
+                Contas a Receber - Odoo
+            </h2>
+            <p class="text-muted">
+                Exportação automatizada do relatório de Contas a Receber com enriquecimento de dados
+            </p>
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="info-box">
+                <h5><i class="fas fa-info-circle"></i> Sobre este relatório</h5>
+                <p class="mb-0">
+                    Este relatório extrai dados do modelo <code>account.move.line</code> do Odoo,
+                    aplica <strong>11 regras de negócio</strong> e enriquece com dados locais de
+                    entregas e agendamentos.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Exportação -->
+    <div class="row mb-4">
+        <!-- Excel -->
+        <div class="col-md-6">
+            <div class="card card-export h-100">
+                <div class="card-body">
+                    <h4 class="card-title">
+                        <i class="fas fa-file-excel text-success"></i>
+                        Exportar Excel
+                    </h4>
+                    <p class="card-text">
+                        Gera arquivo Excel (.xlsx) formatado e pronto para análise.
+                        Ideal para uso direto no Microsoft Excel.
+                    </p>
+
+                    <!-- Filtro de Data -->
+                    <div class="form-group mb-3">
+                        <label for="dataExcel">
+                            <i class="fas fa-calendar-alt"></i>
+                            Data inicial (opcional):
+                        </label>
+                        <input
+                            type="date"
+                            class="form-control"
+                            id="dataExcel"
+                            value="{{ data_ontem }}"
+                        >
+                        <small class="form-text text-muted">
+                            Padrão: D-1 (ontem). Filtra registros a partir desta data.
+                        </small>
+                    </div>
+
+                    <button
+                        class="btn btn-success btn-export btn-lg btn-block"
+                        onclick="exportarExcel()"
+                    >
+                        <i class="fas fa-download"></i> Baixar Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- JSON API -->
+        <div class="col-md-6">
+            <div class="card card-export h-100" style="border-left-color: #007bff;">
+                <div class="card-body">
+                    <h4 class="card-title">
+                        <i class="fas fa-code text-primary"></i>
+                        API JSON
+                    </h4>
+                    <p class="card-text">
+                        Retorna dados em JSON para integração com Power Query,
+                        Python, ou outras ferramentas de análise.
+                    </p>
+
+                    <!-- Filtro de Data -->
+                    <div class="form-group mb-3">
+                        <label for="dataJson">
+                            <i class="fas fa-calendar-alt"></i>
+                            Data inicial (opcional):
+                        </label>
+                        <input
+                            type="date"
+                            class="form-control"
+                            id="dataJson"
+                            value="{{ data_ontem }}"
+                        >
+                        <small class="form-text text-muted">
+                            Padrão: D-1 (ontem). Filtra registros a partir desta data.
+                        </small>
+                    </div>
+
+                    <button
+                        class="btn btn-primary btn-export btn-lg btn-block"
+                        onclick="visualizarJson()"
+                    >
+                        <i class="fas fa-eye"></i> Visualizar JSON
+                    </button>
+
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <strong>URL da API:</strong><br>
+                            <code id="apiUrl">{{ url_for('financeiro.exportar_contas_receber_json', _external=True) }}</code>
+                            <button class="btn btn-sm btn-outline-secondary ml-2" onclick="copiarUrl()">
+                                <i class="fas fa-copy"></i> Copiar
+                            </button>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Regras Aplicadas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tasks"></i>
+                        Regras de Negócio Aplicadas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ol class="rule-list">
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 1</span>
+                            Filtro de data: Registros a partir de <strong>D-1</strong> (ontem por padrão)
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 2</span>
+                            Remove linhas com <strong>NF-e vazio, nulo ou 0</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 3</span>
+                            Remove linhas com <strong>saldo ≤ 0</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 4</span>
+                            Remove linhas da empresa <strong>LA FAMIGLIA-LF</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 5</span>
+                            Remove linhas com <strong>data de vencimento < 02/01/2000</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 6</span>
+                            Converte <strong>NF-e para integer</strong> e ordena crescente
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 7</span>
+                            Converte <strong>datas para formato DATE</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 8</span>
+                            Cria coluna <strong>"Saldo Total" = balance + desconto_concedido</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 9</span>
+                            Remove coluna <strong>balance</strong> original
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 10</span>
+                            Mantém apenas forma de pagamento <strong>"Transferência Bancária CD"</strong>
+                        </li>
+                        <li>
+                            <span class="badge badge-rule badge-secondary">Regra 11</span>
+                            <strong>Enriquece com dados locais:</strong>
+                            <ul>
+                                <li>Data entrega prevista</li>
+                                <li>Data/hora entrega realizada</li>
+                                <li>Status de entrega</li>
+                                <li>Último agendamento (data e status)</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Power Query - Tutorial -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle"></i>
+                        Como usar com Power Query (Excel)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Passo a passo para conectar o Excel à API JSON (atualização automática):</strong></p>
+
+                    <div class="alert alert-success">
+                        <strong><i class="fas fa-check-circle"></i> API Pública</strong><br>
+                        Esta API está configurada como pública e NÃO requer autenticação.
+                        Você pode acessá-la diretamente do Excel sem fazer login.
+                    </div>
+
+                    <ol class="mb-4">
+                        <li>Abra o <strong>Microsoft Excel</strong></li>
+                        <li>Vá em <strong>Dados → Obter Dados → De Outras Fontes → Da Web</strong></li>
+                        <li>No campo URL, cole: <br>
+                            <code id="urlPowerQuery" class="bg-light p-2 d-block mt-2">{{ url_for('financeiro.exportar_contas_receber_json', _external=True) }}</code>
+                            <button class="btn btn-sm btn-secondary mt-1" onclick="copiarUrl('urlPowerQuery')">
+                                <i class="fas fa-copy"></i> Copiar URL
+                            </button>
+                        </li>
+                        <li>Clique em <strong>OK</strong></li>
+                        <li>Na janela do Power Query Editor que abrir:</li>
+                        <ul>
+                            <li>Você verá um registro chamado <code>Record</code></li>
+                            <li>Clique em <strong>Record</strong> para expandir</li>
+                            <li>Encontre o campo <strong>"dados"</strong></li>
+                            <li>Clique em <strong>List</strong> ao lado de "dados"</li>
+                            <li>Clique em <strong>To Table</strong> (Para Tabela)</li>
+                            <li>Clique no ícone de <strong>Expandir</strong> (duas setas) ao lado de "Column1"</li>
+                            <li>Marque todas as colunas que deseja exibir</li>
+                            <li>Desmarque "Use original column name as prefix"</li>
+                        </ul>
+                        <li>Clique em <strong>Fechar e Carregar</strong></li>
+                        <li><strong>Configurar atualização automática:</strong></li>
+                        <ul>
+                            <li>Clique com botão direito na tabela criada</li>
+                            <li>Selecione <strong>Propriedades da Consulta</strong></li>
+                            <li>Marque <strong>"Atualizar a cada X minutos"</strong> (ex: 60 minutos)</li>
+                            <li>Clique em <strong>OK</strong></li>
+                        </ul>
+                    </ol>
+
+                    <div class="alert alert-info">
+                        <strong><i class="fas fa-info-circle"></i> Dica:</strong>
+                        Você pode adicionar <code>?data=2025-11-17</code> no final da URL para filtrar por data específica.
+                        <br>Exemplo: <code>{{ url_for('financeiro.exportar_contas_receber_json', _external=True) }}?data=2025-11-17</code>
+                    </div>
+
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Importante:</strong> A API retorna apenas dados filtrados pelas 11 regras de negócio
+                        (contas a receber ativas, com vencimento válido, sem duplicatas, etc.).
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center p-5">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="sr-only">Carregando...</span>
+                </div>
+                <h5 class="mt-3">Processando relatório...</h5>
+                <p class="text-muted mb-0">
+                    Extraindo dados do Odoo, aplicando regras e enriquecendo com dados locais.
+                    <br>Isso pode levar alguns segundos.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function exportarExcel() {
+        const data = document.getElementById('dataExcel').value;
+        const url = "{{ url_for('financeiro.exportar_contas_receber_excel') }}" +
+                    (data ? `?data=${data}` : '');
+
+        // Mostrar loading
+        $('#loadingModal').modal('show');
+
+        // Criar link temporário para download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `contas_receber_${data || 'hoje'}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Esconder loading após 3 segundos (tempo estimado de download)
+        setTimeout(() => {
+            $('#loadingModal').modal('hide');
+        }, 3000);
+    }
+
+    function visualizarJson() {
+        const data = document.getElementById('dataJson').value;
+        const url = "{{ url_for('financeiro.exportar_contas_receber_json') }}" +
+                    (data ? `?data=${data}` : '');
+
+        // Mostrar loading
+        $('#loadingModal').modal('show');
+
+        // Abrir em nova aba
+        window.open(url, '_blank');
+
+        // Esconder loading
+        setTimeout(() => {
+            $('#loadingModal').modal('hide');
+        }, 1000);
+    }
+
+    function copiarUrl(elementId) {
+        elementId = elementId || 'apiUrl';
+        const url = document.getElementById(elementId).textContent;
+        navigator.clipboard.writeText(url).then(() => {
+            toastr.success('URL copiada para a área de transferência!');
+        });
+    }
+</script>
+{% endblock %}

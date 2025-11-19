@@ -163,3 +163,116 @@ def excluir_todas_pendencias():
     db.session.commit()
     flash('Todas as pendências foram excluídas com sucesso.', 'success')
     return redirect(url_for('financeiro.consultar_pendencias'))
+
+
+# ========================================
+# ROTAS: CONTAS A RECEBER
+# ========================================
+
+@financeiro_bp.route('/contas-receber')
+@login_required
+def contas_receber():
+    """
+    Página de Contas a Receber
+    Exibe interface para exportação de relatório
+    """
+    from datetime import date, timedelta
+
+    data_ontem = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+    return render_template(
+        'financeiro/contas_receber.html',
+        data_ontem=data_ontem
+    )
+
+
+@financeiro_bp.route('/contas-receber/exportar-excel')
+@login_required
+def exportar_contas_receber_excel():
+    """
+    Exporta relatório de Contas a Receber em Excel
+    Aplica as 11 regras de negócio e enriquece com dados locais
+    """
+    try:
+        from app.financeiro.services.contas_receber_service import ContasReceberService
+        from flask import send_file
+        from io import BytesIO
+        from datetime import date
+
+        # Obter data de filtro (se fornecida)
+        data_param = request.args.get('data')
+        data_inicio = None
+
+        if data_param:
+            try:
+                data_inicio = datetime.strptime(data_param, '%Y-%m-%d').date()
+            except ValueError:
+                flash('Data inválida. Usando D-1 como padrão.', 'warning')
+
+        # Criar serviço
+        service = ContasReceberService()
+
+        # Gerar Excel
+        excel_bytes = service.exportar_excel(data_inicio)
+
+        # Nome do arquivo
+        data_str = (data_inicio or date.today()).strftime('%Y-%m-%d')
+        filename = f'contas_receber_{data_str}.xlsx'
+
+        # Retornar arquivo
+        return send_file(
+            BytesIO(excel_bytes),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        flash(f'Erro ao exportar relatório: {str(e)}', 'danger')
+        return redirect(url_for('financeiro.contas_receber'))
+
+
+@financeiro_bp.route('/contas-receber/exportar-json')
+def exportar_contas_receber_json():
+    """
+    API PÚBLICA: Exporta relatório de Contas a Receber em JSON
+    Para uso com Power Query do Excel ou outras ferramentas
+
+    NOTA: Rota pública (sem @login_required) para permitir acesso via Power Query
+    """
+    try:
+        from app.financeiro.services.contas_receber_service import ContasReceberService
+        from datetime import date
+
+        # Obter data de filtro (se fornecida)
+        data_param = request.args.get('data')
+        data_inicio = None
+
+        if data_param:
+            try:
+                data_inicio = datetime.strptime(data_param, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        # Criar serviço
+        service = ContasReceberService()
+
+        # Gerar JSON
+        dados = service.exportar_json(data_inicio)
+
+        # Retornar DIRETAMENTE a lista de dados (sem wrapper)
+        # Isso facilita o Power Query do Excel
+        response = jsonify(dados)
+
+        # Adicionar headers CORS
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'GET')
+
+        return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
