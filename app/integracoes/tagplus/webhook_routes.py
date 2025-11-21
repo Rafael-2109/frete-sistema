@@ -68,8 +68,11 @@ def webhook_nfe():
     """Recebe webhook quando uma NFE é emitida no TagPlus"""
     try:
         # 🔒 LOG DE SEGURANÇA - Início
+        logger.info("="*80)
         logger.info(f"🔔 WEBHOOK RECEBIDO | Endpoint: /webhook/tagplus/nfe | IP: {request.remote_addr}")
+        logger.info("="*80)
         logger.debug(f"🔍 Headers: {dict(request.headers)}")
+        logger.debug(f"🔍 Body RAW: {request.get_data(as_text=True)}")
 
         # Valida assinatura
         validacao_resultado, motivo = validar_assinatura(request)
@@ -137,20 +140,36 @@ def webhook_nfe():
 
         # ✅ PROCESSAR EVENTOS
         # Eventos TagPlus: nfe_criada, nfe_alterada, nfe_apagada
+        logger.info(f"🔄 Processando evento '{event_type}' para NFe ID {nfe_id}")
+
         if event_type in ['nfe_criada', 'nfe_alterada']:
-            # Assumir que NFe criada/alterada = autorizada (processar)
-            processar_nfe_webhook(nfe_completa)
+            try:
+                logger.info(f"🚀 Iniciando processamento de NFe {nfe_completa.get('numero', 'S/N')}")
+                # Assumir que NFe criada/alterada = autorizada (processar)
+                processar_nfe_webhook(nfe_completa)
+                logger.info(f"✅ NFe {nfe_completa.get('numero', 'S/N')} processada com sucesso")
+            except Exception as proc_error:
+                logger.error(f"❌ ERRO ao processar NFe webhook: {proc_error}", exc_info=True)
+                return jsonify({'erro': f'Erro ao processar NFe: {str(proc_error)}'}), 500
+
         elif event_type == 'nfe_apagada':
-            # NFe apagada = cancelar
-            cancelar_nfe_webhook(nfe_completa)
+            try:
+                logger.info(f"🗑️ Processando cancelamento de NFe {nfe_completa.get('numero', 'S/N')}")
+                # NFe apagada = cancelar
+                cancelar_nfe_webhook(nfe_completa)
+                logger.info(f"✅ NFe {nfe_completa.get('numero', 'S/N')} cancelada com sucesso")
+            except Exception as cancel_error:
+                logger.error(f"❌ ERRO ao cancelar NFe webhook: {cancel_error}", exc_info=True)
+                return jsonify({'erro': f'Erro ao cancelar NFe: {str(cancel_error)}'}), 500
         else:
             logger.warning(f"⚠️ Evento desconhecido: '{event_type}' | NFe ID: {nfe_id}")
 
-        return jsonify({'status': 'ok'}), 200
-        
+        logger.info(f"🎉 Webhook processado com sucesso | Event: {event_type} | NFe ID: {nfe_id}")
+        return jsonify({'status': 'ok', 'message': f'Evento {event_type} processado'}), 200
+
     except Exception as e:
-        logger.error(f"Erro no webhook de NFE: {e}")
-        return jsonify({'erro': str(e)}), 500
+        logger.error(f"❌ ERRO CRÍTICO no webhook de NFE: {e}", exc_info=True)
+        return jsonify({'erro': str(e), 'detalhes': 'Verifique os logs para mais informações'}), 500
 
 @csrf.exempt
 @tagplus_webhook.route('/webhook/tagplus/teste', methods=['GET', 'POST'])
@@ -308,78 +327,115 @@ def atualizar_cliente_webhook(cliente, dados):
 def processar_nfe_webhook(nfe_data):
     """Processa NFE recebida via webhook"""
     try:
+        logger.info(f"📦 [WEBHOOK NFe] Iniciando processamento de NFe...")
+        logger.debug(f"📦 [WEBHOOK NFe] Dados recebidos: {nfe_data}")
+
         numero_nf = str(nfe_data.get('numero', ''))
-        
+        logger.info(f"📦 [WEBHOOK NFe] Número da NF: {numero_nf}")
+
         # Verifica se já existe
         existe = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).first()
         if existe:
-            logger.info(f"NF {numero_nf} já existe")
+            logger.info(f"⏭️ [WEBHOOK NFe] NF {numero_nf} já existe no sistema - pulando processamento")
             return
-        
+
         # Busca cliente
+        logger.info(f"🔍 [WEBHOOK NFe] Buscando dados do cliente...")
         cliente_data = nfe_data.get('cliente', {})
         cnpj_cliente = re.sub(r'\D', '', str(cliente_data.get('cnpj', '')))
-        
+        logger.info(f"🔍 [WEBHOOK NFe] CNPJ do cliente: {cnpj_cliente}")
+
         cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
         if not cliente:
+            logger.info(f"➕ [WEBHOOK NFe] Cliente {cnpj_cliente} não encontrado - criando novo...")
             # Cria cliente básico
             criar_cliente_webhook(cliente_data, cnpj_cliente)
             db.session.flush()
             cliente = CadastroCliente.query.filter_by(cnpj_cpf=cnpj_cliente).first()
-        
+            logger.info(f"✅ [WEBHOOK NFe] Cliente {cnpj_cliente} criado com sucesso")
+        else:
+            logger.info(f"✅ [WEBHOOK NFe] Cliente {cnpj_cliente} encontrado: {cliente.raz_social}")
+
         # Processa itens da NF
+        itens_nf = nfe_data.get('itens', [])
+        logger.info(f"📋 [WEBHOOK NFe] Processando {len(itens_nf)} itens da NF...")
+
         itens_criados = []
-        for item in nfe_data.get('itens', []):
+        for idx, item in enumerate(itens_nf, 1):
+            logger.debug(f"📋 [WEBHOOK NFe] Processando item {idx}/{len(itens_nf)}: {item}")
             item_faturamento = criar_item_faturamento_webhook(nfe_data, item, cliente)
             itens_criados.append(item_faturamento)
-        
+            logger.debug(f"✅ [WEBHOOK NFe] Item {idx} criado: {item_faturamento.cod_produto}")
+
+        logger.info(f"💾 [WEBHOOK NFe] Salvando {len(itens_criados)} itens no banco de dados...")
         db.session.commit()
-        logger.info(f"NF {numero_nf} processada via webhook com {len(nfe_data.get('itens', []))} itens")
-        
+        logger.info(f"✅ [WEBHOOK NFe] NF {numero_nf} salva com sucesso com {len(itens_criados)} itens")
+
         # Executa processamento completo (score, movimentação, vinculação)
+        logger.info(f"🔄 [WEBHOOK NFe] Iniciando processamento completo (score, movimentação, etc)...")
         processar_faturamento_tagplus(numero_nf)
-        
+        logger.info(f"🎉 [WEBHOOK NFe] Processamento completo da NF {numero_nf} finalizado!")
+
     except Exception as e:
-        logger.error(f"Erro ao processar NFE webhook: {e}")
+        logger.error(f"❌ [WEBHOOK NFe] Erro ao processar NFE webhook: {e}", exc_info=True)
         db.session.rollback()
         raise
 
 def processar_faturamento_tagplus(numero_nf):
     """Executa processamento completo da NF (score, movimentação, etc)"""
     try:
-        from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+        logger.info(f"🔄 [PROCESSAR FATURAMENTO] Iniciando processamento completo da NF {numero_nf}")
 
-        logger.info(f"Iniciando processamento completo da NF {numero_nf}")
+        # Import dentro da função para evitar circular imports
+        try:
+            from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+            logger.info(f"✅ [PROCESSAR FATURAMENTO] ProcessadorFaturamento importado com sucesso")
+        except Exception as import_error:
+            logger.error(f"❌ [PROCESSAR FATURAMENTO] Erro ao importar ProcessadorFaturamento: {import_error}", exc_info=True)
+            raise
 
         # Busca todos os itens da NF
+        logger.info(f"🔍 [PROCESSAR FATURAMENTO] Buscando itens da NF {numero_nf}...")
         itens_nf = FaturamentoProduto.query.filter_by(
             numero_nf=numero_nf,
             created_by='WebhookTagPlus'
         ).all()
 
         if not itens_nf:
-            logger.warning(f"Nenhum item encontrado para NF {numero_nf}")
+            logger.warning(f"⚠️ [PROCESSAR FATURAMENTO] Nenhum item encontrado para NF {numero_nf}")
             return
 
-        # Processa usando ProcessadorFaturamento padrão
-        processador = ProcessadorFaturamento()
-        resultado = processador.processar_nfs_importadas(
-            usuario='WebhookTagPlus',
-            limpar_inconsistencias=False,
-            nfs_especificas=[numero_nf]
-        )
+        logger.info(f"✅ [PROCESSAR FATURAMENTO] Encontrados {len(itens_nf)} itens para NF {numero_nf}")
 
-        logger.info(f"Processamento completo da NF {numero_nf} finalizado")
+        # Processa usando ProcessadorFaturamento padrão
+        logger.info(f"🚀 [PROCESSAR FATURAMENTO] Iniciando ProcessadorFaturamento para NF {numero_nf}...")
+        processador = ProcessadorFaturamento()
+
+        try:
+            resultado = processador.processar_nfs_importadas(
+                usuario='WebhookTagPlus',
+                limpar_inconsistencias=False,
+                nfs_especificas=[numero_nf]
+            )
+            logger.info(f"✅ [PROCESSAR FATURAMENTO] ProcessadorFaturamento executado com sucesso")
+        except Exception as proc_error:
+            logger.error(f"❌ [PROCESSAR FATURAMENTO] Erro ao executar ProcessadorFaturamento: {proc_error}", exc_info=True)
+            raise
+
+        logger.info(f"🎉 [PROCESSAR FATURAMENTO] Processamento completo da NF {numero_nf} finalizado")
         if resultado:
-            logger.info(f"NFs processadas: {resultado.get('processadas', 0)}")
-            logger.info(f"Movimentações criadas: {resultado.get('movimentacoes_criadas', 0)}")
+            logger.info(f"📊 [PROCESSAR FATURAMENTO] NFs processadas: {resultado.get('processadas', 0)}")
+            logger.info(f"📊 [PROCESSAR FATURAMENTO] Movimentações criadas: {resultado.get('movimentacoes_criadas', 0)}")
             if resultado.get('erros'):
-                logger.warning(f"Erros: {resultado['erros']}")
-        
+                logger.warning(f"⚠️ [PROCESSAR FATURAMENTO] Erros: {resultado['erros']}")
+        else:
+            logger.warning(f"⚠️ [PROCESSAR FATURAMENTO] Nenhum resultado retornado pelo processador")
+
     except Exception as e:
-        logger.error(f"Erro no processamento completo da NF {numero_nf}: {e}")
+        logger.error(f"❌ [PROCESSAR FATURAMENTO] Erro crítico no processamento completo da NF {numero_nf}: {e}", exc_info=True)
         db.session.rollback()
         # Não relança a exceção para não falhar o webhook
+        logger.warning(f"⚠️ [PROCESSAR FATURAMENTO] Webhook continuará apesar do erro no processamento")
 
 def criar_item_faturamento_webhook(nfe_data, item_data, cliente):
     """Cria item de faturamento a partir de webhook"""
