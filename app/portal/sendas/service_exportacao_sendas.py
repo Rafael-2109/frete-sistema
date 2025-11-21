@@ -186,7 +186,7 @@ class ExportacaoSendasService:
                         # Coluna 1 - Número sequencial POR AGENDAMENTO
                         'Demanda': numero_demanda,
 
-                        # Colunas 2-16 - Da planilha modelo (preservar dados da filial)
+                        # Colunas 2-11 - Da planilha modelo (preservar dados da filial)
                         'Razão Social - Fornecedor': planilha_item.razao_social_fornecedor,
                         'Nome Fantasia - Fornecedor': planilha_item.nome_fantasia_fornecedor,
                         'Unidade de destino': planilha_item.unidade_destino,
@@ -198,13 +198,19 @@ class ExportacaoSendasService:
                         'Código Produto SKU Fornecedor': planilha_item_especifico.codigo_produto_sku_fornecedor if planilha_item_especifico and planilha_item_especifico.codigo_produto_sku_fornecedor and str(planilha_item_especifico.codigo_produto_sku_fornecedor).lower() != 'nan' else '',
                         'EAN': planilha_item_especifico.ean if planilha_item_especifico and planilha_item_especifico.ean and str(planilha_item_especifico.ean).lower() != 'nan' else '',
                         'Setor': planilha_item.setor if planilha_item.setor and str(planilha_item.setor).lower() != 'nan' else '',
-                        # 'Número do pedido Trizy': planilha_item_especifico.numero_pedido_trizy if planilha_item_especifico and planilha_item_especifico.numero_pedido_trizy and str(planilha_item_especifico.numero_pedido_trizy).lower() != 'nan' else '',  # ⚠️ COMENTADO: Coluna não existe mais no layout do Sendas
+
+                        # ✅ NOVAS COLUNAS 12-14 - Datas de entrega (preenchidas com a Data sugerida de entrega)
+                        'Entrega De': item_fila.data_agendamento,       # Coluna 12 - Data mínima
+                        'Entrega Até': item_fila.data_agendamento,      # Coluna 13 - Data máxima
+                        'Data Ideal': item_fila.data_agendamento,       # Coluna 14 - Data ideal
+
+                        # Colunas 15-18 - Da planilha modelo (continuação)
                         'Descrição do Item': planilha_item_especifico.descricao_item if planilha_item_especifico and planilha_item_especifico.descricao_item and str(planilha_item_especifico.descricao_item).lower() != 'nan' else '',
                         'Quantidade total': float(planilha_item_especifico.quantidade_total or 0) if planilha_item_especifico and planilha_item_especifico.quantidade_total else 0,
                         'Saldo disponível': float(planilha_item_especifico.saldo_disponivel or 0) if planilha_item_especifico and planilha_item_especifico.saldo_disponivel else 0,
                         'Unidade de medida': planilha_item_especifico.unidade_medida if planilha_item_especifico and planilha_item_especifico.unidade_medida else 'UN',
 
-                        # Colunas 17-24 - Editáveis (dados da FILA)
+                        # Colunas 19-27 - Editáveis (dados da FILA)
                         'Quantidade entrega': float(item_fila.quantidade),  # ✅ Quantidade da FILA
                         'Data sugerida de entrega': item_fila.data_agendamento,  # Será formatado no Excel
                         'ID de agendamento (opcional)': '',
@@ -253,38 +259,42 @@ class ExportacaoSendasService:
             # 5. Criar DataFrame e exportar para Excel
             df = pd.DataFrame(linhas_exportacao)
 
-            # Garantir ordem correta das colunas (1-24)
+            # Garantir ordem correta das colunas (1-27) - ATUALIZADO com 3 novas colunas de data
             colunas_ordenadas = [
-                'Demanda',
-                'Razão Social - Fornecedor',
-                'Nome Fantasia - Fornecedor',
-                'Unidade de destino',
-                'UF Destino',
-                'Fluxo de operação',
-                'Código do pedido Cliente',
-                'Código Produto Cliente',
-                'Código Produto SKU Fornecedor',
-                'EAN',
-                'Setor',
-                # 'Número do pedido Trizy',  # ⚠️ COMENTADO: Coluna não existe mais no layout do Sendas
-                'Descrição do Item',
-                'Quantidade total',
-                'Saldo disponível',
-                'Unidade de medida',
-                'Quantidade entrega',
-                'Data sugerida de entrega',
-                'ID de agendamento (opcional)',
-                'Reserva de Slot (opcional)',
-                'Característica da carga',
-                'Característica do veículo',
-                'Transportadora CNPJ (opcional)',
-                'Observação/ Fornecedor (opcional)'
+                'Demanda',                              # Coluna A (1)
+                'Razão Social - Fornecedor',           # Coluna B (2)
+                'Nome Fantasia - Fornecedor',          # Coluna C (3)
+                'Unidade de destino',                  # Coluna D (4)
+                'UF Destino',                          # Coluna E (5)
+                'Fluxo de operação',                   # Coluna F (6)
+                'Código do pedido Cliente',            # Coluna G (7)
+                'Código Produto Cliente',              # Coluna H (8)
+                'Código Produto SKU Fornecedor',       # Coluna I (9)
+                'EAN',                                 # Coluna J (10)
+                'Setor',                               # Coluna K (11)
+                'Entrega De',                          # Coluna L (12) - ✅ NOVA
+                'Entrega Até',                         # Coluna M (13) - ✅ NOVA
+                'Data Ideal',                          # Coluna N (14) - ✅ NOVA
+                'Descrição do Item',                   # Coluna O (15)
+                'Quantidade total',                    # Coluna P (16)
+                'Saldo disponível',                    # Coluna Q (17)
+                'Unidade de medida',                   # Coluna R (18)
+                'Quantidade entrega',                  # Coluna S (19)
+                'Data sugerida de entrega',            # Coluna T (20)
+                'ID de agendamento (opcional)',        # Coluna U (21)
+                'Reserva de Slot (opcional)',          # Coluna V (22)
+                'Característica da carga',             # Coluna W (23)
+                'Característica do veículo',           # Coluna X (24)
+                'Transportadora CNPJ (opcional)',      # Coluna Y (25)
+                'Observação/ Fornecedor (opcional)'    # Coluna Z (26)
             ]
 
             df = df[colunas_ordenadas]
 
             # ✅ CORREÇÃO: Manter como Date mas formatar célula no Excel
-            df['Data sugerida de entrega'] = pd.to_datetime(df['Data sugerida de entrega']).dt.date
+            # Converter todas as colunas de data
+            for col_data in ['Entrega De', 'Entrega Até', 'Data Ideal', 'Data sugerida de entrega']:
+                df[col_data] = pd.to_datetime(df[col_data]).dt.date
 
             # ✅ CORREÇÃO: Substituir TODOS os NaN por string vazia
             df = df.fillna('')
@@ -294,15 +304,20 @@ class ExportacaoSendasService:
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Agendamento')
 
-                # Formatar coluna de data como DD/MM/YYYY
+                # Formatar colunas de data como DD/MM/YYYY
                 worksheet = writer.sheets['Agendamento']
 
-                # Encontrar índice da coluna 'Data sugerida de entrega' (coluna 18 = R)
-                date_column_letter = 'R'  # Coluna 18
-                for row in range(2, worksheet.max_row + 1):  # Começar da linha 2 (pular header)
-                    cell = worksheet[f'{date_column_letter}{row}']
-                    if cell.value:  # Se tem valor
-                        cell.number_format = 'DD/MM/YYYY'  # Formato de data brasileiro
+                # ✅ ATUALIZADO: Formatar TODAS as colunas de data (L, M, N, T)
+                # Coluna L (12) = Entrega De
+                # Coluna M (13) = Entrega Até
+                # Coluna N (14) = Data Ideal
+                # Coluna T (20) = Data sugerida de entrega
+                date_columns = ['L', 'M', 'N', 'T']
+                for date_column_letter in date_columns:
+                    for row in range(2, worksheet.max_row + 1):  # Começar da linha 2 (pular header)
+                        cell = worksheet[f'{date_column_letter}{row}']
+                        if cell.value:  # Se tem valor
+                            cell.number_format = 'DD/MM/YYYY'  # Formato de data brasileiro
 
                 # Ajustar largura das colunas
                 for column in worksheet.columns:

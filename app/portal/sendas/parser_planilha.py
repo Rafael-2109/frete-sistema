@@ -29,6 +29,7 @@ def processar_planilha_modelo(filepath, usuario='Sistema'):
         logger.info(f"Colunas encontradas: {list(df.columns)[:5]}...")  # Log das primeiras 5 colunas
 
         # Verificar se tem as colunas esperadas (baseado nos nomes)
+        # ✅ ATUALIZADO Nov/2025: Removido 'Número do pedido Trizy', adicionadas 3 colunas de data
         colunas_esperadas = [
             'Razão Social - Fornecedor',
             'Nome Fantasia - Fornecedor',
@@ -40,7 +41,9 @@ def processar_planilha_modelo(filepath, usuario='Sistema'):
             'Código Produto SKU Fornecedor',
             'EAN',
             'Setor',
-            'Número do pedido Trizy',
+            'Entrega De',          # ✅ NOVA - Coluna L (vem vazia na planilha modelo)
+            'Entrega Até',         # ✅ NOVA - Coluna M (vem vazia na planilha modelo)
+            'Data Ideal',          # ✅ NOVA - Coluna N (vem vazia na planilha modelo)
             'Descrição do Item',
             'Quantidade total',
             'Saldo disponível',
@@ -60,6 +63,7 @@ def processar_planilha_modelo(filepath, usuario='Sistema'):
         for index, row in df.iterrows():
             try:
                 # Criar registro com os dados EXATAMENTE como vêm
+                # ✅ ATUALIZADO Nov/2025: Removido 'numero_pedido_trizy' (coluna não existe mais)
                 novo_registro = PlanilhaModeloSendas(
                     razao_social_fornecedor=str(row.get('Razão Social - Fornecedor', '')),
                     nome_fantasia_fornecedor=str(row.get('Nome Fantasia - Fornecedor', '')),
@@ -71,7 +75,7 @@ def processar_planilha_modelo(filepath, usuario='Sistema'):
                     codigo_produto_sku_fornecedor=str(row.get('Código Produto SKU Fornecedor', '')),
                     ean=str(row.get('EAN', '')),
                     setor=str(row.get('Setor', '')),
-                    numero_pedido_trizy=str(row.get('Número do pedido Trizy', '')),
+                    numero_pedido_trizy='',  # ✅ Coluna removida do layout Sendas - manter vazio para compatibilidade
                     descricao_item=str(row.get('Descrição do Item', '')),
                     quantidade_total=float(row.get('Quantidade total', 0)) if pd.notna(row.get('Quantidade total')) else 0,
                     saldo_disponivel=float(row.get('Saldo disponível', 0)) if pd.notna(row.get('Saldo disponível')) else 0,

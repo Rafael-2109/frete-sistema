@@ -1678,14 +1678,14 @@ def analisar_ruptura_lote():
 @login_required
 def processar_agendamento_sendas_async():
     """
-    Processa agendamento no portal Sendas de forma ASSÍNCRONA usando Redis Queue.
-    Retorna imediatamente com um job_id para acompanhamento.
+    Processa agendamento no portal Sendas gravando na fila para exportação manual.
+    ✅ ATUALIZADO Nov/2025: Removida automação Playwright, agora usa exportação de planilha.
     """
     try:
-        from app.portal.workers import enqueue_job
-        from app.portal.workers.sendas_jobs import processar_agendamento_sendas as processar_sendas_job
-        from app.portal.models import PortalIntegracao, PortalLog
-        
+        # ✅ REMOVIDO: imports de automação Playwright (descontinuada)
+        # from app.portal.workers import enqueue_job
+        # from app.portal.workers.sendas_jobs import processar_agendamento_sendas
+
         # Obter dados da requisição
         data = request.get_json()
         if not data:

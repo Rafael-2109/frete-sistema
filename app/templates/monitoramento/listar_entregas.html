@@ -2791,49 +2791,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  // ✅ REMOVIDO Nov/2025: Função processarFilaSendas() - automação Playwright descontinuada
+  // O processamento agora é feito manualmente via exportação de planilha em /portal/sendas/exportacao
   function processarFilaSendas() {
     Swal.fire({
-      title: 'Processar Fila?',
-      text: 'Todos os itens na fila serão enviados para o portal Sendas',
-      icon: 'question',
+      icon: 'info',
+      title: 'Exportação Manual',
+      html: 'A automação foi descontinuada.<br><br>Use a <a href="/portal/sendas/exportacao" target="_blank"><b>Exportação de Planilhas</b></a> para baixar a planilha e fazer upload manual no portal Sendas.',
+      confirmButtonText: 'Ir para Exportação',
       showCancelButton: true,
-      confirmButtonText: 'Sim, Processar',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#28a745'
+      cancelButtonText: 'Fechar'
     }).then((result) => {
       if (result.isConfirmed) {
-        Swal.fire({
-          title: 'Processando...',
-          text: 'Enviando itens para o portal Sendas',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
-        });
-        
-        fetch('/portal/sendas/fila/processar', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          }
-        })
-        .then(response => response.json())
-        .then(result => {
-          if (result.success) {
-            Swal.fire({
-              icon: 'success',
-              title: 'Fila Processada!',
-              html: `${result.message}<br><small>O processamento está sendo feito em background</small>`,
-              confirmButtonText: 'OK'
-            });
-          } else {
-            Swal.fire('Erro', result.message, 'error');
-          }
-        })
-        .catch(error => {
-          Swal.fire('Erro', 'Erro ao processar fila', 'error');
-        });
+        window.open('/portal/sendas/exportacao', '_blank');
       }
     });
   }

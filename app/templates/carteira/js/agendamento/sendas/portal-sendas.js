@@ -616,70 +616,28 @@ class PortalSendas {
 
     /**
      * 🚀 Processa a fila em lote
+     * ✅ ATUALIZADO Nov/2025: Automação Playwright descontinuada, redireciona para exportação manual
      */
     async processarFila() {
-        console.log('🚀 [Sendas] Processando fila em lote');
+        console.log('🚀 [Sendas] processarFila - Redirecionando para exportação manual');
 
         Swal.fire({
-            title: 'Processando Fila Sendas',
+            icon: 'info',
+            title: 'Exportação Manual',
             html: `
                 <div class="text-center">
-                    <div class="spinner-border text-primary mb-3" role="status">
-                        <span class="visually-hidden">Processando...</span>
-                    </div>
-                    <p>Preparando lote para envio ao portal...</p>
+                    <p>A automação foi descontinuada.</p>
+                    <p class="mt-2">Use a <a href="/portal/sendas/exportacao" target="_blank"><b>Exportação de Planilhas</b></a> para baixar a planilha e fazer upload manual no portal Sendas.</p>
                 </div>
             `,
-            allowOutsideClick: false,
-            showConfirmButton: false
-        });
-
-        try {
-            // USAR O MESMO ENDPOINT DO SCHEDULER PARA GARANTIR CONSISTÊNCIA
-            // Este endpoint já processa corretamente com todos os itens
-            const response = await fetch('/portal/sendas/fila/processar', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCSRFToken()
-                }
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // O endpoint /processar já marca os itens como processados internamente
-
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Fila Processada!',
-                    html: `
-                        <div class="text-center">
-                            <p><strong>${result.total_processado || 0}</strong> grupos enviados para processamento</p>
-                            ${result.job_id ? `
-                                <p class="text-muted mt-2">
-                                    <i class="fas fa-info-circle"></i>
-                                    O processamento está sendo feito em background
-                                </p>
-                                <small>Job ID: ${result.job_id}</small>
-                            ` : ''}
-                        </div>
-                    `,
-                    confirmButtonText: 'OK'
-                });
-            } else {
-                throw new Error(result.error || 'Erro no processamento');
+            confirmButtonText: 'Ir para Exportação',
+            showCancelButton: true,
+            cancelButtonText: 'Fechar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.open('/portal/sendas/exportacao', '_blank');
             }
-
-        } catch (error) {
-            console.error('Erro ao processar fila:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro',
-                text: 'Erro ao processar fila: ' + error.message,
-                confirmButtonText: 'OK'
-            });
-        }
+        });
     }
 
     /**
