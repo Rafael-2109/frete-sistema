@@ -364,13 +364,16 @@ class PedidoService:
             valor_faturado = resultado['valor_total_faturado']
             valor_entregue = resultado['valor_entregue']
 
+            # Tolerância de R$ 0,02 para evitar falsos positivos por precisão de float
+            TOLERANCIA = Decimal('0.02')
+
             if valor_faturado == 0:
                 resultado['status'] = 'Em Aberto'
-            elif valor_faturado < valor_total:
+            elif (valor_total - valor_faturado) > TOLERANCIA:
                 resultado['status'] = 'Parcialmente Faturado'
-            elif valor_entregue < valor_total:
+            elif (valor_total - valor_entregue) > TOLERANCIA:
                 resultado['status'] = 'Parcialmente Entregue'
-            else: #valor_entregue >= valor_total
+            else:  # valor_entregue >= valor_total (dentro da tolerância)
                 resultado['status'] = 'Entregue'
 
             # 7. Calcular saldo em carteira
