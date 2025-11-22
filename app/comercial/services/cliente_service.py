@@ -337,6 +337,7 @@ class ClienteService:
 
         pedidos_lista = list(pedidos_norm)
 
+        # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
         saldo_query = db.session.query(
             func.sum(
                 CarteiraPrincipal.qtd_saldo_produto_pedido *
@@ -345,7 +346,7 @@ class ClienteService:
         ).filter(
             CarteiraPrincipal.cnpj_cpf == cnpj,
             CarteiraPrincipal.num_pedido.in_(pedidos_lista),
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
         )
         saldo = saldo_query.scalar() or 0
 
@@ -429,6 +430,7 @@ class ClienteService:
         }
 
         # Saldo em carteira
+        # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
         saldos_carteira = db.session.query(
             func.sum(
                 CarteiraPrincipal.qtd_saldo_produto_pedido *
@@ -436,7 +438,7 @@ class ClienteService:
             )
         ).filter(
             CarteiraPrincipal.cnpj_cpf == cnpj,
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
         ).scalar()
 
         if saldos_carteira:

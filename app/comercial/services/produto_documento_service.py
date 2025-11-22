@@ -86,6 +86,7 @@ class ProdutoDocumentoService:
     def _obter_produtos_nf(numero_nf: str) -> List[Dict[str, Any]]:
         """
         Busca produtos de uma NF específica.
+        OTIMIZADO: Usa LEFT JOIN para buscar palletização em 1 única query.
 
         Args:
             numero_nf: Número da nota fiscal
@@ -94,13 +95,19 @@ class ProdutoDocumentoService:
             Lista de produtos da NF com cálculos de peso e pallet
         """
         try:
-            # Buscar produtos da NF
+            # OTIMIZAÇÃO: Buscar produtos da NF com LEFT JOIN em CadastroPalletizacao
+            # Reduz de N+1 queries para 1 única query
             produtos_nf = db.session.query(
                 FaturamentoProduto.cod_produto,
                 FaturamentoProduto.nome_produto,
                 FaturamentoProduto.qtd_produto_faturado,
                 FaturamentoProduto.preco_produto_faturado,
-                FaturamentoProduto.valor_produto_faturado
+                FaturamentoProduto.valor_produto_faturado,
+                CadastroPalletizacao.peso_bruto,
+                CadastroPalletizacao.palletizacao
+            ).outerjoin(
+                CadastroPalletizacao,
+                CadastroPalletizacao.cod_produto == FaturamentoProduto.cod_produto
             ).filter(
                 FaturamentoProduto.numero_nf == numero_nf,
                 FaturamentoProduto.status_nf != 'Cancelado'
@@ -108,20 +115,12 @@ class ProdutoDocumentoService:
 
             produtos = []
             for produto in produtos_nf:
-                # Buscar dados de palletização
-                cadastro_pallet = db.session.query(
-                    CadastroPalletizacao.peso_bruto,
-                    CadastroPalletizacao.palletizacao
-                ).filter(
-                    CadastroPalletizacao.cod_produto == produto.cod_produto
-                ).first()
-
                 # Calcular peso e pallet
                 qtd = float(produto.qtd_produto_faturado or 0)
 
-                if cadastro_pallet:
-                    peso_total = qtd * float(cadastro_pallet.peso_bruto or 0)
-                    pallet_total = qtd / float(cadastro_pallet.palletizacao) if cadastro_pallet.palletizacao else 0
+                if produto.peso_bruto:
+                    peso_total = qtd * float(produto.peso_bruto or 0)
+                    pallet_total = qtd / float(produto.palletizacao) if produto.palletizacao else 0
                 else:
                     peso_total = 0
                     pallet_total = 0
@@ -198,6 +197,7 @@ class ProdutoDocumentoService:
     def _obter_produtos_saldo(num_pedido: str) -> List[Dict[str, Any]]:
         """
         Busca produtos do saldo de um pedido (CarteiraPrincipal - Separações não sincronizadas).
+        OTIMIZADO: Usa subquery e LEFT JOIN para reduzir de N+1 queries para 1.
 
         Args:
             num_pedido: Número do pedido
@@ -206,12 +206,32 @@ class ProdutoDocumentoService:
             Lista de produtos do saldo
         """
         try:
-            # Buscar produtos da CarteiraPrincipal
+            # OTIMIZAÇÃO: Subquery para calcular total separado por produto
+            subquery_separacoes = db.session.query(
+                Separacao.cod_produto,
+                func.coalesce(func.sum(Separacao.qtd_saldo), 0).label('qtd_separada')
+            ).filter(
+                Separacao.num_pedido == num_pedido,
+                Separacao.sincronizado_nf == False
+            ).group_by(Separacao.cod_produto).subquery()
+
+            # OTIMIZAÇÃO: Query única com LEFT JOINs
+            # - LEFT JOIN com separações para obter qtd_separada
+            # - LEFT JOIN com palletização para obter peso/pallet
             produtos_carteira = db.session.query(
                 CarteiraPrincipal.cod_produto,
                 CarteiraPrincipal.nome_produto,
                 CarteiraPrincipal.qtd_saldo_produto_pedido,
-                CarteiraPrincipal.preco_produto_pedido
+                CarteiraPrincipal.preco_produto_pedido,
+                func.coalesce(subquery_separacoes.c.qtd_separada, 0).label('qtd_separada'),
+                CadastroPalletizacao.peso_bruto,
+                CadastroPalletizacao.palletizacao
+            ).outerjoin(
+                subquery_separacoes,
+                subquery_separacoes.c.cod_produto == CarteiraPrincipal.cod_produto
+            ).outerjoin(
+                CadastroPalletizacao,
+                CadastroPalletizacao.cod_produto == CarteiraPrincipal.cod_produto
             ).filter(
                 CarteiraPrincipal.num_pedido == num_pedido,
                 CarteiraPrincipal.qtd_saldo_produto_pedido > 0
@@ -219,37 +239,20 @@ class ProdutoDocumentoService:
 
             produtos = []
             for produto_cart in produtos_carteira:
-                # Buscar total de separações não sincronizadas para este produto
-                qtd_separada = db.session.query(
-                    func.sum(Separacao.qtd_saldo)
-                ).filter(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.cod_produto == produto_cart.cod_produto,
-                    Separacao.sincronizado_nf == False
-                ).scalar() or 0
-
                 # Calcular saldo real (carteira - separações não sincronizadas)
-                qtd_saldo = float(produto_cart.qtd_saldo_produto_pedido or 0) - float(qtd_separada)
+                qtd_saldo = float(produto_cart.qtd_saldo_produto_pedido or 0) - float(produto_cart.qtd_separada or 0)
 
                 # Só incluir se houver saldo positivo
                 if qtd_saldo <= 0:
                     continue
 
-                # Buscar dados de palletização
-                cadastro_pallet = db.session.query(
-                    CadastroPalletizacao.peso_bruto,
-                    CadastroPalletizacao.palletizacao
-                ).filter(
-                    CadastroPalletizacao.cod_produto == produto_cart.cod_produto
-                ).first()
-
                 # Calcular valores
                 preco = float(produto_cart.preco_produto_pedido or 0)
                 valor_total = preco * qtd_saldo
 
-                if cadastro_pallet:
-                    peso_total = qtd_saldo * float(cadastro_pallet.peso_bruto or 0)
-                    pallet_total = qtd_saldo / float(cadastro_pallet.palletizacao) if cadastro_pallet.palletizacao else 0
+                if produto_cart.peso_bruto:
+                    peso_total = qtd_saldo * float(produto_cart.peso_bruto or 0)
+                    pallet_total = qtd_saldo / float(produto_cart.palletizacao) if produto_cart.palletizacao else 0
                 else:
                     peso_total = 0
                     pallet_total = 0

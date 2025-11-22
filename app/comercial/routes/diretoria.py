@@ -9,7 +9,8 @@ from app.comercial.services.pedido_service import PedidoService
 from app.comercial.services.documento_service import DocumentoService
 from app.comercial.services.produto_documento_service import ProdutoDocumentoService
 from app.comercial.services.permissao_service import PermissaoService
-from app.comercial.decorators import comercial_required, admin_comercial_required
+from app.comercial.services.agregacao_service import AgregacaoComercialService
+from app.comercial.decorators import comercial_required, admin_comercial_required, get_permissoes_cached
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
 from sqlalchemy import distinct, text, func
@@ -35,7 +36,8 @@ def _coletar_clientes_data(
     filtros_avancados_ativos = any(value.strip() for value in filtros_avancados.values())
 
     is_vendedor = current_user.is_authenticated and current_user.perfil == 'vendedor'
-    permissoes = PermissaoService.obter_permissoes_usuario(current_user.id) if is_vendedor else {
+    # OTIMIZAÇÃO: Usa cache de permissões para evitar múltiplas queries
+    permissoes = get_permissoes_cached() if is_vendedor else {
         'equipes': [],
         'vendedores': []
     }
@@ -60,7 +62,8 @@ def _coletar_clientes_data(
                     (qtd_saldo_produto_pedido * preco_produto_pedido) as valor_item
                 FROM carteira_principal
                 WHERE
-                    (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0)
+                    -- TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
+                    (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0.02)
 
                     AND (:is_vendedor = false OR
                          ((:equipe_filtro IS NOT NULL AND equipe_vendas = :equipe_filtro) OR
@@ -365,6 +368,7 @@ def _coletar_clientes_data(
 def dashboard_diretoria():
     """
     Dashboard principal da diretoria com badges de equipes
+    OTIMIZADO: Usa AgregacaoComercialService para reduzir de 500+ queries para 1
     """
     # Se for vendedor e não tiver permissões, mostrar mensagem
     if current_user.perfil == 'vendedor':
@@ -372,75 +376,27 @@ def dashboard_diretoria():
             flash('Você ainda não possui permissões configuradas. Solicite ao administrador.', 'warning')
             return render_template('comercial/dashboard_diretoria.html', equipes=[])
 
-    # Buscar todas as equipes distintas
-    equipes_carteira = db.session.query(
-        distinct(CarteiraPrincipal.equipe_vendas)
-    ).filter(
-        CarteiraPrincipal.equipe_vendas.isnot(None),
-        CarteiraPrincipal.equipe_vendas != ''
-    ).all()
-
-    equipes_faturamento = db.session.query(
-        distinct(FaturamentoProduto.equipe_vendas)
-    ).filter(
-        FaturamentoProduto.equipe_vendas.isnot(None),
-        FaturamentoProduto.equipe_vendas != ''
-    ).all()
-
-    # Unir e fazer distinct
-    equipes_set = set()
-    for e in equipes_carteira:
-        if e[0]:
-            equipes_set.add(e[0])
-
-    for e in equipes_faturamento:
-        if e[0]:
-            equipes_set.add(e[0])
-
-    equipes = sorted(list(equipes_set))
-
-    # Se for vendedor, filtrar equipes permitidas
+    # Obter filtro de equipes baseado em permissões (para vendedores)
+    equipes_filtro = None
     if current_user.perfil == 'vendedor':
-        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+        # OTIMIZAÇÃO: Usa cache de permissões para evitar múltiplas queries
+        permissoes = get_permissoes_cached()
 
-        # Filtrar equipes baseado nas permissões
-        equipes_permitidas = []
-        for equipe in equipes:
-            # Verificar se tem permissão direta para a equipe
-            if equipe in permissoes['equipes']:
-                equipes_permitidas.append(equipe)
-            else:
-                # Verificar se tem permissão para algum vendedor da equipe
-                vendedores_equipe = db.session.query(
-                    distinct(CarteiraPrincipal.vendedor)
-                ).filter(
-                    CarteiraPrincipal.equipe_vendas == equipe,
-                    CarteiraPrincipal.vendedor.isnot(None)
-                ).all()
+        # Se tem permissões específicas de equipes, usar como filtro
+        if permissoes['equipes']:
+            equipes_filtro = permissoes['equipes']
+        elif permissoes['vendedores']:
+            # Se só tem permissão de vendedores, buscar as equipes desses vendedores
+            equipes_dos_vendedores = db.session.query(
+                distinct(CarteiraPrincipal.equipe_vendas)
+            ).filter(
+                CarteiraPrincipal.vendedor.in_(permissoes['vendedores']),
+                CarteiraPrincipal.equipe_vendas.isnot(None)
+            ).all()
+            equipes_filtro = [e[0] for e in equipes_dos_vendedores if e[0]]
 
-                for v in vendedores_equipe:
-                    if v[0] in permissoes['vendedores']:
-                        equipes_permitidas.append(equipe)
-                        break
-
-        equipes = equipes_permitidas
-
-    # Para cada equipe, contar clientes e calcular valores
-    equipes_data = []
-    for equipe in equipes:
-        clientes_cnpj = ClienteService.obter_clientes_por_equipe(equipe)
-
-        # Calcular valor total em aberto da equipe
-        valor_total_equipe = 0
-        for cnpj in clientes_cnpj:
-            valor_cliente = ClienteService.calcular_valor_em_aberto(cnpj, 'em_aberto')
-            valor_total_equipe += valor_cliente
-
-        equipes_data.append({
-            'nome': equipe,
-            'total_clientes': len(clientes_cnpj),
-            'valor_em_aberto': float(valor_total_equipe)
-        })
+    # OTIMIZAÇÃO: Usar query única com CTE ao invés de N+1 queries
+    equipes_data = AgregacaoComercialService.obter_dashboard_completo_otimizado(equipes_filtro)
 
     return render_template('comercial/dashboard_diretoria.html',
                          equipes=equipes_data)
@@ -452,96 +408,45 @@ def dashboard_diretoria():
 def vendedores_equipe(equipe_nome):
     """
     Visualização de vendedores de uma equipe específica
+    OTIMIZADO: Usa AgregacaoComercialService para reduzir de 600+ queries para 1
     """
     # Se for vendedor, verificar se tem acesso à equipe
+    vendedores_filtro = None
     if current_user.perfil == 'vendedor':
-        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+        # OTIMIZAÇÃO: Usa cache de permissões para evitar múltiplas queries
+        permissoes = get_permissoes_cached()
 
         # Verificar se tem acesso direto à equipe
         tem_acesso = equipe_nome in permissoes['equipes']
 
         # Se não tem acesso direto, verificar se tem acesso a algum vendedor da equipe
         if not tem_acesso:
-            # Buscar vendedores da equipe
-            vendedores_equipe = db.session.query(
+            # Buscar vendedores da equipe que o usuário tem permissão
+            vendedores_equipe_lista = db.session.query(
                 distinct(CarteiraPrincipal.vendedor)
             ).filter(
                 CarteiraPrincipal.equipe_vendas == equipe_nome,
                 CarteiraPrincipal.vendedor.isnot(None)
             ).all()
 
-            for v in vendedores_equipe:
+            vendedores_permitidos = []
+            for v in vendedores_equipe_lista:
                 if v[0] in permissoes['vendedores']:
+                    vendedores_permitidos.append(v[0])
                     tem_acesso = True
-                    break
+
+            if tem_acesso:
+                vendedores_filtro = vendedores_permitidos
 
         if not tem_acesso:
             flash('Você não tem permissão para acessar esta equipe.', 'danger')
             return redirect(url_for('comercial.dashboard_diretoria'))
 
-    # Buscar vendedores da equipe
-    vendedores_carteira = db.session.query(
-        distinct(CarteiraPrincipal.vendedor)
-    ).filter(
-        CarteiraPrincipal.equipe_vendas == equipe_nome,
-        CarteiraPrincipal.vendedor.isnot(None),
-        CarteiraPrincipal.vendedor != ''
-    ).all()
-
-    vendedores_faturamento = db.session.query(
-        distinct(FaturamentoProduto.vendedor)
-    ).filter(
-        FaturamentoProduto.equipe_vendas == equipe_nome,
-        FaturamentoProduto.vendedor.isnot(None),
-        FaturamentoProduto.vendedor != ''
-    ).all()
-
-    # Unir e fazer distinct
-    vendedores_set = set()
-    for v in vendedores_carteira:
-        if v[0]:
-            vendedores_set.add(v[0])
-
-    for v in vendedores_faturamento:
-        if v[0]:
-            vendedores_set.add(v[0])
-
-    vendedores = sorted(list(vendedores_set))
-
-    # Se for vendedor, filtrar apenas vendedores permitidos
-    if current_user.perfil == 'vendedor':
-        # Se tem acesso à equipe inteira, mostrar todos
-        if equipe_nome not in permissoes['equipes']:
-            # Filtrar apenas vendedores permitidos
-            vendedores = [v for v in vendedores if v in permissoes['vendedores']]
-
-    # Para cada vendedor, contar clientes e calcular valores
-    vendedores_data = []
-    equipe_nome_norm = equipe_nome.strip() if isinstance(equipe_nome, str) else None
-    for vendedor in vendedores:
-        vendedor_norm = vendedor.strip() if isinstance(vendedor, str) else ''
-        clientes_cnpj = ClienteService.obter_clientes_por_vendedor(vendedor)
-        clientes_validos: set[str] = set()
-        valor_total_vendedor = 0.0
-
-        for cnpj in clientes_cnpj:
-            dados_cliente = ClienteService.obter_dados_cliente(cnpj, 'em_aberto')
-            vendedor_cliente = (dados_cliente['vendedor'] or '').strip() if dados_cliente['vendedor'] else ''
-            equipe_cliente = (dados_cliente['equipe_vendas'] or '').strip() if dados_cliente['equipe_vendas'] else ''
-
-            if vendedor_cliente != vendedor_norm:
-                continue
-            if equipe_nome_norm and equipe_cliente != equipe_nome_norm:
-                continue
-
-            valor_total_vendedor += float(dados_cliente['valor_em_aberto']) if dados_cliente['valor_em_aberto'] else 0.0
-            clientes_validos.add(cnpj)
-
-        vendedores_data.append({
-            'nome': vendedor,
-            'total_clientes': len(clientes_validos),
-            'valor_em_aberto': valor_total_vendedor
-        })
+    # OTIMIZAÇÃO: Usar query única com CTE ao invés de N+1 queries
+    vendedores_data = AgregacaoComercialService.obter_vendedores_equipe_otimizado(
+        equipe_nome,
+        vendedores_filtro
+    )
 
     return render_template('comercial/vendedores_equipe.html',
                          equipe_nome=equipe_nome,
@@ -575,7 +480,8 @@ def lista_clientes():
 
     # Se for vendedor, aplicar restrições de permissões
     if current_user.perfil == 'vendedor':
-        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+        # OTIMIZAÇÃO: Usa cache de permissões para evitar múltiplas queries
+        permissoes = get_permissoes_cached()
 
         # Se não tem permissões, mostrar página vazia
         if not permissoes['equipes'] and not permissoes['vendedores']:
@@ -642,9 +548,10 @@ def lista_clientes():
         ufs_disponiveis = sorted(list(ufs_set))
     else:
         # Se não há clientes, buscar UFs disponíveis no banco
+        # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
         ufs = db.session.query(distinct(CarteiraPrincipal.estado)).filter(
             CarteiraPrincipal.estado.isnot(None),
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0 if filtro_posicao == 'em_aberto' else True
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02 if filtro_posicao == 'em_aberto' else True
         ).all()
         ufs_disponiveis = sorted([uf[0] for uf in ufs if uf[0]])
 
@@ -683,7 +590,8 @@ def exportar_clientes_excel():
     pedido_cliente_filtro = request.args.get('pedido_cliente', '').strip()
 
     if current_user.perfil == 'vendedor':
-        permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+        # OTIMIZAÇÃO: Usa cache de permissões para evitar múltiplas queries
+        permissoes = get_permissoes_cached()
 
         if not permissoes['equipes'] and not permissoes['vendedores']:
             flash('Você não possui permissões para exportar dados.', 'warning')

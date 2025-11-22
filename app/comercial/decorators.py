@@ -10,8 +10,32 @@ Data: 2025-01-21
 """
 
 from functools import wraps
-from flask import redirect, url_for, flash, abort
+from flask import redirect, url_for, flash, g
 from flask_login import current_user, login_required
+
+
+def get_permissoes_cached():
+    """
+    Retorna as permissões do usuário atual com cache na request.
+    OTIMIZAÇÃO: Evita múltiplas queries de permissões na mesma request.
+
+    Returns:
+        Dict com permissões do usuário ou None se não logado
+    """
+    if not current_user.is_authenticated:
+        return None
+
+    # Verificar se já está em cache no contexto da request
+    cache_key = f'_permissoes_comercial_{current_user.id}'
+    if hasattr(g, cache_key):
+        return getattr(g, cache_key)
+
+    # Buscar permissões e cachear
+    from app.comercial.services.permissao_service import PermissaoService
+    permissoes = PermissaoService.obter_permissoes_usuario(current_user.id)
+    setattr(g, cache_key, permissoes)
+
+    return permissoes
 
 
 def comercial_required(f):

@@ -36,16 +36,18 @@ class AgregacaoComercialService:
         """
         try:
             # Query otimizada usando CTE (Common Table Expression)
+            # NOTA: Tolerância de 0.02 para evitar inconsistências de arredondamento decimal
             sql = text("""
                 WITH dados_carteira AS (
                     -- Agregar dados da carteira por equipe
+                    -- TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
                     SELECT
                         equipe_vendas,
                         COUNT(DISTINCT cnpj_cpf) as clientes_carteira,
                         COALESCE(SUM(
                             CASE
-                                WHEN qtd_saldo_produto_pedido > 0
-                                THEN qtd_saldo_produto_pedido * preco_produto_pedido
+                                WHEN qtd_saldo_produto_pedido > 0.02
+                                THEN ROUND((qtd_saldo_produto_pedido * preco_produto_pedido)::numeric, 2)
                                 ELSE 0
                             END
                         ), 0) as valor_carteira
@@ -56,6 +58,7 @@ class AgregacaoComercialService:
                 ),
                 dados_faturamento AS (
                     -- Agregar dados de faturamento não entregue
+                    -- NOTA: Usa status_finalizacao para consistência com cliente_service.py e diretoria.py
                     SELECT
                         fp.equipe_vendas,
                         COUNT(DISTINCT fp.cnpj_cliente) as clientes_faturamento,
@@ -63,8 +66,9 @@ class AgregacaoComercialService:
                     FROM faturamento_produto fp
                     LEFT JOIN entregas_monitoradas em ON em.numero_nf = fp.numero_nf
                     WHERE fp.equipe_vendas IS NOT NULL
+                      AND fp.status_nf != 'Cancelado'
                       AND (:tem_filtro = false OR fp.equipe_vendas = ANY(:equipes))
-                      AND (em.entregue IS NULL OR em.entregue = false)
+                      AND (em.status_finalizacao IS NULL OR em.status_finalizacao != 'Entregue')
                     GROUP BY fp.equipe_vendas
                 )
                 -- Combinar resultados
@@ -114,16 +118,18 @@ class AgregacaoComercialService:
             Lista com dados agregados de todos vendedores
         """
         try:
+            # NOTA: Tolerância de 0.02 para evitar inconsistências de arredondamento decimal
             sql = text("""
                 WITH vendedores_carteira AS (
                     -- Vendedores e valores da carteira
+                    -- TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
                     SELECT
                         vendedor,
                         COUNT(DISTINCT cnpj_cpf) as clientes_carteira,
                         COALESCE(SUM(
                             CASE
-                                WHEN qtd_saldo_produto_pedido > 0
-                                THEN qtd_saldo_produto_pedido * preco_produto_pedido
+                                WHEN qtd_saldo_produto_pedido > 0.02
+                                THEN ROUND((qtd_saldo_produto_pedido * preco_produto_pedido)::numeric, 2)
                                 ELSE 0
                             END
                         ), 0) as valor_carteira
@@ -135,6 +141,7 @@ class AgregacaoComercialService:
                 ),
                 vendedores_faturamento AS (
                     -- Vendedores e valores faturados não entregues
+                    -- NOTA: Usa status_finalizacao para consistência com cliente_service.py e diretoria.py
                     SELECT
                         fp.vendedor,
                         COUNT(DISTINCT fp.cnpj_cliente) as clientes_faturamento,
@@ -143,8 +150,9 @@ class AgregacaoComercialService:
                     LEFT JOIN entregas_monitoradas em ON em.numero_nf = fp.numero_nf
                     WHERE fp.equipe_vendas = :equipe
                       AND fp.vendedor IS NOT NULL
+                      AND fp.status_nf != 'Cancelado'
                       AND (:tem_filtro = false OR fp.vendedor = ANY(:vendedores))
-                      AND (em.entregue IS NULL OR em.entregue = false)
+                      AND (em.status_finalizacao IS NULL OR em.status_finalizacao != 'Entregue')
                     GROUP BY fp.vendedor
                 )
                 -- Combinar resultados
@@ -220,8 +228,9 @@ class AgregacaoComercialService:
             )
 
             # Aplicar filtros
+            # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
             if filtro_posicao == 'em_aberto':
-                query = query.filter(CarteiraPrincipal.qtd_saldo_produto_pedido > 0)
+                query = query.filter(CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02)
 
             if equipe_filtro:
                 query = query.filter(CarteiraPrincipal.equipe_vendas == equipe_filtro)
@@ -298,6 +307,7 @@ class AgregacaoComercialService:
 
         try:
             # Query única para todos os CNPJs
+            # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
             resultado = db.session.query(
                 CarteiraPrincipal.cnpj_cpf,
                 func.sum(
@@ -306,7 +316,7 @@ class AgregacaoComercialService:
                 ).label('valor_total')
             ).filter(
                 CarteiraPrincipal.cnpj_cpf.in_(cnpjs),
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
             ).group_by(
                 CarteiraPrincipal.cnpj_cpf
             ).all()
@@ -334,13 +344,14 @@ class AgregacaoComercialService:
         """
         try:
             stats = {}
+            # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
 
             # Total de equipes ativas
             equipes = db.session.query(
                 func.count(distinct(CarteiraPrincipal.equipe_vendas))
             ).filter(
                 CarteiraPrincipal.equipe_vendas.isnot(None),
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
             ).scalar()
             stats['total_equipes'] = equipes or 0
 
@@ -349,7 +360,7 @@ class AgregacaoComercialService:
                 func.count(distinct(CarteiraPrincipal.vendedor))
             ).filter(
                 CarteiraPrincipal.vendedor.isnot(None),
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
             ).scalar()
             stats['total_vendedores'] = vendedores or 0
 
@@ -357,7 +368,7 @@ class AgregacaoComercialService:
             clientes = db.session.query(
                 func.count(distinct(CarteiraPrincipal.cnpj_cpf))
             ).filter(
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
             ).scalar()
             stats['total_clientes'] = clientes or 0
 
@@ -368,7 +379,7 @@ class AgregacaoComercialService:
                     CarteiraPrincipal.preco_produto_pedido
                 )
             ).filter(
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02
             ).scalar()
             stats['valor_total_aberto'] = float(valor_total) if valor_total else 0.0
 
