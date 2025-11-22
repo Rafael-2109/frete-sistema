@@ -1496,18 +1496,42 @@ def confirmar_agendamento():
 
         # ✅ CORREÇÃO: Atualizar TODAS as separações do produto
         qtd_atualizadas = 0
+        lotes_afetados = set()
         for sep in separacoes:
             sep.agendamento_confirmado = True
             sep.protocolo = protocolo
             qtd_atualizadas += 1
+            if sep.separacao_lote_id:
+                lotes_afetados.add(sep.separacao_lote_id)
 
         db.session.commit()
 
         logger.info(f"✅ Agendamento confirmado: {qtd_atualizadas} separação(ões) de {num_pedido}/{cod_produto}")
 
+        # ✅ SINCRONIZAR com EmbarqueItem (se existir)
+        tabelas_sincronizadas = []
+        try:
+            from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+            sincronizador = SincronizadorAgendamentoService(usuario='Sistema')
+            for lote_id in lotes_afetados:
+                resultado_sync = sincronizador.sincronizar_desde_separacao(
+                    separacao_lote_id=lote_id,
+                    criar_agendamento=False
+                )
+                if resultado_sync['success']:
+                    tabelas = resultado_sync.get('tabelas_atualizadas', [])
+                    tabelas_sincronizadas.extend(tabelas)
+
+            if tabelas_sincronizadas:
+                logger.info(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(set(tabelas_sincronizadas))}")
+        except Exception as sync_error:
+            logger.warning(f"Aviso na sincronização: {sync_error}")
+
         return jsonify({
             'success': True,
-            'message': f'Agendamento confirmado com sucesso ({qtd_atualizadas} separação(ões))'
+            'message': f'Agendamento confirmado com sucesso ({qtd_atualizadas} separação(ões))',
+            'tabelas_sincronizadas': list(set(tabelas_sincronizadas))
         })
 
     except Exception as e:
@@ -1624,13 +1648,34 @@ def atualizar_separacao_lote():
         campos_atualizados = ', '.join(campos_atualizaveis.keys())
         logger.info(f"✅ Lote {separacao_lote_id}: {len(separacoes)} separação(ões) atualizada(s) - Campos: {campos_atualizados}")
 
+        # ✅ SINCRONIZAR com EmbarqueItem (se existir) quando campos de agendamento foram alterados
+        tabelas_sincronizadas = []
+        campos_agendamento = {'agendamento', 'protocolo', 'agendamento_confirmado'}
+        if campos_agendamento.intersection(campos_atualizaveis.keys()):
+            try:
+                from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+                sincronizador = SincronizadorAgendamentoService(usuario='Sistema')
+                resultado_sync = sincronizador.sincronizar_desde_separacao(
+                    separacao_lote_id=separacao_lote_id,
+                    criar_agendamento=False
+                )
+
+                if resultado_sync['success']:
+                    tabelas_sincronizadas = resultado_sync.get('tabelas_atualizadas', [])
+                    if tabelas_sincronizadas:
+                        logger.info(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(tabelas_sincronizadas)}")
+            except Exception as sync_error:
+                logger.warning(f"Aviso na sincronização: {sync_error}")
+
         return jsonify({
             'success': True,
             'message': f'{len(separacoes)} separação(ões) atualizada(s) com sucesso ({campos_atualizados})',
             'qtd_atualizada': len(separacoes),
             'separacao_lote_id': separacao_lote_id,
             'campos_atualizados': list(campos_atualizaveis.keys()),
-            'estoque_atualizado': estoque_atualizado if estoque_atualizado else None
+            'estoque_atualizado': estoque_atualizado if estoque_atualizado else None,
+            'tabelas_sincronizadas': tabelas_sincronizadas
         })
 
     except Exception as e:

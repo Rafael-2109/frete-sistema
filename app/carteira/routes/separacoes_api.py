@@ -356,48 +356,65 @@ def verificar_protocolo_portal():
     """
     Rota proxy para verificar protocolo no portal
     Redireciona para o módulo portal/atacadao
+    ✅ ATUALIZADO: Sincroniza com EmbarqueItem via SincronizadorAgendamentoService
     """
     from flask import request
     from app.portal.atacadao.verificacao_protocolo import VerificadorProtocoloAtacadao
-    
+
     try:
         data = request.get_json()
         lote_id = data.get('lote_id')
         protocolo = data.get('protocolo')
-        
+
         if not protocolo:
             return jsonify({
                 'success': False,
                 'message': 'Protocolo é obrigatório'
             })
-        
+
         logger.info(f"Verificando protocolo {protocolo} via carteira API")
-        
+
         # Usar a classe verificadora
         verificador = VerificadorProtocoloAtacadao()
         resultado = verificador.verificar_protocolo_completo(protocolo, lote_id)
-        
-        # Se tem confirmação e data, atualizar separação e pedido
+
+        # Se tem confirmação e data, atualizar separação e sincronizar
         if resultado.get('success') and lote_id and resultado.get('agendamento_confirmado') and resultado.get('data_aprovada'):
             try:
                 from datetime import datetime
-                
+
                 separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
                 for sep in separacoes:
                     sep.agendamento_confirmado = True
                     sep.agendamento = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
-                
-                # Não precisa atualizar Pedido pois é uma VIEW das Separações
-                logger.info(f"Separações do lote {lote_id} atualizadas com confirmação do agendamento")
-                
+
                 db.session.commit()
-                logger.info(f"Separações atualizadas com confirmação do agendamento")
+                logger.info(f"Separações do lote {lote_id} atualizadas com confirmação do agendamento")
+
+                # ✅ SINCRONIZAR com EmbarqueItem (se existir)
+                try:
+                    from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+                    sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome)
+                    resultado_sync = sincronizador.sincronizar_desde_separacao(
+                        separacao_lote_id=lote_id,
+                        criar_agendamento=False
+                    )
+
+                    if resultado_sync['success']:
+                        tabelas = resultado_sync.get('tabelas_atualizadas', [])
+                        if tabelas:
+                            logger.info(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(tabelas)}")
+                            resultado['tabelas_sincronizadas'] = tabelas
+                except Exception as sync_error:
+                    logger.warning(f"Aviso na sincronização: {sync_error}")
+
             except Exception as e:
                 logger.error(f"Erro ao atualizar separação/pedido: {e}")
                 db.session.rollback()
-        
+
         return jsonify(resultado)
-        
+
     except Exception as e:
         logger.error(f"Erro na verificação de protocolo: {e}")
         return jsonify({
@@ -411,22 +428,23 @@ def verificar_protocolo_portal():
 def atualizar_status_separacao():
     """
     Atualiza status da separação com dados do portal
+    ✅ ATUALIZADO: Sincroniza com EmbarqueItem via SincronizadorAgendamentoService
     """
     from flask import request
     from datetime import datetime
-    
+
     try:
         data = request.get_json()
         lote_id = data.get('lote_id')
         agendamento = data.get('agendamento')
         agendamento_confirmado = data.get('agendamento_confirmado', False)
-        
+
         if not lote_id:
             return jsonify({
                 'success': False,
                 'message': 'Lote ID é obrigatório'
             })
-        
+
         # Buscar e atualizar separações
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
         if not separacoes:
@@ -434,7 +452,7 @@ def atualizar_status_separacao():
                 'success': False,
                 'message': 'Separação não encontrada'
             })
-        
+
         # Converter data de agendamento uma vez
         data_agendamento = None
         if agendamento:
@@ -442,23 +460,40 @@ def atualizar_status_separacao():
                 data_agendamento = datetime.strptime(agendamento, '%Y-%m-%d').date()
             else:
                 data_agendamento = agendamento
-        
+
         # Atualizar separações
         for sep in separacoes:
             if data_agendamento:
                 sep.agendamento = data_agendamento
             sep.agendamento_confirmado = agendamento_confirmado
-        
-        # Não precisa atualizar Pedido pois é uma VIEW das Separações
-        logger.info(f"Separações do lote {lote_id} atualizadas")
-        
+
         db.session.commit()
-        
+        logger.info(f"Separações do lote {lote_id} atualizadas")
+
+        # ✅ SINCRONIZAR com EmbarqueItem (se existir)
+        tabelas_sincronizadas = []
+        try:
+            from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+            sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome)
+            resultado_sync = sincronizador.sincronizar_desde_separacao(
+                separacao_lote_id=lote_id,
+                criar_agendamento=False
+            )
+
+            if resultado_sync['success']:
+                tabelas_sincronizadas = resultado_sync.get('tabelas_atualizadas', [])
+                if tabelas_sincronizadas:
+                    logger.info(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(tabelas_sincronizadas)}")
+        except Exception as sync_error:
+            logger.warning(f"Aviso na sincronização: {sync_error}")
+
         return jsonify({
             'success': True,
-            'message': 'Status atualizado com sucesso'
+            'message': 'Status atualizado com sucesso',
+            'tabelas_sincronizadas': tabelas_sincronizadas
         })
-        
+
     except Exception as e:
         logger.error(f"Erro ao atualizar status: {e}")
         db.session.rollback()

@@ -705,18 +705,8 @@ def editar_pedido(lote_id):
             
             # ✅ COMMIT das alterações
             db.session.commit()
-            
-            # ✅ RESPOSTA PARA AJAX
-            if request.args.get('ajax') or request.is_json:
-                return jsonify({
-                    'success': True,
-                    'message': f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados."
-                })
-            
-            # ✅ MENSAGEM DE SUCESSO com detalhes
-            flash(f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados.", "success")
-            
-            # ✅ LOG das alterações (opcional)
+
+            # ✅ LOG das alterações
             print(f"[EDIT] Pedido {pedido.num_pedido} editado:")
             print(f"  - Expedição: {valores_originais['expedicao']} → {form.expedicao.data}")
             print(f"  - Agendamento: {valores_originais['agendamento']} → {form.agendamento.data}")
@@ -724,43 +714,54 @@ def editar_pedido(lote_id):
             print(f"  - Agendamento Confirmado: {valores_originais['agendamento_confirmado']} → {form.agendamento_confirmado.data}")
             print(f"  - Separações atualizadas: {separacoes_atualizadas}")
 
-            # ✅ NOVA FUNCIONALIDADE: Sincronizar agendamento entre todas as tabelas
+            # ✅ SINCRONIZAR AGENDAMENTO ENTRE TODAS AS TABELAS (EmbarqueItem, EntregaMonitorada, AgendamentoEntrega)
+            # IMPORTANTE: Esta sincronização DEVE ocorrer ANTES do return para garantir que seja executada
             from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+            tabelas_sincronizadas = []
+            erro_sincronizacao = None
 
             try:
                 sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema')
 
-                # Preparar dados
-                dados_agendamento = {
-                    'agendamento': form.agendamento.data,
-                    'protocolo': form.protocolo.data,
-                    'agendamento_confirmado': form.agendamento_confirmado.data,
-                    'numero_nf': form.numero_nf.data if form.numero_nf.data else None,
-                    'nf_cd': form.nf_cd.data if form.nf_cd.data else False
-                }
+                # Executar sincronização usando o método que busca dados da Separacao já commitada
+                if pedido.separacao_lote_id:
+                    resultado_sync = sincronizador.sincronizar_desde_separacao(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        criar_agendamento=True
+                    )
 
-                identificador = {
-                    'separacao_lote_id': pedido.separacao_lote_id,
-                    'numero_nf': form.numero_nf.data if form.numero_nf.data else None
-                }
-
-                # Executar sincronização
-                resultado = sincronizador.sincronizar_agendamento(
-                    dados_agendamento=dados_agendamento,
-                    identificador=identificador
-                )
-
-                if resultado['success']:
-                    print(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(resultado['tabelas_atualizadas'])}")
-                    flash(f"Sincronização completa: {', '.join(resultado['tabelas_atualizadas'])}", "info")
-                else:
-                    print(f"[SINCRONIZAÇÃO] Erro: {resultado['error']}")
-                    flash(f"Aviso: Erro na sincronização - {resultado['error']}", "warning")
+                    if resultado_sync['success']:
+                        tabelas_sincronizadas = resultado_sync.get('tabelas_atualizadas', [])
+                        print(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(tabelas_sincronizadas)}")
+                    else:
+                        erro_sincronizacao = resultado_sync.get('error', 'Erro desconhecido')
+                        print(f"[SINCRONIZAÇÃO] Erro: {erro_sincronizacao}")
 
             except Exception as e:
+                erro_sincronizacao = str(e)
                 print(f"[SINCRONIZAÇÃO] Erro ao sincronizar: {e}")
-                flash(f"Aviso: Erro na sincronização - {str(e)}", "warning")
                 # Não falhar a edição se sincronização der erro
+
+            # ✅ RESPOSTA PARA AJAX (APÓS sincronização)
+            if request.args.get('ajax') or request.is_json:
+                response_data = {
+                    'success': True,
+                    'message': f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados."
+                }
+                if tabelas_sincronizadas:
+                    response_data['tabelas_sincronizadas'] = tabelas_sincronizadas
+                    response_data['message'] += f" Sincronizado: {', '.join(tabelas_sincronizadas)}."
+                if erro_sincronizacao:
+                    response_data['aviso_sincronizacao'] = erro_sincronizacao
+                return jsonify(response_data)
+
+            # ✅ MENSAGEM DE SUCESSO com detalhes (para requisições não-AJAX)
+            flash(f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados.", "success")
+            if tabelas_sincronizadas:
+                flash(f"Sincronização completa: {', '.join(tabelas_sincronizadas)}", "info")
+            if erro_sincronizacao:
+                flash(f"Aviso: Erro na sincronização - {erro_sincronizacao}", "warning")
 
             return redirect(url_for('pedidos.lista_pedidos'))
             

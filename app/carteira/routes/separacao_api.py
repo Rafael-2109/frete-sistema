@@ -516,25 +516,56 @@ def atualizar_datas_separacao_generic(lote_id):
         
         # Atualizar campos se fornecidos
         contador = 0
+        campos_alterados = []
         for sep in separacoes:
             if "expedicao" in data and data["expedicao"]:
                 sep.expedicao = datetime.strptime(data["expedicao"], "%Y-%m-%d").date()
+                if "expedicao" not in campos_alterados:
+                    campos_alterados.append("expedicao")
             if "agendamento" in data:
                 sep.agendamento = datetime.strptime(data["agendamento"], "%Y-%m-%d").date() if data["agendamento"] else None
+                if "agendamento" not in campos_alterados:
+                    campos_alterados.append("agendamento")
             if "protocolo" in data:
                 sep.protocolo = data["protocolo"]
+                if "protocolo" not in campos_alterados:
+                    campos_alterados.append("protocolo")
             if "agendamento_confirmado" in data:
                 sep.agendamento_confirmado = data["agendamento_confirmado"]
+                if "agendamento_confirmado" not in campos_alterados:
+                    campos_alterados.append("agendamento_confirmado")
             contador += 1
-        
+
         db.session.commit()
-        
-        logger.info(f"Datas atualizadas para lote {lote_id} ({contador} itens) por {current_user.nome if hasattr(current_user, 'nome') else 'usuário'}")
-        
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else 'usuário'
+        logger.info(f"Datas atualizadas para lote {lote_id} ({contador} itens) por {usuario}")
+
+        # ✅ SINCRONIZAR com EmbarqueItem (se existir) quando campos de agendamento foram alterados
+        tabelas_sincronizadas = []
+        campos_agendamento = {"agendamento", "protocolo", "agendamento_confirmado"}
+        if campos_agendamento.intersection(campos_alterados):
+            try:
+                from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+                sincronizador = SincronizadorAgendamentoService(usuario=usuario)
+                resultado_sync = sincronizador.sincronizar_desde_separacao(
+                    separacao_lote_id=lote_id,
+                    criar_agendamento=False
+                )
+
+                if resultado_sync['success']:
+                    tabelas_sincronizadas = resultado_sync.get('tabelas_atualizadas', [])
+                    if tabelas_sincronizadas:
+                        logger.info(f"[SINCRONIZAÇÃO] Tabelas atualizadas: {', '.join(tabelas_sincronizadas)}")
+            except Exception as sync_error:
+                logger.warning(f"Aviso na sincronização: {sync_error}")
+
         return jsonify({
             "success": True,
             "message": f"Datas atualizadas para {contador} itens",
-            "lote_id": lote_id
+            "lote_id": lote_id,
+            "tabelas_sincronizadas": tabelas_sincronizadas
         })
         
     except Exception as e:

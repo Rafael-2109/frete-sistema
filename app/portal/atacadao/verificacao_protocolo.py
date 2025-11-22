@@ -412,101 +412,55 @@ def verificar_protocolo_portal():
         # 🔄 Atualizar se tiver sucesso e data (MAS não para status negativos)
         status_negativos = ["Cancelado", "No show", "Recusado", "Rejeitado"]
         is_status_negativo = resultado.get('status_text') and any(neg in resultado.get('status_text', '') for neg in status_negativos)
-        
+
         if is_status_negativo:
             logger.warning(f"❌ Status negativo detectado: '{resultado.get('status_text')}' - NÃO será atualizado no banco de dados")
         elif resultado.get('success') and lote_id and resultado.get('data_aprovada'):
             try:
                 logger.info(f"🔄 Iniciando atualização de datas - Lote: {lote_id}, Data aprovada: {resultado['data_aprovada']}")
-                
-                # Atualizar Separacao
+
+                # Atualizar Separacao primeiro (fonte da verdade)
                 separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
                 logger.info(f"📦 Encontradas {len(separacoes)} separações para atualizar")
-                
+
+                nova_data = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
+
                 for sep in separacoes:
                     data_anterior_sep = sep.agendamento
                     # Atualizar confirmação baseada no resultado do portal
                     if resultado.get('agendamento_confirmado'):
                         sep.agendamento_confirmado = True
-                    sep.agendamento = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
+                    sep.agendamento = nova_data
                     logger.info(f"  - Separação #{sep.id}: data {data_anterior_sep} → {sep.agendamento}, confirmado: {sep.agendamento_confirmado}")
-                
-                # 🆕 Atualizar AgendamentoEntrega em EntregaMonitorada
-                from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
-                
-                # Buscar EntregaMonitorada pelo lote
-                logger.info(f"🔍 Buscando EntregaMonitorada com lote_id: {lote_id}")
-                entrega_monitorada = EntregaMonitorada.query.filter_by(
-                    separacao_lote_id=lote_id
-                ).first()
-                
-                if entrega_monitorada:
-                    logger.info(f"✅ EntregaMonitorada encontrada: #{entrega_monitorada.id}, data_agenda atual: {entrega_monitorada.data_agenda}")
-                    
-                    # Buscar o último agendamento com este protocolo
-                    logger.info(f"🔍 Buscando AgendamentoEntrega com entrega_id={entrega_monitorada.id} e protocolo={protocolo}")
-                    agendamento = AgendamentoEntrega.query.filter_by(
-                        entrega_id=entrega_monitorada.id,
-                        protocolo_agendamento=protocolo
-                    ).order_by(AgendamentoEntrega.criado_em.desc()).first()
-                    
-                    if agendamento:
-                        logger.info(f"✅ AgendamentoEntrega encontrado: #{agendamento.id}, status: {agendamento.status}, data_agendada atual: {agendamento.data_agendada}")
-                        
-                        # Atualizar status para confirmado SE ainda estiver aguardando
-                        if agendamento.status == 'aguardando':
-                            agendamento.status = 'confirmado'
-                            agendamento.confirmado_por = 'Portal Atacadão'
-                            agendamento.confirmado_em = datetime.utcnow()
-                            agendamento.observacoes_confirmacao = f'Confirmado automaticamente via portal - Status: {resultado.get("status_text", "Aguardando check-in")}'
-                            logger.info(f"📝 AgendamentoEntrega #{agendamento.id} - status atualizado para 'confirmado'")
-                        else:
-                            logger.info(f"ℹ️ AgendamentoEntrega #{agendamento.id} já está com status: {agendamento.status}")
-                        
-                        # 🔄 SEMPRE atualizar data se houver divergência (independente do status)
-                        if resultado.get('data_aprovada'):
-                            nova_data = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
-                            logger.info(f"📅 Nova data do portal: {nova_data}")
-                            
-                            # Atualizar AgendamentoEntrega.data_agendada
-                            if agendamento.data_agendada != nova_data:
-                                data_anterior_agendamento = agendamento.data_agendada
-                                agendamento.data_agendada = nova_data
-                                
-                                # Adicionar observação sobre mudança de data
-                                if not agendamento.observacoes_confirmacao:
-                                    agendamento.observacoes_confirmacao = ''
-                                agendamento.observacoes_confirmacao += f' | Data atualizada de {data_anterior_agendamento.strftime("%d/%m/%Y") if data_anterior_agendamento else "N/A"} para {nova_data.strftime("%d/%m/%Y")}'
-                                logger.info(f"✅ AgendamentoEntrega #{agendamento.id} - data_agendada atualizada: {data_anterior_agendamento} → {nova_data}")
-                            else:
-                                logger.info(f"ℹ️ AgendamentoEntrega #{agendamento.id} - data já está correta: {agendamento.data_agendada}")
-                            
-                            # Atualizar EntregaMonitorada.data_agenda
-                            if entrega_monitorada.data_agenda != nova_data:
-                                data_anterior_entrega = entrega_monitorada.data_agenda
-                                entrega_monitorada.data_agenda = nova_data
-                                logger.info(f"✅ EntregaMonitorada #{entrega_monitorada.id} - data_agenda atualizada: {data_anterior_entrega} → {nova_data}")
-                            else:
-                                logger.info(f"ℹ️ EntregaMonitorada #{entrega_monitorada.id} - data já está correta: {entrega_monitorada.data_agenda}")
-                        else:
-                            logger.warning(f"⚠️ Sem data_aprovada no resultado do portal")
-                    else:
-                        logger.warning(f"⚠️ AgendamentoEntrega não encontrado para entrega_id={entrega_monitorada.id} e protocolo={protocolo}")
-                        
-                        # 🔄 AINDA ASSIM, atualizar EntregaMonitorada se houver data aprovada
-                        if resultado.get('data_aprovada'):
-                            nova_data = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
-                            logger.info(f"📅 Atualizando EntregaMonitorada mesmo sem AgendamentoEntrega - nova data: {nova_data}")
-                            
-                            if entrega_monitorada.data_agenda != nova_data:
-                                data_anterior_entrega = entrega_monitorada.data_agenda
-                                entrega_monitorada.data_agenda = nova_data
-                                logger.info(f"✅ EntregaMonitorada #{entrega_monitorada.id} - data_agenda atualizada (sem agendamento): {data_anterior_entrega} → {nova_data}")
-                else:
-                    logger.warning(f"⚠️ EntregaMonitorada não encontrada para lote_id: {lote_id}")
-                
+
+                # Commit para salvar alterações na Separacao
                 db.session.commit()
-                logger.info(f"✅ COMMIT realizado - Separações, AgendamentoEntrega e EntregaMonitorada atualizados com sucesso!")
+                logger.info(f"✅ Separações atualizadas com sucesso!")
+
+                # 🔄 USAR SERVIÇO DE SINCRONIZAÇÃO PADRONIZADO
+                # Isso garante que EmbarqueItem e EntregaMonitorada também sejam atualizados
+                from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+                try:
+                    sincronizador = SincronizadorAgendamentoService(usuario='Portal Atacadão')
+
+                    # Sincronizar desde Separacao para todos os receptores (EmbarqueItem, EntregaMonitorada, AgendamentoEntrega)
+                    resultado_sync = sincronizador.sincronizar_desde_separacao(
+                        separacao_lote_id=lote_id,
+                        criar_agendamento=True
+                    )
+
+                    if resultado_sync['success']:
+                        tabelas = resultado_sync.get('tabelas_atualizadas', [])
+                        logger.info(f"✅ SINCRONIZAÇÃO COMPLETA - Tabelas atualizadas: {', '.join(tabelas)}")
+                        resultado['tabelas_sincronizadas'] = tabelas
+                    else:
+                        logger.warning(f"⚠️ Erro na sincronização: {resultado_sync.get('error')}")
+
+                except Exception as sync_error:
+                    logger.error(f"⚠️ Erro ao chamar serviço de sincronização: {sync_error}")
+                    # Não falhar a operação principal se sincronização der erro
+
             except Exception as e:
                 logger.error(f"Erro ao atualizar separação/agendamento: {e}")
                 db.session.rollback()
