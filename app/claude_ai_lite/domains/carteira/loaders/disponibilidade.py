@@ -1,11 +1,10 @@
 """
 Loader de Disponibilidade - Analise de quando embarcar pedido.
-Usa ServicoEstoqueSimples para projecao.
-Max 150 linhas.
+Usa OpcoesEnvioService para gerar opcoes A/B/C.
 """
 
 from typing import Dict, Any, List
-from datetime import date, timedelta
+from datetime import date
 import logging
 
 from ...base import BaseLoader
@@ -14,22 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 class DisponibilidadeLoader(BaseLoader):
-    """Analisa disponibilidade de estoque para embarque."""
+    """Analisa disponibilidade e gera opcoes de envio."""
 
     DOMINIO = "carteira"
 
     CAMPOS_BUSCA = [
-        "num_pedido",  # Quando posso embarcar pedido X?
+        "num_pedido",
     ]
 
-    HORIZONTE_DIAS = 30  # Analisa 30 dias
-    DIAS_PROTECAO = 7    # Nao roubar de pedidos em 7 dias
-
     def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
-        """Analisa quando pedido pode embarcar baseado no estoque projetado."""
-        from app.carteira.models import CarteiraPrincipal
+        """Analisa pedido e retorna opcoes de envio A/B/C."""
         from app.separacao.models import Separacao
-        from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+        from ..services.opcoes_envio import OpcoesEnvioService
 
         resultado = {
             "sucesso": True,
@@ -37,7 +32,8 @@ class DisponibilidadeLoader(BaseLoader):
             "campo_busca": campo,
             "total_encontrado": 0,
             "dados": [],
-            "analise": {}
+            "analise": {},
+            "opcoes": []
         }
 
         if campo != "num_pedido":
@@ -46,74 +42,37 @@ class DisponibilidadeLoader(BaseLoader):
             return resultado
 
         try:
-            # Busca itens do pedido na CarteiraPrincipal (NAO separados)
-            itens_cart = CarteiraPrincipal.query.filter(
-                CarteiraPrincipal.num_pedido.like(f"%{valor}%")
-            ).all()
-
-            # Busca separacoes existentes (para informar status)
+            # Verifica se ja esta separado
             itens_sep = Separacao.query.filter(
                 Separacao.num_pedido.like(f"%{valor}%"),
                 Separacao.sincronizado_nf == False
             ).all()
 
-            if not itens_cart and not itens_sep:
-                resultado["mensagem"] = f"Pedido {valor} nao encontrado"
+            # Usa o servico de opcoes
+            analise = OpcoesEnvioService.analisar_pedido(valor)
+
+            if not analise["sucesso"]:
+                # Se nao encontrou na carteira, verifica se esta separado
+                if itens_sep:
+                    return self._responder_pedido_ja_separado(valor, itens_sep, resultado)
+                resultado["sucesso"] = False
+                resultado["erro"] = analise.get("erro", "Pedido nao encontrado")
                 return resultado
 
-            # Se pedido JA esta separado, informar a data existente
-            if not itens_cart and itens_sep:
-                return self._responder_pedido_ja_separado(valor, itens_sep, resultado)
+            # Preenche resultado
+            resultado["num_pedido"] = analise["num_pedido"]
+            resultado["cliente"] = analise["cliente"]
+            resultado["valor_total_pedido"] = analise["valor_total_pedido"]
+            resultado["opcoes"] = analise["opcoes"]
+            resultado["total_encontrado"] = len(analise["opcoes"])
 
-            # Agrupa produtos da CARTEIRA (itens que precisam de estoque)
-            produtos_pedido = {}
-            for item in itens_cart:
-                key = item.cod_produto
-                if key not in produtos_pedido:
-                    produtos_pedido[key] = {
-                        "cod": key,
-                        "nome": item.nome_produto,
-                        "qtd_necessaria": 0
-                    }
-                produtos_pedido[key]["qtd_necessaria"] += float(item.qtd_saldo_produto_pedido or 0)
-
-            # Analisa disponibilidade de cada produto
-            hoje = date.today()
-            analises = []
-
-            for prod in produtos_pedido.values():
-                if prod["qtd_necessaria"] <= 0:
-                    continue
-
-                projecao = ServicoEstoqueSimples.calcular_projecao(prod["cod"], dias=self.HORIZONTE_DIAS)
-                data_possivel = self._encontrar_data_disponivel(
-                    projecao, prod["qtd_necessaria"], hoje
-                )
-
-                analises.append({
-                    "cod_produto": prod["cod"],
-                    "nome_produto": prod["nome"],
-                    "qtd_necessaria": prod["qtd_necessaria"],
-                    "estoque_atual": projecao.get("estoque_atual", 0),
-                    "data_possivel": data_possivel.strftime("%d/%m/%Y") if data_possivel else None,
-                    "dias_para_embarque": (data_possivel - hoje).days if data_possivel else None,
-                    "disponivel_hoje": projecao.get("estoque_atual", 0) >= prod["qtd_necessaria"]
-                })
-
-            # Determina data mais restritiva (produto que demora mais)
-            datas_possiveis = [a["data_possivel"] for a in analises if a["data_possivel"]]
-            if datas_possiveis:
-                data_embarque = max(datas_possiveis)  # Data mais distante
-            else:
-                data_embarque = None
-
-            resultado["dados"] = analises
-            resultado["total_encontrado"] = len(analises)
+            # Analise resumida
             resultado["analise"] = {
-                "num_pedido": valor,
-                "total_produtos": len(analises),
-                "data_embarque_sugerida": data_embarque,
-                "todos_disponiveis_hoje": all(a["disponivel_hoje"] for a in analises),
+                "num_pedido": analise["num_pedido"],
+                "cliente": analise["cliente"]["razao_social"] if analise["cliente"] else None,
+                "valor_total": analise["valor_total_pedido"],
+                "qtd_opcoes": len(analise["opcoes"]),
+                "todos_disponiveis_hoje": analise["opcoes"][0]["disponivel_hoje"] if analise["opcoes"] else False
             }
 
         except Exception as e:
@@ -123,22 +82,8 @@ class DisponibilidadeLoader(BaseLoader):
 
         return resultado
 
-    def _encontrar_data_disponivel(self, projecao: Dict, qtd_necessaria: float, hoje: date) -> date:
-        """Encontra primeira data com estoque disponivel."""
-        lista_projecao = projecao.get("projecao", [])
-
-        for dia_proj in lista_projecao:
-            estoque_dia = dia_proj.get("saldo_final", 0)
-            if estoque_dia >= qtd_necessaria:
-                data_str = dia_proj.get("data")
-                if data_str:
-                    return date.fromisoformat(data_str)
-
-        return None  # Nao encontrou no horizonte
-
     def _responder_pedido_ja_separado(self, num_pedido: str, separacoes: List, resultado: Dict) -> Dict:
-        """Responde quando pedido ja esta totalmente separado."""
-        # Agrupa por lote e pega datas
+        """Responde quando pedido ja esta separado."""
         lotes = {}
         for sep in separacoes:
             lote = sep.separacao_lote_id or "sem_lote"
@@ -166,43 +111,85 @@ class DisponibilidadeLoader(BaseLoader):
         return resultado
 
     def formatar_contexto(self, dados: Dict[str, Any]) -> str:
-        """Formata dados para contexto do Claude."""
+        """Formata dados para contexto do Claude com opcoes."""
         if not dados.get("sucesso"):
             return f"Erro: {dados.get('erro')}"
         if dados["total_encontrado"] == 0:
             return dados.get("mensagem", "Pedido nao encontrado.")
 
-        a = dados["analise"]
-
         # Caso especial: pedido ja separado
         if dados.get("ja_separado"):
-            linhas = [
-                f"=== PEDIDO {a['num_pedido']} - JA SEPARADO ===\n",
-                f"O pedido ja foi separado e possui {a['total_lotes']} lote(s).\n"
-            ]
-            for lote in dados["dados"]:
-                exp = lote["expedicao"].strftime("%d/%m/%Y") if lote["expedicao"] else "Nao definida"
-                agend = lote["agendamento"].strftime("%d/%m/%Y") if lote["agendamento"] else "Nao definido"
-                linhas.append(f"  Status: {lote['status']}")
-                linhas.append(f"  Expedicao: {exp}")
-                linhas.append(f"  Agendamento: {agend}")
-                linhas.append(f"  Produtos: {len(lote['produtos'])}")
-                for p in lote["produtos"][:3]:
-                    linhas.append(f"    - {p['nome']}: {p['qtd']:.0f}un")
-            return "\n".join(linhas)
+            return self._formatar_ja_separado(dados)
 
-        # Caso normal: analise de disponibilidade
+        # Caso normal: opcoes de envio
+        return self._formatar_opcoes(dados)
+
+    def _formatar_ja_separado(self, dados: Dict) -> str:
+        """Formata resposta para pedido ja separado."""
+        a = dados["analise"]
         linhas = [
-            f"=== ANALISE DE DISPONIBILIDADE - Pedido {a['num_pedido']} ===\n",
-            f"Total de produtos: {a['total_produtos']}",
-            f"Todos disponiveis hoje: {'SIM' if a['todos_disponiveis_hoje'] else 'NAO'}",
-            f"Data sugerida embarque: {a['data_embarque_sugerida'] or 'Sem previsao em 30 dias'}\n",
-            "--- Detalhes por Produto ---"
+            f"=== PEDIDO {a['num_pedido']} - JA SEPARADO ===\n",
+            f"O pedido ja foi separado e possui {a['total_lotes']} lote(s).\n"
+        ]
+        for lote in dados["dados"]:
+            exp = lote["expedicao"].strftime("%d/%m/%Y") if lote["expedicao"] else "Nao definida"
+            agend = lote["agendamento"].strftime("%d/%m/%Y") if lote["agendamento"] else "Nao definido"
+            linhas.append(f"  Status: {lote['status']}")
+            linhas.append(f"  Expedicao: {exp}")
+            linhas.append(f"  Agendamento: {agend}")
+            for p in lote["produtos"][:3]:
+                linhas.append(f"    - {p['nome']}: {p['qtd']:.0f}un")
+        return "\n".join(linhas)
+
+    def _formatar_opcoes(self, dados: Dict) -> str:
+        """Formata opcoes de envio A/B/C."""
+        a = dados["analise"]
+        opcoes = dados.get("opcoes", [])
+
+        linhas = [
+            f"=== ANALISE DE DISPONIBILIDADE - Pedido {a['num_pedido']} ===",
+            f"Cliente: {a.get('cliente', 'N/A')}",
+            f"Valor Total do Pedido: R$ {a.get('valor_total', 0):,.2f}",
+            "",
+            "=== OPCOES DE ENVIO ===",
+            ""
         ]
 
-        for p in dados["dados"]:
-            status = "DISPONIVEL" if p["disponivel_hoje"] else f"Aguardar {p['dias_para_embarque']} dias" if p["dias_para_embarque"] else "SEM PREVISAO"
-            linhas.append(f"  {p['nome_produto']}")
-            linhas.append(f"    Necessario: {p['qtd_necessaria']:.0f} | Estoque: {p['estoque_atual']:.0f} | {status}")
+        for opcao in opcoes:
+            codigo = opcao["codigo"]
+            linhas.append(f"--- OPCAO {codigo}: {opcao['titulo']} ---")
+            linhas.append(f"  Data de Envio: {opcao['data_envio'] or 'Sem previsao'}")
+
+            if opcao.get("dias_para_envio") is not None:
+                if opcao["dias_para_envio"] == 0:
+                    linhas.append(f"  Disponivel: HOJE")
+                else:
+                    linhas.append(f"  Aguardar: {opcao['dias_para_envio']} dia(s)")
+
+            linhas.append(f"  Valor: R$ {opcao['valor']:,.2f} ({opcao['percentual']:.1f}% do pedido)")
+            linhas.append(f"  Itens: {opcao['qtd_itens']}")
+
+            # Lista itens incluidos (resumido)
+            if opcao.get("itens"):
+                for item in opcao["itens"][:3]:
+                    if item["disponivel_hoje"]:
+                        status_item = "OK"
+                    elif item.get("dias_para_disponivel"):
+                        status_item = f"Aguardar {item['dias_para_disponivel']}d"
+                    else:
+                        status_item = "Sem previsao"
+                    linhas.append(f"    - {item['nome_produto'][:35]}: {item['quantidade']:.0f}un [{status_item}]")
+                if len(opcao["itens"]) > 3:
+                    linhas.append(f"    ... e mais {len(opcao['itens']) - 3} itens")
+
+            # Lista itens excluidos
+            if opcao.get("itens_excluidos"):
+                linhas.append(f"  ITENS NAO INCLUIDOS:")
+                for item in opcao["itens_excluidos"]:
+                    linhas.append(f"    X {item['nome_produto'][:35]}: {item['quantidade']:.0f}un (R$ {item['valor_total']:,.2f})")
+
+            linhas.append("")
+
+        linhas.append("Para criar separacao, responda com a opcao desejada (A, B ou C).")
 
         return "\n".join(linhas)

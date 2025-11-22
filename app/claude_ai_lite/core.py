@@ -10,6 +10,7 @@ from typing import Dict, Any
 
 from .claude_client import get_claude_client
 from .domains import get_loader, listar_dominios
+from .actions import processar_acao_separacao
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,8 @@ def processar_consulta(consulta: str, usar_claude_resposta: bool = True) -> str:
 
     Fluxo:
     1. Claude identifica dominio e entidades
-    2. Roteia para loader correto
-    3. Loader busca dados
+    2. Roteia para loader ou action
+    3. Busca dados ou executa acao
     4. Claude elabora resposta (opcional)
     """
     if not consulta or not consulta.strip():
@@ -37,27 +38,27 @@ def processar_consulta(consulta: str, usar_claude_resposta: bool = True) -> str:
 
     logger.info(f"Intencao: dominio={dominio_base}, tipo={intencao_tipo}, entidades={entidades}")
 
-    # 2. Rotear para loader especifico
+    # 2. Tratamento de acoes (delega para modulo actions/)
+    if dominio_base == "acao":
+        return processar_acao_separacao(intencao_tipo, entidades)
+
+    # 3. Rotear para loader especifico
     dominio = _rotear_dominio(dominio_base, intencao_tipo, entidades)
     loader_class = get_loader(dominio)
 
     if not loader_class:
-        # Fallback para dominio base
         loader_class = get_loader(dominio_base)
         if not loader_class:
             return f"Dominio '{dominio}' nao suportado. Disponiveis: {listar_dominios()}"
 
     loader = loader_class()
 
-    # 3. Extrair campo e valor de busca
+    # 4. Extrair campo e valor de busca
     campo, valor = _extrair_criterio(entidades, loader.CAMPOS_BUSCA)
     if not campo or not valor:
-        return (
-            f"Nao consegui identificar o criterio de busca.\n"
-            f"Campos aceitos: {loader.CAMPOS_BUSCA}"
-        )
+        return f"Nao consegui identificar o criterio de busca.\nCampos aceitos: {loader.CAMPOS_BUSCA}"
 
-    # 4. Buscar dados
+    # 5. Buscar dados
     dados = loader.buscar(valor, campo)
 
     if not dados.get("sucesso"):
@@ -66,13 +67,12 @@ def processar_consulta(consulta: str, usar_claude_resposta: bool = True) -> str:
     if dados["total_encontrado"] == 0:
         return dados.get("mensagem", f"Nenhum resultado para {campo}={valor}")
 
-    # 5. Gerar resposta
+    # 6. Gerar resposta
     contexto = loader.formatar_contexto(dados)
 
     if usar_claude_resposta:
         return client.responder_com_contexto(consulta, contexto, dominio_base)
-    else:
-        return contexto
+    return contexto
 
 
 def _rotear_dominio(dominio_base: str, intencao: str, entidades: Dict) -> str:
@@ -80,13 +80,12 @@ def _rotear_dominio(dominio_base: str, intencao: str, entidades: Dict) -> str:
     if dominio_base != "carteira":
         return dominio_base
 
-    # Roteia dentro do dominio carteira
     if intencao == "buscar_produto" or entidades.get("produto"):
         return "carteira_produto"
     elif intencao == "analisar_disponibilidade" or "quando" in str(entidades).lower():
         return "carteira_disponibilidade"
 
-    return "carteira"  # Default: PedidosLoader
+    return "carteira"
 
 
 def _extrair_criterio(entidades: Dict, campos_aceitos: list) -> tuple:

@@ -115,8 +115,8 @@ class ClaudeClient:
 
 Analise a mensagem e retorne APENAS um JSON valido com:
 {
-    "dominio": "carteira|fretes|embarques|cotacoes|faturamento|geral",
-    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|listar|calcular|relatorio|outro",
+    "dominio": "carteira|fretes|embarques|cotacoes|faturamento|acao|geral",
+    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|escolher_opcao|criar_separacao|confirmar_acao|listar|calcular|relatorio|outro",
     "entidades": {
         "num_pedido": "valor ou null",
         "cnpj": "valor ou null",
@@ -124,7 +124,8 @@ Analise a mensagem e retorne APENAS um JSON valido com:
         "pedido_cliente": "valor ou null",
         "produto": "nome do produto ou null",
         "cod_produto": "codigo do produto ou null",
-        "data": "valor ou null"
+        "data": "valor ou null",
+        "opcao": "A, B ou C se usuario escolher opcao"
     },
     "confianca": 0.0 a 1.0
 }
@@ -140,6 +141,8 @@ REGRAS PARA INTENCAO:
 - Se pergunta "tem estoque para" = analisar_disponibilidade
 - Se menciona alimento/produto sem contexto de envio = buscar_produto
 - Se pergunta status de pedido especifico = consultar_status
+- Se usuario responde "opcao A", "A", "quero A", "escolho B" = escolher_opcao (dominio=acao)
+- Se usuario responde "sim", "confirmo", "pode criar" = confirmar_acao (dominio=acao)
 
 REGRAS PARA PRODUTO:
 - Se menciona alimento = colocar em "produto"
@@ -155,6 +158,11 @@ Exemplos:
 - "Azeitona preta fatiada BD 6x2 tem separacao?" -> carteira, buscar_produto, {produto: "azeitona preta fatiada BD 6x2"}
 - "Ketchup pouch ainda tem na carteira?" -> carteira, buscar_produto, {produto: "ketchup pouch"}
 - "Cliente CERATTI tem pedido?" -> carteira, consultar_status, {cliente: "CERATTI"}
+- "Opcao A" -> acao, escolher_opcao, {opcao: "A"}
+- "Quero a B" -> acao, escolher_opcao, {opcao: "B"}
+- "Opcao A para o pedido VCD123" -> acao, escolher_opcao, {opcao: "A", num_pedido: "VCD123"}
+- "Criar separacao opcao B do pedido VCD456" -> acao, criar_separacao, {opcao: "B", num_pedido: "VCD456"}
+- "Sim, criar separacao" -> acao, confirmar_acao, {}
 
 Retorne SOMENTE o JSON, sem explicacoes."""
 
@@ -205,6 +213,8 @@ REGRAS:
 3. Seja direto e objetivo
 4. Use formatação clara (listas, bullets)
 5. Não invente dados
+6. IMPORTANTE: Se o contexto contiver OPCOES DE ENVIO (A, B, C), você DEVE apresentar TODAS as opções de forma clara e formatada para o usuário escolher
+7. Quando apresentar opcoes, pergunte ao usuario qual opcao deseja
 
 CONTEXTO DOS DADOS:
 {contexto}

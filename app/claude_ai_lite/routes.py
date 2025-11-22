@@ -117,6 +117,57 @@ def api_query_direct():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@claude_lite_bp.route('/api/action/criar-separacao', methods=['POST'])
+@login_required
+def api_criar_separacao():
+    """
+    Cria separacao baseada em opcao escolhida.
+
+    POST /claude-lite/api/action/criar-separacao
+    {
+        "num_pedido": "VCD2509030",
+        "opcao": "A"  // A, B ou C
+    }
+    """
+    try:
+        data = request.get_json()
+
+        if not data or not data.get('num_pedido') or not data.get('opcao'):
+            return jsonify({
+                'success': False,
+                'error': 'Campos "num_pedido" e "opcao" obrigatorios'
+            }), 400
+
+        num_pedido = data['num_pedido'].strip()
+        opcao = data['opcao'].strip().upper()
+
+        if opcao not in ['A', 'B', 'C']:
+            return jsonify({
+                'success': False,
+                'error': 'Opcao deve ser A, B ou C'
+            }), 400
+
+        usuario = getattr(current_user, 'nome', 'Claude AI')
+        logger.info(f"[Claude Lite] {usuario}: Criando separacao {num_pedido} opcao {opcao}")
+
+        from .domains.carteira.services import CriarSeparacaoService
+        resultado = CriarSeparacaoService.criar_separacao_opcao(
+            num_pedido=num_pedido,
+            opcao_codigo=opcao,
+            usuario=usuario
+        )
+
+        return jsonify({
+            **resultado,
+            'source': 'claude_ai_lite',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"[Claude Lite] Erro ao criar separacao: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @claude_lite_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check do servico."""
