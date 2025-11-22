@@ -305,7 +305,52 @@
 
         <!-- Coluna Lateral -->
         <div class="col-md-4">
-            <!-- Vínculo com Frete -->
+            {% if cte.tipo_cte == '1' %}
+            <!-- CTe COMPLEMENTAR: Vínculo com Despesa Extra -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-link"></i> Vínculo com Despesa Extra</h5>
+                </div>
+                <div class="card-body">
+                    {% set despesa_vinculada = cte.despesas_extras_vinculadas | first if cte.despesas_extras_vinculadas else none %}
+                    {% if despesa_vinculada %}
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-check-circle"></i> <strong>Vinculado à Despesa</strong>
+                        <hr>
+                        <p class="mb-2"><strong>Despesa ID:</strong> #{{ despesa_vinculada.id }}</p>
+                        <p class="mb-2"><strong>Tipo:</strong> {{ despesa_vinculada.tipo_despesa }}</p>
+                        <p class="mb-2"><strong>Valor:</strong> {{ (despesa_vinculada.valor_despesa)|moeda_carteira }}</p>
+                        <p class="mb-0"><strong>Status:</strong>
+                            <span class="badge bg-{{ 'success' if despesa_vinculada.status == 'LANCADO_ODOO' else 'info' }}">
+                                {{ despesa_vinculada.status }}
+                            </span>
+                        </p>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa_vinculada.frete_id) }}" class="btn btn-primary">
+                            <i class="fas fa-eye"></i> Ver Frete da Despesa
+                        </a>
+                        {% if despesa_vinculada.status != 'LANCADO_ODOO' %}
+                        <form method="POST" action="{{ url_for('fretes.desvincular_cte_despesa', despesa_id=despesa_vinculada.id) }}"
+                              onsubmit="return confirm('Tem certeza que deseja desvincular este CTe da despesa?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger w-100">
+                                <i class="fas fa-unlink"></i> Desvincular
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i> <strong>CTe Complementar</strong>
+                        <p class="mb-0 mt-2">Este CTe deve ser vinculado a uma <strong>Despesa Extra</strong>, não a um Frete.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <!-- CTe NORMAL: Vínculo com Frete -->
             <div class="card mb-4">
                 <div class="card-header bg-dark text-white">
                     <h5 class="mb-0"><i class="fas fa-link"></i> Vínculo com Frete</h5>
@@ -345,6 +390,7 @@
                     {% endif %}
                 </div>
             </div>
+            {% endif %}
 
             <!-- Fretes Sugeridos -->
             {% if fretes_relacionados and fretes_relacionados|length > 0 %}
@@ -460,6 +506,86 @@
                         Nenhum frete encontrado com NFs em comum.
                         <p class="mb-0 mt-2 small">
                             Verifique se o frete já foi criado no sistema ou se as NFs estão corretas.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- DESPESAS SUGERIDAS (para CTe Complementar) -->
+            {% if cte.tipo_cte == '1' and despesas_sugeridas and despesas_sugeridas|length > 0 %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> Despesas Sugeridas ({{ despesas_sugeridas|length }})
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        <i class="fas fa-info-circle"></i> Despesas extras com tipo CTe aguardando vinculação
+                    </p>
+
+                    {% for item in despesas_sugeridas %}
+                    {% set despesa = item.despesa %}
+                    {% set frete = item.frete %}
+                    {% set prioridade = item.prioridade %}
+                    {% set motivo = item.motivo %}
+
+                    <div class="border rounded p-3 mb-3 {% if prioridade == 1 %}bg-light border-success{% endif %}">
+                        <!-- Header -->
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <strong class="text-primary">Despesa #{{ despesa.id }}</strong>
+                                <span class="badge bg-{% if prioridade == 1 %}success{% elif prioridade == 2 %}info{% else %}warning{% endif %} ms-1">
+                                    P{{ prioridade }}
+                                </span>
+                            </div>
+                            <span class="badge bg-success">{{ (despesa.valor_despesa or 0)|moeda_carteira }}</span>
+                        </div>
+
+                        <!-- Dados -->
+                        <div class="small mb-2">
+                            <p class="mb-1"><strong>Tipo:</strong> {{ despesa.tipo_despesa }}</p>
+                            <p class="mb-1"><strong>Motivo:</strong> {{ despesa.motivo_despesa }}</p>
+                            <p class="mb-1"><strong>Frete:</strong> #{{ frete.id }} - {{ frete.nome_cliente[:25] }}{% if frete.nome_cliente|length > 25 %}...{% endif %}</p>
+                            <p class="mb-1 text-muted"><small><i class="fas fa-lightbulb"></i> {{ motivo }}</small></p>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-grid gap-1">
+                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}"
+                               class="btn btn-sm btn-outline-primary"
+                               target="_blank">
+                                <i class="fas fa-eye"></i> Ver Frete
+                            </a>
+
+                            <form method="POST" action="{{ url_for('cte.vincular_despesa', cte_id=cte.id) }}"
+                                  onsubmit="return confirm('Confirma vincular este CTe à Despesa #{{ despesa.id }}?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="despesa_id" value="{{ despesa.id }}">
+                                <button type="submit" class="btn btn-sm btn-success w-100">
+                                    <i class="fas fa-link"></i> Vincular à Despesa
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% elif cte.tipo_cte == '1' and not (cte.despesas_extras_vinculadas | first) %}
+            <!-- CTe Complementar sem despesas sugeridas -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> Despesas Sugeridas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-secondary mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        Nenhuma despesa extra encontrada para vincular.
+                        <p class="mb-0 mt-2 small">
+                            Verifique se existe uma despesa extra com tipo "CTe" e status "Pendente" no sistema.
                         </p>
                     </div>
                 </div>

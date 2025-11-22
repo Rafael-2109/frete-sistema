@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session, send_from_directory
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session, send_from_directory, send_file
 from flask_login import login_required, current_user
 from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
@@ -4104,8 +4104,8 @@ def lancar_despesa_odoo(despesa_id):
 
     despesa = DespesaExtra.query.get_or_404(despesa_id)
 
-    # Validações
-    if despesa.tipo_documento != 'CTe':
+    # Validações - aceita CTE ou CTe
+    if not despesa.tipo_documento or despesa.tipo_documento.upper() != 'CTE':
         return jsonify({
             'sucesso': False,
             'mensagem': f'Tipo de documento "{despesa.tipo_documento}" não suportado para lançamento no Odoo',
@@ -4238,6 +4238,158 @@ def auditoria_despesa_odoo(despesa_id):
         despesa=despesa,
         auditorias=auditorias
     )
+
+
+@fretes_bp.route('/despesas/<int:despesa_id>/lancar_nfs_recibo', methods=['POST'])
+@login_required
+def lancar_nfs_recibo(despesa_id):
+    """
+    Lança uma despesa NFS/Recibo com número do documento e comprovante opcional.
+    Retorna JSON para AJAX.
+    """
+    from datetime import datetime
+    from werkzeug.utils import secure_filename
+    import os
+
+    try:
+        despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+        # Validar se não é CTe (CTe vai para Odoo) - aceita CTE ou CTe
+        if despesa.tipo_documento and despesa.tipo_documento.upper() == 'CTE':
+            return jsonify({
+                'success': False,
+                'message': 'Despesas com CTe devem ser lançadas no Odoo, não aqui.'
+            }), 400
+
+        # Validar status
+        if despesa.status in ['LANCADO', 'LANCADO_ODOO']:
+            return jsonify({
+                'success': False,
+                'message': 'Despesa já foi lançada.'
+            }), 400
+
+        # Obter dados do formulário
+        tipo_documento = request.form.get('tipo_documento', 'NFS')
+        numero_documento = request.form.get('numero_documento', '').strip()
+        vencimento = request.form.get('vencimento')
+        observacoes = request.form.get('observacoes', '').strip()
+
+        # Validar número do documento
+        if not numero_documento:
+            return jsonify({
+                'success': False,
+                'message': 'Número do documento é obrigatório.'
+            }), 400
+
+        # Atualizar dados da despesa
+        despesa.tipo_documento = tipo_documento
+        despesa.numero_documento = numero_documento
+
+        if vencimento:
+            try:
+                despesa.vencimento_despesa = datetime.strptime(vencimento, '%Y-%m-%d').date()
+            except ValueError:
+                pass  # Ignora se data inválida
+
+        if observacoes:
+            if despesa.observacoes:
+                despesa.observacoes += f"\n[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {observacoes}"
+            else:
+                despesa.observacoes = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {observacoes}"
+
+        # Processar upload de comprovante se enviado
+        if 'comprovante' in request.files:
+            arquivo = request.files['comprovante']
+            if arquivo and arquivo.filename:
+                try:
+                    # Salvar arquivo usando S3 ou local
+                    from app.utils.s3_handler import S3Handler
+                    s3_handler = S3Handler()
+
+                    # Gerar nome único
+                    filename = secure_filename(arquivo.filename)
+                    nome_arquivo = f"comprovantes/despesa_{despesa_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+
+                    # Upload para S3
+                    caminho = s3_handler.upload_file(arquivo, nome_arquivo)
+                    if caminho:
+                        despesa.comprovante_path = caminho
+                        despesa.comprovante_nome_arquivo = arquivo.filename
+                    else:
+                        # Fallback: salvar localmente
+                        upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'comprovantes')
+                        os.makedirs(upload_folder, exist_ok=True)
+                        arquivo_path = os.path.join(upload_folder, nome_arquivo.replace('comprovantes/', ''))
+                        arquivo.save(arquivo_path)
+                        despesa.comprovante_path = f"uploads/comprovantes/{nome_arquivo.replace('comprovantes/', '')}"
+                        despesa.comprovante_nome_arquivo = arquivo.filename
+
+                except Exception as e:
+                    current_app.logger.error(f"Erro ao fazer upload do comprovante: {e}")
+                    # Continua sem o comprovante
+
+        # Atualizar status para LANCADO
+        despesa.status = 'LANCADO'
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Despesa #{despesa_id} lançada com sucesso.',
+            'despesa_id': despesa_id,
+            'status': despesa.status
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao lançar despesa NFS/Recibo: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao lançar despesa: {str(e)}'
+        }), 500
+
+
+@fretes_bp.route('/despesas/<int:despesa_id>/download_comprovante')
+@login_required
+def download_comprovante_despesa(despesa_id):
+    """Download do comprovante de uma despesa extra."""
+    import os
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+    if not despesa.comprovante_path:
+        flash('Despesa não possui comprovante anexado.', 'warning')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+    try:
+        # Verificar se é S3 ou local
+        if despesa.comprovante_path.startswith('http') or despesa.comprovante_path.startswith('s3://'):
+            # Redirect para URL do S3
+            from app.utils.s3_handler import S3Handler
+            s3_handler = S3Handler()
+            url = s3_handler.get_presigned_url(despesa.comprovante_path)
+            if url:
+                return redirect(url)
+            else:
+                flash('Erro ao gerar link do comprovante.', 'error')
+                return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+        else:
+            # Arquivo local
+            arquivo_path = os.path.join(current_app.root_path, 'static', despesa.comprovante_path)
+            if os.path.exists(arquivo_path):
+                return send_file(
+                    arquivo_path,
+                    download_name=despesa.comprovante_nome_arquivo or 'comprovante',
+                    as_attachment=True
+                )
+            else:
+                flash('Arquivo do comprovante não encontrado.', 'error')
+                return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao baixar comprovante: {e}")
+        flash(f'Erro ao baixar comprovante: {str(e)}', 'error')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
 
 
 @fretes_bp.route('/api/despesas/pendentes_vinculacao')

@@ -236,19 +236,107 @@ def sincronizar_ctes():
 @require_financeiro()
 def detalhar_cte(cte_id):
     """Mostra detalhes de um CTe específico"""
+    from app.fretes.models import DespesaExtra, Frete
 
     cte = ConhecimentoTransporte.query.get_or_404(cte_id)
 
-    # Buscar fretes relacionados (sugestões) - apenas para CTes não complementares
     fretes_relacionados = []
-    if cte.tipo_cte != '1':  # Não é complementar
+    despesas_sugeridas = []
+
+    if cte.tipo_cte == '1':
+        # CTe Complementar: buscar despesas extras para vincular
+        despesas_sugeridas = _buscar_despesas_para_cte_complementar(cte)
+        if despesas_sugeridas:
+            logger.info(f"🔍 Encontradas {len(despesas_sugeridas)} despesas sugeridas para CTe Complementar #{cte.id}")
+    else:
+        # CTe Normal: buscar fretes relacionados
         fretes_relacionados = cte.buscar_fretes_relacionados()
         if fretes_relacionados:
             logger.info(f"🔍 Encontrados {len(fretes_relacionados)} fretes sugeridos para CTe #{cte.id}")
 
     return render_template('fretes/ctes/detalhe.html',
                            cte=cte,
-                           fretes_relacionados=fretes_relacionados)
+                           fretes_relacionados=fretes_relacionados,
+                           despesas_sugeridas=despesas_sugeridas)
+
+
+def _buscar_despesas_para_cte_complementar(cte):
+    """
+    Busca despesas extras que podem ser vinculadas a este CTe Complementar.
+
+    Lógica de sugestão (3 prioridades):
+    1. Despesa cujo Frete está vinculado ao CTe Original que este complementar referencia
+    2. Despesa cujo Frete tem NFs em comum com o CTe Original referenciado
+    3. Despesa cujo Frete tem mesmo CNPJ cliente + prefixo transportadora
+    """
+    from app.fretes.models import DespesaExtra, Frete
+    from sqlalchemy import and_
+
+    resultado = []
+
+    # Buscar despesas que podem receber CTe (tipo_documento='CTe' ou 'CTE' e status PENDENTE)
+    from sqlalchemy import func
+    despesas_candidatas = DespesaExtra.query.filter(
+        and_(
+            func.upper(DespesaExtra.tipo_documento) == 'CTE',
+            DespesaExtra.status == 'PENDENTE',
+            DespesaExtra.despesa_cte_id.is_(None)
+        )
+    ).all()
+
+    if not despesas_candidatas:
+        return []
+
+    # CTe que este complementar referencia
+    cte_original_id = cte.cte_complementa_id
+
+    for despesa in despesas_candidatas:
+        frete = Frete.query.get(despesa.frete_id)
+        if not frete:
+            continue
+
+        prioridade = None
+        motivo = ""
+
+        # PRIORIDADE 1: Frete vinculado ao CTe Original
+        if cte_original_id and frete.frete_cte_id == cte_original_id:
+            prioridade = 1
+            motivo = "Frete vinculado ao CTe Original"
+
+        # PRIORIDADE 2: NFs em comum com CTe Original
+        elif cte_original_id and cte.cte_original:
+            cte_original = cte.cte_original
+            if cte_original.numeros_nfs and frete.numeros_nfs:
+                nfs_cte = set(cte_original.numeros_nfs.split(','))
+                nfs_frete = set(frete.numeros_nfs.split(','))
+                nfs_comuns = nfs_cte.intersection(nfs_frete)
+                if nfs_comuns:
+                    prioridade = 2
+                    motivo = f"NFs em comum: {', '.join(list(nfs_comuns)[:3])}"
+
+        # PRIORIDADE 3: CNPJ cliente + prefixo transportadora
+        if not prioridade:
+            if (frete.cnpj_cliente and cte.cnpj_destinatario and
+                frete.cnpj_cliente == cte.cnpj_destinatario):
+                if frete.transportadora and cte.cnpj_emitente:
+                    prefixo_frete = frete.transportadora.cnpj[:8] if frete.transportadora.cnpj else None
+                    prefixo_cte = cte.cnpj_emitente[:8] if cte.cnpj_emitente else None
+                    if prefixo_frete and prefixo_cte and prefixo_frete == prefixo_cte:
+                        prioridade = 3
+                        motivo = "Mesmo cliente e transportadora"
+
+        if prioridade:
+            resultado.append({
+                'despesa': despesa,
+                'frete': frete,
+                'prioridade': prioridade,
+                'motivo': motivo
+            })
+
+    # Ordenar por prioridade
+    resultado.sort(key=lambda x: x['prioridade'])
+
+    return resultado
 
 
 @cte_bp.route('/<int:cte_id>/pdf')
@@ -339,6 +427,45 @@ def vincular_frete(cte_id):
     except Exception as e:
         logger.error(f"Erro ao vincular CTe {cte_id} com frete {frete_id}: {e}")
         flash(f'❌ Erro ao vincular: {str(e)}', 'danger')
+
+    return redirect(url_for('cte.detalhar_cte', cte_id=cte_id))
+
+
+@cte_bp.route('/<int:cte_id>/vincular-despesa', methods=['POST'])
+@login_required
+@require_financeiro()
+def vincular_despesa(cte_id):
+    """Vincula um CTe Complementar com uma Despesa Extra"""
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+
+    cte = ConhecimentoTransporte.query.get_or_404(cte_id)
+
+    # Validar que é CTe Complementar
+    if cte.tipo_cte != '1':
+        flash('Apenas CTes Complementares podem ser vinculados a despesas extras', 'warning')
+        return redirect(url_for('cte.detalhar_cte', cte_id=cte_id))
+
+    despesa_id = request.form.get('despesa_id', type=int)
+
+    if not despesa_id:
+        flash('ID da despesa não informado', 'warning')
+        return redirect(url_for('cte.detalhar_cte', cte_id=cte_id))
+
+    try:
+        sucesso, mensagem = DespesaCteService.vincular_cte(
+            despesa_id=despesa_id,
+            cte_id=cte_id,
+            usuario=current_user.nome if current_user else 'Sistema'
+        )
+
+        if sucesso:
+            flash(f'CTe {cte.numero_cte} vinculado à despesa #{despesa_id} com sucesso!', 'success')
+        else:
+            flash(f'Erro ao vincular: {mensagem}', 'danger')
+
+    except Exception as e:
+        logger.error(f"Erro ao vincular CTe {cte_id} com despesa {despesa_id}: {e}")
+        flash(f'Erro ao vincular: {str(e)}', 'danger')
 
     return redirect(url_for('cte.detalhar_cte', cte_id=cte_id))
 

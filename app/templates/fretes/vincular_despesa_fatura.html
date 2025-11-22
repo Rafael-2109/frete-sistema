@@ -108,9 +108,10 @@
                                 <div class="form-group">
                                     <label class="form-label">Tipo do Documento de Cobrança</label>
                                     <select name="tipo_documento_cobranca" class="form-control" required>
-                                        <option value="CTE" {% if despesa.tipo_documento == 'CTE' %}selected{% endif %}>CTe</option>
+                                        <option value="CTE" {% if despesa.tipo_documento == 'CTE' or despesa.tipo_documento == 'CTe' %}selected{% endif %}>CTe (Complementar)</option>
                                         <option value="NFS" {% if despesa.tipo_documento == 'NFS' %}selected{% endif %}>Nota Fiscal de Serviço</option>
                                         <option value="RECIBO" {% if despesa.tipo_documento == 'RECIBO' %}selected{% endif %}>Recibo</option>
+                                        <option value="BOLETO" {% if despesa.tipo_documento == 'BOLETO' %}selected{% endif %}>Boleto</option>
                                         <option value="OUTROS" {% if despesa.tipo_documento == 'OUTROS' %}selected{% endif %}>Outros</option>
                                     </select>
                                     <small class="text-muted">

@@ -295,9 +295,11 @@ class DespesaCteService:
         Returns:
             Lista de DespesaExtra
         """
+        # Aceita CTE ou CTe (case-insensitive via func.upper)
+        from sqlalchemy import func
         return DespesaExtra.query.filter(
             and_(
-                DespesaExtra.tipo_documento == 'CTe',
+                func.upper(DespesaExtra.tipo_documento) == 'CTE',
                 DespesaExtra.status == 'VINCULADO_CTE',
                 DespesaExtra.despesa_cte_id.isnot(None)
             )
@@ -306,14 +308,16 @@ class DespesaCteService:
     @staticmethod
     def get_despesas_pendentes_vinculacao() -> List[DespesaExtra]:
         """
-        Retorna despesas extras com tipo_documento='CTe' que ainda não têm CTe vinculado.
+        Retorna despesas extras com tipo_documento='CTe' ou 'CTE' que ainda não têm CTe vinculado.
 
         Returns:
             Lista de DespesaExtra
         """
+        # Aceita CTE ou CTe (case-insensitive via func.upper)
+        from sqlalchemy import func
         return DespesaExtra.query.filter(
             and_(
-                DespesaExtra.tipo_documento == 'CTe',
+                func.upper(DespesaExtra.tipo_documento) == 'CTE',
                 DespesaExtra.status == 'PENDENTE',
                 DespesaExtra.despesa_cte_id.is_(None)
             )

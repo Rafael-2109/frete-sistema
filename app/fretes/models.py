@@ -417,8 +417,10 @@ class DespesaExtra(db.Model):
     @property
     def pode_lancar_odoo(self):
         """Verifica se a despesa pode ser lançada no Odoo"""
+        # Aceita CTE ou CTe (case-insensitive)
+        tipo_doc_valido = self.tipo_documento and self.tipo_documento.upper() == 'CTE'
         return (
-            self.tipo_documento == 'CTe' and
+            tipo_doc_valido and
             self.despesa_cte_id is not None and
             self.status == 'VINCULADO_CTE'
         )

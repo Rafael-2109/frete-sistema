@@ -592,6 +592,7 @@
                                     <th>Tipo</th>
                                     <th>Motivo</th>
                                     <th>Documento</th>
+                                    <th>Fatura</th>
                                     <th>CTe Vinculado</th>
                                     <th>Valor</th>
                                     <th>Status</th>
@@ -611,17 +612,33 @@
                                         <span class="badge {% if despesa.tipo_documento == 'CTe' %}bg-primary{% else %}bg-secondary{% endif %}">
                                             {{ despesa.tipo_documento }}
                                         </span><br>
-                                        {% if despesa.numero_documento == 'PENDENTE_FATURA' %}
+                                        {% if despesa.numero_documento == 'PENDENTE_FATURA' or despesa.numero_documento == 'PENDENTE_DOCUMENTO' %}
                                         <small class="text-warning"><i class="fas fa-clock"></i> Pendente</small>
                                         {% else %}
                                         <small>{{ despesa.numero_documento }}</small>
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% if despesa.fatura_frete %}
+                                        <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=despesa.fatura_frete.id) }}"
+                                            class="badge bg-primary text-white text-decoration-none"
+                                            title="Ver fatura {{ despesa.fatura_frete.numero_fatura }}">
+                                            <i class="fas fa-file-invoice"></i> {{ despesa.fatura_frete.numero_fatura[:10] }}{% if despesa.fatura_frete.numero_fatura|length > 10 %}...{% endif %}
+                                        </a>
+                                        {% else %}
+                                        <!-- Permite vincular fatura mesmo após lançamento -->
+                                        <a href="{{ url_for('fretes.vincular_despesa_fatura', despesa_id=despesa.id) }}"
+                                            class="btn btn-sm btn-outline-warning"
+                                            title="Vincular a uma fatura">
+                                            <i class="fas fa-link"></i> Vincular
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         {% if despesa.cte %}
                                         <span class="badge bg-info">{{ despesa.cte.numero_cte }}</span>
                                         <br><small class="text-muted">Complementar</small>
-                                        {% elif despesa.tipo_documento == 'CTe' %}
+                                        {% elif despesa.tipo_documento and despesa.tipo_documento.upper() == 'CTE' %}
                                         <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Pendente</span>
                                         {% else %}
                                         <span class="text-muted">N/A</span>
@@ -644,7 +661,7 @@
                                         <span class="badge bg-success" title="Invoice ID: {{ despesa.odoo_invoice_id }}">
                                             <i class="fas fa-check"></i>
                                         </span>
-                                        {% elif despesa.tipo_documento == 'CTe' %}
+                                        {% elif despesa.tipo_documento and despesa.tipo_documento.upper() == 'CTE' %}
                                         <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i></span>
                                         {% else %}
                                         <span class="text-muted">-</span>
@@ -652,8 +669,8 @@
                                     </td>
                                     <td>
                                         <div class="btn-group-vertical" role="group">
-                                            <!-- Botões de CTe e Odoo para despesas tipo CTe -->
-                                            {% if despesa.tipo_documento == 'CTe' %}
+                                            <!-- Botões de CTe e Odoo para despesas tipo CTe (aceita CTE ou CTe) -->
+                                            {% if despesa.tipo_documento and despesa.tipo_documento.upper() == 'CTE' %}
                                                 {% if despesa.status == 'LANCADO_ODOO' %}
                                                 <!-- Já lançado no Odoo -->
                                                 <a href="{{ url_for('fretes.auditoria_despesa_odoo', despesa_id=despesa.id) }}"
@@ -685,15 +702,24 @@
                                                 </a>
                                                 {% endif %}
                                             {% else %}
-                                                <!-- NFS/Recibo - Marcar como lançado -->
+                                                <!-- NFS/Recibo - Marcar como lançado com modal -->
                                                 {% if despesa.status != 'LANCADO' and despesa.status != 'LANCADO_ODOO' %}
-                                                <form method="POST" action="{{ url_for('fretes.marcar_despesa_lancado', despesa_id=despesa.id) }}" style="display: inline-block;">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                                                    <button type="submit" class="btn btn-sm btn-primary mb-1"
-                                                        title="Marcar como lançado">
-                                                        <i class="fas fa-check"></i> Lançar
-                                                    </button>
-                                                </form>
+                                                <button onclick="abrirModalLancarNfsRecibo({{ despesa.id }}, '{{ despesa.tipo_documento }}', '{{ despesa.numero_documento or '' }}', '{{ despesa.vencimento_despesa.strftime('%Y-%m-%d') if despesa.vencimento_despesa else '' }}')"
+                                                    class="btn btn-sm btn-primary mb-1"
+                                                    title="Lançar despesa (informar documento e anexar comprovante)">
+                                                    <i class="fas fa-check"></i> Lançar
+                                                </button>
+                                                {% elif despesa.status == 'LANCADO' %}
+                                                <span class="badge bg-success mb-1" title="Despesa já lançada">
+                                                    <i class="fas fa-check-circle"></i> Lançado
+                                                </span>
+                                                {% if despesa.comprovante_path %}
+                                                <a href="{{ url_for('fretes.download_comprovante_despesa', despesa_id=despesa.id) }}"
+                                                    class="btn btn-sm btn-outline-success mb-1"
+                                                    title="Baixar comprovante">
+                                                    <i class="fas fa-file-download"></i>
+                                                </a>
+                                                {% endif %}
                                                 {% endif %}
                                             {% endif %}
 
@@ -732,9 +758,9 @@
                             </tbody>
                             <tfoot>
                                 <tr class="font-weight-bold">
-                                    <td colspan="4">Total Despesas Extras:</td>
+                                    <td colspan="5">Total Despesas Extras:</td>
                                     <td>{{ (despesas_extras|sum(attribute='valor_despesa')|moeda_carteira) }}</td>
-                                    <td colspan="3"></td>
+                                    <td colspan="4"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -1337,6 +1363,171 @@ function lancarDespesaOdoo() {
         btnLancar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo';
     });
 }
+
+// ========================================
+// MODAL E LÓGICA DE LANÇAMENTO NFS/RECIBO
+// ========================================
+
+// Função para abrir modal de lançamento NFS/Recibo
+function abrirModalLancarNfsRecibo(despesaId, tipoDocumento, numeroDocumento, vencimento) {
+    document.getElementById('despesa_id_nfs').value = despesaId;
+    document.getElementById('tipo_documento_nfs').value = tipoDocumento || 'NFS';
+    document.getElementById('numero_documento_nfs').value = numeroDocumento || '';
+    document.getElementById('vencimento_nfs').value = vencimento || '';
+    document.getElementById('comprovante_nfs').value = '';
+    document.getElementById('preview_comprovante').classList.add('d-none');
+
+    const modal = new bootstrap.Modal(document.getElementById('modalLancarNfsRecibo'));
+    modal.show();
+}
+
+// Preview do arquivo selecionado
+document.getElementById('comprovante_nfs')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const preview = document.getElementById('preview_comprovante');
+        const content = document.getElementById('preview_comprovante_content');
+
+        preview.classList.remove('d-none');
+        content.innerHTML = `
+            <p class="mb-0"><strong>Arquivo:</strong> ${file.name}</p>
+            <p class="mb-0"><strong>Tamanho:</strong> ${(file.size / 1024).toFixed(2)} KB</p>
+        `;
+    }
+});
+
+// Submeter formulário de lançamento NFS/Recibo via AJAX
+document.getElementById('formLancarNfsRecibo')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const despesaId = document.getElementById('despesa_id_nfs').value;
+    const btnSubmit = document.getElementById('btnLancarNfsRecibo');
+
+    // Validação
+    const numeroDocumento = document.getElementById('numero_documento_nfs').value;
+    if (!numeroDocumento || numeroDocumento.trim() === '') {
+        alert('Por favor, informe o número do documento.');
+        return;
+    }
+
+    // Desabilita o botão e mostra loading
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Lançando...';
+
+    fetch(`/fretes/despesas/${despesaId}/lancar_nfs_recibo`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Fecha o modal
+            bootstrap.Modal.getInstance(document.getElementById('modalLancarNfsRecibo')).hide();
+
+            // Mostra mensagem de sucesso
+            alert('Despesa lançada com sucesso!');
+
+            // Recarrega a página
+            location.reload();
+        } else {
+            alert('Erro ao lançar despesa: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao lançar despesa. Por favor, tente novamente.');
+    })
+    .finally(() => {
+        // Reabilita o botão
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="fas fa-check"></i> Lançar Despesa';
+    });
+});
 </script>
+
+<!-- Modal Lançamento NFS/Recibo -->
+<div class="modal fade" id="modalLancarNfsRecibo" tabindex="-1" aria-labelledby="modalLancarNfsReciboLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalLancarNfsReciboLabel">
+                    <i class="fas fa-file-invoice"></i> Lançar Despesa Extra
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formLancarNfsRecibo" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" id="despesa_id_nfs" name="despesa_id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Atenção:</strong> Informe os dados do documento e anexe o comprovante (opcional).
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="tipo_documento_nfs" class="form-label">
+                                <i class="fas fa-file-alt"></i> Tipo do Documento <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="tipo_documento_nfs" name="tipo_documento" required>
+                                <option value="NFS">Nota Fiscal de Serviço</option>
+                                <option value="RECIBO">Recibo</option>
+                                <option value="BOLETO">Boleto</option>
+                                <option value="OUTROS">Outros</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="numero_documento_nfs" class="form-label">
+                                <i class="fas fa-hashtag"></i> Número do Documento <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="numero_documento_nfs" name="numero_documento"
+                                   required placeholder="Ex: 12345">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="vencimento_nfs" class="form-label">
+                            <i class="fas fa-calendar"></i> Data de Vencimento
+                        </label>
+                        <input type="date" class="form-control" id="vencimento_nfs" name="vencimento">
+                        <div class="form-text">Opcional - Data de vencimento do pagamento</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="comprovante_nfs" class="form-label">
+                            <i class="fas fa-paperclip"></i> Comprovante (PDF, imagem)
+                        </label>
+                        <input type="file" class="form-control" id="comprovante_nfs" name="comprovante"
+                               accept=".pdf,.png,.jpg,.jpeg">
+                        <div class="form-text">Opcional - Anexe o comprovante de pagamento</div>
+                    </div>
+
+                    <div id="preview_comprovante" class="alert alert-secondary d-none">
+                        <h6><i class="fas fa-file"></i> Arquivo selecionado:</h6>
+                        <div id="preview_comprovante_content"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="observacoes_lancamento_nfs" class="form-label">
+                            <i class="fas fa-comment"></i> Observações
+                        </label>
+                        <textarea class="form-control" id="observacoes_lancamento_nfs" name="observacoes"
+                                  rows="2" placeholder="Observações sobre o lançamento..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="btnLancarNfsRecibo">
+                        <i class="fas fa-check"></i> Lançar Despesa
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
