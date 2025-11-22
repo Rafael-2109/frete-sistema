@@ -3013,8 +3013,8 @@
                 return;
             }
 
-            // Abrir modal com os dados
-            abrirModalRastreamento(codProduto, resultado.separacoes);
+            // 🆕 Abrir modal com os dados completos (incluindo códigos unificados)
+            abrirModalRastreamento(codProduto, resultado.separacoes, resultado.codigos_unificados || [codProduto]);
 
         } catch (erro) {
             console.error('Erro ao rastrear produto:', erro);
@@ -3022,7 +3022,7 @@
         }
     }
 
-    function abrirModalRastreamento(codProduto, separacoes) {
+    function abrirModalRastreamento(codProduto, separacoes, codigosUnificados = []) {
         // Criar modal se não existir
         let modal = document.getElementById('modalRastreamentoProduto');
 
@@ -3034,11 +3034,14 @@
                             <div class="modal-header bg-primary text-white">
                                 <h5 class="modal-title">
                                     <i class="fas fa-search me-2"></i>
-                                    Rastreamento de Produto: <span id="modal-rastreamento-codigo"></span>
+                                    Saídas Programadas: <span id="modal-rastreamento-codigo"></span>
                                 </h5>
                                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body">
+                                <div id="modal-rastreamento-unificados">
+                                    <!-- 🆕 Códigos unificados serão exibidos aqui -->
+                                </div>
                                 <div id="modal-rastreamento-conteudo">
                                     <!-- Será preenchido dinamicamente -->
                                 </div>
@@ -3057,6 +3060,27 @@
         // Atualizar código do produto no título
         document.getElementById('modal-rastreamento-codigo').textContent = codProduto;
 
+        // 🆕 Exibir informação sobre códigos unificados
+        const unificadosContainer = document.getElementById('modal-rastreamento-unificados');
+        if (codigosUnificados.length > 1) {
+            unificadosContainer.innerHTML = `
+                <div class="alert alert-warning mb-3">
+                    <i class="fas fa-link me-2"></i>
+                    <strong>Códigos Unificados:</strong> Este produto possui ${codigosUnificados.length} códigos equivalentes.
+                    <br>
+                    <small class="text-muted">
+                        ${codigosUnificados.map(cod =>
+                            cod === codProduto
+                                ? `<strong>${cod}</strong>`
+                                : cod
+                        ).join(' | ')}
+                    </small>
+                </div>
+            `;
+        } else {
+            unificadosContainer.innerHTML = '';
+        }
+
         // Gerar conteúdo da tabela
         const conteudo = document.getElementById('modal-rastreamento-conteudo');
 
@@ -3064,13 +3088,16 @@
             conteudo.innerHTML = `
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
-                    Nenhuma separação ativa encontrada para este produto.
+                    Nenhuma separação ativa encontrada para este produto${codigosUnificados.length > 1 ? ' (incluindo códigos unificados)' : ''}.
                 </div>
             `;
         } else {
             // Calcular totais
             const totalQtd = separacoes.reduce((sum, s) => sum + parseFloat(s.qtd_saldo || 0), 0);
             const totalValor = separacoes.reduce((sum, s) => sum + parseFloat(s.valor_saldo || 0), 0);
+
+            // 🆕 Verificar se há múltiplos códigos nas separações
+            const temMultiplosCodigos = codigosUnificados.length > 1;
 
             conteudo.innerHTML = `
                 <div class="alert alert-success mb-3">
@@ -3082,6 +3109,7 @@
                     <table class="table table-sm table-bordered table-hover">
                         <thead class="table-dark">
                             <tr>
+                                ${temMultiplosCodigos ? '<th style="min-width: 80px;">Código</th>' : ''}
                                 <th style="min-width: 100px;">Lote ID</th>
                                 <th style="min-width: 150px;">Cliente</th>
                                 <th style="min-width: 80px;">Qtd</th>
@@ -3094,9 +3122,14 @@
                             ${separacoes.map(sep => {
                                 const loteIdCurto = sep.separacao_lote_id ? sep.separacao_lote_id.slice(-10) : 'N/A';
                                 const statusBadge = obterBadgeStatus(sep.status_calculado || sep.status || 'ABERTO');
+                                // 🆕 Destacar se código é diferente do pesquisado
+                                const codigoDestaque = sep.cod_produto !== codProduto
+                                    ? `<span class="badge bg-info">${sep.cod_produto}</span>`
+                                    : `<code>${sep.cod_produto}</code>`;
 
                                 return `
                                     <tr>
+                                        ${temMultiplosCodigos ? `<td>${codigoDestaque}</td>` : ''}
                                         <td><code>${loteIdCurto}</code></td>
                                         <td>${sep.raz_social_red || 'N/A'}</td>
                                         <td class="text-end">${Math.round(sep.qtd_saldo || 0).toLocaleString('pt-BR')}</td>

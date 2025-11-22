@@ -1793,7 +1793,8 @@ def verificar_separacoes_existentes():
 @carteira_simples_bp.route('/api/rastrear-produto')
 def rastrear_produto():
     """
-    Retorna todas as separações não sincronizadas de um produto específico
+    Retorna todas as separações não sincronizadas de um produto específico,
+    considerando códigos unificados (produtos equivalentes).
 
     Query params:
     - cod_produto: string (required)
@@ -1801,9 +1802,12 @@ def rastrear_produto():
     Response:
     {
         "success": true,
+        "cod_produto_pesquisado": "ABC123",
+        "codigos_unificados": ["ABC123", "ABC123-V2", "XYZ789"],
         "separacoes": [
             {
                 "separacao_lote_id": "SEP-2025-001",
+                "cod_produto": "ABC123",
                 "raz_social_red": "Cliente XYZ",
                 "qtd_saldo": 100.0,
                 "expedicao": "2025-10-20",
@@ -1823,12 +1827,19 @@ def rastrear_produto():
                 'error': 'Parâmetro cod_produto é obrigatório'
             }), 400
 
-        # Buscar TODAS as separações não sincronizadas deste produto
-        separacoes = Separacao.query.filter_by(
-            cod_produto=cod_produto,
-            sincronizado_nf=False
+        # 🆕 Buscar TODOS os códigos unificados (produtos equivalentes)
+        codigos_unificados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
+        codigos_lista = list(codigos_unificados)
+
+        logger.info(f"🔍 Rastreamento produto {cod_produto} - Códigos unificados: {codigos_lista}")
+
+        # Buscar TODAS as separações não sincronizadas de TODOS os códigos unificados
+        separacoes = Separacao.query.filter(
+            Separacao.cod_produto.in_(codigos_lista),
+            Separacao.sincronizado_nf == False
         ).order_by(
-            Separacao.expedicao.asc()
+            Separacao.expedicao.asc(),
+            Separacao.cod_produto.asc()
         ).all()
 
         # Formatar resposta
@@ -1837,6 +1848,7 @@ def rastrear_produto():
         for sep in separacoes:
             separacoes_formatadas.append({
                 'separacao_lote_id': sep.separacao_lote_id,
+                'cod_produto': sep.cod_produto,  # 🆕 Incluir código do produto
                 'raz_social_red': sep.raz_social_red,
                 'qtd_saldo': float(sep.qtd_saldo or 0),
                 'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
@@ -1845,10 +1857,12 @@ def rastrear_produto():
                 'status_calculado': sep.status_calculado  # Propriedade calculada dinamicamente
             })
 
-        logger.info(f"✅ Rastreamento produto {cod_produto}: {len(separacoes_formatadas)} separações encontradas")
+        logger.info(f"✅ Rastreamento produto {cod_produto}: {len(separacoes_formatadas)} separações encontradas (códigos unificados: {len(codigos_lista)})")
 
         return jsonify({
             'success': True,
+            'cod_produto_pesquisado': cod_produto,
+            'codigos_unificados': codigos_lista,
             'separacoes': separacoes_formatadas,
             'total': len(separacoes_formatadas)
         })
