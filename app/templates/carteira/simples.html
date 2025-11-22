@@ -752,6 +752,83 @@
         background-color: #0d6efd;
         color: #ffffff;
     }
+
+    /* 🆕 ÍCONES INDICADORES DE OBSERVAÇÃO E TAGS */
+    .icone-info {
+        cursor: pointer;
+        font-size: 10px;
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .icone-info:hover {
+        opacity: 1;
+    }
+
+    .icone-obs {
+        color: #ffc107;
+    }
+
+    .icone-tags {
+        color: #0d6efd;
+    }
+
+    /* 🌙 DARK MODE - Ícones */
+    body[data-theme="dark"] .icone-obs {
+        color: #ffca2c;
+    }
+
+    body[data-theme="dark"] .icone-tags {
+        color: #6ea8fe;
+    }
+
+    /* Tooltip e Popover customizados */
+    .tooltip-inner {
+        max-width: 300px !important;
+        text-align: left;
+        white-space: pre-wrap;
+    }
+
+    .popover {
+        max-width: 350px !important;
+    }
+
+    .popover-body {
+        padding: 8px 12px;
+    }
+
+    /* 🌙 DARK MODE - Tooltips e Popovers */
+    body[data-theme="dark"] .tooltip .tooltip-inner {
+        background-color: #2d2d2d !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #404040;
+    }
+
+    body[data-theme="dark"] .bs-tooltip-top .tooltip-arrow::before,
+    body[data-theme="dark"] .bs-tooltip-auto[data-popper-placement^="top"] .tooltip-arrow::before {
+        border-top-color: #2d2d2d !important;
+    }
+
+    body[data-theme="dark"] .popover {
+        background-color: #2d2d2d !important;
+        border-color: #404040 !important;
+    }
+
+    body[data-theme="dark"] .popover-header {
+        background-color: #1e1e1e !important;
+        color: #e0e0e0 !important;
+        border-bottom-color: #404040 !important;
+    }
+
+    body[data-theme="dark"] .popover-body {
+        color: #e0e0e0 !important;
+    }
+
+    body[data-theme="dark"] .bs-popover-top > .popover-arrow::after,
+    body[data-theme="dark"] .bs-popover-auto[data-popper-placement^="top"] > .popover-arrow::after {
+        border-top-color: #2d2d2d !important;
+    }
 </style>
 {% endblock %}
 

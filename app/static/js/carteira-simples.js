@@ -470,7 +470,8 @@
 
         // Aplicar classes visuais
         aplicarClassesVisuais();
-        // ❌ REMOVIDO: inicializarTooltips() - não necessário
+        // 🆕 Inicializar tooltips e popovers para observações e tags
+        inicializarTooltips();
 
         // 🆕 APLICAR VISIBILIDADE INICIAL (ocultar pedidos com saldo=0 após carregamento)
         aplicarVisibilidadeInicial();
@@ -835,6 +836,12 @@
         const municipioTrunc = truncarTexto(item.municipio || '', 20);
         const nomeProdutoTrunc = truncarTexto(item.nome_produto || '', 50);
 
+        // 🆕 Montar ícones indicadores de observação e tags
+        const iconeObservacao = item.observ_ped_1
+            ? `<span class="icone-info icone-obs" title="${escapeHtml(item.observ_ped_1)}" data-bs-toggle="tooltip" data-bs-placement="top">📝</span>`
+            : '';
+        const iconeTags = montarIconeTags(item.tags_pedido);
+
         return `
             <tr id="${rowId}"
                 data-tipo="pedido"
@@ -852,9 +859,12 @@
                 <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
                 <td>${item.cnpj_cpf}</td>
                 <td>
-                    <span class="truncate-tooltip" title="${item.raz_social_red || ''}">
-                        ${razaoSocialTrunc}
-                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="truncate-tooltip" title="${item.raz_social_red || ''}">
+                            ${razaoSocialTrunc}
+                        </span>
+                        ${iconeObservacao}${iconeTags}
+                    </div>
                 </td>
                 <td>${item.estado || ''}</td>
                 <td>
@@ -2737,10 +2747,91 @@
         return texto.substring(0, tamanho) + '...';
     }
 
+    /**
+     * 🆕 Escapa caracteres HTML para evitar XSS em tooltips
+     */
+    function escapeHtml(texto) {
+        if (!texto) return '';
+        const div = document.createElement('div');
+        div.textContent = texto;
+        return div.innerHTML;
+    }
+
+    /**
+     * 🆕 Monta ícone de tags com popover mostrando badges coloridos
+     * @param {string|null} tagsJson - JSON string das tags do Odoo
+     * @returns {string} HTML do ícone ou vazio
+     */
+    function montarIconeTags(tagsJson) {
+        if (!tagsJson) return '';
+
+        try {
+            const tags = JSON.parse(tagsJson);
+            if (!tags || tags.length === 0) return '';
+
+            // Mapa de cores do Odoo para CSS
+            const coresOdoo = {
+                0: '#6c757d',   // Cinza
+                1: '#dc3545',   // Vermelho
+                2: '#fd7e14',   // Laranja
+                3: '#ffc107',   // Amarelo
+                4: '#20c997',   // Verde-água
+                5: '#198754',   // Verde
+                6: '#0dcaf0',   // Ciano
+                7: '#0d6efd',   // Azul
+                8: '#6f42c1',   // Roxo
+                9: '#d63384',   // Rosa
+                10: '#495057',  // Cinza escuro
+                11: '#343a40'   // Preto
+            };
+
+            // Montar lista de badges para o popover
+            const badgesHtml = tags.map(tag => {
+                const cor = coresOdoo[tag.color] || '#6c757d';
+                const corTexto = [3, 6].includes(tag.color) ? '#212529' : '#ffffff';
+                return `<span class="badge me-1" style="background-color: ${cor}; color: ${corTexto}; font-size: 9px;">${escapeHtml(tag.name)}</span>`;
+            }).join('');
+
+            // Primeira tag como título do ícone
+            const primeiraTag = tags[0].name;
+            const quantidadeTags = tags.length;
+
+            return `<span class="icone-info icone-tags"
+                tabindex="0"
+                data-bs-toggle="popover"
+                data-bs-trigger="hover focus"
+                data-bs-html="true"
+                data-bs-content="${escapeHtml(badgesHtml)}"
+                title="${quantidadeTags} tag${quantidadeTags > 1 ? 's' : ''}: ${escapeHtml(primeiraTag)}${quantidadeTags > 1 ? '...' : ''}">🏷️</span>`;
+        } catch (e) {
+            console.warn('Erro ao parsear tags_pedido:', e);
+            return '';
+        }
+    }
+
     function inicializarTooltips() {
         const tooltips = document.querySelectorAll('.truncate-tooltip');
         tooltips.forEach(el => {
             el.title = el.title || el.textContent;
+        });
+
+        // 🆕 Inicializar tooltips Bootstrap para ícones de observação
+        const iconesObs = document.querySelectorAll('.icone-obs[data-bs-toggle="tooltip"]');
+        iconesObs.forEach(el => {
+            new bootstrap.Tooltip(el, {
+                container: 'body',
+                boundary: 'viewport'
+            });
+        });
+
+        // 🆕 Inicializar popovers Bootstrap para ícones de tags
+        const iconesTags = document.querySelectorAll('.icone-tags[data-bs-toggle="popover"]');
+        iconesTags.forEach(el => {
+            new bootstrap.Popover(el, {
+                container: 'body',
+                boundary: 'viewport',
+                sanitize: false  // Permitir HTML nos badges
+            });
         });
     }
 

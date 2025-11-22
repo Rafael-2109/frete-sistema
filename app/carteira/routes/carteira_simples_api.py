@@ -693,7 +693,10 @@ def obter_dados():
                         'palletizacao': palletizacao,
                         'peso_bruto': peso_bruto,
                         'estoque_atual': estoque_info['estoque_atual'],
-                        'programacao': estoque_info['programacao']  # ✅ NOVO: Programação para front-end
+                        'programacao': estoque_info['programacao'],  # ✅ NOVO: Programação para front-end
+                        # 🆕 OBSERVAÇÕES E TAGS PARA CARTEIRA SIMPLES
+                        'observ_ped_1': produto.observ_ped_1[:200] if produto.observ_ped_1 else None,  # Truncado para tooltip
+                        'tags_pedido': produto.tags_pedido  # JSON string das tags do Odoo
                     })
 
                 # 2️⃣ ADICIONAR TODAS AS SEPARAÇÕES DO PEDIDO, AGRUPADAS POR LOTE
