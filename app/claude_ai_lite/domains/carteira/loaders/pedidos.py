@@ -1,0 +1,150 @@
+"""
+Loader de Pedidos - Consultas por pedido, cliente, CNPJ.
+Max 150 linhas.
+"""
+
+from typing import Dict, Any, List
+from sqlalchemy import or_
+import logging
+
+from ...base import BaseLoader
+
+logger = logging.getLogger(__name__)
+
+
+class PedidosLoader(BaseLoader):
+    """Consultas por pedido/cliente/CNPJ."""
+
+    DOMINIO = "carteira"
+
+    CAMPOS_BUSCA = [
+        "num_pedido",
+        "cnpj_cpf",
+        "raz_social_red",
+        "pedido_cliente",
+    ]
+
+    def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
+        """Busca pedidos e suas separacoes."""
+        from app.carteira.models import CarteiraPrincipal
+        from app.separacao.models import Separacao
+
+        resultado = {
+            "sucesso": True,
+            "valor_buscado": valor,
+            "campo_busca": campo,
+            "total_encontrado": 0,
+            "dados": []
+        }
+
+        if not self.validar_campo(campo):
+            resultado["sucesso"] = False
+            resultado["erro"] = f"Campo invalido: {campo}"
+            return resultado
+
+        try:
+            query = CarteiraPrincipal.query
+
+            if campo == "raz_social_red":
+                query = query.filter(CarteiraPrincipal.raz_social_red.ilike(f"%{valor}%"))
+            elif campo == "cnpj_cpf":
+                valor_limpo = "".join(c for c in valor if c.isdigit())
+                query = query.filter(or_(
+                    CarteiraPrincipal.cnpj_cpf.like(f"%{valor}%"),
+                    CarteiraPrincipal.cnpj_cpf.like(f"%{valor_limpo}%")
+                ))
+            elif campo == "pedido_cliente":
+                query = query.filter(CarteiraPrincipal.pedido_cliente.ilike(f"%{valor}%"))
+            elif campo == "num_pedido":
+                query = query.filter(CarteiraPrincipal.num_pedido.like(f"%{valor}%"))
+
+            itens = query.all()
+
+            if not itens:
+                resultado["mensagem"] = f"Nenhum pedido encontrado para {campo}={valor}"
+                return resultado
+
+            # Agrupa por pedido
+            pedidos = {}
+            for item in itens:
+                key = item.num_pedido
+                if key not in pedidos:
+                    separacoes = Separacao.query.filter_by(num_pedido=item.num_pedido).all()
+                    pedidos[key] = {
+                        "num_pedido": item.num_pedido,
+                        "cliente": item.raz_social_red,
+                        "cnpj": item.cnpj_cpf,
+                        "pedido_cliente": item.pedido_cliente,
+                        "expedicao": item.expedicao.strftime("%d/%m/%Y") if item.expedicao else None,
+                        "agendamento": item.agendamento.strftime("%d/%m/%Y") if item.agendamento else None,
+                        "agendamento_confirmado": item.agendamento_confirmado,
+                        "tem_separacao": len(separacoes) > 0,
+                        "produtos": [],
+                        "separacoes": [self._formatar_separacao(s) for s in separacoes]
+                    }
+
+                pedidos[key]["produtos"].append({
+                    "cod_produto": item.cod_produto,
+                    "nome_produto": item.nome_produto,
+                    "qtd": float(item.qtd_saldo_produto_pedido or 0),
+                    "valor": float(item.preco_produto_pedido or 0) * float(item.qtd_saldo_produto_pedido or 0)
+                })
+
+            resultado["dados"] = list(pedidos.values())
+            resultado["total_encontrado"] = len(pedidos)
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar pedidos: {e}")
+            resultado["sucesso"] = False
+            resultado["erro"] = str(e)
+
+        return resultado
+
+    def _formatar_separacao(self, sep) -> Dict:
+        """Formata dados de uma separacao."""
+        return {
+            "lote_id": sep.separacao_lote_id,
+            "status": sep.status_calculado,
+            "expedicao": sep.expedicao.strftime("%d/%m/%Y") if sep.expedicao else None,
+            "agendamento": sep.agendamento.strftime("%d/%m/%Y") if sep.agendamento else None,
+            "agendamento_confirmado": sep.agendamento_confirmado,
+            "numero_nf": sep.numero_nf,
+            "cod_produto": sep.cod_produto,
+            "nome_produto": sep.nome_produto,
+            "qtd_saldo": float(sep.qtd_saldo or 0)
+        }
+
+    def formatar_contexto(self, dados: Dict[str, Any]) -> str:
+        """Formata dados para contexto do Claude."""
+        if not dados.get("sucesso"):
+            return f"Erro: {dados.get('erro')}"
+
+        if dados["total_encontrado"] == 0:
+            return dados.get("mensagem", "Nenhum pedido encontrado.")
+
+        linhas = [f"Encontrados {dados['total_encontrado']} pedido(s):\n"]
+
+        for p in dados["dados"]:
+            linhas.append(f"--- Pedido: {p['num_pedido']} ---")
+            linhas.append(f"  Cliente: {p['cliente']} | CNPJ: {p['cnpj']}")
+            if p.get("pedido_cliente"):
+                linhas.append(f"  Pedido Cliente: {p['pedido_cliente']}")
+            linhas.append(f"  Expedicao: {p.get('expedicao') or 'Nao definida'}")
+            if p.get("agendamento"):
+                conf = " (CONFIRMADO)" if p.get("agendamento_confirmado") else ""
+                linhas.append(f"  Agendamento: {p['agendamento']}{conf}")
+
+            if p.get("produtos"):
+                linhas.append(f"  Produtos ({len(p['produtos'])}):")
+                for prod in p["produtos"][:5]:
+                    linhas.append(f"    - {prod['nome_produto']}: {prod['qtd']:.0f}un")
+
+            if p.get("tem_separacao"):
+                linhas.append(f"  Separacoes ({len(p['separacoes'])}):")
+                for sep in p["separacoes"][:5]:
+                    linhas.append(f"    - {sep['nome_produto']}: {sep['qtd_saldo']:.0f}un | {sep['status']}")
+            else:
+                linhas.append("  TEM SEPARACAO: NAO")
+            linhas.append("")
+
+        return "\n".join(linhas)

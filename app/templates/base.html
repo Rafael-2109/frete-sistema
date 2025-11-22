@@ -670,10 +670,10 @@
   <!-- Bloco de conteúdo das páginas -->
   {% block content %}{% endblock %}
 
- {# <!-- /* 🤖 CLAUDE AI WIDGET - Incluído em todas as páginas */
+<!-- 🤖 CLAUDE AI LITE WIDGET - Chat flutuante -->
 {% if current_user.is_authenticated %}
-  {% include 'claude_ai/widget.html' %}
-{% endif %}#}
+  {% include 'claude_ai_lite/widget.html' %}
+{% endif %}
 
 
 <!-- Scripts adicionais -->

@@ -1,0 +1,262 @@
+<!-- Claude AI Lite Widget - Chat Flutuante Simplificado -->
+<div id="claude-lite-widget">
+    <!-- Botao flutuante -->
+    <button id="claude-lite-toggle" class="claude-lite-btn" title="Assistente Claude">
+        <i class="fas fa-robot"></i>
+    </button>
+
+    <!-- Janela do chat -->
+    <div id="claude-lite-window" class="claude-lite-window" style="display: none;">
+        <div class="claude-lite-header">
+            <span><i class="fas fa-robot"></i> Claude AI Lite</span>
+            <button id="claude-lite-close" class="claude-lite-close"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div id="claude-lite-messages" class="claude-lite-messages">
+            <div class="msg-bot">
+                Ola! Sou o assistente de logistica.<br>
+                <small>Experimente: "Pedido VCD2509030 tem separacao?"</small>
+            </div>
+        </div>
+
+        <div class="claude-lite-input-area">
+            <input type="text" id="claude-lite-input" placeholder="Digite sua pergunta..." />
+            <button id="claude-lite-send"><i class="fas fa-paper-plane"></i></button>
+        </div>
+
+        <div id="claude-lite-loading" class="claude-lite-loading" style="display: none;">
+            <i class="fas fa-spinner fa-spin"></i> Processando...
+        </div>
+    </div>
+</div>
+
+<style>
+#claude-lite-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.claude-lite-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.claude-lite-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+.claude-lite-window {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    width: 380px;
+    height: 500px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.claude-lite-header {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+}
+
+.claude-lite-close {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.8;
+}
+
+.claude-lite-close:hover {
+    opacity: 1;
+}
+
+.claude-lite-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.msg-bot, .msg-user {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.msg-bot {
+    background: #f1f3f4;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.msg-user {
+    background: #667eea;
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.claude-lite-input-area {
+    padding: 12px;
+    border-top: 1px solid #e1e4e8;
+    display: flex;
+    gap: 8px;
+}
+
+#claude-lite-input {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    border-radius: 20px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+}
+
+#claude-lite-input:focus {
+    border-color: #667eea;
+}
+
+#claude-lite-send {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #667eea;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
+
+#claude-lite-send:hover {
+    background: #5a6fd8;
+}
+
+.claude-lite-loading {
+    position: absolute;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    background: rgba(255,255,255,0.95);
+    padding: 12px;
+    text-align: center;
+    color: #667eea;
+    font-size: 14px;
+}
+
+@media (max-width: 480px) {
+    .claude-lite-window {
+        width: 320px;
+        height: 450px;
+        right: -10px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const toggle = document.getElementById('claude-lite-toggle');
+    const window_ = document.getElementById('claude-lite-window');
+    const close = document.getElementById('claude-lite-close');
+    const input = document.getElementById('claude-lite-input');
+    const send = document.getElementById('claude-lite-send');
+    const messages = document.getElementById('claude-lite-messages');
+    const loading = document.getElementById('claude-lite-loading');
+
+    let isOpen = false;
+
+    toggle.addEventListener('click', () => {
+        isOpen = !isOpen;
+        window_.style.display = isOpen ? 'flex' : 'none';
+        if (isOpen) input.focus();
+    });
+
+    close.addEventListener('click', () => {
+        isOpen = false;
+        window_.style.display = 'none';
+    });
+
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    send.addEventListener('click', sendMessage);
+
+    async function sendMessage() {
+        const query = input.value.trim();
+        if (!query) return;
+
+        // Adiciona mensagem do usuario
+        addMessage(query, 'user');
+        input.value = '';
+        loading.style.display = 'block';
+
+        try {
+            const response = await fetch('/claude-lite/api/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({ query: query })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.response) {
+                addMessage(data.response, 'bot');
+            } else {
+                addMessage('Desculpe, ocorreu um erro: ' + (data.error || 'Erro desconhecido'), 'bot');
+            }
+        } catch (error) {
+            addMessage('Erro de conexao. Tente novamente.', 'bot');
+            console.error('Claude Lite Error:', error);
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+
+    function addMessage(text, type) {
+        const div = document.createElement('div');
+        div.className = type === 'user' ? 'msg-user' : 'msg-bot';
+        div.textContent = text;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function getCSRFToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) return meta.getAttribute('content');
+        const input = document.querySelector('input[name="csrf_token"]');
+        if (input) return input.value;
+        return '';
+    }
+})();
+</script>

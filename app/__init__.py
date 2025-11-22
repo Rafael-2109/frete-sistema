@@ -726,6 +726,14 @@ def create_app(config_name=None):
     if claude_ai_bp:
         app.register_blueprint(claude_ai_bp)
 
+    # 🤖 Claude AI Lite - Sistema simplificado e funcional
+    try:
+        from app.claude_ai_lite.routes import claude_lite_bp
+        app.register_blueprint(claude_lite_bp)
+        app.logger.info("✅ Claude AI Lite registrado com sucesso")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Claude AI Lite não disponível: {e}")
+
     # 🔐 Sistema de Permissões
 
     # 🎭 Registrar helpers de permissão nos templates
