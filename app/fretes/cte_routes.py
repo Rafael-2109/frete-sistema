@@ -239,7 +239,16 @@ def detalhar_cte(cte_id):
 
     cte = ConhecimentoTransporte.query.get_or_404(cte_id)
 
-    return render_template('fretes/ctes/detalhe.html', cte=cte)
+    # Buscar fretes relacionados (sugestões) - apenas para CTes não complementares
+    fretes_relacionados = []
+    if cte.tipo_cte != '1':  # Não é complementar
+        fretes_relacionados = cte.buscar_fretes_relacionados()
+        if fretes_relacionados:
+            logger.info(f"🔍 Encontrados {len(fretes_relacionados)} fretes sugeridos para CTe #{cte.id}")
+
+    return render_template('fretes/ctes/detalhe.html',
+                           cte=cte,
+                           fretes_relacionados=fretes_relacionados)
 
 
 @cte_bp.route('/<int:cte_id>/pdf')

@@ -763,6 +763,119 @@ class ConhecimentoTransporte(db.Model):
         # Verificar se começa com o prefixo (primeiros 8 dígitos)
         return cnpj_limpo.startswith(prefixo_cnpj)
 
+    def buscar_fretes_relacionados(self):
+        """
+        Busca Fretes relacionados baseado em:
+        1. Pelo menos 1 NF em comum entre CTe e Frete
+        2. Prefixo do CNPJ da transportadora do CTe batendo com transportadora do Frete
+        3. CTe não seja complementar (tipo_cte != '1')
+
+        Returns:
+            list: Lista de dicts com Frete e informações de CTes concorrentes
+                  [{'frete': Frete, 'ctes_concorrentes': [CTe, ...], 'ja_vinculado': bool}]
+        """
+        # CTe complementar não vincula diretamente com frete
+        if self.tipo_cte == '1':
+            return []
+
+        # Precisa ter NFs para fazer o match
+        if not self.numeros_nfs:
+            return []
+
+        # Extrair lista de NFs do CTe
+        nfs_cte = [nf.strip() for nf in self.numeros_nfs.split(',') if nf.strip()]
+
+        if not nfs_cte:
+            return []
+
+        # Extrair prefixo do CNPJ do emitente (transportadora) - primeiros 8 dígitos
+        cnpj_emitente = self.cnpj_emitente or ''
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj_emitente))
+
+        if len(cnpj_limpo) < 8:
+            return []
+
+        prefixo_cnpj = cnpj_limpo[:8]
+
+        # Buscar todos os Fretes ativos
+        from app.transportadoras.models import Transportadora
+
+        fretes_todos = Frete.query.join(Transportadora).filter(
+            Frete.numeros_nfs.isnot(None)
+        ).all()
+
+        fretes_relacionados = []
+
+        for frete in fretes_todos:
+            # Verificar prefixo CNPJ da transportadora
+            cnpj_transp = frete.transportadora.cnpj if frete.transportadora else ''
+            cnpj_transp_limpo = ''.join(filter(str.isdigit, cnpj_transp))
+
+            if len(cnpj_transp_limpo) < 8 or cnpj_transp_limpo[:8] != prefixo_cnpj:
+                continue
+
+            # Extrair NFs do frete
+            nfs_frete = [nf.strip() for nf in (frete.numeros_nfs or '').split(',') if nf.strip()]
+
+            # Verificar interseção de NFs
+            nfs_comuns = set(nfs_cte) & set(nfs_frete)
+
+            if nfs_comuns:
+                # Buscar outros CTes que também vinculariam com este frete (CTes concorrentes)
+                ctes_concorrentes = self._buscar_ctes_concorrentes(frete, prefixo_cnpj, nfs_frete)
+
+                fretes_relacionados.append({
+                    'frete': frete,
+                    'nfs_comuns': list(nfs_comuns),
+                    'ctes_concorrentes': ctes_concorrentes,
+                    'ja_vinculado': frete.frete_cte_id is not None
+                })
+
+        return fretes_relacionados
+
+    def _buscar_ctes_concorrentes(self, frete, prefixo_cnpj, nfs_frete):
+        """
+        Busca outros CTes (não complementares) que também vinculariam com o mesmo frete.
+        Isso ajuda a identificar se há CTes substituídos/reemitidos.
+
+        Args:
+            frete: Frete para verificar
+            prefixo_cnpj: Prefixo do CNPJ da transportadora
+            nfs_frete: Lista de NFs do frete
+
+        Returns:
+            list: Lista de CTes concorrentes (excluindo o CTe atual)
+        """
+        from sqlalchemy import and_
+
+        # Buscar CTes não complementares, ativos, com mesma transportadora
+        ctes_candidatos = ConhecimentoTransporte.query.filter(
+            and_(
+                ConhecimentoTransporte.ativo == True,
+                ConhecimentoTransporte.id != self.id,  # Excluir o CTe atual
+                ConhecimentoTransporte.tipo_cte != '1',  # Não complementar
+                ConhecimentoTransporte.numeros_nfs.isnot(None),
+                ConhecimentoTransporte.cnpj_emitente.isnot(None)
+            )
+        ).all()
+
+        ctes_concorrentes = []
+
+        for cte in ctes_candidatos:
+            # Verificar prefixo CNPJ
+            cnpj_cte_limpo = ''.join(filter(str.isdigit, cte.cnpj_emitente or ''))
+            if len(cnpj_cte_limpo) < 8 or cnpj_cte_limpo[:8] != prefixo_cnpj:
+                continue
+
+            # Verificar NFs em comum
+            nfs_cte = [nf.strip() for nf in (cte.numeros_nfs or '').split(',') if nf.strip()]
+            nfs_comuns = set(nfs_frete) & set(nfs_cte)
+
+            if nfs_comuns:
+                ctes_concorrentes.append(cte)
+
+        return ctes_concorrentes
+
 
 class LancamentoFreteOdooAuditoria(db.Model):
     """

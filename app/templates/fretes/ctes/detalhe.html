@@ -342,19 +342,129 @@
                         <i class="fas fa-exclamation-triangle"></i> <strong>Não Vinculado</strong>
                         <p class="mb-0 mt-2">Este CTe ainda não está vinculado a nenhum frete do sistema.</p>
                     </div>
-
-                    <form method="POST" action="{{ url_for('cte.vincular_frete', cte_id=cte.id) }}">
-                        <div class="mb-3">
-                            <label for="frete_id" class="form-label">ID do Frete</label>
-                            <input type="number" name="frete_id" id="frete_id" class="form-control" required>
-                        </div>
-                        <button type="submit" class="btn btn-success w-100">
-                            <i class="fas fa-link"></i> Vincular ao Frete
-                        </button>
-                    </form>
                     {% endif %}
                 </div>
             </div>
+
+            <!-- Fretes Sugeridos -->
+            {% if fretes_relacionados and fretes_relacionados|length > 0 %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> Fretes Sugeridos ({{ fretes_relacionados|length }})
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        <i class="fas fa-info-circle"></i> Fretes com NFs em comum e mesma transportadora
+                    </p>
+
+                    {% for item in fretes_relacionados %}
+                    {% set frete = item.frete %}
+                    {% set ctes_concorrentes = item.ctes_concorrentes %}
+                    {% set ja_vinculado = item.ja_vinculado %}
+                    {% set nfs_comuns = item.nfs_comuns %}
+
+                    <div class="border rounded p-3 mb-3 {% if ja_vinculado %}bg-light{% endif %}">
+                        <!-- Header do Frete -->
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <strong class="text-primary">Frete #{{ frete.id }}</strong>
+                                {% if ja_vinculado %}
+                                <span class="badge bg-secondary ms-1">Já vinculado</span>
+                                {% endif %}
+                            </div>
+                            <span class="badge bg-success">{{ (frete.valor_cotado or 0)|moeda_carteira }}</span>
+                        </div>
+
+                        <!-- Dados do Frete -->
+                        <div class="small mb-2">
+                            <p class="mb-1"><strong>Cliente:</strong> {{ frete.nome_cliente[:30] }}{% if frete.nome_cliente|length > 30 %}...{% endif %}</p>
+                            <p class="mb-1"><strong>Destino:</strong> {{ frete.cidade_destino }}/{{ frete.uf_destino }}</p>
+                            <p class="mb-1"><strong>Embarque:</strong> #{{ frete.embarque.numero if frete.embarque else 'N/A' }}</p>
+                            <p class="mb-1"><strong>NFs em comum:</strong>
+                                {% for nf in nfs_comuns[:3] %}
+                                <span class="badge bg-primary">{{ nf }}</span>
+                                {% endfor %}
+                                {% if nfs_comuns|length > 3 %}
+                                <span class="text-muted">+{{ nfs_comuns|length - 3 }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Alerta de CTes Concorrentes -->
+                        {% if ctes_concorrentes and ctes_concorrentes|length > 0 %}
+                        <div class="alert alert-warning mb-2 py-2 px-2">
+                            <small>
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>Atenção!</strong> Existem {{ ctes_concorrentes|length }} outro(s) CTe(s) que também vinculariam com este frete:
+                                <ul class="mb-0 mt-1 ps-3">
+                                    {% for cte_conc in ctes_concorrentes[:3] %}
+                                    <li>
+                                        <a href="{{ url_for('cte.detalhar_cte', cte_id=cte_conc.id) }}" target="_blank" class="text-decoration-none">
+                                            CTe {{ cte_conc.numero_cte }}/{{ cte_conc.serie_cte }}
+                                        </a>
+                                        - {{ cte_conc.data_emissao.strftime('%d/%m/%Y') if cte_conc.data_emissao else 'S/D' }}
+                                        - {{ (cte_conc.valor_total or 0)|moeda_carteira }}
+                                    </li>
+                                    {% endfor %}
+                                    {% if ctes_concorrentes|length > 3 %}
+                                    <li class="text-muted">... e mais {{ ctes_concorrentes|length - 3 }} CTe(s)</li>
+                                    {% endif %}
+                                </ul>
+                                <div class="mt-1 text-danger">
+                                    <i class="fas fa-info-circle"></i> Verifique se este CTe não é substituído/reemitido.
+                                </div>
+                            </small>
+                        </div>
+                        {% endif %}
+
+                        <!-- Botões de Ação -->
+                        <div class="d-grid gap-1">
+                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}"
+                               class="btn btn-sm btn-outline-primary"
+                               target="_blank">
+                                <i class="fas fa-eye"></i> Ver Frete
+                            </a>
+
+                            {% if not ja_vinculado %}
+                            <form method="POST" action="{{ url_for('cte.vincular_frete', cte_id=cte.id) }}"
+                                  onsubmit="return confirm('Confirma vincular este CTe ao Frete #{{ frete.id }}?{% if ctes_concorrentes and ctes_concorrentes|length > 0 %}\n\nATENÇÃO: Existem {{ ctes_concorrentes|length }} outro(s) CTe(s) que também poderiam vincular com este frete. Verifique se este é o CTe correto.{% endif %}');">
+                                <input type="hidden" name="frete_id" value="{{ frete.id }}">
+                                <button type="submit" class="btn btn-sm btn-success w-100">
+                                    <i class="fas fa-link"></i> Vincular
+                                </button>
+                            </form>
+                            {% else %}
+                            <button class="btn btn-sm btn-secondary w-100" disabled
+                                    title="Este frete já possui um CTe vinculado">
+                                <i class="fas fa-lock"></i> Frete já vinculado
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% elif cte.tipo_cte != '1' and not cte.frete_id %}
+            <!-- Nenhum frete sugerido encontrado (apenas para CTes não complementares sem vínculo) -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> Fretes Sugeridos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-secondary mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        Nenhum frete encontrado com NFs em comum.
+                        <p class="mb-0 mt-2 small">
+                            Verifique se o frete já foi criado no sistema ou se as NFs estão corretas.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Arquivos -->
             <div class="card mb-4">
