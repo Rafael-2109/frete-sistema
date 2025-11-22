@@ -471,6 +471,77 @@ inativado_por = db.Column(db.String(100), nullable=True)        # ✅ Usuário i
 criado_em = db.Column(db.DateTime, default=datetime.utcnow)     # ✅ Data criação
 ```
 
+---
+
+## 💸 DespesaExtra (app/fretes/models.py)
+
+### Despesas extras vinculadas a fretes com suporte a integração Odoo
+
+### ⚠️ REGRAS DE STATUS:
+- **PENDENTE**: Despesa criada, aguardando processamento
+- **VINCULADO_CTE**: CTe Complementar vinculado, pronto para Odoo
+- **LANCADO_ODOO**: Lançado com sucesso no Odoo (16 etapas)
+- **LANCADO**: Finalizado sem Odoo (NFS/Recibo)
+- **CANCELADO**: Despesa cancelada
+
+### 📋 Campos Principais
+```python
+# CAMPOS CORRETOS:
+id = db.Column(db.Integer, primary_key=True)
+frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'), nullable=False)  # ✅ FK Frete
+fatura_frete_id = db.Column(db.Integer, db.ForeignKey('faturas_frete.id'), nullable=True)  # ✅ FK Fatura
+
+# STATUS DA DESPESA:
+status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)  # ✅ Status
+# Valores: PENDENTE, VINCULADO_CTE, LANCADO_ODOO, LANCADO, CANCELADO
+
+# VÍNCULO COM CTe COMPLEMENTAR:
+despesa_cte_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)  # ✅ FK CTe
+chave_cte = db.Column(db.String(44), nullable=True, index=True)  # ✅ Chave do CTe
+
+# INTEGRAÇÃO ODOO:
+odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)       # ✅ ID do DFe no Odoo
+odoo_purchase_order_id = db.Column(db.Integer, nullable=True)        # ✅ ID do PO no Odoo
+odoo_invoice_id = db.Column(db.Integer, nullable=True)               # ✅ ID da Invoice no Odoo
+lancado_odoo_em = db.Column(db.DateTime, nullable=True)              # ✅ Data/hora lançamento
+lancado_odoo_por = db.Column(db.String(100), nullable=True)          # ✅ Usuário que lançou
+
+# COMPROVANTE (NFS/RECIBO):
+comprovante_path = db.Column(db.String(500), nullable=True)          # ✅ Caminho S3 do comprovante
+comprovante_nome_arquivo = db.Column(db.String(255), nullable=True)  # ✅ Nome original do arquivo
+
+# CLASSIFICAÇÃO:
+tipo_despesa = db.Column(db.String(50), nullable=False)      # ✅ REENTREGA, TDE, PERNOITE, etc.
+setor_responsavel = db.Column(db.String(20), nullable=False) # ✅ COMERCIAL, LOGISTICA, etc.
+motivo_despesa = db.Column(db.String(50), nullable=False)    # ✅ Motivo da despesa
+
+# DOCUMENTO:
+tipo_documento = db.Column(db.String(20), nullable=False)    # ✅ CTe, NFS, RECIBO, etc.
+numero_documento = db.Column(db.String(50), nullable=False)  # ✅ Número do documento
+
+# VALORES:
+valor_despesa = db.Column(db.Float, nullable=False)          # ✅ Valor da despesa
+vencimento_despesa = db.Column(db.Date)                      # ✅ Data vencimento
+
+# OBSERVAÇÕES E AUDITORIA:
+observacoes = db.Column(db.Text)                             # ✅ Observações
+criado_em = db.Column(db.DateTime, default=datetime.utcnow)  # ✅ Data criação
+criado_por = db.Column(db.String(100), nullable=False)       # ✅ Usuário criador
+
+# RELACIONAMENTOS:
+fatura_frete = db.relationship('FaturaFrete', backref='despesas_extras')
+cte = db.relationship('ConhecimentoTransporte', foreign_keys=[despesa_cte_id], backref='despesas_extras_vinculadas')
+```
+
+### 📋 Lógica de Sugestão de CTe para Despesa Extra
+```
+PRIORIDADE 1: CTe Complementar que referencia CTe vinculado ao Frete da Despesa
+PRIORIDADE 2: CTe Complementar que referencia CTe com NFs em comum com Frete
+PRIORIDADE 3: CTe Complementar com mesmo CNPJ cliente + prefixo transportadora
+```
+
+---
+
 ## CadastroPalletizacao (app/producao/models.py)
 
 ### 📋 Campos Principais

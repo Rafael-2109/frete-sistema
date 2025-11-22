@@ -590,103 +590,130 @@
                             <thead>
                                 <tr>
                                     <th>Tipo</th>
-                                    <th>Setor Responsável</th>
                                     <th>Motivo</th>
                                     <th>Documento</th>
-                                    <th>Número</th>
-                                    <th>Fatura</th>
-                                    <th>Transportadora</th>
+                                    <th>CTe Vinculado</th>
                                     <th>Valor</th>
-                                    <th>Vencimento</th>
+                                    <th>Status</th>
+                                    <th>Odoo</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for despesa in despesas_extras %}
                                 <tr>
-                                    <td>{{ despesa.tipo_despesa }}</td>
-                                    <td>{{ despesa.setor_responsavel }}</td>
-                                    <td>{{ despesa.motivo_despesa }}</td>
-                                    <td>{{ despesa.tipo_documento }}</td>
                                     <td>
+                                        {{ despesa.tipo_despesa }}<br>
+                                        <small class="text-muted">{{ despesa.setor_responsavel }}</small>
+                                    </td>
+                                    <td>{{ despesa.motivo_despesa[:20] }}{% if despesa.motivo_despesa|length > 20 %}...{% endif %}</td>
+                                    <td>
+                                        <span class="badge {% if despesa.tipo_documento == 'CTe' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                            {{ despesa.tipo_documento }}
+                                        </span><br>
                                         {% if despesa.numero_documento == 'PENDENTE_FATURA' %}
-                                        <span class="badge bg-warning text-dark">
-                                            <i class="fas fa-clock"></i>
-                                            PENDENTE
-                                        </span>
+                                        <small class="text-warning"><i class="fas fa-clock"></i> Pendente</small>
                                         {% else %}
-                                        {{ despesa.numero_documento }}
+                                        <small>{{ despesa.numero_documento }}</small>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if despesa.fatura_frete %}
-                                        <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=despesa.fatura_frete.id) }}"
-                                           class="badge bg-primary text-white text-decoration-none"
-                                           title="Ver detalhes da fatura {{ despesa.fatura_frete.numero_fatura }}">
-                                            <i class="fas fa-file-invoice"></i>
-                                            {{ despesa.fatura_frete.numero_fatura }}
-                                        </a>
-                                        {% else %}
-                                        <span class="text-muted">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if despesa.fatura_frete and despesa.fatura_frete.transportadora %}
-                                        {{ despesa.fatura_frete.transportadora.razao_social[:25] }}{% if despesa.fatura_frete.transportadora.razao_social|length > 25 %}...{% endif %}
+                                        {% if despesa.cte %}
+                                        <span class="badge bg-info">{{ despesa.cte.numero_cte }}</span>
+                                        <br><small class="text-muted">Complementar</small>
+                                        {% elif despesa.tipo_documento == 'CTe' %}
+                                        <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Pendente</span>
                                         {% else %}
                                         <span class="text-muted">N/A</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ (despesa.valor_despesa)|moeda_carteira }}</td>
-                                    <td>{{ despesa.vencimento_despesa | formatar_data_segura if
-                                        despesa.vencimento_despesa else 'N/A' }}</td>
+                                    <td>
+                                        <span class="badge
+                                            {% if despesa.status == 'PENDENTE' %}bg-warning text-dark
+                                            {% elif despesa.status == 'VINCULADO_CTE' %}bg-info
+                                            {% elif despesa.status == 'LANCADO_ODOO' %}bg-success
+                                            {% elif despesa.status == 'LANCADO' %}bg-primary
+                                            {% elif despesa.status == 'CANCELADO' %}bg-danger
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ despesa.status_descricao if despesa.status_descricao else despesa.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if despesa.odoo_invoice_id %}
+                                        <span class="badge bg-success" title="Invoice ID: {{ despesa.odoo_invoice_id }}">
+                                            <i class="fas fa-check"></i>
+                                        </span>
+                                        {% elif despesa.tipo_documento == 'CTe' %}
+                                        <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i></span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <div class="btn-group-vertical" role="group">
+                                            <!-- Botões de CTe e Odoo para despesas tipo CTe -->
+                                            {% if despesa.tipo_documento == 'CTe' %}
+                                                {% if despesa.status == 'LANCADO_ODOO' %}
+                                                <!-- Já lançado no Odoo -->
+                                                <a href="{{ url_for('fretes.auditoria_despesa_odoo', despesa_id=despesa.id) }}"
+                                                    class="btn btn-sm btn-outline-success mb-1"
+                                                    title="Ver auditoria Odoo">
+                                                    <i class="fas fa-history"></i> Auditoria
+                                                </a>
+                                                {% elif despesa.status == 'VINCULADO_CTE' %}
+                                                <!-- CTe vinculado, pode lançar no Odoo -->
+                                                <button onclick="abrirModalLancarDespesaOdoo({{ despesa.id }}, '{{ despesa.vencimento_despesa.strftime('%Y-%m-%d') if despesa.vencimento_despesa else '' }}')"
+                                                    class="btn btn-sm btn-success mb-1"
+                                                    title="Lançar no Odoo">
+                                                    <i class="fas fa-cloud-upload-alt"></i> Odoo
+                                                </button>
+                                                <form method="POST" action="{{ url_for('fretes.desvincular_cte_despesa', despesa_id=despesa.id) }}" style="display: inline-block;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning mb-1"
+                                                        onclick="return confirm('Desvincular CTe desta despesa?')"
+                                                        title="Desvincular CTe">
+                                                        <i class="fas fa-unlink"></i>
+                                                    </button>
+                                                </form>
+                                                {% else %}
+                                                <!-- Sem CTe vinculado, vincular -->
+                                                <a href="{{ url_for('fretes.vincular_cte_despesa', despesa_id=despesa.id) }}"
+                                                    class="btn btn-sm btn-warning mb-1"
+                                                    title="Vincular CTe Complementar">
+                                                    <i class="fas fa-link"></i> Vincular CTe
+                                                </a>
+                                                {% endif %}
+                                            {% else %}
+                                                <!-- NFS/Recibo - Marcar como lançado -->
+                                                {% if despesa.status != 'LANCADO' and despesa.status != 'LANCADO_ODOO' %}
+                                                <form method="POST" action="{{ url_for('fretes.marcar_despesa_lancado', despesa_id=despesa.id) }}" style="display: inline-block;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                                    <button type="submit" class="btn btn-sm btn-primary mb-1"
+                                                        title="Marcar como lançado">
+                                                        <i class="fas fa-check"></i> Lançar
+                                                    </button>
+                                                </form>
+                                                {% endif %}
+                                            {% endif %}
+
                                             <!-- Botão Anexar/Ver Emails -->
                                             {% if despesa.emails_anexados %}
                                             <a href="{{ url_for('emails.visualizar_email', email_id=despesa.emails_anexados[0].id) }}"
-                                                class="btn btn-sm btn-info mb-1"
+                                                class="btn btn-sm btn-outline-info mb-1"
                                                 title="Ver emails anexados">
-                                                <i class="fas fa-envelope"></i>
-                                                Emails ({{ despesa.emails_anexados|length }})
+                                                <i class="fas fa-envelope"></i> ({{ despesa.emails_anexados|length }})
                                             </a>
                                             {% else %}
                                             <button onclick="abrirModalAnexarEmail({{ despesa.id }})"
-                                                class="btn btn-sm btn-outline-info mb-1"
+                                                class="btn btn-sm btn-outline-secondary mb-1"
                                                 title="Anexar email">
                                                 <i class="fas fa-paperclip"></i>
-                                                Anexar Email
-                                            </button>
-                                            {% endif %}
-                                            
-                                            {% if frete.fatura_frete_id %}
-                                            <!-- ✅ Fatura vinculada: PERMITE editar documento -->
-                                            {% if despesa.numero_documento == 'PENDENTE_FATURA' %}
-                                            <a href="{{ url_for('fretes.editar_documento_despesa', despesa_id=despesa.id) }}"
-                                                class="btn btn-sm btn-warning text-dark mb-1"
-                                                title="Preencher número do documento">
-                                                <i class="fas fa-edit"></i>
-                                                Preencher CTe
-                                            </a>
-                                            {% else %}
-                                            <a href="{{ url_for('fretes.editar_documento_despesa', despesa_id=despesa.id) }}"
-                                                class="btn btn-sm btn-outline-primary mb-1"
-                                                title="Editar número do documento">
-                                                <i class="fas fa-edit"></i>
-                                                Editar
-                                            </a>
-                                            {% endif %}
-                                            {% else %}
-                                            <!-- ⚠️ Fatura NÃO vinculada: NÃO permite editar documento -->
-                                            <button class="btn btn-sm btn-secondary mb-1" disabled
-                                                title="Vincule uma fatura primeiro para preencher o documento">
-                                                <i class="fas fa-lock"></i>
-                                                Fatura Requerida
                                             </button>
                                             {% endif %}
 
                                             <!-- Botão Excluir Despesa -->
-                                            {% if not despesa.numero_documento or despesa.numero_documento == 'PENDENTE_FATURA' or despesa.numero_documento == '' %}
+                                            {% if despesa.status not in ['LANCADO_ODOO', 'LANCADO'] %}
                                             <form method="POST"
                                                 action="{{ url_for('fretes.excluir_despesa_extra', despesa_id=despesa.id) }}"
                                                 style="display: inline-block;"
@@ -694,14 +721,9 @@
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                                                 <button type="submit" class="btn btn-sm btn-outline-danger"
                                                     title="Excluir despesa extra">
-                                                    <i class="fas fa-trash"></i> Excluir
+                                                    <i class="fas fa-trash"></i>
                                                 </button>
                                             </form>
-                                            {% else %}
-                                            <button class="btn btn-sm btn-outline-danger" disabled
-                                                title="Não é possível excluir despesa com documento fiscal ({{ despesa.numero_documento }})">
-                                                <i class="fas fa-lock"></i> Protegida
-                                            </button>
                                             {% endif %}
                                         </div>
                                     </td>
@@ -710,10 +732,9 @@
                             </tbody>
                             <tfoot>
                                 <tr class="font-weight-bold">
-                                    <td colspan="7">Total Despesas Extras:</td>
+                                    <td colspan="4">Total Despesas Extras:</td>
                                     <td>{{ (despesas_extras|sum(attribute='valor_despesa')|moeda_carteira) }}</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td colspan="3"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -1170,5 +1191,152 @@ function lancarFreteOdoo() {
         </div>
     </div>
 </div>
+
+<!-- Modal Lançamento Despesa no Odoo -->
+<div class="modal fade" id="modalLancarDespesaOdoo" tabindex="-1" aria-labelledby="modalLancarDespesaOdooLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLancarDespesaOdooLabel">
+                    <i class="fas fa-cloud-upload-alt"></i> Lançar Despesa Extra no Odoo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="despesa_id_odoo">
+
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Processo Automatizado</strong><br>
+                    Este processo executará automaticamente <strong>16 etapas</strong> no Odoo
+                    para lançar o CTe Complementar da despesa extra.
+                </div>
+
+                <div class="mb-3">
+                    <label for="dataVencimentoDespesaOdoo" class="form-label">
+                        <i class="fas fa-calendar"></i> Data de Vencimento
+                    </label>
+                    <input type="date"
+                           class="form-control"
+                           id="dataVencimentoDespesaOdoo"
+                           required>
+                    <small class="form-text text-muted">
+                        Data em que a despesa deverá ser paga no Odoo
+                    </small>
+                </div>
+
+                <!-- Barra de Progresso -->
+                <div id="progressLancamentoDespesa" style="display: none;">
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                             role="progressbar"
+                             style="width: 0%">
+                        </div>
+                    </div>
+                    <p id="progressTextDespesa" class="text-center text-muted mb-0"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success" id="btnLancarDespesaOdoo" onclick="lancarDespesaOdoo()">
+                    <i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para abrir modal de lançamento de despesa no Odoo
+function abrirModalLancarDespesaOdoo(despesaId, vencimento) {
+    document.getElementById('despesa_id_odoo').value = despesaId;
+    document.getElementById('dataVencimentoDespesaOdoo').value = vencimento || '';
+    document.getElementById('progressLancamentoDespesa').style.display = 'none';
+
+    const modal = new bootstrap.Modal(document.getElementById('modalLancarDespesaOdoo'));
+    modal.show();
+}
+
+// Função para lançar despesa no Odoo
+function lancarDespesaOdoo() {
+    const despesaId = document.getElementById('despesa_id_odoo').value;
+    const dataVencimento = document.getElementById('dataVencimentoDespesaOdoo').value;
+    const btnLancar = document.getElementById('btnLancarDespesaOdoo');
+    const progressContainer = document.getElementById('progressLancamentoDespesa');
+    const progressBar = progressContainer.querySelector('.progress-bar');
+    const progressText = document.getElementById('progressTextDespesa');
+
+    // Validação
+    if (!dataVencimento) {
+        alert('Por favor, informe a data de vencimento');
+        return;
+    }
+
+    // Desabilitar botão e mostrar progresso
+    btnLancar.disabled = true;
+    btnLancar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Lançando...';
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+    progressText.textContent = 'Iniciando lançamento...';
+
+    // Fazer requisição
+    fetch(`/fretes/despesas/${despesaId}/lancar_odoo`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            data_vencimento: dataVencimento
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Atualizar progresso
+            const etapas = data.etapas_concluidas || 0;
+            const percentual = Math.round((etapas / 16) * 100);
+            progressBar.style.width = percentual + '%';
+            progressBar.classList.remove('bg-primary');
+            progressBar.classList.add('bg-success');
+            progressText.textContent = `${data.mensagem}`;
+
+            // Mostrar sucesso
+            alert(`Lançamento concluído com sucesso!\n\nEtapas: ${etapas}/16\nDFe ID: ${data.dfe_id}\nPO ID: ${data.purchase_order_id}\nInvoice ID: ${data.invoice_id}`);
+
+            // Recarregar página após 2 segundos
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            // Mostrar erro
+            progressBar.classList.remove('bg-primary');
+            progressBar.classList.add('bg-danger');
+            progressText.textContent = `${data.mensagem}`;
+
+            alert(`Erro no lançamento:\n\n${data.mensagem}\n\nDetalhes: ${data.erro || 'N/A'}\n\nEtapas concluídas: ${data.etapas_concluidas || 0}/16`);
+
+            // Reabilitar botão
+            btnLancar.disabled = false;
+            btnLancar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo';
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        progressBar.classList.remove('bg-primary');
+        progressBar.classList.add('bg-danger');
+        progressText.textContent = 'Erro na comunicação';
+
+        alert('Erro ao lançar despesa no Odoo:\n\n' + error);
+
+        // Reabilitar botão
+        btnLancar.disabled = false;
+        btnLancar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo';
+    });
+}
+</script>
 
 {% endblock %}

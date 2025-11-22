@@ -314,6 +314,18 @@ class DespesaExtra(db.Model):
     """
     Modelo para despesas extras dos fretes
     N despesas extras / 1 frete
+
+    INTEGRAÇÃO ODOO:
+    - Despesas com tipo_documento='CTe' podem ser lançadas no Odoo
+    - Requer vínculo com CTe Complementar (despesa_cte_id)
+    - Mesmo fluxo de 16 etapas do Frete
+
+    STATUS:
+    - PENDENTE: Criado, aguardando processamento
+    - VINCULADO_CTE: CTe Complementar vinculado, pronto para Odoo
+    - LANCADO_ODOO: Lançado com sucesso no Odoo
+    - LANCADO: Finalizado sem Odoo (NFS/Recibo)
+    - CANCELADO: Despesa cancelada
     """
     __tablename__ = 'despesas_extras'
 
@@ -321,19 +333,47 @@ class DespesaExtra(db.Model):
     frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'), nullable=False)
     fatura_frete_id = db.Column(db.Integer, db.ForeignKey('faturas_frete.id'), nullable=True, index=True)
 
+    # ================================================
+    # STATUS DA DESPESA
+    # ================================================
+    STATUS_CHOICES = ['PENDENTE', 'VINCULADO_CTE', 'LANCADO_ODOO', 'LANCADO', 'CANCELADO']
+    status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
+
+    # ================================================
+    # VÍNCULO COM CTe COMPLEMENTAR
+    # ================================================
+    # CTe Complementar da despesa extra (diferente do CTe do frete)
+    despesa_cte_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)
+    chave_cte = db.Column(db.String(44), nullable=True, index=True)  # Chave do CTe (facilita buscas)
+
+    # ================================================
+    # INTEGRAÇÃO ODOO
+    # ================================================
+    odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)       # ID do DFe no Odoo
+    odoo_purchase_order_id = db.Column(db.Integer, nullable=True)        # ID do PO no Odoo
+    odoo_invoice_id = db.Column(db.Integer, nullable=True)               # ID da Invoice no Odoo
+    lancado_odoo_em = db.Column(db.DateTime, nullable=True)              # Data/hora lançamento
+    lancado_odoo_por = db.Column(db.String(100), nullable=True)          # Usuário que lançou
+
+    # ================================================
+    # COMPROVANTE (NFS/RECIBO)
+    # ================================================
+    comprovante_path = db.Column(db.String(500), nullable=True)          # Caminho S3 do comprovante
+    comprovante_nome_arquivo = db.Column(db.String(255), nullable=True)  # Nome original do arquivo
+
     # Tipos de despesa (conforme readme.md)
     TIPOS_DESPESA = [
         'REENTREGA', 'TDE', 'PERNOITE', 'DEVOLUÇÃO', 'DIARIA',
         'COMPLEMENTO DE FRETE', 'COMPRA/AVARIA', 'TRANSFERENCIA',
         'DESCARGA', 'ESTACIONAMENTO', 'CARRO DEDICADO', 'ARMAZENAGEM'
     ]
-    
+
     # Setores responsáveis (conforme readme.md)
     SETORES_RESPONSAVEIS = [
         'COMERCIAL', 'QUALIDADE', 'FISCAL', 'FINANCEIRO',
         'LOGISTICA', 'COMPRAS'
     ]
-    
+
     # Motivos das despesas (conforme readme.md)
     MOTIVOS_DESPESA = [
         'PEDIDO EM DESACORDO', 'PROBLEMA NO CLIENTE', 'SEM AGENDA',
@@ -345,31 +385,55 @@ class DespesaExtra(db.Model):
         'DIVERGENTE IMPOSTO NACOM', 'ENTREGA 2° ANDAR', 'ENTREGA NOTURNA',
         'CUSTO DO PRODUTO', 'DEMORA RECEBIMENTO', 'SEM MONITORAMENTO', 'AVARIA'
     ]
-    
+
     tipo_despesa = db.Column(db.String(50), nullable=False)
     setor_responsavel = db.Column(db.String(20), nullable=False)
     motivo_despesa = db.Column(db.String(50), nullable=False)
-    
+
     # Documento da despesa
     tipo_documento = db.Column(db.String(20), nullable=False)  # CTe, NFS, RECIBO, etc.
     numero_documento = db.Column(db.String(50), nullable=False)
-    
+
     # Valores
     valor_despesa = db.Column(db.Float, nullable=False)
     vencimento_despesa = db.Column(db.Date)
-    
+
     # Observações
     observacoes = db.Column(db.Text)
-    
+
     # Controle
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100), nullable=False)
 
-    # Relacionamentos
+    # ================================================
+    # RELACIONAMENTOS
+    # ================================================
     fatura_frete = db.relationship('FaturaFrete', backref='despesas_extras')
+    cte = db.relationship('ConhecimentoTransporte', foreign_keys=[despesa_cte_id], backref='despesas_extras_vinculadas')
 
     def __repr__(self):
-        return f'<DespesaExtra {self.tipo_despesa} - R$ {self.valor_despesa}>'
+        return f'<DespesaExtra {self.tipo_despesa} - R$ {self.valor_despesa} - {self.status}>'
+
+    @property
+    def pode_lancar_odoo(self):
+        """Verifica se a despesa pode ser lançada no Odoo"""
+        return (
+            self.tipo_documento == 'CTe' and
+            self.despesa_cte_id is not None and
+            self.status == 'VINCULADO_CTE'
+        )
+
+    @property
+    def status_descricao(self):
+        """Retorna descrição amigável do status"""
+        descricoes = {
+            'PENDENTE': 'Pendente',
+            'VINCULADO_CTE': 'CTe Vinculado',
+            'LANCADO_ODOO': 'Lançado no Odoo',
+            'LANCADO': 'Lançado',
+            'CANCELADO': 'Cancelado'
+        }
+        return descricoes.get(self.status, self.status)
 
 
 class ContaCorrenteTransportadora(db.Model):
@@ -892,6 +956,7 @@ class LancamentoFreteOdooAuditoria(db.Model):
 
     # Identificação do lançamento
     frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'), nullable=True, index=True)
+    despesa_extra_id = db.Column(db.Integer, db.ForeignKey('despesas_extras.id'), nullable=True, index=True)  # Para despesas extras
     cte_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)
     chave_cte = db.Column(db.String(44), nullable=False, index=True)
 
@@ -936,6 +1001,7 @@ class LancamentoFreteOdooAuditoria(db.Model):
 
     # Relacionamentos
     frete = db.relationship('Frete', backref='auditorias_odoo', lazy=True)
+    despesa_extra = db.relationship('DespesaExtra', backref='auditorias_odoo', lazy=True)
     cte = db.relationship('ConhecimentoTransporte', backref='auditorias_odoo', lazy=True)
 
     def __repr__(self):

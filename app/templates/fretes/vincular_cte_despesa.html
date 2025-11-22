@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Vincular CTe - Despesa #{{ despesa.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-link"></i> Vincular CTe Complementar
+                <small class="text-muted">Despesa #{{ despesa.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}">Frete #{{ frete.id }}</a></li>
+            <li class="breadcrumb-item active">Vincular CTe</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Informações da Despesa -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Dados da Despesa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>ID:</strong> #{{ despesa.id }}</p>
+                    <p><strong>Tipo:</strong> {{ despesa.tipo_despesa }}</p>
+                    <p><strong>Motivo:</strong> {{ despesa.motivo_despesa }}</p>
+                    <p><strong>Setor:</strong> {{ despesa.setor_responsavel }}</p>
+                    <p><strong>Valor:</strong> <span class="badge bg-success">{{ (despesa.valor_despesa)|moeda_carteira }}</span></p>
+                    <p><strong>Status:</strong>
+                        <span class="badge
+                            {% if despesa.status == 'PENDENTE' %}bg-warning text-dark
+                            {% elif despesa.status == 'VINCULADO_CTE' %}bg-info
+                            {% elif despesa.status == 'LANCADO_ODOO' %}bg-success
+                            {% elif despesa.status == 'LANCADO' %}bg-primary
+                            {% else %}bg-secondary{% endif %}">
+                            {{ despesa.status_descricao }}
+                        </span>
+                    </p>
+                    {% if despesa.cte %}
+                    <hr>
+                    <p><strong>CTe Atual:</strong></p>
+                    <div class="alert alert-info">
+                        <strong>{{ despesa.cte.numero_cte }}</strong><br>
+                        <small>{{ despesa.chave_cte }}</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-truck"></i> Frete Relacionado
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Frete:</strong> #{{ frete.id }}</p>
+                    <p><strong>Cliente:</strong> {{ frete.nome_cliente[:30] }}{% if frete.nome_cliente|length > 30 %}...{% endif %}</p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social[:30] }}{% if frete.transportadora.razao_social|length > 30 %}...{% endif %}</p>
+                    {% if frete.frete_cte_id %}
+                    <p><strong>CTe do Frete:</strong>
+                        {% set cte_frete = frete.cte %}
+                        {% if cte_frete %}
+                        <span class="badge bg-primary">{{ cte_frete.numero_cte }}</span>
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" class="btn btn-secondary w-100">
+                <i class="fas fa-arrow-left"></i> Voltar ao Frete
+            </a>
+        </div>
+
+        <!-- Sugestões de CTe -->
+        <div class="col-md-8">
+            <!-- Prioridade 1 -->
+            {% if sugestoes_prioridade_1 %}
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Sugestão Principal (Prioridade 1)
+                        <span class="badge bg-light text-dark">{{ sugestoes_prioridade_1|length }}</span>
+                    </h5>
+                    <small>CTe Complementar que referencia o CTe do Frete</small>
+                </div>
+                <div class="card-body">
+                    {% for cte in sugestoes_prioridade_1 %}
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="cte_id" value="{{ cte.id }}">
+                        <div class="d-flex justify-content-between align-items-center p-3 border rounded bg-light">
+                            <div>
+                                <h6 class="mb-1">
+                                    CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}
+                                    <span class="badge bg-info">Complementar</span>
+                                </h6>
+                                <small class="text-muted">{{ cte.chave_acesso }}</small><br>
+                                <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
+                                <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
+                                {% if cte.data_emissao %}
+                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                {% endif %}
+                            </div>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                        </div>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Prioridade 2 -->
+            {% if sugestoes_prioridade_2 %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-search"></i> Sugestões por NFs em Comum (Prioridade 2)
+                        <span class="badge bg-light text-dark">{{ sugestoes_prioridade_2|length }}</span>
+                    </h5>
+                    <small>CTe Complementar que referencia CTe com NFs em comum</small>
+                </div>
+                <div class="card-body">
+                    {% for cte in sugestoes_prioridade_2 %}
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="cte_id" value="{{ cte.id }}">
+                        <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                            <div>
+                                <h6 class="mb-1">
+                                    CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}
+                                    <span class="badge bg-secondary">Complementar</span>
+                                </h6>
+                                <small class="text-muted">{{ cte.chave_acesso }}</small><br>
+                                <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
+                                <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
+                            </div>
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                        </div>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Prioridade 3 -->
+            {% if sugestoes_prioridade_3 %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-building"></i> Sugestões por CNPJ (Prioridade 3)
+                        <span class="badge bg-dark text-white">{{ sugestoes_prioridade_3|length }}</span>
+                    </h5>
+                    <small>CTe Complementar com mesmo cliente e transportadora</small>
+                </div>
+                <div class="card-body">
+                    {% for cte in sugestoes_prioridade_3 %}
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="cte_id" value="{{ cte.id }}">
+                        <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                            <div>
+                                <h6 class="mb-1">
+                                    CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}
+                                    <span class="badge bg-secondary">Complementar</span>
+                                </h6>
+                                <small class="text-muted">{{ cte.chave_acesso }}</small><br>
+                                <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
+                                <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
+                            </div>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                        </div>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Nenhuma sugestão -->
+            {% if not sugestoes_prioridade_1 and not sugestoes_prioridade_2 and not sugestoes_prioridade_3 %}
+            <div class="alert alert-warning">
+                <h5><i class="fas fa-exclamation-triangle"></i> Nenhum CTe Complementar Encontrado</h5>
+                <p class="mb-0">
+                    Não foram encontrados CTes Complementares compatíveis com esta despesa.
+                    Verifique se o CTe foi importado do Odoo ou aguarde a sincronização.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

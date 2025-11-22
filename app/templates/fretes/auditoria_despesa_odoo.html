@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoria Odoo - Despesa #{{ despesa.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-history"></i> Auditoria Lançamento Odoo
+                <small class="text-muted">Despesa #{{ despesa.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete_id) }}">Frete #{{ despesa.frete_id }}</a></li>
+            <li class="breadcrumb-item active">Auditoria Despesa #{{ despesa.id }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Informações da Despesa -->
+        <div class="col-md-3">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Dados da Despesa
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>ID:</strong> #{{ despesa.id }}</p>
+                    <p><strong>Tipo:</strong> {{ despesa.tipo_despesa }}</p>
+                    <p><strong>Valor:</strong> {{ (despesa.valor_despesa)|moeda_carteira }}</p>
+                    <p><strong>Status:</strong>
+                        <span class="badge
+                            {% if despesa.status == 'LANCADO_ODOO' %}bg-success
+                            {% else %}bg-secondary{% endif %}">
+                            {{ despesa.status }}
+                        </span>
+                    </p>
+                    <hr>
+                    <p><strong>DFe ID:</strong> {{ despesa.odoo_dfe_id or 'N/A' }}</p>
+                    <p><strong>PO ID:</strong> {{ despesa.odoo_purchase_order_id or 'N/A' }}</p>
+                    <p><strong>Invoice ID:</strong> {{ despesa.odoo_invoice_id or 'N/A' }}</p>
+                    {% if despesa.lancado_odoo_em %}
+                    <hr>
+                    <p><strong>Lançado em:</strong><br>{{ despesa.lancado_odoo_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                    <p><strong>Por:</strong> {{ despesa.lancado_odoo_por }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete_id) }}" class="btn btn-secondary w-100">
+                <i class="fas fa-arrow-left"></i> Voltar ao Frete
+            </a>
+        </div>
+
+        <!-- Timeline de Auditoria -->
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list-ol"></i> Etapas do Lançamento
+                        <span class="badge bg-primary">{{ auditorias|length }} registros</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if auditorias %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="60">Etapa</th>
+                                    <th>Descrição</th>
+                                    <th>Modelo</th>
+                                    <th>Ação</th>
+                                    <th>Status</th>
+                                    <th>Tempo</th>
+                                    <th>Data/Hora</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in auditorias %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-primary">{{ log.etapa }}/16</span>
+                                    </td>
+                                    <td>
+                                        {{ log.etapa_descricao }}
+                                        {% if log.mensagem %}
+                                        <br><small class="text-muted">{{ log.mensagem[:60] }}{% if log.mensagem|length > 60 %}...{% endif %}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td><code>{{ log.modelo_odoo }}</code></td>
+                                    <td><span class="badge bg-secondary">{{ log.acao }}</span></td>
+                                    <td>
+                                        {% if log.status == 'SUCESSO' %}
+                                        <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                                        {% elif log.status == 'ERRO' %}
+                                        <span class="badge bg-danger"><i class="fas fa-times"></i></span>
+                                        {% else %}
+                                        <span class="badge bg-warning text-dark">{{ log.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if log.tempo_execucao_ms %}
+                                        {{ log.tempo_execucao_ms }}ms
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ log.executado_em.strftime('%d/%m/%Y %H:%M:%S') if log.executado_em else 'N/A' }}
+                                    </td>
+                                </tr>
+                                {% if log.erro_detalhado %}
+                                <tr class="table-danger">
+                                    <td colspan="7">
+                                        <small><strong>Erro:</strong> {{ log.erro_detalhado }}</small>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Nenhum registro de auditoria encontrado para esta despesa.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

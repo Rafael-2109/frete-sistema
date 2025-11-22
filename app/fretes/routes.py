@@ -4014,3 +4014,274 @@ def anexar_email_ajax(despesa_id):
         current_app.logger.error(f"❌ Erro ao anexar email: {str(e)}")
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# =================== DESPESAS EXTRAS - VINCULAÇÃO CTe E LANÇAMENTO ODOO ===================
+
+@fretes_bp.route('/despesas/<int:despesa_id>/vincular_cte', methods=['GET', 'POST'])
+@login_required
+def vincular_cte_despesa(despesa_id):
+    """
+    Tela para vincular CTe Complementar a uma despesa extra.
+    Mostra sugestões de CTe organizadas por prioridade.
+    """
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+    from app.fretes.models import ConhecimentoTransporte
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+    # Se despesa já está lançada no Odoo, não permite edição
+    if despesa.status == 'LANCADO_ODOO':
+        flash('Despesa já foi lançada no Odoo e não pode ser alterada.', 'warning')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+    if request.method == 'POST':
+        cte_id = request.form.get('cte_id')
+
+        if not cte_id:
+            flash('Selecione um CTe para vincular.', 'error')
+            return redirect(url_for('fretes.vincular_cte_despesa', despesa_id=despesa_id))
+
+        sucesso, mensagem = DespesaCteService.vincular_cte(
+            despesa_id=despesa_id,
+            cte_id=int(cte_id),
+            usuario=current_user.nome
+        )
+
+        if sucesso:
+            flash(mensagem, 'success')
+            return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+        else:
+            flash(mensagem, 'error')
+            return redirect(url_for('fretes.vincular_cte_despesa', despesa_id=despesa_id))
+
+    # GET: Buscar sugestões de CTe
+    resultado = DespesaCteService.buscar_ctes_sugestao(despesa_id)
+
+    if resultado.get('erro'):
+        flash(resultado['erro'], 'error')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+    return render_template(
+        'fretes/vincular_cte_despesa.html',
+        despesa=despesa,
+        frete=resultado['frete'],
+        sugestoes_prioridade_1=resultado['sugestoes_prioridade_1'],
+        sugestoes_prioridade_2=resultado['sugestoes_prioridade_2'],
+        sugestoes_prioridade_3=resultado['sugestoes_prioridade_3']
+    )
+
+
+@fretes_bp.route('/despesas/<int:despesa_id>/desvincular_cte', methods=['POST'])
+@login_required
+def desvincular_cte_despesa(despesa_id):
+    """Remove o vínculo de CTe de uma despesa extra."""
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+    sucesso, mensagem = DespesaCteService.desvincular_cte(
+        despesa_id=despesa_id,
+        usuario=current_user.nome
+    )
+
+    if sucesso:
+        flash(mensagem, 'success')
+    else:
+        flash(mensagem, 'error')
+
+    return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+
+@fretes_bp.route('/despesas/<int:despesa_id>/lancar_odoo', methods=['POST'])
+@login_required
+def lancar_despesa_odoo(despesa_id):
+    """
+    Lança despesa extra no Odoo via API.
+    Requer CTe Complementar vinculado e status VINCULADO_CTE.
+    """
+    from app.fretes.services.lancamento_despesa_odoo_service import LancamentoDespesaOdooService
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+    # Validações
+    if despesa.tipo_documento != 'CTe':
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Tipo de documento "{despesa.tipo_documento}" não suportado para lançamento no Odoo',
+            'erro': 'Apenas despesas com documento CTe podem ser lançadas no Odoo'
+        }), 400
+
+    if not despesa.despesa_cte_id:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'CTe não vinculado',
+            'erro': 'Vincule um CTe Complementar antes de lançar no Odoo'
+        }), 400
+
+    if despesa.status == 'LANCADO_ODOO':
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Despesa já foi lançada no Odoo',
+            'erro': f'Invoice ID: {despesa.odoo_invoice_id}'
+        }), 400
+
+    if despesa.status != 'VINCULADO_CTE':
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Status "{despesa.status}" não permite lançamento',
+            'erro': 'Status esperado: VINCULADO_CTE'
+        }), 400
+
+    # Obter data de vencimento do request
+    data = request.get_json() or {}
+    data_vencimento_str = data.get('data_vencimento')
+
+    data_vencimento = None
+    if data_vencimento_str:
+        try:
+            data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Data de vencimento inválida',
+                'erro': 'Formato esperado: YYYY-MM-DD'
+            }), 400
+
+    # Executar lançamento
+    try:
+        service = LancamentoDespesaOdooService(
+            usuario_nome=current_user.nome,
+            usuario_ip=request.remote_addr
+        )
+
+        resultado = service.lancar_despesa_odoo(
+            despesa_id=despesa_id,
+            data_vencimento=data_vencimento
+        )
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao lançar despesa no Odoo: {str(e)}")
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro interno: {str(e)}',
+            'erro': str(e)
+        }), 500
+
+
+@fretes_bp.route('/despesas/<int:despesa_id>/marcar_lancado', methods=['POST'])
+@login_required
+def marcar_despesa_lancado(despesa_id):
+    """
+    Marca uma despesa como LANCADO (para NFS/Recibo que não vão para Odoo).
+    Permite anexar comprovante opcional.
+    """
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+    # Validar se é NFS ou Recibo (não CTe)
+    if despesa.tipo_documento == 'CTe':
+        flash('Despesas com CTe devem ser lançadas no Odoo.', 'warning')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+    if despesa.status == 'LANCADO_ODOO' or despesa.status == 'LANCADO':
+        flash('Despesa já foi lançada.', 'warning')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+    # Processar upload de comprovante se enviado
+    if 'comprovante' in request.files:
+        arquivo = request.files['comprovante']
+        if arquivo and arquivo.filename:
+            # Salvar arquivo (implementar lógica de upload S3 similar ao email)
+            from app.utils.email_handler import EmailHandler
+            email_handler = EmailHandler()
+
+            # Usar mesmo bucket/path do email
+            caminho = email_handler.upload_email(arquivo, despesa_id, current_user.nome)
+            if caminho:
+                despesa.comprovante_path = caminho
+                despesa.comprovante_nome_arquivo = arquivo.filename
+
+    # Atualizar status
+    sucesso, mensagem = DespesaCteService.atualizar_status_lancado(
+        despesa_id=despesa_id,
+        tipo_lancamento='LANCADO'
+    )
+
+    if sucesso:
+        flash('Despesa marcada como lançada com sucesso.', 'success')
+    else:
+        flash(mensagem, 'error')
+
+    return redirect(url_for('fretes.visualizar_frete', frete_id=despesa.frete_id))
+
+
+@fretes_bp.route('/despesas/<int:despesa_id>/auditoria_odoo')
+@login_required
+def auditoria_despesa_odoo(despesa_id):
+    """Exibe auditoria de lançamento Odoo para uma despesa extra."""
+    from app.fretes.models import LancamentoFreteOdooAuditoria
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+
+    auditorias = LancamentoFreteOdooAuditoria.query.filter_by(
+        despesa_extra_id=despesa_id
+    ).order_by(
+        LancamentoFreteOdooAuditoria.etapa
+    ).all()
+
+    return render_template(
+        'fretes/auditoria_despesa_odoo.html',
+        despesa=despesa,
+        auditorias=auditorias
+    )
+
+
+@fretes_bp.route('/api/despesas/pendentes_vinculacao')
+@login_required
+def api_despesas_pendentes_vinculacao():
+    """API: Lista despesas com tipo_documento=CTe pendentes de vinculação."""
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+
+    despesas = DespesaCteService.get_despesas_pendentes_vinculacao()
+
+    return jsonify({
+        'total': len(despesas),
+        'despesas': [
+            {
+                'id': d.id,
+                'frete_id': d.frete_id,
+                'tipo_despesa': d.tipo_despesa,
+                'valor': d.valor_despesa,
+                'status': d.status
+            }
+            for d in despesas
+        ]
+    })
+
+
+@fretes_bp.route('/api/despesas/pendentes_lancamento')
+@login_required
+def api_despesas_pendentes_lancamento():
+    """API: Lista despesas prontas para lançamento no Odoo."""
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+
+    despesas = DespesaCteService.get_despesas_pendentes_lancamento()
+
+    return jsonify({
+        'total': len(despesas),
+        'despesas': [
+            {
+                'id': d.id,
+                'frete_id': d.frete_id,
+                'tipo_despesa': d.tipo_despesa,
+                'valor': d.valor_despesa,
+                'cte_numero': d.cte.numero_cte if d.cte else None,
+                'status': d.status
+            }
+            for d in despesas
+        ]
+    })
