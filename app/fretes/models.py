@@ -821,6 +821,10 @@ class ConhecimentoTransporte(db.Model):
             nfs_comuns = set(nfs_cte) & set(nfs_frete)
 
             if nfs_comuns:
+                # ✅ Se este CTe já está vinculado a este frete, não incluir na lista de sugestões
+                if self.frete_id == frete.id:
+                    continue
+
                 # Buscar outros CTes que também vinculariam com este frete (CTes concorrentes)
                 ctes_concorrentes = self._buscar_ctes_concorrentes(frete, prefixo_cnpj, nfs_frete)
 

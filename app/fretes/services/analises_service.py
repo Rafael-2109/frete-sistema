@@ -99,6 +99,8 @@ def analise_por_uf(data_inicio=None, data_fim=None, transportadora_id=None, stat
     ).outerjoin(
         subq_despesas,
         Frete.id == subq_despesas.c.frete_id
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -162,6 +164,8 @@ def analise_por_cidade(data_inicio=None, data_fim=None, transportadora_id=None, 
     ).outerjoin(
         subq_despesas,
         Frete.id == subq_despesas.c.frete_id
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -236,6 +240,8 @@ def analise_por_subrota(data_inicio=None, data_fim=None, transportadora_id=None,
             Frete.cidade_destino == CadastroSubRota.nome_cidade,
             CadastroSubRota.ativa == True
         )
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -306,6 +312,8 @@ def analise_por_transportadora(data_inicio=None, data_fim=None, uf=None, status=
     ).outerjoin(
         subq_despesas,
         Frete.id == subq_despesas.c.frete_id
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -371,6 +379,8 @@ def analise_por_cliente(data_inicio=None, data_fim=None, transportadora_id=None,
     ).outerjoin(
         subq_despesas,
         Frete.id == subq_despesas.c.frete_id
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -438,6 +448,8 @@ def analise_por_mes(data_inicio=None, data_fim=None, transportadora_id=None, uf=
     ).outerjoin(
         subq_despesas,
         Frete.id == subq_despesas.c.frete_id
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -511,6 +523,8 @@ def analise_por_modalidade(data_inicio=None, data_fim=None, transportadora_id=No
     ).outerjoin(
         subq_despesas,
         Frete.id == subq_despesas.c.frete_id
+    ).filter(
+        Frete.status != 'CANCELADO'  # ✅ Excluir fretes cancelados
     )
 
     # Aplicar filtros
@@ -666,6 +680,9 @@ def analise_dinamica(filtros=None, group_by='uf', incluir_transportadora=True, i
 
     # SEMPRE fazer JOIN com Transportadora (necessário para cálculos de ICMS/PIS/COFINS)
     query = query.join(Transportadora, Frete.transportadora_id == Transportadora.id)
+
+    # ✅ Excluir fretes cancelados
+    query = query.filter(Frete.status != 'CANCELADO')
 
     # Join adicional para subrota se necessário
     if needs_join == 'subrota':
