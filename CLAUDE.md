@@ -47,6 +47,7 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nível 
 - **FLUXO_SINCRONIZACAO_NF.md** - Fluxogramas do processo de NF (futuro)
 - **CARD_SEPARACAO.md** - Detalhamento da função do Card de Separação e Separação Compacta na Carteira Agrupada
 - **app/integracoes/tagplus/DOCUMENTACAO_API_TAGPLUS.md** - 🔴 DOCUMENTAÇÃO CRÍTICA da API TagPlus com endpoints testados e estruturas reais
+- **app/claude_ai_lite/README.md** - 🤖 Módulo de IA conversacional (consultas e criação de separações via linguagem natural)
 
 Este arquivo contém os nomes corretos dos campos de todos os modelos para evitar erros como `data_expedicao_pedido` (❌ INCORRETO) em vez de `expedicao` (✅ CORRETO).
 

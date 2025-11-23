@@ -8,13 +8,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def processar_acao_separacao(intencao: str, entidades: Dict) -> str:
+def processar_acao_separacao(intencao: str, entidades: Dict, usuario: str = "Claude AI") -> str:
     """
     Processa acoes relacionadas a separacao.
 
     Args:
         intencao: Tipo da intencao (escolher_opcao, criar_separacao, confirmar_acao)
         entidades: Entidades extraidas (opcao, num_pedido, etc)
+        usuario: Nome do usuario que esta executando a acao
 
     Returns:
         Resposta formatada para o usuario
@@ -26,7 +27,7 @@ def processar_acao_separacao(intencao: str, entidades: Dict) -> str:
         return _processar_escolha_opcao(opcao, num_pedido)
 
     elif intencao == "criar_separacao":
-        return _processar_criar_separacao(opcao, num_pedido)
+        return _processar_criar_separacao(opcao, num_pedido, usuario)
 
     elif intencao == "confirmar_acao":
         return (
@@ -71,7 +72,7 @@ def _processar_escolha_opcao(opcao: str, num_pedido: str) -> str:
     return CriarSeparacaoService.formatar_confirmacao(opcao_escolhida, analise["num_pedido"])
 
 
-def _processar_criar_separacao(opcao: str, num_pedido: str) -> str:
+def _processar_criar_separacao(opcao: str, num_pedido: str, usuario: str) -> str:
     """Processa criacao efetiva da separacao."""
     if not opcao or not num_pedido:
         return (
@@ -84,7 +85,7 @@ def _processar_criar_separacao(opcao: str, num_pedido: str) -> str:
     resultado = CriarSeparacaoService.criar_separacao_opcao(
         num_pedido=num_pedido,
         opcao_codigo=opcao.upper(),
-        usuario="Claude AI"
+        usuario=usuario
     )
 
     if resultado["sucesso"]:
@@ -93,7 +94,8 @@ def _processar_criar_separacao(opcao: str, num_pedido: str) -> str:
             f"Lote: {resultado['lote_id']}\n"
             f"Itens: {resultado['itens_criados']}\n"
             f"Valor: R$ {resultado['valor_total']:,.2f} ({resultado['percentual']:.1f}%)\n"
-            f"Data Expedicao: {resultado['data_expedicao']}"
+            f"Data Expedicao: {resultado['data_expedicao']}\n"
+            f"Criado por: {usuario}"
         )
     else:
         return f"Erro ao criar separacao: {resultado['mensagem']}"

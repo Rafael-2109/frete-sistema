@@ -51,9 +51,9 @@ def api_query():
         usuario = getattr(current_user, 'nome', 'Desconhecido')
         logger.info(f"[Claude Lite] {usuario}: '{consulta[:100]}'")
 
-        # Usa o core para processar
+        # Usa o core para processar (passa usuario para acoes)
         from .core import processar_consulta
-        resposta = processar_consulta(consulta, usar_claude_resposta=usar_claude)
+        resposta = processar_consulta(consulta, usar_claude_resposta=usar_claude, usuario=usuario)
 
         return jsonify({
             'success': True,

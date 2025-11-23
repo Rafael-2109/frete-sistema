@@ -67,6 +67,7 @@ class Separacao(db.Model):
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=True)
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)  # Usuario que criou a separacao
     
     # Índices compostos para performance (ordem correta: mais seletivo primeiro)
     __table_args__ = (

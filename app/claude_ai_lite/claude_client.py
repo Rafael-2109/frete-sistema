@@ -26,7 +26,7 @@ class ClaudeClient:
     def __init__(self):
         self.api_key = os.environ.get('ANTHROPIC_API_KEY')
         self.model = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5
-        self.max_tokens = 1024
+        self.max_tokens = 8192
         self._client = None
 
         if not self.api_key:
@@ -132,7 +132,7 @@ Analise a mensagem e retorne APENAS um JSON valido com:
 
 CONTEXTO - INDUSTRIA DE ALIMENTOS:
 - Produtos: Pessego, Ketchup, Azeitona, Cogumelo, Shoyu, Oleo Misto
-- Variacoes: cor (verde, preta), forma (inteira, fatiada, sem caroco, metades)
+- Variacoes: cor (verde, preta), forma (inteira, fatiada, sem caroco, recheada)
 - Embalagens: BD 6x2 (caixa 6 baldes 2kg), Pouch 18x150 (caixa 18 pouchs 150g), Lata, Vidro
 
 REGRAS PARA INTENCAO:
@@ -205,21 +205,41 @@ Retorne SOMENTE o JSON, sem explicacoes."""
         Returns:
             Resposta elaborada pelo Claude
         """
-        system_prompt = f"""Você é um assistente especializado em {dominio} para um sistema de gestão de fretes.
+        system_prompt = f"""Você é um assistente amigável e prestativo especializado em {dominio} para um sistema de gestão de fretes de uma indústria de alimentos.
 
-REGRAS:
+PERSONALIDADE:
+- Seja acolhedor e profissional
+- Use linguagem clara e acessível
+- Sempre ofereça ajuda adicional ao final da resposta
+
+REGRAS DE RESPOSTA:
 1. Responda APENAS com base nos dados fornecidos no CONTEXTO
 2. Se a informação não estiver no contexto, diga que não tem essa informação
-3. Seja direto e objetivo
+3. Seja direto mas cordial
 4. Use formatação clara (listas, bullets)
 5. Não invente dados
-6. IMPORTANTE: Se o contexto contiver OPCOES DE ENVIO (A, B, C), você DEVE apresentar TODAS as opções de forma clara e formatada para o usuário escolher
-7. Quando apresentar opcoes, pergunte ao usuario qual opcao deseja
+6. Se o contexto contiver OPCOES DE ENVIO (A, B, C), apresente TODAS as opções de forma clara
+7. Quando apresentar opcoes, pergunte qual opcao o usuario deseja
+
+ORIENTAÇÃO AO USUÁRIO:
+- Ao final de cada resposta, sugira 1-2 perguntas relacionadas que você pode responder
+- Exemplos de sugestões:
+  * "Posso ajudar com algo mais sobre este pedido?"
+  * "Quer que eu verifique a disponibilidade de estoque?"
+  * "Deseja criar uma separação para este pedido?"
+  * "Precisa consultar outro pedido ou cliente?"
+
+CAPACIDADES QUE VOCÊ TEM:
+- Consultar pedidos por número, cliente ou CNPJ
+- Verificar quando um pedido pode ser enviado (análise de estoque)
+- Mostrar opções de envio (total ou parcial)
+- Criar separações para pedidos
+- Buscar produtos na carteira
 
 CONTEXTO DOS DADOS:
 {contexto}
 
-Responda a pergunta do usuário de forma clara e profissional."""
+Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
 
         return self.completar(pergunta, system_prompt, use_cache=False)
 

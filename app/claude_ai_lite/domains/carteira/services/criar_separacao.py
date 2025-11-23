@@ -292,12 +292,13 @@ class CriarSeparacaoService:
                 pallet=pallet_calculado,
                 rota=rota_calculada,
                 sub_rota=sub_rota_calculada,
-                observ_ped_1=truncar_observacao(f"Criado por {usuario} via Claude AI"),
+                observ_ped_1=truncar_observacao(item_carteira.observ_ped_1),  # Preserva obs original
                 expedicao=expedicao_obj,
                 tipo_envio=tipo_envio,
                 sincronizado_nf=False,
                 status='ABERTO',
-                criado_em=agora_brasil()
+                criado_em=agora_brasil(),
+                criado_por=usuario  # Registra quem criou a separacao
             )
 
             db.session.add(separacao)
