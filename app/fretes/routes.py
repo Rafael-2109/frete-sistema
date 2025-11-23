@@ -4302,15 +4302,15 @@ def lancar_nfs_recibo(despesa_id):
             if arquivo and arquivo.filename:
                 try:
                     # Salvar arquivo usando S3 ou local
-                    from app.utils.s3_handler import S3Handler
-                    s3_handler = S3Handler()
+                    from app.utils.file_storage import FileStorage
+                    file_storage = FileStorage()
 
                     # Gerar nome único
                     filename = secure_filename(arquivo.filename)
                     nome_arquivo = f"comprovantes/despesa_{despesa_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
 
                     # Upload para S3
-                    caminho = s3_handler.upload_file(arquivo, nome_arquivo)
+                    caminho = file_storage.save_file(arquivo, nome_arquivo)
                     if caminho:
                         despesa.comprovante_path = caminho
                         despesa.comprovante_nome_arquivo = arquivo.filename
@@ -4364,9 +4364,9 @@ def download_comprovante_despesa(despesa_id):
         # Verificar se é S3 ou local
         if despesa.comprovante_path.startswith('http') or despesa.comprovante_path.startswith('s3://'):
             # Redirect para URL do S3
-            from app.utils.s3_handler import S3Handler
-            s3_handler = S3Handler()
-            url = s3_handler.get_presigned_url(despesa.comprovante_path)
+            from app.utils.file_storage import FileStorage
+            file_storage = FileStorage()
+            url = file_storage.get_file_url(despesa.comprovante_path)
             if url:
                 return redirect(url)
             else:

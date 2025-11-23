@@ -1,23 +1,43 @@
 """
-Claude AI Lite - Modulo minimo funcional e modular.
+Claude AI Lite - Modulo de IA conversacional modular e escalável.
 
-Estrutura:
-- core.py: Orquestra o fluxo
-- claude_client.py: Cliente API Claude
-- routes.py: Endpoints Flask
-- routes_admin.py: Endpoints de administração (memória/aprendizados)
-- memory.py: Serviço de memória de conversas
-- learning.py: Serviço de aprendizado
-- models.py: Modelos de dados (histórico, aprendizados)
-- domains/: Dominios de negocio (carteira, fretes, etc)
+Arquitetura v2.0:
+- core/: Núcleo (orchestrator, classifier, responder)
+- capabilities/: Capacidades auto-registráveis por domínio
+- prompts/: Prompts centralizados
+- memory.py: Memória de conversas
+- learning.py: Aprendizado permanente
+
+Domínios disponíveis:
+- carteira: pedidos, disponibilidade, gargalos, rotas
+- estoque: estoque, rupturas
+- acao: criar separações
 
 Uso:
     from app.claude_ai_lite import processar_consulta
     resposta = processar_consulta("Pedido VCD2509030 tem separacao?")
+
+Para adicionar nova capacidade:
+    1. Criar arquivo em capabilities/{dominio}/{nome}.py
+    2. Herdar de BaseCapability
+    3. Definir NOME, DOMINIO, INTENCOES, EXEMPLOS
+    4. Implementar executar() e formatar_contexto()
+    5. A capacidade será registrada automaticamente
 """
 
+# Importa do novo core (mantém compatibilidade)
 from .core import processar_consulta
 from .routes import claude_lite_bp
 from .routes_admin import claude_lite_admin_bp
 
-__all__ = ['processar_consulta', 'claude_lite_bp', 'claude_lite_admin_bp']
+# Exporta também o registry de capacidades para uso externo
+from .capabilities import get_capability, get_all_capabilities, find_capability
+
+__all__ = [
+    'processar_consulta',
+    'claude_lite_bp',
+    'claude_lite_admin_bp',
+    'get_capability',
+    'get_all_capabilities',
+    'find_capability'
+]

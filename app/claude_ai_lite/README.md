@@ -5,7 +5,8 @@
 Módulo de IA conversacional para o sistema de fretes, permitindo consultas em linguagem natural sobre pedidos, produtos e criação de separações.
 
 **Criado em:** Novembro/2025
-**Última atualização:** 22/11/2025
+**Última atualização:** 23/11/2025
+**Versão:** 2.0 (Arquitetura de Capacidades)
 
 ### Funcionalidades Principais
 - Consultas por pedido, cliente, produto
@@ -19,42 +20,133 @@ Módulo de IA conversacional para o sistema de fretes, permitindo consultas em l
 
 ---
 
-## Estrutura do Módulo
+## Arquitetura v2.0 (Nova)
+
+A arquitetura foi refatorada para ser **escalável e modular**, usando o padrão de **Capacidades Auto-Registráveis**.
+
+### Conceito Principal
+
+Cada **Capacidade** é uma unidade independente que:
+- Define suas próprias intenções (quando deve ser ativada)
+- Define seus campos de busca
+- Executa a lógica de negócio
+- Formata a resposta
+
+**Benefícios:**
+- Adicionar nova feature = criar 1 arquivo
+- Prompts gerados automaticamente
+- Sem if/elif crescente
+- Fácil de testar isoladamente
+
+---
+
+## Estrutura do Módulo v2.0
 
 ```
 app/claude_ai_lite/
 ├── README.md                 # Esta documentação
-├── __init__.py               # Inicialização e registro dos blueprints
-├── core.py                   # Orquestrador principal
-├── claude_client.py          # Cliente da API Claude (Anthropic)
-├── routes.py                 # Endpoints Flask (consultas)
-├── routes_admin.py           # Endpoints de administração (apenas admin)
-├── memory.py                 # Serviço de memória de conversas
-├── learning.py               # Serviço de aprendizado permanente
-├── models.py                 # Modelos: ClaudeHistoricoConversa, ClaudeAprendizado
+├── __init__.py               # Inicialização e exports
+├── core.py                   # Redirecionador (compatibilidade)
+├── claude_client.py          # Cliente da API Claude
+├── routes.py                 # Endpoints Flask
+├── routes_admin.py           # Endpoints de administração
+├── memory.py                 # Memória de conversas
+├── learning.py               # Aprendizado permanente
+├── models.py                 # Modelos de dados
 │
-├── actions/                  # Handlers de ESCRITA (criar, modificar)
+├── core/                     # 🆕 NÚCLEO v2.0
 │   ├── __init__.py
-│   └── separacao_actions.py  # Criar separações via conversa
+│   ├── orchestrator.py       # Orquestra o fluxo principal
+│   ├── classifier.py         # Classifica intenções
+│   └── responder.py          # Gera respostas elaboradas
 │
-└── domains/                  # Domínios de LEITURA (consultas)
+├── capabilities/             # 🆕 CAPACIDADES AUTO-REGISTRÁVEIS
+│   ├── __init__.py           # Registry automático
+│   ├── base.py               # BaseCapability (contrato)
+│   │
+│   ├── carteira/             # Domínio: Carteira
+│   │   ├── consultar_pedido.py
+│   │   ├── consultar_produto.py
+│   │   ├── consultar_rota.py
+│   │   ├── analisar_disponibilidade.py
+│   │   ├── analisar_gargalos.py
+│   │   └── criar_separacao.py      # Ação
+│   │
+│   └── estoque/              # Domínio: Estoque
+│       └── consultar_estoque.py
+│
+├── prompts/                  # 🆕 PROMPTS CENTRALIZADOS
+│   ├── __init__.py
+│   ├── system_base.py        # Prompt base do sistema
+│   └── intent_prompt.py      # Prompt de classificação (gerado)
+│
+├── actions/                  # Handlers de ações (legado)
+│   └── separacao_actions.py
+│
+└── domains/                  # Loaders (legado, reutilizados)
+    └── carteira/
+        ├── loaders/
+        └── services/
+```
+
+---
+
+## Como Adicionar Nova Capacidade
+
+### 1. Criar arquivo em `capabilities/{dominio}/{nome}.py`:
+
+```python
+from ..base import BaseCapability
+
+class MinhaNovaCapability(BaseCapability):
+    # Metadados obrigatórios
+    NOME = "minha_nova_capability"
+    DOMINIO = "carteira"  # ou "estoque", "fretes", etc
+    TIPO = "consulta"     # ou "acao"
+    INTENCOES = ["minha_intencao", "outra_intencao"]
+    CAMPOS_BUSCA = ["campo1", "campo2"]
+    DESCRICAO = "Descrição curta para o classificador"
+    EXEMPLOS = [
+        "Exemplo de pergunta 1",
+        "Exemplo de pergunta 2"
+    ]
+
+    def pode_processar(self, intencao: str, entidades: dict) -> bool:
+        """Retorna True se deve processar esta requisição."""
+        return intencao in self.INTENCOES
+
+    def executar(self, entidades: dict, contexto: dict) -> dict:
+        """Executa a lógica de negócio."""
+        # Sua lógica aqui
+        return {
+            "sucesso": True,
+            "total_encontrado": 1,
+            "dados": [...]
+        }
+
+    def formatar_contexto(self, dados: dict) -> str:
+        """Formata resultado para o Claude."""
+        return "Texto formatado para o prompt"
+```
+
+### 2. Pronto! A capacidade será registrada automaticamente.
+
+O registry em `capabilities/__init__.py` descobre e registra todas as classes que herdam de `BaseCapability`.
+
+---
+
+## Estrutura Legada (Ainda Funcional)
+
+Os arquivos antigos ainda funcionam e são reutilizados:
+
+```
+└── domains/                  # Domínios de LEITURA (legado)
     ├── __init__.py           # Registro de loaders
     ├── base.py               # BaseLoader abstrato
     │
     └── carteira/             # Domínio da carteira de pedidos
-        ├── __init__.py
-        ├── loaders/          # Loaders de consulta
-        │   ├── pedidos.py          # Consulta pedidos
-        │   ├── produtos.py         # Consulta produtos
-        │   ├── disponibilidade.py  # Análise de quando enviar
-        │   ├── rotas.py            # Consulta por rota/sub-rota/UF
-        │   ├── estoque.py          # Estoque e rupturas
-        │   ├── saldo_pedido.py     # Saldo: original vs separado
-        │   └── gargalos.py         # Produtos gargalo
-        │
+        ├── loaders/          # Loaders de consulta (reutilizados)
         └── services/         # Serviços de negócio
-            ├── opcoes_envio.py     # Gera opções A/B/C de envio
-            └── criar_separacao.py  # Cria separações no banco
 ```
 
 ---

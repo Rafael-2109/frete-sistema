@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(python scripts/testes/test_claude_ai_lite_v2.py:*)"
     ],
     "deny": []
   },
