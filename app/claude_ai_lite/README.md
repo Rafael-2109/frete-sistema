@@ -7,6 +7,16 @@ Módulo de IA conversacional para o sistema de fretes, permitindo consultas em l
 **Criado em:** Novembro/2025
 **Última atualização:** 22/11/2025
 
+### Funcionalidades Principais
+- Consultas por pedido, cliente, produto
+- Análise de disponibilidade de envio (opções A/B/C)
+- Consultas por rota, sub-rota e UF
+- Análise de estoque e rupturas
+- Identificação de gargalos de estoque
+- Criação de separações via chat
+- **Memória de Conversa** - Lembra das últimas 40 mensagens
+- **Aprendizado Permanente** - "Lembre que...", "Esqueça que...", "O que você sabe?"
+
 ---
 
 ## Estrutura do Módulo
@@ -14,11 +24,14 @@ Módulo de IA conversacional para o sistema de fretes, permitindo consultas em l
 ```
 app/claude_ai_lite/
 ├── README.md                 # Esta documentação
-├── __init__.py               # Inicialização e registro do blueprint
-├── core.py                   # Orquestrador principal (max 100 linhas)
+├── __init__.py               # Inicialização e registro dos blueprints
+├── core.py                   # Orquestrador principal
 ├── claude_client.py          # Cliente da API Claude (Anthropic)
-├── config.py                 # Configurações (modelo, tokens, cache)
-├── routes.py                 # Endpoints Flask
+├── routes.py                 # Endpoints Flask (consultas)
+├── routes_admin.py           # Endpoints de administração (apenas admin)
+├── memory.py                 # Serviço de memória de conversas
+├── learning.py               # Serviço de aprendizado permanente
+├── models.py                 # Modelos: ClaudeHistoricoConversa, ClaudeAprendizado
 │
 ├── actions/                  # Handlers de ESCRITA (criar, modificar)
 │   ├── __init__.py
@@ -30,16 +43,16 @@ app/claude_ai_lite/
     │
     └── carteira/             # Domínio da carteira de pedidos
         ├── __init__.py
-        ├── prompts.py        # Prompts específicos (não usado atualmente)
-        │
         ├── loaders/          # Loaders de consulta
-        │   ├── __init__.py
         │   ├── pedidos.py          # Consulta pedidos
         │   ├── produtos.py         # Consulta produtos
-        │   └── disponibilidade.py  # Análise de quando enviar
+        │   ├── disponibilidade.py  # Análise de quando enviar
+        │   ├── rotas.py            # Consulta por rota/sub-rota/UF
+        │   ├── estoque.py          # Estoque e rupturas
+        │   ├── saldo_pedido.py     # Saldo: original vs separado
+        │   └── gargalos.py         # Produtos gargalo
         │
         └── services/         # Serviços de negócio
-            ├── __init__.py
             ├── opcoes_envio.py     # Gera opções A/B/C de envio
             └── criar_separacao.py  # Cria separações no banco
 ```
@@ -145,9 +158,17 @@ O Claude identifica a intenção do usuário:
 | `buscar_pedido` | carteira | "Pedido VCD123" |
 | `buscar_produto` | carteira | "Azeitona verde na carteira" |
 | `analisar_disponibilidade` | carteira | "Quando posso enviar VCD123?" |
+| `buscar_rota` | carteira | "Pedidos na rota MG" ou "Tem algo pra rota B?" (sub-rota) |
+| `buscar_uf` | carteira | "O que tem para São Paulo?" |
+| `consultar_estoque` | estoque | "Qual o estoque de azeitona?" |
+| `consultar_ruptura` | estoque | "Quais produtos vão dar ruptura?" |
+| `analisar_saldo` | carteira | "Quanto falta separar do VCD123?" |
+| `analisar_gargalo` | carteira | "O que está travando o pedido?" |
 | `escolher_opcao` | acao | "Opção A" |
 | `criar_separacao` | acao | "Criar separação opção A do pedido VCD123" |
 | `confirmar_acao` | acao | "Sim, confirmo" |
+| `follow_up` | follow_up | "Preciso dos nomes completos desses itens" 🆕 |
+| `detalhar` | follow_up | "Mais detalhes sobre esses produtos" 🆕 |
 
 ---
 
@@ -164,6 +185,41 @@ O Claude identifica a intenção do usuário:
 ### DisponibilidadeLoader (`carteira_disponibilidade`)
 - Busca por: `num_pedido`
 - Retorna: **Opções de envio A/B/C** com análise de estoque
+
+### RotasLoader (`carteira_rota`) 🆕
+- Busca por: `rota`, `sub_rota`, `cod_uf`
+- Retorna: pedidos/separações filtrados por rota, sub-rota ou UF
+- **Rotas principais**: BA, MG, ES, NE, NE2, NO, MS-MT, SUL (baseadas em UF/região)
+- **Sub-rotas**: CAP, INT, A, B, C, 0, 1, 2 (baseadas em cidade/região interna)
+- Exemplos:
+  - "Pedidos na rota MG" (rota principal)
+  - "O que tem na rota NE?" (rota principal)
+  - "Tem mais algo pra rota B?" (sub-rota)
+  - "Pedidos da sub-rota CAP" (sub-rota)
+  - "O que tem para São Paulo?" (por UF)
+
+### EstoqueLoader (`estoque`) 🆕
+- Busca por: `cod_produto`, `nome_produto`, `ruptura`
+- Retorna: estoque atual, projeção 7/14 dias, produtos com ruptura
+- Exemplos:
+  - "Qual o estoque de azeitona verde?"
+  - "Quais produtos vão dar ruptura?"
+  - "Projeção de estoque do ketchup"
+
+### SaldoPedidoLoader (`carteira_saldo`) 🆕
+- Busca por: `num_pedido`, `cnpj_cpf`, `raz_social_red`
+- Retorna: comparativo quantidade original vs separada vs restante
+- Exemplos:
+  - "Quanto falta separar do VCD123?"
+  - "Saldo do pedido VCD456"
+
+### GargalosLoader (`carteira_gargalo`) 🆕
+- Busca por: `num_pedido`, `geral`, `cod_produto`
+- Retorna: produtos que travam pedidos por falta de estoque
+- Exemplos:
+  - "O que está travando o pedido VCD789?"
+  - "Quais produtos são gargalo?"
+  - "Por que não consigo enviar o VCD111?"
 
 ---
 
@@ -190,6 +246,47 @@ Antes de criar, o sistema valida:
 
 1. **Separação existente**: Não permite duplicar se já existe separação não faturada
 2. **Saldo disponível**: Verifica saldo na CarteiraPrincipal menos separações existentes
+
+---
+
+## Memória e Aprendizado
+
+### Memória de Conversa
+O sistema mantém as **últimas 40 mensagens** de cada usuário para contexto.
+
+Isso permite:
+- Referências a conversas anteriores: "Quais pedidos você falou?"
+- Contexto contínuo: "E o pedido 2 da lista?"
+- Histórico de interações
+
+**Tabela:** `claude_historico_conversa`
+
+### Aprendizado Permanente
+O sistema pode aprender informações de forma permanente:
+
+| Comando | Exemplo | Escopo |
+|---------|---------|--------|
+| `Lembre que...` | "Lembre que o cliente Ceratti é VIP" | Por usuário |
+| `Lembre que... (global)` | "Lembre que o código 123 é Azeitona Verde (global)" | Todos |
+| `Esqueça que...` | "Esqueça que o cliente X é VIP" | Remove |
+| `O que você sabe?` | "O que você sabe sobre mim?" | Lista |
+
+**Tabela:** `claude_aprendizado`
+
+**Categorias de Aprendizado:**
+- `regra_negocio` - Regras e políticas da empresa
+- `cliente` - Informações sobre clientes
+- `produto` - Informações sobre produtos
+- `processo` - Processos e procedimentos
+- `fato` - Fatos gerais
+- `preferencia` - Preferências do usuário
+- `correcao` - Correções de informações
+
+### Administração
+Acesse `/claude-lite/admin/` (apenas administradores) para:
+- Ver/criar/editar aprendizados
+- Consultar histórico de conversas
+- Ver estatísticas de uso
 
 ---
 

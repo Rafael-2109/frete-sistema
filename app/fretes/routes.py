@@ -4026,7 +4026,6 @@ def vincular_cte_despesa(despesa_id):
     Mostra sugestões de CTe organizadas por prioridade.
     """
     from app.fretes.services.despesa_cte_service import DespesaCteService
-    from app.fretes.models import ConhecimentoTransporte
 
     despesa = DespesaExtra.query.get_or_404(despesa_id)
 

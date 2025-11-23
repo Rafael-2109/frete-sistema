@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}Claude AI - Assistente{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Sidebar com ajuda -->
+        <div class="col-md-3">
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-brain me-2"></i>Claude AI Lite
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Assistente inteligente para consultas e operações do sistema de fretes.
+                    </p>
+                    <hr>
+                    <h6><i class="fas fa-lightbulb me-1 text-warning"></i>Exemplos de perguntas:</h6>
+                    <div class="list-group list-group-flush small">
+                        <a href="#" class="list-group-item list-group-item-action exemplo-pergunta" data-pergunta="Pedido VCD2509030 tem separação?">
+                            <i class="fas fa-search me-1"></i>Status de pedido
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action exemplo-pergunta" data-pergunta="Quando posso enviar o pedido VCD2509030?">
+                            <i class="fas fa-truck me-1"></i>Quando enviar?
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action exemplo-pergunta" data-pergunta="O que está travando o pedido VCD2509030?">
+                            <i class="fas fa-exclamation-triangle me-1"></i>Gargalos do pedido
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action exemplo-pergunta" data-pergunta="O que tem pra rota B?">
+                            <i class="fas fa-route me-1"></i>Pedidos por rota
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action exemplo-pergunta" data-pergunta="Quais produtos vão dar ruptura?">
+                            <i class="fas fa-box-open me-1"></i>Rupturas de estoque
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action exemplo-pergunta" data-pergunta="O que você sabe?">
+                            <i class="fas fa-memory me-1"></i>Listar memória
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-keyboard me-1"></i>Comandos Especiais
+                </div>
+                <div class="card-body small">
+                    <p><strong>Memorizar:</strong><br>
+                    <code>Lembre que o cliente X é VIP</code></p>
+
+                    <p><strong>Memorizar (global):</strong><br>
+                    <code>Lembre que código 123 é Azeitona (global)</code></p>
+
+                    <p><strong>Esquecer:</strong><br>
+                    <code>Esqueça que o cliente X é especial</code></p>
+
+                    <p><strong>Listar memória:</strong><br>
+                    <code>O que você sabe?</code></p>
+                </div>
+            </div>
+
+            {% if current_user.id == 1 or current_user.perfil == 'admin' %}
+            <div class="card mt-3">
+                <div class="card-body">
+                    <a href="{{ url_for('claude_lite_admin.admin_dashboard') }}" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="fas fa-cog me-1"></i>Administração
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Área de conversa -->
+        <div class="col-md-9">
+            <div class="card" style="height: calc(100vh - 150px);">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-comments me-2"></i>Conversa com Claude</span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="limparConversa()">
+                        <i class="fas fa-trash me-1"></i>Limpar
+                    </button>
+                </div>
+                <div class="card-body" id="chat-container" style="overflow-y: auto; height: calc(100% - 120px);">
+                    <!-- Mensagem inicial -->
+                    <div class="chat-message assistant">
+                        <div class="message-content">
+                            <strong>Claude:</strong><br>
+                            Olá, {{ current_user.nome }}! Sou o assistente do sistema de fretes.<br><br>
+                            Posso te ajudar com:<br>
+                            - Consultar pedidos e separações<br>
+                            - Analisar quando enviar pedidos (opções A/B/C)<br>
+                            - Identificar gargalos de estoque<br>
+                            - Consultar por rota ou UF<br>
+                            - Verificar estoque e rupturas<br><br>
+                            <em>Como posso te ajudar hoje?</em>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <form id="form-pergunta" onsubmit="enviarPergunta(event)">
+                        <div class="input-group">
+                            <input type="text" id="input-pergunta" class="form-control"
+                                   placeholder="Digite sua pergunta..." autofocus>
+                            <button type="submit" class="btn btn-primary" id="btn-enviar">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.chat-message {
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    border-radius: 10px;
+    max-width: 85%;
+}
+.chat-message.user {
+    background-color: #007bff;
+    color: white;
+    margin-left: auto;
+    text-align: right;
+}
+.chat-message.assistant {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+.chat-message .message-content {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.exemplo-pergunta:hover {
+    background-color: #e9ecef;
+}
+#chat-container {
+    display: flex;
+    flex-direction: column;
+}
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    max-width: 100px;
+}
+.typing-indicator span {
+    height: 8px;
+    width: 8px;
+    background-color: #6c757d;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+    animation: bounce 1.3s linear infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
+@keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+}
+</style>
+
+<script>
+const chatContainer = document.getElementById('chat-container');
+const inputPergunta = document.getElementById('input-pergunta');
+const btnEnviar = document.getElementById('btn-enviar');
+
+// Exemplos clicáveis
+document.querySelectorAll('.exemplo-pergunta').forEach(el => {
+    el.addEventListener('click', function(e) {
+        e.preventDefault();
+        inputPergunta.value = this.dataset.pergunta;
+        inputPergunta.focus();
+    });
+});
+
+function adicionarMensagem(texto, tipo) {
+    const div = document.createElement('div');
+    div.className = `chat-message ${tipo}`;
+
+    const prefixo = tipo === 'user' ? '<strong>Você:</strong><br>' : '<strong>Claude:</strong><br>';
+    div.innerHTML = `<div class="message-content">${prefixo}${formatarTexto(texto)}</div>`;
+
+    chatContainer.appendChild(div);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function formatarTexto(texto) {
+    // Converte markdown básico para HTML
+    return texto
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+}
+
+function mostrarCarregando() {
+    const div = document.createElement('div');
+    div.className = 'typing-indicator';
+    div.id = 'typing';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    chatContainer.appendChild(div);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function esconderCarregando() {
+    const typing = document.getElementById('typing');
+    if (typing) typing.remove();
+}
+
+async function enviarPergunta(e) {
+    e.preventDefault();
+
+    const pergunta = inputPergunta.value.trim();
+    if (!pergunta) return;
+
+    // Mostra pergunta do usuário
+    adicionarMensagem(pergunta, 'user');
+    inputPergunta.value = '';
+
+    // Desabilita input
+    inputPergunta.disabled = true;
+    btnEnviar.disabled = true;
+    mostrarCarregando();
+
+    try {
+        const resp = await fetch('/claude-lite/api/query', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({query: pergunta})
+        });
+
+        const data = await resp.json();
+
+        esconderCarregando();
+
+        if (data.success) {
+            adicionarMensagem(data.response, 'assistant');
+        } else {
+            adicionarMensagem('Desculpe, ocorreu um erro: ' + (data.error || 'Erro desconhecido'), 'assistant');
+        }
+    } catch (error) {
+        esconderCarregando();
+        adicionarMensagem('Erro de comunicação: ' + error.message, 'assistant');
+    }
+
+    // Reabilita input
+    inputPergunta.disabled = false;
+    btnEnviar.disabled = false;
+    inputPergunta.focus();
+}
+
+function limparConversa() {
+    chatContainer.innerHTML = `
+        <div class="chat-message assistant">
+            <div class="message-content">
+                <strong>Claude:</strong><br>
+                Conversa limpa! Como posso te ajudar?
+            </div>
+        </div>
+    `;
+}
+</script>
+{% endblock %}

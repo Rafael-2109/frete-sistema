@@ -729,8 +729,10 @@ def create_app(config_name=None):
     # 🤖 Claude AI Lite - Sistema simplificado e funcional
     try:
         from app.claude_ai_lite.routes import claude_lite_bp
+        from app.claude_ai_lite.routes_admin import claude_lite_admin_bp
         app.register_blueprint(claude_lite_bp)
-        app.logger.info("✅ Claude AI Lite registrado com sucesso")
+        app.register_blueprint(claude_lite_admin_bp)
+        app.logger.info("✅ Claude AI Lite registrado com sucesso (+ admin)")
     except ImportError as e:
         app.logger.warning(f"⚠️ Claude AI Lite não disponível: {e}")
 

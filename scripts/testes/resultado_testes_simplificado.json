@@ -1,0 +1,156 @@
+{
+  "data_execucao": "2025-11-22T23:08:30.397071",
+  "tipo": "verificacao_estrutura",
+  "loaders": [
+    {
+      "dominio": "carteira",
+      "loader": "PedidosLoader",
+      "campos_busca": [
+        "num_pedido",
+        "cnpj_cpf",
+        "raz_social_red",
+        "pedido_cliente"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    },
+    {
+      "dominio": "carteira_produto",
+      "loader": "ProdutosLoader",
+      "campos_busca": [
+        "nome_produto",
+        "cod_produto"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    },
+    {
+      "dominio": "carteira_disponibilidade",
+      "loader": "DisponibilidadeLoader",
+      "campos_busca": [
+        "num_pedido"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    },
+    {
+      "dominio": "carteira_rota",
+      "loader": "RotasLoader",
+      "campos_busca": [
+        "rota",
+        "sub_rota",
+        "cod_uf"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    },
+    {
+      "dominio": "estoque",
+      "loader": "EstoqueLoader",
+      "campos_busca": [
+        "cod_produto",
+        "nome_produto",
+        "ruptura"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    },
+    {
+      "dominio": "carteira_saldo",
+      "loader": "SaldoPedidoLoader",
+      "campos_busca": [
+        "num_pedido",
+        "cnpj_cpf",
+        "raz_social_red"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    },
+    {
+      "dominio": "carteira_gargalo",
+      "loader": "GargalosLoader",
+      "campos_busca": [
+        "num_pedido",
+        "geral",
+        "cod_produto"
+      ],
+      "tem_buscar": true,
+      "tem_formatar": true,
+      "passou": true
+    }
+  ],
+  "learning": [
+    {
+      "texto": "lembre que o cliente Ceratti é VIP",
+      "tipo_esperado": "lembrar",
+      "tipo_detectado": "lembrar",
+      "passou": true
+    },
+    {
+      "texto": "Lembrar que o código AZV é azeitona",
+      "tipo_esperado": "lembrar",
+      "tipo_detectado": "lembrar",
+      "passou": true
+    },
+    {
+      "texto": "guarde que sempre priorizar pedidos grandes",
+      "tipo_esperado": "lembrar",
+      "tipo_detectado": "lembrar",
+      "passou": true
+    },
+    {
+      "texto": "esqueca que o cliente X é VIP",
+      "tipo_esperado": "esquecer",
+      "tipo_detectado": "esquecer",
+      "passou": true
+    },
+    {
+      "texto": "esquecer que o código ABC é palmito",
+      "tipo_esperado": "esquecer",
+      "tipo_detectado": "esquecer",
+      "passou": true
+    },
+    {
+      "texto": "o que você sabe sobre mim?",
+      "tipo_esperado": "listar",
+      "tipo_detectado": "listar",
+      "passou": true
+    },
+    {
+      "texto": "quais conhecimentos você tem?",
+      "tipo_esperado": "listar",
+      "tipo_detectado": "listar",
+      "passou": true
+    },
+    {
+      "texto": "mostre sua memória",
+      "tipo_esperado": "listar",
+      "tipo_detectado": "listar",
+      "passou": true
+    },
+    {
+      "texto": "status do pedido VCD123",
+      "tipo_esperado": null,
+      "tipo_detectado": null,
+      "passou": true
+    },
+    {
+      "texto": "quando enviar o pedido?",
+      "tipo_esperado": null,
+      "tipo_detectado": null,
+      "passou": true
+    }
+  ],
+  "resumo": {
+    "loaders_ok": 7,
+    "loaders_total": 7,
+    "learning_ok": 10,
+    "learning_total": 10
+  }
+}

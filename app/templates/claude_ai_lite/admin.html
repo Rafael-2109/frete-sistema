@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% block title %}Claude AI - Administração{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-brain me-2"></i>Claude AI Lite - Administração</h2>
+            <p class="text-muted">Gerencie memória, aprendizados e histórico de conversas</p>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4" id="estatisticas-container">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Mensagens</h5>
+                    <h2 id="stat-mensagens">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Aprendizados Globais</h5>
+                    <h2 id="stat-globais">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Aprendizados Usuários</h5>
+                    <h2 id="stat-usuarios">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Usuários Ativos</h5>
+                    <h2 id="stat-ativos">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="aprendizados-tab" data-bs-toggle="tab" href="#aprendizados" role="tab">
+                <i class="fas fa-graduation-cap me-1"></i>Aprendizados
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="historico-tab" data-bs-toggle="tab" href="#historico" role="tab">
+                <i class="fas fa-history me-1"></i>Histórico
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="adminTabsContent">
+        <!-- Tab Aprendizados -->
+        <div class="tab-pane fade show active" id="aprendizados" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Conhecimentos do Claude</span>
+                    <button class="btn btn-success btn-sm" onclick="abrirModalAprendizado()">
+                        <i class="fas fa-plus me-1"></i>Novo Aprendizado
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- Filtros -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <select class="form-select form-select-sm" id="filtro-categoria" onchange="carregarAprendizados()">
+                                <option value="">Todas as categorias</option>
+                                <option value="regra_negocio">Regra de Negócio</option>
+                                <option value="cliente">Cliente</option>
+                                <option value="produto">Produto</option>
+                                <option value="processo">Processo</option>
+                                <option value="fato">Fato</option>
+                                <option value="preferencia">Preferência</option>
+                                <option value="correcao">Correção</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select form-select-sm" id="filtro-escopo" onchange="carregarAprendizados()">
+                                <option value="">Todos os escopos</option>
+                                <option value="global">Apenas Globais</option>
+                                <option value="usuario">Apenas Usuários</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tabela -->
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tabela-aprendizados">
+                            <thead>
+                                <tr>
+                                    <th>Escopo</th>
+                                    <th>Categoria</th>
+                                    <th>Conhecimento</th>
+                                    <th>Prioridade</th>
+                                    <th>Criado Por</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-aprendizados">
+                                <tr><td colspan="6" class="text-center">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Histórico -->
+        <div class="tab-pane fade" id="historico" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    Histórico de Conversas
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <input type="number" class="form-control form-control-sm" id="filtro-usuario-id" placeholder="ID do Usuário">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary btn-sm" onclick="carregarHistorico()">Filtrar</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm" id="tabela-historico">
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Usuário</th>
+                                    <th>Tipo</th>
+                                    <th>Conteúdo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-historico">
+                                <tr><td colspan="4" class="text-center">Selecione um usuário ou clique em Filtrar</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo/Editar Aprendizado -->
+<div class="modal fade" id="modalAprendizado" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAprendizadoTitulo">Novo Aprendizado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAprendizado">
+                    <input type="hidden" id="aprendizado-id">
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Categoria</label>
+                            <select class="form-select" id="aprendizado-categoria" required>
+                                <option value="regra_negocio">Regra de Negócio</option>
+                                <option value="cliente">Cliente</option>
+                                <option value="produto">Produto</option>
+                                <option value="processo">Processo</option>
+                                <option value="fato">Fato</option>
+                                <option value="preferencia">Preferência</option>
+                                <option value="correcao">Correção</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Escopo</label>
+                            <select class="form-select" id="aprendizado-escopo">
+                                <option value="global">Global (todos os usuários)</option>
+                                <option value="usuario">Apenas para mim</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Chave (identificador único)</label>
+                        <input type="text" class="form-control" id="aprendizado-chave" required
+                               placeholder="Ex: cliente_vip_ceratti, regra_frete_sp">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Conhecimento</label>
+                        <textarea class="form-control" id="aprendizado-valor" rows="4" required
+                                  placeholder="Descreva o que o Claude deve lembrar..."></textarea>
+                        <small class="text-muted">Este texto será incluído no contexto do Claude quando responder</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Prioridade (1-10)</label>
+                        <input type="number" class="form-control" id="aprendizado-prioridade"
+                               value="5" min="1" max="10">
+                        <small class="text-muted">Maior = mais importante (incluído primeiro no contexto)</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarAprendizado()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variáveis globais
+let modalAprendizado;
+
+document.addEventListener('DOMContentLoaded', function() {
+    modalAprendizado = new bootstrap.Modal(document.getElementById('modalAprendizado'));
+    carregarEstatisticas();
+    carregarAprendizados();
+});
+
+// Estatísticas
+async function carregarEstatisticas() {
+    try {
+        const resp = await fetch('/claude-lite/admin/estatisticas');
+        const data = await resp.json();
+
+        if (data.success) {
+            const stats = data.estatisticas;
+            document.getElementById('stat-mensagens').textContent = stats.total_mensagens;
+            document.getElementById('stat-globais').textContent = stats.aprendizados_globais;
+            document.getElementById('stat-usuarios').textContent = stats.aprendizados_usuarios;
+            document.getElementById('stat-ativos').textContent = stats.usuarios_ativos;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar estatísticas:', e);
+    }
+}
+
+// Aprendizados
+async function carregarAprendizados() {
+    const tbody = document.getElementById('tbody-aprendizados');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Carregando...</td></tr>';
+
+    try {
+        const categoria = document.getElementById('filtro-categoria').value;
+        const escopo = document.getElementById('filtro-escopo').value;
+
+        let url = '/claude-lite/admin/aprendizados?';
+        if (categoria) url += `categoria=${categoria}&`;
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${data.error}</td></tr>`;
+            return;
+        }
+
+        let items = data.aprendizados;
+
+        // Filtra por escopo no frontend
+        if (escopo === 'global') {
+            items = items.filter(a => a.escopo === 'global');
+        } else if (escopo === 'usuario') {
+            items = items.filter(a => a.escopo === 'usuario');
+        }
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum aprendizado encontrado</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = items.map(a => `
+            <tr>
+                <td><span class="badge ${a.escopo === 'global' ? 'bg-success' : 'bg-info'}">${a.escopo}</span></td>
+                <td>${a.categoria}</td>
+                <td>${a.valor.substring(0, 100)}${a.valor.length > 100 ? '...' : ''}</td>
+                <td>${a.prioridade}</td>
+                <td>${a.criado_por || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editarAprendizado(${a.id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removerAprendizado(${a.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Erro: ${e}</td></tr>`;
+    }
+}
+
+function abrirModalAprendizado() {
+    document.getElementById('aprendizado-id').value = '';
+    document.getElementById('aprendizado-categoria').value = 'regra_negocio';
+    document.getElementById('aprendizado-escopo').value = 'global';
+    document.getElementById('aprendizado-chave').value = '';
+    document.getElementById('aprendizado-valor').value = '';
+    document.getElementById('aprendizado-prioridade').value = '5';
+    document.getElementById('modalAprendizadoTitulo').textContent = 'Novo Aprendizado';
+    modalAprendizado.show();
+}
+
+async function editarAprendizado(id) {
+    try {
+        const resp = await fetch('/claude-lite/admin/aprendizados');
+        const data = await resp.json();
+        const aprendizado = data.aprendizados.find(a => a.id === id);
+
+        if (aprendizado) {
+            document.getElementById('aprendizado-id').value = aprendizado.id;
+            document.getElementById('aprendizado-categoria').value = aprendizado.categoria;
+            document.getElementById('aprendizado-escopo').value = aprendizado.escopo;
+            document.getElementById('aprendizado-chave').value = aprendizado.chave;
+            document.getElementById('aprendizado-valor').value = aprendizado.valor;
+            document.getElementById('aprendizado-prioridade').value = aprendizado.prioridade;
+            document.getElementById('modalAprendizadoTitulo').textContent = 'Editar Aprendizado';
+            modalAprendizado.show();
+        }
+    } catch (e) {
+        alert('Erro ao carregar aprendizado: ' + e);
+    }
+}
+
+async function salvarAprendizado() {
+    const id = document.getElementById('aprendizado-id').value;
+    const payload = {
+        categoria: document.getElementById('aprendizado-categoria').value,
+        chave: document.getElementById('aprendizado-chave').value,
+        valor: document.getElementById('aprendizado-valor').value,
+        prioridade: parseInt(document.getElementById('aprendizado-prioridade').value),
+        usuario_id: document.getElementById('aprendizado-escopo').value === 'global' ? null : {{ current_user.id }}
+    };
+
+    try {
+        let url = '/claude-lite/admin/aprendizados';
+        let method = 'POST';
+
+        if (id) {
+            url += '/' + id;
+            method = 'PUT';
+        }
+
+        const resp = await fetch(url, {
+            method: method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        const data = await resp.json();
+
+        if (data.success) {
+            modalAprendizado.hide();
+            carregarAprendizados();
+            carregarEstatisticas();
+            alert(data.mensagem);
+        } else {
+            alert('Erro: ' + data.error);
+        }
+    } catch (e) {
+        alert('Erro ao salvar: ' + e);
+    }
+}
+
+async function removerAprendizado(id) {
+    if (!confirm('Tem certeza que deseja remover este aprendizado?')) return;
+
+    try {
+        const resp = await fetch(`/claude-lite/admin/aprendizados/${id}`, {method: 'DELETE'});
+        const data = await resp.json();
+
+        if (data.success) {
+            carregarAprendizados();
+            carregarEstatisticas();
+        } else {
+            alert('Erro: ' + data.error);
+        }
+    } catch (e) {
+        alert('Erro ao remover: ' + e);
+    }
+}
+
+// Histórico
+async function carregarHistorico() {
+    const tbody = document.getElementById('tbody-historico');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center">Carregando...</td></tr>';
+
+    try {
+        const usuarioId = document.getElementById('filtro-usuario-id').value;
+        let url = '/claude-lite/admin/historico?limite=100';
+        if (usuarioId) url += `&usuario_id=${usuarioId}`;
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">${data.error}</td></tr>`;
+            return;
+        }
+
+        if (data.historico.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Nenhum histórico encontrado</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.historico.map(h => {
+            const data = new Date(h.criado_em).toLocaleString('pt-BR');
+            const tipoClass = h.tipo === 'usuario' ? 'bg-primary' : (h.tipo === 'assistente' ? 'bg-success' : 'bg-secondary');
+            const conteudo = h.conteudo.length > 150 ? h.conteudo.substring(0, 150) + '...' : h.conteudo;
+            return `
+                <tr>
+                    <td><small>${data}</small></td>
+                    <td>${h.usuario_nome}</td>
+                    <td><span class="badge ${tipoClass}">${h.tipo}</span></td>
+                    <td><small>${conteudo}</small></td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Erro: ${e}</td></tr>`;
+    }
+}
+</script>
+{% endblock %}

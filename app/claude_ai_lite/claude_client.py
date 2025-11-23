@@ -101,39 +101,72 @@ class ClaudeClient:
             logger.error(f"Erro ao chamar Claude API: {e}")
             return f"Erro na comunicacao com Claude: {str(e)}"
 
-    def identificar_intencao(self, texto: str) -> Dict[str, Any]:
+    def identificar_intencao(self, texto: str, contexto_conversa: str = None) -> Dict[str, Any]:
         """
         Usa Claude para identificar intenção e extrair entidades.
 
         Args:
             texto: Texto do usuário
+            contexto_conversa: Histórico recente da conversa (para entender follow-ups)
 
         Returns:
             Dict com dominio, intencao e entidades
         """
-        system_prompt = """Voce e um analisador de intencoes para um sistema de logistica de uma INDUSTRIA DE ALIMENTOS.
+        # Seção de contexto para perguntas de follow-up
+        secao_contexto = ""
+        if contexto_conversa:
+            secao_contexto = f"""
+=== CONTEXTO DA CONVERSA ATUAL ===
+{contexto_conversa}
+=== FIM DO CONTEXTO ===
+
+IMPORTANTE - PERGUNTAS DE FOLLOW-UP:
+Se o usuário usa termos como "esses itens", "esse pedido", "desses produtos", "mais detalhes",
+"nomes completos", "especificações", você DEVE:
+1. Buscar no CONTEXTO qual pedido/itens foram discutidos
+2. Extrair o num_pedido do contexto se não foi mencionado explicitamente
+3. Definir intencao como "follow_up" se é uma continuação/detalhamento
+4. Copiar as entidades relevantes do contexto (especialmente num_pedido)
+
+"""
+
+        system_prompt = f"""{secao_contexto}Voce e um analisador de intencoes para um sistema de logistica de uma INDUSTRIA DE ALIMENTOS.
 
 Analise a mensagem e retorne APENAS um JSON valido com:
-{
-    "dominio": "carteira|fretes|embarques|cotacoes|faturamento|acao|geral",
-    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|escolher_opcao|criar_separacao|confirmar_acao|listar|calcular|relatorio|outro",
-    "entidades": {
+{{
+    "dominio": "carteira|estoque|fretes|embarques|cotacoes|faturamento|acao|follow_up|geral",
+    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|buscar_rota|buscar_uf|consultar_estoque|consultar_ruptura|analisar_saldo|analisar_gargalo|escolher_opcao|criar_separacao|separar_disponiveis|incluir_item|excluir_item|alterar_quantidade|confirmar_acao|cancelar|ver_rascunho|listar|calcular|relatorio|follow_up|detalhar|outro",
+    "entidades": {{
         "num_pedido": "valor ou null",
         "cnpj": "valor ou null",
         "cliente": "valor ou null",
         "pedido_cliente": "valor ou null",
         "produto": "nome do produto ou null",
         "cod_produto": "codigo do produto ou null",
+        "item": "nome ou codigo do item a incluir/excluir/alterar ou null",
+        "quantidade": "quantidade numerica ou null",
+        "rota": "nome da rota ou null",
+        "sub_rota": "nome da sub-rota ou null",
+        "uf": "sigla do estado (SP, RJ, MG, etc) ou null",
         "data": "valor ou null",
         "opcao": "A, B ou C se usuario escolher opcao"
-    },
+    }},
     "confianca": 0.0 a 1.0
-}
+}}
 
 CONTEXTO - INDUSTRIA DE ALIMENTOS:
 - Produtos: Pessego, Ketchup, Azeitona, Cogumelo, Shoyu, Oleo Misto
 - Variacoes: cor (verde, preta), forma (inteira, fatiada, sem caroco, recheada)
 - Embalagens: BD 6x2 (caixa 6 baldes 2kg), Pouch 18x150 (caixa 18 pouchs 150g), Lata, Vidro
+- Rotas principais: BA, MG, ES, NE, NE2, NO, MS-MT, SUL, SP, RJ (baseadas em UF/regiao)
+- Sub-rotas: CAP, INT, INT 2, A, B, C, 0, 1, 2 (baseadas em cidade/regiao interna)
+- UFs: SP, RJ, MG, PR, SC, RS, BA, etc
+
+IMPORTANTE - DIFERENCA ENTRE ROTA E SUB-ROTA:
+- ROTA principal usa siglas de UF ou regiao: BA, MG, NE, NO, SUL, MS-MT
+- SUB-ROTA usa letras/numeros simples ou nomes curtos: A, B, C, CAP, INT, INT 2
+- Se usuario diz "rota A", "rota B", "rota C" = provavelmente e SUB-ROTA (colocar em sub_rota)
+- Se usuario diz "rota SP", "rota MG", "rota NE" = e ROTA principal (colocar em rota)
 
 REGRAS PARA INTENCAO:
 - Se pergunta "quando posso enviar/embarcar/despachar" = analisar_disponibilidade
@@ -144,25 +177,80 @@ REGRAS PARA INTENCAO:
 - Se usuario responde "opcao A", "A", "quero A", "escolho B" = escolher_opcao (dominio=acao)
 - Se usuario responde "sim", "confirmo", "pode criar" = confirmar_acao (dominio=acao)
 
+REGRAS PARA SEPARACAO (IMPORTANTE - dominio=acao):
+- "criar separacao", "fazer separacao", "separar pedido" = criar_separacao
+- "separar disponiveis", "separar o que da", "separar itens em estoque" = separar_disponiveis
+- "incluir item X", "adicionar X", "colocar X na separacao" = incluir_item (item=X)
+- "excluir item X", "remover X", "tirar X" = excluir_item (item=X)
+- "alterar quantidade de X para Y", "mudar qtd de X" = alterar_quantidade (item=X, quantidade=Y)
+- "confirmo", "pode criar", "sim", "ok" = confirmar_acao
+- "cancelar", "desistir", "nao quero mais" = cancelar
+- "ver rascunho", "mostrar separacao" = ver_rascunho
+
+REGRAS PARA ROTA/SUB-ROTA/UF:
+- Se pergunta "pedidos na rota MG" ou "rota NE" = buscar_rota (rota principal)
+- Se pergunta "rota A", "rota B", "sub-rota CAP" = buscar_rota com sub_rota
+- Se pergunta "pedidos para SP" ou "o que tem para MG" = buscar_uf
+- ATENCAO: "rota" seguida de letra unica (A, B, C) = SUB-ROTA, nao rota principal!
+
+REGRAS PARA ESTOQUE:
+- Se pergunta "qual o estoque de X" ou "tem estoque de" = consultar_estoque (dominio=estoque)
+- Se pergunta "vai dar ruptura" ou "produtos com ruptura" = consultar_ruptura (dominio=estoque)
+- Se pergunta "projecao de estoque" = consultar_estoque (dominio=estoque)
+
+REGRAS PARA SALDO:
+- Se pergunta "quanto falta separar" ou "saldo do pedido" = analisar_saldo
+- Se pergunta "quantidade separada vs original" = analisar_saldo
+
+REGRAS PARA GARGALO:
+- Se pergunta "o que esta travando" ou "gargalo" = analisar_gargalo
+- Se pergunta "produtos que travam pedidos" = analisar_gargalo
+- Se pergunta "por que nao consigo enviar" = analisar_gargalo
+
 REGRAS PARA PRODUTO:
 - Se menciona alimento = colocar em "produto"
 - Incluir variacao se mencionada: "azeitona verde" = produto: "azeitona verde"
 
 Exemplos:
-- "Pedido VCD2509030 tem separacao?" -> carteira, consultar_status, {num_pedido: "VCD2509030"}
-- "Quando posso enviar o pedido VCD2564344?" -> carteira, analisar_disponibilidade, {num_pedido: "VCD2564344"}
-- "Quando e possivel embarcar o pedido VCD123?" -> carteira, analisar_disponibilidade, {num_pedido: "VCD123"}
-- "Quando da pra despachar o pedido X?" -> carteira, analisar_disponibilidade, {num_pedido: "X"}
-- "O pessego ja foi programado?" -> carteira, buscar_produto, {produto: "pessego"}
-- "Quanto tem de azeitona verde na carteira?" -> carteira, buscar_produto, {produto: "azeitona verde"}
-- "Azeitona preta fatiada BD 6x2 tem separacao?" -> carteira, buscar_produto, {produto: "azeitona preta fatiada BD 6x2"}
-- "Ketchup pouch ainda tem na carteira?" -> carteira, buscar_produto, {produto: "ketchup pouch"}
-- "Cliente CERATTI tem pedido?" -> carteira, consultar_status, {cliente: "CERATTI"}
-- "Opcao A" -> acao, escolher_opcao, {opcao: "A"}
-- "Quero a B" -> acao, escolher_opcao, {opcao: "B"}
-- "Opcao A para o pedido VCD123" -> acao, escolher_opcao, {opcao: "A", num_pedido: "VCD123"}
-- "Criar separacao opcao B do pedido VCD456" -> acao, criar_separacao, {opcao: "B", num_pedido: "VCD456"}
-- "Sim, criar separacao" -> acao, confirmar_acao, {}
+- "Pedido VCD2509030 tem separacao?" -> carteira, consultar_status, {{num_pedido: "VCD2509030"}}
+- "Quando posso enviar o pedido VCD2564344?" -> carteira, analisar_disponibilidade, {{num_pedido: "VCD2564344"}}
+- "O pessego ja foi programado?" -> carteira, buscar_produto, {{produto: "pessego"}}
+- "Cliente CERATTI tem pedido?" -> carteira, consultar_status, {{cliente: "CERATTI"}}
+- "Opcao A" -> acao, escolher_opcao, {{opcao: "A"}}
+- "Pedidos na rota MG" -> carteira, buscar_rota, {{rota: "MG"}}
+- "O que tem na rota NE?" -> carteira, buscar_rota, {{rota: "NE"}}
+- "Tem mais algo pra rota B?" -> carteira, buscar_rota, {{sub_rota: "B"}}
+- "Pedidos da sub-rota CAP" -> carteira, buscar_rota, {{sub_rota: "CAP"}}
+- "O que tem pra rota A?" -> carteira, buscar_rota, {{sub_rota: "A"}}
+- "Rota INT tem pedidos?" -> carteira, buscar_rota, {{sub_rota: "INT"}}
+- "O que tem para Sao Paulo?" -> carteira, buscar_uf, {{uf: "SP"}}
+- "Pedidos para MG" -> carteira, buscar_uf, {{uf: "MG"}}
+- "Qual o estoque de azeitona verde?" -> estoque, consultar_estoque, {{produto: "azeitona verde"}}
+- "Tem ruptura de ketchup?" -> estoque, consultar_ruptura, {{produto: "ketchup"}}
+- "Quais produtos vao dar ruptura?" -> estoque, consultar_ruptura, {{}}
+- "Quanto falta separar do VCD123?" -> carteira, analisar_saldo, {{num_pedido: "VCD123"}}
+- "Saldo do pedido VCD456" -> carteira, analisar_saldo, {{num_pedido: "VCD456"}}
+- "O que esta travando o pedido VCD789?" -> carteira, analisar_gargalo, {{num_pedido: "VCD789"}}
+- "Quais produtos sao gargalo?" -> carteira, analisar_gargalo, {{}}
+- "Por que nao consigo enviar o VCD111?" -> carteira, analisar_gargalo, {{num_pedido: "VCD111"}}
+- "Preciso dos nomes completos desses itens" -> follow_up, detalhar, {{}} (usar contexto anterior)
+- "Mais detalhes sobre esses produtos" -> follow_up, detalhar, {{}} (usar contexto anterior)
+
+EXEMPLOS DE SEPARACAO (dominio=acao):
+- "Criar separacao do pedido VCD123" -> acao, criar_separacao, {{num_pedido: "VCD123"}}
+- "Separar os itens disponiveis" -> acao, separar_disponiveis, {{}}
+- "Separar o que da do pedido VCD123" -> acao, separar_disponiveis, {{num_pedido: "VCD123"}}
+- "Voce consegue gerar separacao dos 3 itens disponiveis?" -> acao, separar_disponiveis, {{}}
+- "Incluir o cogumelo" -> acao, incluir_item, {{item: "cogumelo"}}
+- "Adicionar azeitona verde com 5 unidades" -> acao, incluir_item, {{item: "azeitona verde", quantidade: 5}}
+- "Excluir o pepino" -> acao, excluir_item, {{item: "pepino"}}
+- "Remover oleo da separacao" -> acao, excluir_item, {{item: "oleo"}}
+- "Alterar quantidade de azeitona para 10" -> acao, alterar_quantidade, {{item: "azeitona", quantidade: 10}}
+- "Mudar qtd do cogumelo para 3" -> acao, alterar_quantidade, {{item: "cogumelo", quantidade: 3}}
+- "Confirmo" -> acao, confirmar_acao, {{}}
+- "Sim, pode criar" -> acao, confirmar_acao, {{}}
+- "Cancelar" -> acao, cancelar, {{}}
+- "Ver rascunho" -> acao, ver_rascunho, {{}}
 
 Retorne SOMENTE o JSON, sem explicacoes."""
 
@@ -192,7 +280,8 @@ Retorne SOMENTE o JSON, sem explicacoes."""
         self,
         pergunta: str,
         contexto: str,
-        dominio: str = "logistica"
+        dominio: str = "logistica",
+        contexto_memoria: str = None
     ) -> str:
         """
         Gera resposta usando contexto de dados do sistema.
@@ -201,11 +290,28 @@ Retorne SOMENTE o JSON, sem explicacoes."""
             pergunta: Pergunta do usuário
             contexto: Dados relevantes do banco (já formatados)
             dominio: Domínio da consulta
+            contexto_memoria: Histórico de conversa + aprendizados (opcional)
 
         Returns:
             Resposta elaborada pelo Claude
         """
+        # Monta seção de memória se houver
+        secao_memoria = ""
+        if contexto_memoria:
+            secao_memoria = f"""
+
+MEMÓRIA E HISTÓRICO:
+{contexto_memoria}
+
+IMPORTANTE SOBRE MEMÓRIA:
+- Use o histórico para entender referências como "esses pedidos", "o pedido 2 da lista"
+- Se o usuário perguntar "quais pedidos você falou?", consulte o histórico
+- Respeite os conhecimentos permanentes salvos
+- Se o usuário usar "Lembre que...", confirme que você memorizou
+"""
+
         system_prompt = f"""Você é um assistente amigável e prestativo especializado em {dominio} para um sistema de gestão de fretes de uma indústria de alimentos.
+{secao_memoria}
 
 PERSONALIDADE:
 - Seja acolhedor e profissional
@@ -230,11 +336,57 @@ ORIENTAÇÃO AO USUÁRIO:
   * "Precisa consultar outro pedido ou cliente?"
 
 CAPACIDADES QUE VOCÊ TEM:
+
+**Consultas de Pedidos:**
 - Consultar pedidos por número, cliente ou CNPJ
-- Verificar quando um pedido pode ser enviado (análise de estoque)
-- Mostrar opções de envio (total ou parcial)
-- Criar separações para pedidos
+- Analisar saldo de pedido (original vs separado)
+
+**Análise de Disponibilidade (Quando Posso Enviar?):**
+- Pergunta: "Quando posso enviar o pedido VCD123?"
+- Analisa o estoque atual vs quantidade necessária de cada item
+- Gera até 3 OPÇÕES DE ENVIO:
+  * Opção A: Envio TOTAL - aguarda todos os itens terem estoque
+  * Opção B: Envio PARCIAL - exclui 1 item gargalo (se houver)
+  * Opção C: Envio PARCIAL - exclui 2 itens gargalo (se houver)
+- Mostra data prevista, valor, percentual e itens de cada opção
+
+**Análise de Gargalos (O que está travando?):**
+- Pergunta: "O que está travando o pedido VCD123?" ou "Quais produtos são gargalo?"
+- Identifica produtos com estoque insuficiente para atender demanda
+- Mostra: quantidade necessária, estoque atual, quanto falta
+- Para gargalos gerais: ranking dos produtos que mais travam pedidos
+- Calcula severidade (1-10) baseado em cobertura e pedidos afetados
+
+**Ações:**
+- Criar separações para pedidos (escolher opção A, B ou C após análise)
+
+**Consultas de Produtos e Estoque:**
 - Buscar produtos na carteira
+- Verificar estoque atual e projeção de até 14 dias
+- Identificar produtos com ruptura prevista (próximos 7 dias)
+
+**Consultas por Localização:**
+- Por rota principal: "rota MG", "rota NE", "rota SUL"
+- Por sub-rota: "rota B", "rota CAP", "rota INT"
+- Por UF/estado: "pedidos para SP", "o que tem pra MG?"
+
+**Memória e Aprendizado:**
+- Memorizar: "Lembre que o cliente X é VIP"
+- Memorizar global: "Lembre que código 123 é Azeitona (global)"
+- Esquecer: "Esqueça que o cliente X é especial"
+- Listar: "O que você sabe?"
+
+SE O USUÁRIO PEDIR AJUDA OU PERGUNTAR O QUE VOCÊ FAZ:
+Explique suas capacidades de forma amigável e dê exemplos práticos:
+"Posso te ajudar com várias coisas! Por exemplo:
+- 'Pedido VCD123 tem separação?' - consulto o status
+- 'Quando posso enviar o pedido VCD456?' - analiso estoque e dou opções A/B/C
+- 'O que está travando o pedido X?' - identifico os gargalos de estoque
+- 'O que tem pra rota B?' - listo pedidos da sub-rota
+- 'Qual o estoque de azeitona?' - mostro estoque e projeção
+- 'Quais produtos vão dar ruptura?' - listo produtos críticos
+- 'Lembre que o cliente Ceratti é VIP' - memorizo para você
+O que você gostaria de saber?"
 
 CONTEXTO DOS DADOS:
 {contexto}

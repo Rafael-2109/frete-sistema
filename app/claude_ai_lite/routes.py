@@ -1,12 +1,11 @@
 """
 Rotas Flask para Claude AI Lite.
-
-REGRA: Maximo 3 endpoints. Se precisar de mais, algo esta errado.
+Inclui página de conversa e endpoints de API.
 """
 
 import logging
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 from flask_login import login_required, current_user
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,21 @@ def _exempt_csrf():
 
 _exempt_csrf()
 
+
+# ============================================
+# PÁGINA DE CONVERSA
+# ============================================
+
+@claude_lite_bp.route('/', methods=['GET'])
+@login_required
+def pagina_conversa():
+    """Página dedicada para conversar com o Claude."""
+    return render_template('claude_ai_lite/conversa.html')
+
+
+# ============================================
+# API ENDPOINTS
+# ============================================
 
 @claude_lite_bp.route('/api/query', methods=['POST'])
 @login_required
@@ -49,11 +63,17 @@ def api_query():
         usar_claude = data.get('usar_claude', True)
 
         usuario = getattr(current_user, 'nome', 'Desconhecido')
-        logger.info(f"[Claude Lite] {usuario}: '{consulta[:100]}'")
+        usuario_id = getattr(current_user, 'id', None)
+        logger.info(f"[Claude Lite] {usuario} (ID:{usuario_id}): '{consulta[:100]}'")
 
-        # Usa o core para processar (passa usuario para acoes)
+        # Usa o core para processar (passa usuario e usuario_id para memória)
         from .core import processar_consulta
-        resposta = processar_consulta(consulta, usar_claude_resposta=usar_claude, usuario=usuario)
+        resposta = processar_consulta(
+            consulta,
+            usar_claude_resposta=usar_claude,
+            usuario=usuario,
+            usuario_id=usuario_id
+        )
 
         return jsonify({
             'success': True,

@@ -641,6 +641,35 @@
             </ul>
           </li>
           #}
+
+          <!-- Claude AI Lite -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="menuClaudeLite" role="button" data-bs-toggle="dropdown"
+              title="Claude AI Lite - Assistente Inteligente">
+              <i class="fas fa-brain text-info"></i> Claude AI
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <h6 class="dropdown-header"><i class="fas fa-comments"></i> Assistente</h6>
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('claude_lite.pagina_conversa') }}">
+                  <i class="fas fa-comment-dots text-primary"></i> Conversar com Claude
+                  <span class="badge bg-success ms-2">NOVO</span>
+                </a></li>
+              {% if current_user.id == 1 or current_user.perfil == 'admin' %}
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li>
+                <h6 class="dropdown-header"><i class="fas fa-cog"></i> Administração</h6>
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('claude_lite_admin.admin_dashboard') }}">
+                  <i class="fas fa-graduation-cap text-warning"></i> Aprendizados e Memória
+                </a></li>
+              {% endif %}
+            </ul>
+          </li>
+
           <!-- Logout -->
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('auth.logout') }}">Sair</a>
