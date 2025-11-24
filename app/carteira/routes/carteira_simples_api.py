@@ -373,12 +373,13 @@ def obter_dados():
 
         # 🚀 OTIMIZAÇÃO: Calcular estoque em BATCH para produtos únicos
         # 🔧 CORREÇÃO: Coletar TODOS os produtos (não só os com qtd_saldo > 0)
+        # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal
         produtos_unicos = {}
         for item in items:
             if item.cod_produto not in produtos_unicos:
                 produtos_unicos[item.cod_produto] = {
                     'qtd_total_carteira': 0,
-                    'expedicao': item.expedicao  # Usar primeira data de expedição encontrada
+                    'expedicao': None  # Removido de CarteiraPrincipal - dados de expedição estão em Separacao
                 }
 
             qtd_separada = sep_map.get((item.num_pedido, item.cod_produto), 0)
@@ -640,28 +641,23 @@ def obter_dados():
 
                     # 🚀 OTIMIZAÇÃO: BUSCAR ROTA E SUB_ROTA do cache pré-calculado
                     # 🔧 CORREÇÃO: SEMPRE verificar incoterm FOB/RED PRIMEIRO
+                    # NOTA: Campos rota e sub_rota foram REMOVIDOS de CarteiraPrincipal
+                    # Agora calculamos sempre via cache de localidades
                     if hasattr(produto, 'incoterm') and produto.incoterm in ['FOB', 'RED']:
                         rota_calculada = produto.incoterm
                         sub_rota_calculada = None  # FOB/RED não tem sub-rota
                     else:
-                        rota_calculada = produto.rota
-                        sub_rota_calculada = produto.sub_rota
-
-                        if not rota_calculada or not sub_rota_calculada:
-                            # Buscar do cache pré-calculado
-                            chave_cache = (produto.estado, produto.municipio) if produto.municipio else (produto.estado, None)
-                            rotas_cached = rotas_cache.get(chave_cache, (None, None))
-
-                            if not rota_calculada:
-                                rota_calculada = rotas_cached[0]
-                            if not sub_rota_calculada:
-                                sub_rota_calculada = rotas_cached[1]
+                        # Buscar do cache pré-calculado (campos rota/sub_rota removidos de CarteiraPrincipal)
+                        chave_cache = (produto.estado, produto.municipio) if produto.municipio else (produto.estado, None)
+                        rotas_cached = rotas_cache.get(chave_cache, (None, None))
+                        rota_calculada = rotas_cached[0]
+                        sub_rota_calculada = rotas_cached[1]
 
                     # 🚀 OTIMIZAÇÃO: Pré-calcular datas (evitar strftime repetido)
+                    # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado
+                    # foram REMOVIDOS de CarteiraPrincipal - dados de expedição estão em Separacao
                     data_pedido_str = produto.data_pedido.isoformat() if produto.data_pedido else None
                     data_entrega_str = produto.data_entrega_pedido.isoformat() if produto.data_entrega_pedido else None
-                    expedicao_str = produto.expedicao.isoformat() if produto.expedicao else None
-                    agendamento_str = produto.agendamento.isoformat() if produto.agendamento else None
 
                     # ✅ LINHA DO PEDIDO
                     dados.append({
@@ -686,10 +682,10 @@ def obter_dados():
                         'peso': peso,
                         'rota': rota_calculada,
                         'sub_rota': sub_rota_calculada,
-                        'expedicao': expedicao_str,
-                        'agendamento': agendamento_str,
-                        'protocolo': produto.protocolo,
-                        'agendamento_confirmado': produto.agendamento_confirmado,
+                        'expedicao': None,  # Removido de CarteiraPrincipal - dados em Separacao
+                        'agendamento': None,  # Removido de CarteiraPrincipal - dados em Separacao
+                        'protocolo': None,  # Removido de CarteiraPrincipal - dados em Separacao
+                        'agendamento_confirmado': False,  # Removido de CarteiraPrincipal - dados em Separacao
                         'palletizacao': palletizacao,
                         'peso_bruto': peso_bruto,
                         'estoque_atual': estoque_info['estoque_atual'],

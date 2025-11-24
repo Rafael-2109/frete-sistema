@@ -74,6 +74,9 @@ class ConsultarPedidoCapability(BaseCapability):
             elif campo == "num_pedido":
                 query = query.filter(CarteiraPrincipal.num_pedido.like(f"%{valor}%"))
 
+            # Aplica filtros aprendidos pelo IA Trainer
+            query = self.aplicar_filtros_aprendidos(query, contexto, CarteiraPrincipal)
+
             itens = query.all()
 
             if not itens:
@@ -151,12 +154,12 @@ class ConsultarPedidoCapability(BaseCapability):
 
             if p.get("produtos"):
                 linhas.append(f"  Produtos ({len(p['produtos'])}):")
-                for prod in p["produtos"][:5]:
+                for prod in p["produtos"]:
                     linhas.append(f"    - {prod['nome_produto']}: {prod['qtd']:.0f}un")
 
             if p.get("tem_separacao"):
                 linhas.append(f"  Separacoes ({len(p['separacoes'])}):")
-                for sep in p["separacoes"][:5]:
+                for sep in p["separacoes"]:
                     linhas.append(f"    - {sep['nome_produto']}: {sep['qtd_saldo']:.0f}un | {sep['status']}")
             else:
                 linhas.append("  TEM SEPARACAO: NAO")

@@ -25,8 +25,10 @@ class GargalosLoader(BaseLoader):
         "cod_produto", # Analisa impacto de um produto especifico
     ]
 
-    def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
+    def buscar(self, valor: str, campo: str, contexto: Dict = None) -> Dict[str, Any]:
         """Identifica gargalos de estoque."""
+        self._contexto = contexto  # Guarda para uso nos métodos internos
+
         resultado = {
             "sucesso": True,
             "valor_buscado": valor,

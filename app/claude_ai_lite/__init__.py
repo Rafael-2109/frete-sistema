@@ -29,6 +29,7 @@ Para adicionar nova capacidade:
 from .core import processar_consulta
 from .routes import claude_lite_bp
 from .routes_admin import claude_lite_admin_bp
+from .ia_trainer.routes import bp as ia_trainer_bp
 
 # Exporta também o registry de capacidades para uso externo
 from .capabilities import get_capability, get_all_capabilities, find_capability
@@ -37,6 +38,7 @@ __all__ = [
     'processar_consulta',
     'claude_lite_bp',
     'claude_lite_admin_bp',
+    'ia_trainer_bp',
     'get_capability',
     'get_all_capabilities',
     'find_capability'

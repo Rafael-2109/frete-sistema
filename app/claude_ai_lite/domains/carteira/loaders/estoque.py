@@ -24,7 +24,7 @@ class EstoqueLoader(BaseLoader):
         "ruptura",  # Campo especial para listar produtos com ruptura
     ]
 
-    def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
+    def buscar(self, valor: str, campo: str, contexto: Dict = None) -> Dict[str, Any]:
         """Busca informacoes de estoque."""
         from app.estoque.services.estoque_simples import ServicoEstoqueSimples
         from app.producao.models import CadastroPalletizacao
@@ -50,15 +50,20 @@ class EstoqueLoader(BaseLoader):
 
             # Busca produto pelo nome ou codigo
             if campo == "nome_produto":
-                produtos = CadastroPalletizacao.query.filter(
+                query = CadastroPalletizacao.query.filter(
                     CadastroPalletizacao.nome_produto.ilike(f"%{valor}%"),
                     CadastroPalletizacao.ativo == True
-                ).limit(10).all()
+                )
             else:  # cod_produto
-                produtos = CadastroPalletizacao.query.filter(
+                query = CadastroPalletizacao.query.filter(
                     CadastroPalletizacao.cod_produto.ilike(f"%{valor}%"),
                     CadastroPalletizacao.ativo == True
-                ).limit(10).all()
+                )
+
+            # Aplica filtros aprendidos pelo IA Trainer
+            query = self.aplicar_filtros_aprendidos(query, contexto, CadastroPalletizacao)
+
+            produtos = query.limit(10).all()
 
             if not produtos:
                 resultado["mensagem"] = f"Produto '{valor}' nao encontrado no cadastro."

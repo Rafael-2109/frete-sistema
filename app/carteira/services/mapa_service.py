@@ -48,15 +48,14 @@ class MapaService:
         """
         try:
             # Buscar pedidos da carteira com JOIN para CadastroPalletizacao
+            # NOTA: Campos expedicao, agendamento, protocolo removidos de CarteiraPrincipal
+            # Esses dados agora vêm apenas de Separacao
             pedidos_query = db.session.query(
                 CarteiraPrincipal.num_pedido,
                 CarteiraPrincipal.cnpj_cpf,
                 CarteiraPrincipal.raz_social_red,
                 CarteiraPrincipal.municipio,
                 CarteiraPrincipal.estado,
-                CarteiraPrincipal.expedicao,
-                CarteiraPrincipal.agendamento,
-                CarteiraPrincipal.protocolo,
                 CarteiraPrincipal.observ_ped_1,
                 # Endereço de entrega
                 CarteiraPrincipal.cnpj_endereco_ent,
@@ -84,9 +83,6 @@ class MapaService:
                 CarteiraPrincipal.raz_social_red,
                 CarteiraPrincipal.municipio,
                 CarteiraPrincipal.estado,
-                CarteiraPrincipal.expedicao,
-                CarteiraPrincipal.agendamento,
-                CarteiraPrincipal.protocolo,
                 CarteiraPrincipal.observ_ped_1,
                 CarteiraPrincipal.cnpj_endereco_ent,
                 CarteiraPrincipal.empresa_endereco_ent,
@@ -136,12 +132,12 @@ class MapaService:
                             'itens': pedido.total_itens
                         },
                         'datas': {
-                            'expedicao': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else None,
-                            'agendamento': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else None,
-                            'protocolo': pedido.protocolo
+                            'expedicao': None,  # Removido de CarteiraPrincipal - usar Separacao
+                            'agendamento': None,  # Removido de CarteiraPrincipal - usar Separacao
+                            'protocolo': None  # Removido de CarteiraPrincipal - usar Separacao
                         },
                         'observacoes': pedido.observ_ped_1,
-                        'status': self._determinar_status_pedido(pedido)
+                        'status': 'pendente'  # Simplificado - dados de agendamento agora em Separacao
                     }
                     pedidos_mapa.append(pedido_info)
                 else:
@@ -181,15 +177,8 @@ class MapaService:
         
     def _determinar_status_pedido(self, pedido) -> str:
         """Determina o status do pedido para visualização"""
-        if pedido.agendamento and pedido.protocolo:
-            return "agendado"
-        elif pedido.expedicao:
-            if pedido.expedicao <= datetime.now().date():
-                return "atrasado"
-            elif pedido.expedicao <= datetime.now().date() + timedelta(days=3):
-                return "urgente"
-            else:
-                return "normal"
+        # NOTA: Campos expedicao, agendamento, protocolo foram removidos de CarteiraPrincipal
+        # Para status detalhado, seria necessário consultar Separacao
         return "pendente"
         
     def geocodificar_endereco(self, endereco: str) -> Tuple[Optional[float], Optional[float]]:

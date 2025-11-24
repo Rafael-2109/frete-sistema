@@ -98,18 +98,16 @@ def obter_workspace_estoque(num_pedido):
     
     try:
         # CORREÇÃO 1: Buscar produtos com JOIN em CadastroPalletizacao para peso/pallet corretos
+        # NOTA: Campos expedicao e estoque foram REMOVIDOS de CarteiraPrincipal
         produtos_carteira = (
             db.session.query(
                 CarteiraPrincipal.cod_produto,
                 CarteiraPrincipal.nome_produto,
                 CarteiraPrincipal.qtd_saldo_produto_pedido.label("qtd_pedido"),
                 CarteiraPrincipal.preco_produto_pedido.label("preco_unitario"),
-                CarteiraPrincipal.expedicao,
                 # Dados de palletização CORRETOS via CadastroPalletizacao
                 CadastroPalletizacao.peso_bruto.label("peso_unitario"),
                 CadastroPalletizacao.palletizacao,
-                # Dados básicos
-                CarteiraPrincipal.estoque.label("estoque_hoje"),
             )
             .outerjoin(
                 CadastroPalletizacao,

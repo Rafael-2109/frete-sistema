@@ -57,7 +57,7 @@ class ConsultarProdutoCapability(BaseCapability):
             return {"sucesso": False, "erro": "Produto não informado", "total_encontrado": 0}
 
         loader = ProdutosLoader()
-        return loader.buscar(valor, campo)
+        return loader.buscar(valor, campo, contexto)  # Passa contexto com filtros aprendidos
 
     def formatar_contexto(self, resultado: Dict[str, Any]) -> str:
         """Delega formatação para o loader existente."""

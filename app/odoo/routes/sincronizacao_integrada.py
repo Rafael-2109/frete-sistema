@@ -92,7 +92,8 @@ def listar_pedidos_para_sincronizar():
                 CarteiraPrincipal.preco_produto_pedido
             ).label('valor_total'),
             func.count(CarteiraPrincipal.cod_produto).label('total_itens'),
-            func.max(CarteiraPrincipal.expedicao).label('data_expedicao')
+            # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
+            func.max(CarteiraPrincipal.data_pedido).label('data_expedicao')
         ).filter(
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Apenas itens com saldo
         )

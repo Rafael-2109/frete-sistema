@@ -633,13 +633,14 @@ class CorrecaoPedidosServiceV2:
             primeiro_item = itens_pendentes[0]
 
             # Buscar pedidos do mesmo cliente e produto
+            # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
             pedidos_candidatos = CarteiraPrincipal.query.filter_by(
                 cnpj_cpf=primeiro_item.cnpj_cliente,
                 cod_produto=primeiro_item.cod_produto
             ).filter(
                 CarteiraPrincipal.qtd_saldo_produto_pedido > 0
             ).order_by(
-                CarteiraPrincipal.expedicao.desc()
+                CarteiraPrincipal.data_pedido.desc()
             ).limit(5).all()
 
             # Verificar qual pedido tem quantidades mais próximas

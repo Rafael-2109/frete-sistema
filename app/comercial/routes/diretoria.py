@@ -660,20 +660,30 @@ def exportar_clientes_excel():
         for num_pedido in pedidos_cliente:
             pedido_info = PedidoService._processar_pedido(num_pedido, cnpj, None, None)
 
+            # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado
+            # foram REMOVIDOS de CarteiraPrincipal - buscar de Separacao
             carteira_info = db.session.query(
-                func.min(CarteiraPrincipal.data_pedido).label('data_pedido'),
-                func.min(CarteiraPrincipal.expedicao).label('expedicao'),
-                func.min(CarteiraPrincipal.agendamento).label('agendamento'),
-                func.max(CarteiraPrincipal.protocolo).label('protocolo')
+                func.min(CarteiraPrincipal.data_pedido).label('data_pedido')
             ).filter(
                 CarteiraPrincipal.cnpj_cpf == cnpj,
                 CarteiraPrincipal.num_pedido == num_pedido
             ).first()
 
-            agendamento_confirmado_carteira = db.session.query(CarteiraPrincipal.id).filter(
-                CarteiraPrincipal.cnpj_cpf == cnpj,
-                CarteiraPrincipal.num_pedido == num_pedido,
-                CarteiraPrincipal.agendamento_confirmado.is_(True)
+            # Buscar dados de agendamento de Separacao
+            from app.separacao.models import Separacao
+            sep_info = db.session.query(
+                func.min(Separacao.expedicao).label('expedicao'),
+                func.min(Separacao.agendamento).label('agendamento'),
+                func.max(Separacao.protocolo).label('protocolo')
+            ).filter(
+                Separacao.num_pedido == num_pedido,
+                Separacao.sincronizado_nf == False
+            ).first()
+
+            agendamento_confirmado_carteira = db.session.query(Separacao.id).filter(
+                Separacao.num_pedido == num_pedido,
+                Separacao.sincronizado_nf == False,
+                Separacao.agendamento_confirmado.is_(True)
             ).first() is not None
 
             documentos = DocumentoService.obter_documentos_pedido(num_pedido=num_pedido, cnpj_cliente=cnpj)
@@ -681,14 +691,15 @@ def exportar_clientes_excel():
 
             saldo_carteira_float = float(pedido_info.get('saldo_carteira') or 0)
             if not docs and saldo_carteira_float > 0:
+                # Usar dados de Separacao em vez de CarteiraPrincipal
                 docs = [{
                     'tipo': 'Saldo',
                     'valor': saldo_carteira_float,
                     'numero_nf': '-',
                     'data_faturamento': None,
-                    'data_embarque': carteira_info.expedicao if carteira_info else None,
-                    'data_agendamento': carteira_info.agendamento if carteira_info else None,
-                    'protocolo_agendamento': carteira_info.protocolo if carteira_info and carteira_info.protocolo else '',
+                    'data_embarque': sep_info.expedicao if sep_info else None,
+                    'data_agendamento': sep_info.agendamento if sep_info else None,
+                    'protocolo_agendamento': sep_info.protocolo if sep_info and sep_info.protocolo else '',
                     'status_agendamento': 'aguardando',
                     'data_entrega_prevista': None,
                     'data_entrega_realizada': None,

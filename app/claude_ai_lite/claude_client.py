@@ -135,7 +135,7 @@ Se o usuário usa termos como "esses itens", "esse pedido", "desses produtos", "
 Analise a mensagem e retorne APENAS um JSON valido com:
 {{
     "dominio": "carteira|estoque|fretes|embarques|cotacoes|faturamento|acao|follow_up|geral",
-    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|buscar_rota|buscar_uf|consultar_estoque|consultar_ruptura|analisar_saldo|analisar_gargalo|escolher_opcao|criar_separacao|separar_disponiveis|incluir_item|excluir_item|alterar_quantidade|confirmar_acao|cancelar|ver_rascunho|listar|calcular|relatorio|follow_up|detalhar|outro",
+    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|analisar_estoque_cliente|buscar_rota|buscar_uf|consultar_estoque|consultar_ruptura|analisar_saldo|analisar_gargalo|escolher_opcao|criar_separacao|separar_disponiveis|incluir_item|excluir_item|alterar_quantidade|confirmar_acao|cancelar|ver_rascunho|listar|calcular|relatorio|follow_up|detalhar|outro",
     "entidades": {{
         "num_pedido": "valor ou null",
         "cnpj": "valor ou null",
@@ -207,6 +207,16 @@ REGRAS PARA GARGALO:
 - Se pergunta "produtos que travam pedidos" = analisar_gargalo
 - Se pergunta "por que nao consigo enviar" = analisar_gargalo
 
+REGRAS PARA PERGUNTAS COMPOSTAS (CLIENTE + DATA + ESTOQUE) - IMPORTANTE:
+- "quais produtos do [CLIENTE] terao estoque" = analisar_estoque_cliente
+- "o que posso enviar para o cliente [X]" = analisar_estoque_cliente
+- "produtos disponiveis do [CLIENTE]" = analisar_estoque_cliente
+- "o que tem estoque para enviar ao [CLIENTE]" = analisar_estoque_cliente
+- "quais produtos do [CLIENTE] estao disponiveis dia [DATA]" = analisar_estoque_cliente
+- IMPORTANTE: Se menciona CLIENTE + (estoque OU disponivel OU enviar OU data sem num_pedido), use analisar_estoque_cliente
+- DIFERENCA: "quando posso enviar o PEDIDO VCD123" = analisar_disponibilidade (tem num_pedido)
+- DIFERENCA: "o que posso enviar para o CLIENTE Atacadao" = analisar_estoque_cliente (tem cliente, sem num_pedido)
+
 REGRAS PARA PRODUTO:
 - Se menciona alimento = colocar em "produto"
 - Incluir variacao se mencionada: "azeitona verde" = produto: "azeitona verde"
@@ -235,6 +245,13 @@ Exemplos:
 - "Por que nao consigo enviar o VCD111?" -> carteira, analisar_gargalo, {{num_pedido: "VCD111"}}
 - "Preciso dos nomes completos desses itens" -> follow_up, detalhar, {{}} (usar contexto anterior)
 - "Mais detalhes sobre esses produtos" -> follow_up, detalhar, {{}} (usar contexto anterior)
+
+EXEMPLOS DE PERGUNTAS COMPOSTAS (CLIENTE + DATA + ESTOQUE):
+- "Quais produtos do Atacadao 183 terao estoque no dia 26/11?" -> carteira, analisar_estoque_cliente, {{cliente: "Atacadao 183", data: "26/11"}}
+- "O que posso enviar para o cliente Ceratti?" -> carteira, analisar_estoque_cliente, {{cliente: "Ceratti"}}
+- "Produtos disponiveis do Carrefour para semana que vem" -> carteira, analisar_estoque_cliente, {{cliente: "Carrefour", data: "semana que vem"}}
+- "O que tem estoque para enviar ao Pao de Acucar?" -> carteira, analisar_estoque_cliente, {{cliente: "Pao de Acucar"}}
+- "Quais itens do cliente Extra posso despachar dia 28?" -> carteira, analisar_estoque_cliente, {{cliente: "Extra", data: "28"}}
 
 EXEMPLOS DE SEPARACAO (dominio=acao):
 - "Criar separacao do pedido VCD123" -> acao, criar_separacao, {{num_pedido: "VCD123"}}

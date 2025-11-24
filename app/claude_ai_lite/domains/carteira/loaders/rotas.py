@@ -23,7 +23,7 @@ class RotasLoader(BaseLoader):
         "cod_uf",
     ]
 
-    def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
+    def buscar(self, valor: str, campo: str, contexto: Dict = None) -> Dict[str, Any]:
         """Busca pedidos/separacoes por rota, sub-rota ou UF."""
         from app.separacao.models import Separacao
         from app.localidades.models import CadastroRota, CadastroSubRota
@@ -58,6 +58,9 @@ class RotasLoader(BaseLoader):
                     query = query.filter(Separacao.cod_uf == valor_uf)
                 else:
                     query = query.filter(Separacao.cod_uf.ilike(f"%{valor_uf}%"))
+
+            # Aplica filtros aprendidos pelo IA Trainer
+            query = self.aplicar_filtros_aprendidos(query, contexto, Separacao)
 
             separacoes = query.all()
 

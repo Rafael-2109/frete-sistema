@@ -1,19 +1,48 @@
 """
 Prompt para classificação de intenções.
 
-Gera o prompt dinamicamente baseado nas capacidades registradas.
-Limite: 150 linhas
+Gera o prompt dinamicamente baseado nas capacidades registradas
+E nos códigos aprendidos pelo IA Trainer.
+
+Limite: 200 linhas
 """
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+def _carregar_codigos_aprendidos() -> dict:
+    """
+    Carrega códigos aprendidos do IA Trainer.
+
+    Returns:
+        Dict com prompts, conceitos e entidades formatados
+    """
+    try:
+        from ..ia_trainer.services.codigo_loader import (
+            gerar_contexto_prompts,
+            gerar_contexto_conceitos,
+            gerar_contexto_entidades
+        )
+
+        return {
+            'prompts': gerar_contexto_prompts(),
+            'conceitos': gerar_contexto_conceitos(),
+            'entidades': gerar_contexto_entidades()
+        }
+    except Exception as e:
+        logger.debug(f"[INTENT_PROMPT] Codigos aprendidos nao disponiveis: {e}")
+        return {'prompts': '', 'conceitos': '', 'entidades': ''}
 
 
 def gerar_prompt_classificacao(contexto_conversa: str = None) -> str:
     """
     Gera o prompt de classificação de intenções.
 
-    O prompt é gerado dinamicamente baseado nas capacidades registradas,
-    garantindo que novas capacidades sejam automaticamente incluídas.
+    O prompt é gerado dinamicamente baseado nas capacidades registradas
+    E nos códigos aprendidos pelo IA Trainer.
 
     Args:
         contexto_conversa: Contexto de conversa anterior (para follow-ups)
@@ -34,6 +63,9 @@ def gerar_prompt_classificacao(contexto_conversa: str = None) -> str:
         dominios = ["carteira", "estoque", "fretes", "embarques", "cotacao", "faturamento", "acao", "follow_up", "geral"]
         intencoes = ["consultar_status", "buscar_pedido", "analisar_disponibilidade", "outro"]
         exemplos = ""
+
+    # Carrega códigos aprendidos pelo IA Trainer
+    codigos_aprendidos = _carregar_codigos_aprendidos()
 
     # Adiciona domínios e intenções fixas que sempre devem existir
     dominios_fixos = ["acao", "follow_up", "geral"]
@@ -96,8 +128,8 @@ CONTEXTO - INDUSTRIA DE ALIMENTOS:
 - Sub-rotas: CAP, INT, INT 2, A, B, C, 0, 1, 2 (baseadas em cidade/regiao interna)
 
 REGRAS PARA INTENCAO:
-- "quando posso enviar/embarcar" = analisar_disponibilidade
-- "tem estoque para" = analisar_disponibilidade
+- "quando posso enviar/embarcar" + num_pedido especifico = analisar_disponibilidade
+- "tem estoque para" + num_pedido = analisar_disponibilidade
 - "status do pedido" = consultar_status
 - "opcao A/B/C" ou "quero A" = escolher_opcao (dominio=acao)
 - "sim", "confirmo" = confirmar_acao (dominio=acao)
@@ -106,6 +138,13 @@ REGRAS PARA INTENCAO:
 - "qual estoque de" = consultar_estoque
 - "vai dar ruptura" = consultar_ruptura
 
+REGRAS PARA PERGUNTAS COMPOSTAS (CLIENTE + DATA + ESTOQUE):
+- "quais produtos do [CLIENTE] terao estoque" = analisar_estoque_cliente
+- "o que posso enviar para o cliente [X]" = analisar_estoque_cliente
+- "produtos disponiveis do [CLIENTE]" = analisar_estoque_cliente
+- "o que tem estoque para [CLIENTE]" = analisar_estoque_cliente
+- IMPORTANTE: Se menciona CLIENTE + (estoque OU disponivel OU enviar OU data), use analisar_estoque_cliente
+
 REGRAS PARA ROTA/SUB-ROTA:
 - "rota MG", "rota NE" = rota principal (campo: rota)
 - "rota A", "rota B", "rota CAP" = sub-rota (campo: sub_rota)
@@ -113,6 +152,6 @@ REGRAS PARA ROTA/SUB-ROTA:
 
 {f"EXEMPLOS DAS CAPACIDADES:{chr(10)}{exemplos}" if exemplos else ""}
 
-Retorne SOMENTE o JSON, sem explicacoes."""
+{codigos_aprendidos['prompts']}{codigos_aprendidos['conceitos']}{codigos_aprendidos['entidades']}Retorne SOMENTE o JSON, sem explicacoes."""
 
     return prompt

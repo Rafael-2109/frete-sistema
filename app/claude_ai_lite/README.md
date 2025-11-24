@@ -1,481 +1,529 @@
-# Claude AI Lite - Documentação do Módulo
+# Claude AI Lite - Documentacao do Modulo
 
-## Visão Geral
+## Visao Geral
 
-Módulo de IA conversacional para o sistema de fretes, permitindo consultas em linguagem natural sobre pedidos, produtos e criação de separações.
+Modulo de IA conversacional para o sistema de fretes, permitindo consultas em linguagem natural sobre pedidos, produtos e criacao de separacoes.
 
 **Criado em:** Novembro/2025
-**Última atualização:** 23/11/2025
-**Versão:** 2.0 (Arquitetura de Capacidades)
-
-### Funcionalidades Principais
-- Consultas por pedido, cliente, produto
-- Análise de disponibilidade de envio (opções A/B/C)
-- Consultas por rota, sub-rota e UF
-- Análise de estoque e rupturas
-- Identificação de gargalos de estoque
-- Criação de separações via chat
-- **Memória de Conversa** - Lembra das últimas 40 mensagens
-- **Aprendizado Permanente** - "Lembre que...", "Esqueça que...", "O que você sabe?"
+**Ultima atualizacao:** 23/11/2025
+**Versao:** 3.2 (LoaderExecutor Estruturado)
 
 ---
 
-## Arquitetura v2.0 (Nova)
+## Arquitetura Geral
 
-A arquitetura foi refatorada para ser **escalável e modular**, usando o padrão de **Capacidades Auto-Registráveis**.
-
-### Conceito Principal
-
-Cada **Capacidade** é uma unidade independente que:
-- Define suas próprias intenções (quando deve ser ativada)
-- Define seus campos de busca
-- Executa a lógica de negócio
-- Formata a resposta
-
-**Benefícios:**
-- Adicionar nova feature = criar 1 arquivo
-- Prompts gerados automaticamente
-- Sem if/elif crescente
-- Fácil de testar isoladamente
+```
+Pergunta do Usuario
+        |
+        v
++------------------+
+|   Orchestrator   |  <- Ponto de entrada (core/orchestrator.py)
++------------------+
+        |
+        v
++------------------+
+|   Classifier     |  <- Identifica intencao e entidades (core/classifier.py)
+|   + PROMPTS      |  <- Usa prompt dinamico (prompts/intent_prompt.py)
+|     APRENDIDOS   |  <- Inclui codigos do IA Trainer
++------------------+
+        |
+        v
++------------------+     +----------------------+
+| find_capability  | --> | NAO ENCONTROU?       |
+| (capabilities/)  |     | -> Suggester         |
++------------------+     | -> Log nao respondida|
+        |                | -> Sugestoes         |
+        v                +----------------------+
++------------------+
+| Capability       |  <- Executa logica de negocio
+|   .executar()    |  <- Pode delegar para Loader
++------------------+
+        |
+        v
++------------------+
+| Responder        |  <- Gera resposta elaborada (core/responder.py)
++------------------+
+```
 
 ---
 
-## Estrutura do Módulo v2.0
+## Estrutura de Arquivos
 
 ```
 app/claude_ai_lite/
-├── README.md                 # Esta documentação
-├── __init__.py               # Inicialização e exports
-├── core.py                   # Redirecionador (compatibilidade)
-├── claude_client.py          # Cliente da API Claude
-├── routes.py                 # Endpoints Flask
-├── routes_admin.py           # Endpoints de administração
-├── memory.py                 # Memória de conversas
-├── learning.py               # Aprendizado permanente
-├── models.py                 # Modelos de dados
-│
-├── core/                     # 🆕 NÚCLEO v2.0
-│   ├── __init__.py
-│   ├── orchestrator.py       # Orquestra o fluxo principal
-│   ├── classifier.py         # Classifica intenções
-│   └── responder.py          # Gera respostas elaboradas
-│
-├── capabilities/             # 🆕 CAPACIDADES AUTO-REGISTRÁVEIS
-│   ├── __init__.py           # Registry automático
-│   ├── base.py               # BaseCapability (contrato)
-│   │
-│   ├── carteira/             # Domínio: Carteira
-│   │   ├── consultar_pedido.py
-│   │   ├── consultar_produto.py
-│   │   ├── consultar_rota.py
-│   │   ├── analisar_disponibilidade.py
-│   │   ├── analisar_gargalos.py
-│   │   └── criar_separacao.py      # Ação
-│   │
-│   └── estoque/              # Domínio: Estoque
-│       └── consultar_estoque.py
-│
-├── prompts/                  # 🆕 PROMPTS CENTRALIZADOS
-│   ├── __init__.py
-│   ├── system_base.py        # Prompt base do sistema
-│   └── intent_prompt.py      # Prompt de classificação (gerado)
-│
-├── actions/                  # Handlers de ações (legado)
-│   └── separacao_actions.py
-│
-└── domains/                  # Loaders (legado, reutilizados)
-    └── carteira/
-        ├── loaders/
-        └── services/
+|
+|-- README.md                 # Esta documentacao
+|-- __init__.py               # Inicializacao e exports
+|-- config.py                 # Configuracoes
+|-- routes.py                 # Endpoints Flask (API)
+|-- routes_admin.py           # Endpoints de administracao
+|
+|-- # CLIENTE CLAUDE
+|-- claude_client.py          # Cliente da API Anthropic Claude
+|
+|-- # NUCLEO (core/)
+|-- core/
+|   |-- __init__.py           # Exporta processar_consulta
+|   |-- orchestrator.py       # Orquestra fluxo principal
+|   |-- classifier.py         # Classifica intencoes via Claude
+|   |-- responder.py          # Gera respostas elaboradas
+|   +-- suggester.py          # Gera sugestoes quando nao responde
+|
+|-- # CAPACIDADES (capabilities/)
+|-- capabilities/
+|   |-- __init__.py           # Registry automatico de capacidades
+|   |-- base.py               # BaseCapability (classe base)
+|   |
+|   |-- carteira/             # Dominio: Carteira
+|   |   |-- consultar_pedido.py        # ATIVO - Consulta pedidos
+|   |   |-- consultar_produto.py       # ATIVO - Consulta produtos (delega p/ loader)
+|   |   |-- consultar_rota.py          # ATIVO - Consulta por rota/UF (delega p/ loader)
+|   |   |-- analisar_disponibilidade.py # ATIVO - Analisa opcoes A/B/C
+|   |   |-- analisar_gargalos.py       # ATIVO - Identifica gargalos (delega p/ loader)
+|   |   |-- analisar_estoque_cliente.py # ATIVO - Pergunta composta cliente+estoque+data
+|   |   +-- criar_separacao.py         # ATIVO - Cria separacao via chat
+|   |
+|   +-- estoque/              # Dominio: Estoque
+|       +-- consultar_estoque.py       # ATIVO - Consulta estoque/rupturas (delega p/ loader)
+|
+|-- # LOADERS (domains/carteira/loaders/)
+|-- domains/
+|   |-- __init__.py
+|   |-- base.py               # BaseLoader (classe base para loaders)
+|   |
+|   +-- carteira/
+|       |-- loaders/
+|       |   |-- pedidos.py         # Loader de pedidos (NAO USADO DIRETAMENTE)
+|       |   |-- produtos.py        # USADO por ConsultarProdutoCapability
+|       |   |-- rotas.py           # USADO por ConsultarRotaCapability
+|       |   |-- gargalos.py        # USADO por AnalisarGargalosCapability
+|       |   |-- estoque.py         # USADO por ConsultarEstoqueCapability
+|       |   |-- disponibilidade.py # NAO USADO (logica movida para OpcoesEnvioService)
+|       |   +-- saldo_pedido.py    # NAO USADO
+|       |
+|       |-- prompts.py             # Prompts especificos do dominio (LEGADO)
+|       |
+|       +-- services/
+|           |-- opcoes_envio.py    # USADO - Gera opcoes A/B/C de envio
+|           +-- criar_separacao.py # USADO - Cria separacao no banco
+|
+|-- # PROMPTS CENTRALIZADOS
+|-- prompts/
+|   |-- __init__.py           # Exporta funcoes
+|   |-- system_base.py        # Prompt base do sistema
+|   +-- intent_prompt.py      # Prompt de classificacao (DINAMICO)
+|
+|-- # ACOES
+|-- actions/
+|   |-- __init__.py
+|   |-- separacao_actions.py  # Handlers de acoes de separacao
+|   +-- rascunho_separacao.py # Rascunhos de separacao
+|
+|-- # MEMORIA E APRENDIZADO
+|-- models.py                 # ClaudeHistoricoConversa, ClaudeAprendizado, ClaudePerguntaNaoRespondida
+|-- memory.py                 # Funcoes de memoria de conversa
+|-- learning.py               # Funcoes de aprendizado permanente
+|-- cache.py                  # Cache Redis para o modulo
+|
+|-- # IA TRAINER (sistema de auto-aprendizado)
++-- ia_trainer/
+    |-- __init__.py           # Exports
+    |-- models.py             # CodigoSistemaGerado, SessaoEnsinoIA, VersaoCodigoGerado
+    |-- routes.py             # Endpoints da interface de ensino
+    |
+    +-- services/
+        |-- __init__.py
+        |-- codigo_loader.py   # Carrega codigos ativos (com cache)
+        |-- codebase_reader.py # Le codigo-fonte do sistema
+        |-- code_validator.py  # Valida seguranca do codigo
+        |-- code_executor.py   # Executa codigo com timeout
+        |-- code_generator.py  # Gera codigo via Claude
+        +-- trainer_service.py # Orquestra fluxo de ensino
 ```
 
 ---
 
-## Como Adicionar Nova Capacidade
+## Fluxo de Dados Detalhado
 
-### 1. Criar arquivo em `capabilities/{dominio}/{nome}.py`:
+### 1. Pergunta chega via API
+```
+POST /claude-lite/api/query
+{"query": "Quando posso enviar o pedido VCD123?"}
+```
+
+### 2. Orchestrator processa
+```python
+# core/orchestrator.py
+def processar_consulta(consulta, usuario_id):
+    # 1. Classifica intencao
+    intencao = classifier.classificar(consulta, contexto_conversa)
+    # {"dominio": "carteira", "intencao": "analisar_disponibilidade", "entidades": {"num_pedido": "VCD123"}}
+
+    # 2. Busca capacidade
+    capability = find_capability(intencao["intencao"], intencao["entidades"])
+    # AnalisarDisponibilidadeCapability
+
+    # 3. Executa
+    resultado = capability.executar(intencao["entidades"], contexto)
+
+    # 4. Gera resposta
+    contexto_dados = capability.formatar_contexto(resultado)
+    resposta = responder.gerar_resposta(consulta, contexto_dados)
+```
+
+### 3. Capability executa logica
+```python
+# capabilities/carteira/analisar_disponibilidade.py
+class AnalisarDisponibilidadeCapability(BaseCapability):
+    def executar(self, entidades, contexto):
+        # Usa servico existente
+        from domains.carteira.services.opcoes_envio import OpcoesEnvioService
+        analise = OpcoesEnvioService.analisar_pedido(num_pedido)
+        return {"sucesso": True, "opcoes": analise["opcoes"], ...}
+```
+
+---
+
+## Capacidades Disponiveis
+
+### Capacidades Simples
+
+| Nome | Intencoes | Delega para | Descricao |
+|------|-----------|-------------|-----------|
+| `consultar_pedido` | consultar_status, buscar_pedido | - | Busca pedidos na CarteiraPrincipal |
+| `consultar_produto` | buscar_produto | ProdutosLoader | Busca produtos na carteira/separacao |
+| `consultar_rota` | buscar_rota, buscar_uf | RotasLoader | Busca por rota, sub-rota ou UF |
+| `analisar_disponibilidade` | analisar_disponibilidade | OpcoesEnvioService | Gera opcoes A/B/C de envio |
+| `analisar_gargalos` | analisar_gargalo | GargalosLoader | Identifica produtos gargalo |
+| `consultar_estoque` | consultar_estoque, consultar_ruptura | EstoqueLoader | Consulta estoque e rupturas |
+
+### Capacidades Compostas
+
+| Nome | Intencoes | Descricao |
+|------|-----------|-----------|
+| `analisar_estoque_cliente` | analisar_estoque_cliente | Combina cliente + data + estoque |
+
+**Exemplos de perguntas compostas:**
+- "Quais produtos do Atacadao terao estoque dia 26?"
+- "O que posso enviar para o cliente Ceratti?"
+
+---
+
+## Loaders Ativos
+
+Loaders sao usados pelas Capabilities para executar queries no banco.
+
+| Loader | Usado por | Campos de busca |
+|--------|-----------|-----------------|
+| `ProdutosLoader` | ConsultarProdutoCapability | nome_produto, cod_produto |
+| `RotasLoader` | ConsultarRotaCapability | rota, sub_rota, cod_uf |
+| `GargalosLoader` | AnalisarGargalosCapability | num_pedido, cod_produto, geral |
+| `EstoqueLoader` | ConsultarEstoqueCapability | cod_produto, nome_produto, ruptura |
+
+**Loaders NAO usados (legado):**
+- `PedidosLoader` - Logica movida para ConsultarPedidoCapability
+- `DisponibilidadeLoader` - Substituido por OpcoesEnvioService
+- `SaldoPedidoLoader` - Nao usado
+
+---
+
+## IA Trainer - Status Atual
+
+### O que FUNCIONA:
+
+1. **Interface de ensino** (`/claude-lite/trainer/`)
+   - Listar perguntas nao respondidas
+   - Iniciar sessao de ensino
+   - Salvar decomposicao da pergunta
+   - Gerar codigo via Claude
+   - Debater/refinar codigo
+
+2. **Tipos de codigo suportados:**
+   - `prompt` - Regras para classificacao -> **INTEGRADO**
+   - `conceito` - Termos de negocio -> **INTEGRADO**
+   - `entidade` - Entidades customizadas -> **INTEGRADO**
+   - `filtro` - Condicoes SQL simples -> **INTEGRADO**
+   - `loader` - JSON estruturado para consultas complexas -> **INTEGRADO (v3.2)**
+
+3. **Integracao com o sistema:**
+   - `intent_prompt.py` carrega prompts/conceitos/entidades ativos
+   - `BaseCapability.aplicar_filtros_aprendidos()` aplica filtros via `text()`
+   - `LoaderExecutor` executa loaders estruturados com JOINs, agregacoes, filtros complexos
+
+---
+
+## LoaderExecutor - Motor de Consultas Estruturadas (v3.2)
+
+O `LoaderExecutor` permite ao Claude compor consultas complexas via **JSON estruturado**,
+SEM executar codigo Python arbitrario.
+
+### Funcionalidades:
+
+- **JOINs seguros** entre Models conhecidos
+- **Filtros complexos**: ilike, is_null, in, between, contains, etc
+- **Agregacoes**: count, sum, avg, min, max
+- **Agrupamentos**: GROUP BY com multiplos campos
+- **Parametros dinamicos**: $cliente, $data, etc
+- **Validacao**: whitelist de Models e operadores
+- **Read-only**: impossivel alterar dados
+- **Timeout**: protecao contra queries lentas
+
+### Formato JSON:
+
+```json
+{
+    "modelo_base": "Separacao",
+    "joins": [
+        {"modelo": "CarteiraPrincipal", "tipo": "left", "on": {"local": "num_pedido", "remoto": "num_pedido"}}
+    ],
+    "filtros": [
+        {"campo": "raz_social_red", "operador": "ilike", "valor": "%Assai%"},
+        {"campo": "agendamento", "operador": "is_null"},
+        {"campo": "sincronizado_nf", "operador": "==", "valor": false}
+    ],
+    "campos_retorno": ["num_pedido", "raz_social_red", "qtd_saldo"],
+    "agregacao": {
+        "tipo": "agrupar",
+        "por": ["raz_social_red"],
+        "funcoes": [{"func": "sum", "campo": "qtd_saldo", "alias": "total_qtd"}]
+    },
+    "ordenar": [{"campo": "num_pedido", "direcao": "asc"}],
+    "limite": 100
+}
+```
+
+### Operadores Permitidos:
+
+| Operador | Descricao | Exemplo |
+|----------|-----------|---------|
+| `==`, `!=` | Igualdade | `{"campo": "status", "operador": "==", "valor": "ABERTO"}` |
+| `>`, `>=`, `<`, `<=` | Comparacao | `{"campo": "qtd_saldo", "operador": ">", "valor": 0}` |
+| `ilike`, `like` | Texto (% wildcard) | `{"campo": "raz_social_red", "operador": "ilike", "valor": "%Assai%"}` |
+| `in`, `not_in` | Lista | `{"campo": "cod_uf", "operador": "in", "valor": ["SP", "RJ"]}` |
+| `is_null`, `is_not_null` | Nulos | `{"campo": "agendamento", "operador": "is_null"}` |
+| `between` | Intervalo | `{"campo": "data", "operador": "between", "valor": ["2024-01-01", "2024-12-31"]}` |
+
+### Filtros com AND/OR:
+
+```json
+{
+    "filtros": {
+        "and": [
+            {"campo": "sincronizado_nf", "operador": "==", "valor": false},
+            {
+                "or": [
+                    {"campo": "raz_social_red", "operador": "ilike", "valor": "%Assai%"},
+                    {"campo": "raz_social_red", "operador": "ilike", "valor": "%Atacadao%"}
+                ]
+            }
+        ]
+    }
+}
+```
+
+### JOINs com dot-notation:
+
+```json
+{
+    "joins": [
+        {
+            "modelo": "CarteiraPrincipal",
+            "tipo": "left",
+            "on": {
+                "local": "Separacao.num_pedido",
+                "remoto": "CarteiraPrincipal.num_pedido"
+            }
+        }
+    ]
+}
+```
+
+### Uso Programatico:
 
 ```python
-from ..base import BaseCapability
+from app.claude_ai_lite.ia_trainer.services.loader_executor import executar_loader
 
-class MinhaNovaCapability(BaseCapability):
-    # Metadados obrigatórios
-    NOME = "minha_nova_capability"
-    DOMINIO = "carteira"  # ou "estoque", "fretes", etc
-    TIPO = "consulta"     # ou "acao"
-    INTENCOES = ["minha_intencao", "outra_intencao"]
-    CAMPOS_BUSCA = ["campo1", "campo2"]
-    DESCRICAO = "Descrição curta para o classificador"
-    EXEMPLOS = [
-        "Exemplo de pergunta 1",
-        "Exemplo de pergunta 2"
-    ]
+# Pergunta: "Ha pedidos do cliente Assai sem agendamento?"
+definicao = {
+    "modelo_base": "Separacao",
+    "filtros": [
+        {"campo": "raz_social_red", "operador": "ilike", "valor": "%Assai%"},
+        {"campo": "agendamento", "operador": "is_null"},
+        {"campo": "sincronizado_nf", "operador": "==", "valor": False}
+    ],
+    "campos_retorno": ["num_pedido", "raz_social_red", "qtd_saldo"],
+    "limite": 50
+}
 
-    def pode_processar(self, intencao: str, entidades: dict) -> bool:
-        """Retorna True se deve processar esta requisição."""
-        return intencao in self.INTENCOES
-
-    def executar(self, entidades: dict, contexto: dict) -> dict:
-        """Executa a lógica de negócio."""
-        # Sua lógica aqui
-        return {
-            "sucesso": True,
-            "total_encontrado": 1,
-            "dados": [...]
-        }
-
-    def formatar_contexto(self, dados: dict) -> str:
-        """Formata resultado para o Claude."""
-        return "Texto formatado para o prompt"
+resultado = executar_loader(definicao)
+# {'sucesso': True, 'total': 50, 'dados': [...]}
 ```
 
-### 2. Pronto! A capacidade será registrada automaticamente.
+### O que NAO FUNCIONA ainda:
 
-O registry em `capabilities/__init__.py` descobre e registra todas as classes que herdam de `BaseCapability`.
+1. **Tipo `capability`:**
+   - Marcado como tipo valido mas **NAO IMPLEMENTADO**
+   - Nao ha como criar capacidades dinamicamente
+
+2. **Integracao automatica com Orchestrator:**
+   - Loaders gerados precisam ser chamados manualmente
+   - Futuro: Capability generica que usa loaders aprendidos
 
 ---
 
-## Estrutura Legada (Ainda Funcional)
+## Sistema de Sugestoes
 
-Os arquivos antigos ainda funcionam e são reutilizados:
+Quando o sistema nao consegue responder, o `Suggester` analisa:
 
-```
-└── domains/                  # Domínios de LEITURA (legado)
-    ├── __init__.py           # Registro de loaders
-    ├── base.py               # BaseLoader abstrato
-    │
-    └── carteira/             # Domínio da carteira de pedidos
-        ├── loaders/          # Loaders de consulta (reutilizados)
-        └── services/         # Serviços de negócio
+1. **Tipo da pergunta:** simples, composta, ambigua
+2. **Dimensoes:** cliente, data, estoque, produto, rota, etc
+3. **Gera sugestoes** baseadas nas entidades detectadas
+
+```python
+# Exemplo de sugestao para pergunta composta
+"Sua pergunta combina varias dimensoes que ainda nao consigo processar juntas.
+Tente separar em perguntas mais especificas:
+  1. Pedidos do cliente Atacadao
+  2. Para cada pedido: 'Quando posso enviar o pedido X?'"
 ```
 
 ---
 
-## Fluxo de Funcionamento
+## Cache Redis
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USUÁRIO                                  │
-│                   "Quando posso enviar VCD123?"                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      routes.py                                   │
-│  POST /claude-lite/api/query                                    │
-│  - Recebe consulta                                              │
-│  - Identifica usuário (current_user)                            │
-│  - Chama core.processar_consulta()                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       core.py                                    │
-│  processar_consulta()                                           │
-│  1. Claude identifica intenção e entidades                      │
-│  2. Se dominio="acao" → actions/                                │
-│  3. Senão → roteia para loader correto                          │
-│  4. Busca dados                                                 │
-│  5. Claude elabora resposta                                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌─────────────────────────┐     ┌─────────────────────────┐
-│     domains/loaders/     │     │       actions/          │
-│   (LEITURA - consultas)  │     │   (ESCRITA - ações)     │
-│                         │     │                         │
-│  - PedidosLoader        │     │  - processar_acao_      │
-│  - ProdutosLoader       │     │    separacao()          │
-│  - DisponibilidadeLoader│     │                         │
-└─────────────────────────┘     └─────────────────────────┘
-```
+O sistema usa Redis para cache com fallback para memoria.
+
+| Tipo | TTL | Descricao |
+|------|-----|-----------|
+| `codigos_ativos` | 5 min | Codigos do IA Trainer |
+| `readme_contexto` | 1 hora | Contexto para re-classificacao |
+| `classificacao` | 1 min | Classificacoes recentes |
+
+---
+
+## Tabelas do Banco
+
+### Memoria e Aprendizado
+- `claude_historico_conversa` - Historico de mensagens por usuario
+- `claude_aprendizado` - Conhecimento permanente (por usuario ou global)
+- `claude_perguntas_nao_respondidas` - Log de falhas para analise
+
+### IA Trainer
+- `codigo_sistema_gerado` - Codigo gerado pelo Claude
+- `versao_codigo_gerado` - Historico de versoes
+- `sessao_ensino_ia` - Sessao de ensino (pergunta -> codigo)
 
 ---
 
 ## Endpoints da API
 
-### 1. Consulta Principal
+### Consulta Principal
 ```
 POST /claude-lite/api/query
-Content-Type: application/json
-
-{
-    "query": "Quando posso enviar o pedido VCD2564344?",
-    "usar_claude": true  // opcional, default true
-}
-
-Response:
-{
-    "success": true,
-    "response": "O pedido VCD2564344 pode ser enviado em 27/11/2025...",
-    "source": "claude_ai_lite",
-    "timestamp": "2025-11-22T21:30:00"
-}
+{"query": "...", "usar_claude": true}
 ```
 
-### 2. Consulta Direta (sem NLP)
-```
-POST /claude-lite/api/query/direct
-{
-    "valor": "VCD2564344",
-    "campo": "num_pedido",
-    "dominio": "carteira"
-}
-```
-
-### 3. Criar Separação
-```
-POST /claude-lite/api/action/criar-separacao
-{
-    "num_pedido": "VCD2564344",
-    "opcao": "A"  // A, B ou C
-}
-```
-
-### 4. Health Check
+### Health Check
 ```
 GET /claude-lite/health
 ```
 
+### Admin (requer login)
+```
+GET  /claude-lite/admin/
+```
+
+### IA Trainer (requer login admin)
+```
+GET  /claude-lite/trainer/
+GET  /claude-lite/trainer/api/perguntas
+POST /claude-lite/trainer/api/sessao/iniciar
+POST /claude-lite/trainer/api/sessao/{id}/decomposicao
+POST /claude-lite/trainer/api/sessao/{id}/gerar
+POST /claude-lite/trainer/api/sessao/{id}/debater
+POST /claude-lite/trainer/api/sessao/{id}/testar
+POST /claude-lite/trainer/api/sessao/{id}/ativar
+```
+
 ---
 
-## Intenções Reconhecidas
+## Intencoes Reconhecidas
 
-O Claude identifica a intenção do usuário:
-
-| Intenção | Domínio | Exemplo |
+| Intencao | Dominio | Exemplo |
 |----------|---------|---------|
 | `consultar_status` | carteira | "Status do pedido VCD123" |
 | `buscar_pedido` | carteira | "Pedido VCD123" |
-| `buscar_produto` | carteira | "Azeitona verde na carteira" |
+| `buscar_produto` | carteira | "Azeitona na carteira" |
 | `analisar_disponibilidade` | carteira | "Quando posso enviar VCD123?" |
-| `buscar_rota` | carteira | "Pedidos na rota MG" ou "Tem algo pra rota B?" (sub-rota) |
-| `buscar_uf` | carteira | "O que tem para São Paulo?" |
+| `analisar_estoque_cliente` | carteira | "O que posso enviar pro Atacadao?" |
+| `buscar_rota` | carteira | "Pedidos na rota MG" |
+| `buscar_uf` | carteira | "O que tem para SP?" |
 | `consultar_estoque` | estoque | "Qual o estoque de azeitona?" |
-| `consultar_ruptura` | estoque | "Quais produtos vão dar ruptura?" |
-| `analisar_saldo` | carteira | "Quanto falta separar do VCD123?" |
-| `analisar_gargalo` | carteira | "O que está travando o pedido?" |
-| `escolher_opcao` | acao | "Opção A" |
-| `criar_separacao` | acao | "Criar separação opção A do pedido VCD123" |
+| `consultar_ruptura` | estoque | "Quais produtos vao dar ruptura?" |
+| `analisar_gargalo` | carteira | "O que esta travando o pedido?" |
+| `escolher_opcao` | acao | "Opcao A" |
+| `criar_separacao` | acao | "Criar separacao opcao A" |
 | `confirmar_acao` | acao | "Sim, confirmo" |
-| `follow_up` | follow_up | "Preciso dos nomes completos desses itens" 🆕 |
-| `detalhar` | follow_up | "Mais detalhes sobre esses produtos" 🆕 |
+| `follow_up` | follow_up | "Mais detalhes sobre esses" |
 
 ---
 
-## Loaders Disponíveis
+## Como Adicionar Nova Capacidade
 
-### PedidosLoader (`carteira`)
-- Busca pedidos por: `num_pedido`, `cnpj_cpf`, `raz_social_red`, `pedido_cliente`
-- Retorna: dados do pedido, cliente, status de separação
+1. Criar arquivo em `capabilities/{dominio}/{nome}.py`:
 
-### ProdutosLoader (`carteira_produto`)
-- Busca por: `nome_produto`, `cod_produto`
-- Retorna: produtos na carteira agrupados
-
-### DisponibilidadeLoader (`carteira_disponibilidade`)
-- Busca por: `num_pedido`
-- Retorna: **Opções de envio A/B/C** com análise de estoque
-
-### RotasLoader (`carteira_rota`) 🆕
-- Busca por: `rota`, `sub_rota`, `cod_uf`
-- Retorna: pedidos/separações filtrados por rota, sub-rota ou UF
-- **Rotas principais**: BA, MG, ES, NE, NE2, NO, MS-MT, SUL (baseadas em UF/região)
-- **Sub-rotas**: CAP, INT, A, B, C, 0, 1, 2 (baseadas em cidade/região interna)
-- Exemplos:
-  - "Pedidos na rota MG" (rota principal)
-  - "O que tem na rota NE?" (rota principal)
-  - "Tem mais algo pra rota B?" (sub-rota)
-  - "Pedidos da sub-rota CAP" (sub-rota)
-  - "O que tem para São Paulo?" (por UF)
-
-### EstoqueLoader (`estoque`) 🆕
-- Busca por: `cod_produto`, `nome_produto`, `ruptura`
-- Retorna: estoque atual, projeção 7/14 dias, produtos com ruptura
-- Exemplos:
-  - "Qual o estoque de azeitona verde?"
-  - "Quais produtos vão dar ruptura?"
-  - "Projeção de estoque do ketchup"
-
-### SaldoPedidoLoader (`carteira_saldo`) 🆕
-- Busca por: `num_pedido`, `cnpj_cpf`, `raz_social_red`
-- Retorna: comparativo quantidade original vs separada vs restante
-- Exemplos:
-  - "Quanto falta separar do VCD123?"
-  - "Saldo do pedido VCD456"
-
-### GargalosLoader (`carteira_gargalo`) 🆕
-- Busca por: `num_pedido`, `geral`, `cod_produto`
-- Retorna: produtos que travam pedidos por falta de estoque
-- Exemplos:
-  - "O que está travando o pedido VCD789?"
-  - "Quais produtos são gargalo?"
-  - "Por que não consigo enviar o VCD111?"
-
----
-
-## Opções de Envio (A/B/C)
-
-Quando o usuário pergunta "quando posso enviar?", o sistema gera até 3 opções:
-
-| Opção | Descrição |
-|-------|-----------|
-| **A** | Envio Total - aguarda todos os itens |
-| **B** | Envio Parcial (-1 item gargalo) |
-| **C** | Envio Parcial (-2 itens gargalo) |
-
-Cada opção contém:
-- Data de envio
-- Valor e percentual do pedido
-- Lista de itens incluídos/excluídos
-
----
-
-## Validações na Criação de Separação
-
-Antes de criar, o sistema valida:
-
-1. **Separação existente**: Não permite duplicar se já existe separação não faturada
-2. **Saldo disponível**: Verifica saldo na CarteiraPrincipal menos separações existentes
-
----
-
-## Memória e Aprendizado
-
-### Memória de Conversa
-O sistema mantém as **últimas 40 mensagens** de cada usuário para contexto.
-
-Isso permite:
-- Referências a conversas anteriores: "Quais pedidos você falou?"
-- Contexto contínuo: "E o pedido 2 da lista?"
-- Histórico de interações
-
-**Tabela:** `claude_historico_conversa`
-
-### Aprendizado Permanente
-O sistema pode aprender informações de forma permanente:
-
-| Comando | Exemplo | Escopo |
-|---------|---------|--------|
-| `Lembre que...` | "Lembre que o cliente Ceratti é VIP" | Por usuário |
-| `Lembre que... (global)` | "Lembre que o código 123 é Azeitona Verde (global)" | Todos |
-| `Esqueça que...` | "Esqueça que o cliente X é VIP" | Remove |
-| `O que você sabe?` | "O que você sabe sobre mim?" | Lista |
-
-**Tabela:** `claude_aprendizado`
-
-**Categorias de Aprendizado:**
-- `regra_negocio` - Regras e políticas da empresa
-- `cliente` - Informações sobre clientes
-- `produto` - Informações sobre produtos
-- `processo` - Processos e procedimentos
-- `fato` - Fatos gerais
-- `preferencia` - Preferências do usuário
-- `correcao` - Correções de informações
-
-### Administração
-Acesse `/claude-lite/admin/` (apenas administradores) para:
-- Ver/criar/editar aprendizados
-- Consultar histórico de conversas
-- Ver estatísticas de uso
-
----
-
-## Campos Importantes
-
-### Separação criada pelo Claude
-- `separacao_lote_id`: Padrão `CLAUDE-YYYYMMDDHHMMSS-XXXXXX`
-- `criado_por`: Nome do usuário que solicitou
-- `criado_em`: Data/hora da criação
-
----
-
-## Como Adicionar Novo Loader
-
-1. Criar arquivo em `domains/carteira/loaders/novo_loader.py`:
 ```python
-from ...base import BaseLoader
+from ..base import BaseCapability
 
-class NovoLoader(BaseLoader):
+class MinhaCapability(BaseCapability):
+    NOME = "minha_capability"
     DOMINIO = "carteira"
-    CAMPOS_BUSCA = ["campo1", "campo2"]
+    TIPO = "consulta"
+    INTENCOES = ["minha_intencao"]
+    CAMPOS_BUSCA = ["campo1"]
+    DESCRICAO = "Descricao curta"
+    EXEMPLOS = ["Exemplo de pergunta"]
 
-    def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
-        # Implementar busca
-        pass
+    def pode_processar(self, intencao: str, entidades: dict) -> bool:
+        return intencao in self.INTENCOES
 
-    def formatar_contexto(self, dados: Dict[str, Any]) -> str:
-        # Formatar para o Claude
-        pass
+    def executar(self, entidades: dict, contexto: dict) -> dict:
+        # Logica aqui
+        return {"sucesso": True, "dados": [...]}
+
+    def formatar_contexto(self, dados: dict) -> str:
+        return "Texto formatado"
 ```
 
-2. Registrar em `domains/carteira/__init__.py`:
-```python
-from .loaders.novo_loader import NovoLoader
-registrar_dominio("nome_dominio", NovoLoader)
-```
-
-3. Adicionar roteamento em `core.py` se necessário
+2. Capacidade sera registrada automaticamente pelo `capabilities/__init__.py`
 
 ---
 
-## Como Adicionar Nova Action
+## LACUNAS IDENTIFICADAS - O que falta implementar
 
-1. Criar função em `actions/separacao_actions.py` ou novo arquivo
-2. Registrar em `actions/__init__.py`
-3. Adicionar tratamento em `core.py`:
-```python
-if dominio_base == "acao":
-    return processar_nova_acao(intencao_tipo, entidades, usuario=usuario)
-```
+### 1. ~~Executor de Loaders Gerados~~ - IMPLEMENTADO v3.2
+~~O IA Trainer gera codigo tipo `loader`, mas nao ha forma de executar.~~
+**Solucao:** `LoaderExecutor` com JSON estruturado (JOINs, filtros, agregacoes).
 
-4. Adicionar intenção em `claude_client.py` no prompt de identificação
+### 2. ~~Filtros Complexos~~ - IMPLEMENTADO v3.2
+~~`aplicar_filtros_aprendidos()` so aceita SQL puro via `text()`.~~
+**Solucao:** `LoaderExecutor` suporta ilike, is_null, in, between, contains, etc.
+
+### 3. Integracao Automatica IA Trainer -> Orchestrator (PENDENTE)
+Loaders gerados precisam ser chamados manualmente.
+**Solucao futura:** Criar Capability generica que carrega e executa loaders aprendidos.
+
+### 4. Tipo `capability` (PENDENTE)
+Nao ha como criar capacidades dinamicamente.
+**Solucao futura:** Avaliar necessidade vs uso de loaders estruturados.
 
 ---
 
-## Configuração
+## Configuracao
 
-Arquivo `config.py`:
-```python
-CLAUDE_MODEL = "claude-3-haiku-20240307"  # Modelo rápido e barato
-MAX_TOKENS = 1024
-CACHE_TTL = 300  # 5 minutos
-```
-
-Variável de ambiente necessária:
-```
+```env
 ANTHROPIC_API_KEY=sk-ant-...
+REDIS_URL=redis://...  # Opcional
 ```
 
----
-
-## Regras de Implementação
-
-1. **core.py**: Máximo 100 linhas (atualmente ~110)
-2. **Loaders**: Máximo 150 linhas cada
-3. **Modularização**:
-   - `loaders/` = Consultas (leitura)
-   - `services/` = Lógica de negócio
-   - `actions/` = Handlers de ações (escrita)
-4. **Imports**: Evitar imports circulares, usar imports dentro de funções se necessário
-
----
-
-## Scripts de Migração Relacionados
-
-- `scripts/migrations/adicionar_campo_criado_por_separacao.py` - Campo criado_por
-- `scripts/migrations/adicionar_campo_criado_por_separacao.sql` - Para Render
-
----
-
-## Histórico de Desenvolvimento
-
-### 22/11/2025
-- Criação do módulo base
-- Implementação de loaders: Pedidos, Produtos, Disponibilidade
-- Opções de envio A/B/C
-- Criação de separações via conversa
-- Validações de duplicidade e saldo
-- Campo `criado_por` na Separação
-- Mensagens amigáveis e orientativas
+Modelo utilizado: `claude-sonnet-4-5-20250929`

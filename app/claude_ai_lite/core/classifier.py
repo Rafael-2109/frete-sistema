@@ -4,7 +4,10 @@ Classificador de Intenções do Claude AI Lite.
 Responsabilidade única: identificar domínio, intenção e entidades
 a partir de texto em linguagem natural.
 
-Limite: 100 linhas
+Suporta contexto adicional (README) para re-classificação
+quando confiança está baixa.
+
+Limite: 120 linhas
 """
 
 import json
@@ -27,7 +30,8 @@ class IntentClassifier:
     def classificar(
         self,
         texto: str,
-        contexto_conversa: str = None
+        contexto_conversa: str = None,
+        contexto_adicional: str = None
     ) -> Dict[str, Any]:
         """
         Classifica a intenção do texto.
@@ -35,6 +39,7 @@ class IntentClassifier:
         Args:
             texto: Texto do usuário
             contexto_conversa: Histórico para entender follow-ups
+            contexto_adicional: Contexto extra (ex: README) para melhorar classificação
 
         Returns:
             Dict com dominio, intencao, entidades e confianca
@@ -43,6 +48,10 @@ class IntentClassifier:
 
         # Gera prompt dinamicamente baseado nas capacidades
         system_prompt = gerar_prompt_classificacao(contexto_conversa)
+
+        # Adiciona contexto extra se fornecido (ex: README para baixa confiança)
+        if contexto_adicional:
+            system_prompt = f"{system_prompt}\n\n=== CONTEXTO ADICIONAL DO SISTEMA ===\n{contexto_adicional}\n=== FIM DO CONTEXTO ADICIONAL ==="
 
         # Chama Claude para classificar
         resposta = self._client.completar(texto, system_prompt, use_cache=True)

@@ -140,10 +140,11 @@ def index():
             inconsistencias_abertas = InconsistenciaFaturamento.query.filter_by(resolvida=False).count()
         
         # 📈 PEDIDOS COM EXPEDIÇÃO PRÓXIMA (7 dias)
+        # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
         data_limite = date.today() + timedelta(days=7)
         expedicoes_proximas = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.expedicao <= data_limite,
-            CarteiraPrincipal.expedicao >= date.today(),
+            CarteiraPrincipal.data_pedido <= data_limite,
+            CarteiraPrincipal.data_pedido >= date.today() - timedelta(days=30),  # Pedidos dos últimos 30 dias
             CarteiraPrincipal.ativo == True,
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).count()

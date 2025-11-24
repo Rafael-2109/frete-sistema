@@ -31,10 +31,12 @@ def admin_required(f):
             return jsonify({'success': False, 'error': 'Não autenticado'}), 401
 
         # Verifica se é admin (ajuste conforme seu modelo de usuário)
-        is_admin = getattr(current_user, 'is_admin', False) or \
-                   getattr(current_user, 'admin', False) or \
-                   getattr(current_user, 'perfil', '') == 'admin' or \
-                   current_user.id == 1  # Fallback: primeiro usuário é admin
+        is_admin = (
+            getattr(current_user, 'is_admin', False) or
+            getattr(current_user, 'admin', False) or
+            getattr(current_user, 'perfil', '') == 'administrador' or
+            current_user.id == 1  # Fallback: primeiro usuário é admin
+        )
 
         if not is_admin:
             return jsonify({'success': False, 'error': 'Acesso negado. Apenas administradores.'}), 403
@@ -386,3 +388,217 @@ def listar_categorias():
         'success': True,
         'categorias': categorias
     })
+
+
+# ============================================
+# IA TRAINER - APIs integradas na Admin
+# ============================================
+
+@claude_lite_admin_bp.route('/trainer/estatisticas', methods=['GET'])
+@login_required
+@admin_required
+def trainer_estatisticas():
+    """Retorna estatísticas do IA Trainer."""
+    try:
+        from .models import ClaudePerguntaNaoRespondida
+        from .ia_trainer.models import CodigoSistemaGerado, SessaoEnsinoIA
+
+        # Perguntas pendentes
+        perguntas_pendentes = ClaudePerguntaNaoRespondida.query.filter_by(
+            status='pendente'
+        ).count()
+
+        # Códigos ativos
+        codigos_ativos = CodigoSistemaGerado.query.filter_by(
+            ativo=True
+        ).count()
+
+        # Sessões em andamento
+        sessoes_andamento = SessaoEnsinoIA.query.filter(
+            SessaoEnsinoIA.status.in_(['iniciada', 'decomposta', 'gerada'])
+        ).count()
+
+        # Cache stats
+        cache_stats = {}
+        try:
+            from .cache import get_stats
+            cache_stats = get_stats()
+        except Exception:
+            cache_stats = {'disponivel': False}
+
+        return jsonify({
+            'success': True,
+            'estatisticas': {
+                'perguntas_pendentes': perguntas_pendentes,
+                'codigos_ativos': codigos_ativos,
+                'sessoes_andamento': sessoes_andamento,
+                'cache': {
+                    'total_chaves': cache_stats.get('total_chaves', 0),
+                    'tipo': 'Redis' if cache_stats.get('disponivel') else 'Memória'
+                }
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"[Admin] Erro ao buscar estatísticas do trainer: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@claude_lite_admin_bp.route('/trainer/perguntas', methods=['GET'])
+@login_required
+@admin_required
+def trainer_perguntas():
+    """Lista perguntas não respondidas."""
+    try:
+        from .models import ClaudePerguntaNaoRespondida
+
+        status = request.args.get('status', 'pendente')
+        limite = request.args.get('limite', 50, type=int)
+
+        query = ClaudePerguntaNaoRespondida.query
+
+        if status and status != 'todas':
+            query = query.filter_by(status=status)
+
+        perguntas = query.order_by(
+            ClaudePerguntaNaoRespondida.criado_em.desc()
+        ).limit(limite).all()
+
+        return jsonify({
+            'success': True,
+            'total': len(perguntas),
+            'perguntas': [p.to_dict() for p in perguntas]
+        })
+
+    except Exception as e:
+        logger.error(f"[Admin] Erro ao listar perguntas: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@claude_lite_admin_bp.route('/trainer/codigos', methods=['GET'])
+@login_required
+@admin_required
+def trainer_codigos():
+    """Lista códigos gerados pelo IA Trainer."""
+    try:
+        from .ia_trainer.models import CodigoSistemaGerado
+
+        tipo = request.args.get('tipo')
+        ativo = request.args.get('ativo')
+        limite = request.args.get('limite', 50, type=int)
+
+        query = CodigoSistemaGerado.query
+
+        if tipo:
+            query = query.filter_by(tipo_codigo=tipo)
+        if ativo is not None:
+            query = query.filter_by(ativo=(ativo == 'true'))
+
+        codigos = query.order_by(
+            CodigoSistemaGerado.criado_em.desc()
+        ).limit(limite).all()
+
+        return jsonify({
+            'success': True,
+            'total': len(codigos),
+            'codigos': [c.to_dict() for c in codigos]
+        })
+
+    except Exception as e:
+        logger.error(f"[Admin] Erro ao listar códigos: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@claude_lite_admin_bp.route('/trainer/codigos/<int:codigo_id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def trainer_toggle_codigo(codigo_id):
+    """Ativa/desativa um código."""
+    try:
+        from .ia_trainer.models import CodigoSistemaGerado
+        from .ia_trainer.services.codigo_loader import invalidar_cache
+        from app import db
+
+        codigo = CodigoSistemaGerado.query.get_or_404(codigo_id)
+        codigo.ativo = not codigo.ativo
+        codigo.atualizado_por = current_user.nome
+        db.session.commit()
+
+        # Invalida cache
+        invalidar_cache()
+
+        return jsonify({
+            'success': True,
+            'ativo': codigo.ativo,
+            'mensagem': f"Código {'ativado' if codigo.ativo else 'desativado'} com sucesso!"
+        })
+
+    except Exception as e:
+        logger.error(f"[Admin] Erro ao toggle código: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@claude_lite_admin_bp.route('/trainer/codigos/<int:codigo_id>', methods=['PUT'])
+@login_required
+@admin_required
+def trainer_atualizar_codigo(codigo_id):
+    """Atualiza definição técnica de um código."""
+    try:
+        from .ia_trainer.models import CodigoSistemaGerado
+        from .ia_trainer.services.codigo_loader import invalidar_cache
+        from app import db
+
+        codigo = CodigoSistemaGerado.query.get_or_404(codigo_id)
+        data = request.get_json()
+
+        # Atualizar definição técnica
+        if 'definicao_tecnica' in data:
+            definicao = data['definicao_tecnica']
+            # Se veio como string, validar JSON
+            if isinstance(definicao, str):
+                import json
+                try:
+                    json.loads(definicao)  # Apenas valida
+                except json.JSONDecodeError as e:
+                    return jsonify({'success': False, 'error': f'JSON inválido: {e}'}), 400
+            codigo.definicao_tecnica = definicao
+
+        codigo.atualizado_por = current_user.nome
+        db.session.commit()
+
+        # Invalida cache
+        invalidar_cache()
+
+        return jsonify({
+            'success': True,
+            'mensagem': 'Código atualizado com sucesso!'
+        })
+
+    except Exception as e:
+        logger.error(f"[Admin] Erro ao atualizar código: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@claude_lite_admin_bp.route('/trainer/cache/invalidar', methods=['POST'])
+@login_required
+@admin_required
+def trainer_invalidar_cache():
+    """Invalida todo o cache do Claude AI Lite."""
+    try:
+        from .cache import invalidar_tudo
+        from .ia_trainer.services.codigo_loader import invalidar_cache
+
+        # Invalida cache de códigos
+        invalidar_cache()
+
+        # Invalida todo cache do módulo
+        removidos = invalidar_tudo()
+
+        return jsonify({
+            'success': True,
+            'mensagem': f'Cache invalidado com sucesso! ({removidos} chaves removidas)'
+        })
+
+    except Exception as e:
+        logger.error(f"[Admin] Erro ao invalidar cache: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

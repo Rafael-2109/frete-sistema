@@ -730,9 +730,11 @@ def create_app(config_name=None):
     try:
         from app.claude_ai_lite.routes import claude_lite_bp
         from app.claude_ai_lite.routes_admin import claude_lite_admin_bp
+        from app.claude_ai_lite.ia_trainer.routes import bp as ia_trainer_bp
         app.register_blueprint(claude_lite_bp)
         app.register_blueprint(claude_lite_admin_bp)
-        app.logger.info("✅ Claude AI Lite registrado com sucesso (+ admin)")
+        app.register_blueprint(ia_trainer_bp)
+        app.logger.info("✅ Claude AI Lite registrado com sucesso (+ admin + IA Trainer)")
     except ImportError as e:
         app.logger.warning(f"⚠️ Claude AI Lite não disponível: {e}")
 

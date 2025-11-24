@@ -58,7 +58,7 @@ class ConsultarRotaCapability(BaseCapability):
             return {"sucesso": False, "erro": "Rota/UF não informada", "total_encontrado": 0}
 
         loader = RotasLoader()
-        return loader.buscar(valor, campo)
+        return loader.buscar(valor, campo, contexto)  # Passa contexto com filtros aprendidos
 
     def formatar_contexto(self, resultado: Dict[str, Any]) -> str:
         """Delega formatação para o loader existente."""

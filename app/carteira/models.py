@@ -70,75 +70,9 @@ class CarteiraPrincipal(db.Model):
     endereco_ent = db.Column(db.String(20), nullable=True)  # Número
     telefone_endereco_ent = db.Column(db.String(50), nullable=True)  # Telefone - aumentado de 20 para 50
     
-    # 📅 DADOS OPERACIONAIS (PRESERVADOS na atualização)
-    expedicao = db.Column(db.Date, nullable=True)  # Data prevista expedição  
-    data_entrega = db.Column(db.Date, nullable=True)  # Data prevista entrega
-    agendamento = db.Column(db.Date, nullable=True)  # Data agendamento
-    hora_agendamento = db.Column(db.Time, nullable=True)  # Hora agendamento
-    protocolo = db.Column(db.String(50), nullable=True)  # Protocolo agendamento
-    agendamento_confirmado = db.Column(db.Boolean, nullable=True, default=False)  # Agendamento confirmado
-    roteirizacao = db.Column(db.String(100), nullable=True)  # Transportadora sugerida
-    
-    # 📊 ANÁLISE DE ESTOQUE (CALCULADOS)
-    menor_estoque_produto_d7 = db.Column(db.Numeric(15, 3), nullable=True)  # Previsão ruptura 7 dias
-    saldo_estoque_pedido = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque na data expedição
-    saldo_estoque_pedido_forcado = db.Column(db.Numeric(15, 3), nullable=True)  # Just-in-time
-    
-    # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
-    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # Vínculo separação
-    qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)  # Qtd do produto
-    valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)  # Valor do produto
-    pallet = db.Column(db.Numeric(15, 3), nullable=True)  
-    peso = db.Column(db.Numeric(15, 3), nullable=True)  
-    
-    # 🛣️ DADOS DE ROTA E SUB-ROTA (ADICIONADOS)
-    rota = db.Column(db.String(50), nullable=True)  # Rota principal baseada em cod_uf
-    sub_rota = db.Column(db.String(50), nullable=True)  # Sub-rota baseada em cod_uf + nome_cidade
-    
-    # 📈 TOTALIZADORES POR CLIENTE (CALCULADOS)
-    valor_saldo_total = db.Column(db.Numeric(15, 2), nullable=True)  # Valor total programado CNPJ
-    pallet_total = db.Column(db.Numeric(15, 3), nullable=True)  # Pallet total programado CNPJ  
-    peso_total = db.Column(db.Numeric(15, 3), nullable=True)  # Peso total programado CNPJ
-    valor_cliente_pedido = db.Column(db.Numeric(15, 2), nullable=True)  # Valor total carteira CNPJ
-    pallet_cliente_pedido = db.Column(db.Numeric(15, 3), nullable=True)  # Pallet total carteira CNPJ
-    peso_cliente_pedido = db.Column(db.Numeric(15, 3), nullable=True)  # Peso total carteira CNPJ
-    
-    # 📊 TOTALIZADORES POR PRODUTO (CALCULADOS)
-    qtd_total_produto_carteira = db.Column(db.Numeric(15, 3), nullable=True)  # Qtd total produto na carteira
-    estoque = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque inicial/atual D0
-    
-    # 📈 PROJEÇÃO D0-D28 (28 CAMPOS DE ESTOQUE FUTURO)
-    estoque_d0 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D0
-    estoque_d1 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D1
-    estoque_d2 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D2
-    estoque_d3 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D3
-    estoque_d4 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D4
-    estoque_d5 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D5
-    estoque_d6 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D6
-    estoque_d7 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D7
-    estoque_d8 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D8
-    estoque_d9 = db.Column(db.Numeric(15, 3), nullable=True)   # Estoque final D9
-    estoque_d10 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D10
-    estoque_d11 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D11
-    estoque_d12 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D12
-    estoque_d13 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D13
-    estoque_d14 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D14
-    estoque_d15 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D15
-    estoque_d16 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D16
-    estoque_d17 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D17
-    estoque_d18 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D18
-    estoque_d19 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D19
-    estoque_d20 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D20
-    estoque_d21 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D21
-    estoque_d22 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D22
-    estoque_d23 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D23
-    estoque_d24 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D24
-    estoque_d25 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D25
-    estoque_d26 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D26
-    estoque_d27 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D27
-    estoque_d28 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D28
-    
-    # 📞 AGENDAMENTO
+    # 📅 DADOS OPERACIONAIS
+    # NOTA: Campos de agendamento/expedição/carga estão em Separacao (fonte única da verdade)
+    # CarteiraPrincipal contém apenas dados do pedido original do Odoo
     forma_agendamento = db.Column(db.String(50), nullable=True)  # Portal, Telefone, E-mail, WhatsApp, ODOO, SEM AGENDAMENTO
 
     # 🔄 SINCRONIZAÇÃO INCREMENTAL
@@ -167,9 +101,8 @@ class CarteiraPrincipal(db.Model):
         db.UniqueConstraint('num_pedido', 'cod_produto', name='uq_carteira_pedido_produto'),
         # Índices de consulta
         Index('idx_carteira_cliente_vendedor', 'cnpj_cpf', 'vendedor'),
-        Index('idx_carteira_status_expedicao', 'status_pedido', 'expedicao'),
+        Index('idx_carteira_status_data', 'status_pedido', 'data_pedido'),
         Index('idx_carteira_produto_saldo', 'cod_produto', 'qtd_saldo_produto_pedido'),
-        Index('idx_carteira_separacao_lote', 'separacao_lote_id'),
     )
 
     def __repr__(self):
@@ -189,9 +122,8 @@ class CarteiraPrincipal(db.Model):
             'raz_social_red': self.raz_social_red,
             'vendedor': self.vendedor,
             'status_pedido': self.status_pedido,
-            'expedicao': self.expedicao.strftime('%d/%m/%Y') if self.expedicao else None,
-            'agendamento': self.agendamento.strftime('%d/%m/%Y') if self.agendamento else None,
-            'protocolo': self.protocolo
+            'data_pedido': self.data_pedido.strftime('%d/%m/%Y') if self.data_pedido else None,
+            'forma_agendamento': self.forma_agendamento
         }
 
 class CarteiraCopia(db.Model):
@@ -966,11 +898,12 @@ class PreSeparacaoItem(db.Model):
             qtd_restante = float(qtd_reduzida)
             log_operacoes = []
             
-            # 1º Consumir do saldo livre primeiro (CarteiraPrincipal sem separação)
+            # 1º Consumir do saldo livre primeiro (CarteiraPrincipal)
+            # NOTA: Campo separacao_lote_id foi REMOVIDO de CarteiraPrincipal
+            # Agora buscamos direto o item sem verificar separação (separação está em Separacao)
             carteira_item = CarteiraPrincipal.query.filter(
                 CarteiraPrincipal.num_pedido == num_pedido,
-                CarteiraPrincipal.cod_produto == cod_produto,
-                CarteiraPrincipal.separacao_lote_id.is_(None)
+                CarteiraPrincipal.cod_produto == cod_produto
             ).first()
             
             if carteira_item and carteira_item.qtd_saldo_produto_pedido and qtd_restante > 0:

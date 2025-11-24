@@ -21,7 +21,7 @@ class ProdutosLoader(BaseLoader):
         "cod_produto",
     ]
 
-    def buscar(self, valor: str, campo: str) -> Dict[str, Any]:
+    def buscar(self, valor: str, campo: str, contexto: Dict = None) -> Dict[str, Any]:
         """Busca produtos na carteira e separacao."""
         from app.carteira.models import CarteiraPrincipal
         from app.separacao.models import Separacao
@@ -48,6 +48,10 @@ class ProdutosLoader(BaseLoader):
             else:
                 q_cart = CarteiraPrincipal.query.filter(CarteiraPrincipal.cod_produto.ilike(f"%{valor}%"))
                 q_sep = Separacao.query.filter(Separacao.cod_produto.ilike(f"%{valor}%"), Separacao.sincronizado_nf == False)
+
+            # Aplica filtros aprendidos pelo IA Trainer
+            q_cart = self.aplicar_filtros_aprendidos(q_cart, contexto, CarteiraPrincipal)
+            q_sep = self.aplicar_filtros_aprendidos(q_sep, contexto, Separacao)
 
             itens_cart = q_cart.all()
             itens_sep = q_sep.all()

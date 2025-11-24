@@ -337,22 +337,15 @@ def atualizar_visual_pos_separacao():
             }), 400
             
         # Buscar informações atualizadas do pedido
+        # NOTA: Campos expedicao, separacao_lote_id, qtd_saldo foram REMOVIDOS de CarteiraPrincipal
         pedido_info = db.session.query(
             CarteiraPrincipal.num_pedido,
-            CarteiraPrincipal.expedicao,
-            func.count(CarteiraPrincipal.separacao_lote_id).label('tem_separacao'),
-            func.sum(
-                case(
-                    (CarteiraPrincipal.qtd_saldo > 0, 1),
-                    else_=0
-                )
-            ).label('itens_separados')
+            func.count(CarteiraPrincipal.id).label('total_itens')
         ).filter(
             CarteiraPrincipal.num_pedido == num_pedido,
             CarteiraPrincipal.ativo == True
         ).group_by(
-            CarteiraPrincipal.num_pedido,
-            CarteiraPrincipal.expedicao
+            CarteiraPrincipal.num_pedido
         ).first()
         
         if not pedido_info:
@@ -361,15 +354,19 @@ def atualizar_visual_pos_separacao():
                 'message': 'Pedido não encontrado'
             }), 404
             
-        # Determinar cor baseado no status
-        tem_separacao = pedido_info.itens_separados > 0
+        # NOTA: Campos removidos de CarteiraPrincipal - verificar separações via Separacao
+        from app.separacao.models import Separacao
+        tem_separacao = db.session.query(Separacao).filter(
+            Separacao.num_pedido == num_pedido,
+            Separacao.sincronizado_nf == False
+        ).first() is not None
         cor_linha = 'table-success' if tem_separacao else ''
-        
+
         return jsonify({
             'success': True,
             'pedido': {
                 'num_pedido': num_pedido,
-                'data_expedicao': data_expedicao or (pedido_info.expedicao.isoformat() if pedido_info.expedicao else None),
+                'data_expedicao': data_expedicao,  # Removido de CarteiraPrincipal
                 'tem_separacao': tem_separacao,
                 'cor_linha': cor_linha,
                 'classe_css': 'pedido-com-separacao' if tem_separacao else ''
@@ -456,6 +453,8 @@ def obter_detalhes_pedido_completo(num_pedido):
     """
     try:
         # Buscar informações principais do pedido (primeira linha)
+        # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado, rota, sub_rota,
+        # hora_agendamento, peso, pallet foram REMOVIDOS de CarteiraPrincipal
         pedido_info = db.session.query(
             CarteiraPrincipal.num_pedido,
             CarteiraPrincipal.cnpj_cpf,
@@ -467,20 +466,11 @@ def obter_detalhes_pedido_completo(num_pedido):
             CarteiraPrincipal.vendedor,
             CarteiraPrincipal.equipe_vendas,
             CarteiraPrincipal.data_pedido,
-            CarteiraPrincipal.expedicao,
-            CarteiraPrincipal.agendamento,
-            CarteiraPrincipal.hora_agendamento,
-            CarteiraPrincipal.protocolo,
-            CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.pedido_cliente,
             CarteiraPrincipal.incoterm,
             CarteiraPrincipal.forma_agendamento,
-            CarteiraPrincipal.rota,
-            CarteiraPrincipal.sub_rota,
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.peso).label('peso_total'),
-            func.sum(CarteiraPrincipal.pallet).label('pallet_total'),
             func.count(CarteiraPrincipal.id).label('total_itens')
         ).filter(
             CarteiraPrincipal.num_pedido == num_pedido,
@@ -496,17 +486,10 @@ def obter_detalhes_pedido_completo(num_pedido):
             CarteiraPrincipal.vendedor,
             CarteiraPrincipal.equipe_vendas,
             CarteiraPrincipal.data_pedido,
-            CarteiraPrincipal.expedicao,
-            CarteiraPrincipal.agendamento,
-            CarteiraPrincipal.hora_agendamento,
-            CarteiraPrincipal.protocolo,
-            CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.pedido_cliente,
             CarteiraPrincipal.incoterm,
-            CarteiraPrincipal.forma_agendamento,
-            CarteiraPrincipal.rota,
-            CarteiraPrincipal.sub_rota
+            CarteiraPrincipal.forma_agendamento
         ).first()
         
         if not pedido_info:
@@ -516,6 +499,7 @@ def obter_detalhes_pedido_completo(num_pedido):
             }), 404
         
         # Buscar todos os itens do pedido
+        # NOTA: Campos peso, pallet, estoque foram REMOVIDOS de CarteiraPrincipal
         itens = db.session.query(
             CarteiraPrincipal.id,
             CarteiraPrincipal.cod_produto,
@@ -523,10 +507,7 @@ def obter_detalhes_pedido_completo(num_pedido):
             CarteiraPrincipal.qtd_produto_pedido,
             CarteiraPrincipal.qtd_saldo_produto_pedido,
             CarteiraPrincipal.qtd_cancelada_produto_pedido,
-            CarteiraPrincipal.preco_produto_pedido,
-            CarteiraPrincipal.peso,
-            CarteiraPrincipal.pallet,
-            CarteiraPrincipal.estoque
+            CarteiraPrincipal.preco_produto_pedido
         ).filter(
             CarteiraPrincipal.num_pedido == num_pedido,
             CarteiraPrincipal.ativo == True
@@ -562,6 +543,7 @@ def obter_detalhes_pedido_completo(num_pedido):
         primeira_sep = separacoes[0] if separacoes else None
         
         # Formatar dados do pedido
+        # NOTA: Campos removidos de CarteiraPrincipal - dados de agendamento vêm de Separacao
         pedido_dict = {
             'num_pedido': pedido_info.num_pedido,
             'cnpj_cpf': pedido_info.cnpj_cpf,
@@ -573,25 +555,26 @@ def obter_detalhes_pedido_completo(num_pedido):
             'vendedor': pedido_info.vendedor,
             'equipe_vendas': pedido_info.equipe_vendas,
             'data_pedido': pedido_info.data_pedido.isoformat() if pedido_info.data_pedido else None,
-            # MIGRADO: Dados de agendamento vêm de Separacao, não CarteiraPrincipal
+            # Dados de agendamento vêm de Separacao
             'expedicao': primeira_sep.expedicao.isoformat() if primeira_sep and primeira_sep.expedicao else None,
             'agendamento': primeira_sep.agendamento.isoformat() if primeira_sep and primeira_sep.agendamento else None,
-            'hora_agendamento': pedido_info.hora_agendamento.isoformat() if pedido_info.hora_agendamento else None,
+            'hora_agendamento': None,  # Removido de CarteiraPrincipal
             'protocolo': primeira_sep.protocolo if primeira_sep else None,
             'agendamento_confirmado': primeira_sep.agendamento_confirmado if primeira_sep else False,
             'observ_ped_1': pedido_info.observ_ped_1,
             'pedido_cliente': pedido_info.pedido_cliente,
             'incoterm': pedido_info.incoterm,
             'forma_agendamento': pedido_info.forma_agendamento,
-            'rota': pedido_info.rota,
-            'sub_rota': pedido_info.sub_rota,
+            'rota': None,  # Removido de CarteiraPrincipal
+            'sub_rota': None,  # Removido de CarteiraPrincipal
             'valor_total': float(pedido_info.valor_total or 0),
-            'peso_total': float(pedido_info.peso_total or 0),
-            'pallet_total': float(pedido_info.pallet_total or 0),
+            'peso_total': 0,  # Removido de CarteiraPrincipal
+            'pallet_total': 0,  # Removido de CarteiraPrincipal
             'total_itens': pedido_info.total_itens
         }
         
         # Formatar itens
+        # NOTA: Campos peso, pallet, estoque foram REMOVIDOS de CarteiraPrincipal
         itens_list = []
         for item in itens:
             itens_list.append({
@@ -602,9 +585,9 @@ def obter_detalhes_pedido_completo(num_pedido):
                 'qtd_saldo_produto_pedido': float(item.qtd_saldo_produto_pedido or 0),
                 'qtd_cancelada_produto_pedido': float(item.qtd_cancelada_produto_pedido or 0),
                 'preco_produto_pedido': float(item.preco_produto_pedido or 0),
-                'peso': float(item.peso or 0),
-                'pallet': float(item.pallet or 0),
-                'estoque': float(item.estoque or 0) if item.estoque else 0
+                'peso': 0,  # Removido de CarteiraPrincipal
+                'pallet': 0,  # Removido de CarteiraPrincipal
+                'estoque': 0  # Removido de CarteiraPrincipal
             })
         
         # OTIMIZADO: Buscar TODOS os itens de separação de uma vez

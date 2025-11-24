@@ -1,0 +1,680 @@
+{% extends "base.html" %}
+
+{% block title %}Modo Discussao Avancada - IA Trainer{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="fas fa-comments me-2"></i>Modo Discussao Avancada</h2>
+                    <p class="text-muted mb-0">Discuta e corrija codigos com autonomia ampliada</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('ia_trainer.index') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Painel Esquerdo: Codigo e Problemas -->
+        <div class="col-md-4">
+            <!-- Seletor de Codigo -->
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-code me-1"></i>Codigo em Discussao
+                </div>
+                <div class="card-body" id="cardCodigoBody">
+                    <select id="seletorCodigo" class="form-select mb-2">
+                        <option value="">Selecionar codigo...</option>
+                    </select>
+                    <div id="infoCodigo">
+                        <p class="text-muted small">Selecione um codigo acima ou clique em um problema abaixo.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Problemas -->
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-exclamation-triangle me-1"></i>Problemas Detectados</span>
+                    <button class="btn btn-sm btn-outline-dark" onclick="carregarProblemas()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0" id="listaProblemas" style="max-height: 250px; overflow-y: auto;">
+                    <div class="text-center py-3 text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Propostas Pendentes -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-clipboard-check me-1"></i>Propostas Pendentes
+                </div>
+                <div class="card-body p-0" id="listaPropostas" style="max-height: 150px; overflow-y: auto;">
+                    <div class="text-center py-3 text-muted small">
+                        Nenhuma proposta pendente
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel Central: Chat de Discussao -->
+        <div class="col-md-8">
+            <div class="card" style="height: calc(100vh - 180px);">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-robot me-1"></i>Discussao com Claude</span>
+                    <div>
+                        <select id="modoDiscussao" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                            <option value="critico">Modo Critico</option>
+                            <option value="colaborativo">Modo Colaborativo</option>
+                            <option value="tecnico">Modo Tecnico</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-light ms-2" onclick="limparChat()" title="Limpar chat">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body d-flex flex-column p-0">
+                    <!-- Area de Mensagens -->
+                    <div id="chatArea" class="flex-grow-1 p-3" style="overflow-y: auto; background: #f8f9fa;">
+                        <div class="text-center text-muted py-4" id="chatInicio">
+                            <i class="fas fa-comments fa-3x mb-3"></i>
+                            <p>Selecione um codigo e inicie a discussao.</p>
+                            <p class="small">
+                                O Claude pode ver CLAUDE.md, aprendizados e o banco de dados.<br>
+                                <strong>Qualquer correcao precisa da sua aprovacao.</strong>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Area de Aprovacao (quando houver proposta) -->
+                    <div id="areaAprovacao" class="border-top p-3 bg-warning bg-opacity-25" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0"><i class="fas fa-clipboard-check me-1"></i>Proposta de Correcao - Aguardando Aprovacao</h6>
+                            <span class="badge bg-warning text-dark">PENDENTE</span>
+                        </div>
+                        <div id="comparativoCorrecao" style="max-height: 200px; overflow-y: auto;"></div>
+                        <div class="mt-3 d-flex gap-2">
+                            <button class="btn btn-success" onclick="aprovarCorrecao()">
+                                <i class="fas fa-check me-1"></i>APROVAR e Aplicar
+                            </button>
+                            <button class="btn btn-danger" onclick="rejeitarCorrecao()">
+                                <i class="fas fa-times me-1"></i>Rejeitar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input de Mensagem -->
+                    <div class="border-top p-3">
+                        <div class="input-group">
+                            <textarea id="inputMensagem" class="form-control" rows="2"
+                                placeholder="Digite sua mensagem..."
+                                onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); enviarMensagem(); }"></textarea>
+                            <button class="btn btn-primary" onclick="enviarMensagem()" id="btnEnviar">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <span class="text-muted small">Acoes rapidas:</span>
+                            <button class="btn btn-outline-danger btn-sm ms-1" onclick="comandoRapido('validar')" title="Valida campos contra CLAUDE.md">
+                                <i class="fas fa-check-circle"></i> Validar
+                            </button>
+                            <button class="btn btn-outline-success btn-sm ms-1" onclick="comandoRapido('corrigir')" title="Sugere correcao com ANTES/DEPOIS">
+                                <i class="fas fa-wrench"></i> Corrigir
+                            </button>
+                            <button class="btn btn-outline-info btn-sm ms-1" onclick="comandoRapido('explicar')" title="Explica o codigo">
+                                <i class="fas fa-info-circle"></i> Explicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.msg-usuario {
+    background: #007bff;
+    color: white;
+    border-radius: 15px 15px 0 15px;
+    padding: 10px 15px;
+    margin: 10px 0;
+    margin-left: 20%;
+    max-width: 80%;
+}
+.msg-claude {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 15px 15px 15px 0;
+    padding: 10px 15px;
+    margin: 10px 0;
+    margin-right: 10%;
+    max-width: 90%;
+}
+.msg-sistema {
+    background: #ffc107;
+    color: #212529;
+    border-radius: 10px;
+    padding: 10px 15px;
+    margin: 10px auto;
+    max-width: 90%;
+    text-align: center;
+}
+.diff-antes {
+    background: #ffecec;
+    border-left: 3px solid #dc3545;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-bottom: 5px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+.diff-depois {
+    background: #e6ffec;
+    border-left: 3px solid #28a745;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 150px;
+    overflow-y: auto;
+}
+.problema-item {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.problema-item:hover {
+    background: #fff3cd;
+}
+.problema-item.selecionado {
+    background: #cfe2ff;
+    border-left: 3px solid #0d6efd;
+}
+.codigo-info {
+    font-size: 12px;
+}
+.codigo-info pre {
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+    max-height: 150px;
+    overflow: auto;
+    font-size: 10px;
+}
+</style>
+
+<script>
+// Estado global
+let codigoAtual = null;
+let propostaAtual = null;
+let historicoChatPorCodigo = {}; // Guarda historico por codigo
+
+// Inicializa com codigo da URL se houver
+{% if codigo %}
+codigoAtual = {{ codigo | tojson }};
+{% endif %}
+
+document.addEventListener('DOMContentLoaded', function() {
+    carregarListaCodigos();
+    carregarProblemas();
+    carregarPropostas();
+
+    // Se ja tem codigo, mostra info
+    if (codigoAtual) {
+        mostrarInfoCodigo(codigoAtual);
+        document.getElementById('seletorCodigo').value = codigoAtual.id;
+    }
+});
+
+// ========== CARREGAMENTO ==========
+
+async function carregarListaCodigos() {
+    const seletor = document.getElementById('seletorCodigo');
+
+    try {
+        const resp = await fetch('/claude-lite/trainer/api/codigos');
+        const data = await resp.json();
+
+        if (data.sucesso) {
+            // Limpa opcoes exceto a primeira
+            seletor.innerHTML = '<option value="">Selecionar codigo...</option>';
+
+            data.codigos.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = `${c.nome} (${c.tipo_codigo}) ${c.ativo ? '' : '[INATIVO]'}`;
+                seletor.appendChild(opt);
+            });
+
+            // Evento de mudanca
+            seletor.onchange = function() {
+                if (this.value) {
+                    carregarCodigo(parseInt(this.value));
+                }
+            };
+
+            // Se ja tem codigo selecionado
+            if (codigoAtual) {
+                seletor.value = codigoAtual.id;
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao carregar codigos:', e);
+    }
+}
+
+async function carregarCodigo(codigoId) {
+    try {
+        const resp = await fetch(`/claude-lite/trainer/api/codigos`);
+        const data = await resp.json();
+
+        if (data.sucesso) {
+            const codigo = data.codigos.find(c => c.id === codigoId);
+            if (codigo) {
+                codigoAtual = codigo;
+                mostrarInfoCodigo(codigo);
+
+                // Restaura chat se existir
+                restaurarChat(codigoId);
+
+                // Atualiza URL sem recarregar
+                history.pushState({}, '', `/claude-lite/trainer/discussao/${codigoId}`);
+
+                // Marca problema como selecionado
+                document.querySelectorAll('.problema-item').forEach(el => {
+                    el.classList.remove('selecionado');
+                });
+                const itemProblema = document.querySelector(`.problema-item[data-id="${codigoId}"]`);
+                if (itemProblema) itemProblema.classList.add('selecionado');
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao carregar codigo:', e);
+    }
+}
+
+function mostrarInfoCodigo(codigo) {
+    const container = document.getElementById('infoCodigo');
+
+    container.innerHTML = `
+        <div class="codigo-info">
+            <h6 class="mb-1">${codigo.nome}</h6>
+            <div class="mb-2">
+                <span class="badge bg-info">${codigo.tipo_codigo}</span>
+                <span class="badge ${codigo.ativo ? 'bg-success' : 'bg-secondary'}">${codigo.ativo ? 'Ativo' : 'Inativo'}</span>
+            </div>
+            <div class="mb-2">
+                <strong>Gatilhos:</strong>
+                <div class="small text-muted">${(codigo.gatilhos || []).join(', ') || 'Nenhum'}</div>
+            </div>
+            <div class="mb-2">
+                <strong>Campos:</strong>
+                <div class="small text-monospace">${(codigo.campos_referenciados || []).join(', ') || 'Nenhum'}</div>
+            </div>
+            <div>
+                <strong>Definicao:</strong>
+                <pre>${typeof codigo.definicao_tecnica === 'string' ? codigo.definicao_tecnica : JSON.stringify(codigo.definicao_tecnica, null, 2)}</pre>
+            </div>
+        </div>
+    `;
+
+    // Remove mensagem inicial do chat
+    document.getElementById('chatInicio')?.remove();
+}
+
+async function carregarProblemas() {
+    const container = document.getElementById('listaProblemas');
+
+    try {
+        const resp = await fetch('/claude-lite/trainer/api/discussao/problemas');
+        const data = await resp.json();
+
+        if (data.sucesso && data.problemas.length > 0) {
+            container.innerHTML = data.problemas.map(p => `
+                <div class="problema-item ${codigoAtual?.id === p.codigo_id ? 'selecionado' : ''}"
+                     data-id="${p.codigo_id}"
+                     onclick="selecionarProblema(${p.codigo_id})">
+                    <div class="d-flex justify-content-between">
+                        <strong class="small">${p.nome}</strong>
+                        <span class="badge ${p.ativo ? 'bg-success' : 'bg-secondary'}" style="font-size:10px">${p.ativo ? 'Ativo' : 'Inativo'}</span>
+                    </div>
+                    <small class="text-danger">${p.erros.length} erro(s)</small>
+                    <ul class="small mb-0 mt-1" style="font-size:11px">
+                        ${p.erros.slice(0, 2).map(e => `<li class="text-truncate" style="max-width:250px">${e}</li>`).join('')}
+                        ${p.erros.length > 2 ? `<li class="text-muted">+${p.erros.length - 2} mais...</li>` : ''}
+                    </ul>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div class="text-center py-3 text-success small"><i class="fas fa-check-circle"></i> Nenhum problema</div>';
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="text-center py-3 text-danger small">Erro ao carregar</div>';
+    }
+}
+
+async function carregarPropostas() {
+    const container = document.getElementById('listaPropostas');
+
+    try {
+        const resp = await fetch('/claude-lite/trainer/api/discussao/propostas-pendentes');
+        const data = await resp.json();
+
+        if (data.sucesso && data.total > 0) {
+            container.innerHTML = data.propostas.map(p => `
+                <div class="problema-item">
+                    <strong class="small">${p.nome}</strong>
+                    <small class="d-block text-muted">${p.motivo}</small>
+                    <button class="btn btn-success btn-sm mt-1" onclick="mostrarPropostaExistente('${p.proposta_id}', ${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                        <i class="fas fa-eye"></i> Ver
+                    </button>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div class="text-center py-3 text-muted small">Nenhuma proposta pendente</div>';
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="text-center py-3 text-danger small">Erro</div>';
+    }
+}
+
+// ========== SELECAO ==========
+
+function selecionarProblema(codigoId) {
+    // Salva chat atual antes de mudar
+    if (codigoAtual) {
+        salvarChat(codigoAtual.id);
+    }
+
+    // Carrega novo codigo (sem redirecionar!)
+    carregarCodigo(codigoId);
+
+    // Atualiza seletor
+    document.getElementById('seletorCodigo').value = codigoId;
+}
+
+// ========== CHAT ==========
+
+function salvarChat(codigoId) {
+    const chatArea = document.getElementById('chatArea');
+    historicoChatPorCodigo[codigoId] = chatArea.innerHTML;
+}
+
+function restaurarChat(codigoId) {
+    const chatArea = document.getElementById('chatArea');
+
+    if (historicoChatPorCodigo[codigoId]) {
+        chatArea.innerHTML = historicoChatPorCodigo[codigoId];
+    } else {
+        // Chat novo para este codigo
+        chatArea.innerHTML = `
+            <div class="msg-sistema">
+                <i class="fas fa-info-circle"></i> Discussao iniciada para <strong>${codigoAtual?.nome || 'codigo'}</strong>
+            </div>
+        `;
+    }
+
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function limparChat() {
+    if (confirm('Limpar historico do chat para este codigo?')) {
+        const chatArea = document.getElementById('chatArea');
+        chatArea.innerHTML = '<div class="msg-sistema"><i class="fas fa-trash"></i> Chat limpo</div>';
+
+        if (codigoAtual) {
+            delete historicoChatPorCodigo[codigoAtual.id];
+        }
+    }
+}
+
+async function enviarMensagem() {
+    const input = document.getElementById('inputMensagem');
+    const mensagem = input.value.trim();
+
+    if (!mensagem) return;
+    if (!codigoAtual) {
+        alert('Selecione um codigo primeiro!');
+        return;
+    }
+
+    // Adiciona mensagem do usuario
+    adicionarMensagem('usuario', mensagem);
+    input.value = '';
+
+    // Desabilita botao
+    document.getElementById('btnEnviar').disabled = true;
+
+    // Loading
+    const loadingId = adicionarMensagem('claude', '<i class="fas fa-spinner fa-spin"></i> Analisando...');
+
+    try {
+        const resp = await fetch('/claude-lite/trainer/api/discussao/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                mensagem: mensagem,
+                codigo_id: codigoAtual.id,
+                modo: document.getElementById('modoDiscussao').value
+            })
+        });
+
+        const data = await resp.json();
+        document.getElementById(loadingId)?.remove();
+
+        if (data.sucesso) {
+            let conteudo = formatarResposta(data);
+            adicionarMensagem('claude', conteudo);
+
+            // Se veio proposta, mostra area de aprovacao
+            if (data.aguardando_aprovacao && data.comparativo) {
+                propostaAtual = data.proposta_id;
+                mostrarAreaAprovacao(data.comparativo);
+            }
+        } else {
+            adicionarMensagem('sistema', `<i class="fas fa-exclamation-triangle"></i> ${data.erro}`);
+        }
+    } catch (e) {
+        document.getElementById(loadingId)?.remove();
+        adicionarMensagem('sistema', `<i class="fas fa-times-circle"></i> Erro: ${e.message}`);
+    }
+
+    document.getElementById('btnEnviar').disabled = false;
+
+    // Salva chat
+    if (codigoAtual) salvarChat(codigoAtual.id);
+}
+
+function formatarResposta(data) {
+    let html = '';
+
+    // 1. Resposta conversacional (sempre primeiro e principal)
+    if (data.resposta) {
+        let respostaFormatada = data.resposta
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`(.*?)`/g, '<code>$1</code>');
+        html += `<div class="mb-2">${respostaFormatada}</div>`;
+    } else if (data.analise) {
+        html += `<div class="mb-2">${data.analise}</div>`;
+    }
+
+    // 2. Erros encontrados (se houver)
+    if (data.erros_encontrados?.length > 0) {
+        html += '<div class="alert alert-danger py-2 mb-2"><strong><i class="fas fa-bug"></i> Erros:</strong><ul class="mb-0 small">';
+        data.erros_encontrados.forEach(e => html += `<li>${e}</li>`);
+        html += '</ul></div>';
+    }
+
+    // 3. Sugestoes (se houver)
+    if (data.sugestoes?.length > 0) {
+        html += '<div class="alert alert-info py-2 mb-2"><strong><i class="fas fa-lightbulb"></i> Sugestoes:</strong><ul class="mb-0 small">';
+        data.sugestoes.forEach(s => html += `<li>${s}</li>`);
+        html += '</ul></div>';
+    }
+
+    // 4. Proximos passos (se houver)
+    if (data.proximos_passos?.length > 0) {
+        html += '<div class="small text-muted mt-2"><strong>Proximos passos:</strong> ' + data.proximos_passos.join(' | ') + '</div>';
+    }
+
+    // 5. Codigo corrigido proposto (se houver)
+    if (data.codigo_corrigido) {
+        html += '<div class="alert alert-success py-2"><strong><i class="fas fa-code"></i> Codigo corrigido:</strong>';
+        html += `<pre class="small mb-0" style="max-height:150px;overflow:auto">${JSON.stringify(data.codigo_corrigido, null, 2)}</pre></div>`;
+    }
+
+    return html || 'Resposta recebida';
+}
+
+function adicionarMensagem(tipo, conteudo) {
+    const chatArea = document.getElementById('chatArea');
+    const id = 'msg-' + Date.now();
+
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = `msg-${tipo}`;
+    div.innerHTML = conteudo;
+
+    chatArea.appendChild(div);
+    chatArea.scrollTop = chatArea.scrollHeight;
+
+    return id;
+}
+
+// ========== COMANDOS RAPIDOS ==========
+
+async function comandoRapido(comando) {
+    if (!codigoAtual) {
+        alert('Selecione um codigo primeiro!');
+        return;
+    }
+
+    const comandos = {
+        'validar': `Valide o codigo "${codigoAtual.nome}" (ID ${codigoAtual.id}) contra o CLAUDE.md. Liste TODOS os campos que NAO existem e sugira os campos corretos.`,
+        'corrigir': `Analise o codigo "${codigoAtual.nome}" e PROPONHA uma correcao. Mostre ANTES e DEPOIS de cada campo que precisa mudar. Seja especifico.`,
+        'explicar': `Explique detalhadamente o que o codigo "${codigoAtual.nome}" faz: quais tabelas consulta, quais filtros aplica, e para que serve.`
+    };
+
+    document.getElementById('inputMensagem').value = comandos[comando] || '';
+    enviarMensagem();
+}
+
+// ========== APROVACAO ==========
+
+function mostrarAreaAprovacao(comparativo) {
+    const area = document.getElementById('areaAprovacao');
+    const conteudo = document.getElementById('comparativoCorrecao');
+
+    let html = `<p class="small mb-2"><strong>Codigo:</strong> ${comparativo.nome} | <strong>Motivo:</strong> ${comparativo.motivo}</p>`;
+
+    let temMudanca = false;
+    comparativo.campos.forEach(c => {
+        if (c.mudou) {
+            temMudanca = true;
+            html += `
+                <div class="mb-2">
+                    <strong class="small">${c.campo}:</strong>
+                    <div class="diff-antes"><strong>ANTES:</strong><br>${c.antes}</div>
+                    <div class="diff-depois"><strong>DEPOIS:</strong><br>${c.depois}</div>
+                </div>
+            `;
+        }
+    });
+
+    if (!temMudanca) {
+        html += '<p class="text-muted">Nenhuma mudanca detectada.</p>';
+    }
+
+    conteudo.innerHTML = html;
+    area.style.display = 'block';
+
+    // Scroll para area de aprovacao
+    area.scrollIntoView({ behavior: 'smooth' });
+}
+
+function mostrarPropostaExistente(propostaId, proposta) {
+    propostaAtual = propostaId;
+    mostrarAreaAprovacao(proposta);
+}
+
+async function aprovarCorrecao() {
+    if (!propostaAtual) {
+        alert('Nenhuma proposta para aprovar');
+        return;
+    }
+
+    if (!confirm('Tem certeza que deseja APROVAR e APLICAR esta correcao?')) {
+        return;
+    }
+
+    try {
+        const resp = await fetch('/claude-lite/trainer/api/discussao/aprovar-correcao', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ proposta_id: propostaAtual })
+        });
+
+        const data = await resp.json();
+
+        if (data.sucesso) {
+            adicionarMensagem('sistema', `<i class="fas fa-check-circle text-success"></i> ${data.mensagem}`);
+            document.getElementById('areaAprovacao').style.display = 'none';
+            propostaAtual = null;
+
+            // Recarrega dados
+            carregarProblemas();
+            carregarPropostas();
+
+            // Recarrega codigo atualizado
+            if (codigoAtual) {
+                setTimeout(() => carregarCodigo(codigoAtual.id), 1000);
+            }
+        } else {
+            adicionarMensagem('sistema', `<i class="fas fa-times-circle text-danger"></i> Erro: ${data.erro}`);
+        }
+    } catch (e) {
+        adicionarMensagem('sistema', `<i class="fas fa-times-circle text-danger"></i> Erro: ${e.message}`);
+    }
+
+    if (codigoAtual) salvarChat(codigoAtual.id);
+}
+
+async function rejeitarCorrecao() {
+    if (!propostaAtual) return;
+
+    try {
+        await fetch('/claude-lite/trainer/api/discussao/rejeitar-correcao', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ proposta_id: propostaAtual })
+        });
+
+        adicionarMensagem('sistema', '<i class="fas fa-ban"></i> Proposta rejeitada');
+        document.getElementById('areaAprovacao').style.display = 'none';
+        propostaAtual = null;
+        carregarPropostas();
+    } catch (e) {
+        adicionarMensagem('sistema', `Erro: ${e.message}`);
+    }
+
+    if (codigoAtual) salvarChat(codigoAtual.id);
+}
+</script>
+{% endblock %}

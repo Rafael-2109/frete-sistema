@@ -48,7 +48,7 @@ class AnalisarGargalosCapability(BaseCapability):
 
         campo, valor = self.extrair_valor_busca(entidades)
         loader = GargalosLoader()
-        return loader.buscar(valor, campo)
+        return loader.buscar(valor, campo, contexto)  # Passa contexto com filtros aprendidos
 
     def formatar_contexto(self, resultado: Dict[str, Any]) -> str:
         """Delega formatação para o loader existente."""

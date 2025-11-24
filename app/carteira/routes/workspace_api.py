@@ -29,18 +29,16 @@ def workspace_pedido_real(num_pedido):
     """
     try:
         # Buscar produtos do pedido na carteira
+        # NOTA: Campos expedicao e estoque foram REMOVIDOS de CarteiraPrincipal
         produtos_carteira = (
             db.session.query(
                 CarteiraPrincipal.cod_produto,
                 CarteiraPrincipal.nome_produto,
                 CarteiraPrincipal.qtd_saldo_produto_pedido.label("qtd_pedido"),
                 CarteiraPrincipal.preco_produto_pedido.label("preco_unitario"),
-                CarteiraPrincipal.expedicao,
                 # Dados de palletização
                 CadastroPalletizacao.peso_bruto.label("peso_unitario"),
                 CadastroPalletizacao.palletizacao,
-                # Dados básicos (estoque será calculado via SaldoEstoque)
-                CarteiraPrincipal.estoque.label("estoque_hoje"),
             )
             .outerjoin(
                 CadastroPalletizacao,

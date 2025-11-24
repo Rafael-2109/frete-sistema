@@ -46,6 +46,46 @@
         </div>
     </div>
 
+    <!-- Estatísticas IA Trainer -->
+    <div class="row mb-4" id="estatisticas-trainer">
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Perguntas Pendentes</h5>
+                    <h2 id="stat-pendentes">-</h2>
+                    <small>Aguardando ensino</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Códigos Ativos</h5>
+                    <h2 id="stat-codigos">-</h2>
+                    <small>Gerados pelo IA Trainer</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Sessões de Ensino</h5>
+                    <h2 id="stat-sessoes">-</h2>
+                    <small>Em andamento</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card" style="background-color: #6f42c1; color: white;">
+                <div class="card-body">
+                    <h5 class="card-title">Cache Redis</h5>
+                    <h2 id="stat-cache">-</h2>
+                    <small id="stat-cache-tipo">-</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs" id="adminTabs" role="tablist">
         <li class="nav-item">
@@ -54,8 +94,24 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link" id="perguntas-tab" data-bs-toggle="tab" href="#perguntas" role="tab">
+                <i class="fas fa-question-circle me-1"></i>Perguntas Não Respondidas
+                <span class="badge bg-danger ms-1" id="badge-pendentes">0</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="codigos-tab" data-bs-toggle="tab" href="#codigos" role="tab">
+                <i class="fas fa-code me-1"></i>Códigos Gerados
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" id="historico-tab" data-bs-toggle="tab" href="#historico" role="tab">
                 <i class="fas fa-history me-1"></i>Histórico
+            </a>
+        </li>
+        <li class="nav-item ms-auto">
+            <a class="nav-link text-warning fw-bold" href="{{ url_for('ia_trainer.pagina_discussao') }}">
+                <i class="fas fa-comments me-1"></i>Modo Discussão
             </a>
         </li>
     </ul>
@@ -109,6 +165,84 @@
                             </thead>
                             <tbody id="tbody-aprendizados">
                                 <tr><td colspan="6" class="text-center">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Perguntas Não Respondidas -->
+        <div class="tab-pane fade" id="perguntas" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-question-circle me-2"></i>Perguntas Não Respondidas</span>
+                    <div>
+                        <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="filtro-status-pergunta" onchange="carregarPerguntas()">
+                            <option value="pendente">Pendentes</option>
+                            <option value="analisando">Em Análise</option>
+                            <option value="implementado">Implementadas</option>
+                            <option value="todas">Todas</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tabela-perguntas">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Consulta</th>
+                                    <th>Tipo</th>
+                                    <th>Motivo</th>
+                                    <th>Dimensões</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-perguntas">
+                                <tr><td colspan="6" class="text-center">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Códigos Gerados -->
+        <div class="tab-pane fade" id="codigos" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-code me-2"></i>Códigos Gerados pelo IA Trainer</span>
+                    <div>
+                        <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="filtro-tipo-codigo" onchange="carregarCodigos()">
+                            <option value="">Todos os tipos</option>
+                            <option value="filtro">Filtros</option>
+                            <option value="prompt">Prompts</option>
+                            <option value="conceito">Conceitos</option>
+                            <option value="entidade">Entidades</option>
+                            <option value="loader">Loaders</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="invalidarCache()">
+                            <i class="fas fa-sync me-1"></i>Limpar Cache
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tabela-codigos">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Tipo</th>
+                                    <th>Gatilhos</th>
+                                    <th>Status</th>
+                                    <th>Versão</th>
+                                    <th>Criado</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-codigos">
+                                <tr><td colspan="7" class="text-center">Carregando...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -216,6 +350,83 @@
     </div>
 </div>
 
+<!-- Modal Ver/Editar Código -->
+<div class="modal fade" id="modalCodigo" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-code me-2"></i>Detalhes do Código</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="codigo-id">
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Nome</label>
+                        <input type="text" class="form-control" id="codigo-nome" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Tipo</label>
+                        <input type="text" class="form-control" id="codigo-tipo" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Domínio</label>
+                        <input type="text" class="form-control" id="codigo-dominio" readonly>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Descrição</label>
+                    <textarea class="form-control" id="codigo-descricao" rows="2" readonly></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Gatilhos (palavras-chave)</label>
+                    <input type="text" class="form-control" id="codigo-gatilhos" readonly>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        Definição Técnica (JSON)
+                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="habilitarEdicaoCodigo()">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                    </label>
+                    <textarea class="form-control font-monospace" id="codigo-definicao" rows="15" readonly
+                              style="font-size: 12px;"></textarea>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Status</label>
+                        <div id="codigo-status"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Criado em</label>
+                        <input type="text" class="form-control" id="codigo-criado-em" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Criado por</label>
+                        <input type="text" class="form-control" id="codigo-criado-por" readonly>
+                    </div>
+                </div>
+
+                <div class="mb-3" id="codigo-variacoes-container" style="display:none;">
+                    <label class="form-label fw-bold">Informações de Execução</label>
+                    <pre class="bg-light p-2 rounded" id="codigo-variacoes" style="font-size: 11px; max-height: 150px; overflow: auto;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btn-salvar-codigo" style="display:none;" onclick="salvarCodigo()">
+                    <i class="fas fa-save me-1"></i>Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Variáveis globais
 let modalAprendizado;
@@ -223,7 +434,10 @@ let modalAprendizado;
 document.addEventListener('DOMContentLoaded', function() {
     modalAprendizado = new bootstrap.Modal(document.getElementById('modalAprendizado'));
     carregarEstatisticas();
+    carregarEstatisticasTrainer();
     carregarAprendizados();
+    carregarPerguntas();
+    carregarCodigos();
 });
 
 // Estatísticas
@@ -430,6 +644,321 @@ async function carregarHistorico() {
 
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Erro: ${e}</td></tr>`;
+    }
+}
+
+// =============================================
+// IA TRAINER - Estatísticas
+// =============================================
+
+async function carregarEstatisticasTrainer() {
+    try {
+        const resp = await fetch('/claude-lite/admin/trainer/estatisticas');
+        const data = await resp.json();
+
+        if (data.success) {
+            const stats = data.estatisticas;
+            document.getElementById('stat-pendentes').textContent = stats.perguntas_pendentes || 0;
+            document.getElementById('stat-codigos').textContent = stats.codigos_ativos || 0;
+            document.getElementById('stat-sessoes').textContent = stats.sessoes_andamento || 0;
+            document.getElementById('badge-pendentes').textContent = stats.perguntas_pendentes || 0;
+
+            // Cache
+            if (stats.cache) {
+                document.getElementById('stat-cache').textContent = stats.cache.total_chaves || 0;
+                document.getElementById('stat-cache-tipo').textContent = stats.cache.tipo || 'N/A';
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao carregar estatísticas do trainer:', e);
+    }
+}
+
+// =============================================
+// IA TRAINER - Perguntas Não Respondidas
+// =============================================
+
+async function carregarPerguntas() {
+    const tbody = document.getElementById('tbody-perguntas');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Carregando...</td></tr>';
+
+    try {
+        const status = document.getElementById('filtro-status-pergunta').value;
+        let url = '/claude-lite/admin/trainer/perguntas?limite=50';
+        if (status !== 'todas') url += `&status=${status}`;
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${data.erro || data.error}</td></tr>`;
+            return;
+        }
+
+        if (data.perguntas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhuma pergunta encontrada</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.perguntas.map(p => {
+            const dataFormatada = new Date(p.criado_em).toLocaleDateString('pt-BR');
+            const tipoClass = p.tipo_pergunta === 'composta' ? 'bg-warning' : (p.tipo_pergunta === 'ambigua' ? 'bg-danger' : 'bg-info');
+            const dimensoes = (p.dimensoes_detectadas || []).join(', ') || '-';
+            const consulta = p.consulta.length > 80 ? p.consulta.substring(0, 80) + '...' : p.consulta;
+
+            return `
+                <tr>
+                    <td><small>${dataFormatada}</small></td>
+                    <td title="${p.consulta}">${consulta}</td>
+                    <td><span class="badge ${tipoClass}">${p.tipo_pergunta || 'simples'}</span></td>
+                    <td><small>${p.motivo_falha}</small></td>
+                    <td><small>${dimensoes}</small></td>
+                    <td>
+                        <a href="/claude-lite/trainer/ensinar/${p.id}" class="btn btn-sm btn-primary" title="Ensinar">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </a>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="verDetalhePergunta(${p.id})" title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Erro: ${e}</td></tr>`;
+    }
+}
+
+function verDetalhePergunta(id) {
+    // Abre em nova aba a página de ensino
+    window.open(`/claude-lite/trainer/ensinar/${id}`, '_blank');
+}
+
+// =============================================
+// IA TRAINER - Códigos Gerados
+// =============================================
+
+async function carregarCodigos() {
+    const tbody = document.getElementById('tbody-codigos');
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Carregando...</td></tr>';
+
+    try {
+        const tipo = document.getElementById('filtro-tipo-codigo').value;
+        let url = '/claude-lite/admin/trainer/codigos?limite=50';
+        if (tipo) url += `&tipo=${tipo}`;
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">${data.erro || data.error}</td></tr>`;
+            return;
+        }
+
+        if (data.codigos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum código encontrado</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.codigos.map(c => {
+            const dataFormatada = new Date(c.criado_em).toLocaleDateString('pt-BR');
+            const gatilhos = (c.gatilhos || []).slice(0, 3).join(', ') || '-';
+            const statusClass = c.ativo ? 'bg-success' : 'bg-secondary';
+            const statusText = c.ativo ? 'Ativo' : 'Inativo';
+            const tipoClass = {
+                'filtro': 'bg-primary',
+                'prompt': 'bg-info',
+                'conceito': 'bg-warning',
+                'entidade': 'bg-secondary',
+                'loader': 'bg-dark'
+            }[c.tipo_codigo] || 'bg-light';
+
+            return `
+                <tr>
+                    <td><strong>${c.nome}</strong></td>
+                    <td><span class="badge ${tipoClass}">${c.tipo_codigo}</span></td>
+                    <td><small>${gatilhos}</small></td>
+                    <td><span class="badge ${statusClass}">${statusText}</span></td>
+                    <td>v${c.versao_atual || 1}</td>
+                    <td><small>${dataFormatada}</small></td>
+                    <td>
+                        <button class="btn btn-sm ${c.ativo ? 'btn-outline-warning' : 'btn-outline-success'}"
+                                onclick="toggleCodigo(${c.id})"
+                                title="${c.ativo ? 'Desativar' : 'Ativar'}">
+                            <i class="fas ${c.ativo ? 'fa-pause' : 'fa-play'}"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" onclick="verDetalhesCodigo(${c.id})" title="Ver código">
+                            <i class="fas fa-code"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Erro: ${e}</td></tr>`;
+    }
+}
+
+async function toggleCodigo(id) {
+    try {
+        const resp = await fetch(`/claude-lite/admin/trainer/codigos/${id}/toggle`, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            carregarCodigos();
+            carregarEstatisticasTrainer();
+            alert(data.mensagem);
+        } else {
+            alert('Erro: ' + (data.erro || data.error));
+        }
+    } catch (e) {
+        alert('Erro ao alterar código: ' + e);
+    }
+}
+
+// Cache dos códigos carregados para evitar requisições extras
+let codigosCache = {};
+
+async function verDetalhesCodigo(id) {
+    try {
+        // Buscar código do cache ou da API
+        let codigo = codigosCache[id];
+        if (!codigo) {
+            const resp = await fetch(`/claude-lite/admin/trainer/codigos?limite=100`);
+            const data = await resp.json();
+            if (data.success) {
+                data.codigos.forEach(c => codigosCache[c.id] = c);
+                codigo = codigosCache[id];
+            }
+        }
+
+        if (!codigo) {
+            alert('Código não encontrado');
+            return;
+        }
+
+        // Preencher modal
+        document.getElementById('codigo-id').value = codigo.id;
+        document.getElementById('codigo-nome').value = codigo.nome;
+        document.getElementById('codigo-tipo').value = codigo.tipo_codigo;
+        document.getElementById('codigo-dominio').value = codigo.dominio || '-';
+        document.getElementById('codigo-descricao').value = codigo.descricao_claude || '';
+        document.getElementById('codigo-gatilhos').value = (codigo.gatilhos || []).join(', ');
+
+        // Formatar JSON da definição técnica
+        let definicao = codigo.definicao_tecnica;
+        if (typeof definicao === 'string') {
+            try {
+                definicao = JSON.parse(definicao);
+            } catch(e) {}
+        }
+        document.getElementById('codigo-definicao').value =
+            typeof definicao === 'object' ? JSON.stringify(definicao, null, 2) : (definicao || '');
+
+        // Status
+        const statusHtml = `
+            <span class="badge ${codigo.ativo ? 'bg-success' : 'bg-secondary'} me-2">
+                ${codigo.ativo ? 'Ativo' : 'Inativo'}
+            </span>
+            <span class="badge ${codigo.validado ? 'bg-primary' : 'bg-warning'}">
+                ${codigo.validado ? 'Validado' : 'Pendente Revisão'}
+            </span>
+        `;
+        document.getElementById('codigo-status').innerHTML = statusHtml;
+
+        // Datas
+        document.getElementById('codigo-criado-em').value =
+            codigo.criado_em ? new Date(codigo.criado_em).toLocaleString('pt-BR') : '-';
+        document.getElementById('codigo-criado-por').value = codigo.criado_por || '-';
+
+        // Variações (info de execução)
+        if (codigo.variacoes) {
+            let variacoes = codigo.variacoes;
+            if (typeof variacoes === 'string') {
+                try { variacoes = JSON.parse(variacoes); } catch(e) {}
+            }
+            if (typeof variacoes === 'object') {
+                document.getElementById('codigo-variacoes').textContent = JSON.stringify(variacoes, null, 2);
+                document.getElementById('codigo-variacoes-container').style.display = 'block';
+            }
+        } else {
+            document.getElementById('codigo-variacoes-container').style.display = 'none';
+        }
+
+        // Reset estado de edição
+        document.getElementById('codigo-definicao').readOnly = true;
+        document.getElementById('btn-salvar-codigo').style.display = 'none';
+
+        // Abrir modal
+        const modal = new bootstrap.Modal(document.getElementById('modalCodigo'));
+        modal.show();
+
+    } catch(e) {
+        alert('Erro ao carregar código: ' + e);
+    }
+}
+
+function habilitarEdicaoCodigo() {
+    document.getElementById('codigo-definicao').readOnly = false;
+    document.getElementById('codigo-definicao').focus();
+    document.getElementById('btn-salvar-codigo').style.display = 'inline-block';
+}
+
+async function salvarCodigo() {
+    const id = document.getElementById('codigo-id').value;
+    const definicao = document.getElementById('codigo-definicao').value;
+
+    // Validar JSON
+    try {
+        JSON.parse(definicao);
+    } catch(e) {
+        alert('JSON inválido! Verifique a sintaxe.\n\nErro: ' + e.message);
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/claude-lite/admin/trainer/codigos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ definicao_tecnica: definicao })
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            alert('Código atualizado com sucesso!');
+            // Limpar cache e recarregar lista
+            codigosCache = {};
+            carregarCodigos();
+            bootstrap.Modal.getInstance(document.getElementById('modalCodigo')).hide();
+        } else {
+            alert('Erro: ' + (data.erro || data.error));
+        }
+    } catch(e) {
+        alert('Erro ao salvar: ' + e);
+    }
+}
+
+async function invalidarCache() {
+    if (!confirm('Tem certeza que deseja limpar o cache do Claude AI Lite?')) return;
+
+    try {
+        const resp = await fetch('/claude-lite/admin/trainer/cache/invalidar', {
+            method: 'POST'
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            carregarEstatisticasTrainer();
+            alert('Cache limpo com sucesso!');
+        } else {
+            alert('Erro: ' + (data.erro || data.error));
+        }
+    } catch (e) {
+        alert('Erro ao limpar cache: ' + e);
     }
 }
 </script>

@@ -197,12 +197,14 @@ def _calcular_saidas_projetadas(cod_produto: str, data_inicio: date, data_fim: d
         # Buscar pedidos em carteira (incluindo ATRASADOS)
         # Pedidos atrasados
         carteira_atrasada = db.session.query(
+            # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal
+            # Usando data_pedido como alternativa
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
         ).filter(
             and_(
                 CarteiraPrincipal.cod_produto == cod_produto,
                 CarteiraPrincipal.ativo == True,
-                CarteiraPrincipal.expedicao < hoje  # ATRASADOS
+                CarteiraPrincipal.data_pedido < hoje  # ATRASADOS
             )
         ).scalar()
 
@@ -213,8 +215,8 @@ def _calcular_saidas_projetadas(cod_produto: str, data_inicio: date, data_fim: d
             and_(
                 CarteiraPrincipal.cod_produto == cod_produto,
                 CarteiraPrincipal.ativo == True,
-                CarteiraPrincipal.expedicao >= data_inicio,
-                CarteiraPrincipal.expedicao <= data_fim
+                CarteiraPrincipal.data_pedido >= data_inicio,
+                CarteiraPrincipal.data_pedido <= data_fim
             )
         ).scalar()
 

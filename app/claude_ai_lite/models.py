@@ -251,3 +251,182 @@ class ClaudeAprendizado(db.Model):
             query = query.filter(cls.usuario_id.is_(None))
 
         return query.order_by(cls.prioridade.desc()).all()
+
+
+class ClaudePerguntaNaoRespondida(db.Model):
+    """
+    Log de perguntas que o sistema não conseguiu responder.
+    Usado para análise e melhoria contínua do sistema.
+    """
+    __tablename__ = 'claude_perguntas_nao_respondidas'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Vínculo com usuário
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
+
+    # Pergunta original
+    consulta = db.Column(db.Text, nullable=False)
+
+    # Classificação detectada
+    intencao_detectada = db.Column(db.String(50), nullable=True)
+    dominio_detectado = db.Column(db.String(50), nullable=True)
+    confianca = db.Column(db.Float, nullable=True)
+
+    # Entidades extraídas (JSON)
+    entidades = db.Column(db.JSON, nullable=True)
+
+    # Motivo da falha
+    motivo_falha = db.Column(db.String(100), nullable=False, index=True)
+    # Valores: 'sem_capacidade', 'sem_criterio', 'erro_execucao', 'sem_resultado', 'pergunta_composta'
+
+    # Análise da complexidade
+    tipo_pergunta = db.Column(db.String(20), default='simples', index=True)
+    # Valores: 'simples', 'composta', 'ambigua'
+
+    dimensoes_detectadas = db.Column(db.JSON, nullable=True)
+    # Ex: ["cliente", "data", "estoque"] para perguntas compostas
+
+    # Sugestão oferecida ao usuário
+    sugestao_gerada = db.Column(db.Text, nullable=True)
+
+    # Status de tratamento
+    status = db.Column(db.String(20), default='pendente', index=True)
+    # Valores: 'pendente', 'analisado', 'implementado', 'ignorado'
+
+    # Notas de análise (preenchido manualmente depois)
+    notas_analise = db.Column(db.Text, nullable=True)
+    capacidade_sugerida = db.Column(db.String(100), nullable=True)
+
+    # Timestamps
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    analisado_em = db.Column(db.DateTime, nullable=True)
+    analisado_por = db.Column(db.String(100), nullable=True)
+
+    # Índices
+    __table_args__ = (
+        db.Index('idx_claude_nao_resp_motivo_data', 'motivo_falha', 'criado_em'),
+        db.Index('idx_claude_nao_resp_status', 'status', 'criado_em'),
+    )
+
+    def __repr__(self):
+        return f'<ClaudePerguntaNaoRespondida {self.id} - {self.motivo_falha}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'usuario_id': self.usuario_id,
+            'consulta': self.consulta,
+            'intencao_detectada': self.intencao_detectada,
+            'dominio_detectado': self.dominio_detectado,
+            'confianca': self.confianca,
+            'entidades': self.entidades,
+            'motivo_falha': self.motivo_falha,
+            'tipo_pergunta': self.tipo_pergunta,
+            'dimensoes_detectadas': self.dimensoes_detectadas,
+            'sugestao_gerada': self.sugestao_gerada,
+            'status': self.status,
+            'notas_analise': self.notas_analise,
+            'capacidade_sugerida': self.capacidade_sugerida,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'analisado_em': self.analisado_em.isoformat() if self.analisado_em else None,
+            'analisado_por': self.analisado_por
+        }
+
+    @classmethod
+    def registrar(
+        cls,
+        consulta: str,
+        motivo_falha: str,
+        usuario_id: int = None,
+        intencao: dict = None,
+        sugestao: str = None,
+        tipo_pergunta: str = 'simples',
+        dimensoes: list = None
+    ):
+        """Registra uma pergunta não respondida."""
+        try:
+            registro = cls(
+                usuario_id=usuario_id,
+                consulta=consulta,
+                intencao_detectada=intencao.get('intencao') if intencao else None,
+                dominio_detectado=intencao.get('dominio') if intencao else None,
+                confianca=intencao.get('confianca') if intencao else None,
+                entidades=intencao.get('entidades') if intencao else None,
+                motivo_falha=motivo_falha,
+                tipo_pergunta=tipo_pergunta,
+                dimensoes_detectadas=dimensoes,
+                sugestao_gerada=sugestao
+            )
+            db.session.add(registro)
+            db.session.commit()
+            return registro
+        except Exception as e:
+            db.session.rollback()
+            import logging
+            logging.getLogger(__name__).error(f"Erro ao registrar pergunta não respondida: {e}")
+            return None
+
+    @classmethod
+    def buscar_pendentes(cls, limite: int = 50):
+        """Busca perguntas pendentes de análise."""
+        return cls.query.filter_by(
+            status='pendente'
+        ).order_by(
+            cls.criado_em.desc()
+        ).limit(limite).all()
+
+    @classmethod
+    def buscar_por_motivo(cls, motivo: str, limite: int = 50):
+        """Busca perguntas por motivo de falha."""
+        return cls.query.filter_by(
+            motivo_falha=motivo
+        ).order_by(
+            cls.criado_em.desc()
+        ).limit(limite).all()
+
+    @classmethod
+    def estatisticas(cls, dias: int = 7):
+        """Retorna estatísticas de perguntas não respondidas."""
+        from sqlalchemy import func
+        data_limite = agora_brasil() - timedelta(days=dias)
+
+        # Total por motivo
+        por_motivo = db.session.query(
+            cls.motivo_falha,
+            func.count(cls.id).label('total')
+        ).filter(
+            cls.criado_em >= data_limite
+        ).group_by(
+            cls.motivo_falha
+        ).all()
+
+        # Total por tipo de pergunta
+        por_tipo = db.session.query(
+            cls.tipo_pergunta,
+            func.count(cls.id).label('total')
+        ).filter(
+            cls.criado_em >= data_limite
+        ).group_by(
+            cls.tipo_pergunta
+        ).all()
+
+        # Top dimensões em perguntas compostas
+        compostas = cls.query.filter(
+            cls.criado_em >= data_limite,
+            cls.tipo_pergunta == 'composta'
+        ).all()
+
+        dimensoes_count = {}
+        for c in compostas:
+            if c.dimensoes_detectadas:
+                for d in c.dimensoes_detectadas:
+                    dimensoes_count[d] = dimensoes_count.get(d, 0) + 1
+
+        return {
+            'periodo_dias': dias,
+            'por_motivo': {m: t for m, t in por_motivo},
+            'por_tipo': {t: c for t, c in por_tipo},
+            'dimensoes_frequentes': sorted(dimensoes_count.items(), key=lambda x: -x[1])[:10],
+            'total': sum(t for _, t in por_motivo)
+        }

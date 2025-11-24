@@ -63,6 +63,9 @@ class AgrupamentoService:
         Pedidos com qtd_saldo_produto_pedido = 0 NÃO são deletados do banco,
         apenas não aparecem na listagem do workspace/carteira agrupada.
         """
+        # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado,
+        # rota, sub_rota, separacao_lote_id foram REMOVIDOS de CarteiraPrincipal
+        # Esses dados agora vêm apenas de Separacao
         return db.session.query(
             # Campos base do agrupamento
             CarteiraPrincipal.num_pedido,
@@ -71,9 +74,6 @@ class AgrupamentoService:
             CarteiraPrincipal.data_pedido,
             CarteiraPrincipal.cnpj_cpf,
             CarteiraPrincipal.raz_social_red,
-            CarteiraPrincipal.rota,
-            CarteiraPrincipal.sub_rota,
-            CarteiraPrincipal.expedicao,
             CarteiraPrincipal.data_entrega_pedido,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.status_pedido,
@@ -81,27 +81,24 @@ class AgrupamentoService:
             CarteiraPrincipal.cod_uf,
             CarteiraPrincipal.nome_cidade,
             CarteiraPrincipal.incoterm,
-            CarteiraPrincipal.protocolo,
-            CarteiraPrincipal.agendamento,
-            CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.forma_agendamento,
             CarteiraPrincipal.importante,  # ⭐ Campo importante
             CarteiraPrincipal.tags_pedido,  # 🏷️ Tags do Odoo
 
             # Agregações conforme especificação
-            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido *
                     CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido *
                     CadastroPalletizacao.peso_bruto).label('peso_total'),
             func.sum(
                 func.coalesce(
-                    CarteiraPrincipal.qtd_saldo_produto_pedido / 
+                    CarteiraPrincipal.qtd_saldo_produto_pedido /
                     func.nullif(CadastroPalletizacao.palletizacao, 0),
                     0
                 )
             ).label('pallet_total'),
             func.count(CarteiraPrincipal.id).label('total_itens')
-            
+
         ).outerjoin(
             CadastroPalletizacao,
             and_(
@@ -126,9 +123,6 @@ class AgrupamentoService:
             CarteiraPrincipal.data_pedido,
             CarteiraPrincipal.cnpj_cpf,
             CarteiraPrincipal.raz_social_red,
-            CarteiraPrincipal.rota,
-            CarteiraPrincipal.sub_rota,
-            CarteiraPrincipal.expedicao,
             CarteiraPrincipal.data_entrega_pedido,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.status_pedido,
@@ -136,16 +130,13 @@ class AgrupamentoService:
             CarteiraPrincipal.cod_uf,
             CarteiraPrincipal.nome_cidade,
             CarteiraPrincipal.incoterm,
-            CarteiraPrincipal.protocolo,
-            CarteiraPrincipal.agendamento,
-            CarteiraPrincipal.agendamento_confirmado,
             CarteiraPrincipal.forma_agendamento,
             CarteiraPrincipal.importante,  # ⭐ Campo importante no GROUP BY
             CarteiraPrincipal.tags_pedido  # 🏷️ Tags do Odoo no GROUP BY
         ).order_by(
-            CarteiraPrincipal.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
-            CarteiraPrincipal.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
-            CarteiraPrincipal.cnpj_cpf.asc().nullslast()   # 3º CNPJ: menor para maior (0-9)
+            CarteiraPrincipal.cod_uf.asc().nullslast(),    # 1º UF
+            CarteiraPrincipal.nome_cidade.asc().nullslast(),  # 2º Cidade
+            CarteiraPrincipal.cnpj_cpf.asc().nullslast()   # 3º CNPJ
         ).all()
     
     def _enriquecer_pedido_com_separacoes(self, pedido):
@@ -169,18 +160,12 @@ class AgrupamentoService:
             # Determinar se está totalmente em separação
             totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
 
-            # Usar dados da Separacao se tiver protocolo lá, senão usar da CarteiraPrincipal
-            if dados_separacao.get('tem_protocolo'):
-                # Se tem protocolo na Separacao, usar dados de lá
-                protocolo_final = pedido.protocolo  # Manter protocolo original
-                agendamento_confirmado_final = dados_separacao.get('agendamento_confirmado', False)
-            else:
-                # Usar valores originais da CarteiraPrincipal
-                protocolo_final = pedido.protocolo
-                agendamento_confirmado_final = pedido.agendamento_confirmado
-
-            expedicao_final = pedido.expedicao
-            agendamento_final = pedido.agendamento
+            # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado
+            # foram REMOVIDOS de CarteiraPrincipal - agora vêm apenas de Separacao
+            protocolo_final = dados_separacao.get('protocolo') if dados_separacao.get('tem_protocolo') else None
+            agendamento_confirmado_final = dados_separacao.get('agendamento_confirmado', False)
+            expedicao_final = dados_separacao.get('expedicao')
+            agendamento_final = dados_separacao.get('agendamento')
             
             # Buscar rota e sub-rota das localidades
             rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
@@ -330,6 +315,8 @@ class AgrupamentoService:
             elif grupo == 'assai':
                 grupo_cliente = 'sendas'
         
+        # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado, rota, sub_rota
+        # foram REMOVIDOS de CarteiraPrincipal - valores padrão ou calculados
         return {
             'num_pedido': pedido.num_pedido,
             'vendedor': pedido.vendedor,
@@ -339,8 +326,8 @@ class AgrupamentoService:
             'raz_social_red': pedido.raz_social_red,
             'rota': rota_calculada,
             'sub_rota': sub_rota_calculada,
-            'expedicao': pedido.expedicao,
-            'expedicao_original': pedido.expedicao,
+            'expedicao': None,  # Removido de CarteiraPrincipal
+            'expedicao_original': None,  # Removido de CarteiraPrincipal
             'data_entrega_pedido': pedido.data_entrega_pedido,
             'observ_ped_1': pedido.observ_ped_1,
             'status_pedido': pedido.status_pedido,
@@ -348,9 +335,9 @@ class AgrupamentoService:
             'cod_uf': pedido.cod_uf,
             'nome_cidade': pedido.nome_cidade,
             'incoterm': pedido.incoterm,
-            'protocolo': pedido.protocolo,
-            'agendamento': pedido.agendamento,
-            'agendamento_confirmado': pedido.agendamento_confirmado,
+            'protocolo': None,  # Removido de CarteiraPrincipal
+            'agendamento': None,  # Removido de CarteiraPrincipal
+            'agendamento_confirmado': False,  # Removido de CarteiraPrincipal
             'forma_agendamento': pedido.forma_agendamento,
             'valor_total': float(pedido.valor_total) if pedido.valor_total else 0,
             'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
@@ -360,12 +347,12 @@ class AgrupamentoService:
             'valor_saldo_restante': float(pedido.valor_total) if pedido.valor_total else 0,
             'qtd_separacoes': 0,
             'totalmente_separado': False,
-            'tem_protocolo_separacao': False,  # Se tem protocolo na Separacao
+            'tem_protocolo_separacao': False,
             'separacao_lote_id': None,
             'grupo_cliente': grupo_cliente,
             # ⭐ Campos novos para funcionalidade de importante
             'importante': pedido.importante if hasattr(pedido, 'importante') else False,
-            'agendamento_primeira_separacao': None,  # Não tem separação no modo básico
+            'agendamento_primeira_separacao': None,
             # 🏷️ Tags do Odoo
             'tags_pedido': pedido.tags_pedido if hasattr(pedido, 'tags_pedido') else None
         }

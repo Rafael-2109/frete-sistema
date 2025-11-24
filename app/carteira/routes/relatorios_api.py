@@ -135,11 +135,12 @@ def exportar_carteira_simples():
         query = CarteiraPrincipal.query
         
         # Aplicar filtro de datas se fornecido
+        # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
         if data_inicio and data_fim:
             data_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
             data_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
             query = query.filter(
-                CarteiraPrincipal.expedicao.between(data_inicio, data_fim)
+                CarteiraPrincipal.data_pedido.between(data_inicio, data_fim)
             )
         
         # Buscar dados
@@ -235,11 +236,12 @@ def exportar_carteira_detalhada():
         )
         
         # Aplicar filtro de datas se fornecido
+        # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
         if data_inicio and data_fim:
             data_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
             data_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
             query_pedidos = query_pedidos.filter(
-                CarteiraPrincipal.expedicao.between(data_inicio, data_fim)
+                CarteiraPrincipal.data_pedido.between(data_inicio, data_fim)
             )
         
         # Buscar pedidos
