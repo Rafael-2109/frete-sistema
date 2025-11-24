@@ -246,43 +246,140 @@ function renderizarGrafico(produto) {
  * @param {object} produto - Objeto com dados do produto e projeção
  */
 function renderizarTabelaProjecao(produto) {
+    console.log('[TABELA PROJECAO] Iniciando renderização...', produto);
+
     if (!produto.projecao || produto.projecao.length === 0) {
-        console.error('Projeção vazia em renderizarTabelaProjecao');
+        console.error('[TABELA PROJECAO] Projeção vazia');
         $('#conteudo-projecao').html('<div class="alert alert-warning">Nenhum dado de projeção disponível</div>');
         return;
     }
 
-    let html = `
-        <table class="table table-sm table-bordered table-hover mb-0">
-            <thead class="table-light sticky-top">
-                <tr>
-                    <th>Dia</th>
-                    <th>Data</th>
-                    <th class="text-end">Saldo Inicial</th>
-                    <th class="text-end">Saída</th>
-                    <th class="text-end">Entrada</th>
-                    <th class="text-end">Saldo Final</th>
-                </tr>
-            </thead>
-            <tbody>`;
+    console.log('[TABELA PROJECAO] Projeção tem', produto.projecao.length, 'dias');
 
-    produto.projecao.forEach(item => {
-        const cls = item.saldo_final < 0 ? 'table-danger' : item.saldo_final === 0 ? 'table-warning' : '';
+    // ✅ NOVO: Estado de ordenação
+    let ordemAtual = { campo: 'dia', direcao: 'asc' };
+    let dadosOrdenados = [...produto.projecao]; // Cópia para ordenar
+
+    function renderizarLinhas() {
+        console.log('[TABELA PROJECAO] Renderizando linhas, total:', dadosOrdenados.length);
+        let html = `
+            <table class="table table-sm table-bordered table-hover mb-0" id="tabela-projecao">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th class="sortable" data-campo="dia" style="cursor: pointer;">
+                            Dia <i class="fas fa-sort"></i>
+                        </th>
+                        <th class="sortable" data-campo="data" style="cursor: pointer;">
+                            Data <i class="fas fa-sort"></i>
+                        </th>
+                        <th class="text-end sortable" data-campo="saldo_inicial" style="cursor: pointer;">
+                            Saldo Inicial <i class="fas fa-sort"></i>
+                        </th>
+                        <th class="text-end sortable" data-campo="saida" style="cursor: pointer;">
+                            Saída <i class="fas fa-sort"></i>
+                        </th>
+                        <th class="text-end sortable" data-campo="entrada" style="cursor: pointer;">
+                            Entrada <i class="fas fa-sort"></i>
+                        </th>
+                        <th class="text-end sortable" data-campo="saldo_final" style="cursor: pointer;">
+                            Saldo Final <i class="fas fa-sort"></i>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        dadosOrdenados.forEach((item, index) => {
+            const cls = item.saldo_final < 0 ? 'table-danger' : item.saldo_final === 0 ? 'table-warning' : '';
+
+            // ✅ Função local para formatar números (caso formatarNumero não esteja disponível)
+            const formatarLocal = (num) => {
+                if (num === null || num === undefined) return '0';
+                return parseFloat(num).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+            };
+
+            html += `
+                <tr class="${cls}">
+                    <td><strong>D${item.dia || index}</strong></td>
+                    <td>${new Date(item.data).toLocaleDateString('pt-BR')}</td>
+                    <td class="text-end">${formatarLocal(item.saldo_inicial)}</td>
+                    <td class="text-end text-danger">${formatarLocal(item.saida)}</td>
+                    <td class="text-end text-success">${formatarLocal(item.entrada)}</td>
+                    <td class="text-end fw-bold">${formatarLocal(item.saldo_final)}</td>
+                </tr>`;
+        });
 
         html += `
-            <tr class="${cls}">
-                <td><strong>D${item.dia}</strong></td>
-                <td>${new Date(item.data).toLocaleDateString('pt-BR')}</td>
-                <td class="text-end">${formatarNumero(item.saldo_inicial)}</td>
-                <td class="text-end text-danger">${formatarNumero(item.saida)}</td>
-                <td class="text-end text-success">${formatarNumero(item.entrada)}</td>
-                <td class="text-end fw-bold">${formatarNumero(item.saldo_final)}</td>
-            </tr>`;
-    });
+                </tbody>
+            </table>`;
 
-    html += `
-            </tbody>
-        </table>`;
+        $('#conteudo-projecao').html(html);
+        console.log('[TABELA PROJECAO] HTML inserido, tamanho:', html.length);
 
-    $('#conteudo-projecao').html(html);
+        // ✅ ATUALIZAR ÍCONES DE ORDENAÇÃO
+        $('#tabela-projecao thead th.sortable').each(function() {
+            const campo = $(this).data('campo');
+            const $icon = $(this).find('i');
+
+            if (campo === ordemAtual.campo) {
+                $icon.removeClass('fa-sort fa-sort-up fa-sort-down');
+                $icon.addClass(ordemAtual.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down');
+            } else {
+                $icon.removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+            }
+        });
+
+        // ✅ ADICIONAR LISTENERS DE CLIQUE NOS CABEÇALHOS
+        $('#tabela-projecao thead th.sortable').on('click', function() {
+            const campo = $(this).data('campo');
+
+            // Alternar direção se clicar no mesmo campo
+            if (ordemAtual.campo === campo) {
+                ordemAtual.direcao = ordemAtual.direcao === 'asc' ? 'desc' : 'asc';
+            } else {
+                ordemAtual.campo = campo;
+                ordemAtual.direcao = 'asc';
+            }
+
+            // Ordenar dados
+            ordenarDados();
+
+            // Re-renderizar
+            renderizarLinhas();
+        });
+    }
+
+    function ordenarDados() {
+        dadosOrdenados.sort((a, b) => {
+            let valorA = a[ordemAtual.campo];
+            let valorB = b[ordemAtual.campo];
+
+            // Tratamento especial para data (converter string ISO para timestamp)
+            if (ordemAtual.campo === 'data') {
+                valorA = new Date(valorA).getTime();
+                valorB = new Date(valorB).getTime();
+            }
+
+            // Ordenação numérica ou string
+            if (typeof valorA === 'number' && typeof valorB === 'number') {
+                return ordemAtual.direcao === 'asc' ? valorA - valorB : valorB - valorA;
+            } else {
+                const strA = String(valorA).toLowerCase();
+                const strB = String(valorB).toLowerCase();
+                if (ordemAtual.direcao === 'asc') {
+                    return strA.localeCompare(strB);
+                } else {
+                    return strB.localeCompare(strA);
+                }
+            }
+        });
+    }
+
+    // Renderizar pela primeira vez
+    try {
+        renderizarLinhas();
+        console.log('[TABELA PROJECAO] ✅ Renderização concluída com sucesso');
+    } catch (error) {
+        console.error('[TABELA PROJECAO] ❌ Erro ao renderizar:', error);
+        $('#conteudo-projecao').html(`<div class="alert alert-danger">Erro ao renderizar tabela: ${error.message}</div>`);
+    }
 }

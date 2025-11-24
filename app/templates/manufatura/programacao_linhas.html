@@ -41,6 +41,11 @@
                 <i class="fas fa-sync me-1"></i>Carregar
             </button>
 
+            <!-- ✅ NOVO: Botão Adicionar Programação -->
+            <button id="btn-adicionar-programacao" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAdicionarProgramacao">
+                <i class="fas fa-plus me-1"></i>Adicionar Programação
+            </button>
+
             <span class="mx-1 text-muted">|</span>
 
             <!-- ✅ TOGGLE C/ HISTÓRICO -->
@@ -152,6 +157,110 @@
 <!-- Incluir modais de pedidos (contém modalDetalhesSeparacao) -->
 {% include 'manufatura/necessidade_producao/modals/_modal-pedidos.html' %}
 
+<!-- ✅ NOVO: Modal Adicionar Programação -->
+<div class="modal fade" id="modalAdicionarProgramacao" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle me-2"></i>Adicionar Programação de Produção
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-adicionar-programacao">
+                    <!-- Seleção de Produto -->
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="add-prog-produto-busca" class="form-label">Buscar Produto <span class="text-danger">*</span></label>
+                            <div class="autocomplete-container">
+                                <input type="text"
+                                       id="add-prog-produto-busca"
+                                       class="form-control"
+                                       placeholder="Digite código ou nome do produto..."
+                                       autocomplete="off"
+                                       required>
+                                <input type="hidden" id="add-prog-cod-produto">
+                                <div id="add-prog-autocomplete-list" class="autocomplete-list"></div>
+                            </div>
+                            <small class="text-muted">Digite pelo menos 2 caracteres para buscar</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="add-prog-produto-select" class="form-label">Ou selecione</label>
+                            <select id="add-prog-produto-select" class="form-select">
+                                <option value="">Carregando...</option>
+                            </select>
+                            <small class="text-muted">Produtos comuns</small>
+                        </div>
+                    </div>
+
+                    <!-- Nome do Produto Selecionado -->
+                    <div id="add-prog-produto-info" class="alert alert-info d-none mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Produto:</strong> <span id="add-prog-nome-produto"></span>
+                    </div>
+
+                    <!-- Data e Linha de Produção -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="add-prog-data" class="form-label">Data de Programação <span class="text-danger">*</span></label>
+                            <input type="date" id="add-prog-data" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="add-prog-linha" class="form-label">Linha de Produção <span class="text-danger">*</span></label>
+                            <select id="add-prog-linha" class="form-select" required disabled>
+                                <option value="">Selecione um produto primeiro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Quantidade e Cliente -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="add-prog-quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                            <input type="number"
+                                   id="add-prog-quantidade"
+                                   class="form-control"
+                                   step="0.001"
+                                   min="0.001"
+                                   placeholder="0.000"
+                                   required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="add-prog-cliente" class="form-label">Cliente/Marca (opcional)</label>
+                            <input type="text"
+                                   id="add-prog-cliente"
+                                   class="form-control"
+                                   placeholder="Ex: Cliente X, Marca Y"
+                                   maxlength="100">
+                        </div>
+                    </div>
+
+                    <!-- Observações -->
+                    <div class="mb-3">
+                        <label for="add-prog-observacao" class="form-label">Observações PCP (opcional)</label>
+                        <textarea id="add-prog-observacao"
+                                  class="form-control"
+                                  rows="2"
+                                  placeholder="Observações adicionais..."></textarea>
+                    </div>
+
+                    <!-- Alertas -->
+                    <div id="add-prog-alert" class="alert d-none"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </button>
+                <button type="button" id="btn-salvar-programacao" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>Salvar Programação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -159,6 +268,8 @@
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/necessidade-producao.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/programacao-linhas-agrupamentos.js') }}"></script>
 <script src="{{ url_for('static', filename='manufatura/necessidade_producao/js/modal-detalhes-separacao.js') }}"></script>
+<!-- ✅ NOVO: Script do modal de adicionar programação -->
+<script src="{{ url_for('static', filename='manufatura/programacao_linhas/js/modal-adicionar-programacao.js') }}"></script>
 
 <!-- ✅ Chamar popularFiltros após carregar dados -->
 <script>

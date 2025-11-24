@@ -36,7 +36,12 @@ async function abrirModalDetalhesSeparacao(separacaoLoteId) {
     console.log('3. Modal body encontrado?', modalBody ? 'SIM' : 'NÃO');
 
     if (!modalElement || !modalBody) {
-        alert('ERRO: Elementos do modal não encontrados!');
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro',
+            text: 'Elementos do modal não encontrados!',
+            confirmButtonText: 'OK'
+        });
         return;
     }
 
@@ -56,7 +61,12 @@ async function abrirModalDetalhesSeparacao(separacaoLoteId) {
         console.log('6. Dados recebidos:', dados);
 
         if (dados.erro) {
-            alert('Erro da API: ' + dados.erro);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro da API',
+                text: dados.erro,
+                confirmButtonText: 'OK'
+            });
             return;
         }
 
@@ -187,7 +197,12 @@ async function abrirModalDetalhesSeparacao(separacaoLoteId) {
 
     } catch (error) {
         console.error('❌ ERRO:', error);
-        alert('Erro ao carregar detalhes: ' + error.message);
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro ao carregar detalhes',
+            text: error.message,
+            confirmButtonText: 'OK'
+        });
     }
 }
 

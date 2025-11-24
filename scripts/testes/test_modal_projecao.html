@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste - Modal Projeção</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="p-4">
+    <h3>Teste - Tabela de Projeção com Ordenação</h3>
+    <button class="btn btn-primary mb-3" onclick="testarProjecao()">Testar Renderização</button>
+
+    <div id="conteudo-projecao"></div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    // Dados de teste simulados
+    const produtoTeste = {
+        cod_produto: 'TESTE001',
+        nome_produto: 'Produto Teste',
+        projecao: [
+            { dia: 0, data: '2025-11-24', saldo_inicial: 1000, saida: 100, entrada: 0, saldo_final: 900 },
+            { dia: 1, data: '2025-11-25', saldo_inicial: 900, saida: 50, entrada: 200, saldo_final: 1050 },
+            { dia: 2, data: '2025-11-26', saldo_inicial: 1050, saida: 150, entrada: 0, saldo_final: 900 },
+            { dia: 3, data: '2025-11-27', saldo_inicial: 900, saida: 0, entrada: 500, saldo_final: 1400 },
+            { dia: 4, data: '2025-11-28', saldo_inicial: 1400, saida: 200, entrada: 0, saldo_final: 1200 },
+            { dia: 5, data: '2025-11-29', saldo_inicial: 1200, saida: 300, entrada: 100, saldo_final: 1000 }
+        ]
+    };
+
+    function testarProjecao() {
+        console.log('Iniciando teste de projeção...');
+        renderizarTabelaProjecao(produtoTeste);
+    }
+
+    // CÓDIGO DA FUNÇÃO ORIGINAL (copiado do arquivo)
+    function renderizarTabelaProjecao(produto) {
+        console.log('[TABELA PROJECAO] Iniciando renderização...', produto);
+
+        if (!produto.projecao || produto.projecao.length === 0) {
+            console.error('[TABELA PROJECAO] Projeção vazia');
+            $('#conteudo-projecao').html('<div class="alert alert-warning">Nenhum dado de projeção disponível</div>');
+            return;
+        }
+
+        console.log('[TABELA PROJECAO] Projeção tem', produto.projecao.length, 'dias');
+
+        let ordemAtual = { campo: 'dia', direcao: 'asc' };
+        let dadosOrdenados = [...produto.projecao];
+
+        function renderizarLinhas() {
+            console.log('[TABELA PROJECAO] Renderizando linhas, total:', dadosOrdenados.length);
+            let html = `
+                <table class="table table-sm table-bordered table-hover mb-0" id="tabela-projecao">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="sortable" data-campo="dia" style="cursor: pointer;">
+                                Dia <i class="fas fa-sort"></i>
+                            </th>
+                            <th class="sortable" data-campo="data" style="cursor: pointer;">
+                                Data <i class="fas fa-sort"></i>
+                            </th>
+                            <th class="text-end sortable" data-campo="saldo_inicial" style="cursor: pointer;">
+                                Saldo Inicial <i class="fas fa-sort"></i>
+                            </th>
+                            <th class="text-end sortable" data-campo="saida" style="cursor: pointer;">
+                                Saída <i class="fas fa-sort"></i>
+                            </th>
+                            <th class="text-end sortable" data-campo="entrada" style="cursor: pointer;">
+                                Entrada <i class="fas fa-sort"></i>
+                            </th>
+                            <th class="text-end sortable" data-campo="saldo_final" style="cursor: pointer;">
+                                Saldo Final <i class="fas fa-sort"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            dadosOrdenados.forEach((item, index) => {
+                const cls = item.saldo_final < 0 ? 'table-danger' : item.saldo_final === 0 ? 'table-warning' : '';
+
+                const formatarLocal = (num) => {
+                    if (num === null || num === undefined) return '0';
+                    return parseFloat(num).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                };
+
+                html += `
+                    <tr class="${cls}">
+                        <td><strong>D${item.dia || index}</strong></td>
+                        <td>${new Date(item.data).toLocaleDateString('pt-BR')}</td>
+                        <td class="text-end">${formatarLocal(item.saldo_inicial)}</td>
+                        <td class="text-end text-danger">${formatarLocal(item.saida)}</td>
+                        <td class="text-end text-success">${formatarLocal(item.entrada)}</td>
+                        <td class="text-end fw-bold">${formatarLocal(item.saldo_final)}</td>
+                    </tr>`;
+            });
+
+            html += `
+                    </tbody>
+                </table>`;
+
+            $('#conteudo-projecao').html(html);
+            console.log('[TABELA PROJECAO] HTML inserido, tamanho:', html.length);
+
+            $('#tabela-projecao thead th.sortable').each(function() {
+                const campo = $(this).data('campo');
+                const $icon = $(this).find('i');
+
+                if (campo === ordemAtual.campo) {
+                    $icon.removeClass('fa-sort fa-sort-up fa-sort-down');
+                    $icon.addClass(ordemAtual.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down');
+                } else {
+                    $icon.removeClass('fa-sort-up fa-sort-down').addClass('fa-sort');
+                }
+            });
+
+            $('#tabela-projecao thead th.sortable').on('click', function() {
+                const campo = $(this).data('campo');
+
+                if (ordemAtual.campo === campo) {
+                    ordemAtual.direcao = ordemAtual.direcao === 'asc' ? 'desc' : 'asc';
+                } else {
+                    ordemAtual.campo = campo;
+                    ordemAtual.direcao = 'asc';
+                }
+
+                ordenarDados();
+                renderizarLinhas();
+            });
+        }
+
+        function ordenarDados() {
+            dadosOrdenados.sort((a, b) => {
+                let valorA = a[ordemAtual.campo];
+                let valorB = b[ordemAtual.campo];
+
+                if (ordemAtual.campo === 'data') {
+                    valorA = new Date(valorA).getTime();
+                    valorB = new Date(valorB).getTime();
+                }
+
+                if (typeof valorA === 'number' && typeof valorB === 'number') {
+                    return ordemAtual.direcao === 'asc' ? valorA - valorB : valorB - valorA;
+                } else {
+                    const strA = String(valorA).toLowerCase();
+                    const strB = String(valorB).toLowerCase();
+                    if (ordemAtual.direcao === 'asc') {
+                        return strA.localeCompare(strB);
+                    } else {
+                        return strB.localeCompare(strA);
+                    }
+                }
+            });
+        }
+
+        try {
+            renderizarLinhas();
+            console.log('[TABELA PROJECAO] ✅ Renderização concluída com sucesso');
+        } catch (error) {
+            console.error('[TABELA PROJECAO] ❌ Erro ao renderizar:', error);
+            $('#conteudo-projecao').html(`<div class="alert alert-danger">Erro ao renderizar tabela: ${error.message}</div>`);
+        }
+    }
+    </script>
+</body>
+</html>
