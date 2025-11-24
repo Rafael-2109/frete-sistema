@@ -48,6 +48,7 @@ class RascunhoSeparacao:
     criado_em: str = field(default_factory=lambda: datetime.now().isoformat())
     atualizado_em: str = field(default_factory=lambda: datetime.now().isoformat())
     modo: str = "disponiveis"  # disponiveis, total, parcial, customizado
+    data_expedicao: Optional[str] = None  # Data ISO da expedição calculada/informada
 
     @property
     def itens_incluidos(self) -> List[ItemRascunho]:
@@ -79,6 +80,7 @@ class RascunhoSeparacao:
             "criado_em": self.criado_em,
             "atualizado_em": self.atualizado_em,
             "modo": self.modo,
+            "data_expedicao": self.data_expedicao,
             "resumo": {
                 "total_itens": len(self.itens),
                 "itens_incluidos": len(self.itens_incluidos),
@@ -97,7 +99,8 @@ class RascunhoSeparacao:
             itens=itens,
             criado_em=data.get("criado_em", datetime.now().isoformat()),
             atualizado_em=data.get("atualizado_em", datetime.now().isoformat()),
-            modo=data.get("modo", "customizado")
+            modo=data.get("modo", "customizado"),
+            data_expedicao=data.get("data_expedicao")
         )
 
 
@@ -204,11 +207,16 @@ class RascunhoService:
             )
             itens.append(item)
 
+        # Busca data de expedição da opção A (total)
+        opcao_a = next((op for op in analise.get("opcoes", []) if op["codigo"] == "A"), None)
+        data_expedicao_iso = opcao_a.get("data_envio_iso") if opcao_a else None
+
         rascunho = RascunhoSeparacao(
             num_pedido=analise["num_pedido"],
             cliente=analise.get("cliente", ""),
             itens=itens,
-            modo="total"
+            modo="total",
+            data_expedicao=data_expedicao_iso
         )
 
         return {"sucesso": True, "rascunho": rascunho}
@@ -269,23 +277,124 @@ class RascunhoService:
             )
             itens.append(item)
 
+        # Extrai data de expedição da opção escolhida
+        data_expedicao_iso = opcao_escolhida.get("data_envio_iso")
+
         rascunho = RascunhoSeparacao(
             num_pedido=analise["num_pedido"],
             cliente=analise.get("cliente", ""),
             itens=itens,
-            modo=f"opcao_{opcao.upper()}"
+            modo=f"opcao_{opcao.upper()}",
+            data_expedicao=data_expedicao_iso
         )
 
         return {"sucesso": True, "rascunho": rascunho}
 
     @staticmethod
+    def criar_rascunho_de_opcao_contexto(num_pedido: str, opcao_dados: Dict) -> Dict[str, Any]:
+        """
+        Cria rascunho diretamente dos dados da opção salvos no ConversationContext.
+
+        Este método é mais eficiente pois não precisa re-analisar o pedido,
+        usando diretamente os dados calculados na análise de disponibilidade anterior.
+
+        Args:
+            num_pedido: Número do pedido
+            opcao_dados: Dicionário com dados da opção do contexto:
+                - codigo: 'A', 'B', 'C'
+                - itens: lista de itens incluídos
+                - itens_excluidos: lista de itens excluídos
+                - valor: valor total da opção
+                - percentual: percentual do pedido
+        """
+        try:
+            codigo_opcao = opcao_dados.get('codigo', '?')
+            itens_incluidos = opcao_dados.get('itens', [])
+            itens_excluidos = opcao_dados.get('itens_excluidos', [])
+
+            if not itens_incluidos:
+                return {"sucesso": False, "erro": f"Opção {codigo_opcao} não possui itens incluídos"}
+
+            # Busca cliente do pedido
+            from app.carteira.models import CarteiraPrincipal
+            primeiro_item = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.num_pedido.like(f"%{num_pedido}%"),
+                CarteiraPrincipal.ativo == True
+            ).first()
+
+            cliente = primeiro_item.raz_social_red if primeiro_item else "Cliente não identificado"
+
+            # Monta lista de códigos incluídos
+            codigos_incluidos = {i['cod_produto'] for i in itens_incluidos}
+
+            itens = []
+
+            # Adiciona itens incluídos
+            for item_dados in itens_incluidos:
+                item = ItemRascunho(
+                    cod_produto=item_dados.get('cod_produto', ''),
+                    nome_produto=item_dados.get('nome_produto', ''),
+                    quantidade=float(item_dados.get('quantidade', 0)),
+                    quantidade_original=float(item_dados.get('quantidade', 0)),
+                    valor_unitario=float(item_dados.get('valor_unitario', 0)),
+                    estoque_atual=float(item_dados.get('estoque_atual', 0)),
+                    incluido=True,
+                    forcado=not item_dados.get('disponivel_hoje', False),
+                    editado=False
+                )
+                itens.append(item)
+
+            # Adiciona itens excluídos (para referência)
+            for item_dados in itens_excluidos:
+                if item_dados.get('cod_produto') not in codigos_incluidos:
+                    item = ItemRascunho(
+                        cod_produto=item_dados.get('cod_produto', ''),
+                        nome_produto=item_dados.get('nome_produto', ''),
+                        quantidade=float(item_dados.get('quantidade', 0)),
+                        quantidade_original=float(item_dados.get('quantidade', 0)),
+                        valor_unitario=float(item_dados.get('valor_unitario', 0)),
+                        estoque_atual=float(item_dados.get('estoque_atual', 0)),
+                        incluido=False,  # Excluído na opção
+                        forcado=False,
+                        editado=False
+                    )
+                    itens.append(item)
+
+            # Extrai data de expedição da opção
+            data_expedicao_iso = opcao_dados.get('data_envio_iso')
+
+            rascunho = RascunhoSeparacao(
+                num_pedido=num_pedido,
+                cliente=cliente,
+                itens=itens,
+                modo=f"opcao_{codigo_opcao}",
+                data_expedicao=data_expedicao_iso
+            )
+
+            data_exp_formatada = opcao_dados.get('data_envio', 'Não definida')
+            logger.info(f"[RASCUNHO] Criado via contexto: opção {codigo_opcao}, "
+                       f"{len([i for i in itens if i.incluido])} incluídos, "
+                       f"{len([i for i in itens if not i.incluido])} excluídos, "
+                       f"expedição: {data_exp_formatada}")
+
+            return {"sucesso": True, "rascunho": rascunho}
+
+        except Exception as e:
+            logger.error(f"[RASCUNHO] Erro ao criar de opção contexto: {e}")
+            return {"sucesso": False, "erro": str(e)}
+
+    @staticmethod
     def incluir_item(rascunho: RascunhoSeparacao, identificador: str, quantidade: float = None) -> str:
         """
         Inclui um item no rascunho (por código ou nome parcial).
+
+        MELHORIA: Se não encontrar no pedido, busca em CadastroPalletizacao
+        para sugerir produtos similares.
         """
         rascunho.atualizado_em = datetime.now().isoformat()
         identificador_lower = identificador.lower()
 
+        # FASE 1: Busca no pedido atual
         for item in rascunho.itens:
             if (item.cod_produto.lower() == identificador_lower or
                 identificador_lower in item.nome_produto.lower()):
@@ -305,7 +414,48 @@ class RascunhoService:
 
                 return f"✅ Incluído: {item.nome_produto} | Qtd: {item.quantidade:.0f}{aviso}"
 
-        return f"❌ Item '{identificador}' não encontrado no pedido."
+        # FASE 2: Busca em CadastroPalletizacao para sugestões
+        try:
+            from .produto_resolver import ProdutoResolver
+
+            resultado_busca = ProdutoResolver.buscar_produto(identificador)
+
+            if resultado_busca['sucesso']:
+                produtos = resultado_busca['produtos']
+
+                # Verifica se algum produto encontrado está no pedido
+                for produto in produtos:
+                    for item in rascunho.itens:
+                        if item.cod_produto == produto.cod_produto:
+                            # Encontrou via busca flexível!
+                            if item.incluido:
+                                return f"'{item.nome_produto}' já está incluído no rascunho."
+
+                            item.incluido = True
+                            item.editado = True
+                            if quantidade is not None:
+                                item.quantidade = quantidade
+                            item.forcado = item.estoque_atual < item.quantidade
+
+                            aviso = ""
+                            if item.forcado:
+                                aviso = f"\n⚠️ Atenção: Este item está SEM ESTOQUE (atual: {item.estoque_atual:.0f})"
+
+                            return f"✅ Incluído: {item.nome_produto} | Qtd: {item.quantidade:.0f}{aviso}"
+
+                # Produtos encontrados mas não estão no pedido
+                if resultado_busca['sugestoes']:
+                    return (
+                        f"O item '{identificador}' não está neste pedido.\n\n"
+                        f"Encontrei produtos similares no cadastro:\n"
+                        f"{chr(10).join(resultado_busca['sugestoes'][:5])}\n\n"
+                        f"Porém nenhum deles está no pedido {rascunho.num_pedido}."
+                    )
+
+        except Exception as e:
+            logger.warning(f"[RASCUNHO] Erro ao buscar produto em CadastroPalletizacao: {e}")
+
+        return f"❌ Item '{identificador}' não encontrado no pedido {rascunho.num_pedido}."
 
     @staticmethod
     def excluir_item(rascunho: RascunhoSeparacao, identificador: str) -> str:
@@ -364,9 +514,20 @@ class RascunhoService:
         """
         Formata o rascunho para exibição ao usuário.
         """
+        # Formata data de expedição
+        data_exp_formatada = "Não definida"
+        if rascunho.data_expedicao:
+            try:
+                from datetime import date
+                data_obj = date.fromisoformat(rascunho.data_expedicao)
+                data_exp_formatada = data_obj.strftime("%d/%m/%Y")
+            except (ValueError, TypeError):
+                data_exp_formatada = rascunho.data_expedicao
+
         linhas = [
             f"📋 RASCUNHO DE SEPARAÇÃO - Pedido {rascunho.num_pedido}",
             f"Cliente: {rascunho.cliente}",
+            f"📅 Expedição: {data_exp_formatada}",
             ""
         ]
 
@@ -516,7 +677,8 @@ class RascunhoService:
             resultado = CriarSeparacaoService.criar_separacao_customizada(
                 num_pedido=rascunho.num_pedido,
                 itens=itens_para_criar,
-                usuario=usuario_nome
+                usuario=usuario_nome,
+                data_expedicao=rascunho.data_expedicao  # Preserva data da opção escolhida
             )
 
             if resultado["sucesso"]:

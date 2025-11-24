@@ -149,6 +149,8 @@ def exportar_carteira_simples():
         )
         
         # Converter para DataFrame
+        # NOTA: CarteiraPrincipal contém apenas dados do pedido original do Odoo
+        # Campos de agendamento/expedição estão em Separacao (fonte única da verdade)
         dados = []
         for item in items:
             dados.append({
@@ -166,16 +168,13 @@ def exportar_carteira_simples():
                 'Qtd Saldo': float(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,
                 'Qtd Cancelada': float(item.qtd_cancelada_produto_pedido) if item.qtd_cancelada_produto_pedido else 0,
                 'Preço': float(item.preco_produto_pedido) if item.preco_produto_pedido else 0,
-                'Data Expedição': item.expedicao if item.expedicao else None,
-                'Data Agendamento': item.agendamento if item.agendamento else None,
-                'Hora Agendamento': item.hora_agendamento.strftime('%H:%M') if item.hora_agendamento else '',
-                'Protocolo': item.protocolo or '',
-                'Agendamento Confirmado': 'Sim' if item.agendamento_confirmado else 'Não',
-                'Data Entrega': item.data_entrega if item.data_entrega else None,
+                'Data Pedido': item.data_pedido if item.data_pedido else None,
+                'Data Entrega Prevista': item.data_entrega_pedido if item.data_entrega_pedido else None,
                 'Observações': item.observ_ped_1 or '',
                 'Pedido Cliente': item.pedido_cliente or '',
-                'Estoque Atual': float(item.estoque) if item.estoque else 0,
-                'Estoque na Expedição': float(item.saldo_estoque_pedido) if item.saldo_estoque_pedido else 0
+                'Cond. Pagamento': item.cond_pgto_pedido or '',
+                'Forma Pagamento': item.forma_pgto_pedido or '',
+                'Incoterm': item.incoterm or ''
             })
         
         df = pd.DataFrame(dados)
@@ -193,9 +192,8 @@ def exportar_carteira_simples():
 
             # Colunas de data
             colunas_data = {
-                'Data Expedição': formato_data,
-                'Data Agendamento': formato_data,
-                'Data Entrega': formato_data
+                'Data Pedido': formato_data,
+                'Data Entrega Prevista': formato_data
             }
 
             # Aplicar formato e ajustar largura
@@ -351,12 +349,8 @@ def exportar_carteira_detalhada():
                 pallet_saldo = 0
             
             # Linha do pedido
-            # Determinar valor da coluna "Data Agendada"
-            if pedido.agendamento_confirmado:
-                data_agendada = pedido.agendamento if pedido.agendamento else None
-            else:
-                data_agendada = 'Aguardando Aprovação' if pedido.agendamento else ''
-
+            # NOTA: CarteiraPrincipal não tem campos de agendamento/expedição/protocolo
+            # Esses dados estão em Separacao (fonte única da verdade)
             linha_pedido = {
                 'Tipo': 'PEDIDO',
                 'Lote': '',
@@ -369,17 +363,17 @@ def exportar_carteira_detalhada():
                 'UF': pedido.estado,
                 'Vendedor': pedido.vendedor,
                 'Equipe': pedido.equipe_vendas,
-                'Qtd': qtd_saldo_liquido,  # Removido sufixo "Saldo"
-                'Valor': valor_saldo,  # Removido sufixo "Saldo"
-                'Pallet': pallet_saldo,  # Removido sufixo "Saldo"
-                'Peso': peso_saldo,  # Removido sufixo "Saldo"
+                'Qtd': qtd_saldo_liquido,
+                'Valor': valor_saldo,
+                'Pallet': pallet_saldo,
+                'Peso': peso_saldo,
                 'Cond. Pagamento': pedido.cond_pgto_pedido or '',
                 'Forma Pagamento': pedido.forma_pgto_pedido or '',
                 'Incoterm': pedido.incoterm or '',
-                'Data Expedição': pedido.expedicao if pedido.expedicao else None,
-                'Entrega Prevista': pedido.agendamento if pedido.agendamento else None,
-                'Data Agendada': data_agendada,
-                'Protocolo': pedido.protocolo or '',
+                'Data Expedição': None,  # Campo não existe em CarteiraPrincipal
+                'Entrega Prevista': pedido.data_entrega_pedido if pedido.data_entrega_pedido else None,
+                'Data Agendada': '',  # Dados de agendamento estão em Separacao
+                'Protocolo': '',  # Dados de protocolo estão em Separacao
                 'Observações': pedido.observ_ped_1 or '',
                 'Pedido Cliente': pedido.pedido_cliente or '',
                 'Status': 'ABERTO',

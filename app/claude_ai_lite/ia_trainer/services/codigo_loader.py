@@ -24,17 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Cache em memoria como fallback
 _cache_memoria: Dict[str, Any] = {}
-_cache_memoria_timestamp: datetime = None
+_cache_memoria_timestamp: Optional[datetime] = None
 _cache_ttl = timedelta(minutes=5)
-
-
-def _get_cache():
-    """Obtem instancia do cache (Redis ou memoria)."""
-    try:
-        from ...cache import get_codigos_ativos, set_codigos_ativos
-        return 'redis'
-    except Exception:
-        return 'memoria'
 
 
 def _cache_valido_memoria() -> bool:
@@ -45,6 +36,15 @@ def _cache_valido_memoria() -> bool:
     return datetime.now() - _cache_memoria_timestamp < _cache_ttl
 
 
+def _redis_disponivel() -> bool:
+    """Verifica se Redis esta disponivel para cache."""
+    try:
+        from ...cache import get_codigos_ativos  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def invalidar_cache():
     """Invalida o cache (Redis e memoria)."""
     global _cache_memoria, _cache_memoria_timestamp
@@ -53,12 +53,13 @@ def invalidar_cache():
     _cache_memoria = {}
     _cache_memoria_timestamp = None
 
-    # Invalida Redis
-    try:
-        from ...cache import invalidar_codigos_ativos
-        invalidar_codigos_ativos()
-    except Exception:
-        pass
+    # Invalida Redis se disponivel
+    if _redis_disponivel():
+        try:
+            from ...cache import invalidar_codigos_ativos
+            invalidar_codigos_ativos()
+        except Exception:
+            pass
 
     logger.info("[CODIGO_LOADER] Cache invalidado (Redis + memoria)")
 
@@ -159,22 +160,114 @@ def listar_todos() -> List[Dict]:
 
 
 def buscar_por_gatilho(texto: str) -> List[Dict]:
-    """Busca codigos que correspondem a gatilhos no texto."""
+    """
+    Busca codigos que correspondem a gatilhos no texto.
+
+    Usa matching inteligente:
+    1. Matching exato primeiro (mais confiável)
+    2. Matching normalizado (sem acentos)
+    3. Matching fuzzy com palavras-chave (para variações)
+
+    Args:
+        texto: Texto da pergunta do usuário
+
+    Returns:
+        Lista de códigos que matcharam, ordenados por relevância
+    """
     cache = _garantir_cache()
     texto_lower = texto.lower()
+    texto_normalizado = _normalizar_texto(texto_lower)
+    palavras_texto = set(texto_normalizado.split())
 
     codigos_encontrados = []
     ids_vistos = set()
 
+    # === FASE 1: Matching exato (mais confiável) ===
     for gatilho, codigos in cache.get('por_gatilho', {}).items():
         if gatilho in texto_lower:
             for codigo in codigos:
                 codigo_id = codigo.get('id')
                 if codigo_id not in ids_vistos:
-                    codigos_encontrados.append(codigo)
+                    codigo_com_score = codigo.copy()
+                    codigo_com_score['_match_score'] = 100  # Score máximo
+                    codigo_com_score['_match_tipo'] = 'exato'
+                    codigos_encontrados.append(codigo_com_score)
                     ids_vistos.add(codigo_id)
 
+    # === FASE 2: Matching normalizado (sem acentos) ===
+    for gatilho, codigos in cache.get('por_gatilho', {}).items():
+        gatilho_normalizado = _normalizar_texto(gatilho)
+        if gatilho_normalizado in texto_normalizado:
+            for codigo in codigos:
+                codigo_id = codigo.get('id')
+                if codigo_id not in ids_vistos:
+                    codigo_com_score = codigo.copy()
+                    codigo_com_score['_match_score'] = 90
+                    codigo_com_score['_match_tipo'] = 'normalizado'
+                    codigos_encontrados.append(codigo_com_score)
+                    ids_vistos.add(codigo_id)
+
+    # === FASE 3: Matching por palavras-chave (fuzzy) ===
+    for gatilho, codigos in cache.get('por_gatilho', {}).items():
+        palavras_gatilho = set(_normalizar_texto(gatilho).split())
+
+        # Se todas as palavras do gatilho estão no texto (em qualquer ordem)
+        if palavras_gatilho and palavras_gatilho.issubset(palavras_texto):
+            for codigo in codigos:
+                codigo_id = codigo.get('id')
+                if codigo_id not in ids_vistos:
+                    codigo_com_score = codigo.copy()
+                    codigo_com_score['_match_score'] = 70
+                    codigo_com_score['_match_tipo'] = 'palavras'
+                    codigos_encontrados.append(codigo_com_score)
+                    ids_vistos.add(codigo_id)
+
+    # === FASE 4: Matching parcial (pelo menos 60% das palavras) ===
+    for gatilho, codigos in cache.get('por_gatilho', {}).items():
+        palavras_gatilho = set(_normalizar_texto(gatilho).split())
+        if len(palavras_gatilho) >= 2:  # Apenas para gatilhos com 2+ palavras
+            intersecao = palavras_gatilho.intersection(palavras_texto)
+            cobertura = len(intersecao) / len(palavras_gatilho) if palavras_gatilho else 0
+
+            if cobertura >= 0.6:  # 60% de cobertura
+                for codigo in codigos:
+                    codigo_id = codigo.get('id')
+                    if codigo_id not in ids_vistos:
+                        codigo_com_score = codigo.copy()
+                        codigo_com_score['_match_score'] = int(50 * cobertura)
+                        codigo_com_score['_match_tipo'] = 'parcial'
+                        codigos_encontrados.append(codigo_com_score)
+                        ids_vistos.add(codigo_id)
+
+    # Ordena por score (maior primeiro)
+    codigos_encontrados.sort(key=lambda x: x.get('_match_score', 0), reverse=True)
+
     return codigos_encontrados
+
+
+def _normalizar_texto(texto: str) -> str:
+    """
+    Normaliza texto removendo acentos e caracteres especiais.
+
+    Útil para matching fuzzy de gatilhos.
+    """
+    import unicodedata
+    import re
+
+    # Remove acentos
+    texto_sem_acento = unicodedata.normalize('NFD', texto)
+    texto_sem_acento = ''.join(
+        c for c in texto_sem_acento
+        if unicodedata.category(c) != 'Mn'
+    )
+
+    # Remove pontuação exceto espaço
+    texto_limpo = re.sub(r'[^\w\s]', ' ', texto_sem_acento)
+
+    # Normaliza espaços
+    texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
+
+    return texto_limpo.lower()
 
 
 def buscar_filtros_para_dominio(dominio: str) -> List[Dict]:
@@ -261,12 +354,13 @@ def estatisticas() -> Dict[str, Any]:
     cache = _garantir_cache()
 
     # Detecta tipo de cache em uso
-    tipo_cache = 'redis'
-    try:
-        from ...cache import get_codigos_ativos
-        if get_codigos_ativos() is None:
+    if _redis_disponivel():
+        try:
+            from ...cache import get_codigos_ativos
+            tipo_cache = 'redis' if get_codigos_ativos() is not None else 'memoria'
+        except Exception:
             tipo_cache = 'memoria'
-    except Exception:
+    else:
         tipo_cache = 'memoria'
 
     return {

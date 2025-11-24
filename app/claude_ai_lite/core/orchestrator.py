@@ -42,9 +42,33 @@ def processar_consulta(
 
     contexto_memoria = None
 
+    # 0. NOVO: Classificar tipo de mensagem e reconstruir consulta com contexto
+    from .conversation_context import (
+        ConversationContextManager,
+        classificar_e_reconstruir
+    )
+
+    tipo_mensagem = 'NOVA_CONSULTA'
+    consulta_reconstruida = consulta
+    entidades_contexto = {}
+
+    if usuario_id:
+        tipo_mensagem, consulta_reconstruida, entidades_contexto, metadados_ctx = \
+            classificar_e_reconstruir(consulta, usuario_id)
+
+        logger.info(f"[ORCHESTRATOR] Tipo mensagem: {tipo_mensagem}")
+
+        if tipo_mensagem == 'MODIFICACAO':
+            # Para modificações, usa consulta reconstruída
+            logger.info(f"[ORCHESTRATOR] Consulta reconstruída: {consulta_reconstruida[:100]}...")
+
     # 1. Buscar contexto de memória
     if usuario_id:
         contexto_memoria = _buscar_memoria(usuario_id)
+        # Adiciona contexto conversacional
+        ctx_conversa = ConversationContextManager.formatar_contexto_para_prompt(usuario_id)
+        if ctx_conversa:
+            contexto_memoria = f"{ctx_conversa}\n\n{contexto_memoria}" if contexto_memoria else ctx_conversa
 
     # 2. Verificar comando de aprendizado
     if usuario_id:
@@ -53,10 +77,18 @@ def processar_consulta(
             _registrar_conversa(usuario_id, consulta, resultado_aprendizado, None, None)
             return resultado_aprendizado
 
-    # 3. Classificar intenção
+    # 3. Classificar intenção (usa consulta reconstruída para melhor classificação)
     from .classifier import get_classifier
     classifier = get_classifier()
-    intencao = classifier.classificar(consulta, contexto_memoria)
+    intencao = classifier.classificar(consulta_reconstruida, contexto_memoria)
+
+    # 3.0.1 Merge entidades do contexto com entidades detectadas
+    if entidades_contexto:
+        entidades_intencao = intencao.get('entidades', {})
+        for k, v in entidades_contexto.items():
+            if v and not entidades_intencao.get(k):
+                entidades_intencao[k] = v
+        intencao['entidades'] = entidades_intencao
 
     confianca = intencao.get("confianca", 0.0)
 
@@ -67,6 +99,10 @@ def processar_consulta(
     dominio = intencao.get("dominio", "geral")
     intencao_tipo = intencao.get("intencao", "")
     entidades = intencao.get("entidades", {})
+
+    # 3.2 Mapear entidades para nomes de campos esperados pelas capacidades
+    entidades = _mapear_entidades_para_campos(entidades)
+    intencao['entidades'] = entidades
 
     logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}")
 
@@ -128,6 +164,17 @@ def processar_consulta(
     else:
         resposta = contexto_dados
 
+    # 10.1. NOVO: Se resultado tem opções (análise de disponibilidade), salva no contexto
+    if usuario_id and resultado.get('opcoes'):
+        from .conversation_context import ConversationContextManager
+        ConversationContextManager.atualizar_estado(
+            usuario_id=usuario_id,
+            opcoes=resultado['opcoes'],
+            aguardando_confirmacao=True,
+            acao_pendente='escolher_opcao_envio'
+        )
+        logger.info(f"[ORCHESTRATOR] {len(resultado['opcoes'])} opções salvas no contexto")
+
     # 11. Registrar na memória
     _registrar_conversa(usuario_id, consulta, resposta, intencao, resultado)
 
@@ -142,6 +189,43 @@ def _buscar_memoria(usuario_id: int) -> Optional[str]:
     except Exception as e:
         logger.warning(f"Erro ao buscar memória: {e}")
         return None
+
+
+def _mapear_entidades_para_campos(entidades: Dict) -> Dict:
+    """
+    Mapeia nomes de entidades do classificador para nomes de campos das capacidades.
+
+    O classificador extrai entidades como 'cliente', mas as capacidades esperam
+    'raz_social_red'. Este mapeamento faz a tradução.
+
+    Mapeamentos:
+    - cliente -> raz_social_red
+    - cnpj -> cnpj_cpf
+    - cpf -> cnpj_cpf
+    - codigo -> cod_produto
+    - produto -> nome_produto (se não for código)
+    """
+    if not entidades:
+        return entidades
+
+    mapeamento = {
+        'cliente': 'raz_social_red',
+        'cnpj': 'cnpj_cpf',
+        'cpf': 'cnpj_cpf',
+        'codigo': 'cod_produto',
+    }
+
+    entidades_mapeadas = entidades.copy()
+
+    for origem, destino in mapeamento.items():
+        valor = entidades.get(origem)
+        if valor and str(valor).lower() not in ('null', 'none', ''):
+            # Só mapeia se o destino não tiver valor
+            if not entidades_mapeadas.get(destino):
+                entidades_mapeadas[destino] = valor
+                logger.debug(f"[ORCHESTRATOR] Mapeado {origem}={valor} -> {destino}")
+
+    return entidades_mapeadas
 
 
 def _verificar_aprendizado(consulta: str, usuario_id: int, usuario: str) -> Optional[str]:
@@ -203,7 +287,7 @@ def _formatar_dados_reais(resultado: Dict) -> str:
 
 
 def _registrar_conversa(usuario_id: int, consulta: str, resposta: str, intencao: dict, resultado: dict):
-    """Registra conversa na memória."""
+    """Registra conversa na memória e atualiza contexto conversacional."""
     if not usuario_id:
         return
     try:
@@ -212,6 +296,34 @@ def _registrar_conversa(usuario_id: int, consulta: str, resposta: str, intencao:
             usuario_id=usuario_id, pergunta=consulta, resposta=resposta,
             intencao=intencao, resultado_busca=resultado
         )
+
+        # NOVO: Atualiza contexto conversacional
+        from .conversation_context import ConversationContextManager
+
+        # Extrai entidades relevantes do resultado para enriquecer o contexto
+        entidades = intencao.get('entidades', {}).copy() if intencao else {}
+
+        # Se o resultado tem num_pedido, adiciona às entidades
+        if resultado:
+            if resultado.get('num_pedido'):
+                entidades['num_pedido'] = resultado['num_pedido']
+            # Se resultado.dados tem pedidos, pega o primeiro num_pedido
+            dados = resultado.get('dados')
+            if isinstance(dados, list) and dados:
+                primeiro = dados[0] if isinstance(dados[0], dict) else {}
+                if primeiro.get('num_pedido'):
+                    entidades['num_pedido'] = primeiro['num_pedido']
+            elif isinstance(dados, dict) and dados.get('num_pedido'):
+                entidades['num_pedido'] = dados['num_pedido']
+
+        ConversationContextManager.atualizar_estado(
+            usuario_id=usuario_id,
+            pergunta=consulta,
+            intencao=intencao,
+            resultado=resultado,
+            entidades=entidades
+        )
+
     except Exception as e:
         logger.warning(f"Erro ao registrar conversa: {e}")
 

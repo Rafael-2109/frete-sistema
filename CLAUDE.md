@@ -87,16 +87,16 @@ def tornar_motor_nullable():
 ### 📅 Campos de Datas e Agendamento
 ```python
 # CAMPOS CORRETOS - SEMPRE USAR ESTES NOMES:
-expedicao = db.Column(db.Date, nullable=True)                    # ✅ Data prevista expedição
-agendamento = db.Column(db.Date, nullable=True)                  # ✅ Data agendamento
-protocolo = db.Column(db.String(50), nullable=True)             # ✅ Protocolo agendamento
-agendamento_confirmado = db.Column(db.Boolean, default=False)    # ✅ Status confirmação
-data_entrega_pedido = db.Column(db.Date, nullable=True)          # ✅ Data entrega prevista
-data_entrega = db.Column(db.Date, nullable=True)                 # ✅ Data prevista entrega
+data_entrega_pedido = db.Column(db.Date, nullable=True)          # ✅ Data entrega solicitada pelo comercial
 observ_ped_1 = db.Column(db.Text, nullable=True)                # ✅ Observações
-hora_agendamento = db.Column(db.Time, nullable=True)             # ⚠️ NÃO USADO - ignorar
 
 # ❌ CAMPOS QUE NÃO EXISTEM - NUNCA USAR:
+# data_entrega ❌
+# expedicao ❌
+# agendamento ❌
+# protocolo ❌
+# agendamento_confirmado ❌
+# hora_agendamento ❌
 # data_expedicao_pedido ❌
 # data_agendamento_pedido ❌
 ```
@@ -109,12 +109,6 @@ qtd_saldo_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False) # ✅ Sa
 qtd_cancelada_produto_pedido = db.Column(db.Numeric(15, 3), default=0)  # ✅ Quantidade cancelada
 preco_produto_pedido = db.Column(db.Numeric(15, 2), nullable=True)      # ✅ Preço unitário
 
-# ⚠️ CAMPOS NÃO USADOS (podem ser removidos):
-qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)         # ⚠️ NÃO USADO
-valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)       # ⚠️ NÃO USADO
-peso = db.Column(db.Numeric(15, 3), nullable=True)              # ⚠️ NÃO USADO
-pallet = db.Column(db.Numeric(15, 3), nullable=True)            # ⚠️ NÃO USADO
-```
 
 ### 🆔 Campos de Identificação
 ```python
@@ -152,19 +146,6 @@ endereco_ent = db.Column(db.String(20), nullable=True)          # ✅ Número
 telefone_endereco_ent = db.Column(db.String(20), nullable=True) # ✅ Telefone
 ```
 
-### 📈 Campos de Estoque e Projeção
-```python
-# CAMPOS USADOS:
-saldo_estoque_pedido = db.Column(db.Numeric(15, 3), nullable=True) # ✅ Estoque na data expedição
-menor_estoque_produto_d7 = db.Column(db.Numeric(15, 3), nullable=True) # ✅ Previsão ruptura 7 dias
-
-# ⚠️ CAMPOS NÃO USADOS (podem ser removidos):
-estoque = db.Column(db.Numeric(15, 3), nullable=True)           # ⚠️ NÃO USADO
-# Projeção D0-D28 (28 campos):
-estoque_d0 = db.Column(db.Numeric(15, 3), nullable=True)        # ⚠️ NÃO USADO
-estoque_d1 = db.Column(db.Numeric(15, 3), nullable=True)        # ⚠️ NÃO USADO
-# ... até estoque_d28 - TODOS NÃO USADOS
-```
 
 ### 🏷️ Tags do Pedido (Odoo)
 ```python

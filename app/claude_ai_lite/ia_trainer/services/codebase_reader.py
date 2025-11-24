@@ -23,7 +23,11 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Configuracoes
-BASE_PATH = Path(__file__).parent.parent.parent.parent.parent  # /app
+# BASE_PATH aponta para a raiz do projeto (frete_sistema/)
+# Calculado a partir de: app/claude_ai_lite/ia_trainer/services/codebase_reader.py
+#   services -> ia_trainer -> claude_ai_lite -> app -> frete_sistema
+BASE_PATH = Path(__file__).parent.parent.parent.parent.parent  # /frete_sistema
+APP_PATH = BASE_PATH / 'app'  # /frete_sistema/app (onde estao os modulos)
 MAX_FILE_SIZE = 100000  # 100KB max por arquivo
 MAX_LINES = 500  # Linhas max para retornar
 
@@ -44,16 +48,17 @@ PASTAS_PERMITIDAS = [
 ]
 
 # Arquivos importantes para referencia rapida
+# Caminhos relativos ao BASE_PATH (raiz do projeto)
 ARQUIVOS_REFERENCIA = {
-    'models_carteira': 'carteira/models.py',
-    'models_separacao': 'separacao/models.py',
-    'models_pedidos': 'pedidos/models.py',
-    'models_estoque': 'estoque/models.py',
-    'models_faturamento': 'faturamento/models.py',
-    'models_fretes': 'fretes/models.py',
-    'models_embarques': 'embarques/models.py',
-    'models_producao': 'producao/models.py',
-    'claude_md': '../CLAUDE.md',
+    'models_carteira': 'app/carteira/models.py',
+    'models_separacao': 'app/separacao/models.py',
+    'models_pedidos': 'app/pedidos/models.py',
+    'models_estoque': 'app/estoque/models.py',
+    'models_faturamento': 'app/faturamento/models.py',
+    'models_fretes': 'app/fretes/models.py',
+    'models_embarques': 'app/embarques/models.py',
+    'models_producao': 'app/producao/models.py',
+    'claude_md': 'CLAUDE.md',  # Na raiz do projeto
 }
 
 
@@ -82,7 +87,7 @@ class CodebaseReader:
         Le um arquivo do codigo-fonte.
 
         Args:
-            caminho_relativo: Caminho relativo a /app (ex: 'carteira/models.py')
+            caminho_relativo: Caminho relativo ao projeto (ex: 'app/carteira/models.py' ou 'CLAUDE.md')
             linhas_inicio: Linha inicial (opcional)
             linhas_fim: Linha final (opcional)
 
@@ -90,14 +95,25 @@ class CodebaseReader:
             Dict com conteudo, linhas, tamanho, etc
         """
         # Valida se pasta e permitida
-        pasta_raiz = caminho_relativo.split('/')[0]
-        if pasta_raiz not in PASTAS_PERMITIDAS and not caminho_relativo.startswith('..'):
+        partes = caminho_relativo.split('/')
+        pasta_raiz = partes[0]
+
+        # Se começa com 'app/', valida a pasta do módulo
+        if pasta_raiz == 'app' and len(partes) > 1:
+            pasta_modulo = partes[1]
+            if pasta_modulo not in PASTAS_PERMITIDAS:
+                return {
+                    'sucesso': False,
+                    'erro': f'Pasta "{pasta_modulo}" nao permitida. Permitidas: {PASTAS_PERMITIDAS}'
+                }
+        # Permite arquivos na raiz como CLAUDE.md
+        elif pasta_raiz not in PASTAS_PERMITIDAS and not caminho_relativo.endswith('.md'):
             return {
                 'sucesso': False,
                 'erro': f'Pasta "{pasta_raiz}" nao permitida. Permitidas: {PASTAS_PERMITIDAS}'
             }
 
-        # Monta caminho completo
+        # Monta caminho completo (relativo a BASE_PATH = raiz do projeto)
         caminho_completo = self.base_path / caminho_relativo
 
         if not caminho_completo.exists():
@@ -161,7 +177,7 @@ class CodebaseReader:
         Lista arquivos de uma pasta.
 
         Args:
-            pasta: Pasta relativa a /app
+            pasta: Pasta relativa a /app (ex: 'carteira', 'separacao')
             extensao: Filtrar por extensao (default: .py)
 
         Returns:
@@ -173,7 +189,8 @@ class CodebaseReader:
                 'erro': f'Pasta "{pasta}" nao permitida'
             }
 
-        caminho = self.base_path / pasta
+        # Caminho é app/{pasta} relativo a BASE_PATH
+        caminho = self.base_path / 'app' / pasta
 
         if not caminho.exists():
             return {
@@ -220,7 +237,8 @@ class CodebaseReader:
         if modulo in self._cache_models:
             return self._cache_models[modulo]
 
-        arquivo_models = f'{modulo}/models.py'
+        # Caminho agora é relativo a BASE_PATH (raiz do projeto)
+        arquivo_models = f'app/{modulo}/models.py'
         resultado = self.ler_arquivo(arquivo_models)
 
         if not resultado['sucesso']:
@@ -449,7 +467,8 @@ class CodebaseReader:
         Este arquivo e a FONTE DA VERDADE para nomes de campos.
         """
         try:
-            resultado = self.ler_arquivo('../CLAUDE.md')
+            # CLAUDE.md está na raiz do projeto (BASE_PATH)
+            resultado = self.ler_arquivo('CLAUDE.md')
             if resultado['sucesso']:
                 conteudo = resultado['conteudo']
 

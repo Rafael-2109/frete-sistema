@@ -59,10 +59,19 @@ class ConsultarPedidoCapability(BaseCapability):
             return resultado
 
         try:
-            query = CarteiraPrincipal.query
+            # Filtro base: apenas itens ativos com saldo > 0
+            query = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.ativo == True,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            )
 
             if campo == "raz_social_red":
-                query = query.filter(CarteiraPrincipal.raz_social_red.ilike(f"%{valor}%"))
+                # Busca inteligente: divide em palavras e busca todas (AND)
+                # Ex: "Assai 308" -> raz_social_red ILIKE '%Assai%' AND raz_social_red ILIKE '%308%'
+                palavras = valor.split()
+                for palavra in palavras:
+                    if len(palavra) >= 2:  # Ignora palavras muito curtas
+                        query = query.filter(CarteiraPrincipal.raz_social_red.ilike(f"%{palavra}%"))
             elif campo == "cnpj_cpf":
                 valor_limpo = "".join(c for c in valor if c.isdigit())
                 query = query.filter(or_(
@@ -89,14 +98,20 @@ class ConsultarPedidoCapability(BaseCapability):
                 key = item.num_pedido
                 if key not in pedidos:
                     separacoes = Separacao.query.filter_by(num_pedido=item.num_pedido).all()
+
+                    # NOTA: expedicao e agendamento estão em Separacao, não em CarteiraPrincipal
+                    # Pegamos da primeira separação encontrada, se existir
+                    primeira_sep = separacoes[0] if separacoes else None
+
                     pedidos[key] = {
                         "num_pedido": item.num_pedido,
                         "cliente": item.raz_social_red,
                         "cnpj": item.cnpj_cpf,
                         "pedido_cliente": item.pedido_cliente,
-                        "expedicao": item.expedicao.strftime("%d/%m/%Y") if item.expedicao else None,
-                        "agendamento": item.agendamento.strftime("%d/%m/%Y") if item.agendamento else None,
-                        "agendamento_confirmado": item.agendamento_confirmado,
+                        "data_pedido": item.data_pedido.strftime("%d/%m/%Y") if item.data_pedido else None,
+                        "expedicao": primeira_sep.expedicao.strftime("%d/%m/%Y") if primeira_sep and primeira_sep.expedicao else None,
+                        "agendamento": primeira_sep.agendamento.strftime("%d/%m/%Y") if primeira_sep and primeira_sep.agendamento else None,
+                        "agendamento_confirmado": primeira_sep.agendamento_confirmado if primeira_sep else False,
                         "tem_separacao": len(separacoes) > 0,
                         "produtos": [],
                         "separacoes": [self._formatar_separacao(s) for s in separacoes]

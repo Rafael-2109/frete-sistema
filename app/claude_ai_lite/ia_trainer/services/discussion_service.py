@@ -177,7 +177,7 @@ class DiscussionService:
 
         Verifica se todos os campos referenciados existem e estao corretos.
         """
-        from .models import CodigoSistemaGerado
+        from ..models import CodigoSistemaGerado
 
         codigo = CodigoSistemaGerado.query.get(codigo_id)
         if not codigo:
@@ -194,16 +194,31 @@ class DiscussionService:
         # Valida cada campo
         for campo in campos_usados:
             encontrado = False
-            for model, campos_model in campos_referencia.items():
-                if campo in campos_model:
-                    encontrado = True
-                    break
+
+            # Suporta formato "Model.campo" ou apenas "campo"
+            if '.' in campo:
+                # Formato: "CarteiraPrincipal.num_pedido"
+                partes = campo.split('.', 1)
+                model_esperado = partes[0]
+                nome_campo = partes[1]
+
+                # Valida se o model existe e tem o campo
+                if model_esperado in campos_referencia:
+                    if nome_campo in campos_referencia[model_esperado]:
+                        encontrado = True
+            else:
+                # Formato simples: "num_pedido" - busca em qualquer model
+                nome_campo = campo
+                for model, campos_model in campos_referencia.items():
+                    if nome_campo in campos_model:
+                        encontrado = True
+                        break
 
             if not encontrado:
                 erros.append({
                     'tipo': 'campo_inexistente',
                     'campo': campo,
-                    'mensagem': f"Campo '{campo}' NAO existe no CLAUDE.md. Verifique o nome correto."
+                    'mensagem': f"Campo '{campo}' NAO existe. Verifique o nome correto."
                 })
 
                 # Sugere campos similares
@@ -585,59 +600,63 @@ NAO use UPDATE, DELETE, INSERT, DROP ou qualquer comando de escrita."""
 
     def _carregar_campos_referencia(self) -> Dict[str, List[str]]:
         """
-        Carrega campos do CLAUDE.md para validacao.
+        Carrega campos DIRETAMENTE DOS MODELS usando CodebaseReader.
 
+        Usa a fonte da verdade (models.py) em vez de lista hardcoded.
         Retorna dict: {model_name: [campo1, campo2, ...]}
         """
         if self._claude_md_cache:
             return self._claude_md_cache
 
-        campos = {
-            # CarteiraPrincipal - campos principais
-            'CarteiraPrincipal': [
-                'num_pedido', 'cod_produto', 'nome_produto', 'cnpj_cpf',
-                'raz_social', 'raz_social_red', 'municipio', 'estado',
-                'expedicao', 'agendamento', 'protocolo', 'agendamento_confirmado',
-                'data_entrega', 'data_entrega_pedido', 'observ_ped_1',
-                'qtd_produto_pedido', 'qtd_saldo_produto_pedido', 'qtd_cancelada_produto_pedido',
-                'preco_produto_pedido', 'vendedor', 'equipe_vendas',
-                'separacao_lote_id', 'pedido_cliente', 'saldo_estoque_pedido',
-                'menor_estoque_produto_d7', 'tags_pedido',
-                'cnpj_endereco_ent', 'empresa_endereco_ent', 'cep_endereco_ent',
-                'nome_cidade', 'cod_uf', 'bairro_endereco_ent', 'rua_endereco_ent',
-                'endereco_ent', 'telefone_endereco_ent'
-            ],
-            # Separacao
-            'Separacao': [
-                'separacao_lote_id', 'num_pedido', 'cod_produto', 'nome_produto',
-                'qtd_saldo', 'valor_saldo', 'peso', 'pallet',
-                'pedido_cliente', 'cnpj_cpf', 'raz_social_red',
-                'nome_cidade', 'cod_uf', 'data_pedido', 'expedicao',
-                'agendamento', 'protocolo', 'tipo_envio', 'observ_ped_1',
-                'roteirizacao', 'rota', 'sub_rota',
-                'status', 'nf_cd', 'sincronizado_nf', 'numero_nf'
-            ],
-            # Pedido (VIEW)
-            'Pedido': [
-                'separacao_lote_id', 'num_pedido', 'status', 'nf', 'nf_cd',
-                'cnpj_cpf', 'raz_social_red', 'nome_cidade', 'cod_uf',
-                'cidade_normalizada', 'uf_normalizada', 'codigo_ibge',
-                'data_pedido', 'expedicao', 'agendamento', 'data_embarque', 'protocolo',
-                'valor_saldo_total', 'pallet_total', 'peso_total',
-                'transportadora', 'valor_frete', 'valor_por_kg',
-                'modalidade', 'melhor_opcao', 'valor_melhor_opcao', 'lead_time'
-            ],
-            # CadastroPalletizacao
-            'CadastroPalletizacao': [
-                'cod_produto', 'nome_produto', 'palletizacao', 'peso_bruto',
-                'altura_cm', 'largura_cm', 'comprimento_cm',
-                'tipo_embalagem', 'tipo_materia_prima', 'categoria_produto',
-                'subcategoria', 'linha_producao', 'ativo'
-            ]
+        from .codebase_reader import CodebaseReader
+        reader = CodebaseReader()
+
+        # Models principais organizados por modulo
+        # NOTA: Models reais verificados em 24/11/2025
+        modulos_models = {
+            'carteira': ['CarteiraPrincipal'],
+            'separacao': ['Separacao'],
+            'pedidos': ['Pedido'],
+            'producao': ['CadastroPalletizacao', 'ProgramacaoProducao'],
+            'faturamento': ['FaturamentoProduto', 'RelatorioFaturamentoImportado'],
+            'fretes': ['Frete', 'DespesaExtra', 'FaturaFrete'],
+            'embarques': ['Embarque', 'EmbarqueItem'],
+            'estoque': ['MovimentacaoEstoque', 'UnificacaoCodigos'],
         }
 
+        campos = {}
+
+        for modulo, models_esperados in modulos_models.items():
+            try:
+                resultado = reader.listar_models(modulo)
+                if resultado.get('sucesso'):
+                    for model_info in resultado.get('models', []):
+                        nome_model = model_info['nome']
+                        if nome_model in models_esperados:
+                            campos[nome_model] = [c['nome'] for c in model_info['campos']]
+                            logger.debug(f"[DISCUSSION] Carregado {nome_model}: {len(campos[nome_model])} campos")
+            except Exception as e:
+                logger.warning(f"[DISCUSSION] Erro ao carregar campos de {modulo}: {e}")
+
+        # Se nao conseguiu carregar nenhum model, usa fallback
+        if not campos:
+            logger.warning("[DISCUSSION] Usando fallback - CodebaseReader falhou")
+            campos = self._fallback_campos_referencia()
+
         self._claude_md_cache = campos
+        logger.info(f"[DISCUSSION] Campos carregados para {len(campos)} models")
         return campos
+
+    def _fallback_campos_referencia(self) -> Dict[str, List[str]]:
+        """Fallback minimo caso CodebaseReader falhe."""
+        return {
+            'CarteiraPrincipal': ['num_pedido', 'cod_produto', 'nome_produto', 'cnpj_cpf',
+                                  'raz_social_red', 'expedicao', 'agendamento', 'qtd_saldo_produto_pedido'],
+            'Separacao': ['separacao_lote_id', 'num_pedido', 'cod_produto', 'data_pedido',
+                         'expedicao', 'agendamento', 'status', 'sincronizado_nf'],
+            'Pedido': ['num_pedido', 'data_pedido', 'status', 'cnpj_cpf', 'raz_social_red'],
+            'CadastroPalletizacao': ['cod_produto', 'nome_produto', 'palletizacao', 'peso_bruto'],
+        }
 
     def _sugerir_campos_similares(self, campo_errado: str, campos_referencia: Dict) -> List[str]:
         """Sugere campos similares ao campo errado."""
@@ -663,13 +682,8 @@ NAO use UPDATE, DELETE, INSERT, DROP ou qualquer comando de escrita."""
 
             # Verifica campos_retorno
             for campo in definicao.get('campos_retorno', []):
-                campo_limpo = campo.split('.')[-1] if '.' in campo else campo
-                encontrado = False
-                for campos in campos_referencia.values():
-                    if campo_limpo in campos:
-                        encontrado = True
-                        break
-                if not encontrado:
+                if not self._campo_existe(campo, campos_referencia):
+                    campo_limpo = campo.split('.')[-1] if '.' in campo else campo
                     erros.append({
                         'tipo': 'campo_retorno_inexistente',
                         'campo': campo,
@@ -680,13 +694,8 @@ NAO use UPDATE, DELETE, INSERT, DROP ou qualquer comando de escrita."""
             # Verifica filtros
             for filtro in definicao.get('filtros', []):
                 campo = filtro.get('campo', '')
-                campo_limpo = campo.split('.')[-1] if '.' in campo else campo
-                encontrado = False
-                for campos in campos_referencia.values():
-                    if campo_limpo in campos:
-                        encontrado = True
-                        break
-                if not encontrado:
+                if campo and not self._campo_existe(campo, campos_referencia):
+                    campo_limpo = campo.split('.')[-1] if '.' in campo else campo
                     erros.append({
                         'tipo': 'campo_filtro_inexistente',
                         'campo': campo,
@@ -701,6 +710,29 @@ NAO use UPDATE, DELETE, INSERT, DROP ou qualquer comando de escrita."""
             })
 
         return erros
+
+    def _campo_existe(self, campo: str, campos_referencia: Dict) -> bool:
+        """
+        Verifica se um campo existe no formato 'Model.campo' ou 'campo'.
+
+        Quando formato é 'Model.campo', valida no model específico.
+        Quando formato é 'campo', busca em qualquer model.
+        """
+        if '.' in campo:
+            # Formato: "CarteiraPrincipal.num_pedido"
+            partes = campo.split('.', 1)
+            model_esperado = partes[0]
+            nome_campo = partes[1]
+
+            if model_esperado in campos_referencia:
+                return nome_campo in campos_referencia[model_esperado]
+            return False
+        else:
+            # Formato simples: "num_pedido"
+            for campos in campos_referencia.values():
+                if campo in campos:
+                    return True
+            return False
 
     def _validar_codigo_rapido(self, codigo, campos_referencia: Dict) -> Dict:
         """Validacao rapida de um codigo."""

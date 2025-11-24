@@ -335,3 +335,97 @@ class CriarSeparacaoService:
         linhas.append("Confirma a criacao desta separacao? (sim/nao)")
 
         return "\n".join(linhas)
+
+    @classmethod
+    def criar_separacao_customizada(
+        cls,
+        num_pedido: str,
+        itens: List[Dict],
+        usuario: str = "Claude AI",
+        data_expedicao: str = None
+    ) -> Dict[str, Any]:
+        """
+        Cria separacao customizada a partir de uma lista de itens.
+
+        Este metodo e usado pelo RascunhoService quando o usuario confirma
+        um rascunho que pode ter sido editado manualmente.
+
+        Args:
+            num_pedido: Numero do pedido
+            itens: Lista de dicts com cod_produto, nome_produto, quantidade, valor_unitario
+            usuario: Usuario que esta criando
+            data_expedicao: Data de expedicao ISO (opcional)
+
+        Returns:
+            Dict com sucesso, lote_id, itens_criados, mensagem
+        """
+        resultado = {
+            "sucesso": False,
+            "lote_id": None,
+            "itens_criados": 0,
+            "mensagem": ""
+        }
+
+        try:
+            # 1. Validar se pode criar
+            validacao = cls._validar_pode_criar_separacao(num_pedido)
+            if not validacao["pode_criar"]:
+                resultado["mensagem"] = validacao["motivo"]
+                return resultado
+
+            # 2. Validar saldo disponivel
+            validacao_saldo = cls._validar_saldo_disponivel(num_pedido, itens)
+            if not validacao_saldo["saldo_ok"]:
+                resultado["mensagem"] = validacao_saldo["motivo"]
+                return resultado
+
+            # 3. Gerar lote_id
+            lote_id = cls._gerar_lote_id()
+
+            # 4. Determinar tipo de envio
+            from app.carteira.models import CarteiraPrincipal
+            total_itens_carteira = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.num_pedido == num_pedido,
+                CarteiraPrincipal.ativo == True
+            ).count()
+
+            tipo_envio = "total" if len(itens) >= total_itens_carteira else "parcial"
+
+            # 5. Criar itens de separacao
+            itens_criados = cls._criar_itens_separacao(
+                num_pedido=num_pedido,
+                lote_id=lote_id,
+                itens=itens,
+                data_expedicao=data_expedicao,
+                tipo_envio=tipo_envio,
+                usuario=usuario
+            )
+
+            if itens_criados == 0:
+                resultado["mensagem"] = "Nenhum item foi criado"
+                return resultado
+
+            db.session.commit()
+
+            # 6. Calcular valor total
+            valor_total = sum(
+                float(i.get('quantidade', 0)) * float(i.get('valor_unitario', 0))
+                for i in itens
+            )
+
+            resultado["sucesso"] = True
+            resultado["lote_id"] = lote_id
+            resultado["itens_criados"] = itens_criados
+            resultado["valor_total"] = valor_total
+            resultado["mensagem"] = (
+                f"Separacao criada com sucesso! "
+                f"Lote: {lote_id}, {itens_criados} item(ns), "
+                f"R$ {valor_total:,.2f}"
+            )
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar separacao customizada: {e}")
+            resultado["mensagem"] = f"Erro ao criar separacao: {str(e)}"
+
+        return resultado
