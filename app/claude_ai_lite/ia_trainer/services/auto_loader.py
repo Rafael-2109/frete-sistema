@@ -65,7 +65,8 @@ class AutoLoaderService:
         consulta: str,
         intencao: Dict[str, Any],
         usuario_id: int = None,
-        usuario: str = "sistema"
+        usuario: str = "sistema",
+        conhecimento_negocio: str = None
     ) -> Dict[str, Any]:
         """
         Tenta gerar um loader e responder a pergunta automaticamente.
@@ -75,6 +76,7 @@ class AutoLoaderService:
             intencao: Resultado da classificacao (dominio, entidades, etc)
             usuario_id: ID do usuario
             usuario: Nome do usuario
+            conhecimento_negocio: NOVO v3.5.2 - Aprendizados de negocio (opcional)
 
         Returns:
             Dict com:
@@ -100,11 +102,15 @@ class AutoLoaderService:
 
             logger.info(f"[AUTO_LOADER] Tentando auto-gerar loader para: {consulta[:50]}...")
 
+            # 1.1 NOVO v3.5.2: Carrega conhecimento se nao fornecido
+            if not conhecimento_negocio and usuario_id:
+                conhecimento_negocio = self._carregar_conhecimento(usuario_id)
+
             # 2. Gera decomposicao automatica simplificada
             decomposicao = self._gerar_decomposicao_automatica(consulta, intencao)
 
-            # 3. Gera loader via Claude
-            codigo_gerado = self._gerar_loader(consulta, decomposicao)
+            # 3. Gera loader via Claude (com conhecimento de negocio)
+            codigo_gerado = self._gerar_loader(consulta, decomposicao, conhecimento_negocio)
 
             if not codigo_gerado.get('sucesso'):
                 resultado['erro'] = f"Falha ao gerar loader: {codigo_gerado.get('erro')}"
@@ -209,7 +215,24 @@ class AutoLoaderService:
 
         return decomposicao
 
-    def _gerar_loader(self, consulta: str, decomposicao: List[Dict]) -> Dict[str, Any]:
+    def _carregar_conhecimento(self, usuario_id: int) -> Optional[str]:
+        """
+        NOVO v3.5.2: Carrega conhecimento de negocio para o usuario.
+
+        Args:
+            usuario_id: ID do usuario
+
+        Returns:
+            String com aprendizados formatados ou None
+        """
+        try:
+            from ...prompts.intent_prompt import _carregar_aprendizados_usuario
+            return _carregar_aprendizados_usuario(usuario_id)
+        except Exception as e:
+            logger.debug(f"[AUTO_LOADER] Erro ao carregar conhecimento: {e}")
+            return None
+
+    def _gerar_loader(self, consulta: str, decomposicao: List[Dict], conhecimento_negocio: str = None) -> Dict[str, Any]:
         """Gera loader via CodeGenerator."""
         generator = self._get_code_generator()
 
@@ -221,9 +244,11 @@ class AutoLoaderService:
             'tipo': 'instrucao'
         }]
 
+        # NOVO v3.5.2: Passa conhecimento de negocio ao CodeGenerator
         return generator.gerar_codigo(
             pergunta=consulta,
-            decomposicao=decomposicao_enhanced
+            decomposicao=decomposicao_enhanced,
+            conhecimento_negocio=conhecimento_negocio
         )
 
     def _validar_loader_estruturado(self, definicao_tecnica) -> bool:
@@ -388,7 +413,14 @@ def tentar_responder_automaticamente(
     consulta: str,
     intencao: Dict[str, Any],
     usuario_id: int = None,
-    usuario: str = "sistema"
+    usuario: str = "sistema",
+    conhecimento_negocio: str = None
 ) -> Dict[str, Any]:
-    """Funcao de conveniencia para tentar responder automaticamente."""
-    return get_auto_loader_service().tentar_responder(consulta, intencao, usuario_id, usuario)
+    """
+    Funcao de conveniencia para tentar responder automaticamente.
+
+    NOVO v3.5.2: Aceita conhecimento_negocio para evitar recarregar.
+    """
+    return get_auto_loader_service().tentar_responder(
+        consulta, intencao, usuario_id, usuario, conhecimento_negocio
+    )

@@ -84,13 +84,17 @@ class MemoryService:
             return []
 
     @staticmethod
-    def formatar_contexto_memoria(usuario_id: int) -> str:
+    def formatar_contexto_memoria(usuario_id: int, incluir_aprendizados: bool = True) -> str:
         """
         Formata todo o contexto de memória para enviar ao Claude.
 
         Inclui:
-        1. Aprendizados permanentes (globais + usuário)
+        1. Aprendizados permanentes (globais + usuário) - OPCIONAL
         2. Histórico recente de conversas
+
+        Args:
+            usuario_id: ID do usuário
+            incluir_aprendizados: Se False, não carrega aprendizados (usar quando já cacheados)
 
         Returns:
             String formatada para incluir no system prompt
@@ -99,8 +103,10 @@ class MemoryService:
         tokens_usados = 0
         max_chars = MAX_TOKENS_CONTEXTO * CHARS_POR_TOKEN
 
-        # 1. APRENDIZADOS (prioridade máxima)
-        aprendizados = MemoryService.buscar_aprendizados(usuario_id, incluir_globais=True)
+        # 1. APRENDIZADOS (prioridade máxima) - Opcional para evitar duplicação
+        aprendizados = []
+        if incluir_aprendizados:
+            aprendizados = MemoryService.buscar_aprendizados(usuario_id, incluir_globais=True)
 
         if aprendizados:
             partes.append("=== CONHECIMENTO PERMANENTE ===")

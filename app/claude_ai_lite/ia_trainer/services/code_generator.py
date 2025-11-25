@@ -49,7 +49,8 @@ class CodeGenerator:
         self,
         pergunta: str,
         decomposicao: List[Dict],
-        contexto_codigo: str = None
+        contexto_codigo: str = None,
+        conhecimento_negocio: str = None
     ) -> Dict[str, Any]:
         """
         Gera codigo baseado na decomposicao da pergunta.
@@ -58,12 +59,13 @@ class CodeGenerator:
             pergunta: Pergunta original nao respondida
             decomposicao: Lista de partes explicadas pelo usuario
             contexto_codigo: Contexto adicional do codigo-fonte (opcional)
+            conhecimento_negocio: NOVO v3.5.2 - Aprendizados de negocio (opcional)
 
         Returns:
             Dict com codigo gerado e metadados
         """
         # Monta o prompt para o Claude
-        prompt_sistema = self._montar_prompt_sistema(contexto_codigo)
+        prompt_sistema = self._montar_prompt_sistema(contexto_codigo, conhecimento_negocio)
         prompt_usuario = self._montar_prompt_usuario(pergunta, decomposicao)
 
         # Chama o Claude
@@ -73,7 +75,7 @@ class CodeGenerator:
         # Parseia a resposta
         return self._parsear_resposta(resposta, pergunta, decomposicao)
 
-    def _montar_prompt_sistema(self, contexto_codigo: str = None) -> str:
+    def _montar_prompt_sistema(self, contexto_codigo: str = None, conhecimento_negocio: str = None) -> str:
         """Monta o prompt de sistema para geracao de codigo."""
 
         # Busca contexto do codigo se nao fornecido
@@ -82,9 +84,22 @@ class CodeGenerator:
             reader = CodebaseReader()
             contexto_codigo = reader.gerar_contexto_para_claude()
 
+        # NOVO v3.5.2: Inclui conhecimento de negocio se disponivel
+        secao_conhecimento = ""
+        if conhecimento_negocio:
+            secao_conhecimento = f"""
+=== CONHECIMENTO DO NEGOCIO (APRENDIZADOS) ===
+{conhecimento_negocio}
+=== FIM DO CONHECIMENTO ===
+
+Use o conhecimento acima para entender melhor os termos de negocio
+e gerar codigo mais preciso.
+"""
+
         return f"""Voce e um gerador de codigo especializado para um sistema de logistica de uma industria de alimentos.
 
 {contexto_codigo}
+{secao_conhecimento}
 
 === ROTEIRO DE SEGURANCA - REGRAS OBRIGATORIAS ===
 

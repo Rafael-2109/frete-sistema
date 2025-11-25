@@ -1,78 +1,42 @@
 """
-ConversationContext - Gerenciador de contexto conversacional genérico.
+ConversationContext v5 - Camada de Interpretação Léxica.
 
-Responsabilidades:
-1. Manter estado da conversa (pergunta anterior, resultado, entidades)
-2. Detectar tipo de mensagem (nova consulta, continuação, modificação, ação)
-3. Reconstruir consultas com contexto anterior
-4. Suportar fluxos multi-turno (pergunta -> detalhe -> ação)
+FILOSOFIA v3.5.2:
+- NÃO GUARDA ESTADO (delega 100% para EstadoManager)
+- APENAS interpreta texto (regex, padrões, heurísticas)
+- SEMPRE consulta EstadoManager para obter/atualizar dados
 
-Padrões detectados:
-- NOVA_CONSULTA: Pergunta sem referência a contexto anterior
-- CONTINUACAO: "Quais itens tem nesse pedido?" (referencia pedido anterior)
-- MODIFICACAO: "Refaça com nome_produto" (modifica consulta anterior)
-- ACAO: "Opção A", "Criar separação", "Confirmo"
-- DETALHAMENTO: "Mais detalhes", "Me fala mais sobre"
+O que faz:
+1. Classificar tipo de mensagem (regex)
+2. Extrair opções (A, B, C)
+3. Detectar padrões especiais ("pedido total", referência numérica)
+
+O que NÃO faz mais:
+- Guardar entidades (usa EstadoManager.ENTIDADES)
+- Guardar opções (usa EstadoManager.OPCOES)
+- Guardar histórico (usa EstadoManager.DIALOGO)
+- Reconstruir perguntas (usa EstadoManager.REFERENCIA)
 
 Criado em: 24/11/2025
-Limite: 300 linhas
+Reescrito em: 24/11/2025 - v5 minimalista
+Limite: 150 linhas
 """
 
 import re
 import logging
-from typing import Dict, Optional, Tuple, List, Any
-from dataclasses import dataclass, field
-from datetime import datetime
+from typing import Dict, Optional, Tuple, List
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ConversationState:
-    """Estado atual da conversa de um usuário."""
-    usuario_id: int
-    ultima_pergunta: str = ""
-    ultima_intencao: Dict = field(default_factory=dict)
-    ultimo_resultado: Dict = field(default_factory=dict)
-    entidades_ativas: Dict = field(default_factory=dict)  # Entidades acumuladas
-    opcoes_oferecidas: List[Dict] = field(default_factory=list)  # Opções A, B, C
-    aguardando_confirmacao: bool = False
-    acao_pendente: str = ""
-    timestamp: datetime = field(default_factory=datetime.now)
-    # NOVO v3.4: Histórico rico com itens numerados
-    itens_listados: List[Dict] = field(default_factory=list)  # Itens numerados para referência
-    itens_por_numero: Dict[int, Dict] = field(default_factory=dict)  # Acesso rápido por número
-    ultimo_total: int = 0  # Total de itens no último resultado
-
-
-# Cache em memória por usuário
-_estados_conversa: Dict[int, ConversationState] = {}
-
-
-# Padrões para detectar tipo de mensagem
-PADROES_CONTINUACAO = [
-    r'\b(esse|essa|esses|essas|este|esta|estes|estas)\b',
-    r'\b(nesse|nessa|nesses|nessas|neste|nesta|nestes|nestas)\b',
-    r'\b(dele|dela|deles|delas)\b',
-    r'\b(desse|dessa|desses|dessas|deste|desta|destes|destas)\s+(pedido|cliente|produto)',
-    r'\bquais\s+(itens|produtos|items)\b',
-    r'\bquando\s+(da|posso|pode)\b',
-    r'\bo\s+que\s+(tem|está|esta)\b',
-]
-
-PADROES_MODIFICACAO = [
-    r'\brefa[cç][ao]?\b',
-    r'\binclu[ia]\s+(o\s+)?campo\b',
-    r'\badicion[ea]\s+(o\s+)?campo\b',
-    r'\bmostre?\s+tamb[eé]m\b',
-    r'\btraga?\s+(o\s+)?campo\b',
-    r'\bcom\s+mais\s+detalhes?\b',
-]
+# ============================================================
+# PADRÕES DE REGEX (única responsabilidade deste arquivo)
+# ============================================================
 
 PADROES_ACAO = [
     r'^op[cç][aã]o\s*([abc])\b',
     r'^quero\s+(a\s+)?op[cç][aã]o\s*([abc])\b',
-    r'^([abc])\s*$',  # Apenas "A", "B" ou "C"
+    r'^([abc])\s*$',
     r'\bcriar?\s+separa[cç][aã]o\b',
     r'\bgerar?\s+separa[cç][aã]o\b',
     r'\bconfirm[ao]r?\b',
@@ -81,42 +45,115 @@ PADROES_ACAO = [
     r'\bcancelar?\b',
 ]
 
-PADROES_DETALHAMENTO = [
-    r'\bmais\s+detalhes?\b',
-    r'\bme\s+fal[ea]\s+mais\b',
-    r'\bexplique?\b',
-    r'\bdetalhe?\b',
-    r'\bo\s+que\s+significa\b',
-]
-
 PADROES_TOTAL_PEDIDO = [
     r'\btodos?\s+(os\s+)?itens?\b',
     r'\bpedido\s+total\b',
     r'\bpedido\s+completo\b',
     r'\btudo\b',
     r'\binteiro\b',
-    r'\btotal\b',
 ]
 
-# NOVO: Padrões para referência numérica
 PADROES_REFERENCIA_NUMERO = [
-    r'\b(?:o\s+)?(?:pedido|item)\s+(?:numero\s+)?(\d+)\b',  # "o pedido 2", "item 3"
-    r'\b(?:o\s+)?(\d+)(?:º|°|o|a)?\s*(?:pedido|item|da\s+lista)?\b',  # "o 2º", "o 3o da lista"
-    r'^(\d+)\s*$',  # Apenas "2" ou "3"
-    r'\bquais?\s+(?:sao\s+)?(?:os\s+)?outros?\b',  # "quais são os outros?"
-    r'\be\s+os\s+outros\b',  # "e os outros?"
+    r'\b(?:o\s+)?(?:pedido|item)\s+(?:numero\s+)?(\d+)\b',
+    r'\b(?:o\s+)?(\d+)(?:º|°|o|a)?\s*(?:pedido|item|da\s+lista)?\b',
+    r'^(\d+)\s*$',
 ]
 
+
+# ============================================================
+# FUNÇÕES DE INTERPRETAÇÃO (sem estado)
+# ============================================================
+
+def extrair_opcao(texto: str) -> Optional[str]:
+    """
+    Extrai opção escolhida (A, B, C) do texto.
+
+    Função PURA - não acessa estado.
+
+    Returns:
+        'A', 'B', 'C' ou None
+    """
+    texto_lower = texto.lower().strip()
+
+    patterns = [
+        r'^op[cç][aã]o\s*([abc])\b',
+        r'^quero\s+(a\s+)?op[cç][aã]o\s*([abc])\b',
+        r'^([abc])\s*$',
+        r'\bop[cç][aã]o\s*([abc])\b',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, texto_lower)
+        if match:
+            grupos = [g for g in match.groups() if g and len(g) == 1]
+            if grupos:
+                return grupos[-1].upper()
+
+    return None
+
+
+def detectar_pedido_total(texto: str) -> bool:
+    """
+    Detecta se o usuário quer o pedido total/completo.
+
+    Função PURA - não acessa estado.
+    """
+    texto_lower = texto.lower()
+    for padrao in PADROES_TOTAL_PEDIDO:
+        if re.search(padrao, texto_lower):
+            return True
+    return False
+
+
+def extrair_referencia_numerica(texto: str) -> Optional[int]:
+    """
+    Extrai referência numérica como "o pedido 2" ou "o 3º".
+
+    Função PURA - não acessa estado.
+
+    Returns:
+        Número extraído ou None
+    """
+    texto_lower = texto.lower()
+
+    for padrao in PADROES_REFERENCIA_NUMERO:
+        match = re.search(padrao, texto_lower)
+        if match:
+            grupos = match.groups()
+            if grupos and grupos[0]:
+                try:
+                    return int(grupos[0])
+                except ValueError:
+                    pass
+
+    return None
+
+
+def e_mensagem_acao(texto: str) -> bool:
+    """
+    Verifica se é uma mensagem de ação (opção, confirmação, etc).
+
+    Função PURA - não acessa estado.
+    """
+    texto_lower = texto.lower().strip()
+
+    for padrao in PADROES_ACAO:
+        if re.search(padrao, texto_lower):
+            return True
+
+    return False
+
+
+# ============================================================
+# CLASSE DE COMPATIBILIDADE (delega para EstadoManager)
+# ============================================================
 
 class ConversationContextManager:
-    """Gerencia contexto de conversas."""
+    """
+    Classe de compatibilidade que delega 100% para EstadoManager.
 
-    @staticmethod
-    def obter_estado(usuario_id: int) -> ConversationState:
-        """Obtém ou cria estado da conversa do usuário."""
-        if usuario_id not in _estados_conversa:
-            _estados_conversa[usuario_id] = ConversationState(usuario_id=usuario_id)
-        return _estados_conversa[usuario_id]
+    DEPRECATED: Use EstadoManager diretamente quando possível.
+    """
 
     @staticmethod
     def atualizar_estado(
@@ -129,321 +166,87 @@ class ConversationContextManager:
         aguardando_confirmacao: bool = None,
         acao_pendente: str = None
     ):
-        """Atualiza estado da conversa."""
-        estado = ConversationContextManager.obter_estado(usuario_id)
+        """Delega atualização para EstadoManager."""
+        from .structured_state import EstadoManager, FonteEntidade
 
-        if pergunta is not None:
-            estado.ultima_pergunta = pergunta
-        if intencao is not None:
-            estado.ultima_intencao = intencao
-        if resultado is not None:
-            estado.ultimo_resultado = resultado
-        if entidades is not None:
-            # Merge entidades (preserva anteriores + adiciona novas)
-            estado.entidades_ativas.update({
-                k: v for k, v in entidades.items()
-                if v and str(v).lower() not in ('null', 'none', '')
-            })
-        if opcoes is not None:
-            estado.opcoes_oferecidas = opcoes
-        if aguardando_confirmacao is not None:
-            estado.aguardando_confirmacao = aguardando_confirmacao
-        if acao_pendente is not None:
-            estado.acao_pendente = acao_pendente
+        # Atualiza entidades
+        if entidades:
+            for k, v in entidades.items():
+                if v and str(v).lower() not in ('null', 'none', ''):
+                    EstadoManager.atualizar_entidade(
+                        usuario_id, k, v, FonteEntidade.CONSULTA.value
+                    )
 
-        estado.timestamp = datetime.now()
-        logger.debug(f"[CONTEXT] Estado atualizado para usuário {usuario_id}")
+        # Atualiza opções
+        if opcoes:
+            EstadoManager.definir_opcoes(
+                usuario_id,
+                motivo="Opções oferecidas",
+                lista=[{"letra": chr(65+i), "descricao": str(o.get('descricao', o))}
+                       for i, o in enumerate(opcoes[:3])],
+                esperado_do_usuario="Escolher uma opção"
+            )
 
-    @staticmethod
-    def limpar_estado(usuario_id: int):
-        """Limpa estado da conversa."""
-        if usuario_id in _estados_conversa:
-            del _estados_conversa[usuario_id]
-        logger.debug(f"[CONTEXT] Estado limpo para usuário {usuario_id}")
-
-    @staticmethod
-    def classificar_mensagem(texto: str, usuario_id: int) -> Tuple[str, Dict]:
-        """
-        Classifica o tipo de mensagem baseado no contexto.
-
-        Args:
-            texto: Texto da mensagem
-            usuario_id: ID do usuário
-
-        Returns:
-            Tuple (tipo, metadados) onde tipo é:
-            - NOVA_CONSULTA
-            - CONTINUACAO
-            - MODIFICACAO
-            - ACAO
-            - DETALHAMENTO
-        """
-        texto_lower = texto.lower().strip()
-        estado = ConversationContextManager.obter_estado(usuario_id)
-
-        # 1. Verifica se é AÇÃO (opção, confirmação, etc)
-        for padrao in PADROES_ACAO:
-            match = re.search(padrao, texto_lower)
-            if match:
-                opcao = match.group(1) if match.groups() else None
-                return 'ACAO', {
-                    'opcao_escolhida': opcao.upper() if opcao and len(opcao) == 1 else None,
-                    'texto_original': texto
-                }
-
-        # 2. Verifica se é MODIFICAÇÃO da consulta anterior
-        for padrao in PADROES_MODIFICACAO:
-            if re.search(padrao, texto_lower):
-                return 'MODIFICACAO', {
-                    'pergunta_original': estado.ultima_pergunta,
-                    'modificacao_solicitada': texto
-                }
-
-        # 3. Verifica se é DETALHAMENTO
-        for padrao in PADROES_DETALHAMENTO:
-            if re.search(padrao, texto_lower):
-                return 'DETALHAMENTO', {
-                    'contexto_anterior': estado.ultimo_resultado
-                }
-
-        # 4. Verifica se é CONTINUAÇÃO (referência a contexto anterior)
-        for padrao in PADROES_CONTINUACAO:
-            if re.search(padrao, texto_lower):
-                return 'CONTINUACAO', {
-                    'entidades_anteriores': estado.entidades_ativas,
-                    'resultado_anterior': estado.ultimo_resultado
-                }
-
-        # 5. Por padrão, é NOVA_CONSULTA
-        return 'NOVA_CONSULTA', {}
-
-    @staticmethod
-    def reconstruir_consulta(
-        texto: str,
-        tipo: str,
-        metadados: Dict,
-        usuario_id: int
-    ) -> Tuple[str, Dict]:
-        """
-        Reconstrói a consulta incorporando contexto.
-
-        Args:
-            texto: Texto original da mensagem
-            tipo: Tipo classificado (CONTINUACAO, MODIFICACAO, etc)
-            metadados: Metadados da classificação
-            usuario_id: ID do usuário
-
-        Returns:
-            Tuple (consulta_reconstruida, entidades_combinadas)
-        """
-        estado = ConversationContextManager.obter_estado(usuario_id)
-
-        if tipo == 'NOVA_CONSULTA':
-            return texto, {}
-
-        elif tipo == 'CONTINUACAO':
-            # Combina entidades anteriores com a nova pergunta
-            # Ex: "Quais itens tem nesse pedido?" + num_pedido do contexto
-            entidades = estado.entidades_ativas.copy()
-
-            # Tenta extrair referência do resultado anterior
-            if estado.ultimo_resultado:
-                dados = estado.ultimo_resultado.get('dados', [])
-                if dados and isinstance(dados, list) and len(dados) > 0:
-                    primeiro = dados[0] if isinstance(dados[0], dict) else {}
-                    if 'num_pedido' in primeiro:
-                        entidades['num_pedido'] = primeiro['num_pedido']
-                    if 'cnpj_cpf' in primeiro:
-                        entidades['cnpj'] = primeiro['cnpj_cpf']
-
-            return texto, entidades
-
-        elif tipo == 'MODIFICACAO':
-            # Reconstrói pergunta original + modificação
-            pergunta_original = metadados.get('pergunta_original', '')
-            if pergunta_original:
-                # Ex: "Ha pedidos do Idenildo?" + "Refaça com nome_produto"
-                # -> "Ha pedidos do Idenildo? Inclua o campo nome_produto"
-                consulta_reconstruida = f"{pergunta_original} {texto}"
-                return consulta_reconstruida, estado.entidades_ativas
-
-            return texto, estado.entidades_ativas
-
-        elif tipo == 'ACAO':
-            # Para ações, retorna entidades acumuladas
-            return texto, estado.entidades_ativas
-
-        elif tipo == 'DETALHAMENTO':
-            # Adiciona contexto do resultado anterior
-            return texto, estado.entidades_ativas
-
-        return texto, {}
-
-    @staticmethod
-    def detectar_pedido_total(texto: str) -> bool:
-        """
-        Detecta se o usuário quer o pedido total/completo.
-
-        Útil para separação: "todos os itens", "pedido total", etc.
-        """
-        texto_lower = texto.lower()
-        for padrao in PADROES_TOTAL_PEDIDO:
-            if re.search(padrao, texto_lower):
-                return True
-        return False
-
-    @staticmethod
-    def extrair_opcao(texto: str) -> Optional[str]:
-        """
-        Extrai opção escolhida (A, B, C) do texto.
-
-        Returns:
-            'A', 'B', 'C' ou None
-        """
-        texto_lower = texto.lower().strip()
-
-        # Padrões diretos
-        patterns = [
-            r'^op[cç][aã]o\s*([abc])\b',
-            r'^quero\s+(a\s+)?op[cç][aã]o\s*([abc])\b',
-            r'^([abc])\s*$',
-            r'\bop[cç][aã]o\s*([abc])\b',
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, texto_lower)
-            if match:
-                # Pega o último grupo que matchou
-                grupos = [g for g in match.groups() if g and len(g) == 1]
-                if grupos:
-                    return grupos[-1].upper()
-
-        return None
+        logger.debug(f"[CONTEXT] Delegado para EstadoManager (usuario={usuario_id})")
 
     @staticmethod
     def registrar_itens_numerados(usuario_id: int, dados: List[Dict]):
-        """
-        Registra itens numerados para referência futura.
+        """Delega para EstadoManager."""
+        from .structured_state import EstadoManager
 
-        Args:
-            usuario_id: ID do usuário
-            dados: Lista de itens a numerar
-        """
-        estado = ConversationContextManager.obter_estado(usuario_id)
+        # Registra como dados da última consulta
+        if dados:
+            EstadoManager.definir_consulta(
+                usuario_id,
+                tipo="itens",
+                total=len(dados),
+                itens=dados[:10]  # Limita a 10
+            )
 
-        # Limpa itens anteriores
-        estado.itens_listados = []
-        estado.itens_por_numero = {}
-
-        # Numera novos itens
-        for i, item in enumerate(dados, 1):
-            item_numerado = {
-                'numero': i,
-                'dados': item,
-                # Extrai campos principais para acesso rápido
-                'num_pedido': item.get('num_pedido'),
-                'cod_produto': item.get('cod_produto'),
-                'cliente': item.get('raz_social_red') or item.get('cliente'),
-            }
-            estado.itens_listados.append(item_numerado)
-            estado.itens_por_numero[i] = item_numerado
-
-        estado.ultimo_total = len(dados)
-        logger.debug(f"[CONTEXT] {len(dados)} itens registrados para referência")
+        logger.debug(f"[CONTEXT] {len(dados)} itens delegados para EstadoManager")
 
     @staticmethod
-    def resolver_referencia_numero(texto: str, usuario_id: int) -> Optional[Dict]:
-        """
-        Resolve referência numérica como "o pedido 2" ou "o 3º da lista".
-
-        Args:
-            texto: Texto do usuário
-            usuario_id: ID do usuário
-
-        Returns:
-            Dados do item referenciado ou None
-        """
-        estado = ConversationContextManager.obter_estado(usuario_id)
-        texto_lower = texto.lower()
-
-        # Verifica padrões de referência numérica
-        for padrao in PADROES_REFERENCIA_NUMERO:
-            match = re.search(padrao, texto_lower)
-            if match:
-                grupos = match.groups()
-                if grupos and grupos[0]:
-                    try:
-                        numero = int(grupos[0])
-                        if numero in estado.itens_por_numero:
-                            logger.info(f"[CONTEXT] Referência #{numero} resolvida")
-                            return estado.itens_por_numero[numero]
-                    except ValueError:
-                        pass
-
-        # Verifica se é referência a "outros"
-        if re.search(r'\boutros?\b', texto_lower):
-            # Retorna todos os itens não mencionados ainda
-            return {'_tipo': 'outros', 'itens': estado.itens_listados}
-
-        return None
+    def limpar_estado(usuario_id: int):
+        """Delega para EstadoManager."""
+        from .structured_state import EstadoManager
+        EstadoManager.limpar_tudo(usuario_id)
 
     @staticmethod
     def formatar_contexto_para_prompt(usuario_id: int) -> str:
         """
-        Formata contexto da conversa para incluir no prompt do Claude.
+        DEPRECATED: Use obter_estado_json() do structured_state.
 
-        Returns:
-            String formatada com contexto relevante
+        Mantido apenas para compatibilidade com código legado.
         """
-        estado = ConversationContextManager.obter_estado(usuario_id)
+        from .structured_state import obter_estado_json
+        return obter_estado_json(usuario_id)
 
-        if not estado.ultima_pergunta and not estado.entidades_ativas:
-            return ""
-
-        linhas = ["=== CONTEXTO DA CONVERSA ATUAL ==="]
-
-        if estado.ultima_pergunta:
-            linhas.append(f"Última pergunta: {estado.ultima_pergunta}")
-
-        if estado.entidades_ativas:
-            linhas.append(f"Entidades identificadas: {estado.entidades_ativas}")
-
-        if estado.opcoes_oferecidas:
-            linhas.append(f"Opções oferecidas: {len(estado.opcoes_oferecidas)} opções")
-
-        if estado.aguardando_confirmacao:
-            linhas.append(f"Aguardando confirmação para: {estado.acao_pendente}")
-
-        if estado.ultimo_resultado:
-            total = estado.ultimo_resultado.get('total_encontrado', 0)
-            linhas.append(f"Último resultado: {total} item(s) encontrado(s)")
-
-        # NOVO: Inclui itens numerados se existirem
-        if estado.itens_listados:
-            linhas.append(f"\nITENS LISTADOS ({len(estado.itens_listados)} itens):")
-            for item in estado.itens_listados[:10]:  # Limita a 10
-                num = item['numero']
-                pedido = item.get('num_pedido', '')
-                cliente = item.get('cliente', '')[:30] if item.get('cliente') else ''
-                linhas.append(f"  #{num}: Pedido {pedido} - {cliente}")
-            if len(estado.itens_listados) > 10:
-                linhas.append(f"  ... e mais {len(estado.itens_listados) - 10} itens")
-
-        linhas.append("=== FIM DO CONTEXTO ===")
-
-        return "\n".join(linhas)
+    @staticmethod
+    def extrair_opcao(texto: str) -> Optional[str]:
+        """Wrapper para função pura."""
+        return extrair_opcao(texto)
 
 
-# Funções de conveniência
+# ============================================================
+# FUNÇÃO DE COMPATIBILIDADE
+# ============================================================
+
 def classificar_e_reconstruir(texto: str, usuario_id: int) -> Tuple[str, str, Dict, Dict]:
     """
-    Classifica e reconstrói consulta em uma única chamada.
+    DEPRECATED: Use extração inteligente diretamente.
 
-    Returns:
-        Tuple (tipo, consulta_reconstruida, entidades, metadados)
+    Mantido apenas para compatibilidade com classificador legado.
     """
-    tipo, metadados = ConversationContextManager.classificar_mensagem(texto, usuario_id)
-    consulta, entidades = ConversationContextManager.reconstruir_consulta(
-        texto, tipo, metadados, usuario_id
-    )
-    return tipo, consulta, entidades, metadados
+    from .structured_state import EstadoManager
+
+    # Tipo básico baseado em regex
+    if e_mensagem_acao(texto):
+        tipo = 'ACAO'
+    else:
+        tipo = 'NOVA_CONSULTA'
+
+    # Obtém entidades do EstadoManager
+    estado = EstadoManager.obter(usuario_id)
+    entidades = {k: v.get('valor') for k, v in estado.entidades.items() if v.get('valor')}
+
+    return tipo, texto, entidades, {}

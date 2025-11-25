@@ -3,20 +3,27 @@ Orquestrador do Claude AI Lite.
 
 Coordena o fluxo completo:
 1. Verifica comandos de aprendizado
-2. Classifica intenção
-3. Analisa complexidade da pergunta
-4. Encontra capacidade
-5. Executa e gera resposta
-6. Registra na memória
-7. Loga perguntas não respondidas com sugestões
+2. USA EXTRATOR INTELIGENTE (delega ao Claude)
+3. Encontra capacidade e executa
+4. Gera resposta
+5. Registra na memória
 
-Limite: 200 linhas
+FILOSOFIA v3.5.1 - PILAR 3:
+- O Claude é o CÉREBRO - confiamos na capacidade natural dele
+- Contexto é ESTRUTURADO (JSON), não texto livre
+- O Claude sabe EXATAMENTE o estado da conversa
+- Extração inteligente substitui classificador rígido
+
+Limite: 250 linhas
 """
 
 import logging
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# Flag para usar novo extrator inteligente (pode desativar para rollback)
+USAR_EXTRATOR_INTELIGENTE = True
 
 
 def processar_consulta(
@@ -40,80 +47,58 @@ def processar_consulta(
     if not consulta or not consulta.strip():
         return "Por favor, informe sua consulta."
 
-    contexto_memoria = None
-
-    # 0. NOVO: Classificar tipo de mensagem e reconstruir consulta com contexto
-    from .conversation_context import (
-        ConversationContextManager,
-        classificar_e_reconstruir
-    )
-
-    tipo_mensagem = 'NOVA_CONSULTA'
-    consulta_reconstruida = consulta
-    entidades_contexto = {}
-
+    # 1. NOVO v3.5.1: Obter ESTADO ESTRUTURADO (JSON) - PILAR 3
+    contexto_estruturado = ""
     if usuario_id:
-        tipo_mensagem, consulta_reconstruida, entidades_contexto, metadados_ctx = \
-            classificar_e_reconstruir(consulta, usuario_id)
+        from .structured_state import obter_estado_json
+        contexto_estruturado = obter_estado_json(usuario_id)
+        if contexto_estruturado:
+            logger.debug(f"[ORCHESTRATOR] Estado estruturado: {len(contexto_estruturado)} chars")
 
-        logger.info(f"[ORCHESTRATOR] Tipo mensagem: {tipo_mensagem}")
+    # 1.1 NOVO v3.5.2: Carregar aprendizados UMA VEZ (cache da requisição)
+    conhecimento_negocio = _carregar_conhecimento_negocio(usuario_id)
+    if conhecimento_negocio:
+        logger.debug(f"[ORCHESTRATOR] Conhecimento carregado: {len(conhecimento_negocio)} chars")
 
-        if tipo_mensagem == 'MODIFICACAO':
-            # Para modificações, usa consulta reconstruída
-            logger.info(f"[ORCHESTRATOR] Consulta reconstruída: {consulta_reconstruida[:100]}...")
-
-    # 1. Buscar contexto de memória
-    if usuario_id:
-        contexto_memoria = _buscar_memoria(usuario_id)
-        # Adiciona contexto conversacional
-        ctx_conversa = ConversationContextManager.formatar_contexto_para_prompt(usuario_id)
-        if ctx_conversa:
-            contexto_memoria = f"{ctx_conversa}\n\n{contexto_memoria}" if contexto_memoria else ctx_conversa
-
-    # 2. Verificar comando de aprendizado
+    # 2. Verificar comando de aprendizado (antes de tudo)
     if usuario_id:
         resultado_aprendizado = _verificar_aprendizado(consulta, usuario_id, usuario)
         if resultado_aprendizado:
             _registrar_conversa(usuario_id, consulta, resultado_aprendizado, None, None)
             return resultado_aprendizado
 
-    # 3. Classificar intenção (usa consulta reconstruída para melhor classificação)
-    # IMPORTANTE: Passa usuario_id para que o classificador use os aprendizados personalizados
-    from .classifier import get_classifier
-    classifier = get_classifier()
-    intencao = classifier.classificar(consulta_reconstruida, contexto_memoria, usuario_id=usuario_id)
-
-    # 3.0.1 Merge entidades do contexto com entidades detectadas
-    if entidades_contexto:
-        entidades_intencao = intencao.get('entidades', {})
-        for k, v in entidades_contexto.items():
-            if v and not entidades_intencao.get(k):
-                entidades_intencao[k] = v
-        intencao['entidades'] = entidades_intencao
-
-    confianca = intencao.get("confianca", 0.0)
-
-    # 3.1 Se confiança baixa, re-classificar com contexto do README
-    if confianca < 0.7:
-        intencao = _reclassificar_com_readme(classifier, consulta, contexto_memoria, intencao, usuario_id)
+    # 3. EXTRAÇÃO INTELIGENTE - Delega ao Claude com CONTEXTO ESTRUTURADO
+    if USAR_EXTRATOR_INTELIGENTE:
+        intencao = _extrair_inteligente(consulta, contexto_estruturado, conhecimento_negocio)
+    else:
+        # Fallback: usa classificador antigo (contexto texto)
+        from .conversation_context import ConversationContextManager
+        contexto_texto = ConversationContextManager.formatar_contexto_para_prompt(usuario_id) if usuario_id else ""
+        intencao = _classificar_legado(consulta, contexto_texto, usuario_id)
 
     dominio = intencao.get("dominio", "geral")
     intencao_tipo = intencao.get("intencao", "")
     entidades = intencao.get("entidades", {})
 
-    # 3.2 Mapear entidades para nomes de campos esperados pelas capacidades
-    entidades = _mapear_entidades_para_campos(entidades)
+    logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}, "
+               f"entidades={list(entidades.keys())}")
 
-    # 3.3 NOVO: Extrair condições compostas ("sem agendamento", "atrasados", etc)
-    from .composite_extractor import enriquecer_entidades
-    entidades, filtros_compostos = enriquecer_entidades(consulta_reconstruida, entidades)
-    if filtros_compostos:
-        entidades['_filtros_compostos'] = filtros_compostos
-        logger.info(f"[ORCHESTRATOR] {len(filtros_compostos)} condições compostas detectadas")
+    # 3.1 NOVO v3.5.2: Atualiza estado estruturado com entidades extraídas
+    if usuario_id and entidades:
+        from .structured_state import EstadoManager
+        EstadoManager.atualizar_do_extrator(usuario_id, entidades)
+        logger.debug(f"[ORCHESTRATOR] Estado estruturado atualizado com {len(entidades)} entidades")
 
-    intencao['entidades'] = entidades
+    # 3.2 Buscar contexto de memória para follow-up e responder
+    contexto_memoria = None
+    if usuario_id:
+        contexto_memoria = _buscar_memoria(usuario_id)
 
-    logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}")
+    # 3.5 NOVO: Tratamento de clarificação (ambiguidade detectada)
+    if dominio == "clarificacao":
+        resposta = _processar_clarificacao(intencao, usuario_id)
+        _registrar_conversa(usuario_id, consulta, resposta, intencao, None)
+        return resposta
 
     # 4. Tratamento de follow-up
     if dominio == "follow_up" or intencao_tipo in ("follow_up", "detalhar"):
@@ -132,8 +117,8 @@ def processar_consulta(
     capacidade = find_capability(intencao_tipo, entidades)
 
     if not capacidade:
-        # Tenta loaders aprendidos ou auto-gera em tempo real
-        resposta = _tratar_sem_capacidade(consulta, intencao, usuario_id, usuario)
+        # Tenta loaders aprendidos ou auto-gera em tempo real (com conhecimento cacheado)
+        resposta = _tratar_sem_capacidade(consulta, intencao, usuario_id, usuario, conhecimento_negocio)
         _registrar_conversa(usuario_id, consulta, resposta, intencao, None)
         return resposta
 
@@ -141,7 +126,7 @@ def processar_consulta(
     campo, valor = capacidade.extrair_valor_busca(entidades)
     if not campo or not valor:
         # Tenta auto-loader primeiro (pode ser pergunta complexa como "sem agendamento")
-        resposta = _tratar_sem_criterio(consulta, intencao, usuario_id, usuario)
+        resposta = _tratar_sem_criterio(consulta, intencao, usuario_id, usuario, conhecimento_negocio)
         _registrar_conversa(usuario_id, consulta, resposta, intencao, None)
         return resposta
 
@@ -174,7 +159,11 @@ def processar_consulta(
     if usar_claude_resposta:
         from .responder import get_responder
         responder = get_responder()
-        resposta = responder.gerar_resposta(consulta, contexto_dados, dominio, contexto_memoria)
+        # NOVO v3.5.2: Passa estado estruturado para responder (PILAR 3)
+        resposta = responder.gerar_resposta(
+            consulta, contexto_dados, dominio, contexto_memoria,
+            estado_estruturado=contexto_estruturado
+        )
     else:
         resposta = contexto_dados
 
@@ -203,14 +192,135 @@ def processar_consulta(
     return resposta
 
 
-def _buscar_memoria(usuario_id: int) -> Optional[str]:
-    """Busca contexto de memória do usuário."""
+def _buscar_memoria(usuario_id: int, incluir_aprendizados: bool = False) -> Optional[str]:
+    """
+    Busca contexto de memória do usuário (histórico de conversas).
+
+    Args:
+        usuario_id: ID do usuário
+        incluir_aprendizados: Se True, inclui aprendizados (default: False para evitar duplicação)
+                              Os aprendizados já são carregados no início via _carregar_conhecimento_negocio
+
+    Returns:
+        String com histórico formatado
+    """
     try:
         from ..memory import MemoryService
-        return MemoryService.formatar_contexto_memoria(usuario_id)
+        return MemoryService.formatar_contexto_memoria(usuario_id, incluir_aprendizados=incluir_aprendizados)
     except Exception as e:
         logger.warning(f"Erro ao buscar memória: {e}")
         return None
+
+
+def _extrair_inteligente(consulta: str, contexto_estruturado: str, conhecimento_negocio: str = None) -> Dict[str, Any]:
+    """
+    NOVO v3.5.2: Usa extrator inteligente com CONTEXTO ESTRUTURADO (PILAR 3).
+
+    O Claude recebe:
+    - Mensagem do usuário
+    - Estado ESTRUTURADO em JSON (rascunho, entidades, opções)
+    - Conhecimento do negócio (já carregado - cache)
+
+    O Claude tem LIBERDADE TOTAL para:
+    - Extrair qualquer entidade que encontrar
+    - Inferir intenções de forma natural
+    - Calcular datas (dia 27/11 -> 2025-11-27)
+    - Usar contexto estruturado para resolver referências
+
+    Args:
+        consulta: Texto do usuário
+        contexto_estruturado: JSON estruturado do estado da conversa
+        conhecimento_negocio: Aprendizados já carregados (cache da requisição)
+
+    Returns:
+        Dict no formato esperado pelo sistema (dominio, intencao, entidades)
+    """
+    try:
+        from .intelligent_extractor import extrair_inteligente
+        from .entity_mapper import mapear_extracao
+
+        # Extrai com Claude usando CONTEXTO ESTRUTURADO + conhecimento cacheado
+        extracao = extrair_inteligente(consulta, contexto_estruturado, conhecimento_negocio)
+
+        # Mapeia para formato do sistema (sem restringir)
+        resultado = mapear_extracao(extracao)
+
+        logger.info(f"[ORCHESTRATOR] Extração inteligente: {resultado.get('intencao')} "
+                   f"com {len(resultado.get('entidades', {}))} entidades")
+
+        return resultado
+
+    except Exception as e:
+        logger.error(f"[ORCHESTRATOR] Erro na extração inteligente: {e}")
+        # Fallback para classificador legado
+        return _classificar_legado(consulta, contexto_estruturado, None)
+
+
+def _classificar_legado(consulta: str, contexto_memoria: str, usuario_id: int) -> Dict[str, Any]:
+    """
+    Classificador legado (sistema antigo).
+
+    Mantido para rollback caso o novo extrator tenha problemas.
+    """
+    from .classifier import get_classifier
+    from .conversation_context import classificar_e_reconstruir
+
+    # Reconstruir consulta com contexto
+    if usuario_id:
+        tipo_mensagem, consulta_reconstruida, entidades_contexto, _ = \
+            classificar_e_reconstruir(consulta, usuario_id)
+    else:
+        consulta_reconstruida = consulta
+        entidades_contexto = {}
+
+    # Classificar com sistema antigo
+    classifier = get_classifier()
+    intencao = classifier.classificar(consulta_reconstruida, contexto_memoria, usuario_id=usuario_id)
+
+    # Merge entidades do contexto
+    if entidades_contexto:
+        entidades_intencao = intencao.get('entidades', {})
+        for k, v in entidades_contexto.items():
+            if v and not entidades_intencao.get(k):
+                entidades_intencao[k] = v
+        intencao['entidades'] = entidades_intencao
+
+    # Re-classificar se confiança baixa
+    confianca = intencao.get("confianca", 0.0)
+    if confianca < 0.7:
+        intencao = _reclassificar_com_readme(
+            classifier, consulta, contexto_memoria, intencao, usuario_id
+        )
+
+    # Mapear e enriquecer entidades
+    entidades = intencao.get("entidades", {})
+    entidades = _mapear_entidades_para_campos(entidades)
+
+    from .composite_extractor import enriquecer_entidades
+    entidades, filtros_compostos = enriquecer_entidades(consulta_reconstruida, entidades)
+    if filtros_compostos:
+        entidades['_filtros_compostos'] = filtros_compostos
+
+    intencao['entidades'] = entidades
+
+    return intencao
+
+
+def _carregar_conhecimento_negocio(usuario_id: int = None) -> str:
+    """
+    Carrega conhecimento do negócio (aprendizados) para o extrator.
+
+    Args:
+        usuario_id: ID do usuário para aprendizados personalizados
+
+    Returns:
+        String com conhecimento formatado
+    """
+    try:
+        from ..prompts.intent_prompt import _carregar_aprendizados_usuario
+        return _carregar_aprendizados_usuario(usuario_id)
+    except Exception:
+        return ""
 
 
 def _mapear_entidades_para_campos(entidades: Dict) -> Dict:
@@ -313,6 +423,47 @@ def _verificar_aprendizado(consulta: str, usuario_id: int, usuario: str) -> Opti
         return None
 
 
+def _processar_clarificacao(intencao: Dict, usuario_id: int) -> str:
+    """
+    Processa situações onde o Claude detectou ambiguidade.
+
+    O Claude identificou que a mensagem do usuário pode ter múltiplas
+    interpretações. Retorna uma pergunta clara para esclarecer.
+    """
+    ambiguidade = intencao.get('ambiguidade', {})
+    entidades = intencao.get('entidades', {})
+
+    pergunta = ambiguidade.get('pergunta', 'Poderia esclarecer sua solicitação?')
+    opcoes = ambiguidade.get('opcoes', [])
+
+    # Formata resposta amigável
+    resposta = f"🤔 **Preciso de uma clarificação:**\n\n{pergunta}"
+
+    if opcoes:
+        resposta += "\n\n**Opções:**"
+        for i, opcao in enumerate(opcoes, 1):
+            resposta += f"\n{i}. {opcao}"
+
+    # Se temos entidades parciais, mostramos o que já entendemos
+    if entidades:
+        resposta += "\n\n📋 **O que já entendi:**"
+        for chave, valor in list(entidades.items())[:5]:  # Limita a 5
+            if not chave.startswith('_'):
+                resposta += f"\n- {chave}: {valor}"
+
+    # Atualiza contexto para lembrar que estamos aguardando clarificação
+    if usuario_id:
+        from .conversation_context import ConversationContextManager
+        ConversationContextManager.atualizar_estado(
+            usuario_id=usuario_id,
+            aguardando_confirmacao=True,
+            acao_pendente='clarificacao'
+        )
+
+    logger.info(f"[ORCHESTRATOR] Solicitando clarificação: {pergunta}")
+    return resposta
+
+
 def _processar_follow_up(consulta: str, contexto_memoria: str, usuario_id: int) -> str:
     """Processa perguntas de follow-up."""
     from ..memory import MemoryService
@@ -394,20 +545,25 @@ def _registrar_conversa(usuario_id: int, consulta: str, resposta: str, intencao:
         logger.warning(f"Erro ao registrar conversa: {e}")
 
 
-def _tratar_sem_capacidade(consulta: str, intencao: dict, usuario_id: int, usuario: str = "sistema") -> str:
+def _tratar_sem_capacidade(
+    consulta: str, intencao: dict, usuario_id: int, usuario: str = "sistema",
+    conhecimento_negocio: str = None
+) -> str:
     """
     Trata caso sem capacidade:
     1. Primeiro, tenta usar loader aprendido existente
     2. Se nao existir, tenta auto-gerar loader em tempo real
     3. Se falhar, gera sugestoes e loga
+
+    NOVO v3.5.2: Aceita conhecimento_negocio para evitar recarregar.
     """
     # 1. Tenta usar loader aprendido existente
     resposta_loader = _tentar_loader_aprendido(consulta, intencao)
     if resposta_loader:
         return resposta_loader
 
-    # 2. Tenta auto-gerar loader em tempo real
-    resposta_auto = _tentar_auto_gerar_loader(consulta, intencao, usuario_id, usuario)
+    # 2. Tenta auto-gerar loader em tempo real (com conhecimento cacheado)
+    resposta_auto = _tentar_auto_gerar_loader(consulta, intencao, usuario_id, usuario, conhecimento_negocio)
     if resposta_auto:
         return resposta_auto
 
@@ -476,10 +632,15 @@ def _tentar_loader_aprendido(consulta: str, intencao: dict) -> Optional[str]:
     return None
 
 
-def _tentar_auto_gerar_loader(consulta: str, intencao: dict, usuario_id: int, usuario: str) -> Optional[str]:
+def _tentar_auto_gerar_loader(
+    consulta: str, intencao: dict, usuario_id: int, usuario: str,
+    conhecimento_negocio: str = None
+) -> Optional[str]:
     """
     Tenta auto-gerar um loader em tempo real.
     Loader fica pendente de revisao, mas resposta eh retornada imediatamente.
+
+    NOVO v3.5.2: Aceita conhecimento_negocio para evitar recarregar.
     """
     try:
         logger.info(f"[ORCHESTRATOR] Tentando auto-gerar loader para: {consulta[:50]}...")
@@ -490,7 +651,8 @@ def _tentar_auto_gerar_loader(consulta: str, intencao: dict, usuario_id: int, us
             consulta=consulta,
             intencao=intencao,
             usuario_id=usuario_id,
-            usuario=usuario
+            usuario=usuario,
+            conhecimento_negocio=conhecimento_negocio  # NOVO: passa conhecimento cacheado
         )
 
         logger.info(f"[ORCHESTRATOR] Resultado auto-loader: sucesso={resultado.get('sucesso')}, "
@@ -537,14 +699,19 @@ def _formatar_resposta_loader(resultado: dict, descricao: str = None) -> str:
     return "\n".join(linhas)
 
 
-def _tratar_sem_criterio(consulta: str, intencao: dict, usuario_id: int, usuario: str = "sistema") -> str:
+def _tratar_sem_criterio(
+    consulta: str, intencao: dict, usuario_id: int, usuario: str = "sistema",
+    conhecimento_negocio: str = None
+) -> str:
     """
     Trata caso sem critério de busca:
     1. Primeiro tenta auto-gerar loader (pode ser pergunta complexa)
     2. Se falhar, gera sugestões e loga.
+
+    NOVO v3.5.2: Aceita conhecimento_negocio para evitar recarregar.
     """
     # 1. Tenta auto-gerar loader (perguntas complexas como "sem agendamento")
-    resposta_auto = _tentar_auto_gerar_loader(consulta, intencao, usuario_id, usuario)
+    resposta_auto = _tentar_auto_gerar_loader(consulta, intencao, usuario_id, usuario, conhecimento_negocio)
     if resposta_auto:
         return resposta_auto
 

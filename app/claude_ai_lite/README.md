@@ -5,8 +5,43 @@
 Modulo de IA conversacional para o sistema de fretes, permitindo consultas em linguagem natural sobre pedidos, produtos e criacao de separacoes.
 
 **Criado em:** Novembro/2025
-**Ultima atualizacao:** 24/11/2025
-**Versao:** 3.4.1 (Correção de Extração de Datas)
+**Ultima atualizacao:** 25/11/2025
+**Versao:** 3.5.2 (PILAR 3 - Estado Estruturado + Otimizações)
+
+### Novidades v3.5.2 (Estado Estruturado - PILAR 3)
+
+#### 🔴 MUDANÇAS ARQUITETURAIS
+- ✅ **Estado Estruturado (PILAR 3)**: Claude recebe JSON estruturado ao invés de texto livre
+- ✅ **Integração Extração → Estado**: Entidades extraídas atualizam o estado automaticamente
+- ✅ **Cache de Aprendizados**: Carregado UMA VEZ por requisição (não 3x)
+- ✅ **Estado no Responder**: Claude que gera resposta recebe JSON do estado atual
+- ✅ **ConversationContext v5**: Reescrito para delegar 100% ao EstadoManager (~150 linhas vs 450)
+- ✅ **Conhecimento no AutoLoader**: CodeGenerator recebe aprendizados de negócio
+
+#### 📦 NOVOS COMPONENTES
+- `structured_state.py` - Estado estruturado com JSON para Claude
+  - `EstadoManager` - Gerencia estado por usuário
+  - `ENTIDADES` com metadata (valor + fonte)
+  - `REFERENCIA` (this pointer) para "esse pedido"
+  - `prioridade_fonte` em CONSTRAINTS
+  - `TEMP` para variáveis temporárias
+  - `item_focado` em SEPARACAO
+
+#### 🔄 FLUXO ATUALIZADO
+```
+1. Carrega estado estruturado (JSON)
+2. Carrega conhecimento_negocio UMA VEZ ← NOVO
+3. Extração inteligente (com contexto + conhecimento)
+4. Atualiza estado com entidades ← NOVO
+5. Busca memória (SEM aprendizados - já cacheados) ← NOVO
+6. Gera resposta (com estado estruturado) ← NOVO
+7. Se sem capacidade → auto_loader (com conhecimento) ← NOVO
+```
+
+### Novidades v3.5.1
+- ✅ **Extrator Inteligente**: Delega 100% da extração para Claude
+- ✅ **Contexto Estruturado**: JSON ao invés de texto livre
+- ✅ **Entity Mapper**: Traduz campos do Claude para campos do sistema
 
 ### Novidades v3.4.1
 - ✅ **Extração de Datas Específicas**: "dia 27/11", "pro dia 27/11" agora funciona para separações
@@ -22,42 +57,46 @@ Modulo de IA conversacional para o sistema de fretes, permitindo consultas em li
 
 ---
 
-## 🗺️ MAPA MESTRE - Fluxo de Execução Real
+## 🗺️ MAPA MESTRE - Fluxo de Execução Real (v3.5.2)
 
 Este é o fluxo **EXATO** de execução, na ordem em que acontece no código:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        FLUXO COMPLETO DE EXECUÇÃO                           │
-│                        (orchestrator.py linha a linha)                      │
+│                   FLUXO COMPLETO DE EXECUÇÃO v3.5.2                          │
+│              (orchestrator.py - PILAR 3: Estado Estruturado)                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ENTRADA: processar_consulta(consulta, usuario_id)
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 0: CONTEXTO CONVERSACIONAL                                             │
-│ Arquivo: core/conversation_context.py                                        │
-│ Função: classificar_e_reconstruir()                                          │
+│ ETAPA 1: OBTER ESTADO ESTRUTURADO (NOVO PILAR 3)                             │
+│ Arquivo: core/structured_state.py → obter_estado_json()                      │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Entrada: texto do usuário, usuario_id                                      │
-│ ✔ Saída: tipo_mensagem, consulta_reconstruida, entidades_contexto            │
-│ ✔ Depende de: _estados_conversa (cache em memória)                           │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ O que faz:                                                                   │
-│ - Detecta se é NOVA_CONSULTA, CONTINUACAO, MODIFICACAO, ACAO, DETALHAMENTO   │
-│ - Se MODIFICACAO: "Refaça com nome_produto" + pergunta anterior              │
-│ - Se CONTINUACAO: "esse pedido" → busca num_pedido do contexto               │
+│ ✔ Entrada: usuario_id                                                        │
+│ ✔ Saída: JSON estruturado com estado completo da conversa                    │
+│ ✔ Estrutura:                                                                 │
+│   {                                                                          │
+│     "DIALOGO": {estado, contexto_pergunta_atual, dominios_validos},          │
+│     "ENTIDADES": {campo: {valor, fonte}},  // com metadados                  │
+│     "REFERENCIA": {pedido, cliente, item_idx},  // this pointer              │
+│     "SEPARACAO": {rascunho + item_focado},                                   │
+│     "CONSULTA": {ultima consulta + itens},                                   │
+│     "OPCOES": {se aguardando escolha A/B/C},                                 │
+│     "TEMP": {variaveis temporarias},                                         │
+│     "CONSTRAINTS": {campos_validos, prioridade_fonte}                        │
+│   }                                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 1: BUSCAR MEMÓRIA                                                      │
-│ Arquivo: memory.py → MemoryService.formatar_contexto_memoria()               │
+│ ETAPA 1.1: CARREGAR CONHECIMENTO DE NEGÓCIO (UMA VEZ)                        │
+│ Arquivo: orchestrator.py → _carregar_conhecimento_negocio()                  │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Entrada: usuario_id                                                        │
-│ ✔ Saída: contexto_memoria (string com histórico + aprendizados)              │
-│ ✔ Depende de: ClaudeHistoricoConversa, ClaudeAprendizado (banco)             │
+│ ✔ Carrega ClaudeAprendizado do usuário + globais                             │
+│ ✔ CACHE: Carregado UMA vez por requisição (não 3x como antes)                │
+│ ✔ Usado em: Extrator Inteligente, AutoLoader, CodeGenerator                  │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
@@ -67,87 +106,88 @@ ENTRADA: processar_consulta(consulta, usuario_id)
 │ ─────────────────────────────────────────────────────────────────────────────│
 │ ✔ Entrada: consulta, usuario_id                                              │
 │ ✔ Saída: resultado_aprendizado (ou None se não for comando)                  │
-│ ✔ Depende de: ClaudeAprendizado (banco)                                      │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ Se for "Lembre que...", "Esqueça que..." → processa e RETORNA AQUI           │
+│ ✔ Se "Lembre que...", "Esqueça que..." → processa e RETORNA                  │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 3: CLASSIFICAR INTENÇÃO                                                │
-│ Arquivo: core/classifier.py → IntentClassifier.classificar()                 │
+│ ETAPA 3: EXTRAÇÃO INTELIGENTE (NOVO v3.5.1 - PILAR 3)                        │
+│ Arquivo: core/intelligent_extractor.py → extrair_inteligente()               │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Entrada: consulta_reconstruida, contexto_memoria, usuario_id               │
-│ ✔ Saída: {dominio, intencao, entidades, confianca}                           │
-│ ✔ Depende de: intent_prompt.py, claude_client.py, ClaudeAprendizado,         │
-│              CodigoSistemaGerado (prompts/conceitos/entidades)               │
+│ ✔ Entrada: texto, contexto_estruturado (JSON), conhecimento_negocio          │
+│ ✔ Saída: {intencao, tipo, entidades, ambiguidade, confianca}                 │
+│ ✔ DELEGA 100% ao Claude - extração livre sem regras rígidas                  │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ 1. Gera prompt dinâmico via gerar_prompt_classificacao()                     │
-│    - Carrega ClaudeAprendizado do usuário (caderno de dicas)                 │
-│    - Carrega CodigoSistemaGerado ativos (prompts, conceitos, entidades)      │
-│ 2. Chama Claude API para classificar                                         │
-│ 3. Retorna JSON com dominio, intencao, entidades, confianca                  │
-└──────────────────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼ (se confiança < 0.7)
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 3.1: RE-CLASSIFICAR COM README (opcional)                              │
-│ Arquivo: core/orchestrator.py → _reclassificar_com_readme()                  │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Depende de: cache.py → carregar_readme_contexto()                          │
-│ Se nova confiança > original: usa nova classificação                         │
+│ FILOSOFIA:                                                                   │
+│ - Claude recebe JSON estruturado, não texto livre                            │
+│ - Elimina ambiguidade (sabe se tem rascunho, entidades anteriores)           │
+│ - Pode extrair QUALQUER entidade que encontrar                               │
+│ - Calcula datas automaticamente ("dia 27/11" → 2025-11-27)                   │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 3.2: MAPEAR ENTIDADES                                                  │
-│ Arquivo: core/orchestrator.py → _mapear_entidades_para_campos()              │
+│ ETAPA 3.1: MAPEAR ENTIDADES (NOVO v3.5.1)                                    │
+│ Arquivo: core/entity_mapper.py → mapear_extracao()                           │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Entrada: entidades do classificador                                        │
-│ ✔ Saída: entidades mapeadas para nomes de campos do banco                    │
+│ ✔ Entrada: extração livre do Claude                                          │
+│ ✔ Saída: {dominio, intencao, entidades} no formato do sistema                │
+│ ✔ TRADUTOR, não filtro - preserva tudo que Claude extraiu                    │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ "cliente" → "raz_social_red" | "cnpj" → "cnpj_cpf" | etc (17 mapeamentos)    │
+│ Mapeamentos:                                                                 │
+│ - "cliente" → "raz_social_red"                                               │
+│ - "data_expedicao", "data_nova", "data" → "expedicao"                        │
+│ - "pedido" → "num_pedido"                                                    │
+│ - etc (40+ mapeamentos)                                                      │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 3.3: EXTRAIR CONDIÇÕES COMPOSTAS (v3.4)                                │
-│ Arquivo: core/composite_extractor.py → enriquecer_entidades()                │
+│ ETAPA 3.2: ATUALIZAR ESTADO COM ENTIDADES (NOVO v3.5.2)                      │
+│ Arquivo: core/structured_state.py → EstadoManager.atualizar_do_extrator()    │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Entrada: consulta, entidades mapeadas                                      │
-│ ✔ Saída: entidades + _filtros_compostos                                      │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ "sem agendamento" → {campo: agendamento, operador: is_null}                  │
-│ "atrasados" → {campo: expedicao, operador: <, valor: hoje}                   │
+│ ✔ Integra entidades extraídas no estado estruturado                          │
+│ ✔ Respeita prioridade de fontes (usuario > rascunho > extrator)              │
+│ ✔ Atualiza REFERENCIA automaticamente ("esse pedido" aponta correto)         │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 4: TRATAMENTO ESPECIAL                                                 │
+│ ETAPA 3.3: TRATAR CLARIFICAÇÃO (se ambiguidade detectada)                    │
+│ Arquivo: orchestrator.py → _processar_clarificacao()                         │
 │ ─────────────────────────────────────────────────────────────────────────────│
+│ ✔ Se Claude detectou ambiguidade → retorna pergunta para esclarecer          │
+│ ✔ Não inventa resposta quando não tem certeza                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ETAPA 4: BUSCAR MEMÓRIA (SEM aprendizados - já cacheados)                    │
+│ Arquivo: memory.py → MemoryService.formatar_contexto_memoria()               │
+│ ─────────────────────────────────────────────────────────────────────────────│
+│ ✔ Entrada: usuario_id, incluir_aprendizados=False                            │
+│ ✔ Saída: histórico de conversas (sem duplicar aprendizados)                  │
+│ ✔ OTIMIZAÇÃO: Aprendizados já carregados na etapa 1.1                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ETAPA 5: TRATAMENTO ESPECIAL                                                 │
+│ ─────────────────────────────────────────────────────────────────────────────│
+│ Se dominio == "clarificacao": → _processar_clarificacao() → RETORNA          │
 │ Se dominio == "follow_up": → _processar_follow_up() → RETORNA                │
 │ Se dominio == "acao": → _processar_acao() → RETORNA                          │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 5: ENCONTRAR CAPACIDADE                                                │
+│ ETAPA 6: ENCONTRAR CAPACIDADE                                                │
 │ Arquivo: capabilities/__init__.py → find_capability()                        │
 │ ─────────────────────────────────────────────────────────────────────────────│
 │ ✔ Entrada: intencao_tipo, entidades                                          │
 │ ✔ Saída: instância de BaseCapability (ou None)                               │
-│ ✔ Depende de: _capabilities_registry (auto-preenchido no import)             │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ Se não encontrou: → _tratar_sem_capacidade() (tenta loader aprendido)        │
-└──────────────────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 6: EXTRAIR CRITÉRIO + BUSCAR FILTROS                                   │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ 1. capacidade.extrair_valor_busca() → (campo, valor)                         │
-│ 2. _buscar_filtros_aprendidos() → filtros do IA Trainer                      │
-│ 3. Combina filtros aprendidos + filtros compostos                            │
+│ Se não encontrou → AutoLoader (com conhecimento_negocio)                     │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
@@ -157,37 +197,25 @@ ENTRADA: processar_consulta(consulta, usuario_id)
 │ ─────────────────────────────────────────────────────────────────────────────│
 │ ✔ Entrada: entidades, contexto (com filtros_aprendidos)                      │
 │ ✔ Saída: {sucesso, dados, total_encontrado, ...}                             │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ Capacidade aplica filtros via aplicar_filtros_aprendidos()                   │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 8: FORMATAR + GERAR RESPOSTA                                           │
+│ ETAPA 8: GERAR RESPOSTA (COM estado estruturado)                             │
+│ Arquivo: core/responder.py → gerar_resposta()                                │
 │ ─────────────────────────────────────────────────────────────────────────────│
-│ 1. capacidade.formatar_contexto() → string de dados                          │
-│ 2. _enriquecer_com_conceitos() → adiciona conceitos aprendidos               │
-│ 3. responder.gerar_resposta() → Claude elabora resposta                      │
+│ ✔ NOVO v3.5.2: Recebe estado_estruturado como parâmetro                      │
+│ ✔ Claude que gera resposta SABE o contexto exato da conversa                 │
+│ ✔ Self-Consistency Check (ResponseReviewer) valida antes de enviar           │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 9: REVISAR RESPOSTA (v3.4)                                             │
-│ Arquivo: core/response_reviewer.py → revisar_resposta()                      │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ ✔ Entrada: pergunta, resposta_gerada, contexto_dados                         │
-│ ✔ Saída: resposta (revisada ou original)                                     │
-│ ─────────────────────────────────────────────────────────────────────────────│
-│ Verifica: números inventados, campos incorretos, contradições                │
-└──────────────────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ETAPA 10: REGISTRAR NA MEMÓRIA                                               │
+│ ETAPA 9: REGISTRAR NA MEMÓRIA + ATUALIZAR ESTADO                             │
 │ ─────────────────────────────────────────────────────────────────────────────│
 │ 1. Salva no histórico (ClaudeHistoricoConversa)                              │
-│ 2. Atualiza contexto conversacional                                          │
-│ 3. Registra itens numerados para referência futura                           │
+│ 2. Atualiza estado estruturado com resultado                                 │
+│ 3. Define REFERENCIA para próxima interação                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
@@ -198,16 +226,19 @@ ENTRADA: processar_consulta(consulta, usuario_id)
 
 ## 📦 CAIXAS PRETAS - Cada Módulo em 3 Linhas
 
-### Core (Núcleo)
+### Core (Núcleo) - v3.5.2
 
 | Módulo | Entrada | Saída | Depende de |
 |--------|---------|-------|------------|
 | **orchestrator.py** | texto, usuario_id | resposta (string) | TODOS os outros |
-| **classifier.py** | texto, contexto, usuario_id | {dominio, intencao, entidades, confianca} | intent_prompt, claude_client |
-| **responder.py** | pergunta, contexto_dados | resposta elaborada | system_base, claude_client, response_reviewer |
+| **intelligent_extractor.py** 🆕 | texto, contexto_json, conhecimento | {intencao, tipo, entidades, ambiguidade} | claude_client |
+| **entity_mapper.py** 🆕 | extração livre do Claude | {dominio, intencao, entidades} | MAPEAMENTO_CAMPOS, MAPEAMENTO_INTENCOES |
+| **structured_state.py** 🆕 | usuario_id | JSON estruturado da conversa | EstadoManager, RascunhoService |
+| **classifier.py** | texto, contexto, usuario_id | {dominio, intencao, entidades, confianca} | intent_prompt, claude_client (FALLBACK) |
+| **responder.py** | pergunta, dados, estado_json | resposta elaborada | system_base, claude_client, response_reviewer |
 | **response_reviewer.py** | pergunta, resposta, contexto | resposta revisada | CAMPOS_ERRADOS, claude_client |
 | **composite_extractor.py** | texto, entidades | entidades + filtros | PADROES_CONDICOES (regex) |
-| **conversation_context.py** | texto, usuario_id | tipo_msg, entidades_ctx | _estados_conversa (memória) |
+| **conversation_context.py** | texto, usuario_id | funções de regex | EstadoManager (delega 100%) |
 | **suggester.py** | consulta, intencao | sugestões de perguntas | TEMPLATES_SUGESTOES |
 | **feedback_loop.py** | dias | análise de gaps | ClaudePerguntaNaoRespondida |
 
@@ -220,33 +251,54 @@ ENTRADA: processar_consulta(consulta, usuario_id)
 
 ---
 
-## 🔗 DEPENDÊNCIAS - Quem Precisa de Quem
+## 🔗 DEPENDÊNCIAS - Quem Precisa de Quem (v3.5.2)
 
 ```
 orchestrator.py
-├── conversation_context.py
-├── memory.py
+├── structured_state.py (NOVO - PILAR 3)
+│   ├── EstadoManager (gerencia estado JSON por usuário)
+│   ├── FonteEntidade (enum de fontes: usuario, rascunho, extrator, etc)
+│   └── actions/rascunho_separacao.py (sincroniza com RascunhoService)
+│
+├── intelligent_extractor.py (NOVO - substitui classifier para extração)
+│   ├── claude_client.py (delega 100% ao Claude)
+│   └── RECEBE: contexto_estruturado (JSON do structured_state)
+│
+├── entity_mapper.py (NOVO - traduz extração para campos do sistema)
+│   ├── MAPEAMENTO_CAMPOS (40+ mapeamentos de sinônimos)
+│   └── MAPEAMENTO_INTENCOES (intenção → domínio)
+│
+├── memory.py (histórico SEM aprendizados - já cacheados)
 │   └── models.py (ClaudeHistoricoConversa, ClaudeAprendizado)
+│
 ├── learning.py
 │   └── models.py (ClaudeAprendizado)
-├── classifier.py
+│
+├── classifier.py (FALLBACK - usado quando extrator desativado)
 │   ├── claude_client.py
 │   └── prompts/intent_prompt.py
-│       ├── capabilities/__init__.py (listar_dominios, listar_intencoes)
-│       ├── models.py (ClaudeAprendizado)
-│       └── ia_trainer/services/codigo_loader.py (prompts, conceitos, entidades)
-│           └── ia_trainer/models.py (CodigoSistemaGerado)
-├── composite_extractor.py (standalone - apenas regex)
+│
+├── composite_extractor.py (extrai condições compostas via regex)
+│
 ├── capabilities/__init__.py (find_capability)
 │   └── capabilities/*/
 │       ├── base.py
 │       ├── domains/carteira/loaders/
 │       └── domains/carteira/services/
-├── ia_trainer/services/codigo_loader.py (buscar_filtros_aprendidos)
+│
+├── ia_trainer/services/
+│   ├── auto_loader.py (NOVO - geração autônoma de loaders)
+│   │   └── RECEBE: conhecimento_negocio (aprendizados)
+│   ├── code_generator.py
+│   │   └── RECEBE: conhecimento_negocio (aprendizados)
+│   └── loader_executor.py
+│
 ├── responder.py
 │   ├── claude_client.py
 │   ├── prompts/system_base.py
-│   └── response_reviewer.py
+│   ├── response_reviewer.py
+│   └── RECEBE: estado_estruturado (JSON para Claude)
+│
 └── models.py (ClaudePerguntaNaoRespondida)
 ```
 
@@ -256,21 +308,25 @@ orchestrator.py
 
 | Se você quer... | Coloque em... | E modifique... |
 |-----------------|---------------|----------------|
-| Nova intenção reconhecida | prompts/intent_prompt.py | Adicione em REGRAS PARA INTENCAO |
+| Novo mapeamento de sinônimo | **entity_mapper.py** | Adicione em MAPEAMENTO_CAMPOS |
+| Nova intenção mapeada | **entity_mapper.py** | Adicione em MAPEAMENTO_INTENCOES |
 | Nova capacidade de consulta | capabilities/{dominio}/ | Crie classe herdando BaseCapability |
 | Novo filtro automático | composite_extractor.py | Adicione em PADROES_CONDICOES |
-| Novo mapeamento de entidade | orchestrator.py | Adicione em _mapear_entidades_para_campos |
+| Novo campo válido do sistema | **structured_state.py** | Adicione em CAMPOS_VALIDOS |
+| Nova fonte de entidade | **structured_state.py** | Adicione em FonteEntidade e PRIORIDADE_FONTES |
+| Novo estado de diálogo | **structured_state.py** | Adicione em EstadoDialogo |
 | Novo modelo no LoaderExecutor | ia_trainer/loader_executor.py | Adicione em MODELS_PERMITIDOS |
 | Nova validação de campo | response_reviewer.py | Adicione em CAMPOS_ERRADOS |
-| Novo padrão de conversa | conversation_context.py | Adicione em PADROES_* |
+| ~~Nova intenção reconhecida~~ | ~~prompts/intent_prompt.py~~ | ⚠️ OBSOLETO - Use entity_mapper.py |
+| ~~Novo mapeamento de entidade~~ | ~~orchestrator.py~~ | ⚠️ OBSOLETO - Use entity_mapper.py |
 
 ---
 
-## Arquitetura Visual Simplificada
+## Arquitetura Visual Simplificada (v3.5.2)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VISÃO DE ALTO NÍVEL                            │
+│                    VISÃO DE ALTO NÍVEL - PILAR 3                            │
 └─────────────────────────────────────────────────────────────────────────────┘
 
                          ┌─────────────────┐
@@ -280,36 +336,43 @@ orchestrator.py
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            ORCHESTRATOR                                      │
-│  ┌─────────┐  ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌──────────┐     │
-│  │ Context │→ │ Memory   │→ │ Classifier │→ │Composite │→ │Capability│     │
-│  │ Manager │  │ Service  │  │            │  │ Extractor│  │ Finder   │     │
-│  └─────────┘  └──────────┘  └──────────┬─┘  └──────────┘  └────┬─────┘     │
-│                                        │                        │           │
-│                              ┌─────────┴─────────┐              │           │
-│                              │   Intent Prompt   │              │           │
-│                              │  ┌─────────────┐  │              │           │
-│                              │  │Aprendizados │  │              │           │
-│                              │  │IA Trainer   │  │              │           │
-│                              │  └─────────────┘  │              │           │
-│                              └───────────────────┘              │           │
-│                                                                 │           │
-│  ┌──────────────────────────────────────────────────────────────┴───┐      │
-│  │                         CAPABILITIES                              │      │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │      │
-│  │  │ Consultar│  │ Analisar │  │ Consultar│  │  Criar   │         │      │
-│  │  │  Pedido  │  │Disponib. │  │ Estoque  │  │Separação │         │      │
-│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘         │      │
-│  │       │              │             │             │               │      │
-│  │       ▼              ▼             ▼             ▼               │      │
-│  │  ┌────────────────────────────────────────────────────────┐     │      │
-│  │  │               LOADERS / SERVICES                        │     │      │
-│  │  └────────────────────────────────────────────────────────┘     │      │
-│  └──────────────────────────────────────────────────────────────────┘      │
-│                                  │                                          │
-│                                  ▼                                          │
-│  ┌───────────────────────────────────────────────────────────────────┐     │
-│  │  Responder → Response Reviewer (v3.4) → Registro/Memória          │     │
-│  └───────────────────────────────────────────────────────────────────┘     │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────┐      │
+│  │               🆕 ESTADO ESTRUTURADO (PILAR 3)                      │      │
+│  │  ┌───────────────┐   ┌─────────────────┐   ┌───────────────┐      │      │
+│  │  │ structured_   │ → │ Conhecimento    │ → │ Estado JSON   │      │      │
+│  │  │ state.py      │   │ Negócio (cache) │   │ para Claude   │      │      │
+│  │  └───────────────┘   └─────────────────┘   └───────────────┘      │      │
+│  └───────────────────────────────────────────────────────────────────┘      │
+│                                  │                                           │
+│                                  ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐      │
+│  │               🆕 EXTRAÇÃO INTELIGENTE (substitui classifier)       │      │
+│  │  ┌─────────────────┐   ┌─────────────────┐   ┌───────────────┐    │      │
+│  │  │ intelligent_    │ → │ entity_         │ → │ Estado        │    │      │
+│  │  │ extractor.py    │   │ mapper.py       │   │ atualizado    │    │      │
+│  │  │ (delega Claude) │   │ (traduz campos) │   │               │    │      │
+│  │  └─────────────────┘   └─────────────────┘   └───────────────┘    │      │
+│  └───────────────────────────────────────────────────────────────────┘      │
+│                                  │                                           │
+│                                  ▼                                           │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │                         CAPABILITIES                              │       │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │       │
+│  │  │ Consultar│  │ Analisar │  │ Consultar│  │  Criar   │         │       │
+│  │  │  Pedido  │  │Disponib. │  │ Estoque  │  │Separação │         │       │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘         │       │
+│  │       └──────────────┴──────────────┴──────────────┘             │       │
+│  │                              │                                    │       │
+│  │  ┌───────────────────────────┴────────────────────────────┐      │       │
+│  │  │  Se não encontrou → 🆕 AutoLoader (c/ conhecimento)    │      │       │
+│  │  └────────────────────────────────────────────────────────┘      │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                  │                                           │
+│                                  ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐      │
+│  │  Responder (c/ estado JSON) → ResponseReviewer → Registro         │      │
+│  └───────────────────────────────────────────────────────────────────┘      │
 └─────────────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -318,7 +381,7 @@ orchestrator.py
 
 ---
 
-## Estrutura de Arquivos
+## Estrutura de Arquivos (v3.5.2)
 
 ```
 app/claude_ai_lite/
@@ -332,17 +395,24 @@ app/claude_ai_lite/
 |-- # CLIENTE CLAUDE
 |-- claude_client.py          # Cliente da API Anthropic Claude
 |
-|-- # NUCLEO (core/)
+|-- # NUCLEO (core/) - v3.5.2
 |-- core/
 |   |-- __init__.py           # Exporta processar_consulta
-|   |-- orchestrator.py       # Orquestra fluxo principal
-|   |-- classifier.py         # Classifica intencoes via Claude
-|   |-- responder.py          # Gera respostas elaboradas (c/ revisao)
+|   |-- orchestrator.py       # Orquestra fluxo principal (PILAR 3)
+|   |
+|   |-- # 🆕 NOVOS MÓDULOS v3.5.x (PILAR 3)
+|   |-- structured_state.py   # 🆕 Estado estruturado JSON por usuário
+|   |-- intelligent_extractor.py # 🆕 Extração via Claude (substitui classifier)
+|   |-- entity_mapper.py      # 🆕 Traduz entidades Claude → campos sistema
+|   |
+|   |-- # MÓDULOS EXISTENTES
+|   |-- classifier.py         # Classifica intencoes (FALLBACK)
+|   |-- responder.py          # Gera respostas (c/ estado JSON)
 |   |-- suggester.py          # Gera sugestoes quando nao responde
-|   |-- conversation_context.py # Contexto conversacional (itens numerados)
-|   |-- response_reviewer.py  # NOVO v3.4: Self-Consistency Check
-|   |-- composite_extractor.py # NOVO v3.4: Extrai condicoes compostas
-|   +-- feedback_loop.py      # NOVO v3.4: Analise de gaps automatica
+|   |-- conversation_context.py # Funções de regex (delega p/ EstadoManager)
+|   |-- response_reviewer.py  # Self-Consistency Check
+|   |-- composite_extractor.py # Extrai condicoes compostas via regex
+|   +-- feedback_loop.py      # Analise de gaps automatica
 |
 |-- # CAPACIDADES (capabilities/)
 |-- capabilities/
@@ -386,13 +456,13 @@ app/claude_ai_lite/
 |-- prompts/
 |   |-- __init__.py           # Exporta funcoes
 |   |-- system_base.py        # Prompt base do sistema
-|   +-- intent_prompt.py      # Prompt de classificacao (DINAMICO)
+|   +-- intent_prompt.py      # Prompt de classificacao (FALLBACK)
 |
 |-- # ACOES
 |-- actions/
 |   |-- __init__.py
 |   |-- separacao_actions.py  # Handlers de acoes de separacao
-|   +-- rascunho_separacao.py # Rascunhos de separacao
+|   +-- rascunho_separacao.py # Rascunhos de separacao (integrado c/ EstadoManager)
 |
 |-- # MEMORIA E APRENDIZADO (Sistema Dual)
 |-- models.py                 # ClaudeHistoricoConversa, ClaudeAprendizado, ClaudePerguntaNaoRespondida
@@ -412,7 +482,10 @@ app/claude_ai_lite/
         |-- codebase_reader.py # Le codigo-fonte do sistema
         |-- code_validator.py  # Valida seguranca do codigo
         |-- code_executor.py   # Executa codigo com timeout
-        |-- code_generator.py  # Gera codigo via Claude
+        |-- code_generator.py  # Gera codigo via Claude (c/ conhecimento_negocio)
+        |-- auto_loader.py     # 🆕 Geração autônoma de loaders em tempo real
+        |-- loader_executor.py # Executa loaders estruturados
+        |-- discussion_service.py # Debate e refinamento de código
         +-- trainer_service.py # Orquestra fluxo de ensino
 ```
 
@@ -857,6 +930,136 @@ class MinhaCapability(BaseCapability):
 
 ---
 
+## Novos Módulos v3.5.x - PILAR 3 (Estado Estruturado)
+
+### Estado Estruturado (structured_state.py) 🆕 v3.5.2
+
+O **coração** da nova arquitetura. Claude recebe JSON estruturado ao invés de texto livre.
+
+```python
+from app.claude_ai_lite.core.structured_state import (
+    EstadoManager, obter_estado_json, FonteEntidade,
+    EstadoDialogo, ContextoPergunta, CAMPOS_VALIDOS
+)
+
+# Obtém estado JSON para enviar ao Claude
+estado_json = obter_estado_json(usuario_id)
+# Retorna JSON estruturado:
+# {
+#   "DIALOGO": {"estado": "criando_rascunho", "contexto_pergunta_atual": "modificar_rascunho"},
+#   "ENTIDADES": {"num_pedido": {"valor": "VCD123", "fonte": "usuario"}},
+#   "REFERENCIA": {"pedido": "VCD123", "cliente": "ATACADAO"},  # this pointer
+#   "SEPARACAO": {"ativo": true, "num_pedido": "VCD123", "itens_exemplo": [...]},
+#   "OPCOES": {"motivo": "...", "lista": [...]},  # se aguardando A/B/C
+#   "TEMP": {"ultimo_numero": 5},  # variáveis temporárias
+#   "CONSTRAINTS": {"campos_validos": [...], "prioridade_fonte": [...]}
+# }
+
+# Atualizar entidade COM fonte rastreável
+EstadoManager.atualizar_entidade(
+    usuario_id,
+    campo="num_pedido",
+    valor="VCD123",
+    fonte=FonteEntidade.USUARIO.value  # usuario > rascunho > extrator > consulta > sistema
+)
+
+# Definir rascunho de separação (atualiza REFERENCIA automaticamente)
+EstadoManager.definir_separacao(usuario_id, {
+    "num_pedido": "VCD123",
+    "cliente": "ATACADAO",
+    "data_expedicao": "2025-11-27",
+    "itens": [...]
+})
+
+# Definir opções para escolha A/B/C
+EstadoManager.definir_opcoes(
+    usuario_id,
+    motivo="Escolha como quer enviar",
+    lista=[{"letra": "A", "descricao": "Envio total"}, ...],
+    esperado_do_usuario="Escolher A, B ou C"
+)
+
+# Fontes de entidade (prioridade decrescente):
+# FonteEntidade.USUARIO      # Usuário disse explicitamente
+# FonteEntidade.RASCUNHO     # Veio do rascunho de separação
+# FonteEntidade.EXTRATOR     # Claude extraiu da mensagem
+# FonteEntidade.CONSULTA     # Veio de resultado de consulta
+# FonteEntidade.SISTEMA      # Sistema inferiu
+```
+
+**Campos válidos do sistema** (SEMPRE usar estes nomes):
+- `num_pedido`, `cnpj_cpf`, `cod_produto`, `nome_produto`, `pedido_cliente`
+- `raz_social_red` (NÃO "cliente")
+- `qtd_saldo`, `valor_saldo` (NÃO "quantidade" ou "valor")
+- `expedicao`, `agendamento` (NÃO "data_expedicao")
+- `nome_cidade`, `cod_uf`, `rota`, `sub_rota`
+- `roteirizacao` (NÃO "transportadora")
+- `opcao`
+
+### Extrator Inteligente (intelligent_extractor.py) 🆕 v3.5.1
+
+Delega 100% da extração ao Claude. Substitui o classificador rígido.
+
+```python
+from app.claude_ai_lite.core.intelligent_extractor import extrair_inteligente
+
+# Extração COM contexto estruturado (PILAR 3)
+resultado = extrair_inteligente(
+    texto="crie separação do VCD123 pro dia 27/11",
+    contexto=estado_json,  # JSON estruturado
+    conhecimento="Cliente ATACADAO é prioritário"  # Opcional
+)
+
+# Retorna:
+# {
+#   "intencao": "criar_separacao",
+#   "tipo": "acao",
+#   "entidades": {
+#       "num_pedido": "VCD123",
+#       "data_expedicao": "2025-11-27"  # JÁ calculada!
+#   },
+#   "ambiguidade": {"existe": false},
+#   "confianca": 0.95
+# }
+
+# FILOSOFIA:
+# - Claude recebe JSON, não texto livre
+# - Sabe se tem rascunho ativo, entidades anteriores
+# - Pode extrair QUALQUER entidade (não é limitado)
+# - Calcula datas automaticamente
+```
+
+### Entity Mapper (entity_mapper.py) 🆕 v3.5.1
+
+Traduz entidades livres do Claude para campos do sistema. É um **TRADUTOR**, não filtro.
+
+```python
+from app.claude_ai_lite.core.entity_mapper import mapear_extracao
+
+# Mapeia extração livre para formato do sistema
+resultado = mapear_extracao(extracao_do_claude)
+
+# Retorna:
+# {
+#   "dominio": "acao",
+#   "intencao": "criar_separacao",
+#   "entidades": {
+#       "num_pedido": "VCD123",       # "pedido" → "num_pedido"
+#       "expedicao": "2025-11-27",    # "data_expedicao" → "expedicao"
+#       "raz_social_red": "ATACADAO"  # "cliente" → "raz_social_red"
+#   },
+#   "confianca": 0.95
+# }
+
+# MAPEAMENTOS (40+):
+# "cliente", "razao_social", "empresa" → "raz_social_red"
+# "pedido", "numero_pedido", "numero" → "num_pedido"
+# "data_expedicao", "data_nova", "data", "data_separacao" → "expedicao"
+# etc.
+```
+
+---
+
 ## Novos Módulos v3.4 - Documentação Detalhada
 
 ### Self-Consistency Check (response_reviewer.py)
@@ -941,21 +1144,25 @@ resultado = analisar_gaps(dias=7)
 
 ### Histórico Rico com Itens Numerados (conversation_context.py)
 
-Permite referências como "o pedido 2", "quais são os outros?":
+⚠️ **NOTA v3.5.2**: conversation_context.py agora é uma camada fina que **delega 100%** para EstadoManager.
 
 ```python
-from app.claude_ai_lite.core.conversation_context import ConversationContextManager
+from app.claude_ai_lite.core.conversation_context import (
+    extrair_opcao,          # Função pura - extrai A/B/C do texto
+    detectar_pedido_total,  # Função pura - detecta "pedido total"
+    extrair_referencia_numerica,  # Função pura - extrai "o pedido 2"
+    e_mensagem_acao         # Função pura - detecta se é ação
+)
 
-# Registra itens da resposta (feito automaticamente pelo orchestrator)
-ConversationContextManager.registrar_itens_numerados(usuario_id, dados)
+# Funções de regex (NÃO guardam estado):
+opcao = extrair_opcao("quero opção A")  # Retorna "A"
+numero = extrair_referencia_numerica("o pedido 2")  # Retorna 2
+e_acao = e_mensagem_acao("confirmo")  # Retorna True
 
-# Resolve referências
-item = ConversationContextManager.resolver_referencia_numero("o pedido 2", usuario_id)
-# Retorna dados do item #2
-
-# Suportado:
-# - "o pedido 2", "item 3", "o 2º da lista"
-# - "e os outros?", "quais são os outros?"
+# DEPRECATED - Use EstadoManager diretamente:
+# ConversationContextManager.atualizar_estado() → EstadoManager.atualizar_entidade()
+# ConversationContextManager.registrar_itens_numerados() → EstadoManager.definir_consulta()
+# ConversationContextManager.formatar_contexto_para_prompt() → obter_estado_json()
 ```
 
 ---
@@ -978,13 +1185,25 @@ item = ConversationContextManager.resolver_referencia_numero("o pedido 2", usuar
 ~~Respostas podiam conter informações inventadas (alucinações).~~
 **Solucao:** `ResponseReviewer` valida coerência antes de enviar.
 
-### 5. Integracao Automatica IA Trainer -> Orchestrator (PARCIAL)
-Loaders gerados podem ser chamados via gatilhos.
-**Melhoria futura:** Criar Capability generica que carrega e executa loaders aprendidos.
+### 5. ~~Extração Rígida por Regex~~ - IMPLEMENTADO v3.5.1
+~~Classificador usava regras rígidas para extrair entidades.~~
+**Solução:** `IntelligentExtractor` delega 100% ao Claude com contexto estruturado.
 
-### 6. Tipo `capability` (PENDENTE)
-Nao ha como criar capacidades dinamicamente.
-**Solucao futura:** Avaliar necessidade vs uso de loaders estruturados.
+### 6. ~~Contexto como Texto Livre~~ - IMPLEMENTADO v3.5.2
+~~Claude recebia texto livre, gerando ambiguidade na interpretação.~~
+**Solução:** `EstadoEstruturado` fornece JSON formal com entidades, referências e constraints.
+
+### 7. ~~Cache de Aprendizados Ineficiente~~ - IMPLEMENTADO v3.5.2
+~~Aprendizados eram carregados 3x durante uma requisição.~~
+**Solução:** `conhecimento_negocio` é carregado UMA vez e repassado para todos os módulos.
+
+### 8. Integracao Automatica IA Trainer -> Orchestrator (PARCIAL)
+Loaders gerados podem ser chamados via AutoLoader.
+**Melhoria futura:** Criar Capability genérica que carrega e executa loaders aprendidos.
+
+### 9. Tipo `capability` (PENDENTE)
+Não há como criar capacidades dinamicamente.
+**Solução futura:** Avaliar necessidade vs uso de loaders estruturados + AutoLoader.
 
 ---
 

@@ -45,6 +45,7 @@ class ResponseGenerator:
         contexto_dados: str,
         dominio: str = "logistica",
         contexto_memoria: str = None,
+        estado_estruturado: str = None,
         revisar: bool = True
     ) -> str:
         """
@@ -54,7 +55,8 @@ class ResponseGenerator:
             pergunta: Pergunta original do usuário
             contexto_dados: Dados formatados da capacidade
             dominio: Domínio da consulta
-            contexto_memoria: Histórico + aprendizados
+            contexto_memoria: Histórico de conversas
+            estado_estruturado: NOVO v3.5.2 - JSON do estado atual (PILAR 3)
             revisar: Se deve revisar resposta antes de enviar (default: True)
 
         Returns:
@@ -64,6 +66,20 @@ class ResponseGenerator:
 
         # Monta prompt com memória integrada
         system_prompt = get_system_prompt_with_memory(contexto_memoria)
+
+        # NOVO v3.5.2: Adiciona estado estruturado (PILAR 3)
+        if estado_estruturado:
+            system_prompt += f"""
+
+=== ESTADO ATUAL DA CONVERSA (JSON) ===
+{estado_estruturado}
+=== FIM DO ESTADO ===
+
+Use o JSON acima para entender o contexto exato:
+- REFERENCIA: "esse pedido", "esse cliente" se refere ao que está no JSON
+- SEPARACAO: Se há rascunho ativo, mencione-o na resposta
+- ENTIDADES: Dados já confirmados pelo usuário
+"""
 
         # Adiciona contexto dos dados
         system_prompt += f"""
