@@ -347,96 +347,193 @@
     </div>
 </div>
 
-<!-- Modal Editar Movimentação -->
+<!-- Modal Editar Movimentação - COMPLETO COM TODOS OS CAMPOS -->
 <div class="modal fade" id="modalEditarMovimentacao" tabindex="-1" aria-labelledby="modalEditarMovimentacaoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="modalEditarMovimentacaoLabel">
                     <i class="fas fa-edit"></i> Editar Movimentação de Estoque
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formEditarMovimentacao" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
                 <input type="hidden" id="edit_movimentacao_id" name="movimentacao_id">
-                
+
                 <div class="modal-body">
-                    <div class="row">
-                        <!-- Código do Produto (Readonly) -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_cod_produto" class="form-label">Código do Produto</label>
-                            <input type="text" class="form-control" id="edit_cod_produto" name="cod_produto" readonly>
-                            <small class="text-muted">Não é possível alterar o produto</small>
+                    <!-- SEÇÃO 1: DADOS DO PRODUTO (Readonly) -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-box"></i> Dados do Produto</h6>
                         </div>
-                        
-                        <!-- Nome do Produto (Readonly) -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_nome_produto" class="form-label">Nome do Produto</label>
-                            <input type="text" class="form-control" id="edit_nome_produto" name="nome_produto" readonly>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <!-- Tipo de Movimentação -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_tipo_movimentacao" class="form-label">Tipo de Movimentação <span class="text-danger">*</span></label>
-                            <select class="form-select" id="edit_tipo_movimentacao" name="tipo_movimentacao" required>
-                                <option value="">Selecione...</option>
-                                <option value="AJUSTE">Ajuste</option>
-                                <option value="AVARIA">Avaria</option>
-                                <option value="DEVOLUCAO">Devolução</option>
-                                <option value="TRANSFERENCIA">Transferência</option>
-                                <option value="ENTRADA">Entrada</option>
-                                <option value="SAIDA">Saída</option>
-                                <option value="PRODUCAO">Produção</option>
-                                <option value="FATURAMENTO">Faturamento</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Quantidade -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" id="edit_quantidade" name="quantidade" step="0.01" required>
-                                <span class="input-group-text">UN</span>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_cod_produto" class="form-label">Código do Produto</label>
+                                    <input type="text" class="form-control bg-light" id="edit_cod_produto" name="cod_produto" readonly>
+                                </div>
+                                <div class="col-md-8 mb-3">
+                                    <label for="edit_nome_produto" class="form-label">Nome do Produto</label>
+                                    <input type="text" class="form-control bg-light" id="edit_nome_produto" name="nome_produto" readonly>
+                                </div>
                             </div>
-                            <small class="text-muted" id="edit-avaria-hint" style="display:none;">
-                                <i class="fas fa-info-circle"></i> Avarias são automaticamente negativas
-                            </small>
                         </div>
                     </div>
-                    
-                    <div class="row">
-                        <!-- Data da Movimentação -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_data_movimentacao" class="form-label">Data da Movimentação <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="edit_data_movimentacao" name="data_movimentacao" required>
+
+                    <!-- SEÇÃO 2: DADOS EDITÁVEIS DA MOVIMENTAÇÃO -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fas fa-edit"></i> Dados Editáveis</h6>
                         </div>
-                        
-                        <!-- Local -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_local_movimentacao" class="form-label">Local</label>
-                            <input type="text" class="form-control" id="edit_local_movimentacao" name="local_movimentacao">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_tipo_movimentacao" class="form-label">Tipo de Movimentação <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="edit_tipo_movimentacao" name="tipo_movimentacao" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="AJUSTE">Ajuste</option>
+                                        <option value="AVARIA">Avaria</option>
+                                        <option value="DEVOLUCAO">Devolução</option>
+                                        <option value="DEVOLUÇÃO">Devolução</option>
+                                        <option value="TRANSFERENCIA">Transferência</option>
+                                        <option value="ENTRADA">Entrada</option>
+                                        <option value="SAIDA">Saída</option>
+                                        <option value="SAÍDA">Saída</option>
+                                        <option value="PRODUCAO">Produção</option>
+                                        <option value="PRODUÇÃO">Produção</option>
+                                        <option value="FATURAMENTO">Faturamento</option>
+                                        <option value="EST INICIAL">Est. Inicial</option>
+                                        <option value="RETRABALHO">Retrabalho</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="edit_quantidade" name="quantidade" step="0.001" required>
+                                        <span class="input-group-text">UN</span>
+                                    </div>
+                                    <small class="text-muted" id="edit-avaria-hint" style="display:none;">
+                                        <i class="fas fa-info-circle"></i> Avarias são automaticamente negativas
+                                    </small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_data_movimentacao" class="form-label">Data da Movimentação <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="edit_data_movimentacao" name="data_movimentacao" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_local_movimentacao" class="form-label">Local da Movimentação</label>
+                                    <input type="text" class="form-control" id="edit_local_movimentacao" name="local_movimentacao" placeholder="Ex: ESTOQUE PRINCIPAL, LINHA DE PRODUÇÃO">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_observacoes" class="form-label">Observações</label>
+                                    <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="2" placeholder="Detalhes da movimentação..."></textarea>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="row">
-                        <!-- Documento de Origem -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_documento_origem" class="form-label">Documento de Origem</label>
-                            <input type="text" class="form-control" id="edit_documento_origem" name="documento_origem" placeholder="Ex: NF 123456, Ajuste 001">
+
+                    <!-- SEÇÃO 3: VÍNCULOS (Pedidos, NF, Embarque) -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-link"></i> Vínculos (Pedido / NF / Embarque)</h6>
                         </div>
-                        
-                        <!-- Observações -->
-                        <div class="col-md-6 mb-3">
-                            <label for="edit_observacoes" class="form-label">Observações</label>
-                            <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="2" placeholder="Detalhes da movimentação..."></textarea>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_separacao_lote_id" class="form-label">Lote Separação</label>
+                                    <input type="text" class="form-control bg-light" id="edit_separacao_lote_id" name="separacao_lote_id" readonly>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_num_pedido" class="form-label">Número do Pedido</label>
+                                    <input type="text" class="form-control bg-light" id="edit_num_pedido" name="num_pedido" readonly>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_numero_nf" class="form-label">Número NF</label>
+                                    <input type="text" class="form-control bg-light" id="edit_numero_nf" name="numero_nf" readonly>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_codigo_embarque" class="form-label">Código Embarque</label>
+                                    <input type="text" class="form-control bg-light" id="edit_codigo_embarque" name="codigo_embarque" readonly>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_tipo_origem" class="form-label">Tipo de Origem</label>
+                                    <input type="text" class="form-control bg-light" id="edit_tipo_origem" name="tipo_origem" readonly>
+                                    <small class="text-muted">ODOO, TAGPLUS, MANUAL, LEGADO</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_status_nf" class="form-label">Status NF</label>
+                                    <input type="text" class="form-control bg-light" id="edit_status_nf" name="status_nf" readonly>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_pedido_compras_id" class="form-label">Pedido Compras ID</label>
+                                    <input type="text" class="form-control bg-light" id="edit_pedido_compras_id" name="pedido_compras_id" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO 4: DADOS ODOO -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-warning">
+                            <h6 class="mb-0"><i class="fas fa-database"></i> Dados Odoo (Rastreabilidade)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_odoo_picking_id" class="form-label">Odoo Picking ID</label>
+                                    <input type="text" class="form-control bg-light" id="edit_odoo_picking_id" name="odoo_picking_id" readonly>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_odoo_move_id" class="form-label">Odoo Move ID</label>
+                                    <input type="text" class="form-control bg-light" id="edit_odoo_move_id" name="odoo_move_id" readonly>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_purchase_line_id" class="form-label">Purchase Line ID</label>
+                                    <input type="text" class="form-control bg-light" id="edit_purchase_line_id" name="purchase_line_id" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO 5: AUDITORIA -->
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <h6 class="mb-0"><i class="fas fa-history"></i> Auditoria</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_criado_em" class="form-label">Criado em</label>
+                                    <input type="text" class="form-control bg-light" id="edit_criado_em" readonly>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_criado_por" class="form-label">Criado por</label>
+                                    <input type="text" class="form-control bg-light" id="edit_criado_por" readonly>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_atualizado_em" class="form-label">Atualizado em</label>
+                                    <input type="text" class="form-control bg-light" id="edit_atualizado_em" readonly>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="edit_atualizado_por" class="form-label">Atualizado por</label>
+                                    <input type="text" class="form-control bg-light" id="edit_atualizado_por" readonly>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label class="form-label">Status</label>
+                                    <div id="edit_ativo_badge"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                         <i class="fas fa-times"></i> Cancelar
@@ -555,7 +652,6 @@ function updateRowCount() {
     }
 }
 </script>
-{% endblock %} 
 
 <style>
 /* Dropdown de Sugestões de Produtos */
@@ -795,7 +891,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ========================================
-// 🔧 JAVASCRIPT PARA MODAL DE EDIÇÃO
+// 🔧 FUNÇÃO GLOBAL - EDITAR MOVIMENTAÇÃO
 // ========================================
 
 function editarMovimentacao(id) {
@@ -805,7 +901,7 @@ function editarMovimentacao(id) {
         .then(data => {
             if (data.success) {
                 preencherModalEdicao(data.movimentacao);
-                
+
                 // Abrir modal
                 const modal = new bootstrap.Modal(document.getElementById('modalEditarMovimentacao'));
                 modal.show();
@@ -827,22 +923,49 @@ function editarMovimentacao(id) {
         });
 }
 
-function preencherModalEdicao(movimentacao) {
-    // Preencher campos do modal
-    document.getElementById('edit_movimentacao_id').value = movimentacao.id;
-    document.getElementById('edit_cod_produto').value = movimentacao.cod_produto;
-    document.getElementById('edit_nome_produto').value = movimentacao.nome_produto;
-    document.getElementById('edit_tipo_movimentacao').value = movimentacao.tipo_movimentacao;
-    document.getElementById('edit_quantidade').value = movimentacao.qtd_movimentacao;
-    document.getElementById('edit_data_movimentacao').value = movimentacao.data_movimentacao;
-    document.getElementById('edit_local_movimentacao').value = movimentacao.local_movimentacao;
-    document.getElementById('edit_documento_origem').value = movimentacao.documento_origem;
-    document.getElementById('edit_observacoes').value = movimentacao.observacao;
-    
+function preencherModalEdicao(mov) {
+    // Campos básicos
+    document.getElementById('edit_movimentacao_id').value = mov.id || '';
+    document.getElementById('edit_cod_produto').value = mov.cod_produto || '';
+    document.getElementById('edit_nome_produto').value = mov.nome_produto || '';
+    document.getElementById('edit_tipo_movimentacao').value = mov.tipo_movimentacao || '';
+    document.getElementById('edit_quantidade').value = mov.qtd_movimentacao || '';
+    document.getElementById('edit_data_movimentacao').value = mov.data_movimentacao || '';
+    document.getElementById('edit_local_movimentacao').value = mov.local_movimentacao || '';
+    document.getElementById('edit_observacoes').value = mov.observacao || '';
+
+    // Campos de vínculos
+    document.getElementById('edit_separacao_lote_id').value = mov.separacao_lote_id || '-';
+    document.getElementById('edit_num_pedido').value = mov.num_pedido || '-';
+    document.getElementById('edit_numero_nf').value = mov.numero_nf || '-';
+    document.getElementById('edit_codigo_embarque').value = mov.codigo_embarque || '-';
+    document.getElementById('edit_tipo_origem').value = mov.tipo_origem || '-';
+    document.getElementById('edit_status_nf').value = mov.status_nf || '-';
+    document.getElementById('edit_pedido_compras_id').value = mov.pedido_compras_id || '-';
+
+    // Campos Odoo
+    document.getElementById('edit_odoo_picking_id').value = mov.odoo_picking_id || '-';
+    document.getElementById('edit_odoo_move_id').value = mov.odoo_move_id || '-';
+    document.getElementById('edit_purchase_line_id').value = mov.purchase_line_id || '-';
+
+    // Campos de auditoria
+    document.getElementById('edit_criado_em').value = mov.criado_em || '-';
+    document.getElementById('edit_criado_por').value = mov.criado_por || '-';
+    document.getElementById('edit_atualizado_em').value = mov.atualizado_em || '-';
+    document.getElementById('edit_atualizado_por').value = mov.atualizado_por || '-';
+
+    // Badge de status ativo
+    const ativoBadge = document.getElementById('edit_ativo_badge');
+    if (mov.ativo) {
+        ativoBadge.innerHTML = '<span class="badge bg-success"><i class="fas fa-check"></i> Ativo</span>';
+    } else {
+        ativoBadge.innerHTML = '<span class="badge bg-danger"><i class="fas fa-times"></i> Inativo</span>';
+    }
+
     // Configurar hint de avaria
     const editTipoSelect = document.getElementById('edit_tipo_movimentacao');
     const editAvariaHint = document.getElementById('edit-avaria-hint');
-    
+
     if (editTipoSelect.value === 'AVARIA') {
         editAvariaHint.style.display = 'block';
     } else {
@@ -856,102 +979,83 @@ document.addEventListener('DOMContentLoaded', function() {
     const editTipoSelect = document.getElementById('edit_tipo_movimentacao');
     const editQuantidadeInput = document.getElementById('edit_quantidade');
     const editAvariaHint = document.getElementById('edit-avaria-hint');
-    
-    editTipoSelect.addEventListener('change', function() {
-        if (this.value === 'AVARIA') {
-            editAvariaHint.style.display = 'block';
-            // Se quantidade for positiva, tornar negativa
-            if (editQuantidadeInput.value && parseFloat(editQuantidadeInput.value) > 0) {
-                editQuantidadeInput.value = -Math.abs(parseFloat(editQuantidadeInput.value));
+
+    if (editTipoSelect) {
+        editTipoSelect.addEventListener('change', function() {
+            if (this.value === 'AVARIA') {
+                editAvariaHint.style.display = 'block';
+                // Se quantidade for positiva, tornar negativa
+                if (editQuantidadeInput.value && parseFloat(editQuantidadeInput.value) > 0) {
+                    editQuantidadeInput.value = -Math.abs(parseFloat(editQuantidadeInput.value));
+                }
+            } else {
+                editAvariaHint.style.display = 'none';
             }
-        } else {
-            editAvariaHint.style.display = 'none';
-        }
-    });
-    
-    editQuantidadeInput.addEventListener('input', function() {
-        if (editTipoSelect.value === 'AVARIA' && this.value && parseFloat(this.value) > 0) {
-            this.value = -Math.abs(parseFloat(this.value));
-        }
-    });
-    
+        });
+    }
+
+    if (editQuantidadeInput) {
+        editQuantidadeInput.addEventListener('input', function() {
+            if (editTipoSelect.value === 'AVARIA' && this.value && parseFloat(this.value) > 0) {
+                this.value = -Math.abs(parseFloat(this.value));
+            }
+        });
+    }
+
     // Submissão do formulário de edição
     const formEditarMovimentacao = document.getElementById('formEditarMovimentacao');
-    formEditarMovimentacao.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const movimentacaoId = document.getElementById('edit_movimentacao_id').value;
-        const formData = new FormData(this);
-        
-        fetch(`/estoque/movimentacoes/${movimentacaoId}/editar`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': formData.get('csrf_token')
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Fechar modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarMovimentacao'));
-                modal.hide();
-                
-                // Mostrar mensagem de sucesso
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Sucesso!',
-                    text: data.message || 'Movimentação atualizada com sucesso!',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-                
-                // Recarregar a página
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
-            } else {
+    if (formEditarMovimentacao) {
+        formEditarMovimentacao.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const movimentacaoId = document.getElementById('edit_movimentacao_id').value;
+            const formData = new FormData(this);
+
+            fetch(`/estoque/movimentacoes/${movimentacaoId}/editar`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': formData.get('csrf_token')
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Fechar modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarMovimentacao'));
+                    modal.hide();
+
+                    // Mostrar mensagem de sucesso
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: data.message || 'Movimentação atualizada com sucesso!',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    // Recarregar a página
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro!',
+                        text: data.message || 'Erro ao atualizar movimentação'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro!',
-                    text: data.message || 'Erro ao atualizar movimentação'
+                    text: 'Erro de comunicação com o servidor'
                 });
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro!',
-                text: 'Erro de comunicação com o servidor'
             });
         });
-    });
-    
-    // Auto-abrir modal quando redirecionado de nova_movimentacao
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('nova_mov') === '1') {
-        // Abrir modal automaticamente
-        const modal = new bootstrap.Modal(document.getElementById('modalNovaMovimentacao'));
-        modal.show();
-        
-        // Pré-preencher campos se fornecidos
-        const codProduto = urlParams.get('cod_produto');
-        const tipo = urlParams.get('tipo');
-        
-        if (codProduto) {
-            const inputCodProduto = document.querySelector('#modalNovaMovimentacao input[name="cod_produto"]');
-            if (inputCodProduto) inputCodProduto.value = codProduto;
-        }
-        
-        if (tipo) {
-            const selectTipo = document.querySelector('#modalNovaMovimentacao select[name="tipo_movimentacao"]');
-            if (selectTipo) selectTipo.value = tipo;
-        }
-        
-        // Limpar parâmetros da URL para evitar reabrir modal no refresh
-        const cleanUrl = window.location.pathname + window.location.search.replace(/[?&]nova_mov=1/, '').replace(/[?&]cod_produto=[^&]*/, '').replace(/[?&]tipo=[^&]*/, '');
-        window.history.replaceState({}, document.title, cleanUrl.replace(/[?&]$/, ''));
     }
 });
-</script> 
+</script>
+{% endblock %}

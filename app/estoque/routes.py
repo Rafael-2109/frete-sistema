@@ -630,33 +630,54 @@ def processar_nova_movimentacao():
 # ========================================
 
 @estoque_bp.route('/movimentacoes/<int:id>/editar')
-@login_required 
+@login_required
 def editar_movimentacao(id):
-    """Carregar dados da movimentação para edição"""
+    """Carregar dados da movimentação para edição - TODOS OS CAMPOS"""
     movimentacao = MovimentacaoEstoque.query.get_or_404(id)
-    
+
     # Por segurança, só permitir edição de movimentações recentes (últimos 30 dias)
     limite_edicao = datetime.now().date() - timedelta(days=30)
-    
+
     if movimentacao.data_movimentacao < limite_edicao:
         return jsonify({
             'success': False,
             'message': 'Não é possível editar movimentações antigas (mais de 30 dias)'
         })
-    
-    # Retornar dados da movimentação para o modal
+
+    # Retornar TODOS os dados da movimentação para o modal
     return jsonify({
         'success': True,
         'movimentacao': {
+            # Dados básicos
             'id': movimentacao.id,
             'cod_produto': movimentacao.cod_produto,
             'nome_produto': movimentacao.nome_produto,
             'tipo_movimentacao': movimentacao.tipo_movimentacao,
-            'qtd_movimentacao': float(movimentacao.qtd_movimentacao),
-            'data_movimentacao': movimentacao.data_movimentacao.strftime('%Y-%m-%d'),
-            'local_movimentacao': movimentacao.local_movimentacao,
-            'documento_origem': getattr(movimentacao, 'documento_origem', ''),
-            'observacao': movimentacao.observacao or ''
+            'qtd_movimentacao': float(movimentacao.qtd_movimentacao) if movimentacao.qtd_movimentacao else 0,
+            'data_movimentacao': movimentacao.data_movimentacao.strftime('%Y-%m-%d') if movimentacao.data_movimentacao else '',
+            'local_movimentacao': movimentacao.local_movimentacao or '',
+            'observacao': movimentacao.observacao or '',
+
+            # Campos de vínculos (Pedidos, NF, Embarque)
+            'separacao_lote_id': movimentacao.separacao_lote_id or '',
+            'numero_nf': movimentacao.numero_nf or '',
+            'num_pedido': movimentacao.num_pedido or '',
+            'tipo_origem': movimentacao.tipo_origem or '',
+            'status_nf': movimentacao.status_nf or '',
+            'codigo_embarque': movimentacao.codigo_embarque or '',
+            'pedido_compras_id': movimentacao.pedido_compras_id or '',
+
+            # Campos Odoo (Rastreabilidade)
+            'odoo_picking_id': movimentacao.odoo_picking_id or '',
+            'odoo_move_id': movimentacao.odoo_move_id or '',
+            'purchase_line_id': movimentacao.purchase_line_id or '',
+
+            # Campos de auditoria
+            'criado_em': movimentacao.criado_em.strftime('%d/%m/%Y %H:%M') if movimentacao.criado_em else '',
+            'criado_por': movimentacao.criado_por or '',
+            'atualizado_em': movimentacao.atualizado_em.strftime('%d/%m/%Y %H:%M') if movimentacao.atualizado_em else '',
+            'atualizado_por': movimentacao.atualizado_por or '',
+            'ativo': movimentacao.ativo
         }
     })
 
