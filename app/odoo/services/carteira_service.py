@@ -896,39 +896,9 @@ class CarteiraService:
                     'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),
                     'telefone_endereco_ent': endereco.get('phone', ''),
                     
-                    # 📅 DADOS OPERACIONAIS (PRESERVADOS na atualização)
-                    'expedicao': None,  # Será calculado/preservado
-                    'data_entrega': None,  # Será calculado/preservado
-                    'agendamento': None,  # Será preservado se existir
-                    'protocolo': '',  # Será preservado se existir
-                    'roteirizacao': '',  # Será calculado/preservado
-                    
-                    # 📈 ANÁLISE DE ESTOQUE (CALCULADOS)
-                    'menor_estoque_produto_d7': None,
-                    'saldo_estoque_pedido': None,
-                    'saldo_estoque_pedido_forcado': None,
-                    
-                    # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
-                    'separacao_lote_id': None,
-                    'qtd_saldo': None,
-                    'valor_saldo': None,
-                    'pallet': None,
-                    'peso': None,
-                    
-                    # 📈 TOTALIZADORES POR CLIENTE (CALCULADOS)
-                    'valor_saldo_total': None,
-                    'pallet_total': None,
-                    'peso_total': None,
-                    'valor_cliente_pedido': None,
-                    'pallet_cliente_pedido': None,
-                    'peso_cliente_pedido': None,
-                    
-                    # 📊 TOTALIZADORES POR PRODUTO (CALCULADOS)
-                    'qtd_total_produto_carteira': None,
-                    
-                    # 📈 CAMPOS DE ESTOQUE D0 a D28
-                    'estoque': None,  # Campo base
-                    **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
+                    # 📅 DADOS OPERACIONAIS
+                    # NOTA: Campos de agendamento/expedição/carga foram movidos para Separacao
+                    # CarteiraPrincipal contém apenas dados do pedido original do Odoo
 
                     # 🏷️ TAGS DO PEDIDO (ODOO)
                     'tags_pedido': self._processar_tags_pedido(pedido.get('tag_ids', [])),
@@ -977,8 +947,8 @@ class CarteiraService:
             
             # ⚠️ CAMPOS COM LIMITE DE 50 CARACTERES (críticos)
             campos_varchar50 = [
-                'num_pedido', 'cod_produto', 'status_pedido', 'protocolo',
-                'metodo_entrega_pedido'
+                'num_pedido', 'cod_produto', 'status_pedido',
+                'metodo_entrega_pedido', 'forma_agendamento'
             ]
             
             for campo in campos_varchar50:
@@ -1000,6 +970,7 @@ class CarteiraService:
                         item_sanitizado[campo] = valor[:20]
             
             # Campos que DEVEM ser texto (não podem ser boolean)
+            # NOTA: Campos protocolo, roteirizacao foram movidos para Separacao
             campos_texto = [
                 'observ_ped_1', 'num_pedido', 'cod_produto', 'pedido_cliente',
                 'status_pedido', 'cnpj_cpf', 'raz_social', 'raz_social_red',
@@ -1009,7 +980,7 @@ class CarteiraService:
                 'incoterm', 'metodo_entrega_pedido', 'cliente_nec_agendamento',
                 'cnpj_endereco_ent', 'empresa_endereco_ent', 'cep_endereco_ent',
                 'nome_cidade', 'cod_uf', 'bairro_endereco_ent', 'rua_endereco_ent',
-                'endereco_ent', 'telefone_endereco_ent', 'protocolo', 'roteirizacao',
+                'endereco_ent', 'telefone_endereco_ent', 'forma_agendamento',
                 'created_by', 'updated_by'
             ]
             
@@ -1025,31 +996,18 @@ class CarteiraService:
                         item_sanitizado[campo] = str(valor)
             
             # Campos numéricos - garantir tipo correto
+            # NOTA: Campos de estoque, separação, totalizadores foram movidos para Separacao
             campos_numericos = [
-                'qtd_produto_pedido', 'qtd_saldo_produto_pedido', 
-                'qtd_cancelada_produto_pedido', 'preco_produto_pedido',
-                'menor_estoque_produto_d7', 'saldo_estoque_pedido',
-                'saldo_estoque_pedido_forcado', 'qtd_saldo', 'valor_saldo',
-                'pallet', 'peso', 'valor_saldo_total', 'pallet_total',
-                'peso_total', 'valor_cliente_pedido', 'pallet_cliente_pedido',
-                'peso_cliente_pedido', 'qtd_total_produto_carteira'
+                'qtd_produto_pedido', 'qtd_saldo_produto_pedido',
+                'qtd_cancelada_produto_pedido', 'preco_produto_pedido'
             ]
-            
+
             for campo in campos_numericos:
                 if campo in item_sanitizado and item_sanitizado[campo] is not None:
                     try:
                         item_sanitizado[campo] = float(item_sanitizado[campo])
                     except (ValueError, TypeError):
                         item_sanitizado[campo] = 0.0
-            
-            # Campos de estoque (d0 a d28) - garantir tipo numérico
-            for i in range(29):
-                campo_estoque = f'estoque_d{i}'
-                if campo_estoque in item_sanitizado and item_sanitizado[campo_estoque] is not None:
-                    try:
-                        item_sanitizado[campo_estoque] = float(item_sanitizado[campo_estoque])
-                    except (ValueError, TypeError):
-                        item_sanitizado[campo_estoque] = None
             
             # Campo booleano - garantir tipo correto
             if 'ativo' in item_sanitizado:
@@ -1653,7 +1611,7 @@ class CarteiraService:
                     'qtd_faturada': float(qtd_faturada),
                     'qtd_em_separacao': float(qtd_em_separacao),
                     'saldo_livre': saldo_livre,
-                    'separacao_lote_id': item.separacao_lote_id,
+                    # NOTA: separacao_lote_id foi movido para Separacao (não existe mais em CarteiraPrincipal)
                     'id': item.id
                 }
                 
