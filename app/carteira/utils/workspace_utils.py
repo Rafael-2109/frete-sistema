@@ -292,12 +292,18 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
         if resumo_estoque:
             # Verificar se tem projecao_29_dias ou projecao
             projecao = resumo_estoque.get('projecao_29_dias') or resumo_estoque.get('projecao', [])
-            
-            # Calcular estoque na data de expedição
-            estoque_data_expedicao = calcular_estoque_na_data(
-                projecao,
-                produto.expedicao
-            )
+
+            # Calcular estoque na data de expedição (se disponível)
+            # CORREÇÃO: Campo 'expedicao' foi removido de CarteiraPrincipal, usar getattr com fallback
+            data_expedicao = getattr(produto, 'expedicao', None)
+            if data_expedicao:
+                estoque_data_expedicao = calcular_estoque_na_data(
+                    projecao,
+                    data_expedicao
+                )
+            else:
+                # Fallback: usar estoque atual se não houver data de expedição
+                estoque_data_expedicao = resumo_estoque.get('estoque_atual', 0)
             
             # Primeiro, verificar se tem estoque hoje suficiente
             estoque_atual = resumo_estoque.get('estoque_atual', 0)
