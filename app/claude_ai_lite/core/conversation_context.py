@@ -39,6 +39,10 @@ class ConversationState:
     aguardando_confirmacao: bool = False
     acao_pendente: str = ""
     timestamp: datetime = field(default_factory=datetime.now)
+    # NOVO v3.4: Histórico rico com itens numerados
+    itens_listados: List[Dict] = field(default_factory=list)  # Itens numerados para referência
+    itens_por_numero: Dict[int, Dict] = field(default_factory=dict)  # Acesso rápido por número
+    ultimo_total: int = 0  # Total de itens no último resultado
 
 
 # Cache em memória por usuário
@@ -92,6 +96,15 @@ PADROES_TOTAL_PEDIDO = [
     r'\btudo\b',
     r'\binteiro\b',
     r'\btotal\b',
+]
+
+# NOVO: Padrões para referência numérica
+PADROES_REFERENCIA_NUMERO = [
+    r'\b(?:o\s+)?(?:pedido|item)\s+(?:numero\s+)?(\d+)\b',  # "o pedido 2", "item 3"
+    r'\b(?:o\s+)?(\d+)(?:º|°|o|a)?\s*(?:pedido|item|da\s+lista)?\b',  # "o 2º", "o 3o da lista"
+    r'^(\d+)\s*$',  # Apenas "2" ou "3"
+    r'\bquais?\s+(?:sao\s+)?(?:os\s+)?outros?\b',  # "quais são os outros?"
+    r'\be\s+os\s+outros\b',  # "e os outros?"
 ]
 
 
@@ -308,6 +321,73 @@ class ConversationContextManager:
         return None
 
     @staticmethod
+    def registrar_itens_numerados(usuario_id: int, dados: List[Dict]):
+        """
+        Registra itens numerados para referência futura.
+
+        Args:
+            usuario_id: ID do usuário
+            dados: Lista de itens a numerar
+        """
+        estado = ConversationContextManager.obter_estado(usuario_id)
+
+        # Limpa itens anteriores
+        estado.itens_listados = []
+        estado.itens_por_numero = {}
+
+        # Numera novos itens
+        for i, item in enumerate(dados, 1):
+            item_numerado = {
+                'numero': i,
+                'dados': item,
+                # Extrai campos principais para acesso rápido
+                'num_pedido': item.get('num_pedido'),
+                'cod_produto': item.get('cod_produto'),
+                'cliente': item.get('raz_social_red') or item.get('cliente'),
+            }
+            estado.itens_listados.append(item_numerado)
+            estado.itens_por_numero[i] = item_numerado
+
+        estado.ultimo_total = len(dados)
+        logger.debug(f"[CONTEXT] {len(dados)} itens registrados para referência")
+
+    @staticmethod
+    def resolver_referencia_numero(texto: str, usuario_id: int) -> Optional[Dict]:
+        """
+        Resolve referência numérica como "o pedido 2" ou "o 3º da lista".
+
+        Args:
+            texto: Texto do usuário
+            usuario_id: ID do usuário
+
+        Returns:
+            Dados do item referenciado ou None
+        """
+        estado = ConversationContextManager.obter_estado(usuario_id)
+        texto_lower = texto.lower()
+
+        # Verifica padrões de referência numérica
+        for padrao in PADROES_REFERENCIA_NUMERO:
+            match = re.search(padrao, texto_lower)
+            if match:
+                grupos = match.groups()
+                if grupos and grupos[0]:
+                    try:
+                        numero = int(grupos[0])
+                        if numero in estado.itens_por_numero:
+                            logger.info(f"[CONTEXT] Referência #{numero} resolvida")
+                            return estado.itens_por_numero[numero]
+                    except ValueError:
+                        pass
+
+        # Verifica se é referência a "outros"
+        if re.search(r'\boutros?\b', texto_lower):
+            # Retorna todos os itens não mencionados ainda
+            return {'_tipo': 'outros', 'itens': estado.itens_listados}
+
+        return None
+
+    @staticmethod
     def formatar_contexto_para_prompt(usuario_id: int) -> str:
         """
         Formata contexto da conversa para incluir no prompt do Claude.
@@ -337,6 +417,17 @@ class ConversationContextManager:
         if estado.ultimo_resultado:
             total = estado.ultimo_resultado.get('total_encontrado', 0)
             linhas.append(f"Último resultado: {total} item(s) encontrado(s)")
+
+        # NOVO: Inclui itens numerados se existirem
+        if estado.itens_listados:
+            linhas.append(f"\nITENS LISTADOS ({len(estado.itens_listados)} itens):")
+            for item in estado.itens_listados[:10]:  # Limita a 10
+                num = item['numero']
+                pedido = item.get('num_pedido', '')
+                cliente = item.get('cliente', '')[:30] if item.get('cliente') else ''
+                linhas.append(f"  #{num}: Pedido {pedido} - {cliente}")
+            if len(estado.itens_listados) > 10:
+                linhas.append(f"  ... e mais {len(estado.itens_listados) - 10} itens")
 
         linhas.append("=== FIM DO CONTEXTO ===")
 

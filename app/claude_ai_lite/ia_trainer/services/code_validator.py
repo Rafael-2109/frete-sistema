@@ -96,16 +96,34 @@ PATTERNS_PROIBIDOS = [
 ]
 
 # === MODELS CONHECIDOS ===
+# NOTA: Deve estar sincronizado com MODELS_PERMITIDOS em loader_executor.py
 MODELS_CONHECIDOS = {
+    # === CARTEIRA E SEPARACAO ===
     'CarteiraPrincipal': 'app.carteira.models',
     'Separacao': 'app.separacao.models',
-    'Pedido': 'app.pedidos.models',
-    'EstoqueProjetado': 'app.producao.models',
+    'Pedido': 'app.pedidos.models',                  # VIEW (read-only)
+    'PreSeparacaoItem': 'app.carteira.models',      # DEPRECATED, nao usar
+    'SaldoStandby': 'app.carteira.models',
+
+    # === PRODUCAO E ESTOQUE ===
+    'CadastroPalletizacao': 'app.producao.models',
+    'ProgramacaoProducao': 'app.producao.models',
+    'MovimentacaoEstoque': 'app.estoque.models',
+    'UnificacaoCodigos': 'app.estoque.models',
+
+    # === FATURAMENTO ===
     'FaturamentoProduto': 'app.faturamento.models',
-    'Frete': 'app.fretes.models',
+
+    # === EMBARQUES ===
     'Embarque': 'app.embarques.models',
     'EmbarqueItem': 'app.embarques.models',
-    'CadastroPalletizacao': 'app.producao.models',
+
+    # === LOCALIDADES E ROTAS ===
+    'CadastroRota': 'app.localidades.models',
+    'CadastroSubRota': 'app.localidades.models',
+
+    # === FRETES ===
+    'Frete': 'app.fretes.models',
 }
 
 

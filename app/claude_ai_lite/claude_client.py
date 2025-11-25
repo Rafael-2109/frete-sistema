@@ -135,7 +135,7 @@ Se o usuário usa termos como "esses itens", "esse pedido", "desses produtos", "
 Analise a mensagem e retorne APENAS um JSON valido com:
 {{
     "dominio": "carteira|estoque|fretes|embarques|cotacoes|faturamento|acao|follow_up|geral",
-    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|analisar_estoque_cliente|buscar_rota|buscar_uf|consultar_estoque|consultar_ruptura|analisar_saldo|analisar_gargalo|escolher_opcao|criar_separacao|separar_disponiveis|incluir_item|excluir_item|alterar_quantidade|confirmar_acao|cancelar|ver_rascunho|listar|calcular|relatorio|follow_up|detalhar|outro",
+    "intencao": "consultar_status|buscar_pedido|buscar_produto|analisar_disponibilidade|analisar_estoque_cliente|buscar_rota|buscar_uf|consultar_estoque|consultar_ruptura|analisar_saldo|analisar_gargalo|escolher_opcao|criar_separacao|separar_disponiveis|incluir_item|excluir_item|alterar_quantidade|alterar_expedicao|confirmar_acao|cancelar|ver_rascunho|listar|calcular|relatorio|follow_up|detalhar|outro",
     "entidades": {{
         "num_pedido": "valor ou null",
         "cnpj": "valor ou null",
@@ -149,6 +149,7 @@ Analise a mensagem e retorne APENAS um JSON valido com:
         "sub_rota": "nome da sub-rota ou null",
         "uf": "sigla do estado (SP, RJ, MG, etc) ou null",
         "data": "valor ou null",
+        "data_expedicao": "data de expedicao especifica se mencionada (formato dd/mm ou dd/mm/yyyy) ou null",
         "opcao": "A, B ou C se usuario escolher opcao"
     }},
     "confianca": 0.0 a 1.0
@@ -183,9 +184,16 @@ REGRAS PARA SEPARACAO (IMPORTANTE - dominio=acao):
 - "incluir item X", "adicionar X", "colocar X na separacao" = incluir_item (item=X)
 - "excluir item X", "remover X", "tirar X" = excluir_item (item=X)
 - "alterar quantidade de X para Y", "mudar qtd de X" = alterar_quantidade (item=X, quantidade=Y)
+- "alterar data para DD/MM", "mudar expedicao para DD/MM", "criar para dia DD/MM" = alterar_expedicao (data_expedicao=DD/MM)
+- "crie pro dia 27/11", "criar com data 28/11" = criar_separacao (data_expedicao=DD/MM) - EXTRAIR A DATA!
 - "confirmo", "pode criar", "sim", "ok" = confirmar_acao
 - "cancelar", "desistir", "nao quero mais" = cancelar
 - "ver rascunho", "mostrar separacao" = ver_rascunho
+
+IMPORTANTE - EXTRAIR DATA DE EXPEDICAO:
+- Se usuario menciona "dia DD/MM", "pro dia DD/MM", "para DD/MM" = SEMPRE extrair para data_expedicao
+- Mesmo em criar_separacao ou separar_disponiveis, se tem data especifica, colocar em data_expedicao
+- "Pode criar a separacao, mas crie pro dia 27/11" = criar_separacao com data_expedicao="27/11"
 
 REGRAS PARA ROTA/SUB-ROTA/UF:
 - Se pergunta "pedidos na rota MG" ou "rota NE" = buscar_rota (rota principal)
@@ -264,6 +272,11 @@ EXEMPLOS DE SEPARACAO (dominio=acao):
 - "Remover oleo da separacao" -> acao, excluir_item, {{item: "oleo"}}
 - "Alterar quantidade de azeitona para 10" -> acao, alterar_quantidade, {{item: "azeitona", quantidade: 10}}
 - "Mudar qtd do cogumelo para 3" -> acao, alterar_quantidade, {{item: "cogumelo", quantidade: 3}}
+- "Pode criar a separacao, mas crie pro dia 27/11" -> acao, criar_separacao, {{data_expedicao: "27/11"}}
+- "Criar para o dia 28/11" -> acao, criar_separacao, {{data_expedicao: "28/11"}}
+- "Mudar a data para 29/11" -> acao, alterar_expedicao, {{data_expedicao: "29/11"}}
+- "Alterar expedicao para dia 30/11" -> acao, alterar_expedicao, {{data_expedicao: "30/11"}}
+- "Quero pro dia 27/11 e nao pro dia 25/11" -> acao, alterar_expedicao, {{data_expedicao: "27/11"}}
 - "Confirmo" -> acao, confirmar_acao, {{}}
 - "Sim, pode criar" -> acao, confirmar_acao, {{}}
 - "Cancelar" -> acao, cancelar, {{}}

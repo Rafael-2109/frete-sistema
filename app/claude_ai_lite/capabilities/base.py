@@ -106,7 +106,11 @@ class BaseCapability(ABC):
 
     def aplicar_filtros_aprendidos(self, query, contexto: Dict, modelo_classe=None):
         """
-        Aplica filtros aprendidos pelo IA Trainer à query.
+        Aplica filtros aprendidos pelo IA Trainer E filtros compostos extraídos à query.
+
+        Suporta dois formatos de filtro:
+        1. Filtro SQL (antigo): {"filtro": "campo = valor", "nome": "..."}
+        2. Filtro estruturado (novo): {"campo": "x", "operador": "==", "valor": "y"}
 
         Args:
             query: Query SQLAlchemy em construção
@@ -137,17 +141,72 @@ class BaseCapability(ABC):
                         logger.debug(f"[FILTRO] Ignorando filtro para {modelo_esperado} (query usa {nome_modelo})")
                         continue
 
-                # Aplica o filtro
+                # FORMATO 1: Filtro SQL direto (IA Trainer antigo)
                 filtro_sql = filtro.get('filtro')
                 if filtro_sql:
                     query = query.filter(text(filtro_sql))
-                    logger.info(f"[FILTRO] Aplicado: {filtro.get('nome')} -> {filtro_sql[:50]}...")
+                    logger.info(f"[FILTRO] SQL aplicado: {filtro.get('nome')} -> {filtro_sql[:50]}...")
+                    continue
+
+                # FORMATO 2: Filtro estruturado (CompositeExtractor)
+                campo = filtro.get('campo')
+                operador = filtro.get('operador')
+                valor = filtro.get('valor')
+
+                if campo and operador and modelo_classe:
+                    # Obtém coluna do modelo
+                    if hasattr(modelo_classe, campo):
+                        coluna = getattr(modelo_classe, campo)
+                        query = self._aplicar_filtro_estruturado(query, coluna, operador, valor, campo)
+                        logger.info(f"[FILTRO] Estruturado aplicado: {campo} {operador} {valor}")
 
             except Exception as e:
-                logger.warning(f"[FILTRO] Erro ao aplicar filtro {filtro.get('nome')}: {e}")
+                logger.warning(f"[FILTRO] Erro ao aplicar filtro {filtro.get('nome', filtro.get('campo'))}: {e}")
                 # Continua sem aplicar este filtro
 
         return query
+
+    def _aplicar_filtro_estruturado(self, query, coluna, operador: str, valor, campo_nome: str):
+        """
+        Aplica filtro estruturado à query.
+
+        Args:
+            query: Query SQLAlchemy
+            coluna: Coluna do modelo
+            operador: Operador (==, is_null, >, etc)
+            valor: Valor para comparação
+            campo_nome: Nome do campo (para logs)
+
+        Returns:
+            Query com filtro aplicado
+        """
+        if operador == 'is_null':
+            return query.filter(coluna.is_(None))
+        elif operador == 'is_not_null':
+            return query.filter(coluna.isnot(None))
+        elif operador == '==':
+            return query.filter(coluna == valor)
+        elif operador == '!=':
+            return query.filter(coluna != valor)
+        elif operador == '>':
+            return query.filter(coluna > valor)
+        elif operador == '>=':
+            return query.filter(coluna >= valor)
+        elif operador == '<':
+            return query.filter(coluna < valor)
+        elif operador == '<=':
+            return query.filter(coluna <= valor)
+        elif operador == 'ilike':
+            return query.filter(coluna.ilike(f'%{valor}%'))
+        elif operador == 'like':
+            return query.filter(coluna.like(f'%{valor}%'))
+        elif operador == 'in':
+            return query.filter(coluna.in_(valor))
+        elif operador == 'between' and isinstance(valor, list) and len(valor) == 2:
+            return query.filter(coluna.between(valor[0], valor[1]))
+        else:
+            logger.warning(f"[FILTRO] Operador não suportado: {operador}")
+            return query
 
     def __repr__(self):
         return f"<{self.__class__.__name__} nome={self.NOME} dominio={self.DOMINIO}>"

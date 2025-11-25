@@ -2,9 +2,11 @@
 Prompt para classificação de intenções.
 
 Gera o prompt dinamicamente baseado nas capacidades registradas
-E nos códigos aprendidos pelo IA Trainer.
+e nos DOIS sistemas de aprendizado:
+  1. ClaudeAprendizado (caderno de dicas - conhecimento conceitual)
+  2. CodigoSistemaGerado (receitas prontas - código do IA Trainer)
 
-Limite: 200 linhas
+Limite: 250 linhas
 """
 
 import logging
@@ -13,9 +15,74 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _carregar_aprendizados_usuario(usuario_id: int = None) -> str:
+    """
+    Carrega aprendizados do ClaudeAprendizado (caderno de dicas).
+
+    Inclui aprendizados globais E do usuário específico.
+    Estes são conhecimentos conceituais que ajudam o classificador
+    a entender melhor o contexto do negócio.
+
+    Args:
+        usuario_id: ID do usuário (opcional, para aprendizados personalizados)
+
+    Returns:
+        String formatada com aprendizados relevantes para classificação
+    """
+    try:
+        from ..models import ClaudeAprendizado
+
+        # Busca aprendizados ativos (globais + usuario)
+        query = ClaudeAprendizado.query.filter_by(ativo=True)
+
+        if usuario_id:
+            # Globais OU do usuário específico
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    ClaudeAprendizado.usuario_id.is_(None),  # Globais
+                    ClaudeAprendizado.usuario_id == usuario_id  # Do usuário
+                )
+            )
+        else:
+            # Apenas globais
+            query = query.filter(ClaudeAprendizado.usuario_id.is_(None))
+
+        aprendizados = query.order_by(
+            ClaudeAprendizado.prioridade.desc(),
+            ClaudeAprendizado.criado_em.desc()
+        ).limit(30).all()  # Limita para não sobrecarregar o prompt
+
+        if not aprendizados:
+            return ''
+
+        # Agrupa por categoria para melhor organização
+        por_categoria = {}
+        for a in aprendizados:
+            cat = a.categoria.upper()
+            if cat not in por_categoria:
+                por_categoria[cat] = []
+            por_categoria[cat].append(a.valor)
+
+        # Formata para incluir no prompt de classificação
+        linhas = ["\n=== CONHECIMENTO DO NEGOCIO (aprendido via chat) ==="]
+        linhas.append("Use estas informações para entender melhor as perguntas:")
+        for categoria, valores in por_categoria.items():
+            linhas.append(f"\n[{categoria}]")
+            for valor in valores:
+                linhas.append(f"- {valor}")
+        linhas.append("\n=== FIM DO CONHECIMENTO APRENDIDO ===\n")
+
+        return "\n".join(linhas)
+
+    except Exception as e:
+        logger.debug(f"[INTENT_PROMPT] ClaudeAprendizado nao disponivel: {e}")
+        return ''
+
+
 def _carregar_codigos_aprendidos() -> dict:
     """
-    Carrega códigos aprendidos do IA Trainer.
+    Carrega códigos aprendidos do IA Trainer (receitas prontas).
 
     Returns:
         Dict com prompts, conceitos e entidades formatados
@@ -37,15 +104,18 @@ def _carregar_codigos_aprendidos() -> dict:
         return {'prompts': '', 'conceitos': '', 'entidades': ''}
 
 
-def gerar_prompt_classificacao(contexto_conversa: str = None) -> str:
+def gerar_prompt_classificacao(contexto_conversa: str = None, usuario_id: int = None) -> str:
     """
     Gera o prompt de classificação de intenções.
 
     O prompt é gerado dinamicamente baseado nas capacidades registradas
-    E nos códigos aprendidos pelo IA Trainer.
+    e nos DOIS sistemas de aprendizado:
+      1. ClaudeAprendizado (caderno de dicas - conhecimento conceitual)
+      2. CodigoSistemaGerado (receitas prontas - código do IA Trainer)
 
     Args:
         contexto_conversa: Contexto de conversa anterior (para follow-ups)
+        usuario_id: ID do usuário para carregar aprendizados personalizados
 
     Returns:
         Prompt completo para classificação
@@ -64,7 +134,10 @@ def gerar_prompt_classificacao(contexto_conversa: str = None) -> str:
         intencoes = ["consultar_status", "buscar_pedido", "analisar_disponibilidade", "outro"]
         exemplos = ""
 
-    # Carrega códigos aprendidos pelo IA Trainer
+    # 1. Carrega aprendizados do ClaudeAprendizado (caderno de dicas)
+    conhecimento_aprendido = _carregar_aprendizados_usuario(usuario_id)
+
+    # 2. Carrega códigos aprendidos pelo IA Trainer (receitas prontas)
     codigos_aprendidos = _carregar_codigos_aprendidos()
 
     # Adiciona domínios e intenções fixas que sempre devem existir
@@ -150,8 +223,31 @@ REGRAS PARA ROTA/SUB-ROTA:
 - "rota A", "rota B", "rota CAP" = sub-rota (campo: sub_rota)
 - "pedidos para SP" = UF (campo: uf)
 
+REGRAS PARA CONDICOES COMPOSTAS (FILTROS IMPLICITOS):
+Quando o usuario menciona essas condicoes, o sistema SABE aplicar o filtro automaticamente:
+- "sem agendamento" = agendamento IS NULL (filtro automatico)
+- "sem expedicao" = expedicao IS NULL (filtro automatico)
+- "sem protocolo" = protocolo IS NULL (filtro automatico)
+- "sem transportadora" = roteirizacao IS NULL (filtro automatico)
+- "com agendamento" / "agendados" = agendamento IS NOT NULL
+- "atrasados" = expedicao < hoje
+- "pendentes" = sincronizado_nf = False
+- "abertos" = status = 'ABERTO'
+- "hoje" = expedicao = data atual
+- "amanha" = expedicao = data atual + 1
+
+IMPORTANTE: Perguntas como "pedidos do cliente X sem agendamento" DEVEM ser processadas:
+- Extraia cliente = X
+- O filtro "sem agendamento" sera aplicado AUTOMATICAMENTE pelo sistema
+- Use intencao = "buscar_pedido" ou "consultar_status"
+
+CAMPOS DISPONIVEIS NOS MODELOS:
+- Separacao/CarteiraPrincipal: num_pedido, cnpj_cpf, raz_social_red, cod_produto, nome_produto, qtd_saldo, valor_saldo, expedicao, agendamento, protocolo, roteirizacao, rota, sub_rota, cod_uf, nome_cidade, status, sincronizado_nf
+- Datas: expedicao (data expedição), agendamento (data agendamento), data_pedido
+- Status: ABERTO, PREVISAO, COTADO, EMBARCADO, FATURADO
+
 {f"EXEMPLOS DAS CAPACIDADES:{chr(10)}{exemplos}" if exemplos else ""}
 
-{codigos_aprendidos['prompts']}{codigos_aprendidos['conceitos']}{codigos_aprendidos['entidades']}Retorne SOMENTE o JSON, sem explicacoes."""
+{conhecimento_aprendido}{codigos_aprendidos['prompts']}{codigos_aprendidos['conceitos']}{codigos_aprendidos['entidades']}Retorne SOMENTE o JSON, sem explicacoes."""
 
     return prompt

@@ -55,6 +55,10 @@ def processar_acao_separacao(
     elif intencao == "alterar_quantidade":
         return _processar_alterar_quantidade(usuario_id, item, quantidade)
 
+    elif intencao == "alterar_expedicao":
+        # NOVO v3.4.1: Alterar data de expedição do rascunho
+        return _processar_alterar_expedicao(usuario_id, entidades)
+
     # === AÇÕES DE CRIAÇÃO DE RASCUNHO ===
 
     elif intencao in ("criar_separacao", "separar", "separar_disponiveis"):
@@ -62,6 +66,19 @@ def processar_acao_separacao(
         rascunho_existente = RascunhoService.carregar_rascunho(usuario_id) if usuario_id else None
 
         if rascunho_existente:
+            # NOVO v3.4.1: Verifica se usuário especificou nova data de expedição
+            data_expedicao_nova = entidades.get("data_expedicao")
+            if data_expedicao_nova and data_expedicao_nova != rascunho_existente.data_expedicao:
+                # Atualiza a data do rascunho existente
+                rascunho_existente.data_expedicao = data_expedicao_nova
+                RascunhoService.salvar_rascunho(usuario_id, rascunho_existente)
+                logger.info(f"[ACTION] Data do rascunho atualizada para: {data_expedicao_nova}")
+                return (
+                    f"📅 Data de expedição atualizada para o pedido {rascunho_existente.num_pedido}!\n\n"
+                    f"{RascunhoService.formatar_rascunho(rascunho_existente)}\n\n"
+                    "Deseja 'Confirmar' este rascunho ou 'Cancelar'?"
+                )
+
             return (
                 f"Você já tem um rascunho ativo para o pedido {rascunho_existente.num_pedido}.\n\n"
                 f"{RascunhoService.formatar_rascunho(rascunho_existente)}\n\n"
@@ -85,8 +102,10 @@ def processar_acao_separacao(
                 "- 'Separar disponíveis' = apenas itens em estoque"
             )
 
+        # NOVO v3.4: Extrai data específica se usuário mencionou
+        data_expedicao_usuario = entidades.get("data_expedicao")
         # _criar_rascunho_opcao já busca num_pedido do contexto se não tiver
-        return _criar_rascunho_opcao(usuario_id, num_pedido, opcao)
+        return _criar_rascunho_opcao(usuario_id, num_pedido, opcao, data_expedicao_usuario)
 
     # === AÇÕES DE CONFIRMAÇÃO ===
 
@@ -167,6 +186,13 @@ def _buscar_pedido_do_contexto(usuario_id: int) -> Optional[str]:
 def _criar_rascunho(usuario_id: int, num_pedido: str, opcao: str = None, entidades: Dict = None) -> str:
     """Cria um rascunho baseado no contexto."""
 
+    # NOVO v3.4: Extrai data específica das entidades (se usuário especificou)
+    data_expedicao_usuario = None
+    if entidades:
+        data_expedicao_usuario = entidades.get("data_expedicao")
+        if data_expedicao_usuario:
+            logger.info(f"[ACTION] Data específica do usuário detectada: {data_expedicao_usuario}")
+
     # Detecta modo pela pergunta do usuário
     if entidades:
         texto_original = str(entidades.get("texto_original", "")).lower()
@@ -179,14 +205,19 @@ def _criar_rascunho(usuario_id: int, num_pedido: str, opcao: str = None, entidad
         ]
         if any(p in texto_original for p in padroes_total):
             logger.info(f"[ACTION] Detectado pedido TOTAL para {num_pedido}")
-            return _criar_rascunho_total_pedido(usuario_id, num_pedido)
+            return _criar_rascunho_total_pedido(usuario_id, num_pedido, data_expedicao_usuario)
 
         # Detecta disponíveis
         if any(p in texto_original for p in ["disponivel", "disponíveis", "o que dá", "o que da", "em estoque"]):
-            return _criar_rascunho_disponiveis(usuario_id, num_pedido)
+            return _criar_rascunho_disponiveis(usuario_id, num_pedido, data_expedicao_usuario)
 
     if opcao:
-        return _criar_rascunho_opcao(usuario_id, num_pedido, opcao)
+        return _criar_rascunho_opcao(usuario_id, num_pedido, opcao, data_expedicao_usuario)
+
+    # NOVO v3.4: Se tem data específica mas não tem opcao, cria direto como total
+    if data_expedicao_usuario:
+        logger.info(f"[ACTION] Criando rascunho com data do usuário: {data_expedicao_usuario}")
+        return _criar_rascunho_total_pedido(usuario_id, num_pedido, data_expedicao_usuario)
 
     # Sem opção específica - pergunta ao usuário
     return (
@@ -198,14 +229,26 @@ def _criar_rascunho(usuario_id: int, num_pedido: str, opcao: str = None, entidad
     )
 
 
-def _criar_rascunho_total_pedido(usuario_id: int, num_pedido: str) -> str:
-    """Cria rascunho com TODOS os itens do pedido (independente de estoque)."""
+def _criar_rascunho_total_pedido(usuario_id: int, num_pedido: str, data_expedicao_usuario: str = None) -> str:
+    """
+    Cria rascunho com TODOS os itens do pedido (independente de estoque).
+
+    Args:
+        usuario_id: ID do usuário
+        num_pedido: Número do pedido
+        data_expedicao_usuario: Data específica informada pelo usuário (ISO format) - SOBRESCREVE a calculada
+    """
     resultado = RascunhoService.criar_rascunho_total(num_pedido)
 
     if not resultado["sucesso"]:
         return f"Erro ao criar rascunho total: {resultado.get('erro')}"
 
     rascunho = resultado["rascunho"]
+
+    # NOVO v3.4: Se usuário especificou data, sobrescreve a calculada
+    if data_expedicao_usuario:
+        rascunho.data_expedicao = data_expedicao_usuario
+        logger.info(f"[ACTION] Data de expedição sobrescrita para: {data_expedicao_usuario}")
 
     if usuario_id:
         RascunhoService.salvar_rascunho(usuario_id, rascunho)
@@ -218,8 +261,15 @@ def _criar_rascunho_total_pedido(usuario_id: int, num_pedido: str) -> str:
     )
 
 
-def _criar_rascunho_disponiveis(usuario_id: int, num_pedido: str) -> str:
-    """Cria rascunho apenas com itens disponíveis."""
+def _criar_rascunho_disponiveis(usuario_id: int, num_pedido: str, data_expedicao_usuario: str = None) -> str:
+    """
+    Cria rascunho apenas com itens disponíveis.
+
+    Args:
+        usuario_id: ID do usuário
+        num_pedido: Número do pedido
+        data_expedicao_usuario: Data específica informada pelo usuário (ISO format) - SOBRESCREVE a calculada
+    """
     resultado = RascunhoService.criar_rascunho_disponiveis(num_pedido)
 
     if not resultado["sucesso"]:
@@ -227,18 +277,29 @@ def _criar_rascunho_disponiveis(usuario_id: int, num_pedido: str) -> str:
 
     rascunho = resultado["rascunho"]
 
+    # NOVO v3.4: Se usuário especificou data, sobrescreve a calculada
+    if data_expedicao_usuario:
+        rascunho.data_expedicao = data_expedicao_usuario
+        logger.info(f"[ACTION] Data de expedição sobrescrita para: {data_expedicao_usuario}")
+
     if usuario_id:
         RascunhoService.salvar_rascunho(usuario_id, rascunho)
 
     return RascunhoService.formatar_rascunho(rascunho)
 
 
-def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str) -> str:
+def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str, data_expedicao_usuario: str = None) -> str:
     """
     Cria rascunho baseado em uma opção (A, B, C).
 
     MELHORIA: Primeiro tenta usar opções salvas no ConversationContext
     (da análise de disponibilidade anterior), evitando re-análise.
+
+    Args:
+        usuario_id: ID do usuário
+        num_pedido: Número do pedido
+        opcao: Opção escolhida (A, B, C)
+        data_expedicao_usuario: Data específica informada pelo usuário (ISO format) - SOBRESCREVE a calculada
     """
     from ..core.conversation_context import ConversationContextManager
 
@@ -285,6 +346,11 @@ def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str) -> str:
         return f"Erro ao criar rascunho: {resultado.get('erro')}"
 
     rascunho = resultado["rascunho"]
+
+    # NOVO v3.4: Se usuário especificou data, sobrescreve a calculada
+    if data_expedicao_usuario:
+        rascunho.data_expedicao = data_expedicao_usuario
+        logger.info(f"[ACTION] Data de expedição sobrescrita para: {data_expedicao_usuario}")
 
     if usuario_id:
         RascunhoService.salvar_rascunho(usuario_id, rascunho)
@@ -367,6 +433,66 @@ def _processar_alterar_quantidade(usuario_id: int, item: str, quantidade: float)
     RascunhoService.salvar_rascunho(usuario_id, rascunho)
 
     return f"{resultado}\n\n{RascunhoService.formatar_rascunho(rascunho)}"
+
+
+def _processar_alterar_expedicao(usuario_id: int, entidades: Dict) -> str:
+    """
+    NOVO v3.4.1: Processa alteração de data de expedição do rascunho.
+
+    Chamado quando usuário diz:
+    - "mudar a data para 27/11"
+    - "alterar expedição para dia 28/11"
+    - "quero pro dia 27/11 e não pro dia 25/11"
+    """
+    if not usuario_id:
+        return "Erro: sessão não identificada."
+
+    rascunho = RascunhoService.carregar_rascunho(usuario_id)
+    if not rascunho:
+        return (
+            "Você não tem um rascunho ativo para alterar.\n"
+            "Primeiro, crie um rascunho: 'Criar separação do pedido VCD123'"
+        )
+
+    # Tenta pegar data_expedicao das entidades (extraída pelo classificador ou composite_extractor)
+    nova_data = entidades.get("data_expedicao")
+
+    if not nova_data:
+        # Se não veio, tenta do texto_original
+        texto = entidades.get("texto_original", "")
+        from ..core.composite_extractor import get_extractor
+        extractor = get_extractor()
+        resultado = extractor.extrair(texto)
+        if resultado.get('data_especifica'):
+            nova_data = resultado['data_especifica'].isoformat()
+
+    if not nova_data:
+        return (
+            "Para alterar a data de expedição, informe a nova data.\n"
+            "Exemplo: 'Alterar para dia 27/11' ou 'Mudar expedição para 28/11'"
+        )
+
+    # Atualiza a data
+    data_anterior = rascunho.data_expedicao
+    rascunho.data_expedicao = nova_data
+    RascunhoService.salvar_rascunho(usuario_id, rascunho)
+
+    logger.info(f"[ACTION] Data alterada: {data_anterior} -> {nova_data}")
+
+    # Formata data para exibição
+    try:
+        from datetime import date
+        data_obj = date.fromisoformat(nova_data)
+        data_formatada = data_obj.strftime("%d/%m/%Y")
+    except (ValueError, TypeError):
+        data_formatada = nova_data
+
+    return (
+        f"📅 **Data de expedição atualizada!**\n\n"
+        f"Nova data: **{data_formatada}**\n\n"
+        f"{RascunhoService.formatar_rascunho(rascunho)}\n\n"
+        "Deseja 'Confirmar' este rascunho ou fazer outras alterações?"
+    )
 
 
 def _processar_confirmacao(usuario_id: int, usuario_nome: str) -> str:

@@ -78,9 +78,10 @@ def processar_consulta(
             return resultado_aprendizado
 
     # 3. Classificar intenção (usa consulta reconstruída para melhor classificação)
+    # IMPORTANTE: Passa usuario_id para que o classificador use os aprendizados personalizados
     from .classifier import get_classifier
     classifier = get_classifier()
-    intencao = classifier.classificar(consulta_reconstruida, contexto_memoria)
+    intencao = classifier.classificar(consulta_reconstruida, contexto_memoria, usuario_id=usuario_id)
 
     # 3.0.1 Merge entidades do contexto com entidades detectadas
     if entidades_contexto:
@@ -94,7 +95,7 @@ def processar_consulta(
 
     # 3.1 Se confiança baixa, re-classificar com contexto do README
     if confianca < 0.7:
-        intencao = _reclassificar_com_readme(classifier, consulta, contexto_memoria, intencao)
+        intencao = _reclassificar_com_readme(classifier, consulta, contexto_memoria, intencao, usuario_id)
 
     dominio = intencao.get("dominio", "geral")
     intencao_tipo = intencao.get("intencao", "")
@@ -102,6 +103,14 @@ def processar_consulta(
 
     # 3.2 Mapear entidades para nomes de campos esperados pelas capacidades
     entidades = _mapear_entidades_para_campos(entidades)
+
+    # 3.3 NOVO: Extrair condições compostas ("sem agendamento", "atrasados", etc)
+    from .composite_extractor import enriquecer_entidades
+    entidades, filtros_compostos = enriquecer_entidades(consulta_reconstruida, entidades)
+    if filtros_compostos:
+        entidades['_filtros_compostos'] = filtros_compostos
+        logger.info(f"[ORCHESTRATOR] {len(filtros_compostos)} condições compostas detectadas")
+
     intencao['entidades'] = entidades
 
     logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}")
@@ -139,11 +148,16 @@ def processar_consulta(
     # 8. Buscar e aplicar filtros aprendidos pelo IA Trainer
     filtros_aprendidos = _buscar_filtros_aprendidos(consulta, dominio)
 
-    # 9. Executar capacidade com filtros aprendidos
+    # 8.1 NOVO: Combinar filtros aprendidos + filtros compostos extraídos
+    filtros_compostos = entidades.pop('_filtros_compostos', [])
+    todos_filtros = filtros_aprendidos + filtros_compostos
+
+    # 9. Executar capacidade com TODOS os filtros
     contexto = {
         "usuario_id": usuario_id,
         "usuario": usuario,
-        "filtros_aprendidos": filtros_aprendidos  # Passa para a capacidade
+        "filtros_aprendidos": todos_filtros,  # Inclui filtros compostos
+        "filtros_compostos": filtros_compostos  # Separado para referência
     }
     resultado = capacidade.executar(entidades, contexto)
 
@@ -175,6 +189,14 @@ def processar_consulta(
         )
         logger.info(f"[ORCHESTRATOR] {len(resultado['opcoes'])} opções salvas no contexto")
 
+    # 10.2. NOVO v3.4: Registra itens numerados para referência futura
+    if usuario_id and resultado.get('dados'):
+        dados = resultado['dados']
+        if isinstance(dados, list) and len(dados) > 0:
+            from .conversation_context import ConversationContextManager
+            ConversationContextManager.registrar_itens_numerados(usuario_id, dados)
+            logger.info(f"[ORCHESTRATOR] {len(dados)} itens numerados para referência")
+
     # 11. Registrar na memória
     _registrar_conversa(usuario_id, consulta, resposta, intencao, resultado)
 
@@ -198,21 +220,52 @@ def _mapear_entidades_para_campos(entidades: Dict) -> Dict:
     O classificador extrai entidades como 'cliente', mas as capacidades esperam
     'raz_social_red'. Este mapeamento faz a tradução.
 
-    Mapeamentos:
-    - cliente -> raz_social_red
-    - cnpj -> cnpj_cpf
-    - cpf -> cnpj_cpf
-    - codigo -> cod_produto
-    - produto -> nome_produto (se não for código)
+    Mapeamentos organizados por categoria:
+    - Cliente: cliente -> raz_social_red, cnpj/cpf -> cnpj_cpf
+    - Produto: codigo/codigo_produto -> cod_produto, produto -> nome_produto
+    - Localidade: uf/estado -> cod_uf, cidade -> nome_cidade
+    - Datas: data_expedicao -> expedicao, data_agendamento -> agendamento
+    - Quantidades: quantidade/qtd -> qtd_saldo
+    - Pedido: pedido/numero_pedido -> num_pedido
     """
     if not entidades:
         return entidades
 
+    # Mapeamento expandido com todos os campos relevantes
     mapeamento = {
+        # === CLIENTE ===
         'cliente': 'raz_social_red',
         'cnpj': 'cnpj_cpf',
         'cpf': 'cnpj_cpf',
+        'razao_social': 'raz_social_red',
+
+        # === PRODUTO ===
         'codigo': 'cod_produto',
+        'codigo_produto': 'cod_produto',
+        'produto': 'nome_produto',  # Se não parecer código
+
+        # === LOCALIDADE ===
+        'uf': 'cod_uf',
+        'estado': 'cod_uf',
+        'cidade': 'nome_cidade',
+        'municipio': 'nome_cidade',
+
+        # === DATAS ===
+        'data_expedicao': 'expedicao',
+        'data_agendamento': 'agendamento',
+        'data_entrega': 'data_entrega_pedido',
+
+        # === QUANTIDADES ===
+        'quantidade': 'qtd_saldo',
+        'qtd': 'qtd_saldo',
+
+        # === PEDIDO ===
+        'pedido': 'num_pedido',
+        'numero_pedido': 'num_pedido',
+        'pedido_cliente': 'pedido_cliente',
+
+        # === FRETE/EMBARQUE ===
+        'transportadora': 'roteirizacao',
     }
 
     entidades_mapeadas = entidades.copy()
@@ -224,6 +277,19 @@ def _mapear_entidades_para_campos(entidades: Dict) -> Dict:
             if not entidades_mapeadas.get(destino):
                 entidades_mapeadas[destino] = valor
                 logger.debug(f"[ORCHESTRATOR] Mapeado {origem}={valor} -> {destino}")
+
+    # Tratamento especial para 'produto': verifica se parece código ou nome
+    produto = entidades.get('produto')
+    if produto and str(produto).lower() not in ('null', 'none', ''):
+        # Se for só dígitos ou tiver formato de código (ex: "12345"), mapeia para cod_produto
+        if str(produto).isdigit() or (len(str(produto)) <= 10 and str(produto).replace('-', '').isalnum()):
+            if not entidades_mapeadas.get('cod_produto'):
+                entidades_mapeadas['cod_produto'] = produto
+                logger.debug(f"[ORCHESTRATOR] Produto '{produto}' identificado como código")
+        else:
+            # Senão, é nome do produto
+            if not entidades_mapeadas.get('nome_produto'):
+                entidades_mapeadas['nome_produto'] = produto
 
     return entidades_mapeadas
 
@@ -620,7 +686,8 @@ def _reclassificar_com_readme(
     classifier,
     consulta: str,
     contexto_memoria: str,
-    intencao_original: dict
+    intencao_original: dict,
+    usuario_id: int = None
 ) -> dict:
     """
     Re-classifica consulta usando contexto do README quando confiança está baixa.
@@ -630,6 +697,7 @@ def _reclassificar_com_readme(
         consulta: Texto original do usuário
         contexto_memoria: Contexto de memória
         intencao_original: Classificação original com baixa confiança
+        usuario_id: ID do usuário para aprendizados personalizados
 
     Returns:
         Nova classificação (ou original se não melhorar)
@@ -647,11 +715,12 @@ def _reclassificar_com_readme(
         confianca_original = intencao_original.get("confianca", 0.0)
         logger.info(f"[ORCHESTRATOR] Confiança baixa ({confianca_original:.2f}), re-classificando com README...")
 
-        # Re-classifica com contexto adicional
+        # Re-classifica com contexto adicional (mantém usuario_id para aprendizados)
         nova_intencao = classifier.classificar(
             consulta,
             contexto_memoria,
-            contexto_adicional=readme_contexto
+            contexto_adicional=readme_contexto,
+            usuario_id=usuario_id
         )
 
         nova_confianca = nova_intencao.get("confianca", 0.0)

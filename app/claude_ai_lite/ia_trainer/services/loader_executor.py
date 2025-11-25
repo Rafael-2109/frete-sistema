@@ -49,19 +49,46 @@ logger = logging.getLogger(__name__)
 # ============================================
 # MODELS PERMITIDOS (whitelist de seguranca)
 # ============================================
+#
+# IMPORTANTE: Apenas models listados aqui podem ser usados em consultas.
+# Para adicionar novo model:
+#   1. Verificar se o model existe no caminho especificado
+#   2. Adicionar entrada: 'NomeModel': 'caminho.do.modulo'
+#   3. Testar: from caminho.do.modulo import NomeModel
+#
+# NOTAS:
+#   - Pedido: E uma VIEW (read-only), nao uma tabela. Funciona para SELECT.
+#   - Para projecao de estoque, use ServicoEstoqueSimples (servico, nao model)
+#
+# ============================================
 
 MODELS_PERMITIDOS = {
-    'CarteiraPrincipal': 'app.carteira.models',
-    'Separacao': 'app.separacao.models',
-    'Pedido': 'app.pedidos.models',
-    'EstoqueProjetado': 'app.producao.models',
-    'FaturamentoProduto': 'app.faturamento.models',
-    'Frete': 'app.fretes.models',
-    'Embarque': 'app.embarques.models',
-    'EmbarqueItem': 'app.embarques.models',
-    'CadastroPalletizacao': 'app.producao.models',
-    'CadastroRota': 'app.localidades.models',
-    'CadastroSubRota': 'app.localidades.models',
+    # === CARTEIRA E SEPARACAO ===
+    'CarteiraPrincipal': 'app.carteira.models',      # Itens da carteira de pedidos
+    'Separacao': 'app.separacao.models',             # Itens separados/pre-separados
+    'Pedido': 'app.pedidos.models',                  # VIEW agregada de Separacao (read-only!)
+    'PreSeparacaoItem': 'app.carteira.models',       # Pre-separacoes (deprecated, mas ainda usado)
+    'SaldoStandby': 'app.carteira.models',           # Saldos em standby
+
+    # === PRODUCAO E ESTOQUE ===
+    'CadastroPalletizacao': 'app.producao.models',   # Palletizacao e peso dos produtos
+    'ProgramacaoProducao': 'app.producao.models',    # Programacao de producao
+    'MovimentacaoEstoque': 'app.estoque.models',     # Movimentacoes de entrada/saida
+    'UnificacaoCodigos': 'app.estoque.models',       # Codigos unificados de produtos
+
+    # === FATURAMENTO ===
+    'FaturamentoProduto': 'app.faturamento.models',  # Produtos faturados por NF
+
+    # === EMBARQUES ===
+    'Embarque': 'app.embarques.models',              # Embarques (cabecalho)
+    'EmbarqueItem': 'app.embarques.models',          # Itens do embarque
+
+    # === LOCALIDADES E ROTAS ===
+    'CadastroRota': 'app.localidades.models',        # Rotas principais
+    'CadastroSubRota': 'app.localidades.models',     # Sub-rotas
+
+    # === FRETES (expandir quando necessario) ===
+    'Frete': 'app.fretes.models',                    # Fretes
 }
 
 # ============================================

@@ -64,10 +64,13 @@ class GargalosLoader(BaseLoader):
         from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 
         # Busca itens do pedido na carteira
-        itens = CarteiraPrincipal.query.filter(
+        query = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.num_pedido.like(f"%{num_pedido}%"),
             CarteiraPrincipal.ativo == True
-        ).all()
+        )
+        # Aplica filtros aprendidos pelo IA Trainer
+        query = self.aplicar_filtros_aprendidos(query, self._contexto, CarteiraPrincipal)
+        itens = query.all()
 
         if not itens:
             resultado["mensagem"] = f"Pedido '{num_pedido}' nao encontrado na carteira."
@@ -139,14 +142,17 @@ class GargalosLoader(BaseLoader):
         from sqlalchemy import func
 
         # Agrupa demanda por produto na carteira
-        demanda = CarteiraPrincipal.query.with_entities(
+        query = CarteiraPrincipal.query.with_entities(
             CarteiraPrincipal.cod_produto,
             CarteiraPrincipal.nome_produto,
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('total_demanda'),
             func.count(CarteiraPrincipal.num_pedido.distinct()).label('qtd_pedidos')
         ).filter(
             CarteiraPrincipal.ativo == True
-        ).group_by(
+        )
+        # Aplica filtros aprendidos pelo IA Trainer
+        query = self.aplicar_filtros_aprendidos(query, self._contexto, CarteiraPrincipal)
+        demanda = query.group_by(
             CarteiraPrincipal.cod_produto,
             CarteiraPrincipal.nome_produto
         ).all()
@@ -196,10 +202,13 @@ class GargalosLoader(BaseLoader):
         from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 
         # Busca pedidos que usam esse produto
-        itens = CarteiraPrincipal.query.filter(
+        query = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.cod_produto.ilike(f"%{cod_produto}%"),
             CarteiraPrincipal.ativo == True
-        ).all()
+        )
+        # Aplica filtros aprendidos pelo IA Trainer
+        query = self.aplicar_filtros_aprendidos(query, self._contexto, CarteiraPrincipal)
+        itens = query.all()
 
         if not itens:
             resultado["mensagem"] = f"Produto '{cod_produto}' nao encontrado na carteira."
