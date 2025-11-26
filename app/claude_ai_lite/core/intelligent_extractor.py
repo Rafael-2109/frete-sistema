@@ -1,19 +1,21 @@
 """
 Extrator Inteligente - Delega ao Claude a extração completa.
 
-FILOSOFIA v3.5.1 - PILAR 3:
-- O Claude recebe CONTEXTO ESTRUTURADO (JSON), não texto livre
-- Isso elimina ambiguidade e interpretações erradas
-- O Claude sabe EXATAMENTE o estado atual da conversa
+FILOSOFIA v4.0:
+- O Claude é o CÉREBRO - confiamos 100% nas decisões dele
+- O Claude recebe:
+  1. Lista de CAPABILITIES disponíveis (com descrição e intenções)
+  2. ESTADO ESTRUTURADO da conversa (JSON)
+  3. CONHECIMENTO DO NEGÓCIO (aprendizados)
+- O Claude decide:
+  1. DOMÍNIO (carteira, estoque, acao, etc)
+  2. INTENÇÃO (deve mapear para uma capability)
+  3. ENTIDADES extraídas
 
-O Claude deve ter LIBERDADE para:
-- Extrair QUALQUER entidade que encontrar
-- Inferir intenções de forma natural
-- Usar contexto estruturado para entender referências
-- Calcular datas, quantidades, etc.
+O entity_mapper NÃO infere mais - apenas traduz nomes de campos.
 
 Criado em: 24/11/2025
-Atualizado: 24/11/2025 - Contexto estruturado (PILAR 3)
+Atualizado: 26/11/2025 - Claude decide domínio/intenção, lista de capabilities
 """
 
 import json
@@ -24,11 +26,109 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# CAPABILITIES DISPONÍVEIS
+# =============================================================================
+# Lista completa para o Claude escolher. Ele deve retornar a intenção correta.
+
+CAPABILITIES_DISPONIVEIS = """
+=== CAPABILITIES DISPONÍVEIS ===
+
+Escolha a intenção que melhor se encaixa. O sistema vai executar a capability correspondente.
+
+DOMÍNIO: carteira
+- consultar_pedido
+  Intenções: consultar_status, buscar_pedido
+  Descrição: Consulta status e detalhes de pedidos
+  Campos: num_pedido, cnpj_cpf, raz_social_red
+  Exemplos: "Status do pedido VCD123", "Pedidos do cliente Atacadão"
+
+- analisar_disponibilidade
+  Intenções: analisar_disponibilidade, quando_posso_enviar, verificar_disponibilidade
+  Descrição: Analisa QUANDO um pedido/cliente pode ser enviado baseado no estoque
+  Campos: num_pedido, raz_social_red, qtd_saldo
+  Exemplos: "Quando posso enviar o VCD123?", "Quando dá pra enviar 28 pallets pro Atacadão?"
+
+- consultar_produto
+  Intenções: buscar_produto
+  Descrição: Busca produtos na carteira por nome ou código
+  Campos: nome_produto, cod_produto
+  Exemplos: "Azeitona na carteira", "Produto 12345"
+
+- consultar_rota
+  Intenções: buscar_rota, buscar_uf
+  Descrição: Busca pedidos por rota, sub-rota ou UF
+  Campos: rota, sub_rota, cod_uf
+  Exemplos: "Pedidos da rota MG", "O que tem pra SP?"
+
+- analisar_gargalos
+  Intenções: analisar_gargalo
+  Descrição: Identifica produtos que travam pedidos por falta de estoque
+  Campos: num_pedido, cod_produto
+  Exemplos: "O que trava o pedido VCD123?", "Gargalos do pedido"
+
+- analisar_estoque_cliente
+  Intenções: analisar_estoque_cliente, produtos_cliente_data
+  Descrição: Analisa quais produtos de um cliente terão estoque disponível em uma data
+  Campos: raz_social_red, data
+  Exemplos: "Quais produtos do Atacadão terão estoque dia 26?"
+
+- consulta_generica
+  Intenções: consulta_generica, consultar_por_data, listar_dados
+  Descrição: Consultas genéricas em tabelas por período/filtro
+  Campos: tabela, campo_filtro, data_inicio, data_fim
+  Exemplos: "O que entrou de pedido ontem?", "Separações criadas hoje"
+
+DOMÍNIO: estoque
+- consultar_estoque
+  Intenções: consultar_estoque, consultar_ruptura
+  Descrição: Consulta estoque atual, projeção e rupturas
+  Campos: cod_produto, nome_produto
+  Exemplos: "Estoque de azeitona", "Vai dar ruptura de azeitona?"
+
+DOMÍNIO: acao (para modificar dados/criar coisas)
+- criar_separacao
+  Intenções: criar_separacao, separar, gerar_separacao
+  Descrição: Cria separações para pedidos
+  Campos: num_pedido, expedicao, opcao
+  Exemplos: "Cria separação do VCD123", "Separa o pedido pro dia 27"
+
+- escolher_opcao
+  Intenções: escolher_opcao
+  Descrição: Usuário escolhendo opção A/B/C apresentada anteriormente
+  Campos: opcao
+  Exemplos: "Opção A", "Quero a B", "Escolho a primeira"
+
+- confirmar_acao
+  Intenções: confirmar_acao
+  Descrição: Usuário confirmando uma ação pendente
+  Exemplos: "Sim", "Confirmo", "Pode fazer"
+
+- cancelar
+  Intenções: cancelar
+  Descrição: Usuário cancelando ação/rascunho
+  Exemplos: "Cancela", "Desisto", "Não quero mais"
+
+- alterar_expedicao
+  Intenções: alterar_expedicao, alterar_data
+  Descrição: Alterar data de expedição de um rascunho
+  Campos: expedicao
+  Exemplos: "Muda pro dia 28", "Altera a data pra 30/11"
+
+- ver_rascunho
+  Intenções: ver_rascunho
+  Descrição: Mostrar o rascunho atual
+  Exemplos: "Mostra o rascunho", "Como está a separação?"
+
+=== FIM DAS CAPABILITIES ===
+"""
+
+
 class IntelligentExtractor:
     """
     Extrator que delega TODO o trabalho ao Claude.
 
-    NOVO v3.5.1: Recebe contexto ESTRUTURADO em JSON.
+    v4.0: Claude decide domínio, intenção E entidades.
     """
 
     def __init__(self, claude_client):
@@ -41,20 +141,33 @@ class IntelligentExtractor:
         conhecimento_negocio: str = None
     ) -> Dict[str, Any]:
         """
-        Extrai TUDO do texto usando Claude de forma livre.
+        Extrai TUDO do texto usando Claude.
+
+        O Claude recebe:
+        1. Lista de capabilities disponíveis
+        2. Estado estruturado da conversa
+        3. Conhecimento do negócio
+
+        O Claude retorna:
+        - dominio: carteira, estoque, acao, geral
+        - intencao: deve mapear para uma capability
+        - tipo: consulta, acao, modificacao, confirmacao, cancelamento
+        - entidades: dados extraídos
+        - ambiguidade: se precisa perguntar algo
+        - confianca: 0.0 a 1.0
 
         Args:
             texto: Mensagem do usuário
-            contexto_estruturado: JSON estruturado do estado da conversa
-            conhecimento_negocio: Aprendizados do negócio (opcional)
+            contexto_estruturado: JSON do estado da conversa
+            conhecimento_negocio: Aprendizados do negócio
 
         Returns:
-            Dict com extração completa e livre
+            Dict com extração completa
         """
         hoje = datetime.now().strftime("%d/%m/%Y")
         ano_atual = datetime.now().year
 
-        # Monta seção de contexto estruturado
+        # Seção de contexto estruturado
         secao_contexto = ""
         if contexto_estruturado and contexto_estruturado.strip():
             secao_contexto = f"""
@@ -62,101 +175,87 @@ class IntelligentExtractor:
 {contexto_estruturado}
 === FIM DO ESTADO ===
 
-IMPORTANTE - REGRAS BASEADAS NO ESTADO:
-1. Se RASCUNHO_ATIVO.existe = true:
-   - Qualquer menção a data é MODIFICAÇÃO do rascunho existente
-   - "pro dia 27/11" = alterar data_expedicao do rascunho para 2025-11-27
-   - "confirmo" ou "sim" = confirmar o rascunho atual
-   - "cancela" = cancelar o rascunho
-   - Use o num_pedido do rascunho se não for mencionado
+REGRAS DO ESTADO:
+1. Se SEPARACAO.ativo = true:
+   - Há um rascunho de separação em andamento
+   - Menções a data são para MODIFICAR o rascunho
+   - "confirmo" = confirmar_acao
+   - "cancela" = cancelar
 
-2. Se ESTADO.aguardando = "escolha_opcao":
+2. Se OPCOES tem lista:
    - O usuário provavelmente está escolhendo uma opção (A, B, C)
-   - Qualquer menção a data JUNTO com opção modifica a opção escolhida
+   - Use intenção: escolher_opcao
 
-3. Se ENTIDADES_CONHECIDAS tem dados:
-   - Use esses valores quando o usuário disser "esse pedido", "esse cliente"
-   - Não pergunte por num_pedido se já está nas ENTIDADES_CONHECIDAS
+3. Se ENTIDADES tem dados:
+   - Use esses valores quando disser "esse pedido", "esse cliente"
+   - Não pergunte o que já está no contexto
 
 """
 
-        # Prompt que confia no Claude + contexto estruturado
-        system_prompt = f"""Você é um extrator de informações para um sistema de logística de uma INDÚSTRIA DE ALIMENTOS.
+        # Prompt completo
+        system_prompt = f"""Você é o cérebro de um sistema de logística de uma INDÚSTRIA DE ALIMENTOS.
 
 DATA DE HOJE: {hoje}
-{secao_contexto}
-{f"CONHECIMENTO DO NEGÓCIO:{chr(10)}{conhecimento_negocio}{chr(10)}" if conhecimento_negocio else ""}
-TAREFA: Analise o texto e extraia TODAS as informações relevantes.
 
-RETORNE um JSON com:
+{CAPABILITIES_DISPONIVEIS}
+
+{secao_contexto}
+
+{f"CONHECIMENTO DO NEGÓCIO:{chr(10)}{conhecimento_negocio}{chr(10)}" if conhecimento_negocio else ""}
+
+=== SUA TAREFA ===
+
+Analise a mensagem do usuário e retorne um JSON com:
+
 {{
-    "intencao": "o que o usuário QUER FAZER (verbo no infinitivo)",
-    "tipo": "consulta|acao|modificacao|confirmacao|cancelamento|clarificacao|consulta_generica|outro",
+    "dominio": "carteira|estoque|acao|geral",
+    "intencao": "nome_da_intencao (DEVE ser uma das listadas nas capabilities)",
+    "tipo": "consulta|acao|modificacao|confirmacao|cancelamento|clarificacao",
     "entidades": {{
-        // EXTRAIA TUDO que encontrar, sem restrições!
-        // "num_pedido": "VCD123456",
-        // "cliente": "nome do cliente",
-        // "data_expedicao": "2025-11-27" (SEMPRE em formato ISO se for data),
-        // "data_agendamento": "2025-11-28",
-        // "quantidade": 100,
-        // "produto": "azeitona verde",
-        // "opcao": "A" (se usuário escolheu opção),
-        //
-        // PARA CONSULTAS GENÉRICAS (por data, tabela, etc):
-        // "tabela": "CarteiraPrincipal" (ou Separacao, Pedido, etc),
-        // "campo_filtro": "data_pedido" (campo usado no filtro),
-        // "data_inicio": "2025-11-24" (ISO),
-        // "data_fim": "2025-11-25" (ISO),
-        // "valor_filtro": "valor a buscar",
-        //
-        // ... qualquer outra informação relevante
+        // Use nomes de negócio ou técnicos, tanto faz:
+        // "num_pedido" ou "pedido": "VCD123456",
+        // "raz_social_red" ou "cliente": "ATACADAO",
+        // "expedicao" ou "data_expedicao": "2025-11-27" (ISO),
+        // "cod_produto" ou "produto": "azeitona",
+        // "opcao": "A" (se escolheu opção),
+        // ... extraia TUDO relevante
     }},
     "ambiguidade": {{
-        "existe": true/false,
+        "existe": false,
         "pergunta": "pergunta para esclarecer (se existe=true)",
         "opcoes": ["opção 1", "opção 2"]
     }},
-    "contexto_usado": "quais dados do ESTADO você usou",
     "confianca": 0.0 a 1.0
 }}
 
-REGRAS IMPORTANTES:
-1. DATAS: Calcule e retorne em formato ISO (YYYY-MM-DD). Ano: {ano_atual}
+=== REGRAS ===
+
+1. DOMÍNIO:
+   - "carteira" = consultas sobre pedidos, clientes, produtos na carteira
+   - "estoque" = consultas sobre estoque, rupturas, projeção
+   - "acao" = criar/modificar/confirmar/cancelar algo
+   - "geral" = não se encaixa em nenhum
+
+2. INTENÇÃO:
+   - DEVE ser uma das listadas nas capabilities
+   - Escolha a que melhor se encaixa
+   - Se não souber, use a mais próxima ou retorne ambiguidade
+
+3. DATAS:
+   - Retorne em formato ISO (YYYY-MM-DD)
    - "dia 27/11" → "2025-11-27"
-   - "amanhã" → calcule baseado em hoje
-   - "semana que vem" → calcule data aproximada
+   - "amanhã" → calcule baseado em hoje ({hoje})
+   - Ano padrão: {ano_atual}
 
-2. CONTEXTO ESTRUTURADO: Use o JSON do ESTADO ATUAL para entender referências.
-   - Se tem RASCUNHO_ATIVO, mensagens são sobre ELE
-   - Se tem ENTIDADES_CONHECIDAS.num_pedido, use quando disser "esse pedido"
+4. AMBIGUIDADE:
+   - Só pergunte se REALMENTE não souber
+   - Se tem contexto (ESTADO), use-o
+   - Prefira inferir do que perguntar
 
-3. MODIFICAÇÕES COM RASCUNHO:
-   - "crie pro dia X" + rascunho ativo = MODIFICAR data do rascunho
-   - tipo = "modificacao"
-   - data_expedicao = nova data
-
-4. AMBIGUIDADE - Só pergunte se REALMENTE não souber:
-   - Se tem rascunho ativo, data mencionada é para a expedição (não pergunte)
-   - Se tem num_pedido no contexto, use-o (não pergunte)
-   - Só pergunte quando não houver como inferir
-
-5. SEPARAÇÃO:
-   - data_expedicao = saída do armazém
-   - data_agendamento = entrega ao cliente
-   - "criar para dia X" geralmente é data_expedicao
-
-6. CONSULTAS GENÉRICAS (tipo="consulta_generica"):
-   Use quando o usuário quer buscar dados por período/filtro:
-   - "O que entrou de pedido ontem e hoje?" → tabela=CarteiraPrincipal, campo_filtro=data_pedido, data_inicio=ontem, data_fim=hoje
-   - "Pedidos novos" → tabela=CarteiraPrincipal, campo_filtro=data_pedido, data_inicio=últimos 3 dias
-   - "Separações criadas hoje" → tabela=Separacao, campo_filtro=criado_em, data_inicio=hoje
-
-   TABELAS DISPONÍVEIS:
-   - CarteiraPrincipal: pedidos/itens na carteira (campo data: data_pedido)
-   - Separacao: separações criadas (campo data: criado_em)
-   - Pedido: VIEW agregada de pedidos
-   - FaturamentoProduto: itens faturados
-   - Embarque: embarques
+5. CONTEXTO:
+   - Se tem SEPARACAO ativa, ações são sobre ela
+   - Se tem OPCOES, usuário provavelmente está escolhendo
+   - Use ENTIDADES do contexto quando disser "esse", "aquele"
 
 Retorne APENAS o JSON, sem explicações."""
 
@@ -175,8 +274,9 @@ Retorne APENAS o JSON, sem explicações."""
             # Remove blocos markdown
             if resposta_limpa.startswith("```"):
                 linhas = resposta_limpa.split("\n")
-                # Remove primeira e última linha (```json e ```)
-                resposta_limpa = "\n".join(linhas[1:-1] if linhas[-1].strip() == "```" else linhas[1:])
+                resposta_limpa = "\n".join(
+                    linhas[1:-1] if linhas[-1].strip() == "```" else linhas[1:]
+                )
 
             resultado = json.loads(resposta_limpa)
 
@@ -187,9 +287,13 @@ Retorne APENAS o JSON, sem explicações."""
                     if v is not None and str(v).lower() not in ('null', 'none', '')
                 }
 
-            logger.info(f"[INTELLIGENT_EXTRACTOR] Extraído: tipo={resultado.get('tipo')}, "
-                       f"intencao={resultado.get('intencao')}, "
-                       f"entidades={list(resultado.get('entidades', {}).keys())}")
+            logger.info(
+                f"[INTELLIGENT_EXTRACTOR] Extraído: "
+                f"dominio={resultado.get('dominio')}, "
+                f"intencao={resultado.get('intencao')}, "
+                f"tipo={resultado.get('tipo')}, "
+                f"entidades={list(resultado.get('entidades', {}).keys())}"
+            )
 
             return resultado
 
@@ -201,7 +305,8 @@ Retorne APENAS o JSON, sem explicações."""
     def _fallback(self, texto: str) -> Dict[str, Any]:
         """Resposta padrão quando extração falha."""
         return {
-            "intencao": "entender",
+            "dominio": "geral",
+            "intencao": "outro",
             "tipo": "outro",
             "entidades": {"texto_original": texto},
             "confianca": 0.0,
