@@ -5,8 +5,92 @@
 Modulo de IA conversacional para o sistema de fretes, permitindo consultas em linguagem natural sobre pedidos, produtos e criacao de separacoes.
 
 **Criado em:** Novembro/2025
-**Ultima atualizacao:** 25/11/2025
-**Versao:** 3.5.2 (PILAR 3 - Estado Estruturado + Otimizações)
+**Ultima atualizacao:** 26/11/2025
+**Versao:** 4.0.0 (AgentPlanner - Claude decide ferramentas)
+
+---
+
+## 🚀 Novidades v4.0.0 (AgentPlanner)
+
+### 🔴 MUDANÇA ARQUITETURAL PRINCIPAL
+
+O Claude agora é um **Agente com Ferramentas**:
+- Claude **planeja** quais ferramentas usar
+- Claude **executa** até 5 etapas encadeadas
+- Claude **escolhe** o modelo correto (CarteiraPrincipal vs Separacao)
+- Sistema apenas **valida** e **executa** o plano
+
+### 📦 NOVOS COMPONENTES
+
+| Arquivo | Função |
+|---------|--------|
+| `core/agent_planner.py` | Planeja e executa ferramentas em múltiplas etapas |
+| `core/tool_registry.py` | Catálogo unificado de ferramentas (capabilities + códigos + loader_genérico) |
+
+### ✅ MELHORIAS IMPLEMENTADAS
+
+1. **Schema de Regras de Negócio** no `tool_registry.py`:
+   - Documentação completa de CarteiraPrincipal vs Separacao
+   - Fórmulas de cálculo de saldos (carteira, separação, em aberto)
+   - Sinônimos do usuário → tabelas/campos corretos
+   - Quando usar cada tabela baseado na pergunta
+
+2. **Filtros Obrigatórios** no `agent_planner.py`:
+   - Se há `raz_social_red` nas entidades → SEMPRE filtra por cliente
+   - Se há `num_pedido` nas entidades → SEMPRE filtra por pedido
+   - NUNCA retorna dados de todos os clientes quando há contexto específico
+
+3. **Campos de Retorno Obrigatórios**:
+   - Se filtra por cliente → SEMPRE inclui `raz_social_red` no retorno
+   - Se filtra por pedido → SEMPRE inclui `num_pedido` no retorno
+   - Garante identificação dos dados retornados
+
+4. **Validação de Contexto** no `response_reviewer.py`:
+   - Verifica se dados retornados correspondem ao cliente/pedido esperado
+   - Se não corresponde → sinaliza para reprocessar
+
+5. **Reprocessamento Automático** no `orchestrator.py`:
+   - Se validação falha → tenta novamente com direcionamento específico
+   - Injeta entidades do estado que estavam faltando
+   - Máximo 1 retry para evitar loops
+
+6. **Normalização UPPERCASE** no `entity_mapper.py`:
+   - Campos como `raz_social_red` são normalizados para MAIÚSCULO
+   - Garante consistência com dados do banco
+
+### 🗑️ ARQUIVOS REMOVIDOS
+
+| Arquivo | Motivo |
+|---------|--------|
+| `config.py` | Constantes não utilizadas (cada capability define seu próprio CAMPOS_BUSCA) |
+| `conversation_context.py` | 100% deprecated, delegava para EstadoManager |
+
+### 📊 FLUXO ATUALIZADO v4.0
+
+```
+1. Estado Estruturado (JSON)
+2. Conhecimento do Negócio (cache)
+3. Extração Inteligente (Claude)
+4. Mapeamento + Normalização UPPERCASE
+5. Atualização do Estado
+        │
+        ▼
+┌───────────────────────────────────────────┐
+│ 6. AGENT PLANNER (NOVO v4.0)              │
+│                                           │
+│   6.1 Carrega ferramentas (ToolRegistry)  │
+│   6.2 Claude planeja etapas               │
+│   6.3 Executa cada etapa (máx 5)          │
+│   6.4 Fallback: AutoLoader experimental   │
+└───────────────────────────────────────────┘
+        │
+        ▼
+7. Gerar Resposta (com validação de contexto)
+   → Se dados não correspondem → REPROCESSA
+8. Registrar na Memória
+```
+
+---
 
 ### Novidades v3.5.2 (Estado Estruturado - PILAR 3)
 
@@ -388,7 +472,7 @@ app/claude_ai_lite/
 |
 |-- README.md                 # Esta documentacao
 |-- __init__.py               # Inicializacao e exports
-|-- config.py                 # Configuracoes
+|-- # config.py              # ❌ REMOVIDO v4.0 (constantes não utilizadas)
 |-- routes.py                 # Endpoints Flask (API)
 |-- routes_admin.py           # Endpoints de administracao
 |
@@ -400,18 +484,22 @@ app/claude_ai_lite/
 |   |-- __init__.py           # Exporta processar_consulta
 |   |-- orchestrator.py       # Orquestra fluxo principal (PILAR 3)
 |   |
-|   |-- # 🆕 NOVOS MÓDULOS v3.5.x (PILAR 3)
-|   |-- structured_state.py   # 🆕 Estado estruturado JSON por usuário
-|   |-- intelligent_extractor.py # 🆕 Extração via Claude (substitui classifier)
-|   |-- entity_mapper.py      # 🆕 Traduz entidades Claude → campos sistema
+|   |-- # 🆕 NOVOS MÓDULOS v4.0 (AgentPlanner)
+|   |-- agent_planner.py      # 🆕 v4.0 - Planeja e executa ferramentas
+|   |-- tool_registry.py      # 🆕 v4.0 - Catálogo unificado de ferramentas
 |   |
-|   |-- # MÓDULOS EXISTENTES
+|   |-- # MÓDULOS v3.5.x (PILAR 3)
+|   |-- structured_state.py   # Estado estruturado JSON por usuário
+|   |-- intelligent_extractor.py # Extração via Claude
+|   |-- entity_mapper.py      # Traduz entidades + normaliza UPPERCASE
+|   |
+|   |-- # MÓDULOS DE SUPORTE
 |   |-- classifier.py         # Classifica intencoes (FALLBACK)
 |   |-- responder.py          # Gera respostas (c/ estado JSON)
+|   |-- response_reviewer.py  # Self-Consistency Check + validação de contexto
 |   |-- suggester.py          # Gera sugestoes quando nao responde
-|   |-- conversation_context.py # Funções de regex (delega p/ EstadoManager)
-|   |-- response_reviewer.py  # Self-Consistency Check
 |   |-- composite_extractor.py # Extrai condicoes compostas via regex
+|   |-- # conversation_context.py # ❌ REMOVIDO v4.0 (delegava p/ EstadoManager)
 |   +-- feedback_loop.py      # Analise de gaps automatica
 |
 |-- # CAPACIDADES (capabilities/)
@@ -927,6 +1015,128 @@ class MinhaCapability(BaseCapability):
 ```
 
 2. Capacidade sera registrada automaticamente pelo `capabilities/__init__.py`
+
+---
+
+## Novos Módulos v4.0 - AgentPlanner
+
+### AgentPlanner (agent_planner.py) 🆕 v4.0
+
+O coração da nova arquitetura. Claude planeja e executa ferramentas em múltiplas etapas.
+
+```python
+from app.claude_ai_lite.core.agent_planner import plan_and_execute
+
+# Executa consulta com planejamento automático
+resultado = plan_and_execute(
+    consulta="O que tem pendente de separação do cliente ATACADAO?",
+    dominio="carteira",
+    entidades={"raz_social_red": "ATACADAO"},
+    intencao_original="consultar_pedido",
+    usuario_id=123,
+    usuario="admin",
+    contexto_estruturado=estado_json,
+    conhecimento_negocio=conhecimento
+)
+
+# Claude planeja:
+# {
+#   "etapas": [
+#     {
+#       "ferramenta": "loader_generico",
+#       "loader_json": {
+#         "modelo_base": "CarteiraPrincipal",
+#         "filtros": [
+#           {"campo": "raz_social_red", "operador": "ilike", "valor": "%ATACADAO%"},
+#           {"campo": "qtd_saldo_produto_pedido", "operador": ">", "valor": 0}
+#         ],
+#         "campos_retorno": ["num_pedido", "raz_social_red", "qtd_saldo_produto_pedido"]
+#       }
+#     },
+#     {
+#       "ferramenta": "loader_generico",
+#       "loader_json": {
+#         "modelo_base": "Separacao",
+#         "filtros": [
+#           {"campo": "raz_social_red", "operador": "ilike", "valor": "%ATACADAO%"},
+#           {"campo": "sincronizado_nf", "operador": "==", "valor": false}
+#         ]
+#       },
+#       "usar_resultado_de": 0  // Encadeia com etapa anterior
+#     }
+#   ],
+#   "explicacao": "Busca em CarteiraPrincipal e Separacao para calcular saldo em aberto"
+# }
+
+# Resultado:
+# {
+#   "sucesso": True,
+#   "dados": [...],
+#   "total_encontrado": 15,
+#   "etapas_executadas": [
+#     {"etapa": 1, "ferramenta": "loader_generico", "sucesso": True, "total": 10},
+#     {"etapa": 2, "ferramenta": "loader_generico", "sucesso": True, "total": 5}
+#   ],
+#   "experimental": False
+# }
+```
+
+**Regras do AgentPlanner:**
+- Máximo 5 etapas por consulta
+- Se há `raz_social_red` nas entidades → SEMPRE filtra por cliente
+- Se filtra por cliente → SEMPRE inclui `raz_social_red` no retorno
+- Fallback para AutoLoader se nenhuma ferramenta resolver
+
+### ToolRegistry (tool_registry.py) 🆕 v4.0
+
+Catálogo unificado de ferramentas em formato padronizado.
+
+```python
+from app.claude_ai_lite.core.tool_registry import get_tool_registry
+
+registry = get_tool_registry()
+
+# Lista ferramentas por domínio
+ferramentas = registry.listar_ferramentas(dominio='carteira')
+# Retorna: [
+#   {"nome": "consultar_pedido", "tipo": "capability", "dominio": "carteira", ...},
+#   {"nome": "verificar_estoque_cliente", "tipo": "codigo_gerado", ...},
+#   {"nome": "loader_generico", "tipo": "loader_generico", ...}
+# ]
+
+# Formata para prompt do Claude
+prompt = registry.formatar_para_prompt(ferramentas)
+
+# Schema com regras de negócio
+schema = registry.formatar_schema_resumido(dominio='carteira')
+# Retorna documentação completa:
+# - Hierarquia (1 num_pedido = N itens)
+# - CarteiraPrincipal vs Separacao
+# - Fórmulas de cálculo de saldos
+# - Quando usar cada tabela
+# - Sinônimos do usuário
+```
+
+**Schema de Regras de Negócio:**
+```
+CÁLCULO DE SALDOS (por num_pedido + cod_produto):
+
+1. EM CARTEIRA (não faturado):
+   CarteiraPrincipal.qtd_saldo_produto_pedido WHERE qtd_saldo_produto_pedido > 0
+
+2. EM SEPARAÇÃO (separado mas não faturado):
+   SUM(Separacao.qtd_saldo) WHERE sincronizado_nf=False
+
+3. SALDO EM ABERTO (disponível para separar):
+   CarteiraPrincipal.qtd_saldo_produto_pedido - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+
+QUANDO USAR CADA TABELA:
+| Usuário pergunta | Usar tabela | Filtro |
+|------------------|-------------|--------|
+| "saldo do pedido", "na carteira" | CarteiraPrincipal | qtd_saldo_produto_pedido > 0 |
+| "em separação", "separado" | Separacao | sincronizado_nf=False |
+| "disponível para separar" | JOIN ambas | Calcular diferença |
+```
 
 ---
 
