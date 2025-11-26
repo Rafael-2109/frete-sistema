@@ -300,6 +300,166 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
         logger.info(f"[ANALISAR_DISP] Cliente {cliente}: {total_pallets_disponiveis:.1f} pallets, {len(itens_analisados)} itens")
         return resultado
 
+    def _montar_carga_sugerida(
+        self, itens_analisados: List[Dict], qtd_pallets_desejada: float
+    ) -> Dict[str, Any]:
+        """
+        Monta uma carga sugerida com EXATAMENTE a quantidade de pallets desejada.
+
+        Estratégia:
+        1. Prioriza itens disponíveis hoje (já ordenados assim em itens_analisados)
+        2. Se o item tem mais pallets que o necessário → FRACIONA (calcula qtd proporcional)
+        3. Se o item tem menos pallets que falta → adiciona inteiro e continua
+        4. A carga fecha em EXATAMENTE X pallets (ou máximo disponível se não houver X)
+
+        Args:
+            itens_analisados: Lista de itens ordenados (disponíveis primeiro, maior pallets primeiro)
+            qtd_pallets_desejada: Quantidade de pallets que o usuário quer enviar
+
+        Returns:
+            Dict com a carga sugerida:
+            - pode_montar: bool - Se foi possível montar a carga
+            - total_pallets: float - Total de pallets da carga sugerida
+            - total_peso: float - Peso total da carga
+            - total_valor: float - Valor total da carga
+            - itens: List[Dict] - Itens selecionados para a carga
+            - todos_disponiveis_hoje: bool - Se todos os itens têm estoque
+            - itens_aguardar: int - Quantidade de itens sem estoque hoje
+        """
+        from app.producao.models import CadastroPalletizacao
+
+        carga = {
+            "pode_montar": False,
+            "total_pallets": 0.0,
+            "total_peso": 0.0,
+            "total_valor": 0.0,
+            "itens": [],
+            "todos_disponiveis_hoje": True,
+            "itens_aguardar": 0
+        }
+
+        if not itens_analisados or qtd_pallets_desejada <= 0:
+            return carga
+
+        # Carrega cache de palletização para calcular fracionamento
+        cache_pallet = {}
+        produtos = CadastroPalletizacao.query.filter_by(ativo=True).all()
+        for p in produtos:
+            cache_pallet[p.cod_produto] = {
+                'palletizacao': float(p.palletizacao or 0),
+                'peso_bruto': float(p.peso_bruto or 0)
+            }
+
+        pallets_acumulados = 0.0
+        peso_acumulado = 0.0
+        valor_acumulado = 0.0
+        itens_selecionados = []
+        itens_sem_estoque = 0
+
+        pallets_faltando = qtd_pallets_desejada
+
+        # Seleciona itens até atingir EXATAMENTE a quantidade de pallets
+        for item in itens_analisados:
+            # Se já atingiu a quantidade exata, para
+            if pallets_faltando <= 0:
+                break
+
+            pallets_item = item["pallets"]
+            quantidade_item = item["quantidade"]
+
+            # Busca dados de palletização para possível fracionamento
+            pallet_info = cache_pallet.get(item["cod_produto"], {})
+            palletizacao = pallet_info.get('palletizacao', 0)
+            peso_bruto = pallet_info.get('peso_bruto', 0)
+
+            if pallets_item > pallets_faltando and palletizacao > 0:
+                # CASO 1: Item tem MAIS pallets que o necessário → FRACIONA
+                # Calcula a quantidade exata para fechar os pallets que faltam
+                quantidade_necessaria = pallets_faltando * palletizacao
+                pallets_usar = pallets_faltando
+                peso_usar = quantidade_necessaria * peso_bruto
+                # Calcula valor proporcional
+                valor_unitario = item["valor"] / quantidade_item if quantidade_item > 0 else 0
+                valor_usar = quantidade_necessaria * valor_unitario
+
+                itens_selecionados.append({
+                    "num_pedido": item["num_pedido"],
+                    "cod_produto": item["cod_produto"],
+                    "nome_produto": item["nome_produto"],
+                    "quantidade": round(quantidade_necessaria, 2),
+                    "quantidade_original": quantidade_item,
+                    "pallets": round(pallets_usar, 2),
+                    "peso": round(peso_usar, 2),
+                    "valor": round(valor_usar, 2),
+                    "disponivel_hoje": item["disponivel_hoje"],
+                    "estoque_atual": item.get("estoque_atual", 0),
+                    "fracionado": True,
+                    "percentual_usado": round((quantidade_necessaria / quantidade_item) * 100, 1)
+                })
+
+                pallets_acumulados += pallets_usar
+                peso_acumulado += peso_usar
+                valor_acumulado += valor_usar
+                pallets_faltando = 0  # Fechou a carga
+
+                if not item["disponivel_hoje"]:
+                    itens_sem_estoque += 1
+
+                logger.info(
+                    f"[MONTAR_CARGA] Item FRACIONADO: {item['cod_produto']} | "
+                    f"Original: {quantidade_item:.0f}un ({pallets_item:.2f} plt) | "
+                    f"Usado: {quantidade_necessaria:.0f}un ({pallets_usar:.2f} plt)"
+                )
+
+            else:
+                # CASO 2: Item tem MENOS ou IGUAL pallets que falta → adiciona inteiro
+                itens_selecionados.append({
+                    "num_pedido": item["num_pedido"],
+                    "cod_produto": item["cod_produto"],
+                    "nome_produto": item["nome_produto"],
+                    "quantidade": quantidade_item,
+                    "pallets": pallets_item,
+                    "peso": item["peso"],
+                    "valor": item["valor"],
+                    "disponivel_hoje": item["disponivel_hoje"],
+                    "estoque_atual": item.get("estoque_atual", 0),
+                    "fracionado": False
+                })
+
+                pallets_acumulados += pallets_item
+                peso_acumulado += item["peso"]
+                valor_acumulado += item["valor"]
+                pallets_faltando -= pallets_item
+
+                if not item["disponivel_hoje"]:
+                    itens_sem_estoque += 1
+
+        # Verifica se conseguiu montar a carga
+        # Aceita se chegou a pelo menos 95% do solicitado (tolerância mínima)
+        # OU se usou todos os itens disponíveis
+        atingiu_meta = pallets_acumulados >= qtd_pallets_desejada * 0.95
+        usou_todos = len(itens_selecionados) == len(itens_analisados)
+
+        if itens_selecionados and (atingiu_meta or usou_todos):
+            carga["pode_montar"] = True
+            carga["total_pallets"] = round(pallets_acumulados, 2)
+            carga["total_peso"] = round(peso_acumulado, 2)
+            carga["total_valor"] = round(valor_acumulado, 2)
+            carga["itens"] = itens_selecionados
+            carga["todos_disponiveis_hoje"] = itens_sem_estoque == 0
+            carga["itens_aguardar"] = itens_sem_estoque
+            carga["atingiu_meta_exata"] = atingiu_meta
+
+        logger.info(
+            f"[MONTAR_CARGA] Solicitado: {qtd_pallets_desejada} pallets | "
+            f"Montado: {pallets_acumulados:.2f} pallets | "
+            f"Itens: {len(itens_selecionados)} | "
+            f"Aguardar: {itens_sem_estoque} | "
+            f"Meta atingida: {atingiu_meta}"
+        )
+
+        return carga
+
     def _responder_pedido_ja_separado(self, num_pedido: str, separacoes: List, resultado: Dict) -> Dict:
         """Responde quando pedido já está separado."""
         lotes = {}
@@ -351,6 +511,7 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
         """Formata análise de disponibilidade por CLIENTE com pallets calculados."""
         a = dados.get("analise", {})
         itens = dados.get("dados", [])
+        carga = dados.get("carga_sugerida", {})
 
         linhas = [
             f"=== ANÁLISE DE DISPONIBILIDADE - Cliente: {a.get('cliente', 'N/A')} ===",
@@ -371,21 +532,71 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
             linhas.append("")
             linhas.append(f"🎯 {a['mensagem']}")
 
-        # Lista dos itens
-        linhas.append("")
-        linhas.append("--- ITENS DETALHADOS ---")
+        # === CARGA SUGERIDA (se existe) ===
+        if carga.get("pode_montar") and carga.get("itens"):
+            linhas.append("")
+            linhas.append("=" * 50)
+            linhas.append("📋 CARGA SUGERIDA")
+            linhas.append("=" * 50)
+            linhas.append(f"   Total: {carga.get('total_pallets', 0):.1f} pallets")
+            linhas.append(f"   Peso: {carga.get('total_peso', 0):,.0f} kg")
+            linhas.append(f"   Valor: R$ {carga.get('total_valor', 0):,.2f}")
+            linhas.append(f"   Itens: {len(carga.get('itens', []))}")
 
-        for i, item in enumerate(itens[:15], 1):
-            status = "✅ OK" if item.get('disponivel_hoje') else "⏳ Aguardar"
-            linhas.append(
-                f"{i}. {item['nome_produto'][:35]} | "
-                f"Pedido: {item['num_pedido']} | "
-                f"{item['quantidade']:.0f} un = {item['pallets']:.2f} pallets | "
-                f"[{status}]"
-            )
+            if carga.get("todos_disponiveis_hoje"):
+                linhas.append(f"   Status: ✅ TODOS DISPONÍVEIS HOJE")
+            else:
+                linhas.append(f"   Status: ⏳ {carga.get('itens_aguardar', 0)} item(ns) aguardando estoque")
 
-        if len(itens) > 15:
-            linhas.append(f"... e mais {len(itens) - 15} itens")
+            linhas.append("")
+            linhas.append("--- ITENS DA CARGA ---")
+
+            for i, item in enumerate(carga.get("itens", []), 1):
+                status = "✅" if item.get('disponivel_hoje') else "⏳"
+                fracionado = item.get('fracionado', False)
+
+                if fracionado:
+                    # Item fracionado - mostra quantidade original e usada
+                    linhas.append(
+                        f"  {i}. [{status}] {item['nome_produto'][:40]} ✂️ PARCIAL"
+                    )
+                    linhas.append(
+                        f"      Pedido: {item['num_pedido']} | "
+                        f"{item['quantidade']:.0f} de {item.get('quantidade_original', 0):.0f} un "
+                        f"({item.get('percentual_usado', 0):.0f}%) = {item['pallets']:.2f} pallets | "
+                        f"R$ {item['valor']:,.2f}"
+                    )
+                else:
+                    # Item inteiro
+                    linhas.append(
+                        f"  {i}. [{status}] {item['nome_produto'][:40]}"
+                    )
+                    linhas.append(
+                        f"      Pedido: {item['num_pedido']} | "
+                        f"{item['quantidade']:.0f} un = {item['pallets']:.2f} pallets | "
+                        f"R$ {item['valor']:,.2f}"
+                    )
+
+            linhas.append("")
+            linhas.append("💬 Para criar separação com estes itens, responda: 'CONFIRMAR CARGA'")
+            linhas.append("   ou ajuste a quantidade e pergunte novamente.")
+
+        else:
+            # Sem carga sugerida, mostra lista geral de itens
+            linhas.append("")
+            linhas.append("--- ITENS DETALHADOS ---")
+
+            for i, item in enumerate(itens[:15], 1):
+                status = "✅ OK" if item.get('disponivel_hoje') else "⏳ Aguardar"
+                linhas.append(
+                    f"{i}. {item['nome_produto'][:35]} | "
+                    f"Pedido: {item['num_pedido']} | "
+                    f"{item['quantidade']:.0f} un = {item['pallets']:.2f} pallets | "
+                    f"[{status}]"
+                )
+
+            if len(itens) > 15:
+                linhas.append(f"... e mais {len(itens) - 15} itens")
 
         return "\n".join(linhas)
 

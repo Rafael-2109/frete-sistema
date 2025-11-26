@@ -3,15 +3,9 @@
 ContextLoader - Carregamento de dados
 """
 
-import os
-import anthropic
 import logging
-import re
-import json
-import time
-import asyncio
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta, date
+from typing import Dict, Any
+from datetime import datetime, timedelta
 try:
     from flask_login import current_user
     FLASK_LOGIN_AVAILABLE = True
@@ -28,16 +22,11 @@ except ImportError:
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.monitoramento.models import EntregaMonitorada
 from app.pedidos.models import Pedido
-from app.fretes.models import Frete, DespesaExtra
-from app.transportadoras.models import Transportadora
 from app.faturamento.models import RelatorioFaturamentoImportado
 
-from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
-from app.utils.redis_cache import redis_cache, cache_aside, cached_query, intelligent_cache, REDIS_DISPONIVEL
-from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
-from app.utils.ml_models_real import get_ml_models_system
-from app.utils.api_helper import get_system_alerts
-from app.utils.ai_logging import ai_logger, AILogger, log_info as logger_info, log_error as logger_error, log_warning as logger_warning
+from app.utils.redis_cache import redis_cache, REDIS_DISPONIVEL
+from app.utils.grupo_empresarial import GrupoEmpresarialDetector
+from app.utils.ai_logging import log_info as logger_info, log_error as logger_error, log_warning as logger_warning
 
 # Criar logger compatível
 class Logger:
