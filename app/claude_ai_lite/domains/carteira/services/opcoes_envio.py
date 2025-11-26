@@ -27,6 +27,8 @@ class ItemPedido:
     data_disponivel: Optional[date]
     dias_para_disponivel: Optional[int]
     disponivel_hoje: bool
+    pallets: float = 0.0  # Calculado via CadastroPalletizacao
+    peso_total: float = 0.0  # Calculado via CadastroPalletizacao
 
 
 @dataclass
@@ -59,6 +61,7 @@ class OpcoesEnvioService:
         """
         from app.carteira.models import CarteiraPrincipal
         from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+        from app.producao.models import CadastroPalletizacao
 
         resultado = {
             "sucesso": True,
@@ -116,6 +119,20 @@ class OpcoesEnvioService:
 
                 dias_para = (data_disponivel - hoje).days if data_disponivel else None
 
+                # Buscar palletizacao do produto
+                pallets = 0.0
+                peso_total = 0.0
+                try:
+                    cadastro = CadastroPalletizacao.query.filter_by(
+                        cod_produto=item.cod_produto,
+                        ativo=True
+                    ).first()
+                    if cadastro:
+                        pallets = cadastro.calcular_pallets(quantidade)
+                        peso_total = cadastro.calcular_peso_total(quantidade)
+                except Exception as e:
+                    logger.warning(f"Erro ao buscar palletizacao de {item.cod_produto}: {e}")
+
                 item_analisado = ItemPedido(
                     cod_produto=item.cod_produto,
                     nome_produto=item.nome_produto,
@@ -125,7 +142,9 @@ class OpcoesEnvioService:
                     estoque_atual=estoque_atual,
                     data_disponivel=data_disponivel,
                     dias_para_disponivel=dias_para,
-                    disponivel_hoje=estoque_atual >= quantidade
+                    disponivel_hoje=estoque_atual >= quantidade,
+                    pallets=pallets,
+                    peso_total=peso_total
                 )
                 itens_analisados.append(item_analisado)
 

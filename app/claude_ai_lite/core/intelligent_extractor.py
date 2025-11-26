@@ -91,7 +91,7 @@ TAREFA: Analise o texto e extraia TODAS as informações relevantes.
 RETORNE um JSON com:
 {{
     "intencao": "o que o usuário QUER FAZER (verbo no infinitivo)",
-    "tipo": "consulta|acao|modificacao|confirmacao|cancelamento|clarificacao|outro",
+    "tipo": "consulta|acao|modificacao|confirmacao|cancelamento|clarificacao|consulta_generica|outro",
     "entidades": {{
         // EXTRAIA TUDO que encontrar, sem restrições!
         // "num_pedido": "VCD123456",
@@ -101,6 +101,14 @@ RETORNE um JSON com:
         // "quantidade": 100,
         // "produto": "azeitona verde",
         // "opcao": "A" (se usuário escolheu opção),
+        //
+        // PARA CONSULTAS GENÉRICAS (por data, tabela, etc):
+        // "tabela": "CarteiraPrincipal" (ou Separacao, Pedido, etc),
+        // "campo_filtro": "data_pedido" (campo usado no filtro),
+        // "data_inicio": "2025-11-24" (ISO),
+        // "data_fim": "2025-11-25" (ISO),
+        // "valor_filtro": "valor a buscar",
+        //
         // ... qualquer outra informação relevante
     }},
     "ambiguidade": {{
@@ -136,6 +144,19 @@ REGRAS IMPORTANTES:
    - data_expedicao = saída do armazém
    - data_agendamento = entrega ao cliente
    - "criar para dia X" geralmente é data_expedicao
+
+6. CONSULTAS GENÉRICAS (tipo="consulta_generica"):
+   Use quando o usuário quer buscar dados por período/filtro:
+   - "O que entrou de pedido ontem e hoje?" → tabela=CarteiraPrincipal, campo_filtro=data_pedido, data_inicio=ontem, data_fim=hoje
+   - "Pedidos novos" → tabela=CarteiraPrincipal, campo_filtro=data_pedido, data_inicio=últimos 3 dias
+   - "Separações criadas hoje" → tabela=Separacao, campo_filtro=criado_em, data_inicio=hoje
+
+   TABELAS DISPONÍVEIS:
+   - CarteiraPrincipal: pedidos/itens na carteira (campo data: data_pedido)
+   - Separacao: separações criadas (campo data: criado_em)
+   - Pedido: VIEW agregada de pedidos
+   - FaturamentoProduto: itens faturados
+   - Embarque: embarques
 
 Retorne APENAS o JSON, sem explicações."""
 

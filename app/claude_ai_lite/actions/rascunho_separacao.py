@@ -627,19 +627,23 @@ class RascunhoService:
 
     @staticmethod
     def limpar_rascunho(usuario_id: int) -> bool:
-        """Remove o rascunho ativo do usuário."""
+        """Remove o rascunho ativo do usuário - DELETA do banco."""
         try:
             from ..models import ClaudeAprendizado
             from app import db
 
-            registro = ClaudeAprendizado.query.filter_by(
+            # IMPORTANTE: Deleta completamente ao invés de apenas desativar
+            # Rascunhos não devem ficar poluindo a tabela de aprendizados
+            registros = ClaudeAprendizado.query.filter_by(
                 usuario_id=usuario_id,
                 chave=RascunhoService.CHAVE_RASCUNHO
-            ).first()
+            ).all()
 
-            if registro:
-                registro.ativo = False
-                db.session.commit()
+            for registro in registros:
+                db.session.delete(registro)
+
+            db.session.commit()
+            logger.info(f"[RASCUNHO] Rascunho deletado para usuario {usuario_id}")
 
             return True
 

@@ -248,6 +248,14 @@ Retorne o JSON com o codigo gerado."""
         """Parseia a resposta do Claude."""
 
         try:
+            # Verifica resposta vazia
+            if not resposta or not resposta.strip():
+                return {
+                    'sucesso': False,
+                    'erro': 'Resposta vazia do Claude. Verifique a conexao com a API.',
+                    'resposta_raw': resposta
+                }
+
             # Limpa resposta
             resposta_limpa = resposta.strip()
 
@@ -255,7 +263,21 @@ Retorne o JSON com o codigo gerado."""
             if resposta_limpa.startswith("```"):
                 linhas = resposta_limpa.split("\n")
                 # Remove primeira e ultima linha (``` json e ```)
-                resposta_limpa = "\n".join(linhas[1:-1])
+                resposta_limpa = "\n".join(linhas[1:-1]).strip()
+
+            # Se ainda estiver vazio apos limpeza
+            if not resposta_limpa:
+                return {
+                    'sucesso': False,
+                    'erro': 'Resposta do Claude estava vazia apos limpeza',
+                    'resposta_raw': resposta
+                }
+
+            # Tenta encontrar JSON em qualquer lugar da resposta
+            import re
+            match = re.search(r'\{[\s\S]*\}', resposta_limpa)
+            if match:
+                resposta_limpa = match.group(0)
 
             # Parseia JSON
             codigo_gerado = json.loads(resposta_limpa)

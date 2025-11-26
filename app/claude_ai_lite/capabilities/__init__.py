@@ -98,6 +98,10 @@ def find_capability(intencao: str, entidades: Dict) -> Optional[BaseCapability]:
     Percorre todas as capacidades e retorna a primeira que
     pode processar a intenção/entidades.
 
+    Se nenhuma capacidade específica for encontrada, tenta usar
+    a ConsultaGenericaCapability como fallback (se houver entidades
+    suficientes para montar uma consulta).
+
     Args:
         intencao: Intenção identificada pelo classificador
         entidades: Entidades extraídas
@@ -107,9 +111,25 @@ def find_capability(intencao: str, entidades: Dict) -> Optional[BaseCapability]:
     """
     _auto_discover()
 
+    # Primeiro, tenta capacidades específicas (exceto genérica)
     for cap in _CAPABILITIES.values():
+        if cap.NOME == 'consulta_generica':
+            continue  # Pula a genérica na primeira passada
         if cap.pode_processar(intencao, entidades):
             return cap
+
+    # Se não encontrou específica, tenta a consulta genérica como fallback
+    generica = _CAPABILITIES.get('consulta_generica')
+    if generica:
+        # Verifica se tem dados suficientes para consulta genérica
+        tem_tabela = entidades.get('tabela')
+        tem_data = entidades.get('data_inicio') or entidades.get('data_fim') or entidades.get('data')
+        tem_campo = entidades.get('campo_filtro')
+        tem_valor = entidades.get('valor_filtro')
+
+        if tem_tabela or tem_data or (tem_campo and tem_valor):
+            logger.info(f"[CAPABILITIES] Usando consulta_generica como fallback para: {intencao}")
+            return generica
 
     return None
 

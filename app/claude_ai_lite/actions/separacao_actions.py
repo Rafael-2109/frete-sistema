@@ -137,17 +137,17 @@ def _buscar_pedido_do_contexto(usuario_id: int) -> Optional[str]:
     """Busca o número do pedido do contexto da última conversa."""
     try:
         from ..memory import MemoryService
-        from ..core.conversation_context import ConversationContextManager
+        from ..core.structured_state import EstadoManager
 
         # 1. Primeiro tenta do rascunho ativo
         rascunho = RascunhoService.carregar_rascunho(usuario_id)
         if rascunho:
             return rascunho.num_pedido
 
-        # 2. Tenta das entidades ativas do ConversationContext
-        estado = ConversationContextManager.obter_estado(usuario_id)
-        if estado.entidades_ativas.get('num_pedido'):
-            return estado.entidades_ativas['num_pedido']
+        # 2. Tenta das entidades ativas do EstadoManager
+        num_pedido = EstadoManager.obter_valor_entidade(usuario_id, 'num_pedido')
+        if num_pedido:
+            return num_pedido
 
         # 3. Tenta do último resultado
         ultimo_resultado = MemoryService.extrair_ultimo_resultado(usuario_id)
@@ -292,7 +292,7 @@ def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str, data_exp
     """
     Cria rascunho baseado em uma opção (A, B, C).
 
-    MELHORIA: Primeiro tenta usar opções salvas no ConversationContext
+    MELHORIA: Primeiro tenta usar opções salvas no EstadoManager
     (da análise de disponibilidade anterior), evitando re-análise.
 
     Args:
@@ -301,20 +301,21 @@ def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str, data_exp
         opcao: Opção escolhida (A, B, C)
         data_expedicao_usuario: Data específica informada pelo usuário (ISO format) - SOBRESCREVE a calculada
     """
-    from ..core.conversation_context import ConversationContextManager
+    from ..core.structured_state import EstadoManager
 
-    # NOVO: Tenta buscar opções do contexto da conversa
-    estado = ConversationContextManager.obter_estado(usuario_id) if usuario_id else None
-    opcoes_contexto = estado.opcoes_oferecidas if estado else []
+    # Tenta buscar opções do estado estruturado
+    estado = EstadoManager.obter(usuario_id) if usuario_id else None
+    opcoes_contexto = estado.opcoes.get('lista', []) if estado and estado.opcoes else []
 
     # Se tem opções no contexto e não tem num_pedido, pega do contexto
-    if not num_pedido and estado and estado.entidades_ativas.get('num_pedido'):
-        num_pedido = estado.entidades_ativas['num_pedido']
-        logger.info(f"[ACTION] num_pedido recuperado do contexto: {num_pedido}")
+    if not num_pedido and estado:
+        num_pedido = EstadoManager.obter_valor_entidade(usuario_id, 'num_pedido')
+        if num_pedido:
+            logger.info(f"[ACTION] num_pedido recuperado do contexto: {num_pedido}")
 
     # Se ainda não tem num_pedido, tenta novamente do contexto geral
     if not num_pedido and usuario_id:
-        num_pedido = _buscar_pedido_do_contexto(usuario_id)
+        num_pedido = _buscar_pedido_do_contexto(usuario_id) or ""
 
     if not num_pedido:
         return (
@@ -326,7 +327,9 @@ def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str, data_exp
     opcao_encontrada = None
     if opcoes_contexto:
         for op in opcoes_contexto:
-            if op.get('codigo') == opcao.upper():
+            # Suporta ambos os formatos: 'letra' (novo) e 'codigo' (legado)
+            letra = op.get('letra') or op.get('codigo')
+            if letra == opcao.upper():
                 opcao_encontrada = op
                 break
 
@@ -354,13 +357,8 @@ def _criar_rascunho_opcao(usuario_id: int, num_pedido: str, opcao: str, data_exp
 
     if usuario_id:
         RascunhoService.salvar_rascunho(usuario_id, rascunho)
-        # Limpa opções do contexto após usar
-        ConversationContextManager.atualizar_estado(
-            usuario_id=usuario_id,
-            opcoes=[],
-            aguardando_confirmacao=False,
-            acao_pendente=""
-        )
+        # Limpa opções e ação após usar
+        EstadoManager.limpar_acao(usuario_id)
 
     return (
         f"📦 **RASCUNHO CRIADO - OPÇÃO {opcao.upper()}**\n\n"

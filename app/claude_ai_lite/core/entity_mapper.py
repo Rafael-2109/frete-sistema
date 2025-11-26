@@ -87,6 +87,13 @@ MAPEAMENTO_CAMPOS = {
 
 # Mapeamento de intenções para domínios
 MAPEAMENTO_INTENCOES = {
+    # Consultas genéricas (por data, tabela, etc)
+    'consulta_generica': ('carteira', 'consulta_generica'),
+    'consultar_por_data': ('carteira', 'consulta_generica'),
+    'listar_por_data': ('carteira', 'consulta_generica'),
+    'buscar_por_filtro': ('carteira', 'consulta_generica'),
+    'consultar_tabela': ('carteira', 'consulta_generica'),
+
     # Ações de separação
     'criar_separacao': ('acao', 'criar_separacao'),
     'criar separação': ('acao', 'criar_separacao'),
@@ -144,6 +151,17 @@ MAPEAMENTO_INTENCOES = {
     'quando_posso_enviar': ('carteira', 'analisar_disponibilidade'),
     'consultar_estoque': ('estoque', 'consultar_estoque'),
     'analisar_gargalo': ('carteira', 'analisar_gargalo'),
+
+    # Análise de disponibilidade (quando posso enviar)
+    'analisar_disponibilidade': ('carteira', 'analisar_disponibilidade'),
+    'quando_posso_enviar': ('carteira', 'analisar_disponibilidade'),
+    'verificar_disponibilidade': ('carteira', 'analisar_disponibilidade'),
+    'consultar_prazo': ('carteira', 'analisar_disponibilidade'),
+    'consultar prazo de envio': ('carteira', 'analisar_disponibilidade'),
+    'prazo_envio': ('carteira', 'analisar_disponibilidade'),
+    'consultar_data_disponivel_expedicao': ('carteira', 'analisar_disponibilidade'),
+    'verificar_data_envio': ('carteira', 'analisar_disponibilidade'),
+    'data_disponivel': ('carteira', 'analisar_disponibilidade'),
 }
 
 
@@ -204,6 +222,18 @@ def _determinar_dominio_intencao(tipo: str, intencao_raw: str, entidades: Dict) 
     if entidades.get('opcao'):
         return ('acao', 'escolher_opcao')
 
+    # REGRA 2: Se tem cliente + quantidade/pallets + palavras de disponibilidade = analisar_disponibilidade
+    # Detecta perguntas como "Quando dá pra enviar 28 pallets pro Atacadão 183?"
+    tem_cliente = entidades.get('cliente') or entidades.get('raz_social_red')
+    tem_quantidade = entidades.get('quantidade') or entidades.get('qtd_saldo')
+    tem_pallets = entidades.get('unidade') == 'pallets' or 'pallet' in str(entidades).lower()
+    palavras_disponibilidade = ['quando', 'disponib', 'enviar', 'posso', 'dá pra', 'da pra', 'prazo']
+    pergunta_disponibilidade = any(p in intencao_raw for p in palavras_disponibilidade)
+
+    if tem_cliente and (tem_quantidade or tem_pallets) and pergunta_disponibilidade:
+        logger.info(f"[ENTITY_MAPPER] Detectado: cliente + pallets + 'quando' = analisar_disponibilidade")
+        return ('carteira', 'analisar_disponibilidade')
+
     # Verifica se tem mapeamento direto
     intencao_normalizada = intencao_raw.replace(' ', '_').lower()
     if intencao_normalizada in MAPEAMENTO_INTENCOES:
@@ -263,6 +293,18 @@ def _determinar_dominio_intencao(tipo: str, intencao_raw: str, entidades: Dict) 
         if entidades.get('cliente') or entidades.get('raz_social_red'):
             return ('carteira', 'buscar_pedido')
         return ('carteira', 'consultar_status')
+
+    # NOVO: Tipo consulta_generica
+    if tipo == 'consulta_generica':
+        return ('carteira', 'consulta_generica')
+
+    # Verifica se tem dados suficientes para consulta genérica (fallback)
+    tem_tabela = entidades.get('tabela')
+    tem_data = entidades.get('data_inicio') or entidades.get('data_fim')
+    tem_campo_filtro = entidades.get('campo_filtro')
+
+    if tem_tabela or tem_data or tem_campo_filtro:
+        return ('carteira', 'consulta_generica')
 
     # Default
     return ('geral', 'outro')

@@ -274,7 +274,8 @@ class EstadoEstruturado:
                 ),
                 "lista": [
                     {
-                        "letra": opt.get("letra"),
+                        # Suporta ambos: 'codigo' (serviço de opções) e 'letra' (legado)
+                        "letra": opt.get("codigo") or opt.get("letra"),
                         "descricao": opt.get("descricao", "")[:50]
                     }
                     for opt in self.opcoes.get("lista", [])[:5]
