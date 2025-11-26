@@ -357,3 +357,20 @@ O scheduler está configurado para rodar **automaticamente em background** duran
 
 **Última atualização:** 12/11/2025
 **Responsável:** Sistema de Fretes - Equipe de Integração Odoo
+
+
+
+python -c "
+from app import create_app
+from app.odoo.services.carteira_service import CarteiraService
+from app.utils.timezone import agora_utc
+from datetime import timedelta
+
+app = create_app()
+with app.app_context():
+    s = CarteiraService()
+    r = s.obter_carteira_pendente(modo_incremental=True, minutos_janela=6360)
+    print(f'Sucesso: {r.get(\"sucesso\")}')
+    print(f'Registros: {len(r.get(\"dados\", []))}')
+    print(f'Erro: {r.get(\"erro\", \"Nenhum\")}')
+"

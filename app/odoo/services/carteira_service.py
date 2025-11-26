@@ -1727,21 +1727,15 @@ class CarteiraService:
             # Substituir dados_novos apenas com dados ativos
             dados_novos = dados_ativos
 
-            # Aplicar filtro de pendente e status válidos
-            if usar_filtro_pendente:
-                dados_novos = [
-                    item for item in dados_novos
-                    if float(item.get('qtd_saldo_produto_pedido', 0)) > 0
-                    and item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
-                ]
-            else:
-                # Mesmo sem filtro de saldo, aplicar filtro de status
-                dados_novos = [
-                    item for item in dados_novos
-                    if item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
-                ]
+            # 🔧 CORREÇÃO: Aplicar APENAS filtro de status aqui
+            # O filtro de saldo (usar_filtro_pendente) será aplicado DEPOIS do recálculo de saldo
+            # para não descartar itens que têm qty_saldo=0 no Odoo mas saldo > 0 após recálculo
+            dados_novos = [
+                item for item in dados_novos
+                if item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
+            ]
 
-            logger.info(f"✅ {len(dados_novos)} registros ativos obtidos do Odoo")
+            logger.info(f"✅ {len(dados_novos)} registros ativos obtidos do Odoo (antes do recálculo de saldo)")
             
             # FASE 3: CALCULAR DIFERENÇAS COM SALDOS CALCULADOS
             logger.info("🔍 Fase 3: Calculando saldos e identificando diferenças...")
@@ -1839,7 +1833,20 @@ class CarteiraService:
                         'mensagem': f'Saldo negativo ({qtd_saldo_calculado:.2f}) - possível NF devolvida ou erro'
                     })
                     logger.warning(f"⚠️ Saldo negativo detectado: {item_novo['num_pedido']}/{item_novo['cod_produto']} = {qtd_saldo_calculado:.2f}")
-            
+
+            # 🔧 CORREÇÃO: Aplicar filtro de saldo APÓS o recálculo (se usar_filtro_pendente=True)
+            # Isso garante que itens com qty_saldo=0 no Odoo mas saldo > 0 após recálculo sejam incluídos
+            if usar_filtro_pendente:
+                dados_antes_filtro = len(dados_novos)
+                dados_novos = [
+                    item for item in dados_novos
+                    if float(item.get('qtd_saldo_produto_pedido', 0)) > 0
+                ]
+                dados_filtrados = dados_antes_filtro - len(dados_novos)
+                if dados_filtrados > 0:
+                    logger.info(f"🔍 Filtro de saldo pendente: {dados_filtrados} itens removidos com saldo <= 0 (após recálculo)")
+                logger.info(f"✅ {len(dados_novos)} registros após filtro de saldo pendente")
+
             # Agora comparar saldos CALCULADOS (antes x depois)
             reducoes = []
             aumentos = []
