@@ -77,7 +77,7 @@ def calcular_data_disponibilidade_real(projecao_29_dias, qtd_necessaria):
             else:
                 try:
                     data_dia = datetime.strptime(str(dia_data), '%Y-%m-%d').date()
-                except:
+                except Exception:
                     continue
             
             # Pular dias passados (mas incluir hoje)
@@ -246,7 +246,7 @@ def calcular_disponibilidade_para_pedido(projecao, qtd_pedido):
             else:
                 try:
                     data_dia = datetime.strptime(str(data), '%Y-%m-%d').date()
-                except:
+                except Exception:
                     continue
             
             # Pular dias passados (incluindo hoje, pois queremos disponibilidade FUTURA)

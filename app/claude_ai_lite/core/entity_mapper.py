@@ -10,6 +10,7 @@ FILOSOFIA v4.0:
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - Removida toda inferência de domínio/intenção
+Atualizado: 26/11/2025 - Adicionada normalização UPPERCASE para campos texto
 """
 
 import logging
@@ -81,6 +82,22 @@ MAPEAMENTO_CAMPOS = {
     'opcao_escolhida': 'opcao',
 }
 
+# =============================================================================
+# CAMPOS QUE DEVEM SER NORMALIZADOS PARA UPPERCASE
+# =============================================================================
+# Esses campos são armazenados em MAIÚSCULO no banco de dados.
+# Normalizamos para garantir que a busca funcione (ilike é case-insensitive,
+# mas consistência ajuda na verificação de correspondência).
+
+CAMPOS_NORMALIZAR_UPPERCASE = {
+    'raz_social_red',   # Nome do cliente
+    'cliente',          # Sinônimo de raz_social_red
+    'nome_cidade',      # Cidade
+    'cod_uf',           # UF (SP, RJ, MG...)
+    'rota',             # Rota
+    'sub_rota',         # Sub-rota
+}
+
 
 def mapear_extracao(extracao: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -143,6 +160,8 @@ def _mapear_entidades(entidades_raw: Dict) -> Dict:
 
     Se o Claude usou 'cliente', traduz para 'raz_social_red'.
     Se o Claude já usou 'raz_social_red', mantém.
+
+    Também normaliza campos texto para UPPERCASE quando necessário.
     """
     entidades = {}
 
@@ -156,11 +175,26 @@ def _mapear_entidades(entidades_raw: Dict) -> Dict:
         # Traduz se tiver mapeamento, senão mantém original
         campo_destino = MAPEAMENTO_CAMPOS.get(campo_normalizado, campo_original)
 
+        # Normaliza valor para UPPERCASE se for campo de texto que exige
+        valor_final = _normalizar_uppercase(campo_destino, valor)
+
         # Evita sobrescrever valor existente
         if campo_destino not in entidades:
-            entidades[campo_destino] = valor
+            entidades[campo_destino] = valor_final
 
     return entidades
+
+
+def _normalizar_uppercase(campo: str, valor: Any) -> Any:
+    """
+    Normaliza valor para UPPERCASE se o campo exigir.
+
+    Os dados no banco estão em MAIÚSCULO para campos como raz_social_red.
+    Isso garante consistência na busca e verificação de correspondência.
+    """
+    if campo in CAMPOS_NORMALIZAR_UPPERCASE and isinstance(valor, str):
+        return valor.upper()
+    return valor
 
 
 def _normalizar_datas(entidades: Dict) -> Dict:

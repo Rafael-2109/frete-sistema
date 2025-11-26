@@ -272,41 +272,227 @@ class ToolRegistry:
         NOTA: Atualmente hardcoded. No futuro pode usar inspect do SQLAlchemy.
         """
         schemas = {
-            'carteira': """TABELAS (carteira):
-- Separacao: num_pedido, cod_produto, qtd_saldo, raz_social_red, nome_cidade, cod_uf,
-  expedicao, agendamento, status, sincronizado_nf (False=ativo na carteira)
-- CarteiraPrincipal: num_pedido, cod_produto, qtd_saldo_produto_pedido, raz_social_red
-- Pedido (VIEW): separacao_lote_id, num_pedido, status, valor_saldo_total, peso_total""",
+            'carteira': """=== MODELO DE DADOS DA CARTEIRA ===
 
-            'estoque': """TABELAS (estoque):
-- MovimentacaoEstoque: cod_produto, quantidade, tipo_movimentacao, data_disponibilidade
-- CadastroPalletizacao: cod_produto, palletizacao, peso_bruto
-- Separacao (projeção saída): cod_produto, qtd_saldo WHERE sincronizado_nf=False""",
+HIERARQUIA:
+- 1 num_pedido = N itens (cod_produto)
+- 1 separacao_lote_id = 1 separação = 1 expedicao = 1 num_pedido = N itens
+- Um pedido pode ter múltiplas separações parciais
+- Uma separação pertence a apenas um pedido
 
-            'fretes': """TABELAS (fretes):
-- Frete: id, transportadora_id, valor_frete, status
-- Embarque: numero, data_embarque, status, tipo_carga
-- EmbarqueItem: embarque_id, pedido, nota_fiscal, peso, valor""",
+FLUXO DO PEDIDO:
+Pedido entra (Odoo) → CarteiraPrincipal → Separacao (ABERTO) → Cotação → COTADO → NF → FATURADO
 
-            'faturamento': """TABELAS (faturamento):
-- FaturamentoProduto: numero_nf, data_fatura, cod_produto, qtd_produto_faturado, origem""",
+=== TABELA: CarteiraPrincipal ===
+Representa a CARTEIRA de pedidos (saldo original do pedido).
+Sinônimos do usuário: "carteira", "pendente", "em aberto", "saldo do pedido"
 
-            'acao': """TABELAS (ação):
-- Separacao: Para criar separações (status='PREVISAO' para rascunho)
-- Pedido: VIEW read-only, não permite escrita"""
+Campos principais:
+- num_pedido: número do pedido (nosso código interno)
+- pedido_cliente: pedido de compra do cliente (código do cliente)
+- cod_produto: código do produto (1 linha por produto no pedido)
+- qtd_produto_pedido: quantidade ORIGINAL do item
+- qtd_saldo_produto_pedido: quantidade NÃO FATURADA (atualiza quando fatura)
+- preco_produto_pedido: preço unitário
+- raz_social_red: nome do cliente (usar ilike para busca, dados em MAIÚSCULO)
+- cnpj_cpf: CNPJ ou CPF do cliente
+- nome_cidade, cod_uf: localização do cliente
+
+=== TABELA: Separacao ===
+Representa SEPARAÇÕES criadas a partir da carteira.
+Sinônimos do usuário: "em separação", "separado", "mandou pra expedição"
+
+Campos principais:
+- separacao_lote_id: ID único da separação (agrupa itens)
+- num_pedido: pedido de origem
+- cod_produto: código do produto
+- qtd_saldo: quantidade na separação
+- valor_saldo: valor do item
+- sincronizado_nf: False = NÃO FATURADO, True = FATURADO
+- numero_nf: número da NF (preenchido quando fatura)
+- status: ABERTO | COTADO | FATURADO
+- cotacao_id: ID da cotação (se tiver, status=COTADO)
+- expedicao: data solicitada para expedição (quando sai do armazém)
+- agendamento: data de entrega no cliente (quando exige agendamento)
+- agendamento_confirmado: True = cliente aprovou a data
+- protocolo: protocolo do agendamento
+- raz_social_red, nome_cidade, cod_uf: dados do cliente
+
+STATUS DA SEPARAÇÃO:
+- ABERTO: Separação criada, sem frete cotado
+- COTADO: Frete cotado, está em um Embarque (tem cotacao_id)
+- FATURADO: NF emitida (sincronizado_nf=True)
+
+=== REGRAS DE NEGÓCIO - CÁLCULOS ===
+
+Para calcular saldos de um pedido (por num_pedido + cod_produto):
+
+1. EM CARTEIRA (não faturado):
+   CarteiraPrincipal.qtd_saldo_produto_pedido WHERE qtd_saldo_produto_pedido > 0
+
+2. EM SEPARAÇÃO (separado mas não faturado):
+   SUM(Separacao.qtd_saldo) WHERE sincronizado_nf=False
+
+3. SALDO EM ABERTO (disponível para separar):
+   CarteiraPrincipal.qtd_saldo_produto_pedido - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+   JOIN: num_pedido + cod_produto
+
+VALORES MONETÁRIOS:
+- Pedido total = SUM(qtd_produto_pedido * preco_produto_pedido)
+- Em carteira = SUM(qtd_saldo_produto_pedido * preco_produto_pedido)
+- Em separação = SUM(Separacao.valor_saldo WHERE sincronizado_nf=False)
+- Saldo em aberto = Em carteira - Em separação
+
+=== QUANDO USAR CADA TABELA ===
+
+| Usuário pergunta | Usar tabela | Filtro |
+|------------------|-------------|--------|
+| "saldo do pedido", "na carteira", "pendente" | CarteiraPrincipal | qtd_saldo_produto_pedido > 0 |
+| "em separação", "separado", "não faturado" | Separacao | sincronizado_nf=False |
+| "disponível para separar", "saldo em aberto" | JOIN ambas | Calcular diferença |
+| "faturado", "com NF" | Separacao | sincronizado_nf=True |
+| "cotado", "com frete" | Separacao | status='COTADO' ou cotacao_id IS NOT NULL |
+
+VIEW: Pedido (agregação por separacao_lote_id, read-only)
+- Campos: separacao_lote_id, num_pedido, status, valor_saldo_total, peso_total""",
+
+            'estoque': """=== MODELO DE DADOS DO ESTOQUE ===
+
+=== TABELA: MovimentacaoEstoque ===
+Registra entradas e saídas de estoque.
+- cod_produto: código do produto
+- quantidade: valor (saídas já são NEGATIVAS, basta somar)
+- ativo: True = movimento válido
+
+Estoque atual = SUM(quantidade) WHERE ativo=True GROUP BY cod_produto
+
+=== TABELA: CadastroPalletizacao ===
+Dados cadastrais do produto.
+- cod_produto: código do produto
+- nome_produto: nome do produto
+- palletizacao: quantidade por pallet
+- peso_bruto: peso unitário (kg)
+
+=== CÁLCULO DE ESTOQUE PROJETADO ===
+
+O ServicoEstoqueSimples já calcula considerando:
+- Estoque atual (MovimentacaoEstoque)
+- Menos: Separações pendentes (sincronizado_nf=False)
+- Mais: Entradas programadas (ProgramacaoProducao)
+
+Para consultas simples de projeção:
+Estoque projetado = Estoque atual - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)""",
+
+            'fretes': """=== MODELO DE DADOS DE FRETES ===
+
+FLUXO: Separação ABERTO → Cotação → Embarque → EmbarqueItem → COTADO
+
+=== TABELA: Embarque ===
+Agrupa separações para transporte.
+Sinônimos: "embarque", "carga"
+- numero: número do embarque
+- data_prevista_embarque: quando vai sair (atualiza expedicao das separações)
+- data_embarque: data real do embarque
+- status: draft | ativo | cancelado
+- tipo_carga: FRACIONADA | DIRETA
+- transportadora_id: transportadora contratada
+
+=== TABELA: EmbarqueItem ===
+Itens dentro do embarque.
+- embarque_id: FK para Embarque
+- separacao_lote_id: 1 EmbarqueItem = 1 Separacao
+- pedido: num_pedido
+- nota_fiscal: número da NF (quando faturado)
+- peso, valor: totais do item
+
+RELACIONAMENTO:
+- 1 Embarque = N EmbarqueItem
+- 1 EmbarqueItem = 1 separacao_lote_id
+
+=== TABELA: Frete ===
+Cotações de frete.
+- id, transportadora_id, valor_frete, status
+
+Sinônimos do usuário:
+- "cotação" = frete fechado / contratado
+- "quando vai sair" = expedicao (data_prevista_embarque atualiza expedicao)""",
+
+            'faturamento': """=== MODELO DE DADOS DE FATURAMENTO ===
+
+=== TABELA: FaturamentoProduto ===
+Notas fiscais emitidas (importadas do ERP).
+- numero_nf: número da nota fiscal
+- data_fatura: data de emissão
+- cod_produto: código do produto
+- qtd_produto_faturado: quantidade faturada
+- preco_produto_faturado: preço faturado
+- origem: num_pedido de origem
+- cnpj_cliente, nome_cliente: dados do cliente
+- status_nf: Lançado | Cancelado | Provisório
+
+FLUXO DE FATURAMENTO:
+1. NF importada em FaturamentoProduto
+2. ProcessadorFaturamento vincula NF ao EmbarqueItem
+3. Separacao recebe numero_nf e sincronizado_nf=True
+4. CarteiraPrincipal.qtd_saldo_produto_pedido é recalculado""",
+
+            'acao': """=== MODELO DE DADOS PARA AÇÕES ===
+
+=== CRIAR SEPARAÇÃO ===
+1. Inserir em Separacao com status='ABERTO'
+2. sincronizado_nf = False
+3. Preencher: num_pedido, cod_produto, qtd_saldo, expedicao, raz_social_red, etc.
+
+=== ALTERAR SEPARAÇÃO ===
+- Pode alterar: expedicao, agendamento, protocolo, agendamento_confirmado
+- Não pode alterar: qtd_saldo após COTADO
+
+VIEW: Pedido
+- É VIEW read-only, não permite INSERT/UPDATE/DELETE"""
         }
 
         if dominio and dominio in schemas:
             return schemas[dominio]
 
         # Retorna resumo geral se domínio não especificado
-        return """TABELAS PRINCIPAIS:
-- Separacao: Itens separados (sincronizado_nf=False = carteira ativa)
-- CarteiraPrincipal: Carteira original de pedidos
-- Pedido: VIEW agregada de Separacao
-- MovimentacaoEstoque: Entradas/saídas estoque
-- CadastroPalletizacao: Peso e palletização por produto
-- FaturamentoProduto: NFs emitidas"""
+        return """=== MODELO DE DADOS RESUMIDO ===
+
+HIERARQUIA:
+- 1 num_pedido = N itens (cod_produto)
+- 1 separacao_lote_id = 1 separação = N itens do mesmo pedido
+- Um pedido pode ter múltiplas separações parciais
+
+FLUXO: Pedido → CarteiraPrincipal → Separacao (ABERTO) → COTADO → FATURADO
+
+=== TABELAS PRINCIPAIS ===
+
+| Tabela | Representa | Filtro comum |
+|--------|------------|--------------|
+| CarteiraPrincipal | Carteira de pedidos | qtd_saldo_produto_pedido > 0 |
+| Separacao | Separações criadas | sincronizado_nf=False (não faturado) |
+| Pedido | VIEW agregada | read-only |
+| MovimentacaoEstoque | Estoque | SUM(quantidade) por cod_produto |
+| CadastroPalletizacao | Dados do produto | peso_bruto, palletizacao |
+| FaturamentoProduto | NFs emitidas | - |
+| Embarque | Cargas/embarques | status='ativo' |
+| EmbarqueItem | Itens no embarque | 1 item = 1 separacao_lote_id |
+
+=== CÁLCULO DE SALDOS (por num_pedido + cod_produto) ===
+
+- EM CARTEIRA: CarteiraPrincipal.qtd_saldo_produto_pedido
+- EM SEPARAÇÃO: SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+- SALDO EM ABERTO: Carteira - Separação
+
+=== SINÔNIMOS DO USUÁRIO ===
+
+| Termo técnico | Usuário fala |
+|---------------|--------------|
+| CarteiraPrincipal | "carteira", "pendente", "em aberto" |
+| Separacao (sinc=False) | "em separação", "separado", "não faturado" |
+| sincronizado_nf=True | "faturado", "com NF" |
+| expedicao | "quando vai sair", "data de saída" |
+| agendamento | "data de entrega", "agenda" |
+| status=COTADO | "com frete", "cotado" |"""
 
     def obter_ferramenta(self, nome: str) -> Optional[Dict]:
         """

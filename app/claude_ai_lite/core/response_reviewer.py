@@ -33,7 +33,8 @@ class ResponseReviewer:
         pergunta: str,
         resposta_gerada: str,
         contexto_dados: str,
-        dominio: str = "logistica"
+        dominio: str = "logistica",
+        estado_estruturado: str = None
     ) -> Tuple[str, Dict[str, Any]]:
         """
         Revisa a resposta para garantir coerência com os dados.
@@ -43,10 +44,23 @@ class ResponseReviewer:
             resposta_gerada: Resposta gerada pelo Claude
             contexto_dados: Dados reais do sistema
             dominio: Domínio da consulta
+            estado_estruturado: JSON do estado com entidades do contexto
 
         Returns:
             Tuple (resposta_revisada, metadados_revisao)
         """
+        # 0. NOVO: Verifica se resultado corresponde ao contexto do usuário
+        problema_contexto = self._verificar_correspondencia_contexto(
+            contexto_dados, estado_estruturado
+        )
+        if problema_contexto:
+            logger.warning(f"[REVIEWER] Problema de contexto: {problema_contexto}")
+            return resposta_gerada, {
+                'revisao': 'contexto_invalido',
+                'problema_contexto': problema_contexto,
+                'reprocessar': True  # Sinaliza para reprocessar
+            }
+
         # 1. Verificação rápida local (sem chamar API)
         problemas_locais = self._verificar_problemas_locais(resposta_gerada, contexto_dados)
 
@@ -79,6 +93,67 @@ class ResponseReviewer:
             }
 
         return resposta_gerada, {'revisao': 'aprovada'}
+
+    def _verificar_correspondencia_contexto(
+        self,
+        contexto_dados: str,
+        estado_estruturado: str
+    ) -> Optional[str]:
+        """
+        Verifica se os dados retornados correspondem ao contexto do usuário.
+
+        Se o usuário está perguntando sobre o cliente X, os dados devem ser do cliente X.
+
+        Returns:
+            None se OK, ou string descrevendo o problema
+        """
+        if not estado_estruturado:
+            return None
+
+        try:
+            import json
+            estado = json.loads(estado_estruturado)
+
+            # Extrai entidades do estado
+            entidades = estado.get('ENTIDADES', {})
+            referencia = estado.get('REFERENCIA', {})
+
+            # Verifica cliente esperado
+            cliente_esperado = None
+            if 'raz_social_red' in entidades:
+                dados_cliente = entidades['raz_social_red']
+                cliente_esperado = dados_cliente.get('valor') if isinstance(dados_cliente, dict) else dados_cliente
+            elif 'cliente' in referencia:
+                cliente_esperado = referencia['cliente']
+
+            if cliente_esperado:
+                # Normaliza para comparação
+                cliente_upper = cliente_esperado.upper()
+
+                # Verifica se o cliente aparece nos dados
+                if cliente_upper not in contexto_dados.upper():
+                    # Verifica se há dados de OUTROS clientes
+                    if 'raz_social_red' in contexto_dados.lower() or 'cliente' in contexto_dados.lower():
+                        return f"Dados retornados não contêm o cliente esperado: {cliente_esperado}"
+
+            # Verifica pedido esperado
+            pedido_esperado = None
+            if 'num_pedido' in entidades:
+                dados_pedido = entidades['num_pedido']
+                pedido_esperado = dados_pedido.get('valor') if isinstance(dados_pedido, dict) else dados_pedido
+            elif 'pedido' in referencia:
+                pedido_esperado = referencia['pedido']
+
+            if pedido_esperado:
+                if pedido_esperado not in contexto_dados:
+                    # Verifica se há dados de OUTROS pedidos
+                    if 'num_pedido' in contexto_dados.lower() or 'VCD' in contexto_dados:
+                        return f"Dados retornados não contêm o pedido esperado: {pedido_esperado}"
+
+        except Exception as e:
+            logger.debug(f"[REVIEWER] Erro ao verificar contexto: {e}")
+
+        return None
 
     def _verificar_problemas_locais(self, resposta: str, contexto: str) -> list:
         """Verifica problemas sem chamar API."""

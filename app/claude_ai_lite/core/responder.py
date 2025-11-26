@@ -95,10 +95,16 @@ Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
         # Self-Consistency Check: revisa resposta antes de enviar
         if revisar and HABILITAR_REVISAO:
             resposta, metadados = self._revisar_resposta(
-                pergunta, resposta, contexto_dados, dominio
+                pergunta, resposta, contexto_dados, dominio, estado_estruturado
             )
             if metadados.get('corrigido'):
                 logger.info(f"[RESPONDER] Resposta revisada. Problemas: {metadados.get('problemas', [])}")
+
+            # NOVO: Se dados não correspondem ao contexto, sinaliza para reprocessar
+            if metadados.get('reprocessar'):
+                logger.warning(f"[RESPONDER] Contexto inválido: {metadados.get('problema_contexto')}")
+                # Retorna resposta com marcador para o orchestrator tratar
+                return f"[REPROCESSAR]{metadados.get('problema_contexto')}[/REPROCESSAR]"
 
         return resposta
 
@@ -107,14 +113,15 @@ Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
         pergunta: str,
         resposta: str,
         contexto_dados: str,
-        dominio: str
+        dominio: str,
+        estado_estruturado: str = None
     ) -> Tuple[str, Dict[str, Any]]:
         """Aplica Self-Consistency Check na resposta."""
         try:
             reviewer = self._get_reviewer()
             if reviewer:
                 return reviewer.revisar_resposta(
-                    pergunta, resposta, contexto_dados, dominio
+                    pergunta, resposta, contexto_dados, dominio, estado_estruturado
                 )
         except Exception as e:
             logger.warning(f"[RESPONDER] Erro na revisão: {e}")

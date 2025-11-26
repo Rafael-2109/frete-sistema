@@ -230,7 +230,22 @@ REGRAS:
 3. Se precisar combinar dados, use múltiplas etapas (máximo {MAX_ETAPAS})
 4. Passe os parâmetros corretos baseado nas entidades disponíveis
 
-ENTIDADES DISPONÍVEIS:
+⚠️ REGRAS CRÍTICAS:
+
+FILTROS OBRIGATÓRIOS:
+- Se há raz_social_red nas entidades, SEMPRE inclua filtro de cliente em TODAS as queries
+- Se há num_pedido nas entidades, SEMPRE inclua filtro de pedido em TODAS as queries
+- Se há cod_produto nas entidades, SEMPRE inclua filtro de produto em TODAS as queries
+- NUNCA retorne dados de TODOS os clientes quando há um cliente específico no contexto
+- Use operador "ilike" com "%" para buscas de texto (ex: "%ATACADAO%")
+
+CAMPOS_RETORNO OBRIGATÓRIOS:
+- Se filtrar por raz_social_red, SEMPRE inclua "raz_social_red" em campos_retorno
+- Se filtrar por num_pedido, SEMPRE inclua "num_pedido" em campos_retorno
+- Se filtrar por cod_produto, SEMPRE inclua "cod_produto" e "nome_produto" em campos_retorno
+- SEMPRE inclua os campos de identificação para que o usuário saiba de quem são os dados
+
+ENTIDADES DISPONÍVEIS (USE TODAS COMO FILTROS QUANDO APLICÁVEL):
 {json.dumps(entidades, ensure_ascii=False, indent=2)}
 
 === FORMATO DE RESPOSTA ===

@@ -159,6 +159,50 @@ def processar_consulta(
             consulta, contexto_dados, dominio, contexto_memoria,
             estado_estruturado=contexto_estruturado
         )
+
+        # 7.0 NOVO: Verifica se precisa reprocessar (dados não correspondem ao contexto)
+        if resposta.startswith('[REPROCESSAR]'):
+            problema = resposta.replace('[REPROCESSAR]', '').replace('[/REPROCESSAR]', '')
+            logger.warning(f"[ORCHESTRATOR] Reprocessando: {problema}")
+
+            # Tenta novamente com direcionamento mais específico
+            entidades_forcadas = entidades.copy()
+
+            # Garante que entidades do estado sejam incluídas
+            from .structured_state import EstadoManager
+            estado = EstadoManager.obter(usuario_id)
+            for campo, dados in estado.entidades.items():
+                if campo not in entidades_forcadas:
+                    valor = dados.get('valor') if isinstance(dados, dict) else dados
+                    if valor:
+                        entidades_forcadas[campo] = valor
+
+            # Adiciona direcionamento no contexto
+            consulta_direcionada = f"{consulta} [IMPORTANTE: Filtrar por {', '.join(f'{k}={v}' for k, v in entidades_forcadas.items() if k in ['raz_social_red', 'num_pedido'])}]"
+
+            resultado_retry = plan_and_execute(
+                consulta=consulta_direcionada,
+                dominio=dominio,
+                entidades=entidades_forcadas,
+                intencao_original=intencao_tipo,
+                usuario_id=usuario_id,
+                usuario=usuario,
+                contexto_estruturado=contexto_estruturado,
+                conhecimento_negocio=conhecimento_negocio
+            )
+
+            if resultado_retry.get('sucesso') and resultado_retry.get('total_encontrado', 0) > 0:
+                resultado = resultado_retry
+                contexto_dados = _formatar_contexto_resultado(resultado)
+                contexto_dados = _enriquecer_com_conceitos(contexto_dados, consulta)
+                resposta = responder.gerar_resposta(
+                    consulta, contexto_dados, dominio, contexto_memoria,
+                    estado_estruturado=contexto_estruturado
+                )
+                logger.info("[ORCHESTRATOR] Reprocessamento bem-sucedido")
+            else:
+                # Se retry também falhou, informa ao usuário
+                resposta = f"Não encontrei dados específicos do cliente/pedido solicitado.\n\n{problema}\n\nPoderia reformular sua pergunta?"
     else:
         resposta = contexto_dados
 
