@@ -109,22 +109,37 @@ MODELS_PERMITIDOS = {
 # ============================================
 
 OPERADORES_PERMITIDOS = {
+    # Comparação básica
     '==': 'eq',
     '!=': 'ne',
     '>': 'gt',
     '>=': 'ge',
     '<': 'lt',
     '<=': 'le',
+    # Texto
     'ilike': 'ilike',
     'like': 'like',
-    'in': 'in_',
-    'not_in': 'notin_',
-    'is_null': 'is_null',
-    'is_not_null': 'is_not_null',
-    'between': 'between',
     'contains': 'contains',
     'startswith': 'startswith',
     'endswith': 'endswith',
+    # Listas
+    'in': 'in_',
+    'not_in': 'notin_',
+    # Nulos
+    'is_null': 'is_null',
+    'is_not_null': 'is_not_null',
+    # Range
+    'between': 'between',
+    # OPERADORES DE DATA (novos)
+    'date_today': 'date_today',
+    'date_gte_today': 'date_gte_today',
+    'date_lte_today': 'date_lte_today',
+    'date_this_week': 'date_this_week',
+    'date_last_7_days': 'date_last_7_days',
+    'date_this_month': 'date_this_month',
+    'date_last_30_days': 'date_last_30_days',
+    'date_gte_days_ago': 'date_gte_days_ago',
+    'date_lte_days_ago': 'date_lte_days_ago',
 }
 
 # ============================================
@@ -660,6 +675,7 @@ class LoaderExecutor:
         valor = filtro.get('valor')
 
         try:
+            # === OPERADORES BASICOS ===
             if operador == '==':
                 return campo == valor
             elif operador == '!=':
@@ -672,27 +688,91 @@ class LoaderExecutor:
                 return campo < valor
             elif operador == '<=':
                 return campo <= valor
+
+            # === OPERADORES DE TEXTO ===
             elif operador == 'ilike':
                 return campo.ilike(valor)
             elif operador == 'like':
                 return campo.like(valor)
-            elif operador == 'in':
-                return campo.in_(valor if isinstance(valor, list) else [valor])
-            elif operador == 'not_in':
-                return campo.notin_(valor if isinstance(valor, list) else [valor])
-            elif operador == 'is_null':
-                return campo.is_(None)
-            elif operador == 'is_not_null':
-                return campo.isnot(None)
-            elif operador == 'between':
-                if isinstance(valor, list) and len(valor) == 2:
-                    return campo.between(valor[0], valor[1])
             elif operador == 'contains':
                 return campo.contains(valor)
             elif operador == 'startswith':
                 return campo.startswith(valor)
             elif operador == 'endswith':
                 return campo.endswith(valor)
+
+            # === OPERADORES DE LISTA ===
+            elif operador == 'in':
+                return campo.in_(valor if isinstance(valor, list) else [valor])
+            elif operador == 'not_in':
+                return campo.notin_(valor if isinstance(valor, list) else [valor])
+
+            # === OPERADORES DE NULO ===
+            elif operador == 'is_null':
+                return campo.is_(None)
+            elif operador == 'is_not_null':
+                return campo.isnot(None)
+
+            # === OPERADOR DE RANGE ===
+            elif operador == 'between':
+                if isinstance(valor, list) and len(valor) == 2:
+                    return campo.between(valor[0], valor[1])
+
+            # === OPERADORES DE DATA (NOVOS) ===
+            elif operador == 'date_today':
+                # Data == hoje
+                hoje = datetime.now().date()
+                return campo == hoje
+
+            elif operador == 'date_gte_today':
+                # Data >= hoje
+                hoje = datetime.now().date()
+                return campo >= hoje
+
+            elif operador == 'date_lte_today':
+                # Data <= hoje
+                hoje = datetime.now().date()
+                return campo <= hoje
+
+            elif operador == 'date_this_week':
+                # Data na semana atual (desde segunda-feira)
+                hoje = datetime.now().date()
+                # Calcula segunda-feira da semana atual
+                segunda_feira = hoje - timedelta(days=hoje.weekday())
+                return campo >= segunda_feira
+
+            elif operador == 'date_last_7_days':
+                # Ultimos 7 dias (inclui hoje)
+                hoje = datetime.now().date()
+                data_limite = hoje - timedelta(days=7)
+                return campo >= data_limite
+
+            elif operador == 'date_this_month':
+                # Mes atual (desde dia 1)
+                hoje = datetime.now().date()
+                primeiro_dia_mes = hoje.replace(day=1)
+                return campo >= primeiro_dia_mes
+
+            elif operador == 'date_last_30_days':
+                # Ultimos 30 dias (inclui hoje)
+                hoje = datetime.now().date()
+                data_limite = hoje - timedelta(days=30)
+                return campo >= data_limite
+
+            elif operador == 'date_gte_days_ago':
+                # Data >= N dias atras (valor = numero de dias)
+                if valor is not None:
+                    hoje = datetime.now().date()
+                    data_limite = hoje - timedelta(days=int(valor))
+                    return campo >= data_limite
+
+            elif operador == 'date_lte_days_ago':
+                # Data <= N dias atras (valor = numero de dias)
+                if valor is not None:
+                    hoje = datetime.now().date()
+                    data_limite = hoje - timedelta(days=int(valor))
+                    return campo <= data_limite
+
         except Exception as e:
             logger.error(f"[LOADER_EXECUTOR] Erro ao construir filtro: {e}")
 

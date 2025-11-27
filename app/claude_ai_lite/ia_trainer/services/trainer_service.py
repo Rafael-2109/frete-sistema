@@ -207,8 +207,12 @@ class TrainerService:
             db.session.commit()
             return resultado
 
-        # Adiciona ao debate
-        sessao.adicionar_mensagem_debate('assistente', f"Codigo gerado:\n```json\n{resultado}\n```")
+        # Adiciona ao debate (usa json.dumps para garantir formato JSON valido)
+        import json
+        sessao.adicionar_mensagem_debate(
+            'assistente',
+            f"Codigo gerado:\n```json\n{json.dumps(resultado, indent=2, ensure_ascii=False)}\n```"
+        )
         sessao.atualizar_status('codigo_gerado')
         db.session.commit()
 

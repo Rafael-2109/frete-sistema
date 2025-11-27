@@ -96,116 +96,69 @@ Use o conhecimento acima para entender melhor os termos de negocio
 e gerar codigo mais preciso.
 """
 
-        return f"""Voce e um gerador de codigo especializado para um sistema de logistica de uma industria de alimentos.
+        return f"""Voce e um gerador de codigo para consultas no sistema.
 
 {contexto_codigo}
 {secao_conhecimento}
 
-=== ROTEIRO DE SEGURANCA - REGRAS OBRIGATORIAS ===
+=== IMPORTANTE: REGRAS DE NEGOCIO ===
+As regras de negocio (quais campos usar, significado de cada Model, filtros corretos)
+estao documentadas no CLAUDE.md acima. SIGA ESSAS REGRAS, nao invente.
 
-1. O codigo gerado deve ser APENAS PARA CONSULTA (READ-ONLY)
-   - NUNCA gere codigo que altera, deleta ou insere dados
-   - NUNCA use db.session.commit(), .add(), .delete(), .update()
-   - NUNCA use SQL de escrita (INSERT, UPDATE, DELETE, DROP)
-
-2. Imports permitidos (WHITELIST):
-   - sqlalchemy: or_, and_, func, desc, asc
-   - Models do app: CarteiraPrincipal, Separacao, Pedido, etc
-   - datetime, Decimal
-   - typing
-
-3. Imports PROIBIDOS (BLACKLIST):
-   - os, subprocess, sys, shutil
-   - open(), file(), eval(), exec()
-   - requests, urllib, socket
-
-4. Performance:
-   - Sempre use .limit() para evitar trazer milhares de registros
-   - Evite SELECT sem filtros
-   - Timeout maximo de 2 segundos
-
-5. Validacao:
-   - Todos os campos referenciados devem existir nos Models
-   - Use nomes exatos dos campos conforme a estrutura mostrada
+=== SEGURANCA ===
+- Codigo APENAS para CONSULTA (read-only)
+- NUNCA gere commit(), add(), delete(), update()
+- Sempre use .limit() para evitar milhares de registros
 
 === FORMATO DE RESPOSTA ===
-
-Retorne APENAS um JSON valido com a estrutura:
+Retorne APENAS um JSON valido:
 {{
-    "tipo_codigo": "filtro|loader|prompt|conceito|entidade",
-    "nome": "nome_unico_snake_case",
+    "tipo_codigo": "loader|filtro|prompt|conceito|entidade",
+    "nome": "nome_snake_case",
     "dominio": "carteira|estoque|fretes|etc",
-    "gatilhos": ["palavra1", "palavra2", "variacao"],
-    "composicao": "descricao de como combina com outras partes (opcional)",
-    "definicao_tecnica": "codigo/expressao para filtro/prompt/conceito OU objeto JSON para loader",
-    "models_referenciados": ["Model1", "Model2"],
-    "campos_referenciados": ["campo1", "campo2"],
-    "descricao_claude": "Descricao para eu entender quando usar",
-    "exemplos_uso": ["Exemplo de pergunta 1", "Exemplo 2"],
-    "variacoes": "Notas sobre variacoes e casos especiais",
-    "raciocinio": "Explique seu raciocinio e caminhos alternativos considerados"
+    "gatilhos": ["palavra1", "variacao"],
+    "definicao_tecnica": "objeto JSON para loader OU string para filtro simples",
+    "models_referenciados": ["Model1"],
+    "campos_referenciados": ["campo1"],
+    "descricao_claude": "Quando usar este codigo",
+    "exemplos_uso": ["Exemplo 1"],
+    "raciocinio": "Seu raciocinio"
 }}
 
 === TIPOS DE CODIGO ===
 
-1. FILTRO: Expressao ORM simples para filtrar dados
-   definicao_tecnica: "CarteiraPrincipal.qtd_saldo_produto_pedido > 0"
-
-2. LOADER: JSON ESTRUTURADO para consultas complexas (JOINs, agregacoes, filtros multiplos)
-   definicao_tecnica deve ser um OBJETO JSON com esta estrutura:
+1. LOADER (preferido): JSON estruturado para consultas
    {{
-       "modelo_base": "Separacao",
-       "joins": [
-           {{"modelo": "CarteiraPrincipal", "tipo": "left", "on": {{"local": "num_pedido", "remoto": "num_pedido"}}}}
-       ],
-       "filtros": [
-           {{"campo": "raz_social_red", "operador": "ilike", "valor": "%$cliente%"}},
-           {{"campo": "agendamento", "operador": "is_null"}},
-           {{"campo": "sincronizado_nf", "operador": "==", "valor": false}}
-       ],
-       "campos_retorno": ["num_pedido", "raz_social_red", "qtd_saldo", "agendamento"],
-       "agregacao": {{
-           "tipo": "agrupar",
-           "por": ["num_pedido", "raz_social_red"],
-           "funcoes": [{{"func": "sum", "campo": "qtd_saldo", "alias": "total_qtd"}}]
-       }},
-       "ordenar": [{{"campo": "num_pedido", "direcao": "asc"}}],
+       "modelo_base": "NomeModel",
+       "filtros": [{{"campo": "x", "operador": "==", "valor": y}}],
+       "campos_retorno": ["campo1", "campo2"],
+       "ordenar": [{{"campo": "x", "direcao": "asc"}}],
        "limite": 100
    }}
 
-   OPERADORES PERMITIDOS para filtros:
-   - "==", "!=", ">", ">=", "<", "<=" (comparacao)
-   - "ilike", "like" (texto, use % como wildcard)
-   - "in", "not_in" (lista de valores)
-   - "is_null", "is_not_null" (nulos)
-   - "between" (intervalo, valor deve ser lista [min, max])
-   - "contains", "startswith", "endswith" (texto)
+2. FILTRO: Expressao simples (apenas quando nao precisa de JOINs/agregacoes)
 
-   PARAMETROS DINAMICOS:
-   - Use $nome_parametro para valores que serao substituidos na execucao
-   - Ex: "%$cliente%" sera substituido pelo valor do parametro cliente
+3. CONCEITO: Definicao de termo de negocio
 
-3. PROMPT: Regra para adicionar ao prompt de classificacao
-   definicao_tecnica: "Se usuario perguntar sobre 'parcial pendente', significa..."
+=== OPERADORES PERMITIDOS ===
+Comparacao: "==", "!=", ">", ">=", "<", "<="
+Texto: "ilike", "like", "contains", "startswith", "endswith"
+Listas: "in", "not_in"
+Nulos: "is_null", "is_not_null"
+Range: "between" (valor = [min, max])
+Data: "date_today", "date_gte_today", "date_lte_today", "date_this_week",
+      "date_last_7_days", "date_this_month", "date_last_30_days",
+      "date_gte_days_ago", "date_lte_days_ago"
 
-4. CONCEITO: Definicao de termo de negocio
-   definicao_tecnica: "Item parcial pendente = parte faturada, parte na carteira"
+=== QUANDO USAR LOADER vs FILTRO ===
+Use LOADER quando: JOINs, agregacoes, filtros combinados, filtros de DATA
+Use FILTRO apenas para: comparacoes simples de um campo
 
-5. ENTIDADE: Nova entidade para extracao de texto
-   definicao_tecnica: "parcial_pendente: boolean"
+=== REGRA CRITICA DE DATA ===
+Para filtros de data, SEMPRE use os operadores de data (date_this_week, etc).
+NUNCA use func.date_trunc ou codigo Python como string.
 
-=== PREFERENCIA POR LOADER ESTRUTURADO ===
-
-SEMPRE prefira gerar LOADER quando:
-- A pergunta envolve mais de um Model
-- Precisa de JOINs entre tabelas
-- Precisa de filtros combinados (AND/OR)
-- Precisa de agregacoes (SUM, COUNT, etc)
-- Envolve busca por cliente + alguma condicao
-
-NUNCA gere codigo Python arbitrario. Use sempre o formato JSON estruturado para loaders.
-
-Retorne SOMENTE o JSON, sem explicacoes adicionais fora do JSON."""
+Retorne SOMENTE o JSON."""
 
     def _montar_prompt_usuario(self, pergunta: str, decomposicao: List[Dict]) -> str:
         """Monta o prompt do usuario com a decomposicao."""
