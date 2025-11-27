@@ -6,7 +6,14 @@ Gerencia:
 - Aprendizados permanentes (por usuário e globais)
 - Formatação de contexto para o Claude
 
+v2.0 (27/11/2025):
+- Busca por TEMPO (últimos 30min) ao invés de quantidade
+- Agrupamento por INTERAÇÃO (nunca corta conversa pela metade)
+- Detecção de INÍCIO DE CONVERSA por gap de inatividade
+- Formatação inteligente para o Claude
+
 Atualizado: 26/11/2025 - Configurações dinâmicas via config.py
+Atualizado: 27/11/2025 - v2.0: Histórico inteligente por tempo/interação
 """
 
 import logging
@@ -14,6 +21,17 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CONFIGURAÇÕES DO HISTÓRICO v2
+# =============================================================================
+
+HISTORICO_MINUTOS_DEFAULT = 30  # Janela padrão: últimos 30 minutos
+HISTORICO_GAP_NOVA_CONVERSA = 10  # Gap de 10min = nova conversa
+HISTORICO_LIMITE_INTERACOES = 20  # Máximo de interações a incluir
+HISTORICO_MAX_CHARS_MENSAGEM = 2000  # Truncar mensagens muito longas (aumentado)
+HISTORICO_MAX_CHARS_RESULTADO = 1000  # Truncar resultados de busca (aumentado)
 
 
 # =============================================================================
@@ -51,6 +69,135 @@ def _get_chars_por_token() -> int:
 MAX_HISTORICO = 40
 MAX_TOKENS_CONTEXTO = 8192
 CHARS_POR_TOKEN = 4
+
+
+# =============================================================================
+# FUNÇÕES AUXILIARES DO HISTÓRICO v2
+# =============================================================================
+
+def _agrupar_por_interacao(mensagens: List[Dict]) -> List[List[Dict]]:
+    """
+    Agrupa mensagens em interações completas (v2).
+
+    Uma interação = usuario + (resultado?) + assistente
+    Garante que nunca cortamos uma conversa pela metade.
+
+    Args:
+        mensagens: Lista de mensagens em ordem cronológica
+
+    Returns:
+        Lista de interações, cada uma sendo uma lista de mensagens
+    """
+    if not mensagens:
+        return []
+
+    interacoes = []
+    interacao_atual = []
+
+    for msg in mensagens:
+        interacao_atual.append(msg)
+
+        # Interação termina quando assistente responde
+        if msg['tipo'] == 'assistente':
+            interacoes.append(interacao_atual)
+            interacao_atual = []
+
+    # Última interação incompleta (usuário perguntou, ainda não respondeu)
+    # Inclui mesmo assim - é a pergunta atual!
+    if interacao_atual:
+        interacoes.append(interacao_atual)
+
+    return interacoes
+
+
+def _detectar_inicio_conversa(mensagens: List[Dict], gap_minutos: int = HISTORICO_GAP_NOVA_CONVERSA) -> int:
+    """
+    Encontra onde começa a conversa ATUAL (v2).
+
+    Procura por gap de inatividade > N minutos.
+    Tudo antes do gap é "conversa anterior" e pode ser ignorado.
+
+    Args:
+        mensagens: Lista de mensagens em ordem cronológica
+        gap_minutos: Minutos de inatividade que indicam nova conversa
+
+    Returns:
+        Índice da primeira mensagem da conversa atual (0 = tudo é uma conversa)
+    """
+    if len(mensagens) <= 1:
+        return 0
+
+    # Percorre de trás pra frente procurando gap
+    for i in range(len(mensagens) - 1, 0, -1):
+        try:
+            # Parseia timestamps
+            atual_str = mensagens[i].get('criado_em')
+            anterior_str = mensagens[i - 1].get('criado_em')
+
+            if not atual_str or not anterior_str:
+                continue
+
+            # Suporta tanto datetime quanto string ISO
+            if isinstance(atual_str, str):
+                atual = datetime.fromisoformat(atual_str.replace('Z', '+00:00'))
+            else:
+                atual = atual_str
+
+            if isinstance(anterior_str, str):
+                anterior = datetime.fromisoformat(anterior_str.replace('Z', '+00:00'))
+            else:
+                anterior = anterior_str
+
+            # Calcula gap em minutos
+            gap = (atual - anterior).total_seconds() / 60
+
+            if gap > gap_minutos:
+                logger.debug(f"[MEMORY] Gap de {gap:.1f}min detectado, conversa começa no índice {i}")
+                return i  # Conversa atual começa aqui
+
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug(f"[MEMORY] Erro ao parsear timestamp: {e}")
+            continue
+
+    return 0  # Tudo é uma conversa contínua
+
+
+def _formatar_interacao(interacao: List[Dict], incluir_resultado: bool = True) -> List[str]:
+    """
+    Formata uma interação para texto legível (v2).
+
+    Args:
+        interacao: Lista de mensagens da interação
+        incluir_resultado: Se deve incluir mensagens tipo 'resultado'
+
+    Returns:
+        Lista de linhas formatadas
+    """
+    linhas = []
+
+    for msg in interacao:
+        tipo = msg.get('tipo', '')
+        conteudo = msg.get('conteudo', '')
+
+        if tipo == 'usuario':
+            # Trunca se muito longo
+            if len(conteudo) > HISTORICO_MAX_CHARS_MENSAGEM:
+                conteudo = conteudo[:HISTORICO_MAX_CHARS_MENSAGEM] + "..."
+            linhas.append(f"USUÁRIO: {conteudo}")
+
+        elif tipo == 'assistente':
+            # Trunca se muito longo
+            if len(conteudo) > HISTORICO_MAX_CHARS_MENSAGEM:
+                conteudo = conteudo[:HISTORICO_MAX_CHARS_MENSAGEM] + "..."
+            linhas.append(f"ASSISTENTE: {conteudo}")
+
+        elif tipo == 'resultado' and incluir_resultado:
+            # Resultados são mais resumidos
+            if len(conteudo) > HISTORICO_MAX_CHARS_RESULTADO:
+                conteudo = conteudo[:HISTORICO_MAX_CHARS_RESULTADO] + "..."
+            linhas.append(f"[Resultado: {conteudo}]")
+
+    return linhas
 
 
 class MemoryService:
@@ -121,22 +268,27 @@ class MemoryService:
     @staticmethod
     def formatar_contexto_memoria(usuario_id: int, incluir_aprendizados: bool = True, modelo: str = "sonnet") -> str:
         """
-        Formata todo o contexto de memória para enviar ao Claude.
+        Formata todo o contexto de memória para enviar ao Claude (v2).
+
+        v2.0 Melhorias:
+        - Busca por TEMPO (últimos 30min) ao invés de quantidade
+        - Agrupa por INTERAÇÃO (nunca corta conversa pela metade)
+        - Detecta INÍCIO DE CONVERSA por gap de inatividade
+        - Limita por interações completas, não por caracteres
 
         Inclui:
         1. Aprendizados permanentes (globais + usuário) - OPCIONAL
-        2. Histórico recente de conversas
+        2. Histórico recente de conversas (v2: por tempo/interação)
 
         Args:
             usuario_id: ID do usuário
-            incluir_aprendizados: Se False, não carrega aprendizados (usar quando já cacheados)
+            incluir_aprendizados: Se False, não carrega aprendizados
             modelo: Modelo Claude em uso (para ajustar tokens)
 
         Returns:
             String formatada para incluir no system prompt
         """
         partes = []
-        tokens_usados = 0
 
         # Usa configurações dinâmicas
         max_tokens = _get_max_tokens(modelo)
@@ -167,40 +319,108 @@ class MemoryService:
 
             partes.append("")
 
-        # 2. HISTÓRICO DE CONVERSAS (usa limite dinâmico)
-        max_historico = _get_max_historico()
-        historico = MemoryService.buscar_historico(usuario_id, max_historico)
+        # 2. HISTÓRICO DE CONVERSAS (v2: por tempo e interação)
+        historico = MemoryService.buscar_historico_inteligente(usuario_id)
 
         if historico:
             partes.append("=== HISTÓRICO RECENTE DA CONVERSA ===")
-
-            for msg in historico:
-                tipo = msg['tipo']
-                conteudo = msg['conteudo']
-
-                # Trunca mensagens muito longas
-                if len(conteudo) > 500:
-                    conteudo = conteudo[:500] + "..."
-
-                if tipo == 'usuario':
-                    partes.append(f"USUÁRIO: {conteudo}")
-                elif tipo == 'assistente':
-                    partes.append(f"ASSISTENTE: {conteudo}")
-                elif tipo == 'resultado':
-                    # Resultados de busca são resumidos
-                    partes.append(f"[Resultado de busca: {conteudo[:200]}...]")
-
-                # Verifica limite de tokens
-                texto_atual = "\n".join(partes)
-                if len(texto_atual) > max_chars:
-                    # Remove mensagens mais antigas até caber
-                    partes = partes[:-1]
-                    partes.append("... (histórico anterior omitido)")
-                    break
-
+            partes.extend(historico)
             partes.append("")
 
         return "\n".join(partes) if partes else ""
+
+    @staticmethod
+    def buscar_historico_inteligente(
+        usuario_id: int,
+        minutos: int = HISTORICO_MINUTOS_DEFAULT,
+        max_interacoes: int = HISTORICO_LIMITE_INTERACOES
+    ) -> List[str]:
+        """
+        Busca e formata histórico de forma inteligente (v2).
+
+        Algoritmo:
+        1. Busca mensagens dos últimos N minutos
+        2. Detecta início da conversa atual (gap de inatividade)
+        3. Agrupa em interações completas
+        4. Limita por número de interações (não chars)
+        5. Formata para texto legível
+
+        Args:
+            usuario_id: ID do usuário
+            minutos: Janela de tempo para buscar
+            max_interacoes: Máximo de interações a incluir
+
+        Returns:
+            Lista de linhas formatadas do histórico
+        """
+        try:
+            from .models import ClaudeHistoricoConversa
+
+            # 1. Busca por TEMPO (não quantidade)
+            mensagens_raw = ClaudeHistoricoConversa.buscar_historico_recente(
+                usuario_id,
+                minutos=minutos,
+                limite_max=max_interacoes * 4  # ~4 msgs por interação
+            )
+
+            if not mensagens_raw:
+                return []
+
+            # Converte para dict
+            mensagens = [m.to_dict() for m in mensagens_raw]
+
+            # 2. Detecta início da conversa atual (após gap)
+            inicio = _detectar_inicio_conversa(mensagens)
+            if inicio > 0:
+                mensagens = mensagens[inicio:]
+                logger.debug(f"[MEMORY] Conversa atual: {len(mensagens)} msgs (ignorou {inicio} anteriores)")
+
+            # 3. Agrupa em interações completas
+            interacoes = _agrupar_por_interacao(mensagens)
+
+            if not interacoes:
+                return []
+
+            # 4. Limita por número de interações (pega as mais recentes)
+            if len(interacoes) > max_interacoes:
+                interacoes = interacoes[-max_interacoes:]
+                logger.debug(f"[MEMORY] Limitado a {max_interacoes} interações")
+
+            # 5. Formata cada interação
+            linhas = []
+            for i, interacao in enumerate(interacoes):
+                linhas_interacao = _formatar_interacao(interacao)
+                linhas.extend(linhas_interacao)
+
+                # Separador entre interações (exceto última)
+                if i < len(interacoes) - 1:
+                    linhas.append("")
+
+            logger.debug(f"[MEMORY] Histórico v2: {len(interacoes)} interações, {len(linhas)} linhas")
+            return linhas
+
+        except Exception as e:
+            logger.error(f"[MEMORY] Erro ao buscar histórico inteligente: {e}")
+            return []
+
+    @staticmethod
+    def buscar_historico_para_extrator(usuario_id: int) -> str:
+        """
+        Busca histórico formatado especificamente para o extrator (v2).
+
+        Diferente do formatar_contexto_memoria():
+        - NÃO inclui aprendizados (extrator já recebe conhecimento separado)
+        - Foco em interações recentes para entender follow-ups
+        - Retorna string pronta para incluir no prompt
+
+        Args:
+            usuario_id: ID do usuário
+
+        Returns:
+            String com histórico formatado ou string vazia
+        """
+        linhas = MemoryService.buscar_historico_inteligente(usuario_id)
+        return "\n".join(linhas) if linhas else ""
 
     @staticmethod
     def extrair_ultimo_resultado(usuario_id: int) -> Optional[Dict]:

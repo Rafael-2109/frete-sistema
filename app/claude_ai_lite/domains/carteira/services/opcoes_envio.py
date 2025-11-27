@@ -153,7 +153,9 @@ class OpcoesEnvioService:
                 resultado["erro"] = "Nenhum item com quantidade para analisar"
                 return resultado
 
-            resultado["itens_analisados"] = itens_analisados
+            # IMPORTANTE: Converter para dict para evitar erro de serialização JSON
+            # ItemPedido é dataclass e não é JSON serializable
+            resultado["itens_analisados"] = [cls._item_to_dict(i) for i in itens_analisados]
             resultado["valor_total_pedido"] = sum(i.valor_total for i in itens_analisados)
 
             # Ordenar por dias para disponibilidade (gargalos primeiro)

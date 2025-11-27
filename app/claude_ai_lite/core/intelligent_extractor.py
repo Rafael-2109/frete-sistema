@@ -21,6 +21,7 @@ Criado em: 24/11/2025
 Atualizado: 26/11/2025 - Claude decide domínio/intenção, lista de capabilities
 Atualizado: 26/11/2025 - Capabilities dinâmicas via ToolRegistry + config.py
 Atualizado: 27/11/2025 - v5: Herança automática de contexto (REFERENCIA.cliente_atual)
+Atualizado: 27/11/2025 - v5.6: Recebe histórico da conversa para entender follow-ups
 """
 
 import json
@@ -217,7 +218,8 @@ class IntelligentExtractor:
         self,
         texto: str,
         contexto_estruturado: str = None,
-        conhecimento_negocio: str = None
+        conhecimento_negocio: str = None,
+        historico_conversa: str = None
     ) -> Dict[str, Any]:
         """
         Extrai TUDO do texto usando Claude.
@@ -226,6 +228,7 @@ class IntelligentExtractor:
         1. Lista de capabilities disponíveis
         2. Estado estruturado da conversa
         3. Conhecimento do negócio
+        4. NOVO v5.6: Histórico recente da conversa
 
         O Claude retorna:
         - dominio: carteira, estoque, acao, geral
@@ -239,6 +242,7 @@ class IntelligentExtractor:
             texto: Mensagem do usuário
             contexto_estruturado: JSON do estado da conversa
             conhecimento_negocio: Aprendizados do negócio
+            historico_conversa: NOVO - Últimas mensagens da conversa
 
         Returns:
             Dict com extração completa
@@ -294,6 +298,25 @@ REGRAS DO ESTADO (v5 - CRÍTICAS):
         # Carrega capabilities (dinâmico ou fallback baseado na config)
         capabilities_prompt = _obter_capabilities_prompt()
 
+        # v5.6: Seção do histórico de conversa (CRÍTICO para entender follow-ups)
+        secao_historico = ""
+        if historico_conversa and historico_conversa.strip():
+            # Limita histórico para não sobrecarregar (últimas 5 interações aprox)
+            historico_limitado = historico_conversa[:3000]
+            secao_historico = f"""
+=== HISTÓRICO RECENTE DA CONVERSA ===
+{historico_limitado}
+=== FIM DO HISTÓRICO ===
+
+REGRAS DO HISTÓRICO (v5.6 - CRÍTICAS):
+1. O histórico mostra as últimas mensagens trocadas
+2. Se o usuário pedir "mais informação" ou "detalhar", OLHE o que foi mostrado antes
+3. Se VOCÊ SUGERIU algo antes ("Posso ajudar com..."), e o usuário aceita, FAÇA
+4. "Qual valor de cada?" após lista de pedidos = valores DOS PEDIDOS já mostrados
+5. NUNCA peça clarificação se a resposta está no histórico!
+
+"""
+
         # Prompt completo
         system_prompt = f"""Você é o cérebro de um sistema de logística de uma INDÚSTRIA DE ALIMENTOS.
 
@@ -302,6 +325,8 @@ DATA DE HOJE: {hoje}
 {capabilities_prompt}
 
 {secao_contexto}
+
+{secao_historico}
 
 {f"CONHECIMENTO DO NEGÓCIO:{chr(10)}{conhecimento_negocio}{chr(10)}" if conhecimento_negocio else ""}
 
@@ -455,7 +480,16 @@ def get_intelligent_extractor() -> IntelligentExtractor:
 def extrair_inteligente(
     texto: str,
     contexto: str = None,
-    conhecimento: str = None
+    conhecimento: str = None,
+    historico: str = None
 ) -> Dict[str, Any]:
-    """Função de conveniência para extração inteligente."""
-    return get_intelligent_extractor().extrair(texto, contexto, conhecimento)
+    """
+    Função de conveniência para extração inteligente.
+
+    Args:
+        texto: Mensagem do usuário
+        contexto: JSON do estado estruturado
+        conhecimento: Aprendizados do negócio
+        historico: NOVO v5.6 - Histórico recente da conversa
+    """
+    return get_intelligent_extractor().extrair(texto, contexto, conhecimento, historico)

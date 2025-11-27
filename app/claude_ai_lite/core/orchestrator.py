@@ -1,18 +1,19 @@
 """
-Orquestrador do Claude AI Lite v5.4.
+Orquestrador do Claude AI Lite v5.7.
 
 Coordena o fluxo completo:
 1. Obter estado estruturado (CONDICIONAL via roteamento)
 2. Carregar conhecimento do negócio (CONDICIONAL via roteamento)
 3. Verificar comandos de aprendizado
-4. Extração inteligente (Claude) - retorna também roteamento
-5. FALLBACK DE HERANÇA - Garante herança de contexto (v5.3)
-6. Tratamento especial via HANDLERS EXTENSÍVEIS
-7. AgentPlanner planeja e executa ferramentas
-8. Gerar resposta
-9. Registrar na memória COM CONTEXTO COMPLETO
+4. BUSCAR HISTÓRICO INTELIGENTE (v5.7 - método v2!)
+5. Extração inteligente (Claude) - COM HISTÓRICO para entender follow-ups
+6. FALLBACK DE HERANÇA - Garante herança de contexto (v5.5 - inclui clarificação!)
+7. Tratamento especial via HANDLERS EXTENSÍVEIS
+8. AgentPlanner planeja e executa ferramentas
+9. Gerar resposta
+10. Registrar na memória COM CONTEXTO COMPLETO
 
-FILOSOFIA v5.4:
+FILOSOFIA v5.7:
 - O Claude é o CÉREBRO - planeja E executa
 - AgentPlanner substitui find_capability() -> cap.executar()
 - Suporta múltiplas etapas (até 10 com justificativa)
@@ -21,10 +22,11 @@ FILOSOFIA v5.4:
 - Handlers extensíveis para domínios customizados
 - Fluxo flexível com roteamento (Claude decide etapas)
 - Registro de contexto completo (filtros, domínio, capacidade)
-- NOVO v5.3: Fallback de herança - se Claude não herdou cliente_atual,
-  o orchestrator herda automaticamente (safety net)
-- NOVO v5.4: "detalhar" vai para AgentPlanner (nova query com agrupamento)
-- NOVO v5.4: Preserva tipo/total originais do resultado
+- Fallback de herança trata CLARIFICAÇÃO
+- NOVO v5.7: HISTÓRICO INTELIGENTE v2!
+  - Busca por TEMPO (últimos 30min) ao invés de quantidade
+  - Agrupa por INTERAÇÃO (nunca corta conversa pela metade)
+  - Detecta INÍCIO DE CONVERSA por gap de 10min de inatividade
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - AgentPlanner v5.0, removido ConversationContext
@@ -32,10 +34,13 @@ Atualizado: 27/11/2025 - v5.1: Handlers extensíveis, fluxo flexível
 Atualizado: 27/11/2025 - v5.2: Contexto completo para herança em follow-ups
 Atualizado: 27/11/2025 - v5.3: Fallback de herança (safety net)
 Atualizado: 27/11/2025 - v5.4: "detalhar" removido do follow_up, preserva tipo/total
+Atualizado: 27/11/2025 - v5.5: Fallback herança trata clarificação → domínio anterior
+Atualizado: 27/11/2025 - v5.6: Histórico da conversa passado para o extrator
+Atualizado: 27/11/2025 - v5.7: Histórico INTELIGENTE v2 (tempo/interação/gap)
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List, Callable, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +189,22 @@ def processar_consulta(
     if conhecimento_negocio:
         logger.debug(f"[ORCHESTRATOR] Conhecimento carregado: {len(conhecimento_negocio)} chars")
 
+    # 4.1 v5.7: Busca histórico INTELIGENTE para extrator
+    # Usa novo método v2 que:
+    # - Busca por TEMPO (últimos 30min)
+    # - Agrupa por INTERAÇÃO (nunca corta pela metade)
+    # - Detecta INÍCIO DE CONVERSA (gap de 10min)
+    historico_conversa = None
+    if usuario_id:
+        from ..memory import MemoryService
+        historico_conversa = MemoryService.buscar_historico_para_extrator(usuario_id)
+        if historico_conversa:
+            logger.debug(f"[ORCHESTRATOR] Histórico v2 para extrator: {len(historico_conversa)} chars")
+
     # 5. SEMPRE: EXTRAÇÃO INTELIGENTE - Delega ao Claude
     # Retorna também roteamento para controlar fluxo
-    intencao = _extrair_inteligente(consulta, contexto_estruturado, conhecimento_negocio)
+    # v5.6: Agora passa histórico da conversa para entender follow-ups
+    intencao = _extrair_inteligente(consulta, contexto_estruturado, conhecimento_negocio, historico_conversa)
 
     dominio = intencao.get("dominio", "geral")
     intencao_tipo = intencao.get("intencao", "")
@@ -200,10 +218,18 @@ def processar_consulta(
     logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}, "
                f"entidades={list(entidades.keys())}")
 
-    # 5.1 FALLBACK DE HERANÇA v5.2 - Garante que contexto seja herdado
+    # 5.1 FALLBACK DE HERANÇA v5.5 - Garante que contexto seja herdado
     # Se o Claude do extrator não herdou cliente_atual, fazemos aqui
+    # v5.5: Agora também trata clarificação - se há contexto válido, não pede clarificação!
     if usuario_id:
-        entidades = _aplicar_fallback_heranca(usuario_id, entidades, dominio)
+        entidades, intencao, heranca_aplicada = _aplicar_fallback_heranca(
+            usuario_id, entidades, dominio, intencao
+        )
+        # Atualiza domínio e intenção_tipo se mudaram
+        if heranca_aplicada:
+            dominio = intencao.get("dominio", dominio)
+            intencao_tipo = intencao.get("intencao", intencao_tipo)
+            logger.debug(f"[ORCHESTRATOR] Pós-herança: dominio={dominio}, intencao={intencao_tipo}")
 
     # 5.2 Atualiza estado estruturado com entidades extraídas
     if usuario_id and entidades:
@@ -374,14 +400,20 @@ def _buscar_memoria(usuario_id: int, incluir_aprendizados: bool = False) -> Opti
         return None
 
 
-def _extrair_inteligente(consulta: str, contexto_estruturado: str, conhecimento_negocio: str = None) -> Dict[str, Any]:
+def _extrair_inteligente(
+    consulta: str,
+    contexto_estruturado: str,
+    conhecimento_negocio: str = None,
+    historico_conversa: str = None
+) -> Dict[str, Any]:
     """
-    Usa extrator inteligente com CONTEXTO ESTRUTURADO.
+    Usa extrator inteligente com CONTEXTO ESTRUTURADO + HISTÓRICO.
 
     O Claude recebe:
     - Mensagem do usuário
     - Estado ESTRUTURADO em JSON
     - Conhecimento do negócio
+    - v5.6: Histórico recente da conversa (CRÍTICO para follow-ups!)
 
     Returns:
         Dict com dominio, intencao, entidades
@@ -390,7 +422,13 @@ def _extrair_inteligente(consulta: str, contexto_estruturado: str, conhecimento_
         from .intelligent_extractor import extrair_inteligente
         from .entity_mapper import mapear_extracao
 
-        extracao = extrair_inteligente(consulta, contexto_estruturado, conhecimento_negocio)
+        # v5.6: Passa histórico para o extrator entender follow-ups
+        extracao = extrair_inteligente(
+            consulta,
+            contexto_estruturado,
+            conhecimento_negocio,
+            historico_conversa
+        )
         resultado = mapear_extracao(extracao)
 
         logger.info(f"[ORCHESTRATOR] Extração: {resultado.get('intencao')} "
@@ -803,13 +841,23 @@ def _registrar_conversa(usuario_id: int, consulta: str, resposta: str, intencao:
         logger.warning(f"Erro ao registrar conversa: {e}")
 
 
-def _aplicar_fallback_heranca(usuario_id: int, entidades: Dict, dominio: str) -> Dict:
+def _aplicar_fallback_heranca(
+    usuario_id: int,
+    entidades: Dict,
+    dominio: str,
+    intencao: Dict
+) -> Tuple[Dict, Dict, bool]:
     """
-    Fallback de herança v5.2 - Garante que contexto seja herdado.
+    Fallback de herança v5.5 - Garante que contexto seja herdado.
 
     Se o Claude do extrator NÃO incluiu raz_social_red nas entidades,
     mas existe REFERENCIA.cliente_atual no estado E consulta_ativa=true,
     então herdamos automaticamente.
+
+    v5.5: Agora também aplica para domínio "clarificacao"!
+    Isso evita que o Claude pergunte "de qual cliente?" quando
+    já existe um cliente_atual válido no contexto.
+    Quando herda em clarificação, MUDA o domínio para o domínio anterior!
 
     Isso é um SAFETY NET caso o Claude "esqueça" de herdar.
 
@@ -817,10 +865,16 @@ def _aplicar_fallback_heranca(usuario_id: int, entidades: Dict, dominio: str) ->
         usuario_id: ID do usuário
         entidades: Dict de entidades extraídas pelo Claude
         dominio: Domínio da consulta
+        intencao: Dict completo da intenção (será modificado se necessário)
 
     Returns:
-        Dict de entidades (possivelmente enriquecido com herança)
+        Tuple (entidades, intencao_modificada, heranca_aplicada)
+        - entidades: Dict de entidades (possivelmente enriquecido com herança)
+        - intencao: Dict de intenção (possivelmente com domínio alterado)
+        - heranca_aplicada: True se herança foi aplicada
     """
+    heranca_aplicada = False
+
     try:
         from .structured_state import EstadoManager
 
@@ -831,24 +885,40 @@ def _aplicar_fallback_heranca(usuario_id: int, entidades: Dict, dominio: str) ->
         # 1. consulta_ativa = True (há contexto válido)
         # 2. cliente_atual existe
         # 3. raz_social_red NÃO está nas entidades (Claude não herdou)
-        # 4. Domínio é compatível (não mudou para estoque, por exemplo)
+        # 4. Domínio é compatível OU é clarificação (v5.5)
+        dominios_compativeis = ['carteira', 'geral', 'clarificacao', None, '']
+
         if (ref.get('consulta_ativa') and
             ref.get('cliente_atual') and
             not entidades.get('raz_social_red') and
-            dominio in ['carteira', 'geral', None, '']):
+            dominio in dominios_compativeis):
 
             # Aplica herança
             entidades = entidades.copy()  # Não modifica original
             entidades['raz_social_red'] = ref['cliente_atual']
+            heranca_aplicada = True
 
-            logger.info(f"[ORCHESTRATOR] FALLBACK HERANÇA: "
-                       f"herdou raz_social_red='{ref['cliente_atual']}' do contexto")
+            # v5.5: Se era clarificação, muda para o domínio anterior
+            # Isso evita que o handler de clarificação seja chamado
+            if dominio == 'clarificacao':
+                dominio_anterior = ref.get('dominio_atual', 'carteira')
+                intencao = intencao.copy()
+                intencao['dominio'] = dominio_anterior
+                # Se a intenção era pedir clarificação, muda para consulta genérica
+                if intencao.get('intencao') in ['pedir_cliente', 'pedir_clarificacao', 'clarificacao']:
+                    intencao['intencao'] = 'consultar_pendentes'  # Intenção padrão
 
-        return entidades
+                logger.info(f"[ORCHESTRATOR] FALLBACK HERANÇA (clarificacao→{dominio_anterior}): "
+                           f"herdou raz_social_red='{ref['cliente_atual']}' do contexto")
+            else:
+                logger.info(f"[ORCHESTRATOR] FALLBACK HERANÇA: "
+                           f"herdou raz_social_red='{ref['cliente_atual']}' do contexto")
+
+        return entidades, intencao, heranca_aplicada
 
     except Exception as e:
         logger.warning(f"[ORCHESTRATOR] Erro no fallback de herança: {e}")
-        return entidades
+        return entidades, intencao, False
 
 
 def _extrair_filtros_do_resultado(resultado: Dict, entidades: Dict) -> Dict[str, Any]:

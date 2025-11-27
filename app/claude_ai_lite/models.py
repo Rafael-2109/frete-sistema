@@ -77,9 +77,42 @@ class ClaudeHistoricoConversa(db.Model):
         ).limit(limite).all()[::-1]  # Inverte para ordem cronológica
 
     @classmethod
+    def buscar_historico_recente(cls, usuario_id: int, minutos: int = 30, limite_max: int = 80):
+        """
+        Busca mensagens dos últimos N minutos (v2).
+
+        Diferença do buscar_historico():
+        - Usa TEMPO como critério principal (não quantidade)
+        - Pega conversa recente, não mensagens antigas
+        - Limite máximo como safety net
+
+        Args:
+            usuario_id: ID do usuário
+            minutos: Janela de tempo (default: 30 min)
+            limite_max: Limite de segurança (default: 80 mensagens)
+
+        Returns:
+            Lista de mensagens em ordem cronológica
+
+        NOTA: O banco armazena timestamps em UTC, então usamos datetime.utcnow()
+        para garantir comparação correta (não agora_brasil() que é timezone-aware).
+        """
+        from datetime import datetime
+        # CRÍTICO: Banco usa UTC naive, então comparar com UTC
+        data_limite = datetime.utcnow() - timedelta(minutes=minutos)
+        return cls.query.filter(
+            cls.usuario_id == usuario_id,
+            cls.criado_em >= data_limite
+        ).order_by(
+            cls.criado_em.desc()
+        ).limit(limite_max).all()[::-1]
+
+    @classmethod
     def limpar_historico_antigo(cls, dias: int = 7):
         """Remove histórico mais antigo que N dias."""
-        data_limite = agora_brasil() - timedelta(days=dias)
+        from datetime import datetime
+        # CRÍTICO: Banco usa UTC naive
+        data_limite = datetime.utcnow() - timedelta(days=dias)
         deletados = cls.query.filter(
             cls.criado_em < data_limite
         ).delete()
