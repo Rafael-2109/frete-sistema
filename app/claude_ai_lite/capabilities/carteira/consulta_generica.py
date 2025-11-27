@@ -244,8 +244,9 @@ class ConsultaGenericaCapability(BaseCapability):
             campo_filtro = campo_filtro.split('.')[-1]
 
         if campo_filtro not in campos_modelo:
-            # Tenta campos alternativos de data
-            for alt in ['data_pedido', 'criado_em', 'created_at', 'data']:
+            # Tenta campos alternativos de data por ordem de prioridade
+            # data_fatura para FaturamentoProduto, data_pedido para CarteiraPrincipal, etc
+            for alt in ['data_fatura', 'data_pedido', 'criado_em', 'created_at', 'data']:
                 if alt in campos_modelo:
                     campo_filtro = alt
                     break
@@ -426,6 +427,19 @@ class ConsultaGenericaCapability(BaseCapability):
             'Pedido': [
                 'num_pedido', 'cnpj_cpf', 'raz_social_red', 'nome_cidade',
                 'cod_uf', 'valor_saldo_total', 'status'
+            ],
+            'FaturamentoProduto': [
+                'numero_nf', 'data_fatura', 'nome_cliente', 'cnpj_cliente',
+                'cod_produto', 'nome_produto', 'qtd_produto_faturado',
+                'valor_produto_faturado', 'vendedor', 'status_nf'
+            ],
+            'Embarque': [
+                'numero', 'data_prevista_embarque', 'data_embarque', 'status',
+                'tipo_carga', 'valor_total', 'peso_total', 'pallet_total'
+            ],
+            'Frete': [
+                'id', 'numero_cte', 'valor_frete', 'peso', 'data_emissao',
+                'transportadora', 'status'
             ],
         }
 

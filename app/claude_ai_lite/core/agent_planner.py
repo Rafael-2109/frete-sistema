@@ -286,6 +286,35 @@ Para loader_generico (query customizada):
     "explicacao": "Por que esse plano resolve a pergunta"
 }}
 
+Para loader_generico COM AGREGAÇÃO (para perguntas de "quanto", "total", "soma"):
+{{
+    "etapas": [
+        {{
+            "ferramenta": "loader_generico",
+            "params": {{}},
+            "loader_json": {{
+                "modelo_base": "FaturamentoProduto",
+                "filtros": [
+                    {{"campo": "data_fatura", "operador": "==", "valor": "2025-11-25"}}
+                ],
+                "agregacao": {{
+                    "tipo": "agrupar",
+                    "por": [],
+                    "funcoes": [
+                        {{"func": "sum", "campo": "valor_produto_faturado", "alias": "total_valor"}},
+                        {{"func": "count", "campo": "id", "alias": "total_registros"}}
+                    ]
+                }}
+            }},
+            "descricao": "Calcula total de faturamento do dia"
+        }}
+    ],
+    "explicacao": "Usa agregação SQL para calcular soma/contagem"
+}}
+
+FUNÇÕES DE AGREGAÇÃO DISPONÍVEIS: sum, count, avg, min, max
+USE AGREGAÇÃO quando o usuário perguntar "quanto", "total", "soma", "quantos"
+
 === USAR RESULTADO DE ETAPA ANTERIOR ===
 
 Se etapa 2 precisa do resultado da etapa 1, use:

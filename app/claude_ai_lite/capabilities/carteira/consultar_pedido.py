@@ -105,7 +105,8 @@ class ConsultarPedidoCapability(BaseCapability):
 
                     pedidos[key] = {
                         "num_pedido": item.num_pedido,
-                        "cliente": item.raz_social_red,
+                        "raz_social_red": item.raz_social_red,  # Nome técnico do campo
+                        "cliente": item.raz_social_red,  # Alias para legibilidade
                         "cnpj": item.cnpj_cpf,
                         "pedido_cliente": item.pedido_cliente,
                         "data_pedido": item.data_pedido.strftime("%d/%m/%Y") if item.data_pedido else None,

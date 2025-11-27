@@ -74,10 +74,31 @@ DOMÍNIO: carteira
   Exemplos: "Quais produtos do Atacadão terão estoque dia 26?"
 
 - consulta_generica
-  Intenções: consulta_generica, consultar_por_data, listar_dados
+  Intenções: consulta_generica, consultar_por_data, listar_dados, consultar_faturamento
   Descrição: Consultas genéricas em tabelas por período/filtro
-  Campos: tabela, campo_filtro, data_inicio, data_fim
-  Exemplos: "O que entrou de pedido ontem?", "Separações criadas hoje"
+  Campos: tabela, campo_filtro, data_inicio, data_fim, agregacao
+  TABELAS VÁLIDAS: CarteiraPrincipal, Separacao, Pedido, FaturamentoProduto, Embarque,
+                   MovimentacaoEstoque, CadastroPalletizacao, ProgramacaoProducao, Frete
+  SINÔNIMOS DE TABELA:
+    - "faturamento", "faturou", "NFs emitidas" → tabela="FaturamentoProduto"
+    - "pedido", "pedidos" → tabela="Pedido" ou "CarteiraPrincipal"
+    - "separação", "separações" → tabela="Separacao"
+    - "estoque", "movimentação" → tabela="MovimentacaoEstoque"
+    - "embarque" → tabela="Embarque"
+    - "fretes" → tabela="Frete"
+
+  AGREGAÇÃO (campo "agregacao"):
+    - Se usuário pergunta "quanto", "total", "soma" → agregacao="sum"
+    - Se usuário pergunta "quantos", "contagem" → agregacao="count"
+    - Se usuário quer lista detalhada → NÃO incluir agregacao
+
+  IMPORTANTE: Sempre extraia "tabela" como entidade quando o usuário perguntar sobre dados!
+  Exemplos:
+    - "O que entrou de pedido ontem?" → tabela="CarteiraPrincipal", data_inicio="ontem"
+    - "Separações criadas hoje" → tabela="Separacao", data_inicio="hoje"
+    - "Quanto faturou hoje?" → tabela="FaturamentoProduto", data_inicio="hoje", data_fim="hoje", agregacao="sum"
+    - "Quantas NFs foram emitidas ontem?" → tabela="FaturamentoProduto", data_inicio="ontem", agregacao="count"
+    - "Lista as NFs de hoje" → tabela="FaturamentoProduto", data_inicio="hoje" (sem agregacao)
 
 DOMÍNIO: estoque
 - consultar_estoque
