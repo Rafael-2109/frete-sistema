@@ -1,5 +1,5 @@
 """
-Orquestrador do Claude AI Lite v5.3.
+Orquestrador do Claude AI Lite v5.4.
 
 Coordena o fluxo completo:
 1. Obter estado estruturado (CONDICIONAL via roteamento)
@@ -12,7 +12,7 @@ Coordena o fluxo completo:
 8. Gerar resposta
 9. Registrar na memória COM CONTEXTO COMPLETO
 
-FILOSOFIA v5.3:
+FILOSOFIA v5.4:
 - O Claude é o CÉREBRO - planeja E executa
 - AgentPlanner substitui find_capability() -> cap.executar()
 - Suporta múltiplas etapas (até 10 com justificativa)
@@ -23,12 +23,15 @@ FILOSOFIA v5.3:
 - Registro de contexto completo (filtros, domínio, capacidade)
 - NOVO v5.3: Fallback de herança - se Claude não herdou cliente_atual,
   o orchestrator herda automaticamente (safety net)
+- NOVO v5.4: "detalhar" vai para AgentPlanner (nova query com agrupamento)
+- NOVO v5.4: Preserva tipo/total originais do resultado
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - AgentPlanner v5.0, removido ConversationContext
 Atualizado: 27/11/2025 - v5.1: Handlers extensíveis, fluxo flexível
 Atualizado: 27/11/2025 - v5.2: Contexto completo para herança em follow-ups
 Atualizado: 27/11/2025 - v5.3: Fallback de herança (safety net)
+Atualizado: 27/11/2025 - v5.4: "detalhar" removido do follow_up, preserva tipo/total
 """
 
 import logging
@@ -101,7 +104,10 @@ def _obter_handler(intencao: Dict) -> Optional[Callable]:
     # 3. Handlers padrão internos (tratamento especial)
     if dominio == "clarificacao":
         return _handler_clarificacao
-    if dominio == "follow_up" or intencao_tipo in ("follow_up", "detalhar"):
+    # v5.4: "detalhar" REMOVIDO - deve ir pro AgentPlanner fazer nova query
+    # follow_up é para perguntas sobre o MESMO resultado ("qual o maior?", "quem é o primeiro?")
+    # detalhar precisa de NOVA consulta com agrupamento diferente
+    if dominio == "follow_up" or intencao_tipo == "follow_up":
         return _handler_follow_up
     if dominio == "acao":
         return _handler_acao
@@ -322,7 +328,7 @@ def processar_consulta(
         _salvar_opcoes_no_estado(usuario_id, resultado['opcoes'])
         logger.info(f"[ORCHESTRATOR] {len(resultado['opcoes'])} opções salvas")
 
-    # 7.2 Registra itens numerados e contexto completo para referência futura (v5)
+    # 7.2 Registra itens numerados e contexto completo para referência futura (v5.4)
     if usuario_id and resultado.get('dados'):
         dados = resultado['dados']
         if isinstance(dados, list) and len(dados) > 0:
@@ -330,15 +336,22 @@ def processar_consulta(
             filtros_aplicados = _extrair_filtros_do_resultado(resultado, entidades)
             capacidade_usada = _extrair_capacidade_do_resultado(resultado)
 
+            # v5.4: Extrai tipo/total do resultado (se disponível)
+            tipo_consulta = resultado.get('tipo_consulta')  # capability pode informar
+            total_real = resultado.get('total_encontrado', len(dados))
+
             _registrar_itens_no_estado(
                 usuario_id,
                 dados,
                 dominio=dominio,
                 capacidade=capacidade_usada,
                 filtros_aplicados=filtros_aplicados,
-                resumo=f"Consulta: {intencao_tipo or 'geral'}"
+                resumo=f"Consulta: {intencao_tipo or 'geral'}",
+                # v5.4: Preserva tipo/total originais
+                tipo=tipo_consulta,
+                total_encontrado=total_real
             )
-            logger.info(f"[ORCHESTRATOR] {len(dados)} itens numerados, "
+            logger.info(f"[ORCHESTRATOR] {len(dados)} itens (total_real={total_real}), "
                        f"filtros={filtros_aplicados}")
 
     # 8. Registrar na memória
@@ -709,24 +722,34 @@ def _registrar_itens_no_estado(
     capacidade: str = None,
     filtros_aplicados: Dict[str, Any] = None,
     agrupamento: str = None,
-    resumo: str = None
+    resumo: str = None,
+    # v5.4: Preservar tipo/total originais do resultado
+    tipo: str = None,
+    total_encontrado: int = None
 ):
     """
-    Registra itens e contexto completo no estado (v5).
+    Registra itens e contexto completo no estado (v5.4).
 
     Isso é CRÍTICO para que follow-ups funcionem corretamente.
     Quando o usuário pergunta "o que está pendente?", o estado
     preserva o contexto da consulta anterior (cliente, domínio, etc).
+
+    v5.4: Agora preserva tipo/total originais do resultado (se fornecidos).
+    Isso evita perder informação de consultas agregadas.
 
     O limite de itens para serialização está em EstadoManager.definir_consulta.
     """
     try:
         from .structured_state import EstadoManager
 
+        # v5.4: Usa tipo/total fornecidos ou fallback para valores padrão
+        tipo_final = tipo or "itens"
+        total_final = total_encontrado if total_encontrado is not None else len(dados)
+
         EstadoManager.definir_consulta(
             usuario_id,
-            tipo="itens",
-            total=len(dados),
+            tipo=tipo_final,
+            total=total_final,
             itens=dados,  # Passa todos; limite aplicado em definir_consulta
             # v5: Contexto completo
             dominio=dominio,

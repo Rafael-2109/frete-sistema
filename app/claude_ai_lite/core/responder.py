@@ -4,12 +4,12 @@ Gerador de Respostas do Claude AI Lite.
 Responsabilidade única: elaborar respostas naturais
 baseadas no contexto de dados e memória.
 
-NOVO v3.4: Self-Consistency Check
-- Revisa resposta antes de enviar
-- Detecta alucinações
-- Valida coerência com dados
+v4.0: Integração com ResponseReviewer v2 (minimalista)
+- Revisão sem custo extra de tokens
+- Apenas verificações determinísticas
+- Correção automática de totais
 
-Atualizado: 26/11/2025 - Revisão condicional baseada em confiança (config.py)
+Atualizado: 27/11/2025 - v4.0: ResponseReviewer v2 minimalista
 """
 
 import logging
@@ -19,27 +19,36 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CONFIGURAÇÃO DINÂMICA DE REVISÃO
+# CONFIGURAÇÃO DE REVISÃO
 # =============================================================================
+
+# Flag para habilitar/desabilitar revisão globalmente
+HABILITAR_REVISAO = True
+
 
 def _deve_revisar(confianca: float = 0.5) -> bool:
     """
     Decide se deve revisar resposta baseado na confiança.
 
-    Se config.resposta.revisao_condicional = True:
-        Só revisa se confiança < limiar
-    Senão:
-        Sempre revisa
+    Na v2, a revisão é barata (sem chamada Claude extra),
+    então podemos revisar mais liberalmente.
+
+    Args:
+        confianca: Nível de confiança (0.0-1.0)
+
+    Returns:
+        True se deve revisar
     """
+    if not HABILITAR_REVISAO:
+        return False
+
     try:
         from ..config import deve_revisar_resposta
         return deve_revisar_resposta(confianca)
     except ImportError:
-        return True  # Fallback: sempre revisa
-
-
-# Flag de fallback (mantida para compatibilidade)
-HABILITAR_REVISAO = True
+        # Fallback: revisa se confiança < 0.9
+        # Como revisão v2 é barata, podemos ser mais agressivos
+        return confianca < 0.9
 
 
 class ResponseGenerator:
@@ -54,10 +63,15 @@ class ResponseGenerator:
         self._reviewer = None
 
     def _get_reviewer(self):
-        """Lazy loading do reviewer."""
+        """
+        Lazy loading do reviewer v2.
+
+        Na v2, o reviewer não precisa do claude_client
+        (não faz chamadas extras ao Claude).
+        """
         if self._reviewer is None and HABILITAR_REVISAO:
             from .response_reviewer import ResponseReviewer
-            self._reviewer = ResponseReviewer(self._client)
+            self._reviewer = ResponseReviewer()  # Sem client na v2
         return self._reviewer
 
     def gerar_resposta(
@@ -78,19 +92,19 @@ class ResponseGenerator:
             contexto_dados: Dados formatados da capacidade
             dominio: Domínio da consulta
             contexto_memoria: Histórico de conversas
-            estado_estruturado: NOVO v3.5.2 - JSON do estado atual (PILAR 3)
-            revisar: Se deve revisar resposta antes de enviar (default: True)
-            confianca: Nível de confiança da extração (0.0-1.0) - usado para revisão condicional
+            estado_estruturado: JSON do estado atual (v5 PONTE)
+            revisar: Se deve revisar resposta (default: True)
+            confianca: Nível de confiança da extração (0.0-1.0)
 
         Returns:
-            Resposta elaborada em linguagem natural (revisada se habilitado)
+            Resposta elaborada em linguagem natural
         """
         from ..prompts.system_base import get_system_prompt_with_memory
 
         # Monta prompt com memória integrada
         system_prompt = get_system_prompt_with_memory(contexto_memoria)
 
-        # NOVO v3.5.2: Adiciona estado estruturado (PILAR 3)
+        # Adiciona estado estruturado (v5 PONTE)
         if estado_estruturado:
             system_prompt += f"""
 
@@ -112,25 +126,26 @@ CONTEXTO DOS DADOS:
 
 Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
 
-        # Gera resposta inicial
+        # Gera resposta inicial via Claude
         resposta = self._client.completar(pergunta, system_prompt, use_cache=False)
 
-        # Self-Consistency Check: revisa resposta antes de enviar
-        # Usa decisão dinâmica baseada na confiança
+        # Revisão v2: barata e determinística
         deve_revisar = revisar and _deve_revisar(confianca)
 
         if deve_revisar:
             resposta, metadados = self._revisar_resposta(
                 pergunta, resposta, contexto_dados, dominio, estado_estruturado
             )
-            if metadados.get('corrigido'):
-                logger.info(f"[RESPONDER] Resposta revisada. Problemas: {metadados.get('problemas', [])}")
 
-            # NOVO: Se dados não correspondem ao contexto, sinaliza para reprocessar
+            if metadados.get('corrigido'):
+                logger.info(f"[RESPONDER] Resposta revisada: {metadados.get('problemas', [])}")
+
+            # Se dados não correspondem ao contexto, sinaliza para reprocessar
             if metadados.get('reprocessar'):
-                logger.warning(f"[RESPONDER] Contexto inválido: {metadados.get('problema_contexto')}")
-                # Retorna resposta com marcador para o orchestrator tratar
-                return f"[REPROCESSAR]{metadados.get('problema_contexto')}[/REPROCESSAR]"
+                problema = metadados.get('problema_contexto', 'Contexto inválido')
+                logger.warning(f"[RESPONDER] Reprocessar: {problema}")
+                # Retorna marcador para orchestrator tratar
+                return f"[REPROCESSAR]{problema}[/REPROCESSAR]"
 
         return resposta
 
@@ -142,7 +157,12 @@ Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
         dominio: str,
         estado_estruturado: str = None
     ) -> Tuple[str, Dict[str, Any]]:
-        """Aplica Self-Consistency Check na resposta."""
+        """
+        Aplica revisão v2 (minimalista) na resposta.
+
+        A revisão v2 NÃO chama o Claude novamente.
+        Apenas verifica coerência básica deterministicamente.
+        """
         try:
             reviewer = self._get_reviewer()
             if reviewer:
@@ -162,6 +182,9 @@ Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
     ) -> str:
         """
         Gera resposta para perguntas de follow-up.
+
+        Follow-ups trabalham sobre dados JÁ CARREGADOS,
+        não precisam de revisão (dados são os mesmos).
 
         Args:
             pergunta: Pergunta de follow-up
@@ -187,6 +210,10 @@ INSTRUÇÕES:
 
         return self._client.completar(pergunta, system_prompt, use_cache=False)
 
+
+# =============================================================================
+# FACTORY
+# =============================================================================
 
 def get_responder() -> ResponseGenerator:
     """Factory para obter instância do responder."""
