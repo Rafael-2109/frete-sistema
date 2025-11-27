@@ -10,6 +10,8 @@ import json
 from typing import Dict, Optional, Any
 from datetime import datetime, timedelta
 
+from app.claude_ai_lite.config import get_max_tokens
+
 logger = logging.getLogger(__name__)
 
 # Cache simples em memória (produção: usar Redis)
@@ -25,8 +27,8 @@ class ClaudeClient:
 
     def __init__(self):
         self.api_key = os.environ.get('ANTHROPIC_API_KEY')
-        self.model = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5
-        self.max_tokens = 8192
+        self.model = "claude-opus-4-5-20251101"  # Claude Opus 4.5
+        self.max_tokens = get_max_tokens('opus')  # Usa config dinâmica (16384 para opus)
         self._client = None
 
         if not self.api_key:

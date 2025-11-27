@@ -1424,4 +1424,4 @@ ANTHROPIC_API_KEY=sk-ant-...
 REDIS_URL=redis://...  # Opcional
 ```
 
-Modelo utilizado: `claude-sonnet-4-5-20250929`
+Modelo utilizado: `claude-opus-4-5-20251101`
