@@ -273,14 +273,9 @@ Retorne o JSON com o codigo gerado."""
                     'resposta_raw': resposta
                 }
 
-            # Tenta encontrar JSON em qualquer lugar da resposta
-            import re
-            match = re.search(r'\{[\s\S]*\}', resposta_limpa)
-            if match:
-                resposta_limpa = match.group(0)
-
-            # Parseia JSON
-            codigo_gerado = json.loads(resposta_limpa)
+            # Extrai o PRIMEIRO JSON valido da resposta
+            # Isso evita "Extra data" quando Claude retorna texto adicional apos JSON
+            codigo_gerado = self._extrair_primeiro_json(resposta_limpa)
 
             # Valida campos obrigatorios
             campos_obrigatorios = ['tipo_codigo', 'nome', 'definicao_tecnica', 'descricao_claude']
@@ -307,6 +302,67 @@ Retorne o JSON com o codigo gerado."""
                 'erro': f'Erro ao parsear resposta: {e}',
                 'resposta_raw': resposta
             }
+
+    def _extrair_primeiro_json(self, texto: str) -> Dict:
+        """
+        Extrai o PRIMEIRO objeto JSON valido de um texto.
+
+        Usa um algoritmo de contagem de chaves para encontrar
+        onde o JSON termina, evitando "Extra data" quando ha
+        texto adicional apos o JSON.
+
+        Args:
+            texto: Texto contendo JSON (possivelmente com texto extra)
+
+        Returns:
+            Dict parseado do primeiro JSON encontrado
+
+        Raises:
+            json.JSONDecodeError: Se nao encontrar JSON valido
+        """
+        # Encontra o inicio do JSON
+        inicio = texto.find('{')
+        if inicio == -1:
+            raise json.JSONDecodeError("Nenhum objeto JSON encontrado", texto, 0)
+
+        # Conta chaves para encontrar o fim do JSON
+        nivel = 0
+        em_string = False
+        escape = False
+        fim = -1
+
+        for i, char in enumerate(texto[inicio:], inicio):
+            if escape:
+                escape = False
+                continue
+
+            if char == '\\' and em_string:
+                escape = True
+                continue
+
+            if char == '"' and not escape:
+                em_string = not em_string
+                continue
+
+            if em_string:
+                continue
+
+            if char == '{':
+                nivel += 1
+            elif char == '}':
+                nivel -= 1
+                if nivel == 0:
+                    fim = i + 1
+                    break
+
+        if fim == -1:
+            raise json.JSONDecodeError("JSON mal formatado - chaves nao balanceadas", texto, inicio)
+
+        # Extrai apenas o JSON
+        json_str = texto[inicio:fim]
+
+        # Parseia
+        return json.loads(json_str)
 
     def refinar_codigo(
         self,

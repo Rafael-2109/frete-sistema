@@ -290,13 +290,16 @@ class SessaoEnsinoIA(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'pergunta_origem_id': self.pergunta_origem_id,  # Necessario para "Continuar Ensino"
             'pergunta_original': self.pergunta_original,
             'decomposicao': self.decomposicao,
             'historico_debate': self.historico_debate,
             'status': self.status,
             'solucao_criada': self.solucao_criada,
+            'codigo_gerado_id': self.codigo_gerado_id,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
-            'criado_por': self.criado_por
+            'criado_por': self.criado_por,
+            'finalizado_em': self.finalizado_em.isoformat() if self.finalizado_em else None
         }
 
     def adicionar_mensagem_debate(self, role: str, content: str):
