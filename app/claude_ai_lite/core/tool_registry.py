@@ -498,6 +498,16 @@ SINÔNIMOS DO USUÁRIO:
 - "carteira", "pendente" → CarteiraPrincipal
 - "em separação", "separado" → Separacao (sincronizado_nf=False)
 - "faturado", "com NF" → Separacao (sincronizado_nf=True)
+
+TERMOS DO DOMÍNIO:
+- Carteira: Pedidos aguardando processamento (ainda não separados)
+- Separação: Produtos já separados do estoque para envio
+- Expedição: Data prevista para saída do produto da fábrica
+- Programado: Tem data de expedição definida
+- Agendamento: Data combinada para entrega no cliente
+- Agendamento Confirmado: Cliente confirmou a data
+- Lote: Agrupamento de itens separados juntos
+- NF: Nota Fiscal emitida após faturamento
 """,
             'estoque': """
 CÁLCULO DE ESTOQUE:
@@ -802,6 +812,112 @@ FLUXO: Pedido → CarteiraPrincipal → Separacao (ABERTO) → COTADO → FATURA
             }
 
         return None
+
+    def gerar_capacidades_usuario(self) -> str:
+        """
+        Gera descrição de capacidades em linguagem HUMANA.
+
+        Usado pelo PROMPT 3 (resposta) para explicar ao usuário o que
+        o assistente pode fazer. Diferente de formatar_para_prompt()
+        que é técnico para classificação.
+
+        Returns:
+            String formatada para incluir no prompt de resposta
+        """
+        ferramentas = self.listar_ferramentas(incluir_generica=False)
+
+        if not ferramentas:
+            return self._get_capacidades_fallback()
+
+        # Agrupa por categoria lógica (mais amigável que domínio técnico)
+        categorias = {
+            'Consultas de Pedidos': [],
+            'Análise de Disponibilidade': [],
+            'Consultas de Estoque': [],
+            'Ações': [],
+            'Consultas por Localização': [],
+            'Outras Consultas': []
+        }
+
+        # Mapeia capabilities para categorias
+        for f in ferramentas:
+            nome = f.get('nome', '')
+            desc = f.get('descricao', '')
+            exemplos = f.get('exemplos', [])
+            dominio = f.get('dominio', 'geral')
+
+            # Classifica em categoria amigável
+            if 'pedido' in nome or nome in ['consultar_pedido']:
+                cat = 'Consultas de Pedidos'
+            elif 'disponibilidade' in nome or 'quando_posso' in nome or 'gargalo' in nome:
+                cat = 'Análise de Disponibilidade'
+            elif 'estoque' in nome or 'ruptura' in nome:
+                cat = 'Consultas de Estoque'
+            elif 'rota' in nome or 'uf' in nome:
+                cat = 'Consultas por Localização'
+            elif dominio == 'acao' or nome in ['criar_separacao', 'escolher_opcao', 'confirmar_acao', 'cancelar']:
+                cat = 'Ações'
+            else:
+                cat = 'Outras Consultas'
+
+            categorias[cat].append({
+                'nome': nome,
+                'descricao': desc,
+                'exemplos': exemplos[:2] if exemplos else []  # Máx 2 exemplos
+            })
+
+        # Formata em linguagem amigável
+        linhas = ["CAPACIDADES QUE VOCÊ TEM:", ""]
+
+        for categoria, items in categorias.items():
+            if not items:
+                continue
+
+            linhas.append(f"**{categoria}:**")
+            for item in items:
+                if item['descricao']:
+                    linhas.append(f"- {item['descricao']}")
+                if item['exemplos']:
+                    exemplos_fmt = ', '.join([f'"{e}"' for e in item['exemplos']])
+                    linhas.append(f"  Exemplos: {exemplos_fmt}")
+            linhas.append("")
+
+        # Adiciona seção de ajuda
+        linhas.append("SE O USUÁRIO PEDIR AJUDA:")
+        linhas.append("Explique suas capacidades de forma amigável com exemplos práticos.")
+
+        return "\n".join(linhas)
+
+    def _get_capacidades_fallback(self) -> str:
+        """Fallback de capacidades quando não consegue carregar."""
+        return """CAPACIDADES QUE VOCÊ TEM:
+
+**Consultas de Pedidos:**
+- Consultar pedidos por número, cliente ou CNPJ
+- Analisar saldo de pedido (original vs separado)
+
+**Análise de Disponibilidade (Quando Posso Enviar?):**
+- Analisa o estoque atual vs quantidade necessária de cada item
+- Gera OPÇÕES DE ENVIO (A, B, C) adaptadas à situação
+- Mostra data prevista, valor, percentual e itens de cada opção
+
+**Análise de Gargalos (O que está travando?):**
+- Identifica produtos com estoque insuficiente
+- Mostra: quantidade necessária, estoque atual, quanto falta
+
+**Ações:**
+- Criar separações para pedidos
+- Escolher opções A/B/C após análise
+
+**Consultas de Estoque:**
+- Verificar estoque atual e projeção de até 14 dias
+- Identificar produtos com ruptura prevista
+
+**Consultas por Localização:**
+- Por rota principal, sub-rota ou UF/estado
+
+SE O USUÁRIO PEDIR AJUDA:
+Explique suas capacidades de forma amigável com exemplos práticos."""
 
 
 # Singleton

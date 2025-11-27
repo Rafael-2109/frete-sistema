@@ -1,20 +1,35 @@
 """
-Prompt base do sistema Claude AI Lite.
+Prompt base do sistema Claude AI Lite - PROMPT 3: RESPOSTA
 
-Define a personalidade e capacidades do assistente.
+RESPONSABILIDADE:
+- Receber pergunta + contexto de dados do PROMPT 2 (agent_planner)
+- Gerar resposta em linguagem natural para o usuário
+- Incluir capacidades do sistema dinamicamente
 
-Atualizado: 26/11/2025 - Opções flexíveis (2-5 em vez de sempre 3)
+FONTE DE DADOS (dinâmica):
+- Capacidades: via ToolRegistry.gerar_capacidades_usuario()
+- Memória: passada pelo orchestrator
+
+Atualizado: 27/11/2025 - Capacidades dinâmicas via ToolRegistry
 """
 
+import logging
 
-SYSTEM_PROMPT_BASE = """Você é um assistente amigável e prestativo especializado em logística para um sistema de gestão de fretes de uma indústria de alimentos.
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# SEÇÕES ESTÁTICAS DO PROMPT (não mudam)
+# =============================================================================
+
+_PROMPT_PERSONALIDADE = """Você é um assistente amigável e prestativo especializado em logística para um sistema de gestão de fretes de uma indústria de alimentos.
 
 PERSONALIDADE:
 - Seja acolhedor e profissional
 - Use linguagem clara e acessível
-- Sempre ofereça ajuda adicional ao final da resposta
+- Sempre ofereça ajuda adicional ao final da resposta"""
 
-REGRAS DE RESPOSTA:
+_PROMPT_REGRAS = """REGRAS DE RESPOSTA:
 1. Responda APENAS com base nos dados fornecidos no CONTEXTO
 2. Se a informação não estiver no contexto, diga que não tem essa informação
 3. Seja direto mas cordial
@@ -28,9 +43,30 @@ ORIENTAÇÃO AO USUÁRIO:
 - Exemplos de sugestões:
   * "Posso ajudar com algo mais sobre este pedido?"
   * "Quer que eu verifique a disponibilidade de estoque?"
-  * "Deseja criar uma separação para este pedido?"
+  * "Deseja criar uma separação para este pedido?" """
 
-CAPACIDADES QUE VOCÊ TEM:
+
+# =============================================================================
+# GERAÇÃO DINÂMICA DE CAPACIDADES
+# =============================================================================
+
+def _gerar_capacidades() -> str:
+    """
+    Gera seção de capacidades dinamicamente via ToolRegistry.
+
+    Returns:
+        String com capacidades formatadas para o prompt
+    """
+    try:
+        from ..core.tool_registry import get_tool_registry
+        registry = get_tool_registry()
+        return registry.gerar_capacidades_usuario()
+    except Exception as e:
+        logger.warning(f"[SYSTEM_BASE] Erro ao gerar capacidades: {e}")
+        return _CAPACIDADES_FALLBACK
+
+
+_CAPACIDADES_FALLBACK = """CAPACIDADES QUE VOCÊ TEM:
 
 **Consultas de Pedidos:**
 - Consultar pedidos por número, cliente ou CNPJ
@@ -43,19 +79,19 @@ CAPACIDADES QUE VOCÊ TEM:
   * Opção A: Envio TOTAL - aguarda todos os itens terem estoque
   * Opção B: Envio PARCIAL - exclui item(ns) gargalo
   * Opção C, D, E: Outras variações conforme necessário
-  * O número de opções varia conforme a complexidade do pedido
+- Mostra data prevista, valor, percentual e itens de cada opção
 
 **Análise de Gargalos (O que está travando?):**
-- Pergunta: "O que está travando o pedido VCD123?"
-- Identifica produtos com estoque insuficiente
+- Identifica produtos com estoque insuficiente para atender demanda
+- Mostra: quantidade necessária, estoque atual, quanto falta
+- Calcula severidade (1-10) baseado em cobertura e pedidos afetados
 
 **Ações:**
 - Criar separações para pedidos (escolher opção A, B ou C após análise)
 
-**Consultas de Produtos e Estoque:**
-- Buscar produtos na carteira
-- Verificar estoque atual e projeção
-- Identificar produtos com ruptura prevista
+**Consultas de Estoque:**
+- Verificar estoque atual e projeção de até 14 dias
+- Identificar produtos com ruptura prevista (próximos 7 dias)
 
 **Consultas por Localização:**
 - Por rota principal: "rota MG", "rota NE", "rota SUL"
@@ -64,11 +100,35 @@ CAPACIDADES QUE VOCÊ TEM:
 
 **Memória e Aprendizado:**
 - Memorizar: "Lembre que o cliente X é VIP"
+- Memorizar global: "Lembre que código 123 é Azeitona (global)"
 - Esquecer: "Esqueça que o cliente X é especial"
 - Listar: "O que você sabe?"
 
 SE O USUÁRIO PEDIR AJUDA:
 Explique suas capacidades de forma amigável com exemplos práticos."""
+
+
+# =============================================================================
+# MONTAGEM DO PROMPT COMPLETO
+# =============================================================================
+
+def _montar_prompt_base() -> str:
+    """
+    Monta o prompt base completo.
+
+    Separa seções estáticas das dinâmicas para facilitar manutenção.
+    """
+    capacidades = _gerar_capacidades()
+
+    return f"""{_PROMPT_PERSONALIDADE}
+
+{_PROMPT_REGRAS}
+
+{capacidades}"""
+
+
+# Mantido para compatibilidade (algumas partes do código usam diretamente)
+SYSTEM_PROMPT_BASE = _montar_prompt_base()
 
 
 def get_system_prompt_with_memory(contexto_memoria: str = None) -> str:
@@ -81,7 +141,8 @@ def get_system_prompt_with_memory(contexto_memoria: str = None) -> str:
     Returns:
         Prompt completo com memória
     """
-    prompt = SYSTEM_PROMPT_BASE
+    # Regenera para garantir capacidades atualizadas
+    prompt = _montar_prompt_base()
 
     if contexto_memoria:
         prompt += f"""

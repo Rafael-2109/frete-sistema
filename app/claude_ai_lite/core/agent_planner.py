@@ -1,5 +1,15 @@
 """
-AgentPlanner - Planeja e executa ferramentas em múltiplas etapas.
+AgentPlanner - PROMPT 2: PLANEJAMENTO
+
+RESPONSABILIDADE:
+- Receber domínio, intenção e entidades do PROMPT 1 (intelligent_extractor)
+- Planejar quais ferramentas usar e em que ordem
+- Executar as etapas e consolidar resultados
+
+FONTE DE DADOS (dinâmica):
+- Ferramentas: via ToolRegistry.formatar_para_prompt()
+- Schema: via ToolRegistry.formatar_schema_resumido()
+- Configurações: via config.py
 
 FILOSOFIA:
 - É uma CAMADA dentro do orchestrator, não um orquestrador paralelo
@@ -9,10 +19,10 @@ FILOSOFIA:
 - Usa resultado de etapas anteriores para alimentar próximas
 
 FLUXO:
-1. Recebe pergunta + domínio + entidades
+1. Recebe pergunta + domínio + entidades (do PROMPT 1)
 2. Claude planeja quais ferramentas usar e em que ordem
 3. Executa cada etapa, passando resultados anteriores
-4. Retorna dados consolidados para o responder
+4. Retorna dados consolidados para o responder (PROMPT 3)
 
 REGRAS DE FALLBACK:
 - Se nenhuma ferramenta resolve: tenta AutoLoader (apenas para consultas)
@@ -20,7 +30,7 @@ REGRAS DE FALLBACK:
 - AutoLoader marca resultado como "experimental"
 
 Criado em: 26/11/2025
-Atualizado: 26/11/2025 - MAX_ETAPAS dinâmico via config.py
+Atualizado: 27/11/2025 - Documentação arquitetura de prompts
 """
 
 import json

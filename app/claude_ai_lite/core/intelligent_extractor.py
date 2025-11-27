@@ -1,5 +1,15 @@
 """
-Extrator Inteligente - Delega ao Claude a extração completa.
+Extrator Inteligente - PROMPT 1: CLASSIFICAÇÃO
+
+RESPONSABILIDADE:
+- Receber pergunta do usuário
+- Classificar domínio, intenção e extrair entidades
+- Delegar 100% ao Claude
+
+FONTE DE DADOS (dinâmica):
+- Capabilities: via ToolRegistry.formatar_para_prompt()
+- Fallback: _gerar_capabilities_fallback() (gera das capabilities)
+- Mínimo: _CAPABILITIES_MINIMO (só se tudo falhar)
 
 FILOSOFIA v5.0:
 - O Claude é o CÉREBRO - confiamos 100% nas decisões dele
@@ -7,6 +17,7 @@ FILOSOFIA v5.0:
   1. Lista de CAPABILITIES disponíveis (com descrição e intenções)
   2. ESTADO ESTRUTURADO da conversa (JSON) - v5 com PONTE de contexto
   3. CONHECIMENTO DO NEGÓCIO (aprendizados)
+  4. HISTÓRICO DA CONVERSA (para follow-ups)
 - O Claude decide:
   1. DOMÍNIO (carteira, estoque, acao, etc)
   2. INTENÇÃO (deve mapear para uma capability)
@@ -18,10 +29,8 @@ HERANÇA AUTOMÁTICA v5:
 - Isso resolve o problema de "o que está pendente?" após consultar cliente X
 
 Criado em: 24/11/2025
-Atualizado: 26/11/2025 - Claude decide domínio/intenção, lista de capabilities
-Atualizado: 26/11/2025 - Capabilities dinâmicas via ToolRegistry + config.py
-Atualizado: 27/11/2025 - v5: Herança automática de contexto (REFERENCIA.cliente_atual)
-Atualizado: 27/11/2025 - v5.6: Recebe histórico da conversa para entender follow-ups
+Atualizado: 27/11/2025 - v5.6: Recebe histórico da conversa
+Atualizado: 27/11/2025 - v5.7: Fallback dinâmico (nunca desincroniza)
 """
 
 import json
@@ -33,7 +42,77 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CARREGAMENTO DINÂMICO DE CAPABILITIES
+# CAPABILITIES FALLBACK - GERADO DINAMICAMENTE
+# =============================================================================
+# O fallback agora também é gerado dinamicamente para nunca desincronizar.
+# Atualizado: 27/11/2025 - Removido fallback hardcoded
+
+# Fallback MÍNIMO - só usado se TUDO falhar (capabilities não carregadas)
+_CAPABILITIES_MINIMO = """
+=== CAPABILITIES MÍNIMAS ===
+Se você está vendo isso, houve erro no carregamento das capabilities.
+
+DOMÍNIO: carteira
+- consultar_pedido: Consulta pedidos (num_pedido, cliente)
+- consulta_generica: Consultas em tabelas
+
+DOMÍNIO: acao
+- escolher_opcao: Usuário escolhendo A/B/C
+- confirmar_acao: Usuário confirmando (sim, confirmo)
+- cancelar: Usuário cancelando
+
+=== FIM ===
+"""
+
+
+def _gerar_capabilities_fallback() -> str:
+    """
+    Gera fallback de capabilities dinamicamente (sem ToolRegistry).
+
+    Usado quando ToolRegistry falha - gera direto das capabilities.
+    Isso garante que NUNCA haja desincronização.
+    """
+    try:
+        from ..capabilities import get_all_capabilities
+
+        caps = get_all_capabilities()
+        if not caps:
+            return _CAPABILITIES_MINIMO
+
+        linhas = ["=== CAPABILITIES DISPONÍVEIS ===", ""]
+
+        # Agrupa por domínio
+        por_dominio = {}
+        for cap in caps:
+            d = cap.DOMINIO or 'geral'
+            if d not in por_dominio:
+                por_dominio[d] = []
+            por_dominio[d].append(cap)
+
+        for dominio, lista in sorted(por_dominio.items()):
+            linhas.append(f"DOMÍNIO: {dominio}")
+            for cap in lista:
+                linhas.append(f"- {cap.NOME}")
+                if cap.INTENCOES:
+                    linhas.append(f"  Intenções: {', '.join(cap.INTENCOES)}")
+                if cap.DESCRICAO:
+                    linhas.append(f"  Descrição: {cap.DESCRICAO}")
+                if cap.CAMPOS_BUSCA:
+                    linhas.append(f"  Campos: {', '.join(cap.CAMPOS_BUSCA)}")
+                if cap.EXEMPLOS:
+                    linhas.append(f"  Exemplos: {'; '.join(cap.EXEMPLOS)}")
+                linhas.append("")
+
+        linhas.append("=== FIM DAS CAPABILITIES ===")
+        return "\n".join(linhas)
+
+    except Exception as e:
+        logger.warning(f"[INTELLIGENT_EXTRACTOR] Fallback dinâmico falhou: {e}")
+        return _CAPABILITIES_MINIMO
+
+
+# =============================================================================
+# CARREGAMENTO DINÂMICO DE CAPABILITIES (via ToolRegistry)
 # =============================================================================
 
 def _carregar_capabilities_dinamicas() -> str:
@@ -55,14 +134,14 @@ def _carregar_capabilities_dinamicas() -> str:
         ferramentas = registry.listar_ferramentas(incluir_generica=False)
 
         if not ferramentas:
-            logger.warning("[INTELLIGENT_EXTRACTOR] Nenhuma ferramenta encontrada, usando fallback")
-            return _CAPABILITIES_FALLBACK
+            logger.warning("[INTELLIGENT_EXTRACTOR] Nenhuma ferramenta encontrada, usando fallback dinâmico")
+            return _gerar_capabilities_fallback()
 
         return registry.formatar_para_prompt(ferramentas)
 
     except Exception as e:
         logger.warning(f"[INTELLIGENT_EXTRACTOR] Erro ao carregar capabilities dinâmicas: {e}")
-        return _CAPABILITIES_FALLBACK
+        return _gerar_capabilities_fallback()
 
 
 def _obter_capabilities_prompt() -> str:
@@ -72,7 +151,7 @@ def _obter_capabilities_prompt() -> str:
     Se config.extracao.carregar_capabilities_dinamicamente = True:
         Carrega do ToolRegistry
     Senão:
-        Usa string fixa (fallback)
+        Gera fallback dinâmico (nunca desincroniza)
     """
     from ..config import usar_capabilities_dinamicas
 
@@ -81,127 +160,8 @@ def _obter_capabilities_prompt() -> str:
         logger.debug("[INTELLIGENT_EXTRACTOR] Usando capabilities dinâmicas")
         return caps
 
-    logger.debug("[INTELLIGENT_EXTRACTOR] Usando capabilities estáticas (fallback)")
-    return _CAPABILITIES_FALLBACK
-
-
-# =============================================================================
-# CAPABILITIES FALLBACK (string fixa para quando dinâmico falhar)
-# =============================================================================
-# Mantido como fallback caso o carregamento dinâmico falhe.
-
-_CAPABILITIES_FALLBACK = """
-=== CAPABILITIES DISPONÍVEIS ===
-
-Escolha a intenção que melhor se encaixa. O sistema vai executar a capability correspondente.
-
-DOMÍNIO: carteira
-- consultar_pedido
-  Intenções: consultar_status, buscar_pedido
-  Descrição: Consulta status e detalhes de pedidos
-  Campos: num_pedido, cnpj_cpf, raz_social_red
-  Exemplos: "Status do pedido VCD123", "Pedidos do cliente Atacadão"
-
-- analisar_disponibilidade
-  Intenções: analisar_disponibilidade, quando_posso_enviar, verificar_disponibilidade
-  Descrição: Analisa QUANDO um pedido/cliente pode ser enviado baseado no estoque
-  Campos: num_pedido, raz_social_red, qtd_saldo
-  Exemplos: "Quando posso enviar o VCD123?", "Quando dá pra enviar 28 pallets pro Atacadão?"
-
-- consultar_produto
-  Intenções: buscar_produto
-  Descrição: Busca produtos na carteira por nome ou código
-  Campos: nome_produto, cod_produto
-  Exemplos: "Azeitona na carteira", "Produto 12345"
-
-- consultar_rota
-  Intenções: buscar_rota, buscar_uf
-  Descrição: Busca pedidos por rota, sub-rota ou UF
-  Campos: rota, sub_rota, cod_uf
-  Exemplos: "Pedidos da rota MG", "O que tem pra SP?"
-
-- analisar_gargalos
-  Intenções: analisar_gargalo
-  Descrição: Identifica produtos que travam pedidos por falta de estoque
-  Campos: num_pedido, cod_produto
-  Exemplos: "O que trava o pedido VCD123?", "Gargalos do pedido"
-
-- analisar_estoque_cliente
-  Intenções: analisar_estoque_cliente, produtos_cliente_data
-  Descrição: Analisa quais produtos de um cliente terão estoque disponível em uma data
-  Campos: raz_social_red, data
-  Exemplos: "Quais produtos do Atacadão terão estoque dia 26?"
-
-- consulta_generica
-  Intenções: consulta_generica, consultar_por_data, listar_dados, consultar_faturamento
-  Descrição: Consultas genéricas em tabelas por período/filtro
-  Campos: tabela, campo_filtro, data_inicio, data_fim, agregacao
-  TABELAS VÁLIDAS: CarteiraPrincipal, Separacao, Pedido, FaturamentoProduto, Embarque,
-                   MovimentacaoEstoque, CadastroPalletizacao, ProgramacaoProducao, Frete
-  SINÔNIMOS DE TABELA:
-    - "faturamento", "faturou", "NFs emitidas" → tabela="FaturamentoProduto"
-    - "pedido", "pedidos" → tabela="Pedido" ou "CarteiraPrincipal"
-    - "separação", "separações" → tabela="Separacao"
-    - "estoque", "movimentação" → tabela="MovimentacaoEstoque"
-    - "embarque" → tabela="Embarque"
-    - "fretes" → tabela="Frete"
-
-  AGREGAÇÃO (campo "agregacao"):
-    - Se usuário pergunta "quanto", "total", "soma" → agregacao="sum"
-    - Se usuário pergunta "quantos", "contagem" → agregacao="count"
-    - Se usuário quer lista detalhada → NÃO incluir agregacao
-
-  IMPORTANTE: Sempre extraia "tabela" como entidade quando o usuário perguntar sobre dados!
-  Exemplos:
-    - "O que entrou de pedido ontem?" → tabela="CarteiraPrincipal", data_inicio="ontem"
-    - "Separações criadas hoje" → tabela="Separacao", data_inicio="hoje"
-    - "Quanto faturou hoje?" → tabela="FaturamentoProduto", data_inicio="hoje", data_fim="hoje", agregacao="sum"
-    - "Quantas NFs foram emitidas ontem?" → tabela="FaturamentoProduto", data_inicio="ontem", agregacao="count"
-    - "Lista as NFs de hoje" → tabela="FaturamentoProduto", data_inicio="hoje" (sem agregacao)
-
-DOMÍNIO: estoque
-- consultar_estoque
-  Intenções: consultar_estoque, consultar_ruptura
-  Descrição: Consulta estoque atual, projeção e rupturas
-  Campos: cod_produto, nome_produto
-  Exemplos: "Estoque de azeitona", "Vai dar ruptura de azeitona?"
-
-DOMÍNIO: acao (para modificar dados/criar coisas)
-- criar_separacao
-  Intenções: criar_separacao, separar, gerar_separacao
-  Descrição: Cria separações para pedidos
-  Campos: num_pedido, expedicao, opcao
-  Exemplos: "Cria separação do VCD123", "Separa o pedido pro dia 27"
-
-- escolher_opcao
-  Intenções: escolher_opcao
-  Descrição: Usuário escolhendo opção A/B/C apresentada anteriormente
-  Campos: opcao
-  Exemplos: "Opção A", "Quero a B", "Escolho a primeira"
-
-- confirmar_acao
-  Intenções: confirmar_acao
-  Descrição: Usuário confirmando uma ação pendente
-  Exemplos: "Sim", "Confirmo", "Pode fazer"
-
-- cancelar
-  Intenções: cancelar
-  Descrição: Usuário cancelando ação/rascunho
-  Exemplos: "Cancela", "Desisto", "Não quero mais"
-
-- alterar_expedicao
-  Intenções: alterar_expedicao, alterar_data
-  Descrição: Alterar data de expedição de um rascunho
-  Campos: expedicao
-  Exemplos: "Muda pro dia 28", "Altera a data pra 30/11"
-
-- ver_rascunho
-  Intenções: ver_rascunho
-  Descrição: Mostrar o rascunho atual
-  Exemplos: "Mostra o rascunho", "Como está a separação?"
-
-=== FIM DAS CAPABILITIES ===
-"""
+    logger.debug("[INTELLIGENT_EXTRACTOR] Usando capabilities fallback dinâmico")
+    return _gerar_capabilities_fallback()
 
 
 class IntelligentExtractor:
@@ -321,6 +281,32 @@ REGRAS DO HISTÓRICO (v5.6 - CRÍTICAS):
         system_prompt = f"""Você é o cérebro de um sistema de logística de uma INDÚSTRIA DE ALIMENTOS.
 
 DATA DE HOJE: {hoje}
+
+=== CONTEXTO DA INDÚSTRIA ===
+Produtos: Pêssego, Ketchup, Azeitona, Cogumelo, Shoyu, Óleo Misto
+Variações: cor (verde, preta), forma (inteira, fatiada, sem caroço, recheada)
+Embalagens: BD 6x2 (caixa 6 baldes 2kg), Pouch 18x150 (18 pouchs 150g), Lata, Vidro
+Rotas principais: BA, MG, ES, NE, NE2, NO, MS-MT, SUL, SP, RJ
+Sub-rotas: CAP, INT, INT 2, A, B, C, 0, 1, 2 (baseadas em cidade/região interna)
+
+=== INTERPRETAÇÃO DE FILTROS IMPLÍCITOS ===
+Quando o usuário diz:
+- "sem agendamento" → agendamento IS NULL
+- "sem expedição" → expedicao IS NULL
+- "sem protocolo" → protocolo IS NULL
+- "sem transportadora" → roteirizacao IS NULL
+- "atrasados" → expedicao < hoje
+- "pendentes" → sincronizado_nf = False
+- "abertos" → status = 'ABERTO'
+- "hoje" → expedicao = data atual
+- "amanhã" → expedicao = data atual + 1
+- "já foi programado" → tem expedicao definida
+- "ainda tem na carteira" → qtd_saldo > 0 (não separado)
+
+=== INTERPRETAÇÃO DE LOCALIZAÇÃO ===
+- "rota MG", "rota NE" → rota principal (campo: rota)
+- "rota A", "rota B", "rota CAP" → sub-rota (campo: sub_rota)
+- "pedidos para SP", "o que tem pra MG" → UF (campo: cod_uf)
 
 {capabilities_prompt}
 

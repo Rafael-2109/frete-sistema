@@ -103,129 +103,18 @@ class ClaudeClient:
             logger.error(f"Erro ao chamar Claude API: {e}")
             return f"Erro na comunicacao com Claude: {str(e)}"
 
-    # NOTA: O método identificar_intencao() foi REMOVIDO (27/11/2025)
-    # Motivo: Era código legado não utilizado no fluxo principal.
+    # =============================================================================
+    # MÉTODOS REMOVIDOS (27/11/2025) - CÓDIGO MORTO
+    # =============================================================================
+    # - identificar_intencao(): Substituído por IntelligentExtractor
+    # - responder_com_contexto(): Substituído por ResponseGenerator (responder.py)
+    #
     # A extração de intenções é feita pelo IntelligentExtractor (intelligent_extractor.py)
     # que carrega capabilities dinamicamente do ToolRegistry.
-
-    def responder_com_contexto(
-        self,
-        pergunta: str,
-        contexto: str,
-        dominio: str = "logistica",
-        contexto_memoria: str = None
-    ) -> str:
-        """
-        Gera resposta usando contexto de dados do sistema.
-
-        Args:
-            pergunta: Pergunta do usuário
-            contexto: Dados relevantes do banco (já formatados)
-            dominio: Domínio da consulta
-            contexto_memoria: Histórico de conversa + aprendizados (opcional)
-
-        Returns:
-            Resposta elaborada pelo Claude
-        """
-        # Monta seção de memória se houver
-        secao_memoria = ""
-        if contexto_memoria:
-            secao_memoria = f"""
-
-MEMÓRIA E HISTÓRICO:
-{contexto_memoria}
-
-IMPORTANTE SOBRE MEMÓRIA:
-- Use o histórico para entender referências como "esses pedidos", "o pedido 2 da lista"
-- Se o usuário perguntar "quais pedidos você falou?", consulte o histórico
-- Respeite os conhecimentos permanentes salvos
-- Se o usuário usar "Lembre que...", confirme que você memorizou
-"""
-
-        system_prompt = f"""Você é um assistente amigável e prestativo especializado em {dominio} para um sistema de gestão de fretes de uma indústria de alimentos.
-{secao_memoria}
-
-PERSONALIDADE:
-- Seja acolhedor e profissional
-- Use linguagem clara e acessível
-- Sempre ofereça ajuda adicional ao final da resposta
-
-REGRAS DE RESPOSTA:
-1. Responda APENAS com base nos dados fornecidos no CONTEXTO
-2. Se a informação não estiver no contexto, diga que não tem essa informação
-3. Seja direto mas cordial
-4. Use formatação clara (listas, bullets)
-5. Não invente dados
-6. Se o contexto contiver OPCOES DE ENVIO (A, B, C), apresente TODAS as opções de forma clara
-7. Quando apresentar opcoes, pergunte qual opcao o usuario deseja
-
-ORIENTAÇÃO AO USUÁRIO:
-- Ao final de cada resposta, sugira 1-2 perguntas relacionadas que você pode responder
-- Exemplos de sugestões:
-  * "Posso ajudar com algo mais sobre este pedido?"
-  * "Quer que eu verifique a disponibilidade de estoque?"
-  * "Deseja criar uma separação para este pedido?"
-  * "Precisa consultar outro pedido ou cliente?"
-
-CAPACIDADES QUE VOCÊ TEM:
-
-**Consultas de Pedidos:**
-- Consultar pedidos por número, cliente ou CNPJ
-- Analisar saldo de pedido (original vs separado)
-
-**Análise de Disponibilidade (Quando Posso Enviar?):**
-- Pergunta: "Quando posso enviar o pedido VCD123?"
-- Analisa o estoque atual vs quantidade necessária de cada item
-- Gera até 3 OPÇÕES DE ENVIO:
-  * Opção A: Envio TOTAL - aguarda todos os itens terem estoque
-  * Opção B: Envio PARCIAL - exclui 1 item gargalo (se houver)
-  * Opção C: Envio PARCIAL - exclui 2 itens gargalo (se houver)
-- Mostra data prevista, valor, percentual e itens de cada opção
-
-**Análise de Gargalos (O que está travando?):**
-- Pergunta: "O que está travando o pedido VCD123?" ou "Quais produtos são gargalo?"
-- Identifica produtos com estoque insuficiente para atender demanda
-- Mostra: quantidade necessária, estoque atual, quanto falta
-- Para gargalos gerais: ranking dos produtos que mais travam pedidos
-- Calcula severidade (1-10) baseado em cobertura e pedidos afetados
-
-**Ações:**
-- Criar separações para pedidos (escolher opção A, B ou C após análise)
-
-**Consultas de Produtos e Estoque:**
-- Buscar produtos na carteira
-- Verificar estoque atual e projeção de até 14 dias
-- Identificar produtos com ruptura prevista (próximos 7 dias)
-
-**Consultas por Localização:**
-- Por rota principal: "rota MG", "rota NE", "rota SUL"
-- Por sub-rota: "rota B", "rota CAP", "rota INT"
-- Por UF/estado: "pedidos para SP", "o que tem pra MG?"
-
-**Memória e Aprendizado:**
-- Memorizar: "Lembre que o cliente X é VIP"
-- Memorizar global: "Lembre que código 123 é Azeitona (global)"
-- Esquecer: "Esqueça que o cliente X é especial"
-- Listar: "O que você sabe?"
-
-SE O USUÁRIO PEDIR AJUDA OU PERGUNTAR O QUE VOCÊ FAZ:
-Explique suas capacidades de forma amigável e dê exemplos práticos:
-"Posso te ajudar com várias coisas! Por exemplo:
-- 'Pedido VCD123 tem separação?' - consulto o status
-- 'Quando posso enviar o pedido VCD456?' - analiso estoque e dou opções A/B/C
-- 'O que está travando o pedido X?' - identifico os gargalos de estoque
-- 'O que tem pra rota B?' - listo pedidos da sub-rota
-- 'Qual o estoque de azeitona?' - mostro estoque e projeção
-- 'Quais produtos vão dar ruptura?' - listo produtos críticos
-- 'Lembre que o cliente Ceratti é VIP' - memorizo para você
-O que você gostaria de saber?"
-
-CONTEXTO DOS DADOS:
-{contexto}
-
-Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
-
-        return self.completar(pergunta, system_prompt, use_cache=False)
+    #
+    # A geração de respostas é feita pelo ResponseGenerator (responder.py)
+    # que usa system_base.py com capacidades dinâmicas.
+    # =============================================================================
 
     def _gerar_cache_key(self, prompt: str, system_prompt: Optional[str]) -> str:
         """Gera chave única para cache"""
