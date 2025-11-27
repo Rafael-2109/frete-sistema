@@ -122,7 +122,13 @@ class EstadoEstruturado:
     """
     Estado completo e estruturado da conversa.
 
-    v4: Com REFERENCIA, item_focado, prioridade_fonte, TEMP.
+    v5: REFERENCIA expandida como ponte de contexto.
+
+    MUDANÇAS v5:
+    - REFERENCIA agora inclui: cliente_atual, dominio_atual, consulta_ativa
+    - CONSULTA enriquecida com: filtros_aplicados, dominio, capacidade, resumo
+    - Unificação: "cliente" sempre mapeia para "raz_social_red" internamente
+    - Herança automática de contexto em follow-ups
     """
     # === IDENTIFICAÇÃO ===
     usuario_id: int
@@ -130,29 +136,33 @@ class EstadoEstruturado:
     # === ESTADO DO DIÁLOGO (nível alto) ===
     estado_dialogo: str = EstadoDialogo.IDLE.value
     acao_atual: Optional[str] = None  # criar_separacao, alterar_data, etc
-    contexto_pergunta: str = ContextoPergunta.LIVRE.value  # NOVO: o que esperamos
+    contexto_pergunta: str = ContextoPergunta.LIVRE.value  # o que esperamos
 
     # === ENTIDADES COM METADADOS ===
     # Estrutura: {"num_pedido": {"valor": "VCD123", "fonte": "usuario"}}
+    # NOTA v5: "raz_social_red" é o campo canônico para cliente
     entidades: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
-    # === REFERÊNCIAS (this pointer) ===
-    # Para resolver "esse pedido", "esse item", "o segundo"
+    # === REFERÊNCIAS (this pointer) - EXPANDIDA v5 ===
+    # Para resolver "esse pedido", "esse cliente", "o segundo"
+    # v5: Agora serve como PONTE de contexto entre consultas
     referencia: Dict[str, Any] = field(default_factory=dict)
-    # Campos: pedido, cliente, produto, item_idx
+    # Campos base: pedido, cliente, produto, item_idx
+    # Campos v5: cliente_atual, dominio_atual, consulta_ativa (bool)
 
     # === DOMÍNIO: SEPARAÇÃO ===
     separacao: Optional[Dict] = None
-    item_focado: Optional[Dict] = None  # NOVO: item atualmente em foco
+    item_focado: Optional[Dict] = None  # item atualmente em foco
 
-    # === DOMÍNIO: CONSULTA ===
+    # === DOMÍNIO: CONSULTA - ENRIQUECIDA v5 ===
+    # Agora inclui: filtros_aplicados, dominio, capacidade, agrupamento, resumo
     consulta: Optional[Dict] = None
 
     # === OPÇÕES OFERECIDAS ===
     opcoes: Optional[Dict] = None
 
     # === VARIÁVEIS TEMPORÁRIAS ===
-    temp: Dict[str, Any] = field(default_factory=dict)  # NOVO: "coloca 5", "o segundo"
+    temp: Dict[str, Any] = field(default_factory=dict)  # "coloca 5", "o segundo"
 
     # === TIMESTAMP ===
     atualizado_em: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -195,10 +205,10 @@ class EstadoEstruturado:
             if entidades_formatadas:
                 estado["ENTIDADES"] = entidades_formatadas
 
-        # === 3. REFERÊNCIA (this pointer) ===
+        # === 3. REFERÊNCIA (this pointer) - v5: PONTE DE CONTEXTO ===
         if self.referencia:
             ref = {}
-            # Monta referências para "esse pedido", "esse item", etc
+            # Campos base: "esse pedido", "esse item", etc
             if self.referencia.get("pedido"):
                 ref["pedido"] = self.referencia["pedido"]
             if self.referencia.get("cliente"):
@@ -207,6 +217,15 @@ class EstadoEstruturado:
                 ref["produto"] = self.referencia["produto"]
             if self.referencia.get("item_idx") is not None:
                 ref["item_idx"] = self.referencia["item_idx"]
+
+            # v5: Campos de PONTE - contexto ativo da conversa
+            if self.referencia.get("cliente_atual"):
+                ref["cliente_atual"] = self.referencia["cliente_atual"]
+            if self.referencia.get("dominio_atual"):
+                ref["dominio_atual"] = self.referencia["dominio_atual"]
+            if self.referencia.get("consulta_ativa"):
+                ref["consulta_ativa"] = True  # Sinaliza que há contexto válido para herança
+
             if ref:
                 estado["REFERENCIA"] = ref
 
@@ -244,7 +263,7 @@ class EstadoEstruturado:
                     "qtd": self.item_focado.get("quantidade")
                 }
 
-        # === 5. CONSULTA (com modelo SQL) ===
+        # === 5. CONSULTA - v5: ENRIQUECIDA COM CONTEXTO COMPLETO ===
         if self.consulta:
             con = self.consulta
             estado["CONSULTA"] = {
@@ -252,6 +271,39 @@ class EstadoEstruturado:
                 "tipo": con.get("tipo"),
                 "total": con.get("total_encontrado", 0)
             }
+
+            # v5: Domínio e capacidade usada
+            if con.get("dominio"):
+                estado["CONSULTA"]["dominio"] = con["dominio"]
+            if con.get("capacidade"):
+                estado["CONSULTA"]["capacidade"] = con["capacidade"]
+
+            # v5: Filtros aplicados - CRÍTICO para herança de contexto
+            filtros = con.get("filtros_aplicados", {})
+            if filtros:
+                estado["CONSULTA"]["filtros_aplicados"] = filtros
+
+            # v5: Agrupamento (se houver)
+            if con.get("agrupamento"):
+                estado["CONSULTA"]["agrupamento"] = con["agrupamento"]
+
+            # v5: Resumo legível para o Claude entender o contexto
+            if con.get("resumo"):
+                estado["CONSULTA"]["resumo"] = con["resumo"]
+            elif filtros:
+                # Gera resumo automático dos filtros
+                partes = []
+                if filtros.get("raz_social_red"):
+                    partes.append(f"cliente={filtros['raz_social_red']}")
+                if filtros.get("num_pedido"):
+                    partes.append(f"pedido={filtros['num_pedido']}")
+                if filtros.get("cod_uf"):
+                    partes.append(f"UF={filtros['cod_uf']}")
+                if filtros.get("rota"):
+                    partes.append(f"rota={filtros['rota']}")
+                if partes:
+                    estado["CONSULTA"]["resumo"] = f"Filtrado por: {', '.join(partes)}"
+
             # Itens para referência numérica
             itens = con.get("itens", [])[:5]
             if itens:
@@ -553,10 +605,16 @@ class EstadoManager:
         tipo: str,
         total: int,
         itens: List[Dict] = None,
-        modelo: str = "CarteiraPrincipal"
+        modelo: str = None,
+        # v5: Novos parâmetros para contexto completo
+        dominio: str = None,
+        capacidade: str = None,
+        filtros_aplicados: Dict[str, Any] = None,
+        agrupamento: str = None,
+        resumo: str = None
     ):
         """
-        Define resultado de consulta.
+        Define resultado de consulta com contexto completo (v5).
 
         Args:
             usuario_id: ID do usuário
@@ -564,8 +622,28 @@ class EstadoManager:
             total: Total de resultados
             itens: Lista de itens encontrados
             modelo: Modelo SQL usado (CarteiraPrincipal, EstoqueAtual, etc)
+            dominio: Domínio da consulta (carteira, estoque, etc)
+            capacidade: Nome da capability/ferramenta usada
+            filtros_aplicados: Dict com filtros usados {campo: valor}
+            agrupamento: Como os dados foram agrupados (por_pedido, por_cliente, etc)
+            resumo: Resumo legível da consulta
         """
         e = EstadoManager.obter(usuario_id)
+
+        # v5: Infere modelo do domínio se não foi passado
+        if modelo is None:
+            mapeamento = {
+                "carteira": "CarteiraPrincipal",
+                "separacao": "Separacao",
+                "estoque": "MovimentacaoEstoque",
+                "fretes": "Frete",
+                "embarques": "Embarque",
+                "faturamento": "FaturamentoProduto",
+                "entregas": "EntregaMonitorada",
+            }
+            modelo = mapeamento.get(dominio, "Separacao")
+
+        # Monta estrutura de consulta enriquecida
         e.consulta = {
             "modelo": modelo,
             "tipo": tipo,
@@ -573,32 +651,67 @@ class EstadoManager:
             "itens": itens[:10] if itens else []
         }
 
+        # v5: Adiciona contexto completo
+        if dominio:
+            e.consulta["dominio"] = dominio
+        if capacidade:
+            e.consulta["capacidade"] = capacidade
+        if filtros_aplicados:
+            e.consulta["filtros_aplicados"] = filtros_aplicados
+        if agrupamento:
+            e.consulta["agrupamento"] = agrupamento
+        if resumo:
+            e.consulta["resumo"] = resumo
+
         # Extrai entidades do primeiro resultado (fonte = consulta)
+        cliente_extraido = None
+        pedido_extraido = None
+
         if itens and len(itens) > 0:
             primeiro = itens[0]
             if primeiro.get("num_pedido"):
+                pedido_extraido = primeiro["num_pedido"]
                 # Só atualiza se não tiver num_pedido com fonte mais prioritária
                 atual = e.entidades.get("num_pedido", {})
                 fonte_atual = atual.get("fonte") if isinstance(atual, dict) else None
                 if fonte_atual not in [FonteEntidade.USUARIO.value, FonteEntidade.RASCUNHO.value]:
                     EstadoManager.atualizar_entidade(
                         usuario_id, "num_pedido",
-                        primeiro["num_pedido"],
+                        pedido_extraido,
                         FonteEntidade.CONSULTA.value
                     )
-                    # Atualiza referência
-                    EstadoManager.definir_referencia(usuario_id, pedido=primeiro["num_pedido"])
 
+            # v5: Unificado - raz_social_red é o campo canônico
             if primeiro.get("raz_social_red"):
-                atual = e.entidades.get("cliente", {})
+                cliente_extraido = primeiro["raz_social_red"]
+                # Atualiza AMBOS: raz_social_red (canônico) e cliente (alias)
+                atual = e.entidades.get("raz_social_red", {})
                 fonte_atual = atual.get("fonte") if isinstance(atual, dict) else None
                 if fonte_atual not in [FonteEntidade.USUARIO.value, FonteEntidade.RASCUNHO.value]:
                     EstadoManager.atualizar_entidade(
-                        usuario_id, "cliente",
-                        primeiro["raz_social_red"],
+                        usuario_id, "raz_social_red",
+                        cliente_extraido,
                         FonteEntidade.CONSULTA.value
                     )
-                    EstadoManager.definir_referencia(usuario_id, cliente=primeiro["raz_social_red"])
+
+        # v5: Extrai cliente dos filtros aplicados (prioridade sobre itens)
+        if filtros_aplicados:
+            if filtros_aplicados.get("raz_social_red"):
+                cliente_extraido = filtros_aplicados["raz_social_red"]
+            if filtros_aplicados.get("num_pedido"):
+                pedido_extraido = filtros_aplicados["num_pedido"]
+
+        # v5: Atualiza REFERENCIA como PONTE de contexto
+        # Isso é CRÍTICO para follow-ups funcionarem!
+        EstadoManager.definir_referencia(
+            usuario_id,
+            pedido=pedido_extraido,
+            cliente=cliente_extraido,
+            # Campos de PONTE v5
+            cliente_atual=cliente_extraido,
+            dominio_atual=dominio or "carteira",
+            consulta_ativa=True  # Sinaliza que há contexto válido
+        )
 
         e.atualizado_em = datetime.now().isoformat()
 
@@ -754,10 +867,55 @@ def definir_resultado_consulta(
     tipo: str,
     total: int,
     itens: List[Dict] = None,
-    modelo: str = "CarteiraPrincipal"
+    modelo: str = None,
+    # v5: Novos parâmetros
+    dominio: str = None,
+    capacidade: str = None,
+    filtros_aplicados: Dict[str, Any] = None,
+    agrupamento: str = None,
+    resumo: str = None
 ):
-    """Define resultado de consulta."""
-    EstadoManager.definir_consulta(usuario_id, tipo, total, itens, modelo)
+    """
+    Define resultado de consulta com contexto completo (v5).
+
+    Args:
+        usuario_id: ID do usuário
+        tipo: Tipo da consulta
+        total: Total de resultados
+        itens: Lista de itens encontrados
+        modelo: Modelo SQL usado (inferido do domínio se não informado)
+        dominio: Domínio da consulta (carteira, estoque, etc)
+        capacidade: Nome da capability/ferramenta usada
+        filtros_aplicados: Dict com filtros usados {campo: valor}
+        agrupamento: Como os dados foram agrupados
+        resumo: Resumo legível da consulta
+    """
+    # v5: Infere modelo do domínio se não foi passado
+    if modelo is None:
+        modelo = _inferir_modelo_do_dominio(dominio)
+
+    EstadoManager.definir_consulta(
+        usuario_id, tipo, total, itens, modelo,
+        dominio=dominio,
+        capacidade=capacidade,
+        filtros_aplicados=filtros_aplicados,
+        agrupamento=agrupamento,
+        resumo=resumo
+    )
+
+
+def _inferir_modelo_do_dominio(dominio: str) -> str:
+    """Infere o modelo SQL baseado no domínio."""
+    mapeamento = {
+        "carteira": "CarteiraPrincipal",
+        "separacao": "Separacao",
+        "estoque": "MovimentacaoEstoque",
+        "fretes": "Frete",
+        "embarques": "Embarque",
+        "faturamento": "FaturamentoProduto",
+        "entregas": "EntregaMonitorada",
+    }
+    return mapeamento.get(dominio, "Separacao")  # Default para Separacao (fonte da verdade)
 
 
 def definir_opcoes(

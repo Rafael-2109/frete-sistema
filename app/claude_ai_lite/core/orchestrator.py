@@ -1,28 +1,34 @@
 """
-Orquestrador do Claude AI Lite v5.1.
+Orquestrador do Claude AI Lite v5.3.
 
 Coordena o fluxo completo:
 1. Obter estado estruturado (CONDICIONAL via roteamento)
 2. Carregar conhecimento do negócio (CONDICIONAL via roteamento)
 3. Verificar comandos de aprendizado
 4. Extração inteligente (Claude) - retorna também roteamento
-5. Tratamento especial via HANDLERS EXTENSÍVEIS
-6. AgentPlanner planeja e executa ferramentas
-7. Gerar resposta
-8. Registrar na memória
+5. FALLBACK DE HERANÇA - Garante herança de contexto (v5.3)
+6. Tratamento especial via HANDLERS EXTENSÍVEIS
+7. AgentPlanner planeja e executa ferramentas
+8. Gerar resposta
+9. Registrar na memória COM CONTEXTO COMPLETO
 
-FILOSOFIA v5.1:
+FILOSOFIA v5.3:
 - O Claude é o CÉREBRO - planeja E executa
 - AgentPlanner substitui find_capability() -> cap.executar()
 - Suporta múltiplas etapas (até 10 com justificativa)
 - Fallback automático para AutoLoader
 - Usa EstadoManager diretamente (ConversationContext removido)
-- NOVO: Handlers extensíveis para domínios customizados
-- NOVO: Fluxo flexível com roteamento (Claude decide etapas)
+- Handlers extensíveis para domínios customizados
+- Fluxo flexível com roteamento (Claude decide etapas)
+- Registro de contexto completo (filtros, domínio, capacidade)
+- NOVO v5.3: Fallback de herança - se Claude não herdou cliente_atual,
+  o orchestrator herda automaticamente (safety net)
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - AgentPlanner v5.0, removido ConversationContext
 Atualizado: 27/11/2025 - v5.1: Handlers extensíveis, fluxo flexível
+Atualizado: 27/11/2025 - v5.2: Contexto completo para herança em follow-ups
+Atualizado: 27/11/2025 - v5.3: Fallback de herança (safety net)
 """
 
 import logging
@@ -188,7 +194,12 @@ def processar_consulta(
     logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}, "
                f"entidades={list(entidades.keys())}")
 
-    # 5.1 Atualiza estado estruturado com entidades extraídas
+    # 5.1 FALLBACK DE HERANÇA v5.2 - Garante que contexto seja herdado
+    # Se o Claude do extrator não herdou cliente_atual, fazemos aqui
+    if usuario_id:
+        entidades = _aplicar_fallback_heranca(usuario_id, entidades, dominio)
+
+    # 5.2 Atualiza estado estruturado com entidades extraídas
     if usuario_id and entidades:
         from .structured_state import EstadoManager
         EstadoManager.atualizar_do_extrator(usuario_id, entidades)
@@ -311,12 +322,24 @@ def processar_consulta(
         _salvar_opcoes_no_estado(usuario_id, resultado['opcoes'])
         logger.info(f"[ORCHESTRATOR] {len(resultado['opcoes'])} opções salvas")
 
-    # 7.2 Registra itens numerados para referência futura
+    # 7.2 Registra itens numerados e contexto completo para referência futura (v5)
     if usuario_id and resultado.get('dados'):
         dados = resultado['dados']
         if isinstance(dados, list) and len(dados) > 0:
-            _registrar_itens_no_estado(usuario_id, dados)
-            logger.info(f"[ORCHESTRATOR] {len(dados)} itens numerados")
+            # v5: Extrai contexto completo para herança em follow-ups
+            filtros_aplicados = _extrair_filtros_do_resultado(resultado, entidades)
+            capacidade_usada = _extrair_capacidade_do_resultado(resultado)
+
+            _registrar_itens_no_estado(
+                usuario_id,
+                dados,
+                dominio=dominio,
+                capacidade=capacidade_usada,
+                filtros_aplicados=filtros_aplicados,
+                resumo=f"Consulta: {intencao_tipo or 'geral'}"
+            )
+            logger.info(f"[ORCHESTRATOR] {len(dados)} itens numerados, "
+                       f"filtros={filtros_aplicados}")
 
     # 8. Registrar na memória
     _registrar_conversa(usuario_id, consulta, resposta, intencao, resultado)
@@ -678,8 +701,25 @@ def _salvar_opcoes_no_estado(usuario_id: int, opcoes: List[Dict]):
         logger.warning(f"Erro ao salvar opções: {e}")
 
 
-def _registrar_itens_no_estado(usuario_id: int, dados: List[Dict]):
-    """Registra itens numerados no estado para referência futura."""
+def _registrar_itens_no_estado(
+    usuario_id: int,
+    dados: List[Dict],
+    # v5: Contexto completo para herança em follow-ups
+    dominio: str = None,
+    capacidade: str = None,
+    filtros_aplicados: Dict[str, Any] = None,
+    agrupamento: str = None,
+    resumo: str = None
+):
+    """
+    Registra itens e contexto completo no estado (v5).
+
+    Isso é CRÍTICO para que follow-ups funcionem corretamente.
+    Quando o usuário pergunta "o que está pendente?", o estado
+    preserva o contexto da consulta anterior (cliente, domínio, etc).
+
+    O limite de itens para serialização está em EstadoManager.definir_consulta.
+    """
     try:
         from .structured_state import EstadoManager
 
@@ -687,8 +727,17 @@ def _registrar_itens_no_estado(usuario_id: int, dados: List[Dict]):
             usuario_id,
             tipo="itens",
             total=len(dados),
-            itens=dados[:10]  # Limita a 10 itens
+            itens=dados,  # Passa todos; limite aplicado em definir_consulta
+            # v5: Contexto completo
+            dominio=dominio,
+            capacidade=capacidade,
+            filtros_aplicados=filtros_aplicados,
+            agrupamento=agrupamento,
+            resumo=resumo
         )
+
+        logger.debug(f"[ORCHESTRATOR] Estado atualizado: {len(dados)} itens, "
+                    f"dominio={dominio}, filtros={filtros_aplicados}")
 
     except Exception as e:
         logger.warning(f"Erro ao registrar itens: {e}")
@@ -729,6 +778,102 @@ def _registrar_conversa(usuario_id: int, consulta: str, resposta: str, intencao:
 
     except Exception as e:
         logger.warning(f"Erro ao registrar conversa: {e}")
+
+
+def _aplicar_fallback_heranca(usuario_id: int, entidades: Dict, dominio: str) -> Dict:
+    """
+    Fallback de herança v5.2 - Garante que contexto seja herdado.
+
+    Se o Claude do extrator NÃO incluiu raz_social_red nas entidades,
+    mas existe REFERENCIA.cliente_atual no estado E consulta_ativa=true,
+    então herdamos automaticamente.
+
+    Isso é um SAFETY NET caso o Claude "esqueça" de herdar.
+
+    Args:
+        usuario_id: ID do usuário
+        entidades: Dict de entidades extraídas pelo Claude
+        dominio: Domínio da consulta
+
+    Returns:
+        Dict de entidades (possivelmente enriquecido com herança)
+    """
+    try:
+        from .structured_state import EstadoManager
+
+        estado = EstadoManager.obter(usuario_id)
+        ref = estado.referencia
+
+        # Verifica condições para herança:
+        # 1. consulta_ativa = True (há contexto válido)
+        # 2. cliente_atual existe
+        # 3. raz_social_red NÃO está nas entidades (Claude não herdou)
+        # 4. Domínio é compatível (não mudou para estoque, por exemplo)
+        if (ref.get('consulta_ativa') and
+            ref.get('cliente_atual') and
+            not entidades.get('raz_social_red') and
+            dominio in ['carteira', 'geral', None, '']):
+
+            # Aplica herança
+            entidades = entidades.copy()  # Não modifica original
+            entidades['raz_social_red'] = ref['cliente_atual']
+
+            logger.info(f"[ORCHESTRATOR] FALLBACK HERANÇA: "
+                       f"herdou raz_social_red='{ref['cliente_atual']}' do contexto")
+
+        return entidades
+
+    except Exception as e:
+        logger.warning(f"[ORCHESTRATOR] Erro no fallback de herança: {e}")
+        return entidades
+
+
+def _extrair_filtros_do_resultado(resultado: Dict, entidades: Dict) -> Dict[str, Any]:
+    """
+    Extrai filtros aplicados do resultado e entidades (v5).
+
+    Esses filtros são CRÍTICOS para herança de contexto em follow-ups.
+    Quando o usuário pergunta "e o que está pendente?", os filtros
+    permitem saber que é "pendente DO ASSAI" (do contexto anterior).
+    """
+    filtros = {}
+
+    # 1. Extrai de entidades (fonte mais confiável)
+    campos_filtro = ['raz_social_red', 'num_pedido', 'cod_produto', 'cod_uf', 'rota', 'vendedor']
+    for campo in campos_filtro:
+        if entidades.get(campo):
+            filtros[campo] = entidades[campo]
+
+    # 2. Extrai de resultado.cliente (algumas capabilities retornam isso)
+    if resultado.get('cliente'):
+        cliente = resultado['cliente']
+        if isinstance(cliente, dict):
+            filtros['raz_social_red'] = cliente.get('razao_social') or cliente.get('nome')
+        elif isinstance(cliente, str):
+            filtros['raz_social_red'] = cliente
+
+    # 3. Extrai de dados[0] se não tiver nos outros
+    if not filtros.get('raz_social_red'):
+        dados = resultado.get('dados', [])
+        if dados and isinstance(dados[0], dict):
+            primeiro = dados[0]
+            if primeiro.get('raz_social_red'):
+                filtros['raz_social_red'] = primeiro['raz_social_red']
+
+    return filtros
+
+
+def _extrair_capacidade_do_resultado(resultado: Dict) -> Optional[str]:
+    """
+    Extrai nome da capacidade/ferramenta usada (v5).
+    """
+    etapas = resultado.get('etapas_executadas', [])
+    if etapas:
+        # Retorna a primeira ferramenta que teve sucesso
+        for etapa in etapas:
+            if etapa.get('sucesso') and etapa.get('ferramenta'):
+                return etapa['ferramenta']
+    return None
 
 
 def _enriquecer_com_conceitos(contexto_dados: str, consulta: str) -> str:

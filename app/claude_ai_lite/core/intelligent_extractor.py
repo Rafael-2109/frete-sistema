@@ -1,22 +1,26 @@
 """
 Extrator Inteligente - Delega ao Claude a extração completa.
 
-FILOSOFIA v4.0:
+FILOSOFIA v5.0:
 - O Claude é o CÉREBRO - confiamos 100% nas decisões dele
 - O Claude recebe:
   1. Lista de CAPABILITIES disponíveis (com descrição e intenções)
-  2. ESTADO ESTRUTURADO da conversa (JSON)
+  2. ESTADO ESTRUTURADO da conversa (JSON) - v5 com PONTE de contexto
   3. CONHECIMENTO DO NEGÓCIO (aprendizados)
 - O Claude decide:
   1. DOMÍNIO (carteira, estoque, acao, etc)
   2. INTENÇÃO (deve mapear para uma capability)
-  3. ENTIDADES extraídas
+  3. ENTIDADES extraídas - INCLUINDO herança automática de contexto!
 
-O entity_mapper NÃO infere mais - apenas traduz nomes de campos.
+HERANÇA AUTOMÁTICA v5:
+- Se REFERENCIA.consulta_ativa = true e usuário NÃO muda de assunto
+- HERDA cliente_atual, dominio_atual automaticamente
+- Isso resolve o problema de "o que está pendente?" após consultar cliente X
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - Claude decide domínio/intenção, lista de capabilities
 Atualizado: 26/11/2025 - Capabilities dinâmicas via ToolRegistry + config.py
+Atualizado: 27/11/2025 - v5: Herança automática de contexto (REFERENCIA.cliente_atual)
 """
 
 import json
@@ -250,18 +254,38 @@ class IntelligentExtractor:
 {contexto_estruturado}
 === FIM DO ESTADO ===
 
-REGRAS DO ESTADO:
-1. Se SEPARACAO.ativo = true:
+REGRAS DO ESTADO (v5 - CRÍTICAS):
+
+1. HERANÇA AUTOMÁTICA DE CONTEXTO (MAIS IMPORTANTE):
+   Se REFERENCIA.consulta_ativa = true E o usuário NÃO mencionou cliente/pedido:
+   - HERDE REFERENCIA.cliente_atual como raz_social_red nas entidades
+   - HERDE REFERENCIA.dominio_atual como domínio
+   - Exemplo: "o que está pendente?" + cliente_atual="ASSAI"
+     → entidades: {{"raz_social_red": "ASSAI"}}
+
+2. FILTROS DA ÚLTIMA CONSULTA:
+   Se CONSULTA.filtros_aplicados existe:
+   - Esses são os filtros usados na consulta anterior
+   - Para follow-ups ("e o total?", "detalha por pedido"), HERDE esses filtros
+   - Só NÃO herde se o usuário EXPLICITAMENTE mudar de assunto
+     (ex: "e o Atacadão?", "agora quero ver o estoque")
+
+3. QUANDO NÃO HERDAR (pedir clarificação):
+   - Usuário muda explicitamente de assunto ("e o cliente X?", "agora quero...")
+   - Não existe REFERENCIA.cliente_atual (primeira consulta)
+   - Pergunta é claramente sobre OUTRO domínio
+
+4. Se SEPARACAO.ativo = true:
    - Há um rascunho de separação em andamento
    - Menções a data são para MODIFICAR o rascunho
    - "confirmo" = confirmar_acao
    - "cancela" = cancelar
 
-2. Se OPCOES tem lista:
+5. Se OPCOES tem lista:
    - O usuário provavelmente está escolhendo uma opção (A, B, C)
    - Use intenção: escolher_opcao
 
-3. Se ENTIDADES tem dados:
+6. Se ENTIDADES tem dados:
    - Use esses valores quando disser "esse pedido", "esse cliente"
    - Não pergunte o que já está no contexto
 
@@ -335,15 +359,28 @@ Analise a mensagem do usuário e retorne um JSON com:
    - "amanhã" → calcule baseado em hoje ({hoje})
    - Ano padrão: {ano_atual}
 
-4. AMBIGUIDADE:
-   - Só pergunte se REALMENTE não souber
-   - Se tem contexto (ESTADO), use-o
-   - Prefira inferir do que perguntar
+4. AMBIGUIDADE (v5 - HERANÇA PRIMEIRO):
+   - ANTES de pedir clarificação, VERIFIQUE se REFERENCIA.consulta_ativa = true
+   - Se sim E a pergunta é sobre o MESMO domínio → HERDE cliente_atual
+   - Só pergunte se:
+     a) Não existe cliente_atual no contexto (primeira consulta)
+     b) Usuário EXPLICITAMENTE mudou de assunto ("e o Atacadão?")
+     c) A pergunta é claramente sobre OUTRO domínio
+   - NUNCA pergunte "de qual cliente?" se cliente_atual existe e a pergunta é compatível
 
-5. CONTEXTO:
+5. CONTEXTO (v5 - PONTE):
+   - REFERENCIA.cliente_atual = cliente da conversa atual (HERDAR em follow-ups)
+   - REFERENCIA.consulta_ativa = true significa "há contexto válido para herança"
+   - CONSULTA.filtros_aplicados = filtros da última consulta (herdar se for follow-up)
    - Se tem SEPARACAO ativa, ações são sobre ela
    - Se tem OPCOES, usuário provavelmente está escolhendo
    - Use ENTIDADES do contexto quando disser "esse", "aquele"
+
+6. EXEMPLOS DE HERANÇA:
+   - Contexto: cliente_atual="ASSAI", consulta_ativa=true
+   - "o que está pendente?" → entidades: {{"raz_social_red": "ASSAI"}}
+   - "detalha por pedido" → entidades: {{"raz_social_red": "ASSAI"}}
+   - "e o Atacadão?" → entidades: {{"raz_social_red": "ATACADAO"}} (mudou!)
 
 Retorne APENAS o JSON, sem explicações."""
 

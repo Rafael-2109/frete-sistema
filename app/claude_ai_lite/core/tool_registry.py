@@ -645,7 +645,7 @@ O ServicoEstoqueSimples já calcula considerando:
 Para consultas simples de projeção:
 Estoque projetado = Estoque atual - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)""",
 
-            'fretes': """=== MODELO DE DADOS DE FRETES ===
+            'embarques': """=== MODELO DE DADOS DO EMBARQUE ===
 
 FLUXO: Separação ABERTO → Cotação → Embarque → EmbarqueItem → COTADO
 
@@ -669,15 +669,7 @@ Itens dentro do embarque.
 
 RELACIONAMENTO:
 - 1 Embarque = N EmbarqueItem
-- 1 EmbarqueItem = 1 separacao_lote_id
-
-=== TABELA: Frete ===
-Cotações de frete.
-- id, transportadora_id, valor_frete, status
-
-Sinônimos do usuário:
-- "cotação" = frete fechado / contratado
-- "quando vai sair" = expedicao (data_prevista_embarque atualiza expedicao)""",
+- 1 EmbarqueItem = 1 separacao_lote_id """,
 
             'faturamento': """=== MODELO DE DADOS DE FATURAMENTO ===
 
