@@ -80,7 +80,7 @@ class MemoryService:
             logger.error(f"[MEMORY] Erro ao registrar mensagem: {e}")
 
     @staticmethod
-    def buscar_historico(usuario_id: int, limite: int = MAX_HISTORICO) -> List[Dict]:
+    def buscar_historico(usuario_id: int, limite: int = None) -> List[Dict]:
         """
         Busca histórico de conversas do usuário.
 
@@ -89,6 +89,9 @@ class MemoryService:
         """
         try:
             from .models import ClaudeHistoricoConversa
+            # Usa config dinâmica se limite não foi especificado
+            if limite is None:
+                limite = _get_max_historico()
             mensagens = ClaudeHistoricoConversa.buscar_historico(usuario_id, limite)
             return [m.to_dict() for m in mensagens]
         except Exception as e:

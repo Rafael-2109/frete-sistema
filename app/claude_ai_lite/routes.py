@@ -161,10 +161,16 @@ def api_criar_separacao():
         num_pedido = data['num_pedido'].strip()
         opcao = data['opcao'].strip().upper()
 
-        if opcao not in ['A', 'B', 'C']:
+        # Validação flexível de opções (A até E conforme config)
+        from .config import get_config
+        config = get_config()
+        max_opcoes = config.resposta.max_opcoes
+        opcoes_validas = [chr(65 + i) for i in range(max_opcoes)]  # ['A', 'B', 'C', 'D', 'E']
+
+        if opcao not in opcoes_validas:
             return jsonify({
                 'success': False,
-                'error': 'Opcao deve ser A, B ou C'
+                'error': f'Opcao deve ser uma das seguintes: {", ".join(opcoes_validas)}'
             }), 400
 
         usuario = getattr(current_user, 'nome', 'Claude AI')

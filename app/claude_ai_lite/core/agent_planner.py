@@ -105,11 +105,18 @@ class AgentPlanner:
         }
 
         try:
-            # 1. Obtém ferramentas disponíveis para o domínio
+            # 1. Obtém ferramentas disponíveis
+            # IMPORTANTE: NÃO filtra por domínio - Claude deve ter acesso a TUDO
+            # O domínio é apenas uma SUGESTÃO do extrator, não uma RESTRIÇÃO
             registry = self._get_tool_registry()
+
+            # Ferramentas: traz do domínio + loader_generico (sempre disponível)
             ferramentas = registry.listar_ferramentas(dominio=dominio)
             ferramentas_prompt = registry.formatar_para_prompt(ferramentas)
-            schema_prompt = registry.formatar_schema_resumido(dominio)
+
+            # Schema: SEMPRE completo - Claude precisa saber de TODAS as tabelas
+            # Isso permite que ele use loader_generico para qualquer consulta
+            schema_prompt = registry.formatar_schema_resumido(dominio=None)  # None = COMPLETO
 
             # 2. Claude planeja as etapas
             plano = self._planejar(
@@ -167,10 +174,20 @@ class AgentPlanner:
                 if resultado_etapa.get('sucesso') and resultado_etapa.get('dados'):
                     dados_acumulados.extend(resultado_etapa.get('dados', []))
 
+                # IMPORTANTE: Preserva campos especiais de capabilities (opcoes, analise, etc)
+                # Isso permite que capabilities como analisar_disponibilidade funcionem
+                for campo_especial in ['opcoes', 'analise', 'carga_sugerida', 'ja_separado',
+                                       'num_pedido', 'cliente', 'valor_total_pedido', 'total_pallets']:
+                    if resultado_etapa.get(campo_especial) is not None:
+                        resultado[campo_especial] = resultado_etapa[campo_especial]
+
             # 4. Consolida resultados
             resultado['etapas_executadas'] = etapas_resumo
             resultado['dados'] = dados_acumulados
-            resultado['total_encontrado'] = len(dados_acumulados)
+
+            # total_encontrado usa dados OU total de opcoes (o que for maior)
+            total_opcoes = len(resultado.get('opcoes', []))
+            resultado['total_encontrado'] = max(len(dados_acumulados), total_opcoes)
 
             # Verifica se teve sucesso em pelo menos uma etapa
             algum_sucesso = any(e.get('sucesso') for e in etapas_resumo)
@@ -310,6 +327,7 @@ Para loader_generico (query customizada):
                     {{"campo": "nome_campo", "operador": "==", "valor": "valor"}}
                 ],
                 "campos_retorno": ["campo1", "campo2"],
+                "ordenar": [{{"campo": "nome_campo", "direcao": "desc"}}],
                 "limite": 100
             }},
             "usar_resultado_de": null,
@@ -317,6 +335,27 @@ Para loader_generico (query customizada):
         }}
     ],
     "explicacao": "Por que esse plano resolve a pergunta"
+}}
+
+Para loader_generico COM ORDENAÇÃO (para "maiores", "menores", "top N"):
+{{
+    "etapas": [
+        {{
+            "ferramenta": "loader_generico",
+            "params": {{}},
+            "loader_json": {{
+                "modelo_base": "CarteiraPrincipal",
+                "filtros": [
+                    {{"campo": "data_pedido", "operador": ">=", "valor": "2025-11-24"}}
+                ],
+                "campos_retorno": ["num_pedido", "raz_social_red", "valor_total_calculado"],
+                "ordenar": [{{"campo": "qtd_saldo_produto_pedido", "direcao": "desc"}}],
+                "limite": 3
+            }},
+            "descricao": "Busca os 3 maiores pedidos por quantidade"
+        }}
+    ],
+    "explicacao": "Usa ordenação para encontrar maiores/menores"
 }}
 
 Para loader_generico COM AGREGAÇÃO (para perguntas de "quanto", "total", "soma"):
@@ -348,6 +387,48 @@ Para loader_generico COM AGREGAÇÃO (para perguntas de "quanto", "total", "soma
 FUNÇÕES DE AGREGAÇÃO DISPONÍVEIS: sum, count, avg, min, max
 USE AGREGAÇÃO quando o usuário perguntar "quanto", "total", "soma", "quantos"
 
+ORDENAÇÃO DISPONÍVEL: "ordenar": [{{"campo": "nome", "direcao": "desc|asc"}}]
+USE ORDENAÇÃO quando o usuário perguntar "maiores", "menores", "top", "ranking"
+
+=== AUTONOMIA DO LOADER_GENERICO ===
+
+O loader_generico é sua FERRAMENTA PRINCIPAL para consultas não cobertas por capabilities.
+Você tem AUTONOMIA para usá-lo em QUALQUER tabela listada no schema.
+
+TABELAS DISPONÍVEIS (use o nome exato):
+- CarteiraPrincipal: pedidos na carteira (qtd_saldo_produto_pedido, preco_produto_pedido)
+- Separacao: separações criadas (qtd_saldo, valor_saldo, sincronizado_nf)
+- Pedido: VIEW agregada (valor_saldo_total, peso_total)
+- FaturamentoProduto: NFs emitidas (valor_produto_faturado, qtd_produto_faturado, data_fatura)
+- Embarque: embarques (valor_total, peso_total, pallet_total)
+- MovimentacaoEstoque: movimentações de estoque
+- CadastroPalletizacao: dados de produtos (palletizacao, peso_bruto)
+- Frete: fretes
+
+CAMPOS COMUNS DE VALOR:
+- CarteiraPrincipal: Para valor total use expressão "preco_produto_pedido * qtd_saldo_produto_pedido"
+- FaturamentoProduto: valor_produto_faturado (JÁ É o valor total do item - use este!)
+- Separacao: valor_saldo (campo direto de valor)
+- Pedido: valor_saldo_total (VIEW com valor já calculado)
+- Embarque: valor_total
+
+EXPRESSÕES MATEMÁTICAS SUPORTADAS NA AGREGAÇÃO:
+- Formato: "campo1 * campo2" (com espaços ao redor do operador)
+- Operadores: *, +, -, /
+- Exemplo para valor total de pedido:
+  {{"func": "sum", "campo": "preco_produto_pedido * qtd_saldo_produto_pedido", "alias": "valor_total"}}
+
+DICA PARA "MAIORES PEDIDOS POR VALOR":
+- Use agregação com expressão: sum(preco_produto_pedido * qtd_saldo_produto_pedido)
+- Agrupe por num_pedido e raz_social_red
+- Ordene pelo alias (ex: valor_total DESC)
+
+CAMPOS COMUNS DE DATA:
+- CarteiraPrincipal: data_pedido
+- FaturamentoProduto: data_fatura
+- Separacao: criado_em, expedicao, agendamento
+- Embarque: data_prevista_embarque, data_embarque
+
 === USAR RESULTADO DE ETAPA ANTERIOR ===
 
 Se etapa 2 precisa do resultado da etapa 1, use:
@@ -370,6 +451,50 @@ Se etapa 2 precisa do resultado da etapa 1, use:
 
 Quando usar_resultado_de não é null, os dados da etapa indicada (0-indexed)
 são injetados em _dados_anteriores nos params.
+
+=== ENRIQUECER CONTEXTO (AUTONOMIA TOTAL) ===
+
+Use enriquecer_contexto quando identificar que FALTA INFORMAÇÃO para responder.
+VOCÊ define O QUE precisa e COMO buscar. O sistema apenas executa.
+
+QUANDO USAR:
+- Termo ambíguo: "João" pode ser cliente, vendedor ou produto
+- Validação necessária: Verificar se pedido/cliente existe antes de prosseguir
+- Contexto incompleto: Estado não tem info que você precisa
+
+FORMATO:
+{{
+    "ferramenta": "enriquecer_contexto",
+    "params": {{
+        "motivo": "Explicação de POR QUE você precisa dessa informação",
+        "loader_json": {{
+            "modelo_base": "TabelaQueVoceEscolher",
+            "filtros": [...],
+            "campos_retorno": [...],
+            "limite": N
+        }}
+    }},
+    "descricao": "O que essa busca adicional faz"
+}}
+
+EXEMPLO - Resolver ambiguidade:
+{{
+    "ferramenta": "enriquecer_contexto",
+    "params": {{
+        "motivo": "Usuário mencionou 'João' sem especificar se é cliente ou vendedor",
+        "loader_json": {{
+            "modelo_base": "CarteiraPrincipal",
+            "filtros": [{{"campo": "vendedor", "operador": "ilike", "valor": "%JOAO%"}}],
+            "campos_retorno": ["vendedor"],
+            "agregacao": {{"por": ["vendedor"], "funcoes": []}},
+            "limite": 5
+        }}
+    }},
+    "descricao": "Verifica se João é vendedor"
+}}
+
+DICA: Use enriquecer_contexto ANTES das etapas principais quando perceber ambiguidade.
+O resultado fica disponível para as etapas seguintes via usar_resultado_de.
 
 === EXEMPLOS ===
 
@@ -513,6 +638,9 @@ Retorne APENAS o JSON, sem explicações adicionais."""
             loader_json = etapa.get('loader_json', {})
             return self._executar_loader_generico(loader_json, params_final)
 
+        elif tipo == 'enriquecer_contexto':
+            return self._executar_enriquecer_contexto(params_final, usuario_id)
+
         else:
             return {'sucesso': False, 'erro': f'Tipo de ferramenta desconhecido: {tipo}'}
 
@@ -602,6 +730,70 @@ Retorne APENAS o JSON, sem explicações adicionais."""
         except Exception as e:
             logger.error(f"[AGENT_PLANNER] Erro ao executar loader genérico: {e}")
             return {'sucesso': False, 'erro': str(e)}
+
+    def _executar_enriquecer_contexto(self, params: Dict, usuario_id: int) -> Dict[str, Any]:
+        """
+        Enriquece o contexto permitindo que Claude defina O QUE e COMO buscar.
+
+        Esta ferramenta dá TOTAL AUTONOMIA ao Claude:
+        - Claude define o motivo (por que precisa)
+        - Claude define o loader_json (como buscar)
+        - O sistema apenas executa
+
+        Params esperados:
+        - motivo: Por que Claude precisa dessa informação
+        - loader_json: Query JSON para buscar (mesmo formato do loader_generico)
+
+        Exemplo de uso pelo Claude:
+        {
+            "ferramenta": "enriquecer_contexto",
+            "params": {
+                "motivo": "Preciso validar se 'João' é cliente ou vendedor antes de prosseguir",
+                "loader_json": {
+                    "modelo_base": "CarteiraPrincipal",
+                    "filtros": [{"campo": "vendedor", "operador": "ilike", "valor": "%JOAO%"}],
+                    "campos_retorno": ["vendedor"],
+                    "agregacao": {"por": ["vendedor"], "funcoes": []},
+                    "limite": 5
+                }
+            },
+            "descricao": "Verifica se João é vendedor"
+        }
+        """
+        motivo = params.get('motivo', 'Não especificado')
+        loader_json = params.get('loader_json', {})
+
+        logger.info(f"[AGENT_PLANNER] Enriquecendo contexto: motivo='{motivo}'")
+
+        # Se Claude não forneceu loader_json, tenta usar params como loader
+        if not loader_json and 'modelo_base' in params:
+            loader_json = {k: v for k, v in params.items() if k not in ('motivo', '_dados_anteriores')}
+
+        if not loader_json:
+            return {
+                'sucesso': False,
+                'erro': 'loader_json não fornecido. Claude deve definir como buscar.',
+                'dados': [],
+                'contexto_adicional': f"Motivo: {motivo}"
+            }
+
+        # Executa o loader definido pelo Claude
+        try:
+            from ..ia_trainer.services.loader_executor import executar_loader
+
+            resultado = executar_loader(loader_json)
+
+            return {
+                'sucesso': resultado.get('sucesso', False),
+                'dados': resultado.get('dados', []),
+                'total': resultado.get('total', 0),
+                'erro': resultado.get('erro'),
+                'contexto_adicional': f"[Enriquecimento] {motivo}: {resultado.get('total', 0)} resultados"
+            }
+
+        except Exception as e:
+            logger.error(f"[AGENT_PLANNER] Erro ao enriquecer contexto: {e}")
+            return {'sucesso': False, 'erro': str(e), 'dados': []}
 
     def _tentar_fallback(
         self,

@@ -357,7 +357,7 @@ class EstadoEstruturado:
 
         # === AÇÃO ESPERADA (baseada em contexto_pergunta) ===
         if self.contexto_pergunta == ContextoPergunta.ESCOLHER_OPCAO.value:
-            constraints["acao_esperada"] = "usuario_escolhendo_opcao_A_B_C"
+            constraints["acao_esperada"] = "usuario_escolhendo_opcao"  # Flexível: A-E
         elif self.contexto_pergunta == ContextoPergunta.CONFIRMAR_ACAO.value:
             constraints["acao_esperada"] = "usuario_confirmando_ou_cancelando"
         elif self.contexto_pergunta == ContextoPergunta.MODIFICAR_RASCUNHO.value:

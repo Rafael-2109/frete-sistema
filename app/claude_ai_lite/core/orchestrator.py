@@ -1,31 +1,125 @@
 """
-Orquestrador do Claude AI Lite v5.0.
+Orquestrador do Claude AI Lite v5.1.
 
 Coordena o fluxo completo:
-1. Obter estado estruturado
-2. Carregar conhecimento do negócio
+1. Obter estado estruturado (CONDICIONAL via roteamento)
+2. Carregar conhecimento do negócio (CONDICIONAL via roteamento)
 3. Verificar comandos de aprendizado
-4. Extração inteligente (Claude)
-5. Tratamento especial (clarificação, follow-up, ação)
+4. Extração inteligente (Claude) - retorna também roteamento
+5. Tratamento especial via HANDLERS EXTENSÍVEIS
 6. AgentPlanner planeja e executa ferramentas
 7. Gerar resposta
 8. Registrar na memória
 
-FILOSOFIA v5.0:
+FILOSOFIA v5.1:
 - O Claude é o CÉREBRO - planeja E executa
 - AgentPlanner substitui find_capability() -> cap.executar()
-- Suporta múltiplas etapas (até 5)
+- Suporta múltiplas etapas (até 10 com justificativa)
 - Fallback automático para AutoLoader
 - Usa EstadoManager diretamente (ConversationContext removido)
+- NOVO: Handlers extensíveis para domínios customizados
+- NOVO: Fluxo flexível com roteamento (Claude decide etapas)
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - AgentPlanner v5.0, removido ConversationContext
+Atualizado: 27/11/2025 - v5.1: Handlers extensíveis, fluxo flexível
 """
 
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# REGISTRY DE HANDLERS EXTENSÍVEIS
+# =============================================================================
+
+# Handlers padrão para domínios conhecidos
+# Novos handlers podem ser registrados em runtime via registrar_handler()
+_HANDLERS_DOMINIO: Dict[str, Callable] = {}
+
+
+def registrar_handler(dominio: str, handler: Callable):
+    """
+    Registra handler customizado para um domínio.
+
+    Args:
+        dominio: Nome do domínio (ex: "urgente", "preview")
+        handler: Função que processa o domínio
+
+    Exemplo:
+        def processar_urgente(intencao, entidades, usuario, usuario_id, texto, memoria):
+            return "Processando urgente..."
+
+        registrar_handler("urgente", processar_urgente)
+    """
+    _HANDLERS_DOMINIO[dominio] = handler
+    logger.info(f"[ORCHESTRATOR] Handler registrado para domínio: {dominio}")
+
+
+def _obter_handler(intencao: Dict) -> Optional[Callable]:
+    """
+    Obtém handler para o domínio/intenção.
+
+    Prioridade:
+    1. Handlers customizados da config
+    2. Handlers registrados em runtime
+    3. Handlers padrão internos
+
+    Args:
+        intencao: Dict com dominio e intencao
+
+    Returns:
+        Função handler ou None
+    """
+    from ..config import get_config
+
+    dominio = intencao.get('dominio', '')
+    intencao_tipo = intencao.get('intencao', '')
+    config = get_config()
+
+    # 1. Handlers customizados da config têm prioridade
+    if dominio in config.orquestracao.handlers_customizados:
+        handler_name = config.orquestracao.handlers_customizados[dominio]
+        handler = globals().get(handler_name)
+        if handler:
+            logger.debug(f"[ORCHESTRATOR] Usando handler customizado: {handler_name}")
+            return handler
+
+    # 2. Handlers registrados em runtime
+    if dominio in _HANDLERS_DOMINIO:
+        logger.debug(f"[ORCHESTRATOR] Usando handler registrado: {dominio}")
+        return _HANDLERS_DOMINIO[dominio]
+
+    # 3. Handlers padrão internos (tratamento especial)
+    if dominio == "clarificacao":
+        return _handler_clarificacao
+    if dominio == "follow_up" or intencao_tipo in ("follow_up", "detalhar"):
+        return _handler_follow_up
+    if dominio == "acao":
+        return _handler_acao
+
+    return None
+
+
+def _handler_clarificacao(intencao: Dict, entidades: Dict, usuario: str,
+                          usuario_id: int, texto: str, memoria: str) -> str:
+    """Handler interno para clarificação."""
+    return _processar_clarificacao(intencao, usuario_id)
+
+
+def _handler_follow_up(intencao: Dict, entidades: Dict, usuario: str,
+                       usuario_id: int, texto: str, memoria: str) -> str:
+    """Handler interno para follow-up."""
+    return _processar_follow_up(texto, memoria, usuario_id)
+
+
+def _handler_acao(intencao: Dict, entidades: Dict, usuario: str,
+                  usuario_id: int, texto: str, memoria: str) -> str:
+    """Handler interno para ações."""
+    intencao_tipo = intencao.get('intencao', '')
+    return _processar_acao(intencao_tipo, entidades, usuario, usuario_id, texto)
 
 
 def processar_consulta(
@@ -35,7 +129,10 @@ def processar_consulta(
     usuario_id: int = None
 ) -> str:
     """
-    Processa consulta em linguagem natural.
+    Processa consulta em linguagem natural com fluxo flexível.
+
+    O fluxo é dinâmico - etapas podem ser puladas baseado no roteamento
+    retornado pela extração inteligente.
 
     Args:
         consulta: Texto do usuário
@@ -46,10 +143,22 @@ def processar_consulta(
     Returns:
         Resposta formatada
     """
+    from ..config import get_config
+    config = get_config()
+
+    # 1. SEMPRE: Validação básica
     if not consulta or not consulta.strip():
         return "Por favor, informe sua consulta."
 
-    # 1. Obter ESTADO ESTRUTURADO (JSON)
+    # 2. Verificar comando de aprendizado (antes de tudo - sempre executa)
+    if usuario_id:
+        resultado_aprendizado = _verificar_aprendizado(consulta, usuario_id, usuario)
+        if resultado_aprendizado:
+            _registrar_conversa(usuario_id, consulta, resultado_aprendizado, None, None)
+            return resultado_aprendizado
+
+    # 3. CONDICIONAL: Obter ESTADO ESTRUTURADO (JSON)
+    # Por padrão carrega, mas roteamento pode pular
     contexto_estruturado = ""
     if usuario_id:
         from .structured_state import obter_estado_json
@@ -57,56 +166,47 @@ def processar_consulta(
         if contexto_estruturado:
             logger.debug(f"[ORCHESTRATOR] Estado estruturado: {len(contexto_estruturado)} chars")
 
-    # 2. Carregar conhecimento do negócio (aprendizados)
+    # 4. CONDICIONAL: Carregar conhecimento do negócio (aprendizados)
+    # Por padrão carrega, mas roteamento pode pular
     conhecimento_negocio = _carregar_conhecimento_negocio(usuario_id)
     if conhecimento_negocio:
         logger.debug(f"[ORCHESTRATOR] Conhecimento carregado: {len(conhecimento_negocio)} chars")
 
-    # 3. Verificar comando de aprendizado (antes de tudo)
-    if usuario_id:
-        resultado_aprendizado = _verificar_aprendizado(consulta, usuario_id, usuario)
-        if resultado_aprendizado:
-            _registrar_conversa(usuario_id, consulta, resultado_aprendizado, None, None)
-            return resultado_aprendizado
-
-    # 4. EXTRAÇÃO INTELIGENTE - Delega ao Claude
+    # 5. SEMPRE: EXTRAÇÃO INTELIGENTE - Delega ao Claude
+    # Retorna também roteamento para controlar fluxo
     intencao = _extrair_inteligente(consulta, contexto_estruturado, conhecimento_negocio)
 
     dominio = intencao.get("dominio", "geral")
     intencao_tipo = intencao.get("intencao", "")
     entidades = intencao.get("entidades", {})
+    roteamento = intencao.get("roteamento", {})
+
+    # Log do roteamento se presente
+    if roteamento:
+        logger.debug(f"[ORCHESTRATOR] Roteamento: {roteamento}")
 
     logger.info(f"[ORCHESTRATOR] dominio={dominio}, intencao={intencao_tipo}, "
                f"entidades={list(entidades.keys())}")
 
-    # 4.1 Atualiza estado estruturado com entidades extraídas
+    # 5.1 Atualiza estado estruturado com entidades extraídas
     if usuario_id and entidades:
         from .structured_state import EstadoManager
         EstadoManager.atualizar_do_extrator(usuario_id, entidades)
         logger.debug(f"[ORCHESTRATOR] Estado atualizado com {len(entidades)} entidades")
 
-    # 4.2 Buscar contexto de memória
+    # 5.2 CONDICIONAL: Buscar contexto de memória (roteamento pode pular)
     contexto_memoria = None
-    if usuario_id:
+    deve_buscar_memoria = roteamento.get('buscar_memoria', True)
+    if usuario_id and deve_buscar_memoria:
         contexto_memoria = _buscar_memoria(usuario_id)
+    elif not deve_buscar_memoria:
+        logger.debug(f"[ORCHESTRATOR] Memória pulada: {roteamento.get('motivo', 'sem motivo')}")
 
-    # 5. TRATAMENTOS ESPECIAIS (não passam pelo AgentPlanner)
-
-    # 5.1 Clarificação (Claude detectou ambiguidade)
-    if dominio == "clarificacao":
-        resposta = _processar_clarificacao(intencao, usuario_id)
-        _registrar_conversa(usuario_id, consulta, resposta, intencao, None)
-        return resposta
-
-    # 5.2 Follow-up
-    if dominio == "follow_up" or intencao_tipo in ("follow_up", "detalhar"):
-        resposta = _processar_follow_up(consulta, contexto_memoria, usuario_id)
-        _registrar_conversa(usuario_id, consulta, resposta, intencao, None)
-        return resposta
-
-    # 5.3 Ações (separação, etc)
-    if dominio == "acao":
-        resposta = _processar_acao(intencao_tipo, entidades, usuario, usuario_id, consulta)
+    # 6. HANDLERS EXTENSÍVEIS - Tratamentos especiais
+    # Usa sistema de handlers em vez de IFs hardcoded
+    handler = _obter_handler(intencao)
+    if handler:
+        resposta = handler(intencao, entidades, usuario, usuario_id, consulta, contexto_memoria)
         _registrar_conversa(usuario_id, consulta, resposta, intencao, None)
         return resposta
 
@@ -376,12 +476,20 @@ def _formatar_contexto_resultado(resultado: Dict) -> str:
     """
     Formata resultado do AgentPlanner para o responder.
 
+    IMPORTANTE: Deve exibir TODOS os campos retornados, não apenas uma lista fixa.
+    Isso permite que agregações (total_faturado, total_notas) sejam exibidas.
+    Também formata OPÇÕES de envio quando presentes (analisar_disponibilidade).
+
     Args:
         resultado: Dict do AgentPlanner com dados, etapas_executadas, etc
 
     Returns:
         String formatada para contexto do responder
     """
+    # Se tem opções de envio, usa formatação especial
+    if resultado.get('opcoes'):
+        return _formatar_opcoes_envio(resultado)
+
     dados = resultado.get('dados', [])
     total = resultado.get('total_encontrado', 0)
     etapas = resultado.get('etapas_executadas', [])
@@ -399,16 +507,55 @@ def _formatar_contexto_resultado(resultado: Dict) -> str:
     # Dados
     if dados:
         linhas.append("\nDADOS:")
+
+        # Detecta se é resultado de agregação (poucos registros com campos tipo total_, sum_, etc)
+        eh_agregacao = len(dados) <= 5 and any(
+            any(k.startswith(('total_', 'sum_', 'count_', 'avg_', 'min_', 'max_'))
+                for k in (item.keys() if isinstance(item, dict) else []))
+            for item in dados
+        )
+
         for i, item in enumerate(dados[:20], 1):
             if isinstance(item, dict):
-                # Prioriza campos mais relevantes
-                partes = []
-                for campo in ['num_pedido', 'raz_social_red', 'cod_produto', 'nome_produto',
-                              'qtd_saldo', 'expedicao', 'status']:
-                    if campo in item and item[campo] is not None:
-                        partes.append(f"{campo}: {item[campo]}")
-                if partes:
-                    linhas.append(f"{i}. {' | '.join(partes[:5])}")
+                if eh_agregacao:
+                    # Para agregação: mostra TODOS os campos
+                    partes = []
+                    for campo, valor in item.items():
+                        if valor is not None:
+                            # Formata valores numéricos grandes
+                            if isinstance(valor, (int, float)) and valor > 1000:
+                                if isinstance(valor, float):
+                                    partes.append(f"{campo}: R$ {valor:,.2f}")
+                                else:
+                                    partes.append(f"{campo}: {valor:,}")
+                            else:
+                                partes.append(f"{campo}: {valor}")
+                    linhas.append(f"{i}. {' | '.join(partes)}")
+                else:
+                    # Para listagens: prioriza campos mais relevantes
+                    campos_prio = ['num_pedido', 'raz_social_red', 'cod_produto', 'nome_produto',
+                                   'qtd_saldo', 'valor_saldo', 'expedicao', 'status', 'data_pedido',
+                                   'total_qtd', 'total_itens', 'valor_total']
+                    partes = []
+                    for campo in campos_prio:
+                        if campo in item and item[campo] is not None:
+                            valor = item[campo]
+                            if isinstance(valor, (int, float)) and valor > 1000:
+                                if isinstance(valor, float):
+                                    partes.append(f"{campo}: R$ {valor:,.2f}")
+                                else:
+                                    partes.append(f"{campo}: {valor:,}")
+                            else:
+                                partes.append(f"{campo}: {valor}")
+
+                    # Se não encontrou campos prioritários, mostra todos
+                    if not partes:
+                        for campo, valor in list(item.items())[:6]:
+                            if valor is not None:
+                                partes.append(f"{campo}: {valor}")
+
+                    if partes:
+                        linhas.append(f"{i}. {' | '.join(partes[:6])}")
             else:
                 linhas.append(f"{i}. {item}")
 
@@ -418,24 +565,114 @@ def _formatar_contexto_resultado(resultado: Dict) -> str:
     return "\n".join(linhas)
 
 
+def _formatar_opcoes_envio(resultado: Dict) -> str:
+    """
+    Formata opções de envio (analisar_disponibilidade).
+
+    Args:
+        resultado: Dict com opcoes, analise, num_pedido, cliente, etc
+
+    Returns:
+        String formatada para contexto do responder
+    """
+    opcoes = resultado.get('opcoes', [])
+    analise = resultado.get('analise', {})
+    num_pedido = resultado.get('num_pedido', analise.get('num_pedido', 'N/A'))
+    cliente = resultado.get('cliente', {})
+    valor_total = resultado.get('valor_total_pedido', analise.get('valor_total', 0))
+
+    # Extrai nome do cliente
+    if isinstance(cliente, dict):
+        nome_cliente = cliente.get('razao_social', cliente.get('nome', 'N/A'))
+    else:
+        nome_cliente = str(cliente) if cliente else 'N/A'
+
+    linhas = [
+        f"=== ANÁLISE DE DISPONIBILIDADE - Pedido {num_pedido} ===",
+        f"Cliente: {nome_cliente}",
+        f"Valor Total do Pedido: R$ {valor_total:,.2f}",
+        "",
+        "=== OPÇÕES DE ENVIO ===",
+        ""
+    ]
+
+    for opcao in opcoes:
+        codigo = opcao.get("codigo", "?")
+        titulo = opcao.get("titulo", "Sem título")
+        data_envio = opcao.get("data_envio", "Sem previsão")
+        dias = opcao.get("dias_para_envio")
+        valor = opcao.get("valor", 0)
+        percentual = opcao.get("percentual", 0)
+        qtd_itens = opcao.get("qtd_itens", 0)
+
+        linhas.append(f"--- OPÇÃO {codigo}: {titulo} ---")
+        linhas.append(f"  Data de Envio: {data_envio}")
+
+        if dias is not None:
+            if dias == 0:
+                linhas.append(f"  Disponível: HOJE")
+            else:
+                linhas.append(f"  Aguardar: {dias} dia(s)")
+
+        linhas.append(f"  Valor: R$ {valor:,.2f} ({percentual:.1f}% do pedido)")
+        linhas.append(f"  Itens: {qtd_itens}")
+
+        # Lista itens incluídos (resumido)
+        itens = opcao.get("itens", [])
+        for item in itens[:3]:
+            nome = item.get('nome_produto', item.get('nome', '?'))[:35]
+            qtd = item.get('quantidade', 0)
+            disponivel = item.get('disponivel_hoje', False)
+            status = "OK" if disponivel else "Aguardar"
+            linhas.append(f"    - {nome}: {qtd:.0f}un [{status}]")
+
+        if len(itens) > 3:
+            linhas.append(f"    ... e mais {len(itens) - 3} itens")
+
+        # Lista itens excluídos
+        excluidos = opcao.get("itens_excluidos", [])
+        if excluidos:
+            linhas.append(f"  ITENS NÃO INCLUÍDOS:")
+            for item in excluidos[:2]:
+                nome = item.get('nome_produto', '?')[:35]
+                qtd = item.get('quantidade', 0)
+                valor_item = item.get('valor_total', 0)
+                linhas.append(f"    X {nome}: {qtd:.0f}un (R$ {valor_item:,.2f})")
+
+        linhas.append("")
+
+    linhas.append("Para criar separação, responda com a opção desejada (A, B ou C).")
+
+    return "\n".join(linhas)
+
+
 def _salvar_opcoes_no_estado(usuario_id: int, opcoes: List[Dict]):
     """Salva opções no estado estruturado usando EstadoManager."""
     try:
         from .structured_state import EstadoManager
+        from ..config import get_config
 
-        # Formata opções para o EstadoManager
+        config = get_config()
+        max_opcoes = config.resposta.max_opcoes  # Usa config (default: 5)
+
+        # Formata opções para o EstadoManager (agora flexível: 2-5 opções)
         lista_formatada = []
-        for i, opcao in enumerate(opcoes[:3]):
-            letra = chr(65 + i)  # A, B, C
+        for i, opcao in enumerate(opcoes[:max_opcoes]):
+            letra = chr(65 + i)  # A, B, C, D, E...
             descricao = str(opcao.get('descricao', opcao)) if isinstance(opcao, dict) else str(opcao)
             lista_formatada.append({"letra": letra, "descricao": descricao})
+
+        # Gera string de opções válidas para feedback
+        opcoes_str = ", ".join([op["letra"] for op in lista_formatada])
 
         EstadoManager.definir_opcoes(
             usuario_id,
             motivo="Opções oferecidas",
             lista=lista_formatada,
-            esperado_do_usuario="Escolher uma opção"
+            esperado_do_usuario=f"Escolher uma opção ({opcoes_str})"
         )
+
+        logger.debug(f"[ORCHESTRATOR] {len(lista_formatada)} opções salvas: {opcoes_str}")
 
     except Exception as e:
         logger.warning(f"Erro ao salvar opções: {e}")

@@ -124,6 +124,9 @@ class ToolRegistry:
         if incluir_generica:
             ferramentas.append(self._criar_loader_generico())
 
+        # 4. Enriquecer Contexto (sempre disponível)
+        ferramentas.append(self._criar_enriquecer_contexto())
+
         # Salva no cache
         self._cache[cache_key] = ferramentas
         self._cache_timestamp = datetime.now()
@@ -234,6 +237,26 @@ class ToolRegistry:
             'params': ['loader_json'],
             'intencoes': ['consulta_dinamica', 'query_customizada'],
             'exemplos': []
+        }
+
+    def _criar_enriquecer_contexto(self) -> Dict:
+        """
+        Cria definição da ferramenta enriquecer_contexto.
+
+        Esta ferramenta dá autonomia ao Claude para buscar informações adicionais
+        que ele identifica como necessárias durante o planejamento.
+        """
+        return {
+            'nome': 'enriquecer_contexto',
+            'tipo': 'enriquecer_contexto',
+            'dominio': 'geral',
+            'descricao': 'Busca informações adicionais quando você identificar que falta contexto para responder. VOCÊ define o motivo e o loader_json.',
+            'params': ['motivo', 'loader_json'],
+            'intencoes': ['validar_entidade', 'resolver_ambiguidade', 'buscar_contexto_adicional'],
+            'exemplos': [
+                'Verificar se "João" é cliente ou vendedor',
+                'Validar se pedido existe antes de analisar'
+            ]
         }
 
     def formatar_para_prompt(self, ferramentas: List[Dict]) -> str:
@@ -773,6 +796,15 @@ FLUXO: Pedido → CarteiraPrincipal → Separacao (ABERTO) → COTADO → FATURA
             return {
                 'nome': 'loader_generico',
                 'tipo': 'loader_generico',
+                'dominio': 'geral',
+                'objeto': None
+            }
+
+        # Enriquecer contexto
+        if nome == 'enriquecer_contexto':
+            return {
+                'nome': 'enriquecer_contexto',
+                'tipo': 'enriquecer_contexto',
                 'dominio': 'geral',
                 'objeto': None
             }

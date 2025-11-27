@@ -190,6 +190,10 @@ class DisponibilidadeLoader(BaseLoader):
 
             linhas.append("")
 
-        linhas.append("Para criar separacao, responda com a opcao desejada (A, B ou C).")
+        # Gera texto dinâmico baseado nas opções disponíveis
+        if opcoes:
+            letras = [op.get('codigo', chr(65 + i)) for i, op in enumerate(opcoes)]
+            opcoes_str = ", ".join(letras[:-1]) + f" ou {letras[-1]}" if len(letras) > 1 else letras[0]
+            linhas.append(f"Para criar separacao, responda com a opcao desejada ({opcoes_str}).")
 
         return "\n".join(linhas)

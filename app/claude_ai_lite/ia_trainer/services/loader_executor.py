@@ -46,6 +46,19 @@ from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# CONFIGURAÇÃO DINÂMICA DE LIMITES
+# =============================================================================
+
+def _get_max_registros_query() -> int:
+    """Retorna limite máximo de registros baseado na config."""
+    try:
+        from app.claude_ai_lite.config import get_config
+        return get_config().limites.max_registros_query
+    except ImportError:
+        return 1000  # Fallback
+
 # ============================================
 # MODELS PERMITIDOS (whitelist de seguranca)
 # ============================================
@@ -230,10 +243,11 @@ class LoaderExecutor:
                 if func.get('func') not in AGREGACOES_PERMITIDAS:
                     erros.append(f"Funcao de agregacao '{func.get('func')}' nao permitida")
 
-        # Valida limite
+        # Valida limite (usa config dinâmica)
+        max_permitido = _get_max_registros_query()
         limite = definicao.get('limite', 100)
-        if limite > 1000:
-            avisos.append(f"Limite {limite} muito alto, usando 1000")
+        if limite > max_permitido:
+            avisos.append(f"Limite {limite} muito alto, usando {max_permitido}")
 
         return {
             'valido': len(erros) == 0,
@@ -360,7 +374,9 @@ class LoaderExecutor:
                 func_nome = func_def.get('func')
                 campo_nome = func_def.get('campo')
                 alias = func_def.get('alias', f'{func_nome}_{campo_nome}')
-                campo = getattr(modelo_base, campo_nome, None)
+
+                # NOVO: Suporte a expressões matemáticas simples (campo1 * campo2)
+                campo = self._resolver_expressao_campo(modelo_base, campo_nome)
 
                 if campo is not None and func_nome in AGREGACOES_PERMITIDAS:
                     if func_nome == 'count':
@@ -411,6 +427,8 @@ class LoaderExecutor:
 
         # Aplica GROUP BY para agregacao
         campos_group_by_nomes = set()  # Para validar ORDER BY
+        aliases_agregacao = {}  # Mapa alias -> expressao SQLAlchemy
+
         if tem_agregacao:
             agregacao = definicao['agregacao']
             campos_grupo = []
@@ -422,16 +440,34 @@ class LoaderExecutor:
             if campos_grupo:
                 query = query.group_by(*campos_grupo)
 
+            # Registra aliases das agregacoes para permitir ORDER BY
+            for func_def in agregacao.get('funcoes', []):
+                alias = func_def.get('alias', f"{func_def.get('func')}_{func_def.get('campo')}")
+                aliases_agregacao[alias] = True  # Apenas marca como valido
+
         # Aplica ordenacao (com validacao para agregacao)
         for ordem in definicao.get('ordenar', []):
             campo_nome = ordem['campo']
 
-            # Se tem agregacao, so permite ordenar por campos no GROUP BY
+            # Se tem agregacao, permite ordenar por:
+            # 1. Campos no GROUP BY
+            # 2. Aliases das funcoes de agregacao
             if tem_agregacao:
-                # Extrai nome do campo (sem prefixo de modelo)
                 nome_simples = campo_nome.split('.')[-1] if '.' in campo_nome else campo_nome
+
+                # Verifica se e um alias de agregacao
+                if nome_simples in aliases_agregacao:
+                    # Ordena pelo alias (SQLAlchemy suporta via text())
+                    from sqlalchemy import text
+                    if ordem.get('direcao', 'asc') == 'desc':
+                        query = query.order_by(text(f"{nome_simples} DESC"))
+                    else:
+                        query = query.order_by(text(f"{nome_simples} ASC"))
+                    continue
+
+                # Verifica se esta no GROUP BY
                 if nome_simples not in campos_group_by_nomes:
-                    logger.warning(f"[LOADER_EXECUTOR] Ignorando ORDER BY '{campo_nome}' - nao esta no GROUP BY")
+                    logger.warning(f"[LOADER_EXECUTOR] Ignorando ORDER BY '{campo_nome}' - nao esta no GROUP BY nem e alias")
                     continue
 
             campo = self._resolver_campo(modelo_base, modelos_join, campo_nome)
@@ -441,8 +477,9 @@ class LoaderExecutor:
                 else:
                     query = query.order_by(asc(campo))
 
-        # Aplica limite
-        limite = min(definicao.get('limite', 100), 1000)
+        # Aplica limite (usa config dinâmica)
+        max_permitido = _get_max_registros_query()
+        limite = min(definicao.get('limite', 100), max_permitido)
         query = query.limit(limite)
 
         return query
@@ -491,6 +528,59 @@ class LoaderExecutor:
                 if campo is not None:
                     return campo
         return None
+
+    def _resolver_expressao_campo(self, modelo_base: Type, expressao: str):
+        """
+        Resolve expressão de campo, suportando operações matemáticas simples.
+
+        Suporta:
+        - Campo simples: "valor_total" -> modelo.valor_total
+        - Multiplicação: "preco * qtd" ou "preco_produto_pedido * qtd_saldo_produto_pedido"
+        - Adição: "campo1 + campo2"
+        - Subtração: "campo1 - campo2"
+
+        Args:
+            modelo_base: Modelo SQLAlchemy
+            expressao: String com nome do campo ou expressão
+
+        Returns:
+            Coluna SQLAlchemy ou expressão matemática
+        """
+        expressao = expressao.strip()
+
+        # Detecta operadores matemáticos
+        operadores = ['*', '+', '-', '/']
+        operador_encontrado = None
+        for op in operadores:
+            if f' {op} ' in expressao:
+                operador_encontrado = op
+                break
+
+        if operador_encontrado:
+            # Separa os operandos
+            partes = expressao.split(f' {operador_encontrado} ')
+            if len(partes) == 2:
+                campo1_nome = partes[0].strip()
+                campo2_nome = partes[1].strip()
+
+                campo1 = getattr(modelo_base, campo1_nome, None)
+                campo2 = getattr(modelo_base, campo2_nome, None)
+
+                if campo1 is not None and campo2 is not None:
+                    if operador_encontrado == '*':
+                        return campo1 * campo2
+                    elif operador_encontrado == '+':
+                        return campo1 + campo2
+                    elif operador_encontrado == '-':
+                        return campo1 - campo2
+                    elif operador_encontrado == '/':
+                        return campo1 / campo2
+                else:
+                    logger.warning(f"[LOADER_EXECUTOR] Campos não encontrados na expressão: {expressao}")
+                    return None
+
+        # Campo simples
+        return getattr(modelo_base, expressao, None)
 
     def _construir_filtros_compostos(self, modelo_base: Type, modelos_join: Dict, filtros_config):
         """

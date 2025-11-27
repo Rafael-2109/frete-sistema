@@ -123,8 +123,8 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
                 "todos_disponiveis_hoje": analise["opcoes"][0]["disponivel_hoje"] if analise["opcoes"] else False
             }
 
-            # Adiciona dados para memória/follow-up
-            resultado["dados"] = analise.get("itens", [])
+            # Adiciona dados para memória/follow-up (itens_analisados do serviço)
+            resultado["dados"] = analise.get("itens_analisados", analise.get("itens", []))
 
         except Exception as e:
             logger.error(f"Erro na análise de disponibilidade: {e}")
