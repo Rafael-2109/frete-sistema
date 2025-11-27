@@ -16,6 +16,7 @@ O entity_mapper NÃO infere mais - apenas traduz nomes de campos.
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - Claude decide domínio/intenção, lista de capabilities
+Atualizado: 26/11/2025 - Capabilities dinâmicas via ToolRegistry + config.py
 """
 
 import json
@@ -27,11 +28,64 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CAPABILITIES DISPONÍVEIS
+# CARREGAMENTO DINÂMICO DE CAPABILITIES
 # =============================================================================
-# Lista completa para o Claude escolher. Ele deve retornar a intenção correta.
 
-CAPABILITIES_DISPONIVEIS = """
+def _carregar_capabilities_dinamicas() -> str:
+    """
+    Carrega capabilities dinamicamente do ToolRegistry.
+
+    Benefícios:
+    - Sempre atualizado com novas capabilities
+    - Inclui códigos gerados ativos
+    - Não precisa manutenção manual
+
+    Returns:
+        String formatada com capabilities para o prompt
+    """
+    try:
+        from .tool_registry import get_tool_registry
+
+        registry = get_tool_registry()
+        ferramentas = registry.listar_ferramentas(incluir_generica=False)
+
+        if not ferramentas:
+            logger.warning("[INTELLIGENT_EXTRACTOR] Nenhuma ferramenta encontrada, usando fallback")
+            return _CAPABILITIES_FALLBACK
+
+        return registry.formatar_para_prompt(ferramentas)
+
+    except Exception as e:
+        logger.warning(f"[INTELLIGENT_EXTRACTOR] Erro ao carregar capabilities dinâmicas: {e}")
+        return _CAPABILITIES_FALLBACK
+
+
+def _obter_capabilities_prompt() -> str:
+    """
+    Retorna capabilities para o prompt, usando config para decidir.
+
+    Se config.extracao.carregar_capabilities_dinamicamente = True:
+        Carrega do ToolRegistry
+    Senão:
+        Usa string fixa (fallback)
+    """
+    from ..config import usar_capabilities_dinamicas
+
+    if usar_capabilities_dinamicas():
+        caps = _carregar_capabilities_dinamicas()
+        logger.debug("[INTELLIGENT_EXTRACTOR] Usando capabilities dinâmicas")
+        return caps
+
+    logger.debug("[INTELLIGENT_EXTRACTOR] Usando capabilities estáticas (fallback)")
+    return _CAPABILITIES_FALLBACK
+
+
+# =============================================================================
+# CAPABILITIES FALLBACK (string fixa para quando dinâmico falhar)
+# =============================================================================
+# Mantido como fallback caso o carregamento dinâmico falhe.
+
+_CAPABILITIES_FALLBACK = """
 === CAPABILITIES DISPONÍVEIS ===
 
 Escolha a intenção que melhor se encaixa. O sistema vai executar a capability correspondente.
@@ -213,12 +267,15 @@ REGRAS DO ESTADO:
 
 """
 
+        # Carrega capabilities (dinâmico ou fallback baseado na config)
+        capabilities_prompt = _obter_capabilities_prompt()
+
         # Prompt completo
         system_prompt = f"""Você é o cérebro de um sistema de logística de uma INDÚSTRIA DE ALIMENTOS.
 
 DATA DE HOJE: {hoje}
 
-{CAPABILITIES_DISPONIVEIS}
+{capabilities_prompt}
 
 {secao_contexto}
 
@@ -246,7 +303,17 @@ Analise a mensagem do usuário e retorne um JSON com:
         "pergunta": "pergunta para esclarecer (se existe=true)",
         "opcoes": ["opção 1", "opção 2"]
     }},
-    "confianca": 0.0 a 1.0
+    "confianca": 0.0 a 1.0,
+
+    // CAMPOS OPCIONAIS - adicione se relevante:
+    "roteamento": {{
+        "carregar_conhecimento": true,  // false se não precisa de aprendizados
+        "buscar_memoria": true,         // false se consulta é independente
+        "usar_estado": true             // false se contexto anterior não é relevante
+    }},
+    "contexto_adicional": "informação extra que você quer passar ao sistema",
+    "avisos": ["aviso 1", "aviso 2"],    // alertas sobre a consulta
+    "sugestao_alternativa": "se detectou que usuário pode querer algo diferente"
 }}
 
 === REGRAS ===

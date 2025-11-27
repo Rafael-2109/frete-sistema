@@ -19,6 +19,7 @@ Formato unificado:
 }
 
 Criado em: 26/11/2025
+Atualizado: 26/11/2025 - Schema dinâmico via SQLAlchemy inspect + config.py
 """
 
 import logging
@@ -26,6 +27,33 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# MAPEAMENTO DE MODELS PARA SCHEMA DINÂMICO
+# =============================================================================
+
+MODELS_POR_DOMINIO = {
+    'carteira': [
+        ('Separacao', 'app.separacao.models'),
+        ('CarteiraPrincipal', 'app.carteira.models'),
+    ],
+    'estoque': [
+        ('MovimentacaoEstoque', 'app.estoque.models'),
+        ('CadastroPalletizacao', 'app.producao.models'),
+    ],
+    'fretes': [
+        ('Embarque', 'app.embarques.models'),
+        ('EmbarqueItem', 'app.embarques.models'),
+    ],
+    'faturamento': [
+        ('FaturamentoProduto', 'app.faturamento.models'),
+    ],
+}
+
+# Cache de schema dinâmico (TTL gerenciado separadamente)
+_schema_cache: Dict[str, str] = {}
+_schema_cache_timestamp: Optional[datetime] = None
 
 
 def _normalizar_lista(valor) -> List[str]:
@@ -261,15 +289,226 @@ class ToolRegistry:
 
     def formatar_schema_resumido(self, dominio: str = None) -> str:
         """
-        Retorna schema RESUMIDO das tabelas relevantes ao domínio.
+        Retorna schema das tabelas relevantes ao domínio.
+
+        Usa config.ferramentas.schema_dinamico para decidir:
+        - True: Gera schema via SQLAlchemy inspect (sempre atualizado)
+        - False: Usa schema hardcoded (fallback)
 
         Args:
             dominio: Domínio para filtrar schema
 
         Returns:
-            Schema resumido
+            Schema formatado para prompt
+        """
+        from ..config import usar_schema_dinamico, get_config
 
-        NOTA: Atualmente hardcoded. No futuro pode usar inspect do SQLAlchemy.
+        if usar_schema_dinamico():
+            try:
+                schema = self._gerar_schema_dinamico(dominio)
+                if schema:
+                    logger.debug(f"[TOOL_REGISTRY] Usando schema dinâmico para {dominio or 'geral'}")
+                    return schema
+            except Exception as e:
+                logger.warning(f"[TOOL_REGISTRY] Schema dinâmico falhou: {e}, usando fallback")
+
+        return self._get_schema_hardcoded(dominio)
+
+    def _gerar_schema_dinamico(self, dominio: str = None) -> str:
+        """
+        Gera schema usando SQLAlchemy inspect.
+
+        Benefícios:
+        - Sempre atualizado com mudanças no banco
+        - Não precisa manutenção manual
+
+        Args:
+            dominio: Domínio para filtrar
+
+        Returns:
+            Schema formatado
+        """
+        global _schema_cache, _schema_cache_timestamp
+
+        from ..config import get_config
+        config = get_config()
+
+        # Verifica cache
+        cache_key = dominio or 'geral'
+        if _schema_cache_timestamp:
+            delta = (datetime.now() - _schema_cache_timestamp).total_seconds()
+            if delta < config.ferramentas.schema_cache_ttl and cache_key in _schema_cache:
+                return _schema_cache[cache_key]
+
+        # Gera schema
+        from sqlalchemy import inspect
+        import importlib
+
+        linhas = [f"=== SCHEMA DO BANCO ({dominio.upper() if dominio else 'GERAL'}) ===\n"]
+
+        # Adiciona contexto de negócio fixo (importante!)
+        linhas.append(self._get_contexto_negocio(dominio))
+
+        # Models a processar
+        if dominio and dominio in MODELS_POR_DOMINIO:
+            models_lista = MODELS_POR_DOMINIO[dominio]
+        else:
+            # Todos os models
+            models_lista = [m for lista in MODELS_POR_DOMINIO.values() for m in lista]
+
+        for model_name, module_path in models_lista:
+            try:
+                module = importlib.import_module(module_path)
+                model_class = getattr(module, model_name, None)
+
+                if model_class is None:
+                    continue
+
+                schema_model = self._formatar_model_para_prompt(model_class)
+                linhas.append(schema_model)
+
+            except Exception as e:
+                logger.warning(f"[TOOL_REGISTRY] Erro ao processar {model_name}: {e}")
+
+        resultado = "\n".join(linhas)
+
+        # Salva no cache
+        _schema_cache[cache_key] = resultado
+        _schema_cache_timestamp = datetime.now()
+
+        return resultado
+
+    def _formatar_model_para_prompt(self, model_class) -> str:
+        """
+        Formata um model SQLAlchemy para string de prompt.
+
+        Agrupa campos por tipo para facilitar leitura.
+        """
+        from sqlalchemy import inspect
+
+        try:
+            mapper = inspect(model_class)
+        except Exception:
+            return f"Erro ao inspecionar {model_class.__name__}"
+
+        linhas = [f"\n=== TABELA: {model_class.__tablename__} ==="]
+
+        # Agrupa campos por tipo
+        campos_id = []
+        campos_data = []
+        campos_valor = []
+        campos_texto = []
+        campos_bool = []
+
+        for column in mapper.columns:
+            tipo_str = str(column.type).lower()
+            nullable = "opcional" if column.nullable else "obrigatório"
+
+            info = f"{column.name}: {str(column.type)[:20]} ({nullable})"
+
+            # Categoriza
+            if column.primary_key or column.name.endswith('_id'):
+                campos_id.append(info)
+            elif 'date' in tipo_str or 'time' in tipo_str:
+                campos_data.append(info)
+            elif 'numeric' in tipo_str or 'float' in tipo_str or 'integer' in tipo_str:
+                campos_valor.append(info)
+            elif 'bool' in tipo_str:
+                campos_bool.append(info)
+            else:
+                campos_texto.append(info)
+
+        # Formata por categoria (limita quantidade para não poluir)
+        if campos_id:
+            linhas.append("Identificação:")
+            for c in campos_id[:8]:
+                linhas.append(f"  - {c}")
+
+        if campos_data:
+            linhas.append("Datas:")
+            for c in campos_data[:6]:
+                linhas.append(f"  - {c}")
+
+        if campos_valor:
+            linhas.append("Valores/Quantidades:")
+            for c in campos_valor[:8]:
+                linhas.append(f"  - {c}")
+
+        if campos_bool:
+            linhas.append("Flags:")
+            for c in campos_bool[:5]:
+                linhas.append(f"  - {c}")
+
+        if campos_texto:
+            linhas.append("Outros campos:")
+            for c in campos_texto[:10]:
+                linhas.append(f"  - {c}")
+            if len(campos_texto) > 10:
+                linhas.append(f"  ... e mais {len(campos_texto) - 10} campos")
+
+        return "\n".join(linhas)
+
+    def _get_contexto_negocio(self, dominio: str = None) -> str:
+        """
+        Retorna contexto de negócio fixo (regras importantes).
+
+        Isso NÃO pode ser gerado dinamicamente - são regras de negócio.
+        """
+        contextos = {
+            'carteira': """
+HIERARQUIA:
+- 1 num_pedido = N itens (cod_produto)
+- 1 separacao_lote_id = 1 separação = N itens do mesmo pedido
+
+FLUXO: Pedido → CarteiraPrincipal → Separacao (ABERTO) → COTADO → FATURADO
+
+REGRAS DE SALDO (por num_pedido + cod_produto):
+- EM CARTEIRA: CarteiraPrincipal.qtd_saldo_produto_pedido
+- EM SEPARAÇÃO: SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+- SALDO EM ABERTO: Carteira - Separação
+
+STATUS SEPARACAO:
+- sincronizado_nf=False: NÃO FATURADO (aparece na carteira)
+- sincronizado_nf=True: FATURADO (tem NF)
+
+SINÔNIMOS DO USUÁRIO:
+- "carteira", "pendente" → CarteiraPrincipal
+- "em separação", "separado" → Separacao (sincronizado_nf=False)
+- "faturado", "com NF" → Separacao (sincronizado_nf=True)
+""",
+            'estoque': """
+CÁLCULO DE ESTOQUE:
+- Estoque atual = SUM(MovimentacaoEstoque.quantidade) WHERE ativo=True
+- Projetado = Atual - Separações pendentes + Entradas programadas
+""",
+            'fretes': """
+FLUXO: Separação ABERTO → Cotação → Embarque → COTADO
+- 1 Embarque = N EmbarqueItem
+- 1 EmbarqueItem = 1 separacao_lote_id
+""",
+            'faturamento': """
+FLUXO DE FATURAMENTO:
+- NF importada → ProcessadorFaturamento → Separacao.sincronizado_nf=True
+""",
+        }
+
+        if dominio and dominio in contextos:
+            return contextos[dominio]
+
+        # Resumo geral
+        return """
+HIERARQUIA GERAL:
+- 1 num_pedido = N itens (cod_produto)
+- 1 separacao_lote_id = 1 separação
+
+FLUXO: Pedido → CarteiraPrincipal → Separacao → Embarque → Faturamento
+"""
+
+    def _get_schema_hardcoded(self, dominio: str = None) -> str:
+        """
+        Schema hardcoded (fallback quando dinâmico falha).
+
+        Mantido para garantir que sempre funcione.
         """
         schemas = {
             'carteira': """=== MODELO DE DADOS DA CARTEIRA ===

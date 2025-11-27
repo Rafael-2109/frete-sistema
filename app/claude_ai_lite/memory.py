@@ -6,7 +6,7 @@ Gerencia:
 - Aprendizados permanentes (por usuário e globais)
 - Formatação de contexto para o Claude
 
-Limite: 300 linhas
+Atualizado: 26/11/2025 - Configurações dinâmicas via config.py
 """
 
 import logging
@@ -15,10 +15,42 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Configurações
-MAX_HISTORICO = 40  # Últimas 40 mensagens
-MAX_TOKENS_CONTEXTO = 8192  # Tokens máximos de contexto
-CHARS_POR_TOKEN = 4  # Estimativa: 1 token ≈ 4 caracteres
+
+# =============================================================================
+# FUNÇÕES DE CONFIGURAÇÃO DINÂMICA
+# =============================================================================
+
+def _get_max_historico() -> int:
+    """Retorna limite de histórico baseado na config."""
+    try:
+        from .config import get_max_historico
+        return get_max_historico()
+    except ImportError:
+        return 40  # Fallback
+
+
+def _get_max_tokens(modelo: str = "sonnet") -> int:
+    """Retorna limite de tokens baseado no modelo."""
+    try:
+        from .config import get_max_tokens
+        return get_max_tokens(modelo)
+    except ImportError:
+        return 8192  # Fallback
+
+
+def _get_chars_por_token() -> int:
+    """Retorna estimativa de chars por token."""
+    try:
+        from .config import get_config
+        return get_config().memoria.chars_por_token
+    except ImportError:
+        return 4  # Fallback
+
+
+# Constantes de fallback (mantidas para compatibilidade)
+MAX_HISTORICO = 40
+MAX_TOKENS_CONTEXTO = 8192
+CHARS_POR_TOKEN = 4
 
 
 class MemoryService:
@@ -84,7 +116,7 @@ class MemoryService:
             return []
 
     @staticmethod
-    def formatar_contexto_memoria(usuario_id: int, incluir_aprendizados: bool = True) -> str:
+    def formatar_contexto_memoria(usuario_id: int, incluir_aprendizados: bool = True, modelo: str = "sonnet") -> str:
         """
         Formata todo o contexto de memória para enviar ao Claude.
 
@@ -95,13 +127,18 @@ class MemoryService:
         Args:
             usuario_id: ID do usuário
             incluir_aprendizados: Se False, não carrega aprendizados (usar quando já cacheados)
+            modelo: Modelo Claude em uso (para ajustar tokens)
 
         Returns:
             String formatada para incluir no system prompt
         """
         partes = []
         tokens_usados = 0
-        max_chars = MAX_TOKENS_CONTEXTO * CHARS_POR_TOKEN
+
+        # Usa configurações dinâmicas
+        max_tokens = _get_max_tokens(modelo)
+        chars_por_token = _get_chars_por_token()
+        max_chars = max_tokens * chars_por_token
 
         # 1. APRENDIZADOS (prioridade máxima) - Opcional para evitar duplicação
         aprendizados = []
@@ -127,8 +164,9 @@ class MemoryService:
 
             partes.append("")
 
-        # 2. HISTÓRICO DE CONVERSAS
-        historico = MemoryService.buscar_historico(usuario_id, MAX_HISTORICO)
+        # 2. HISTÓRICO DE CONVERSAS (usa limite dinâmico)
+        max_historico = _get_max_historico()
+        historico = MemoryService.buscar_historico(usuario_id, max_historico)
 
         if historico:
             partes.append("=== HISTÓRICO RECENTE DA CONVERSA ===")
@@ -303,8 +341,8 @@ class MemoryService:
                 'total_mensagens': total_mensagens,
                 'aprendizados_usuario': aprendizados_usuario,
                 'aprendizados_globais': aprendizados_globais,
-                'max_historico': MAX_HISTORICO,
-                'max_tokens': MAX_TOKENS_CONTEXTO
+                'max_historico': _get_max_historico(),
+                'max_tokens': _get_max_tokens()
             }
 
         except Exception as e:

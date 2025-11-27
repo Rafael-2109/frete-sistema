@@ -9,7 +9,7 @@ NOVO v3.4: Self-Consistency Check
 - Detecta alucinações
 - Valida coerência com dados
 
-Limite: 120 linhas
+Atualizado: 26/11/2025 - Revisão condicional baseada em confiança (config.py)
 """
 
 import logging
@@ -17,7 +17,28 @@ from typing import Optional, Tuple, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Flag para ativar/desativar revisão
+
+# =============================================================================
+# CONFIGURAÇÃO DINÂMICA DE REVISÃO
+# =============================================================================
+
+def _deve_revisar(confianca: float = 0.5) -> bool:
+    """
+    Decide se deve revisar resposta baseado na confiança.
+
+    Se config.resposta.revisao_condicional = True:
+        Só revisa se confiança < limiar
+    Senão:
+        Sempre revisa
+    """
+    try:
+        from ..config import deve_revisar_resposta
+        return deve_revisar_resposta(confianca)
+    except ImportError:
+        return True  # Fallback: sempre revisa
+
+
+# Flag de fallback (mantida para compatibilidade)
 HABILITAR_REVISAO = True
 
 
@@ -46,7 +67,8 @@ class ResponseGenerator:
         dominio: str = "logistica",
         contexto_memoria: str = None,
         estado_estruturado: str = None,
-        revisar: bool = True
+        revisar: bool = True,
+        confianca: float = 0.5
     ) -> str:
         """
         Gera resposta elaborada usando contexto de dados.
@@ -58,6 +80,7 @@ class ResponseGenerator:
             contexto_memoria: Histórico de conversas
             estado_estruturado: NOVO v3.5.2 - JSON do estado atual (PILAR 3)
             revisar: Se deve revisar resposta antes de enviar (default: True)
+            confianca: Nível de confiança da extração (0.0-1.0) - usado para revisão condicional
 
         Returns:
             Resposta elaborada em linguagem natural (revisada se habilitado)
@@ -93,7 +116,10 @@ Responda de forma clara, profissional e sempre oferecendo ajuda adicional."""
         resposta = self._client.completar(pergunta, system_prompt, use_cache=False)
 
         # Self-Consistency Check: revisa resposta antes de enviar
-        if revisar and HABILITAR_REVISAO:
+        # Usa decisão dinâmica baseada na confiança
+        deve_revisar = revisar and _deve_revisar(confianca)
+
+        if deve_revisar:
             resposta, metadados = self._revisar_resposta(
                 pergunta, resposta, contexto_dados, dominio, estado_estruturado
             )

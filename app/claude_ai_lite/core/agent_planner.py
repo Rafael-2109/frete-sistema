@@ -4,7 +4,8 @@ AgentPlanner - Planeja e executa ferramentas em múltiplas etapas.
 FILOSOFIA:
 - É uma CAMADA dentro do orchestrator, não um orquestrador paralelo
 - Substitui o trecho: find_capability() -> cap.executar()
-- Permite até 5 etapas de execução
+- Permite múltiplas etapas de execução (default: 5, máximo: 10)
+- Claude pode solicitar mais etapas com justificativa
 - Usa resultado de etapas anteriores para alimentar próximas
 
 FLUXO:
@@ -15,10 +16,11 @@ FLUXO:
 
 REGRAS DE FALLBACK:
 - Se nenhuma ferramenta resolve: tenta AutoLoader (apenas para consultas)
-- AutoLoader só roda se não resolveu em 5 etapas
+- AutoLoader só roda se não resolveu nas etapas permitidas
 - AutoLoader marca resultado como "experimental"
 
 Criado em: 26/11/2025
+Atualizado: 26/11/2025 - MAX_ETAPAS dinâmico via config.py
 """
 
 import json
@@ -27,9 +29,6 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-
-# Máximo de etapas permitidas
-MAX_ETAPAS = 5
 
 
 class AgentPlanner:
@@ -130,13 +129,17 @@ class AgentPlanner:
                     usuario_id, usuario, conhecimento_negocio, resultado
                 )
 
-            # 3. Executa cada etapa (máximo MAX_ETAPAS)
+            # 3. Executa cada etapa (máximo dinâmico via config)
             # DUAS LISTAS: brutos (com dados) para encadeamento, resumo para log
             resultados_brutos = []
             etapas_resumo = []
             dados_acumulados = []
 
-            for i, etapa in enumerate(plano['etapas'][:MAX_ETAPAS]):
+            # Obtém máximo de etapas (pode ser maior se Claude justificou)
+            from ..config import get_max_etapas
+            max_etapas = get_max_etapas(plano)
+
+            for i, etapa in enumerate(plano['etapas'][:max_etapas]):
                 logger.info(f"[AGENT_PLANNER] Executando etapa {i+1}/{len(plano['etapas'])}: {etapa.get('ferramenta')}")
 
                 # Executa a etapa (passa resultados brutos para encadeamento)
@@ -204,12 +207,51 @@ class AgentPlanner:
         """
         hoje = datetime.now().strftime("%d/%m/%Y")
 
+        # Obtém configurações de etapas
+        from ..config import get_config
+        config = get_config()
+        max_etapas_default = config.planejamento.max_etapas_default
+        max_etapas_complexas = config.planejamento.max_etapas_complexas
+        usar_diretrizes = config.planejamento.usar_diretrizes_flexiveis
+
         # Monta contexto
         contexto_extra = ""
         if contexto_estruturado:
             contexto_extra += f"\n=== ESTADO DA CONVERSA ===\n{contexto_estruturado}\n"
         if conhecimento_negocio:
             contexto_extra += f"\n=== CONHECIMENTO DO NEGÓCIO ===\n{conhecimento_negocio}\n"
+
+        # Monta seção de filtros (flexível ou rígida baseado na config)
+        if usar_diretrizes:
+            secao_filtros = """=== DIRETRIZES DE FILTROS ===
+
+SEGURANÇA DE DADOS (obrigatório):
+- Quando há cliente/pedido específico no contexto, inclua o filtro correspondente
+- Exceção: consultas agregadas/estatísticas (ex: "total faturado hoje") podem não filtrar por cliente
+
+BOAS PRÁTICAS (recomendado):
+- Inclua campos de identificação (raz_social_red, num_pedido) no retorno
+- Use "ilike" com "%" para buscas de texto (ex: "%ATACADAO%")
+- Retorne apenas dados relevantes para a pergunta
+
+SE PRECISAR DIVERGIR DAS DIRETRIZES:
+- Adicione "justificativa_filtro": "motivo" no JSON
+- Exemplo: ranking de clientes não filtra por cliente específico"""
+        else:
+            secao_filtros = """⚠️ REGRAS CRÍTICAS:
+
+FILTROS OBRIGATÓRIOS:
+- Se há raz_social_red nas entidades, SEMPRE inclua filtro de cliente em TODAS as queries
+- Se há num_pedido nas entidades, SEMPRE inclua filtro de pedido em TODAS as queries
+- Se há cod_produto nas entidades, SEMPRE inclua filtro de produto em TODAS as queries
+- NUNCA retorne dados de TODOS os clientes quando há um cliente específico no contexto
+- Use operador "ilike" com "%" para buscas de texto (ex: "%ATACADAO%")
+
+CAMPOS_RETORNO OBRIGATÓRIOS:
+- Se filtrar por raz_social_red, SEMPRE inclua "raz_social_red" em campos_retorno
+- Se filtrar por num_pedido, SEMPRE inclua "num_pedido" em campos_retorno
+- Se filtrar por cod_produto, SEMPRE inclua "cod_produto" e "nome_produto" em campos_retorno
+- SEMPRE inclua os campos de identificação para que o usuário saiba de quem são os dados"""
 
         system_prompt = f"""Você é um planejador de consultas para um sistema de logística.
 
@@ -227,25 +269,16 @@ Analise a pergunta e planeje quais ferramentas usar para respondê-la.
 REGRAS:
 1. Use a ferramenta mais ESPECÍFICA disponível (capability > codigo_gerado > loader_generico)
 2. Se uma ferramenta resolve tudo, use apenas ela (1 etapa)
-3. Se precisar combinar dados, use múltiplas etapas (máximo {MAX_ETAPAS})
+3. Se precisar combinar dados, use múltiplas etapas (default: {max_etapas_default})
+   - Se precisar de MAIS etapas para consultas complexas, adicione no JSON:
+     "etapas_necessarias": N,
+     "justificativa_etapas_extras": "explicação do motivo"
+   - Máximo absoluto: {max_etapas_complexas} etapas
 4. Passe os parâmetros corretos baseado nas entidades disponíveis
 
-⚠️ REGRAS CRÍTICAS:
+{secao_filtros}
 
-FILTROS OBRIGATÓRIOS:
-- Se há raz_social_red nas entidades, SEMPRE inclua filtro de cliente em TODAS as queries
-- Se há num_pedido nas entidades, SEMPRE inclua filtro de pedido em TODAS as queries
-- Se há cod_produto nas entidades, SEMPRE inclua filtro de produto em TODAS as queries
-- NUNCA retorne dados de TODOS os clientes quando há um cliente específico no contexto
-- Use operador "ilike" com "%" para buscas de texto (ex: "%ATACADAO%")
-
-CAMPOS_RETORNO OBRIGATÓRIOS:
-- Se filtrar por raz_social_red, SEMPRE inclua "raz_social_red" em campos_retorno
-- Se filtrar por num_pedido, SEMPRE inclua "num_pedido" em campos_retorno
-- Se filtrar por cod_produto, SEMPRE inclua "cod_produto" e "nome_produto" em campos_retorno
-- SEMPRE inclua os campos de identificação para que o usuário saiba de quem são os dados
-
-ENTIDADES DISPONÍVEIS (USE TODAS COMO FILTROS QUANDO APLICÁVEL):
+ENTIDADES DISPONÍVEIS (USE COMO FILTROS QUANDO APLICÁVEL):
 {json.dumps(entidades, ensure_ascii=False, indent=2)}
 
 === FORMATO DE RESPOSTA ===
@@ -377,6 +410,19 @@ Pergunta: "Pedidos sem agendamento do Atacadão"
     ],
     "explicacao": "Não há capability para filtrar agendamento, usando loader_generico"
 }}
+
+=== NOTA SOBRE OS EXEMPLOS ===
+
+Os exemplos acima são ILUSTRATIVOS. Você pode:
+- Adaptar a estrutura para casos únicos
+- Combinar abordagens de diferentes exemplos
+- Criar estruturas diferentes se necessário
+
+O importante é que o JSON seja válido e tenha:
+- "etapas": lista de etapas a executar (obrigatório)
+- Cada etapa com "ferramenta" e "descricao" (obrigatório)
+- "etapas_necessarias" e "justificativa_etapas_extras" (se precisar de mais etapas)
+- "justificativa_filtro" (se precisar divergir das diretrizes de filtro)
 
 Retorne APENAS o JSON, sem explicações adicionais."""
 
