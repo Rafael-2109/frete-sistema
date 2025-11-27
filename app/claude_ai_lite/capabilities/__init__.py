@@ -158,13 +158,24 @@ def gerar_exemplos_para_prompt() -> str:
     """
     Gera exemplos de todas as capacidades para o prompt de classificação.
     Usado pelo classifier para gerar o prompt dinamicamente.
+
+    IMPORTANTE: Mostra TODOS os exemplos de cada capability (não truncar!)
+    Cada exemplo é mapeado para a intenção mais adequada da capability.
     """
     _auto_discover()
     linhas = []
 
     for cap in _CAPABILITIES.values():
-        for exemplo in cap.EXEMPLOS[:2]:  # Máximo 2 exemplos por capacidade
-            intencao = cap.INTENCOES[0] if cap.INTENCOES else "outro"
+        # TODOS os exemplos (não truncar!) - corrigido em 27/11/2025
+        for i, exemplo in enumerate(cap.EXEMPLOS):
+            # Usa a primeira intenção como padrão, mas se há múltiplas
+            # e o índice existe, usa a intenção correspondente
+            if cap.INTENCOES:
+                # Tenta mapear exemplo para intenção pelo índice (se possível)
+                idx = min(i, len(cap.INTENCOES) - 1)
+                intencao = cap.INTENCOES[idx]
+            else:
+                intencao = "outro"
             linhas.append(f'- "{exemplo}" -> {cap.DOMINIO}, {intencao}')
 
     return "\n".join(linhas)

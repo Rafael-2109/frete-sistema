@@ -176,8 +176,10 @@ class AgentPlanner:
 
                 # IMPORTANTE: Preserva campos especiais de capabilities (opcoes, analise, etc)
                 # Isso permite que capabilities como analisar_disponibilidade funcionem
+                # v2.0: Adicionado tipo_consulta, resumo para pedidos_abertos_disponibilidade
                 for campo_especial in ['opcoes', 'analise', 'carga_sugerida', 'ja_separado',
-                                       'num_pedido', 'cliente', 'valor_total_pedido', 'total_pallets']:
+                                       'num_pedido', 'cliente', 'valor_total_pedido', 'total_pallets',
+                                       'tipo_consulta', 'resumo']:
                     if resultado_etapa.get(campo_especial) is not None:
                         resultado[campo_especial] = resultado_etapa[campo_especial]
 

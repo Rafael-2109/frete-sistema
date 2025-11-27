@@ -2,9 +2,16 @@
 Capacidade: Analisar Disponibilidade
 
 Analisa quando um pedido pode ser enviado e gera opções A/B/C.
+
+v2.0 (27/11/2025):
+- Adicionado suporte a "pedidos em aberto que dá pra mandar"
+- Calcula saldo real: carteira - separações pendentes (sincronizado_nf=False)
+- Agrupa resultado por pedido com detalhe de itens
+- Ordena: disponíveis primeiro, depois por valor
+- Suporta follow-ups: "qual valor?", "qual peso?", "quantos pallets?"
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 
 from ..base import BaseCapability
@@ -19,12 +26,20 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
     DOMINIO = "carteira"
     TIPO = "consulta"
     INTENCOES = [
-        "analisar_disponibilidade",
-        "quando_posso_enviar",
+        # Intenções principais (aparecem no prompt do extrator)
+        "analisar_disponibilidade",       # Geral: quando posso enviar?
+        "consultar_pedidos_abertos",      # v2.0: Do que tem em aberto, dá pra mandar?
+        "quando_posso_enviar",            # Quando posso enviar pedido X?
+        # Intenções secundárias (menos frequentes)
         "verificar_disponibilidade",
         "consultar_prazo",
         "consultar prazo de envio",
-        "prazo_envio"
+        "prazo_envio",
+        # v2.0: Variações de "pedidos em aberto"
+        "analisar_pedidos_abertos",
+        "pedidos_disponiveis",
+        "o_que_da_pra_mandar",
+        "quais_pedidos_posso_enviar",
     ]
     CAMPOS_BUSCA = ["num_pedido", "raz_social_red", "cliente"]  # Aceita pedido OU cliente
     DESCRICAO = "Analisa quando um pedido/cliente pode ser enviado baseado no estoque"
@@ -32,7 +47,12 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
         "Quando posso enviar o pedido VCD123?",
         "Quando embarcar VCD456?",
         "Quando dá pra enviar 28 pallets pro Atacadão 183?",
-        "Posso despachar o VCD111 hoje?"
+        "Posso despachar o VCD111 hoje?",
+        # v2.0: Novos exemplos
+        "Do que tem em aberto, dá pra mandar algum?",
+        "Quais pedidos do Atacadão dá pra enviar hoje?",
+        "O que está disponível pra mandar?",
+        "Qual o maior pedido que dá pra mandar?",
     ]
 
     def pode_processar(self, intencao: str, entidades: Dict) -> bool:
@@ -43,8 +63,14 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
 
         # Verifica palavras-chave na intenção
         intencao_lower = intencao.lower()
-        palavras_chave = ['quando', 'prazo', 'disponib', 'enviar', 'embarcar', 'despachar']
-        if any(p in intencao_lower for p in palavras_chave):
+
+        # Palavras-chave originais
+        palavras_prazo = ['quando', 'prazo', 'disponib', 'enviar', 'embarcar', 'despachar']
+
+        # v2.0: Palavras-chave para "pedidos em aberto"
+        palavras_aberto = ['aberto', 'mandar', 'maior', 'disponivel', 'posso enviar']
+
+        if any(p in intencao_lower for p in palavras_prazo + palavras_aberto):
             # Aceita num_pedido OU cliente
             if entidades.get('num_pedido') or entidades.get('raz_social_red') or entidades.get('cliente'):
                 return True
@@ -67,6 +93,35 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
         filtro_add = str(entidades.get('filtro_adicional', '')).lower()
         excluir_separados = 'separad' in status_sep or 'separad' in filtro_add
 
+        # v2.0: Detecta se é consulta de "pedidos em aberto que dá pra mandar"
+        # Usa intenções específicas para evitar colisão com outros domínios
+        intencao = str(entidades.get('_intencao', contexto.get('intencao', ''))).lower()
+        # Intenções que indicam "pedidos em aberto que dá pra mandar"
+        # Sincronizado com INTENCOES da classe
+        intencoes_pedidos_abertos = [
+            'consultar_pedidos_abertos',
+            'analisar_pedidos_abertos',
+            'pedidos_disponiveis',
+            'o_que_da_pra_mandar',
+            'quais_pedidos_posso_enviar',
+        ]
+        quer_pedidos_abertos = intencao in intencoes_pedidos_abertos
+
+        # Também aceita flag explícita na entidade
+        if entidades.get('analisar_disponibilidade_pedidos'):
+            quer_pedidos_abertos = True
+
+        # v2.0: Fallback - detecta por palavras-chave na consulta original
+        # Caso extrator não classifique corretamente
+        consulta_original = str(contexto.get('consulta', '')).lower()
+        palavras_pedidos_abertos = [
+            'em aberto', 'pedidos abertos', 'dá pra mandar',
+            'pode mandar', 'disponível pra', 'disponíveis pra'
+        ]
+        if not quer_pedidos_abertos and any(p in consulta_original for p in palavras_pedidos_abertos):
+            quer_pedidos_abertos = True
+            logger.debug(f"[ANALISAR_DISP] Detectado pedidos_abertos via palavras-chave: {consulta_original[:50]}")
+
         resultado = {
             "sucesso": True,
             "valor_buscado": valor,
@@ -83,7 +138,11 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
             return resultado
 
         try:
-            # CASO 1: Busca por CLIENTE (não por num_pedido)
+            # v2.0: CASO 0 - Consulta de "pedidos em aberto que dá pra mandar"
+            if quer_pedidos_abertos and campo in ['raz_social_red', 'cliente']:
+                return self._analisar_pedidos_em_aberto(valor, resultado, entidades)
+
+            # CASO 1: Busca por CLIENTE (não por num_pedido) - análise de pallets
             if campo in ['raz_social_red', 'cliente']:
                 return self._analisar_por_cliente(
                     valor, qtd_pallets_desejada, excluir_separados, resultado, entidades
@@ -300,6 +359,265 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
         logger.info(f"[ANALISAR_DISP] Cliente {cliente}: {total_pallets_disponiveis:.1f} pallets, {len(itens_analisados)} itens")
         return resultado
 
+    def _analisar_pedidos_em_aberto(
+        self, cliente: str, resultado: Dict, entidades: Dict
+    ) -> Dict[str, Any]:
+        """
+        v2.0: Analisa pedidos EM ABERTO de um cliente e identifica quais podem ser enviados.
+
+        LÓGICA:
+        1. Saldo real = CarteiraPrincipal.qtd_saldo - Separacao.qtd_saldo (sincronizado_nf=False)
+        2. Agrupa por num_pedido (não por item)
+        3. Verifica disponibilidade de estoque de CADA item do pedido
+        4. Pedido "disponível" = TODOS os itens têm estoque suficiente
+        5. Ordena: disponíveis primeiro, depois por valor
+
+        Args:
+            cliente: Nome do cliente (raz_social_red)
+            resultado: Dict base para preencher
+            entidades: Entidades extraídas
+
+        Returns:
+            Dict com pedidos analisados, ordenados por disponibilidade
+        """
+        from app.carteira.models import CarteiraPrincipal
+        from app.separacao.models import Separacao
+        from app.producao.models import CadastroPalletizacao
+        from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+        from sqlalchemy import func
+
+        logger.info(f"[PEDIDOS_ABERTOS] Analisando pedidos em aberto do cliente: {cliente}")
+
+        # 1. BUSCAR ITENS DA CARTEIRA DO CLIENTE
+        itens_carteira = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.raz_social_red.ilike(f"%{cliente}%"),
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido >= 0.001  # Com saldo
+        ).all()
+
+        if not itens_carteira:
+            resultado["sucesso"] = False
+            resultado["erro"] = f"Cliente '{cliente}' não encontrado na carteira"
+            return resultado
+
+        # 2. BUSCAR SEPARAÇÕES PENDENTES (sincronizado_nf=False, status != PREVISAO)
+        pedidos_cliente = list(set([i.num_pedido for i in itens_carteira]))
+
+        separacoes_pendentes = Separacao.query.filter(
+            Separacao.num_pedido.in_(pedidos_cliente),
+            Separacao.sincronizado_nf == False,
+            Separacao.status != 'PREVISAO'
+        ).all()
+
+        # Monta dict: {(num_pedido, cod_produto): qtd_separada}
+        qtd_separada = {}
+        for sep in separacoes_pendentes:
+            key = (sep.num_pedido, sep.cod_produto)
+            qtd_separada[key] = qtd_separada.get(key, 0) + float(sep.qtd_saldo or 0)
+
+        # 3. CARREGAR CACHE DE PALLETIZAÇÃO
+        cache_pallet = {}
+        palletizacoes = CadastroPalletizacao.query.filter_by(ativo=True).all()
+        for p in palletizacoes:
+            cache_pallet[p.cod_produto] = {
+                'palletizacao': float(p.palletizacao or 0),
+                'peso_bruto': float(p.peso_bruto or 0)
+            }
+
+        # 4. CALCULAR SALDO REAL E AGRUPAR POR PEDIDO
+        pedidos_abertos = {}
+        produtos_unicos = set()
+
+        for item in itens_carteira:
+            key_sep = (item.num_pedido, item.cod_produto)
+            qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+            qtd_ja_separada = qtd_separada.get(key_sep, 0)
+            saldo_real = qtd_carteira - qtd_ja_separada
+
+            # Só inclui se tem saldo real positivo
+            if saldo_real < 0.001:
+                continue
+
+            produtos_unicos.add(item.cod_produto)
+
+            if item.num_pedido not in pedidos_abertos:
+                pedidos_abertos[item.num_pedido] = {
+                    "num_pedido": item.num_pedido,
+                    "raz_social_red": item.raz_social_red,
+                    "cnpj_cpf": item.cnpj_cpf,
+                    "data_pedido": item.data_pedido.strftime("%d/%m/%Y") if item.data_pedido else None,
+                    "itens": [],
+                    "valor_total": 0,
+                    "peso_total": 0,
+                    "pallets_total": 0,
+                }
+
+            preco = float(item.preco_produto_pedido or 0)
+            valor_item = saldo_real * preco
+
+            # Calcula peso e pallets
+            pall_data = cache_pallet.get(item.cod_produto, {})
+            peso_item = saldo_real * pall_data.get('peso_bruto', 0) if pall_data.get('peso_bruto') else 0
+            pallets_item = saldo_real / pall_data['palletizacao'] if pall_data.get('palletizacao', 0) > 0 else 0
+
+            pedidos_abertos[item.num_pedido]["itens"].append({
+                "cod_produto": item.cod_produto,
+                "nome_produto": item.nome_produto,
+                "qtd_carteira": qtd_carteira,
+                "qtd_separada": qtd_ja_separada,
+                "saldo_real": saldo_real,
+                "preco_unitario": preco,
+                "valor_item": valor_item,
+                "peso": peso_item,
+                "pallets": pallets_item,
+            })
+            pedidos_abertos[item.num_pedido]["valor_total"] += valor_item
+            pedidos_abertos[item.num_pedido]["peso_total"] += peso_item
+            pedidos_abertos[item.num_pedido]["pallets_total"] += pallets_item
+
+        if not pedidos_abertos:
+            resultado["sucesso"] = True
+            resultado["total_encontrado"] = 0
+            resultado["mensagem"] = f"Todos os pedidos de {cliente} já estão em separação ou faturados"
+            resultado["tipo_consulta"] = "pedidos_abertos_disponibilidade"
+            return resultado
+
+        # 5. BUSCAR ESTOQUE EM BATCH
+        estoque_por_produto = {}
+        for cod_produto in produtos_unicos:
+            try:
+                estoque = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+                estoque_por_produto[cod_produto] = estoque
+            except Exception as e:
+                logger.warning(f"Erro ao buscar estoque de {cod_produto}: {e}")
+                estoque_por_produto[cod_produto] = 0
+
+        # 6. ANALISAR DISPONIBILIDADE DE CADA PEDIDO
+        # Também calcula data de disponibilidade e identifica gargalos
+        from datetime import date, timedelta
+
+        for num_pedido, pedido in pedidos_abertos.items():
+            todos_disponiveis = True
+            itens_disponiveis = 0
+            itens_indisponiveis = 0
+            gargalos = []  # Itens que impedem envio hoje
+            data_disponibilidade_total = date.today()  # Data que TODOS estarão disponíveis
+
+            for item in pedido["itens"]:
+                cod = item["cod_produto"]
+                estoque = estoque_por_produto.get(cod, 0)
+                saldo = item["saldo_real"]
+
+                item["estoque_atual"] = estoque
+                item["disponivel"] = estoque >= saldo
+
+                if item["disponivel"]:
+                    itens_disponiveis += 1
+                    item["data_disponivel"] = date.today().strftime("%d/%m/%Y")
+                else:
+                    itens_indisponiveis += 1
+                    todos_disponiveis = False
+
+                    # Calcula quando estará disponível via projeção
+                    try:
+                        projecao = ServicoEstoqueSimples.calcular_projecao(cod, dias=30)
+                        data_disp = self._encontrar_data_disponivel(projecao, saldo)
+                        item["data_disponivel"] = data_disp.strftime("%d/%m/%Y") if data_disp else "Sem previsão"
+
+                        # Atualiza data de disponibilidade total do pedido
+                        if data_disp and data_disp > data_disponibilidade_total:
+                            data_disponibilidade_total = data_disp
+                        elif not data_disp:
+                            data_disponibilidade_total = None  # Sem previsão
+                    except Exception:
+                        item["data_disponivel"] = "Sem previsão"
+                        data_disponibilidade_total = None
+
+                    # Adiciona à lista de gargalos
+                    gargalos.append({
+                        "cod_produto": cod,
+                        "nome_produto": item["nome_produto"],
+                        "falta": saldo - estoque,
+                        "data_disponivel": item["data_disponivel"]
+                    })
+
+            pedido["todos_disponiveis"] = todos_disponiveis
+            pedido["itens_disponiveis"] = itens_disponiveis
+            pedido["itens_indisponiveis"] = itens_indisponiveis
+            pedido["total_itens"] = len(pedido["itens"])
+            pedido["percentual_disponivel"] = round(
+                (itens_disponiveis / len(pedido["itens"]) * 100) if pedido["itens"] else 0
+            )
+
+            # Data de disponibilidade total e gargalos
+            if not todos_disponiveis:
+                pedido["gargalos"] = gargalos
+                pedido["data_disponibilidade_total"] = (
+                    data_disponibilidade_total.strftime("%d/%m/%Y")
+                    if data_disponibilidade_total else "Sem previsão"
+                )
+
+        # 7. ORDENAR: Disponíveis primeiro, depois por valor
+        pedidos_lista = list(pedidos_abertos.values())
+        pedidos_lista.sort(
+            key=lambda p: (-int(p["todos_disponiveis"]), -p["valor_total"])
+        )
+
+        # 8. MONTAR RESUMO
+        total_pedidos = len(pedidos_lista)
+        pedidos_disponiveis = sum(1 for p in pedidos_lista if p["todos_disponiveis"])
+        valor_total = sum(p["valor_total"] for p in pedidos_lista)
+        valor_disponivel = sum(p["valor_total"] for p in pedidos_lista if p["todos_disponiveis"])
+        peso_total = sum(p["peso_total"] for p in pedidos_lista)
+        pallets_total = sum(p["pallets_total"] for p in pedidos_lista)
+
+        resultado["sucesso"] = True
+        resultado["dados"] = pedidos_lista
+        resultado["total_encontrado"] = total_pedidos
+        resultado["tipo_consulta"] = "pedidos_abertos_disponibilidade"
+        resultado["resumo"] = {
+            "cliente": cliente,
+            "total_pedidos_abertos": total_pedidos,
+            "pedidos_disponiveis": pedidos_disponiveis,
+            "pedidos_parciais": total_pedidos - pedidos_disponiveis,
+            "valor_total_aberto": round(valor_total, 2),
+            "valor_disponivel": round(valor_disponivel, 2),
+            "peso_total": round(peso_total, 2),
+            "pallets_total": round(pallets_total, 2),
+        }
+        resultado["analise"] = resultado["resumo"]  # Compatibilidade
+
+        logger.info(
+            f"[PEDIDOS_ABERTOS] {cliente}: {total_pedidos} pedidos em aberto, "
+            f"{pedidos_disponiveis} disponíveis (R$ {valor_disponivel:,.2f})"
+        )
+
+        return resultado
+
+    def _encontrar_data_disponivel(self, projecao: Dict, qtd: float):
+        """
+        Encontra primeira data com estoque suficiente baseado na projeção.
+
+        Args:
+            projecao: Dict com lista de projeção diária de estoque
+            qtd: Quantidade necessária
+
+        Returns:
+            date quando estiver disponível ou None se sem previsão
+        """
+        from datetime import date
+
+        lista_projecao = projecao.get("projecao", [])
+
+        for dia_proj in lista_projecao:
+            estoque_dia = dia_proj.get("saldo_final", 0)
+            if estoque_dia >= qtd:
+                data_str = dia_proj.get("data")
+                if data_str:
+                    return date.fromisoformat(data_str)
+
+        return None  # Sem previsão dentro do horizonte
+
     def _montar_carga_sugerida(
         self, itens_analisados: List[Dict], qtd_pallets_desejada: float
     ) -> Dict[str, Any]:
@@ -500,6 +818,10 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
         if resultado.get("ja_separado"):
             return self._formatar_ja_separado(resultado)
 
+        # v2.0: Caso de "pedidos em aberto que dá pra mandar"
+        if resultado.get("tipo_consulta") == "pedidos_abertos_disponibilidade":
+            return self._formatar_pedidos_abertos(resultado)
+
         # Caso: análise por CLIENTE (tem total_pallets)
         if resultado.get("total_pallets") is not None:
             return self._formatar_analise_cliente(resultado)
@@ -667,5 +989,69 @@ class AnalisarDisponibilidadeCapability(BaseCapability):
             linhas.append("")
 
         linhas.append("Para criar separação, responda com a opção desejada (A, B ou C).")
+
+        return "\n".join(linhas)
+
+    def _formatar_pedidos_abertos(self, dados: Dict) -> str:
+        """
+        v2.0: Formata resultado de pedidos em aberto com análise de disponibilidade.
+
+        Mostra:
+        - Resumo geral (total, disponíveis, valor)
+        - Lista de pedidos ordenados (disponíveis primeiro)
+        - Detalhe de itens por pedido
+        """
+        resumo = dados.get("resumo", {})
+        pedidos = dados.get("dados", [])
+
+        linhas = [
+            f"=== PEDIDOS EM ABERTO - {resumo.get('cliente', 'Cliente')} ===",
+            "",
+            f"📊 RESUMO:",
+            f"   Total de pedidos em aberto: {resumo.get('total_pedidos_abertos', 0)}",
+            f"   ✅ Disponíveis para envio TOTAL: {resumo.get('pedidos_disponiveis', 0)}",
+            f"   ⚠️ Parcialmente disponíveis: {resumo.get('pedidos_parciais', 0)}",
+            "",
+            f"💰 VALORES:",
+            f"   Valor total em aberto: R$ {resumo.get('valor_total_aberto', 0):,.2f}",
+            f"   Valor disponível hoje: R$ {resumo.get('valor_disponivel', 0):,.2f}",
+            f"   Peso total: {resumo.get('peso_total', 0):,.0f} kg",
+            f"   Pallets total: {resumo.get('pallets_total', 0):.1f}",
+            "",
+            "=" * 60,
+            ""
+        ]
+
+        # Lista de pedidos (limita a 10)
+        for i, p in enumerate(pedidos[:10], 1):
+            status = "✅ DISPONÍVEL" if p["todos_disponiveis"] else f"⚠️ PARCIAL ({p['percentual_disponivel']}%)"
+            linhas.append(f"--- {i}. Pedido: {p['num_pedido']} | {status} ---")
+            linhas.append(f"   Cliente: {p.get('raz_social_red', 'N/A')}")
+            linhas.append(f"   Valor: R$ {p['valor_total']:,.2f}")
+            linhas.append(f"   Peso: {p['peso_total']:,.0f}kg | Pallets: {p['pallets_total']:.2f}")
+            linhas.append(f"   Itens: {p['itens_disponiveis']}/{p['total_itens']} disponíveis")
+
+            # Mostra itens resumidos
+            for item in p["itens"][:3]:
+                disp = "✅" if item.get("disponivel") else "❌"
+                linhas.append(
+                    f"      {disp} {item['nome_produto'][:35]}: "
+                    f"{item['saldo_real']:.0f}un (estoque: {item.get('estoque_atual', 0):.0f})"
+                )
+            if len(p["itens"]) > 3:
+                linhas.append(f"      ... e mais {len(p['itens']) - 3} itens")
+
+            linhas.append("")
+
+        if len(pedidos) > 10:
+            linhas.append(f"... e mais {len(pedidos) - 10} pedidos")
+            linhas.append("")
+
+        # Mensagem de ajuda
+        linhas.append("=" * 60)
+        linhas.append("💡 AÇÕES DISPONÍVEIS:")
+        linhas.append("   - 'Qual o valor desses pedidos?' → Mostra valores")
+        linhas.append("   - 'Qual o maior?' → Mostra o pedido de maior valor disponível")
+        linhas.append("   - 'Programe o pedido X pro dia DD/MM' → Cria separação")
 
         return "\n".join(linhas)

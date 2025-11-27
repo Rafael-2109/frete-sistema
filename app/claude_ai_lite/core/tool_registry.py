@@ -155,7 +155,7 @@ class ToolRegistry:
                 'descricao': cap.DESCRICAO or '',
                 'params': cap.CAMPOS_BUSCA or [],
                 'intencoes': cap.INTENCOES or [],
-                'exemplos': (cap.EXEMPLOS or [])[:2]
+                'exemplos': cap.EXEMPLOS or []  # TODOS os exemplos (não truncar!)
             })
 
         return resultado
@@ -187,7 +187,7 @@ class ToolRegistry:
 
                 # Normaliza listas (podem vir como string do banco)
                 gatilhos = _normalizar_lista(codigo.gatilhos)
-                exemplos = _normalizar_lista(codigo.exemplos_uso)[:2]
+                exemplos = _normalizar_lista(codigo.exemplos_uso)  # TODOS os exemplos (não truncar!)
 
                 resultado.append({
                     'nome': codigo.nome,
@@ -294,9 +294,9 @@ class ToolRegistry:
 
                 linhas.append(f"  {tipo_label} {f['nome']}")
 
-                # Mostra intenções se houver
+                # Mostra intenções se houver (todas, não truncar!)
                 if f.get('intencoes'):
-                    linhas.append(f"     Intenções: {', '.join(f['intencoes'][:3])}")
+                    linhas.append(f"     Intenções: {', '.join(f['intencoes'])}")
 
                 linhas.append(f"     Descrição: {f['descricao']}")
 

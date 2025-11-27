@@ -554,15 +554,27 @@ def _formatar_contexto_resultado(resultado: Dict) -> str:
     Isso permite que agregações (total_faturado, total_notas) sejam exibidas.
     Também formata OPÇÕES de envio quando presentes (analisar_disponibilidade).
 
+    v2.0 (27/11/2025):
+    - Adicionado tratamento para tipo_consulta="pedidos_abertos_disponibilidade"
+    - Formatação especializada para análise de pedidos em aberto
+
     Args:
         resultado: Dict do AgentPlanner com dados, etapas_executadas, etc
 
     Returns:
         String formatada para contexto do responder
     """
+    # v2.0: Se é consulta de pedidos em aberto, usa formatação especializada
+    if resultado.get('tipo_consulta') == 'pedidos_abertos_disponibilidade':
+        return _formatar_pedidos_abertos(resultado)
+
     # Se tem opções de envio, usa formatação especial
     if resultado.get('opcoes'):
         return _formatar_opcoes_envio(resultado)
+
+    # v2.0: Se tem análise por cliente (total_pallets), formatação específica
+    if resultado.get('total_pallets') is not None:
+        return _formatar_analise_cliente(resultado)
 
     dados = resultado.get('dados', [])
     total = resultado.get('total_encontrado', 0)
@@ -716,6 +728,187 @@ def _formatar_opcoes_envio(resultado: Dict) -> str:
         linhas.append("")
 
     linhas.append("Para criar separação, responda com a opção desejada (A, B ou C).")
+
+    return "\n".join(linhas)
+
+
+def _formatar_pedidos_abertos(resultado: Dict) -> str:
+    """
+    v2.0: Formata resultado de pedidos em aberto com análise de disponibilidade.
+
+    Mostra:
+    - Resumo geral (total, disponíveis, valor)
+    - Lista de pedidos ordenados (disponíveis primeiro)
+    - Detalhe de itens por pedido
+    - Gargalos e data de disponibilidade total para pedidos parciais
+    """
+    resumo = resultado.get('resumo', resultado.get('analise', {}))
+    pedidos = resultado.get('dados', [])
+
+    linhas = [
+        f"=== PEDIDOS EM ABERTO - {resumo.get('cliente', 'Cliente')} ===",
+        "",
+        f"📊 RESUMO:",
+        f"   Total de pedidos em aberto: {resumo.get('total_pedidos_abertos', len(pedidos))}",
+        f"   ✅ Disponíveis para envio TOTAL: {resumo.get('pedidos_disponiveis', 0)}",
+        f"   ⚠️ Parcialmente disponíveis: {resumo.get('pedidos_parciais', 0)}",
+        "",
+        f"💰 VALORES:",
+        f"   Valor total em aberto: R$ {resumo.get('valor_total_aberto', 0):,.2f}",
+        f"   Valor disponível hoje: R$ {resumo.get('valor_disponivel', 0):,.2f}",
+        f"   Peso total: {resumo.get('peso_total', 0):,.0f} kg",
+        f"   Pallets total: {resumo.get('pallets_total', 0):.1f}",
+        "",
+        "=" * 60,
+        ""
+    ]
+
+    # Lista de pedidos (limita a 10)
+    for i, p in enumerate(pedidos[:10], 1):
+        todos_disp = p.get("todos_disponiveis", False)
+        percentual = p.get('percentual_disponivel', 0)
+        status = "✅ DISPONÍVEL" if todos_disp else f"⚠️ PARCIAL ({percentual}%)"
+        linhas.append(f"--- {i}. Pedido: {p.get('num_pedido', 'N/A')} | {status} ---")
+        linhas.append(f"   Cliente: {p.get('raz_social_red', 'N/A')}")
+        linhas.append(f"   Valor: R$ {p.get('valor_total', 0):,.2f}")
+        linhas.append(f"   Peso: {p.get('peso_total', 0):,.0f}kg | Pallets: {p.get('pallets_total', 0):.2f}")
+        linhas.append(f"   Itens: {p.get('itens_disponiveis', 0)}/{p.get('total_itens', 0)} disponíveis")
+
+        # Se tem data de disponibilidade total (pedido parcial)
+        if not todos_disp and p.get('data_disponibilidade_total'):
+            linhas.append(f"   📅 Previsão todos disponíveis: {p['data_disponibilidade_total']}")
+
+        # Mostra gargalos (itens que impedem envio hoje)
+        gargalos = p.get('gargalos', [])
+        if gargalos:
+            linhas.append(f"   🔴 GARGALOS ({len(gargalos)} item(ns)):")
+            for g in gargalos[:3]:
+                linhas.append(
+                    f"      - {g.get('nome_produto', 'N/A')[:30]}: "
+                    f"faltam {g.get('falta', 0):.0f}un "
+                    f"(previsão: {g.get('data_disponivel', 'N/A')})"
+                )
+            if len(gargalos) > 3:
+                linhas.append(f"      ... e mais {len(gargalos) - 3} gargalos")
+
+        # Mostra itens resumidos (apenas se poucos gargalos)
+        itens = p.get("itens", [])
+        if len(gargalos) < 2:
+            for item in itens[:3]:
+                disp = "✅" if item.get("disponivel") else "❌"
+                linhas.append(
+                    f"      {disp} {item.get('nome_produto', 'N/A')[:35]}: "
+                    f"{item.get('saldo_real', 0):.0f}un (estoque: {item.get('estoque_atual', 0):.0f})"
+                )
+            if len(itens) > 3:
+                linhas.append(f"      ... e mais {len(itens) - 3} itens")
+
+        linhas.append("")
+
+    if len(pedidos) > 10:
+        linhas.append(f"... e mais {len(pedidos) - 10} pedidos")
+        linhas.append("")
+
+    # Mensagem de ajuda
+    linhas.append("=" * 60)
+    linhas.append("💡 AÇÕES DISPONÍVEIS:")
+    linhas.append("   - 'Qual o valor desses pedidos?' → Mostra valores")
+    linhas.append("   - 'Qual o maior?' → Mostra o pedido de maior valor disponível")
+    linhas.append("   - 'Programe o pedido X pro dia DD/MM' → Cria separação")
+
+    return "\n".join(linhas)
+
+
+def _formatar_analise_cliente(resultado: Dict) -> str:
+    """
+    v2.0: Formata análise de disponibilidade por CLIENTE com pallets calculados.
+    """
+    analise = resultado.get("analise", {})
+    itens = resultado.get("dados", [])
+    carga = resultado.get("carga_sugerida", {})
+
+    linhas = [
+        f"=== ANÁLISE DE DISPONIBILIDADE - Cliente: {analise.get('cliente', 'N/A')} ===",
+        "",
+        f"📦 RESUMO DE PALLETS:",
+        f"   Total na carteira: {analise.get('total_pallets', 0):.1f} pallets",
+        f"   Disponível HOJE: {analise.get('pallets_disponiveis_hoje', 0):.1f} pallets",
+        f"   Total de itens: {analise.get('itens_total', 0)}",
+        f"   Itens disponíveis hoje: {analise.get('itens_disponiveis_hoje', 0)}",
+        f"   Peso total: {analise.get('total_peso', 0):,.0f} kg",
+    ]
+
+    if analise.get('excluiu_separados'):
+        linhas.append(f"   (Excluídos itens já separados)")
+
+    # Mensagem principal se pediu quantidade específica
+    if analise.get('mensagem'):
+        linhas.append("")
+        linhas.append(f"🎯 {analise['mensagem']}")
+
+    # === CARGA SUGERIDA (se existe) ===
+    if carga.get("pode_montar") and carga.get("itens"):
+        linhas.append("")
+        linhas.append("=" * 50)
+        linhas.append("📋 CARGA SUGERIDA")
+        linhas.append("=" * 50)
+        linhas.append(f"   Total: {carga.get('total_pallets', 0):.1f} pallets")
+        linhas.append(f"   Peso: {carga.get('total_peso', 0):,.0f} kg")
+        linhas.append(f"   Valor: R$ {carga.get('total_valor', 0):,.2f}")
+        linhas.append(f"   Itens: {len(carga.get('itens', []))}")
+
+        if carga.get("todos_disponiveis_hoje"):
+            linhas.append(f"   Status: ✅ TODOS DISPONÍVEIS HOJE")
+        else:
+            linhas.append(f"   Status: ⏳ {carga.get('itens_aguardar', 0)} item(ns) aguardando estoque")
+
+        linhas.append("")
+        linhas.append("--- ITENS DA CARGA ---")
+
+        for i, item in enumerate(carga.get("itens", []), 1):
+            status = "✅" if item.get('disponivel_hoje') else "⏳"
+            fracionado = item.get('fracionado', False)
+
+            if fracionado:
+                linhas.append(
+                    f"  {i}. [{status}] {item.get('nome_produto', 'N/A')[:40]} ✂️ PARCIAL"
+                )
+                linhas.append(
+                    f"      Pedido: {item.get('num_pedido', 'N/A')} | "
+                    f"{item.get('quantidade', 0):.0f} de {item.get('quantidade_original', 0):.0f} un "
+                    f"({item.get('percentual_usado', 0):.0f}%) = {item.get('pallets', 0):.2f} pallets | "
+                    f"R$ {item.get('valor', 0):,.2f}"
+                )
+            else:
+                linhas.append(
+                    f"  {i}. [{status}] {item.get('nome_produto', 'N/A')[:40]}"
+                )
+                linhas.append(
+                    f"      Pedido: {item.get('num_pedido', 'N/A')} | "
+                    f"{item.get('quantidade', 0):.0f} un = {item.get('pallets', 0):.2f} pallets | "
+                    f"R$ {item.get('valor', 0):,.2f}"
+                )
+
+        linhas.append("")
+        linhas.append("💬 Para criar separação com estes itens, responda: 'CONFIRMAR CARGA'")
+        linhas.append("   ou ajuste a quantidade e pergunte novamente.")
+
+    else:
+        # Sem carga sugerida, mostra lista geral de itens
+        linhas.append("")
+        linhas.append("--- ITENS DETALHADOS ---")
+
+        for i, item in enumerate(itens[:15], 1):
+            status = "✅ OK" if item.get('disponivel_hoje') else "⏳ Aguardar"
+            linhas.append(
+                f"{i}. {item.get('nome_produto', 'N/A')[:35]} | "
+                f"Pedido: {item.get('num_pedido', 'N/A')} | "
+                f"{item.get('quantidade', 0):.0f} un = {item.get('pallets', 0):.2f} pallets | "
+                f"[{status}]"
+            )
+
+        if len(itens) > 15:
+            linhas.append(f"... e mais {len(itens) - 15} itens")
 
     return "\n".join(linhas)
 
