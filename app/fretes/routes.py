@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session, send_from_directory, send_file
 from flask_login import login_required, current_user
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import and_, or_, desc, func
 import os
 import logging
@@ -3757,11 +3757,12 @@ def lancamento_freteiros():
                 'valor_cotado_total': valor_cotado_total_transportadora
             })
     
-    return render_template('fretes/lancamento_freteiros.html', 
+    return render_template('fretes/lancamento_freteiros.html',
                           dados_freteiros=dados_freteiros,
                           form=LancamentoFreteirosForm(),
                           filtro_form=filtro_form,
-                          filtro_selecionado=filtro_transportadora)
+                          filtro_selecionado=filtro_transportadora,
+                          hoje=date.today())
 
 @fretes_bp.route('/emitir_fatura_freteiro/<int:transportadora_id>', methods=['POST'])
 @login_required

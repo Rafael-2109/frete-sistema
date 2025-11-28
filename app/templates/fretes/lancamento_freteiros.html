@@ -120,10 +120,23 @@
                                                 {% if embarque_data.embarque.modalidade %}
                                                     <span class="badge bg-secondary me-2">{{ embarque_data.embarque.modalidade }}</span>
                                                 {% endif %}
-                                                <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_id) }}" 
+                                                <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_id) }}"
                                                    target="_blank" class="text-decoration-none">
                                                     Embarque {{ embarque_id }}
                                                 </a>
+                                                {% if embarque_data.embarque.data_embarque %}
+                                                    {% set dias_atras = (hoje - embarque_data.embarque.data_embarque).days %}
+                                                    <span class="ms-2 {% if dias_atras >= 7 %}text-danger fw-bold{% else %}text-muted{% endif %}"
+                                                          title="Data de embarque: {{ embarque_data.embarque.data_embarque.strftime('%d/%m/%Y') }}{% if dias_atras >= 7 %} - {{ dias_atras }} dias atrás!{% endif %}">
+                                                        {% if dias_atras >= 7 %}
+                                                            <i class="fas fa-exclamation-triangle"></i>
+                                                        {% endif %}
+                                                        <i class="fas fa-calendar-alt"></i> {{ embarque_data.embarque.data_embarque.strftime('%d/%m/%Y') }}
+                                                        {% if dias_atras >= 7 %}
+                                                            <span class="badge bg-danger ms-1">{{ dias_atras }}d</span>
+                                                        {% endif %}
+                                                    </span>
+                                                {% endif %}
                                                 <span class="badge bg-info ms-2">{{ embarque_data.fretes|length }} fretes</span>
                                             </h6>
                                             

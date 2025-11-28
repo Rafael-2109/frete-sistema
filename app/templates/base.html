@@ -303,9 +303,8 @@
               {% endif %}
               {% if current_user.tem_permissao('financeiro') or current_user.pode_acessar_financeiro() or
               current_user.perfil == 'administrador' %}
-              <li><a class="dropdown-item" href="{{ url_for('financeiro.contas_receber') }}">
+              <li><a class="dropdown-item" href="{{ url_for('financeiro.contas_receber_hub') }}">
                   <i class="fas fa-file-invoice-dollar text-success"></i> Contas a Receber
-                  <span class="badge bg-success ms-2">NOVO</span>
                 </a></li>
               {% endif %}
               {#<!--/***

@@ -89,8 +89,8 @@ class ContasReceberService:
 
             logger.info(f"✅ {len(registros)} registros extraídos do Odoo")
 
-            # Enriquecer com UF dos parceiros (2ª query)
-            registros = self._enriquecer_ufs_parceiros(registros)
+            # Enriquecer com dados dos parceiros (2ª query): UF, CNPJ, Razão Social
+            registros = self._enriquecer_dados_parceiros(registros)
 
             return registros
 
@@ -98,17 +98,21 @@ class ContasReceberService:
             logger.error(f"❌ Erro ao extrair dados do Odoo: {e}")
             raise
 
-    def _enriquecer_ufs_parceiros(self, registros: List[Dict]) -> List[Dict]:
+    def _enriquecer_dados_parceiros(self, registros: List[Dict]) -> List[Dict]:
         """
-        Busca UF (state_id) dos parceiros através de query em res.partner
+        Busca dados adicionais dos parceiros através de query em res.partner:
+        - state_id (UF)
+        - l10n_br_cnpj (CNPJ)
+        - trade_name (Nome fantasia / Razão Social Reduzida)
+        - name (Razão Social completa - fallback para trade_name)
 
         Args:
             registros: Lista de registros de account.move.line
 
         Returns:
-            Lista de registros enriquecida com campo 'partner_state_id'
+            Lista de registros enriquecida com campos de parceiro
         """
-        logger.info("🔍 Buscando UF dos parceiros via res.partner...")
+        logger.info("🔍 Buscando dados dos parceiros via res.partner...")
 
         # Extrair IDs únicos de parceiros
         partner_ids = set()
@@ -120,53 +124,104 @@ class ContasReceberService:
         partner_ids = list(partner_ids)
 
         if not partner_ids:
-            logger.warning("⚠️  Nenhum parceiro para buscar UF")
+            logger.warning("⚠️  Nenhum parceiro para buscar dados")
             return registros
 
-        logger.info(f"📊 Buscando UF de {len(partner_ids)} parceiros únicos...")
+        logger.info(f"📊 Buscando dados de {len(partner_ids)} parceiros únicos...")
 
-        # Buscar parceiros com state_id em lotes (evitar timeout)
+        # Buscar parceiros com todos os campos necessários em lotes (evitar timeout)
         BATCH_SIZE = 500
-        partner_state_map = {}
+        partner_data_map = {}
 
         for i in range(0, len(partner_ids), BATCH_SIZE):
             batch = partner_ids[i:i + BATCH_SIZE]
 
             try:
+                # Campos do res.partner:
+                # - l10n_br_cnpj: CNPJ do parceiro
+                # - l10n_br_razao_social: Razão Social completa (campo brasileiro)
+                # - name: Nome fantasia / Nome reduzido (usado como raz_social_red)
+                # - state_id: UF do parceiro
                 partners_data = self.connection.search_read(
                     'res.partner',
                     [['id', 'in', batch]],
-                    fields=['id', 'state_id'],
+                    fields=['id', 'state_id', 'l10n_br_cnpj', 'l10n_br_razao_social', 'name'],
                     limit=None
                 )
 
                 for partner in partners_data:
                     partner_id = partner.get('id')
-                    state_id = partner.get('state_id')  # Retorna [id, 'Sigla'] ou False
 
+                    # UF - O Odoo retorna [id, 'Nome Estado (BR)'] ou False
+                    # Precisamos extrair apenas a sigla de 2 caracteres
+                    state_id = partner.get('state_id')  # Retorna [id, 'São Paulo (BR)'] ou False
+                    uf = None
                     if state_id and isinstance(state_id, (list, tuple)) and len(state_id) > 1:
-                        partner_state_map[partner_id] = state_id[1]  # Pegar apenas a sigla (ex: 'SP')
-                    else:
-                        partner_state_map[partner_id] = None
+                        estado_nome = state_id[1]  # Ex: 'São Paulo (BR)' ou 'SP'
+                        # Se já é sigla de 2 caracteres, usar direto
+                        if len(estado_nome) == 2:
+                            uf = estado_nome.upper()
+                        else:
+                            # Mapeamento de nomes de estados para siglas
+                            estado_map = {
+                                'acre': 'AC', 'alagoas': 'AL', 'amapá': 'AP', 'amazonas': 'AM',
+                                'bahia': 'BA', 'ceará': 'CE', 'distrito federal': 'DF',
+                                'espírito santo': 'ES', 'goiás': 'GO', 'maranhão': 'MA',
+                                'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG',
+                                'pará': 'PA', 'paraíba': 'PB', 'paraná': 'PR', 'pernambuco': 'PE',
+                                'piauí': 'PI', 'rio de janeiro': 'RJ', 'rio grande do norte': 'RN',
+                                'rio grande do sul': 'RS', 'rondônia': 'RO', 'roraima': 'RR',
+                                'santa catarina': 'SC', 'são paulo': 'SP', 'sergipe': 'SE', 'tocantins': 'TO'
+                            }
+                            # Remover ' (BR)' e tentar encontrar no mapa
+                            estado_limpo = estado_nome.replace(' (BR)', '').lower().strip()
+                            uf = estado_map.get(estado_limpo)
+                            if not uf:
+                                # Fallback: pegar as 2 primeiras letras
+                                uf = estado_nome[:2].upper() if estado_nome else None
+
+                    # CNPJ
+                    cnpj = partner.get('l10n_br_cnpj') or None
+
+                    # Razão Social completa (campo l10n_br_razao_social)
+                    raz_social = partner.get('l10n_br_razao_social') or partner.get('name', '')
+
+                    # Nome fantasia / Razão Social Reduzida (campo name)
+                    name = partner.get('name', '')
+                    raz_social_red = name[:100] if name else None
+
+                    partner_data_map[partner_id] = {
+                        'uf': uf,
+                        'cnpj': cnpj,
+                        'raz_social_red': raz_social_red,
+                        'raz_social': raz_social
+                    }
 
                 logger.info(f"✅ Processado lote {i//BATCH_SIZE + 1}/{(len(partner_ids)-1)//BATCH_SIZE + 1}")
 
             except Exception as e:
-                logger.error(f"⚠️  Erro ao buscar lote de UFs: {e}")
+                logger.error(f"⚠️  Erro ao buscar lote de dados de parceiros: {e}")
                 continue
 
-        logger.info(f"✅ {len(partner_state_map)} parceiros com UF mapeados")
+        logger.info(f"✅ {len(partner_data_map)} parceiros com dados mapeados")
 
-        # Enriquecer registros com UF
+        # Enriquecer registros com dados dos parceiros
         for reg in registros:
             partner = reg.get('partner_id')
             if partner and isinstance(partner, (list, tuple)) and len(partner) > 0:
                 partner_id = partner[0]
-                reg['partner_state'] = partner_state_map.get(partner_id)
+                partner_data = partner_data_map.get(partner_id, {})
+                reg['partner_state'] = partner_data.get('uf')
+                reg['partner_cnpj'] = partner_data.get('cnpj')
+                reg['partner_raz_social_red'] = partner_data.get('raz_social_red')
+                reg['partner_raz_social'] = partner_data.get('raz_social')
             else:
                 reg['partner_state'] = None
+                reg['partner_cnpj'] = None
+                reg['partner_raz_social_red'] = None
+                reg['partner_raz_social'] = None
 
-        logger.info(f"✅ Registros enriquecidos com UF dos parceiros")
+        logger.info(f"✅ Registros enriquecidos com dados dos parceiros (UF, CNPJ, Razão Social)")
 
         return registros
 
@@ -271,11 +326,10 @@ class ContasReceberService:
         df = df.drop(columns=['balance'])
         logger.info(f"✅ Regra 9: Coluna 'balance' removida")
 
-        # Regra 10: Remover linhas onde payment_provider_id != "Transferência Bancária"
-        # NOTA: No Odoo o nome é "Transferência Bancária" (sem "CD")
-        total_antes = len(df)
-        df = df[df['payment_provider_id_nome'] == 'Transferência Bancária']
-        logger.info(f"✅ Regra 10: {len(df)} registros (removidos {total_antes - len(df)} com forma pgto diferente)")
+        # Regra 10: REMOVIDA - Agora aceita todas as formas de pagamento
+        # Anteriormente filtrava apenas "Transferência Bancária"
+        # Mantido para referência histórica
+        logger.info(f"✅ Regra 10: DESATIVADA - Todas as formas de pagamento são aceitas")
 
         logger.info(f"🎯 Total final após regras: {len(df)} registros ({total_inicial - len(df)} removidos)")
 
@@ -529,6 +583,8 @@ class ContasReceberService:
             'l10n_br_cobranca_parcela': 'Parcela',
             'l10n_br_paga': 'Parcela Paga?',
             'partner_id_nome': 'Parceiro/Razão Social',
+            'partner_cnpj': 'Parceiro/CNPJ',
+            'partner_raz_social_red': 'Parceiro/Nome Fantasia',
             'partner_state': 'Parceiro/Estado',
             'date': 'Data',
             'date_maturity': 'Data de Vencimento',

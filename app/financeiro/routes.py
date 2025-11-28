@@ -171,10 +171,157 @@ def excluir_todas_pendencias():
 
 @financeiro_bp.route('/contas-receber')
 @login_required
-def contas_receber():
+def contas_receber_hub():
     """
-    Página de Contas a Receber
-    Exibe interface para exportação de relatório
+    HUB Central de Contas a Receber
+    Página inicial com links para listagem e exportação
+    """
+    return render_template('financeiro/contas_receber_hub.html')
+
+
+@financeiro_bp.route('/contas-receber/listar')
+@login_required
+def listar_contas_receber():
+    """
+    Listagem de Contas a Receber com paginação e filtros.
+    Paginação: 200 registros por página.
+    """
+    from app.financeiro.models import ContasAReceber
+    from sqlalchemy import func, or_
+    from datetime import date
+
+    # Parâmetros de paginação
+    page = request.args.get('page', 1, type=int)
+    per_page = 200
+
+    # Parâmetros de ordenação
+    sort = request.args.get('sort', 'vencimento')
+    direction = request.args.get('direction', 'asc')
+
+    # Parâmetros de filtro
+    empresa = request.args.get('empresa', '', type=str)
+    titulo_nf = request.args.get('titulo_nf', '', type=str)
+    cnpj = request.args.get('cnpj', '', type=str)
+    cliente = request.args.get('cliente', '', type=str)
+    uf = request.args.get('uf', '', type=str)
+    status = request.args.get('status', '', type=str)
+    venc_de = request.args.get('venc_de', '', type=str)
+    venc_ate = request.args.get('venc_ate', '', type=str)
+    vendedor = request.args.get('vendedor', '', type=str)
+    transportadora = request.args.get('transportadora', '', type=str)
+    canhoto = request.args.get('canhoto', '', type=str)
+
+    # Query base
+    query = ContasAReceber.query
+
+    # Aplicar filtros
+    if empresa:
+        query = query.filter(ContasAReceber.empresa == int(empresa))
+
+    if titulo_nf:
+        query = query.filter(ContasAReceber.titulo_nf.ilike(f'%{titulo_nf}%'))
+
+    if cnpj:
+        cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '')
+        query = query.filter(ContasAReceber.cnpj.ilike(f'%{cnpj_limpo}%'))
+
+    if cliente:
+        query = query.filter(or_(
+            ContasAReceber.raz_social.ilike(f'%{cliente}%'),
+            ContasAReceber.raz_social_red.ilike(f'%{cliente}%')
+        ))
+
+    if uf:
+        query = query.filter(ContasAReceber.uf_cliente == uf)
+
+    if status:
+        hoje = date.today()
+        if status == 'aberto':
+            query = query.filter(
+                ContasAReceber.parcela_paga == False,
+                ContasAReceber.nf_cancelada == False,
+                or_(ContasAReceber.vencimento >= hoje, ContasAReceber.vencimento.is_(None))
+            )
+        elif status == 'pago':
+            query = query.filter(ContasAReceber.parcela_paga == True)
+        elif status == 'vencido':
+            query = query.filter(
+                ContasAReceber.parcela_paga == False,
+                ContasAReceber.nf_cancelada == False,
+                ContasAReceber.vencimento < hoje
+            )
+        elif status == 'cancelado':
+            query = query.filter(ContasAReceber.nf_cancelada == True)
+
+    if venc_de:
+        try:
+            data_de = datetime.strptime(venc_de, '%Y-%m-%d').date()
+            query = query.filter(ContasAReceber.vencimento >= data_de)
+        except ValueError:
+            pass
+
+    if venc_ate:
+        try:
+            data_ate = datetime.strptime(venc_ate, '%Y-%m-%d').date()
+            query = query.filter(ContasAReceber.vencimento <= data_ate)
+        except ValueError:
+            pass
+
+    if vendedor:
+        query = query.filter(ContasAReceber.vendedor.ilike(f'%{vendedor}%'))
+
+    if transportadora:
+        query = query.filter(ContasAReceber.transportadora.ilike(f'%{transportadora}%'))
+
+    if canhoto:
+        if canhoto == 'com':
+            query = query.filter(ContasAReceber.canhoto_arquivo.isnot(None))
+        elif canhoto == 'sem':
+            query = query.filter(ContasAReceber.canhoto_arquivo.is_(None))
+
+    # Aplicar ordenação
+    sort_column = getattr(ContasAReceber, sort, ContasAReceber.vencimento)
+    if direction == 'desc':
+        query = query.order_by(sort_column.desc().nullslast())
+    else:
+        query = query.order_by(sort_column.asc().nullsfirst())
+
+    # Paginar
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+    contas = paginacao.items
+
+    # Calcular totais da página
+    valor_total = sum(c.valor_titulo or 0 for c in contas)
+    hoje = date.today()
+    vencidos = sum(1 for c in contas if c.vencimento and c.vencimento < hoje and not c.parcela_paga)
+    pagos = sum(1 for c in contas if c.parcela_paga)
+
+    # Buscar UFs disponíveis para filtro
+    ufs_disponiveis = db.session.query(ContasAReceber.uf_cliente).distinct().filter(
+        ContasAReceber.uf_cliente.isnot(None)
+    ).order_by(ContasAReceber.uf_cliente).all()
+    ufs_disponiveis = [u[0] for u in ufs_disponiveis if u[0]]
+
+    return render_template(
+        'financeiro/listar_contas_receber.html',
+        contas=contas,
+        paginacao=paginacao,
+        sort=sort,
+        direction=direction,
+        hoje=hoje,
+        valor_total=valor_total,
+        vencidos=vencidos,
+        pagos=pagos,
+        ufs_disponiveis=ufs_disponiveis
+    )
+
+
+@financeiro_bp.route('/contas-receber/exportar')
+@login_required
+def contas_receber_exportar():
+    """
+    Página de Exportação de Contas a Receber
+    Exibe interface para exportação de relatório (Excel/JSON)
     """
     from datetime import date, timedelta
 
@@ -229,7 +376,7 @@ def exportar_contas_receber_excel():
 
     except Exception as e:
         flash(f'Erro ao exportar relatório: {str(e)}', 'danger')
-        return redirect(url_for('financeiro.contas_receber'))
+        return redirect(url_for('financeiro.contas_receber_exportar'))
 
 
 @financeiro_bp.route('/contas-receber/exportar-json')
@@ -270,6 +417,91 @@ def exportar_contas_receber_json():
         response.headers.add('Access-Control-Allow-Methods', 'GET')
 
         return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/contas-receber/sincronizar-odoo', methods=['POST'])
+@login_required
+def sincronizar_contas_receber_odoo():
+    """
+    Sincronização manual de Contas a Receber com Odoo.
+    Busca dados dos últimos 7 dias.
+
+    Uso: Botão "Sincronizar com Odoo" na interface de Contas a Receber
+    """
+    try:
+        from app.financeiro.services.sincronizacao_contas_receber_service import SincronizacaoContasReceberService
+
+        # Criar serviço e executar sincronização manual (7 dias)
+        service = SincronizacaoContasReceberService()
+        resultado = service.sincronizar_manual(dias=7)
+
+        if resultado.get('sucesso'):
+            return jsonify({
+                'success': True,
+                'message': 'Sincronização concluída com sucesso!',
+                'novos': resultado.get('novos', 0),
+                'atualizados': resultado.get('atualizados', 0),
+                'enriquecidos': resultado.get('enriquecidos', 0),
+                'snapshots': resultado.get('snapshots_criados', 0),
+                'erros': resultado.get('erros', 0)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado.get('erro', 'Erro desconhecido na sincronização')
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/contas-receber/status')
+@login_required
+def status_contas_receber():
+    """
+    Retorna estatísticas da tabela contas_a_receber
+    """
+    try:
+        from app.financeiro.models import ContasAReceber, ContasAReceberSnapshot
+        from sqlalchemy import func
+
+        total = ContasAReceber.query.count()
+        por_empresa = db.session.query(
+            ContasAReceber.empresa,
+            func.count(ContasAReceber.id)
+        ).group_by(ContasAReceber.empresa).all()
+
+        ultima_sync = db.session.query(
+            func.max(ContasAReceber.ultima_sincronizacao)
+        ).scalar()
+
+        total_snapshots = ContasAReceberSnapshot.query.count()
+
+        empresas = {
+            1: 'NACOM GOYA - FB',
+            2: 'NACOM GOYA - SC',
+            3: 'NACOM GOYA - CD'
+        }
+
+        return jsonify({
+            'success': True,
+            'total': total,
+            'por_empresa': [
+                {'empresa': empresas.get(e, f'Empresa {e}'), 'total': t}
+                for e, t in por_empresa
+            ],
+            'ultima_sincronizacao': ultima_sync.isoformat() if ultima_sync else None,
+            'total_snapshots': total_snapshots
+        })
 
     except Exception as e:
         return jsonify({

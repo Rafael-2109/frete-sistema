@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Contas a Receber - Central{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hub-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .hub-card {
+        border: none;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        height: 100%;
+    }
+
+    .hub-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+
+    .hub-card .card-body {
+        padding: 2rem;
+    }
+
+    .hub-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .hub-icon.primary {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+    }
+
+    .hub-icon.info {
+        background: linear-gradient(135deg, #007bff 0%, #17a2b8 100%);
+        color: white;
+    }
+
+    .hub-icon.warning {
+        background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        color: white;
+    }
+
+    .hub-icon.secondary {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        color: white;
+    }
+
+    .hub-card h4 {
+        color: #343a40;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }
+
+    .hub-card p {
+        color: #6c757d;
+        font-size: 0.95rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .hub-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        font-size: 0.75rem;
+    }
+
+    .stats-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #343a40;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .btn-hub {
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 hub-container">
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-1">
+                <i class="fas fa-file-invoice-dollar text-success"></i>
+                Contas a Receber
+            </h2>
+            <p class="text-muted mb-0">
+                Central de gestão de contas a receber - Dados sincronizados do Odoo
+            </p>
+        </div>
+    </div>
+
+    <!-- Estatísticas Rápidas -->
+    <div class="stats-container" id="statsContainer">
+        <div class="row">
+            <div class="col-md-3 stat-item">
+                <div class="stat-value" id="statTotal">-</div>
+                <div class="stat-label">Total de Títulos</div>
+            </div>
+            <div class="col-md-3 stat-item">
+                <div class="stat-value" id="statFB">-</div>
+                <div class="stat-label">FB (Fábrica)</div>
+            </div>
+            <div class="col-md-3 stat-item">
+                <div class="stat-value" id="statSC">-</div>
+                <div class="stat-label">SC (Santa Catarina)</div>
+            </div>
+            <div class="col-md-3 stat-item">
+                <div class="stat-value" id="statCD">-</div>
+                <div class="stat-label">CD (Centro Dist.)</div>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12 text-center">
+                <small class="text-muted">
+                    <i class="fas fa-sync-alt"></i>
+                    Última sincronização: <span id="ultimaSync">-</span>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Navegação -->
+    <div class="row g-4">
+        <!-- Consultar Títulos -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card hub-card position-relative">
+                <span class="badge bg-success hub-badge">PRINCIPAL</span>
+                <div class="card-body">
+                    <div class="hub-icon primary">
+                        <i class="fas fa-search-dollar"></i>
+                    </div>
+                    <h4>Consultar Títulos</h4>
+                    <p>
+                        Visualize e gerencie todos os títulos a receber com filtros avançados,
+                        ordenação e paginação. Acesse informações de entrega e agendamento.
+                    </p>
+                    <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="btn btn-success btn-hub w-100">
+                        <i class="fas fa-table me-2"></i>
+                        Acessar Listagem
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exportar Relatórios -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card hub-card">
+                <div class="card-body">
+                    <div class="hub-icon info">
+                        <i class="fas fa-file-export"></i>
+                    </div>
+                    <h4>Exportar Relatórios</h4>
+                    <p>
+                        Exporte dados para Excel ou acesse via API JSON para integração
+                        com Power Query e outras ferramentas de análise.
+                    </p>
+                    <a href="{{ url_for('financeiro.contas_receber_exportar') }}" class="btn btn-primary btn-hub w-100">
+                        <i class="fas fa-download me-2"></i>
+                        Exportar Dados
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sincronização (placeholder para futuro) -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card hub-card">
+                <div class="card-body">
+                    <div class="hub-icon warning">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <h4>Sincronização</h4>
+                    <p>
+                        Sincronize dados com o Odoo manualmente.
+                        A sincronização automática ocorre a cada 30 minutos.
+                    </p>
+                    <button class="btn btn-warning btn-hub w-100" onclick="sincronizarOdoo()" id="btnSincronizar">
+                        <i class="fas fa-cloud-download-alt me-2"></i>
+                        Sincronizar Agora
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações Adicionais -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Sobre os Dados
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-database text-primary"></i> Fonte de Dados</h6>
+                            <p class="text-muted small">
+                                Dados extraídos do modelo <code>account.move.line</code> do Odoo,
+                                filtrados por 11 regras de negócio.
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-sync text-success"></i> Sincronização</h6>
+                            <p class="text-muted small">
+                                Automática a cada 30 minutos via scheduler.
+                                Janela de 120 minutos para alterações incrementais.
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-link text-info"></i> Enriquecimento</h6>
+                            <p class="text-muted small">
+                                Dados enriquecidos com informações de entregas, agendamentos
+                                e status de finalização do sistema local.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Carregar estatísticas ao abrir a página
+document.addEventListener('DOMContentLoaded', function() {
+    carregarEstatisticas();
+});
+
+function carregarEstatisticas() {
+    fetch("{{ url_for('financeiro.status_contas_receber') }}")
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('statTotal').textContent = data.total.toLocaleString('pt-BR');
+
+                // Por empresa
+                data.por_empresa.forEach(emp => {
+                    if (emp.empresa.includes('FB')) {
+                        document.getElementById('statFB').textContent = emp.total.toLocaleString('pt-BR');
+                    } else if (emp.empresa.includes('SC')) {
+                        document.getElementById('statSC').textContent = emp.total.toLocaleString('pt-BR');
+                    } else if (emp.empresa.includes('CD')) {
+                        document.getElementById('statCD').textContent = emp.total.toLocaleString('pt-BR');
+                    }
+                });
+
+                // Última sincronização
+                if (data.ultima_sincronizacao) {
+                    const dataSync = new Date(data.ultima_sincronizacao);
+                    document.getElementById('ultimaSync').textContent = dataSync.toLocaleString('pt-BR');
+                } else {
+                    document.getElementById('ultimaSync').textContent = 'Nunca';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar estatísticas:', error);
+        });
+}
+
+function sincronizarOdoo() {
+    const btn = document.getElementById('btnSincronizar');
+    const textoOriginal = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sincronizando...';
+
+    fetch("{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(
+                `Novos: ${data.novos} | Atualizados: ${data.atualizados} | Enriquecidos: ${data.enriquecidos}`,
+                'Sincronização Concluída!'
+            );
+            // Recarregar estatísticas
+            carregarEstatisticas();
+        } else {
+            toastr.error(data.error || 'Erro desconhecido', 'Erro na Sincronização');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        toastr.error('Erro ao conectar com o servidor', 'Erro');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    });
+}
+</script>
+{% endblock %}

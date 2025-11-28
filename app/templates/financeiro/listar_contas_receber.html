@@ -1,0 +1,587 @@
+{% extends 'base.html' %}
+{% block title %}Contas a Receber - Listagem{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filtros-container {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .table-contas {
+        font-size: 0.875rem;
+    }
+
+    .table-contas th {
+        background: #343a40;
+        color: white;
+        font-weight: 500;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .table-contas th a {
+        color: white;
+        text-decoration: none;
+    }
+
+    .table-contas th a:hover {
+        color: #20c997;
+    }
+
+    .badge-empresa {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .badge-fb { background-color: #28a745; }
+    .badge-sc { background-color: #007bff; }
+    .badge-cd { background-color: #6f42c1; }
+
+    .badge-status {
+        font-size: 0.75rem;
+    }
+
+    .valor-positivo { color: #28a745; font-weight: 600; }
+    .valor-negativo { color: #dc3545; font-weight: 600; }
+
+    .cliente-col {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .obs-col {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .btn-acao {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.08);
+    }
+
+    .tr-pago {
+        background-color: rgba(40, 167, 69, 0.1) !important;
+    }
+
+    .tr-vencido {
+        background-color: rgba(220, 53, 69, 0.1) !important;
+    }
+
+    .tr-cancelado {
+        background-color: rgba(108, 117, 125, 0.2) !important;
+        text-decoration: line-through;
+        opacity: 0.7;
+    }
+
+    .info-totais {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .canhoto-icon {
+        color: #28a745;
+    }
+
+    .no-canhoto-icon {
+        color: #dc3545;
+    }
+
+    /* Tooltip customizado para observações */
+    .obs-tooltip {
+        cursor: help;
+    }
+
+    /* Responsividade da tabela */
+    .table-responsive {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Variável para preservar filtros na ordenação #}
+{% set filtros_atuais = request.args.copy() %}
+{% if 'sort' in filtros_atuais %}{% set _ = filtros_atuais.pop('sort') %}{% endif %}
+{% if 'direction' in filtros_atuais %}{% set _ = filtros_atuais.pop('direction') %}{% endif %}
+{% if 'page' in filtros_atuais %}{% set _ = filtros_atuais.pop('page') %}{% endif %}
+
+<div class="container-fluid mt-3">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">
+                <i class="fas fa-file-invoice-dollar text-success"></i>
+                Contas a Receber
+            </h4>
+            <small class="text-muted">
+                <a href="{{ url_for('financeiro.contas_receber_hub') }}">
+                    <i class="fas fa-arrow-left"></i> Voltar ao Hub
+                </a>
+            </small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success btn-sm" onclick="exportarExcel()">
+                <i class="fas fa-file-excel"></i> Excel
+            </button>
+            <button class="btn btn-outline-primary btn-sm" onclick="sincronizarOdoo()" id="btnSync">
+                <i class="fas fa-sync-alt"></i> Sincronizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Totais Resumidos -->
+    <div class="info-totais">
+        <div class="row text-center">
+            <div class="col-md-3">
+                <h5 class="mb-0">{{ paginacao.total | default(0) }}</h5>
+                <small>Total de Títulos</small>
+            </div>
+            <div class="col-md-3">
+                <h5 class="mb-0">R$ {{ "%.2f"|format(valor_total | default(0)) }}</h5>
+                <small>Valor Total (página)</small>
+            </div>
+            <div class="col-md-3">
+                <h5 class="mb-0">{{ vencidos | default(0) }}</h5>
+                <small>Vencidos</small>
+            </div>
+            <div class="col-md-3">
+                <h5 class="mb-0">{{ pagos | default(0) }}</h5>
+                <small>Pagos</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filtros-container">
+        <form method="GET" id="formFiltros">
+            <div class="row g-2">
+                <!-- Linha 1 -->
+                <div class="col-md-2">
+                    <label class="form-label small">Empresa</label>
+                    <select name="empresa" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        <option value="1" {% if request.args.get('empresa') == '1' %}selected{% endif %}>FB (Fábrica)</option>
+                        <option value="2" {% if request.args.get('empresa') == '2' %}selected{% endif %}>SC (Santa Catarina)</option>
+                        <option value="3" {% if request.args.get('empresa') == '3' %}selected{% endif %}>CD (Centro Dist.)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">NF</label>
+                    <input type="text" name="titulo_nf" class="form-control form-control-sm"
+                           placeholder="Número NF" value="{{ request.args.get('titulo_nf', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">CNPJ</label>
+                    <input type="text" name="cnpj" class="form-control form-control-sm"
+                           placeholder="CNPJ" value="{{ request.args.get('cnpj', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Cliente</label>
+                    <input type="text" name="cliente" class="form-control form-control-sm"
+                           placeholder="Razão Social" value="{{ request.args.get('cliente', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">UF</label>
+                    <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for uf in ufs_disponiveis %}
+                        <option value="{{ uf }}" {% if request.args.get('uf') == uf %}selected{% endif %}>{{ uf }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="aberto" {% if request.args.get('status') == 'aberto' %}selected{% endif %}>Em Aberto</option>
+                        <option value="pago" {% if request.args.get('status') == 'pago' %}selected{% endif %}>Pagos</option>
+                        <option value="vencido" {% if request.args.get('status') == 'vencido' %}selected{% endif %}>Vencidos</option>
+                        <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelados</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row g-2 mt-2">
+                <!-- Linha 2 -->
+                <div class="col-md-2">
+                    <label class="form-label small">Vencimento De</label>
+                    <input type="date" name="venc_de" class="form-control form-control-sm"
+                           value="{{ request.args.get('venc_de', '') }}" onchange="this.form.submit()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Vencimento Até</label>
+                    <input type="date" name="venc_ate" class="form-control form-control-sm"
+                           value="{{ request.args.get('venc_ate', '') }}" onchange="this.form.submit()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Vendedor</label>
+                    <input type="text" name="vendedor" class="form-control form-control-sm"
+                           placeholder="Vendedor" value="{{ request.args.get('vendedor', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Transportadora</label>
+                    <input type="text" name="transportadora" class="form-control form-control-sm"
+                           placeholder="Transportadora" value="{{ request.args.get('transportadora', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Canhoto</label>
+                    <select name="canhoto" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="com" {% if request.args.get('canhoto') == 'com' %}selected{% endif %}>Com Canhoto</option>
+                        <option value="sem" {% if request.args.get('canhoto') == 'sem' %}selected{% endif %}>Sem Canhoto</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover table-striped table-contas">
+            <thead>
+                <tr>
+                    <!-- Empresa -->
+                    {% set next_dir = 'desc' if sort == 'empresa' and direction == 'asc' else 'asc' %}
+                    <th style="width: 70px;">
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='empresa', direction=next_dir, **filtros_atuais) }}">
+                            Emp {% if sort == 'empresa' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                        </a>
+                    </th>
+
+                    <!-- NF-Parcela -->
+                    {% set next_dir = 'desc' if sort == 'titulo_nf' and direction == 'asc' else 'asc' %}
+                    <th style="width: 100px;">
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='titulo_nf', direction=next_dir, **filtros_atuais) }}">
+                            NF-Parc {% if sort == 'titulo_nf' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                        </a>
+                    </th>
+
+                    <!-- CNPJ -->
+                    <th style="width: 130px;">CNPJ</th>
+
+                    <!-- Cliente -->
+                    {% set next_dir = 'desc' if sort == 'raz_social_red' and direction == 'asc' else 'asc' %}
+                    <th>
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='raz_social_red', direction=next_dir, **filtros_atuais) }}">
+                            Cliente {% if sort == 'raz_social_red' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                        </a>
+                    </th>
+
+                    <!-- UF -->
+                    {% set next_dir = 'desc' if sort == 'uf_cliente' and direction == 'asc' else 'asc' %}
+                    <th style="width: 50px;">
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='uf_cliente', direction=next_dir, **filtros_atuais) }}">
+                            UF {% if sort == 'uf_cliente' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                        </a>
+                    </th>
+
+                    <!-- Vencimento -->
+                    {% set next_dir = 'desc' if sort == 'vencimento' and direction == 'asc' else 'asc' %}
+                    <th style="width: 95px;">
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='vencimento', direction=next_dir, **filtros_atuais) }}">
+                            Venc {% if sort == 'vencimento' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                        </a>
+                    </th>
+
+                    <!-- Valor -->
+                    {% set next_dir = 'desc' if sort == 'valor_titulo' and direction == 'asc' else 'asc' %}
+                    <th style="width: 100px;">
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='valor_titulo', direction=next_dir, **filtros_atuais) }}">
+                            Valor {% if sort == 'valor_titulo' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                        </a>
+                    </th>
+
+                    <!-- Tipo -->
+                    <th style="width: 100px;">Tipo</th>
+
+                    <!-- Status Entrega -->
+                    <th style="width: 90px;">Entrega</th>
+
+                    <!-- Agendamento -->
+                    <th style="width: 90px;">Agend.</th>
+
+                    <!-- Canhoto -->
+                    <th style="width: 50px;" class="text-center">📄</th>
+
+                    <!-- Vendedor -->
+                    <th style="width: 100px;">Vendedor</th>
+
+                    <!-- Transportadora -->
+                    <th style="width: 120px;">Transp.</th>
+
+                    <!-- Status Pago -->
+                    <th style="width: 70px;" class="text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for conta in contas %}
+                <tr class="{% if conta.parcela_paga %}tr-pago{% elif conta.nf_cancelada %}tr-cancelado{% elif conta.vencimento and conta.vencimento < hoje %}tr-vencido{% endif %}">
+                    <!-- Empresa -->
+                    <td>
+                        {% if conta.empresa == 1 %}
+                            <span class="badge badge-empresa badge-fb">FB</span>
+                        {% elif conta.empresa == 2 %}
+                            <span class="badge badge-empresa badge-sc">SC</span>
+                        {% elif conta.empresa == 3 %}
+                            <span class="badge badge-empresa badge-cd">CD</span>
+                        {% else %}
+                            <span class="badge bg-secondary">?</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- NF-Parcela -->
+                    <td>
+                        <strong>{{ conta.titulo_nf }}</strong>-{{ conta.parcela }}
+                    </td>
+
+                    <!-- CNPJ -->
+                    <td>
+                        <small>{{ conta.cnpj or '-' }}</small>
+                    </td>
+
+                    <!-- Cliente -->
+                    <td class="cliente-col" title="{{ conta.raz_social or '' }}">
+                        {{ conta.raz_social_red or conta.raz_social or '-' }}
+                    </td>
+
+                    <!-- UF -->
+                    <td class="text-center">
+                        {{ conta.uf_cliente or '-' }}
+                    </td>
+
+                    <!-- Vencimento -->
+                    <td>
+                        {% if conta.vencimento %}
+                            {% if conta.vencimento < hoje and not conta.parcela_paga %}
+                                <span class="text-danger fw-bold">{{ conta.vencimento.strftime('%d/%m/%Y') }}</span>
+                            {% else %}
+                                {{ conta.vencimento.strftime('%d/%m/%Y') }}
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <!-- Valor -->
+                    <td class="text-end">
+                        {% if conta.valor_titulo %}
+                            <span class="{% if conta.valor_titulo > 0 %}valor-positivo{% else %}valor-negativo{% endif %}">
+                                R$ {{ "%.2f"|format(conta.valor_titulo) }}
+                            </span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <!-- Tipo -->
+                    <td class="obs-col" title="{{ conta.tipo_titulo or '' }}">
+                        <small>{{ conta.tipo_titulo or '-' }}</small>
+                    </td>
+
+                    <!-- Status Entrega -->
+                    <td>
+                        {% if conta.status_finalizacao %}
+                            <span class="badge {% if conta.status_finalizacao == 'ENTREGUE' %}bg-success{% elif conta.status_finalizacao == 'DEVOLVIDO' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">
+                                {{ conta.status_finalizacao[:10] }}
+                            </span>
+                        {% elif conta.data_hora_entrega_realizada %}
+                            <span class="badge bg-success badge-status">ENTREGUE</span>
+                        {% else %}
+                            <span class="badge bg-secondary badge-status">-</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Agendamento -->
+                    <td>
+                        {% if conta.ultimo_agendamento_data %}
+                            <small>{{ conta.ultimo_agendamento_data.strftime('%d/%m') }}</small>
+                            {% if conta.ultimo_agendamento_status %}
+                                <br><span class="badge bg-info badge-status">{{ conta.ultimo_agendamento_status[:6] }}</span>
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <!-- Canhoto -->
+                    <td class="text-center">
+                        {% if conta.canhoto_arquivo %}
+                            <i class="fas fa-file-alt canhoto-icon" title="Canhoto disponível"></i>
+                        {% else %}
+                            <i class="fas fa-times no-canhoto-icon" title="Sem canhoto"></i>
+                        {% endif %}
+                    </td>
+
+                    <!-- Vendedor -->
+                    <td class="obs-col" title="{{ conta.vendedor or '' }}">
+                        <small>{{ conta.vendedor or '-' }}</small>
+                    </td>
+
+                    <!-- Transportadora -->
+                    <td class="obs-col" title="{{ conta.transportadora or '' }}">
+                        <small>{{ conta.transportadora or '-' }}</small>
+                    </td>
+
+                    <!-- Status Pago -->
+                    <td class="text-center">
+                        {% if conta.nf_cancelada %}
+                            <span class="badge bg-secondary">CANC</span>
+                        {% elif conta.parcela_paga %}
+                            <span class="badge bg-success">PAGO</span>
+                        {% elif conta.vencimento and conta.vencimento < hoje %}
+                            <span class="badge bg-danger">VENC</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">ABERTO</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="14" class="text-center text-muted py-4">
+                        <i class="fas fa-inbox fa-2x mb-2"></i>
+                        <p class="mb-0">Nenhuma conta encontrada com os filtros aplicados.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginação -->
+    {% if paginacao and paginacao.pages > 1 %}
+    <nav class="mt-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="text-muted small">
+                Exibindo {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
+                – {{ (paginacao.page - 1) * paginacao.per_page + contas|length }}
+                de {{ paginacao.total }} registros
+            </div>
+            <ul class="pagination pagination-sm mb-0">
+                {% set args_no_page = request.args.copy() %}
+                {% if 'page' in args_no_page %}{% set _ = args_no_page.pop('page') %}{% endif %}
+
+                <!-- Primeira -->
+                <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_contas_receber', page=1, **args_no_page) }}">«</a>
+                </li>
+
+                <!-- Anterior -->
+                <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_contas_receber', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+                </li>
+
+                <!-- Páginas -->
+                {% for p in range(paginacao.page - 2, paginacao.page + 3) if p > 0 and p <= paginacao.pages %}
+                <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_contas_receber', page=p, **args_no_page) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+
+                <!-- Próxima -->
+                <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_contas_receber', page=paginacao.next_num, **args_no_page) }}">›</a>
+                </li>
+
+                <!-- Última -->
+                <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_contas_receber', page=paginacao.pages, **args_no_page) }}">»</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function exportarExcel() {
+    // Construir URL com filtros atuais
+    const params = new URLSearchParams(window.location.search);
+    const url = "{{ url_for('financeiro.exportar_contas_receber_excel') }}" +
+                (params.toString() ? '?' + params.toString() : '');
+
+    // Criar link e baixar
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'contas_receber.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toastr.info('Gerando arquivo Excel...', 'Aguarde');
+}
+
+function sincronizarOdoo() {
+    const btn = document.getElementById('btnSync');
+    const textoOriginal = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+
+    fetch("{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(
+                `Novos: ${data.novos} | Atualizados: ${data.atualizados} | Enriquecidos: ${data.enriquecidos}`,
+                'Sincronização Concluída!'
+            );
+            // Recarregar página para mostrar dados atualizados
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            toastr.error(data.error || 'Erro desconhecido', 'Erro na Sincronização');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        toastr.error('Erro ao conectar com o servidor', 'Erro');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    });
+}
+
+// Auto submit ao pressionar Enter nos campos de texto
+document.querySelectorAll('#formFiltros input[type="text"]').forEach(input => {
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('formFiltros').submit();
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -40,6 +40,7 @@ JANELA_PEDIDOS = int(os.environ.get('JANELA_PEDIDOS', 90))  # 90 minutos (mesma 
 JANELA_ALOCACOES = int(os.environ.get('JANELA_ALOCACOES', 90))  # 90 minutos (mesma janela)
 JANELA_CTES = int(os.environ.get('JANELA_CTES', 90))  # ✅ 90 minutos para CTes
 DIAS_ENTRADAS = int(os.environ.get('DIAS_ENTRADAS', 7))  # 7 dias para entradas de materiais
+JANELA_CONTAS_RECEBER = int(os.environ.get('JANELA_CONTAS_RECEBER', 120))  # ✅ 120 minutos para Contas a Receber
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -51,6 +52,7 @@ pedido_service = None
 alocacao_service = None
 entrada_material_service = None
 cte_service = None  # ✅ Service de CTes
+contas_receber_service = None  # ✅ Service de Contas a Receber
 
 
 def inicializar_services():
@@ -59,7 +61,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -70,6 +72,7 @@ def inicializar_services():
         from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
         from app.odoo.services.entrada_material_service import EntradaMaterialService
         from app.odoo.services.cte_service import CteService  # ✅ Service de CTes
+        from app.financeiro.services.sincronizacao_contas_receber_service import SincronizacaoContasReceberService  # ✅ Service de Contas a Receber
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -79,6 +82,7 @@ def inicializar_services():
         alocacao_service = AlocacaoComprasServiceOtimizado()
         entrada_material_service = EntradaMaterialService()
         cte_service = CteService()  # ✅ Instanciar service de CTes
+        contas_receber_service = SincronizacaoContasReceberService()  # ✅ Instanciar service de Contas a Receber
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -93,7 +97,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -107,10 +111,11 @@ def executar_sincronizacao():
     logger.info(f"   - Alocações: janela={JANELA_ALOCACOES}min")
     logger.info(f"   - CTes: janela={JANELA_CTES}min")  # ✅ Adicionar CTes ao log
     logger.info(f"   - Entradas: dias={DIAS_ENTRADAS}")
+    logger.info(f"   - Contas a Receber: janela={JANELA_CONTAS_RECEBER}min")  # ✅ Adicionar Contas a Receber ao log
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -599,6 +604,64 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes de Contas a Receber")
+        except Exception as e:
+            pass
+
+        # 8️⃣ CONTAS A RECEBER - com retry
+        sucesso_contas_receber = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"💰 Sincronizando Contas a Receber (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_CONTAS_RECEBER} minutos")
+
+                # Usar service já instanciado
+                resultado_contas_receber = contas_receber_service.sincronizar_incremental(
+                    minutos_janela=JANELA_CONTAS_RECEBER
+                )
+
+                if resultado_contas_receber.get("sucesso"):
+                    sucesso_contas_receber = True
+                    logger.info("✅ Contas a Receber sincronizadas com sucesso!")
+                    logger.info(f"   - Novos: {resultado_contas_receber.get('novos', 0)}")
+                    logger.info(f"   - Atualizados: {resultado_contas_receber.get('atualizados', 0)}")
+                    logger.info(f"   - Enriquecidos: {resultado_contas_receber.get('enriquecidos', 0)}")
+                    logger.info(f"   - Snapshots: {resultado_contas_receber.get('snapshots_criados', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_contas_receber.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Contas a Receber: {erro}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        # Reinicializar service
+                        from app.financeiro.services.sincronizacao_contas_receber_service import SincronizacaoContasReceberService
+                        contas_receber_service = SincronizacaoContasReceberService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar Contas a Receber: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.financeiro.services.sincronizacao_contas_receber_service import SincronizacaoContasReceberService
+                        contas_receber_service = SincronizacaoContasReceberService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -608,12 +671,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber])
 
-        if total_sucesso == 8:
+        if total_sucesso == 9:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 6:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/8 módulos OK")
+        elif total_sucesso >= 7:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/9 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -630,8 +693,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Entradas de Materiais: FALHOU")
             if not sucesso_ctes:
                 logger.info("   ❌ CTes: FALHOU")
+            if not sucesso_contas_receber:
+                logger.info("   ❌ Contas a Receber: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/8 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/9 módulos OK")
         logger.info("=" * 60)
 
 

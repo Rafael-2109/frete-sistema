@@ -638,6 +638,162 @@ items = Separacao.query.filter_by(
 
 ---
 
+## 💰 ContasAReceber (app/financeiro/models.py)
+
+### Contas a Receber importadas do Odoo com enriquecimento local
+
+### ⚠️ CHAVE ÚNICA: empresa + titulo_nf + parcela
+
+### 📋 Campos Principais
+```python
+# CAMPOS DO ODOO (importados automaticamente):
+empresa = db.Column(db.Integer, nullable=False, index=True)  # ✅ 1=FB, 2=SC, 3=CD
+titulo_nf = db.Column(db.String(20), nullable=False, index=True)  # ✅ NF-e
+parcela = db.Column(db.String(10), nullable=False, index=True)  # ✅ Número da parcela
+
+# Cliente:
+cnpj = db.Column(db.String(20), nullable=True, index=True)  # ✅ CNPJ do cliente
+raz_social = db.Column(db.String(255), nullable=True)  # ✅ Razão Social completa
+raz_social_red = db.Column(db.String(100), nullable=True)  # ✅ Nome fantasia/trade_name
+uf_cliente = db.Column(db.String(2), nullable=True, index=True)  # ✅ UF do cliente
+
+# Datas do Odoo:
+emissao = db.Column(db.Date, nullable=True)  # ✅ Data de emissão
+vencimento = db.Column(db.Date, nullable=True, index=True)  # ✅ Data de vencimento
+
+# Valores do Odoo:
+valor_original = db.Column(db.Float, nullable=True)  # ✅ Saldo Total (balance + desconto_concedido)
+desconto_percentual = db.Column(db.Float, nullable=True)  # ✅ desconto_concedido_percentual / 100
+desconto = db.Column(db.Float, nullable=True)  # ✅ desconto_concedido
+tipo_titulo = db.Column(db.String(100), nullable=True)  # ✅ Forma de Pagamento
+parcela_paga = db.Column(db.Boolean, default=False)  # ✅ l10n_br_paga
+status_pagamento_odoo = db.Column(db.String(50), nullable=True)  # ✅ x_studio_status_de_pagamento
+
+# CAMPOS CALCULADOS:
+valor_titulo = db.Column(db.Float, nullable=True)  # ✅ valor_original - desconto - SUM(abatimentos)
+liberacao_prevista_antecipacao = db.Column(db.Date, nullable=True)  # ✅ Via LiberacaoAntecipacao + EntregaMonitorada
+
+# CAMPOS DO SISTEMA (preenchidos manualmente):
+confirmacao_tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=True)
+forma_confirmacao_tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=True)
+data_confirmacao = db.Column(db.DateTime, nullable=True)  # ✅ Log automático
+confirmacao_entrega = db.Column(db.Text, nullable=True)
+observacao = db.Column(db.Text, nullable=True)
+alerta = db.Column(db.Boolean, default=False, nullable=False)
+acao_necessaria_tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=True)
+obs_acao_necessaria = db.Column(db.Text, nullable=True)
+data_lembrete = db.Column(db.Date, nullable=True)
+
+# CAMPOS ENRIQUECIDOS (via EntregaMonitorada):
+entrega_monitorada_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=True)
+data_entrega_prevista = db.Column(db.Date, nullable=True)
+data_hora_entrega_realizada = db.Column(db.DateTime, nullable=True)
+status_finalizacao = db.Column(db.String(50), nullable=True)
+nova_nf = db.Column(db.String(20), nullable=True)
+reagendar = db.Column(db.Boolean, default=False)
+data_embarque = db.Column(db.Date, nullable=True)
+transportadora = db.Column(db.String(255), nullable=True)
+vendedor = db.Column(db.String(100), nullable=True)
+canhoto_arquivo = db.Column(db.String(500), nullable=True)
+nf_cd = db.Column(db.Boolean, default=False, nullable=False)  # ✅ NF está no CD
+
+# AgendamentoEntrega (último):
+ultimo_agendamento_data = db.Column(db.Date, nullable=True)
+ultimo_agendamento_status = db.Column(db.String(20), nullable=True)
+ultimo_agendamento_protocolo = db.Column(db.String(100), nullable=True)
+
+# FaturamentoProduto:
+nf_cancelada = db.Column(db.Boolean, default=False, nullable=False)  # ✅ Se FaturamentoProduto.ativo = False
+
+# Auditoria:
+criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+odoo_write_date = db.Column(db.DateTime, nullable=True)  # ✅ write_date do Odoo para sync incremental
+ultima_sincronizacao = db.Column(db.DateTime, nullable=True)
+```
+
+---
+
+## 📋 ContasAReceberTipo (app/financeiro/models.py)
+
+### Tabela de domínio para tipos usados em Contas a Receber e Abatimento
+
+```python
+# CAMPOS CORRETOS:
+id = db.Column(db.Integer, primary_key=True)
+tipo = db.Column(db.String(100), nullable=False)  # ✅ Nome do tipo
+considera_a_receber = db.Column(db.Boolean, default=True, nullable=False)  # ✅ Se considera na projeção
+tabela = db.Column(db.String(50), nullable=False)  # ✅ contas_a_receber ou contas_a_receber_abatimento
+campo = db.Column(db.String(50), nullable=False)  # ✅ confirmacao, forma_confirmacao, acao_necessaria, tipo
+explicacao = db.Column(db.Text, nullable=True)
+ativo = db.Column(db.Boolean, default=True, nullable=False)
+```
+
+---
+
+## 📋 LiberacaoAntecipacao (app/financeiro/models.py)
+
+### Configuração de prazos de liberação para antecipação de recebíveis
+
+### ⚠️ PRIORIDADE DE MATCH: 1. prefixo_cnpj → 2. nome_exato → 3. contem_nome
+
+```python
+# CAMPOS CORRETOS:
+id = db.Column(db.Integer, primary_key=True)
+criterio_identificacao = db.Column(db.String(20), nullable=False)  # ✅ prefixo_cnpj, nome_exato, contem_nome
+identificador = db.Column(db.String(255), nullable=False)  # ✅ Valor para identificação
+uf = db.Column(db.String(100), default='TODOS', nullable=False)  # ✅ "TODOS" ou lista de UFs
+dias_uteis_previsto = db.Column(db.Integer, nullable=False)  # ✅ Dias úteis para liberação
+ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+# Métodos úteis:
+# LiberacaoAntecipacao.buscar_configuracao(cnpj, razao_social, uf) - Busca configuração por prioridade
+# LiberacaoAntecipacao.calcular_data_liberacao(data_entrega, dias_uteis) - Calcula data de liberação
+# LiberacaoAntecipacao.extrair_prefixo_cnpj(cnpj) - Extrai os 8 primeiros dígitos do CNPJ
+```
+
+---
+
+## 📋 ContasAReceberAbatimento (app/financeiro/models.py)
+
+### Abatimentos vinculados a Contas a Receber (1:N)
+
+```python
+# CAMPOS CORRETOS:
+id = db.Column(db.Integer, primary_key=True)
+conta_a_receber_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), nullable=False, index=True)
+tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=True)
+motivo = db.Column(db.Text, nullable=True)
+doc_motivo = db.Column(db.String(255), nullable=True)  # ✅ Documento que justifica
+valor = db.Column(db.Float, nullable=False)
+previsto = db.Column(db.Boolean, default=True, nullable=False)  # ✅ Se é previsto ou já realizado
+data = db.Column(db.Date, nullable=True)
+data_vencimento = db.Column(db.Date, nullable=True)
+```
+
+---
+
+## 📋 ContasAReceberSnapshot (app/financeiro/models.py)
+
+### Histórico de alterações em campos vindos do Odoo
+
+```python
+# CAMPOS CORRETOS:
+id = db.Column(db.Integer, primary_key=True)
+conta_a_receber_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), nullable=False, index=True)
+campo = db.Column(db.String(50), nullable=False)  # ✅ Nome do campo alterado
+valor_anterior = db.Column(db.Text, nullable=True)  # ✅ JSON string
+valor_novo = db.Column(db.Text, nullable=True)  # ✅ JSON string
+alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+alterado_por = db.Column(db.String(100), nullable=True)
+odoo_write_date = db.Column(db.DateTime, nullable=True)
+
+# Método útil:
+# ContasAReceberSnapshot.registrar_alteracao(conta, campo, valor_anterior, valor_novo, usuario, odoo_write_date)
+```
+
+---
+
 
 ### ❌ ARQUIVOS OBSOLETOS DA CARTEIRA DE PEDIDOS:
 
