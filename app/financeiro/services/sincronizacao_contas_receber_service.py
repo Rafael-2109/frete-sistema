@@ -19,7 +19,6 @@ from app.financeiro.models import (
     ContasAReceber, ContasAReceberSnapshot, LiberacaoAntecipacao
 )
 from app.monitoramento.models import EntregaMonitorada
-from app.faturamento.models import RelatorioFaturamentoImportado
 
 logger = logging.getLogger(__name__)
 
@@ -353,35 +352,13 @@ class SincronizacaoContasReceberService:
             ).first()
 
             if entrega:
+                # Apenas vincula o relacionamento - dados são obtidos dinamicamente
                 conta.entrega_monitorada_id = entrega.id
-                conta.data_entrega_prevista = entrega.data_entrega_prevista
-                conta.data_hora_entrega_realizada = entrega.data_hora_entrega_realizada
-                conta.status_finalizacao = entrega.status_finalizacao
-                conta.nova_nf = entrega.nova_nf
-                conta.reagendar = entrega.reagendar
-                conta.data_embarque = entrega.data_embarque
-                conta.transportadora = entrega.transportadora
-                conta.vendedor = entrega.vendedor
-                conta.canhoto_arquivo = entrega.canhoto_arquivo
-                conta.nf_cd = entrega.nf_cd
 
-                # Último agendamento
-                if entrega.agendamentos:
-                    ultimo_ag = sorted(entrega.agendamentos, key=lambda ag: ag.criado_em, reverse=True)[0]
-                    conta.ultimo_agendamento_data = ultimo_ag.data_agendada
-                    conta.ultimo_agendamento_status = ultimo_ag.status
-                    conta.ultimo_agendamento_protocolo = ultimo_ag.protocolo_agendamento
-
-                # Calcular liberação antecipação
+                # Calcular liberação antecipação (usa dados do relacionamento)
                 conta.calcular_liberacao_antecipacao()
 
                 self.estatisticas['enriquecidos'] += 1
 
-            # Verificar NF cancelada via FaturamentoProduto
-            nf_cancelada = RelatorioFaturamentoImportado.query.filter_by(
-                numero_nf=conta.titulo_nf,
-                ativo=False
-            ).first()
-
-            if nf_cancelada:
-                conta.nf_cancelada = True
+            # nf_cancelada é obtido dinamicamente via property no modelo
+            # (busca em FaturamentoProduto.status_nf = 'Cancelado')

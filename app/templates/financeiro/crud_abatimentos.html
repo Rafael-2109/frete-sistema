@@ -1,0 +1,466 @@
+{% extends 'base.html' %}
+{% block title %}Abatimentos - Contas a Receber{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4><i class="fas fa-minus-circle text-danger"></i> Abatimentos</h4>
+            <small class="text-muted">Listagem geral de abatimentos cadastrados no sistema</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('financeiro.exportar_abatimentos_excel', **request.args) }}"
+               class="btn btn-success btn-sm"
+               title="Exportar para Excel">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoAbatimento">
+                <i class="fas fa-plus"></i> Novo Abatimento
+            </button>
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">NF</label>
+                    <input type="text" name="titulo_nf" class="form-control form-control-sm"
+                           placeholder="Número NF" value="{{ request.args.get('titulo_nf', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Cliente</label>
+                    <input type="text" name="cliente" class="form-control form-control-sm"
+                           placeholder="Razão Social" value="{{ request.args.get('cliente', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Tipo</label>
+                    <select name="tipo_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        {% for tipo in tipos %}
+                        <option value="{{ tipo.id }}" {% if request.args.get('tipo_id') == tipo.id|string %}selected{% endif %}>{{ tipo.tipo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Previsto</label>
+                    <select name="previsto" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="true" {% if request.args.get('previsto') == 'true' %}selected{% endif %}>Sim</option>
+                        <option value="false" {% if request.args.get('previsto') == 'false' %}selected{% endif %}>Não</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Data De</label>
+                    <input type="date" name="data_de" class="form-control form-control-sm"
+                           value="{{ request.args.get('data_de', '') }}" onchange="this.form.submit()">
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('financeiro.listar_abatimentos') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 50px;">Emp</th>
+                        <th>NF-Parcela</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Motivo</th>
+                        <th>Documento</th>
+                        <th class="text-end">Valor</th>
+                        <th class="text-center">Previsto</th>
+                        <th>Data</th>
+                        <th>Criado Em</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in abatimentos %}
+                    {% set abat = item[0] %}
+                    {% set titulo_nf = item[1] %}
+                    {% set parcela = item[2] %}
+                    {% set cliente = item[3] %}
+                    {% set empresa = item[4] %}
+                    <tr>
+                        <td>
+                            {% if empresa == 1 %}
+                                <span class="badge bg-success">FB</span>
+                            {% elif empresa == 2 %}
+                                <span class="badge bg-primary">SC</span>
+                            {% elif empresa == 3 %}
+                                <span class="badge bg-purple" style="background-color: #6f42c1;">CD</span>
+                            {% else %}
+                                <span class="badge bg-secondary">?</span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ titulo_nf }}</strong>-{{ parcela }}</td>
+                        <td>
+                            <span class="d-inline-block text-truncate" style="max-width: 150px;" title="{{ cliente }}">
+                                {{ cliente or '-' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if abat.tipo %}
+                                <span class="badge bg-warning text-dark">{{ abat.tipo.tipo }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="d-inline-block text-truncate" style="max-width: 150px;" title="{{ abat.motivo }}">
+                                {{ abat.motivo or '-' }}
+                            </span>
+                        </td>
+                        <td>{{ abat.doc_motivo or '-' }}</td>
+                        <td class="text-end">
+                            <span class="text-danger fw-bold">
+                                {{ "R$ {:,.2f}".format(abat.valor).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if abat.previsto %}
+                                <span class="badge bg-info">Sim</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Não</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ abat.data.strftime('%d/%m/%Y') if abat.data else '-' }}</td>
+                        <td>{{ abat.criado_em.strftime('%d/%m/%Y %H:%M') if abat.criado_em else '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                            Nenhum abatimento encontrado
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    {% if paginacao and paginacao.pages > 1 %}
+    <nav class="mt-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="text-muted small">
+                Exibindo {{ (paginacao.page - 1) * 50 + 1 }}
+                – {{ (paginacao.page - 1) * 50 + abatimentos|length }}
+                de {{ paginacao.total }} registros
+            </div>
+            <ul class="pagination pagination-sm mb-0">
+                {% set args_no_page = request.args.copy() %}
+                {% if 'page' in args_no_page %}{% set _ = args_no_page.pop('page') %}{% endif %}
+
+                <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_abatimentos', page=1, **args_no_page) }}">«</a>
+                </li>
+                <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_abatimentos', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+                </li>
+
+                {% for p in range(paginacao.page - 2, paginacao.page + 3) if p > 0 and p <= paginacao.pages %}
+                <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_abatimentos', page=p, **args_no_page) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+
+                <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_abatimentos', page=paginacao.next_num, **args_no_page) }}">›</a>
+                </li>
+                <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('financeiro.listar_abatimentos', page=paginacao.pages, **args_no_page) }}">»</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Modal Novo Abatimento -->
+<div class="modal fade" id="modalNovoAbatimento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Novo Abatimento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNovoAbatimento">
+                    <!-- Busca NF-Parcela -->
+                    <div class="mb-3">
+                        <label class="form-label">NF-Parcela <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" id="buscaNfParcela" class="form-control"
+                                   placeholder="Digite o número da NF..." autocomplete="off">
+                            <button class="btn btn-outline-secondary" type="button" id="btnLimparBusca" title="Limpar">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="resultadosBusca" class="list-group mt-1" style="position: absolute; z-index: 1050; max-height: 200px; overflow-y: auto; display: none;"></div>
+                        <input type="hidden" id="contaId" name="conta_id" required>
+                    </div>
+
+                    <!-- Dados Dinâmicos -->
+                    <div class="row mb-3" id="dadosDinamicos" style="display: none;">
+                        <div class="col-md-8">
+                            <label class="form-label">Cliente</label>
+                            <input type="text" id="clienteDisplay" class="form-control form-control-sm" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Empresa</label>
+                            <input type="text" id="empresaDisplay" class="form-control form-control-sm text-center fw-bold" readonly>
+                        </div>
+                    </div>
+
+                    <!-- Tipo de Abatimento -->
+                    <div class="mb-3">
+                        <label class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select id="tipoAbatimento" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for tipo in tipos %}
+                            <option value="{{ tipo.id }}">{{ tipo.tipo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Valor -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Valor <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" id="valorAbatimento" class="form-control"
+                                       step="0.01" min="0.01" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" id="dataAbatimento" class="form-control">
+                        </div>
+                    </div>
+
+                    <!-- Motivo -->
+                    <div class="mb-3">
+                        <label class="form-label">Motivo</label>
+                        <textarea id="motivoAbatimento" class="form-control" rows="2" placeholder="Descrição do motivo..."></textarea>
+                    </div>
+
+                    <!-- Documento -->
+                    <div class="mb-3">
+                        <label class="form-label">Documento de Referência</label>
+                        <input type="text" id="docMotivoAbatimento" class="form-control" placeholder="Nº Nota, Boleto, etc.">
+                    </div>
+
+                    <!-- Previsto -->
+                    <div class="form-check mb-3">
+                        <input type="checkbox" id="previstoAbatimento" class="form-check-input" checked>
+                        <label class="form-check-label" for="previstoAbatimento">Abatimento Previsto</label>
+                        <small class="form-text text-muted d-block">Marque se o abatimento ainda não foi realizado</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarAbatimento">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const buscaInput = document.getElementById('buscaNfParcela');
+    const resultadosDiv = document.getElementById('resultadosBusca');
+    const contaIdInput = document.getElementById('contaId');
+    const clienteDisplay = document.getElementById('clienteDisplay');
+    const empresaDisplay = document.getElementById('empresaDisplay');
+    const dadosDinamicos = document.getElementById('dadosDinamicos');
+    const btnLimpar = document.getElementById('btnLimparBusca');
+    const btnSalvar = document.getElementById('btnSalvarAbatimento');
+
+    let timeoutBusca = null;
+
+    // Busca de NF-Parcela
+    buscaInput.addEventListener('input', function() {
+        const termo = this.value.trim();
+
+        if (timeoutBusca) clearTimeout(timeoutBusca);
+
+        if (termo.length < 2) {
+            resultadosDiv.style.display = 'none';
+            return;
+        }
+
+        timeoutBusca = setTimeout(() => {
+            fetch(`/financeiro/contas-receber/api/buscar-titulos?q=${encodeURIComponent(termo)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.titulos.length > 0) {
+                        resultadosDiv.innerHTML = data.titulos.map(t => `
+                            <a href="#" class="list-group-item list-group-item-action py-2"
+                               data-id="${t.id}"
+                               data-display="${t.display}"
+                               data-cliente="${t.cliente}"
+                               data-empresa="${t.empresa}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${t.display}</strong>
+                                        <small class="text-muted d-block">${t.cliente}</small>
+                                    </div>
+                                    <span class="badge ${t.empresa === 1 ? 'bg-success' : t.empresa === 2 ? 'bg-primary' : 'bg-purple'}"
+                                          style="${t.empresa === 3 ? 'background-color: #6f42c1;' : ''}">
+                                        ${t.empresa === 1 ? 'FB' : t.empresa === 2 ? 'SC' : 'CD'}
+                                    </span>
+                                </div>
+                            </a>
+                        `).join('');
+                        resultadosDiv.style.display = 'block';
+                    } else {
+                        resultadosDiv.innerHTML = '<div class="list-group-item text-muted">Nenhum título encontrado</div>';
+                        resultadosDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    console.error('Erro na busca:', err);
+                    resultadosDiv.style.display = 'none';
+                });
+        }, 300);
+    });
+
+    // Selecionar resultado
+    resultadosDiv.addEventListener('click', function(e) {
+        e.preventDefault();
+        const item = e.target.closest('.list-group-item');
+        if (!item || !item.dataset.id) return;
+
+        const id = item.dataset.id;
+        const display = item.dataset.display;
+        const cliente = item.dataset.cliente;
+        const empresa = parseInt(item.dataset.empresa);
+
+        contaIdInput.value = id;
+        buscaInput.value = display;
+        buscaInput.disabled = true;
+
+        clienteDisplay.value = cliente;
+        empresaDisplay.value = empresa === 1 ? 'FB' : empresa === 2 ? 'SC' : 'CD';
+        empresaDisplay.className = 'form-control form-control-sm text-center fw-bold text-white ' +
+            (empresa === 1 ? 'bg-success' : empresa === 2 ? 'bg-primary' : '');
+        if (empresa === 3) {
+            empresaDisplay.style.backgroundColor = '#6f42c1';
+        } else {
+            empresaDisplay.style.backgroundColor = '';
+        }
+
+        dadosDinamicos.style.display = 'flex';
+        resultadosDiv.style.display = 'none';
+    });
+
+    // Limpar busca
+    btnLimpar.addEventListener('click', function() {
+        buscaInput.value = '';
+        buscaInput.disabled = false;
+        contaIdInput.value = '';
+        clienteDisplay.value = '';
+        empresaDisplay.value = '';
+        empresaDisplay.className = 'form-control form-control-sm text-center fw-bold';
+        empresaDisplay.style.backgroundColor = '';
+        dadosDinamicos.style.display = 'none';
+        resultadosDiv.style.display = 'none';
+        buscaInput.focus();
+    });
+
+    // Fechar resultados ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#buscaNfParcela') && !e.target.closest('#resultadosBusca')) {
+            resultadosDiv.style.display = 'none';
+        }
+    });
+
+    // Salvar abatimento
+    btnSalvar.addEventListener('click', function() {
+        const contaId = contaIdInput.value;
+        const tipoId = document.getElementById('tipoAbatimento').value;
+        const valor = document.getElementById('valorAbatimento').value;
+
+        if (!contaId) {
+            alert('Selecione uma NF-Parcela');
+            buscaInput.focus();
+            return;
+        }
+        if (!tipoId) {
+            alert('Selecione um tipo de abatimento');
+            return;
+        }
+        if (!valor || parseFloat(valor) <= 0) {
+            alert('Informe um valor válido');
+            return;
+        }
+
+        const dados = {
+            tipo_id: parseInt(tipoId),
+            valor: parseFloat(valor),
+            motivo: document.getElementById('motivoAbatimento').value,
+            doc_motivo: document.getElementById('docMotivoAbatimento').value,
+            data: document.getElementById('dataAbatimento').value || null,
+            previsto: document.getElementById('previstoAbatimento').checked
+        };
+
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+        fetch(`/financeiro/contas-receber/api/${contaId}/abatimentos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                // Fechar modal e recarregar página
+                bootstrap.Modal.getInstance(document.getElementById('modalNovoAbatimento')).hide();
+                location.reload();
+            } else {
+                alert('Erro: ' + (data.error || 'Não foi possível salvar'));
+            }
+        })
+        .catch(err => {
+            console.error('Erro:', err);
+            alert('Erro ao salvar abatimento');
+        })
+        .finally(() => {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar';
+        });
+    });
+
+    // Limpar formulário ao abrir modal
+    document.getElementById('modalNovoAbatimento').addEventListener('show.bs.modal', function() {
+        document.getElementById('formNovoAbatimento').reset();
+        btnLimpar.click();
+    });
+});
+</script>
+{% endblock %}

@@ -2,117 +2,7 @@
 {% block title %}Contas a Receber - Listagem{% endblock %}
 
 {% block extra_css %}
-<style>
-    .filtros-container {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .table-contas {
-        font-size: 0.875rem;
-    }
-
-    .table-contas th {
-        background: #343a40;
-        color: white;
-        font-weight: 500;
-        white-space: nowrap;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .table-contas th a {
-        color: white;
-        text-decoration: none;
-    }
-
-    .table-contas th a:hover {
-        color: #20c997;
-    }
-
-    .badge-empresa {
-        font-size: 0.7rem;
-        padding: 0.25rem 0.5rem;
-    }
-
-    .badge-fb { background-color: #28a745; }
-    .badge-sc { background-color: #007bff; }
-    .badge-cd { background-color: #6f42c1; }
-
-    .badge-status {
-        font-size: 0.75rem;
-    }
-
-    .valor-positivo { color: #28a745; font-weight: 600; }
-    .valor-negativo { color: #dc3545; font-weight: 600; }
-
-    .cliente-col {
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .obs-col {
-        max-width: 150px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .btn-acao {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
-    }
-
-    .table-hover tbody tr:hover {
-        background-color: rgba(0, 123, 255, 0.08);
-    }
-
-    .tr-pago {
-        background-color: rgba(40, 167, 69, 0.1) !important;
-    }
-
-    .tr-vencido {
-        background-color: rgba(220, 53, 69, 0.1) !important;
-    }
-
-    .tr-cancelado {
-        background-color: rgba(108, 117, 125, 0.2) !important;
-        text-decoration: line-through;
-        opacity: 0.7;
-    }
-
-    .info-totais {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .canhoto-icon {
-        color: #28a745;
-    }
-
-    .no-canhoto-icon {
-        color: #dc3545;
-    }
-
-    /* Tooltip customizado para observações */
-    .obs-tooltip {
-        cursor: help;
-    }
-
-    /* Responsividade da tabela */
-    .table-responsive {
-        max-height: 70vh;
-        overflow-y: auto;
-    }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/contas_receber.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -123,141 +13,146 @@
 {% if 'page' in filtros_atuais %}{% set _ = filtros_atuais.pop('page') %}{% endif %}
 
 <div class="container-fluid mt-3">
-    <!-- Cabeçalho -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h4 class="mb-0">
-                <i class="fas fa-file-invoice-dollar text-success"></i>
-                Contas a Receber
-            </h4>
-            <small class="text-muted">
-                <a href="{{ url_for('financeiro.contas_receber_hub') }}">
-                    <i class="fas fa-arrow-left"></i> Voltar ao Hub
-                </a>
-            </small>
+    <!-- Accordion com Filtros e Totais -->
+    <div class="accordion mb-3" id="accordionFiltros">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingFiltros">
+                <button class="accordion-button {% if not request.args.get('empresa') and not request.args.get('titulo_nf') and not request.args.get('status') %}collapsed{% endif %}"
+                        type="button" data-bs-toggle="collapse" data-bs-target="#collapseFiltros"
+                        aria-expanded="{% if request.args.get('empresa') or request.args.get('titulo_nf') or request.args.get('status') %}true{% else %}false{% endif %}"
+                        aria-controls="collapseFiltros">
+                    <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-file-invoice-dollar text-success"></i>
+                            <strong>Contas a Receber</strong>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="badge bg-secondary">{{ paginacao.total | default(0) }} títulos</span>
+                            <span class="badge bg-success fs-6" id="accordion-valor-total">
+                                {{ "R$ {:,.2f}".format(valor_total | default(0)).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                            </span>
+                            <span class="badge bg-danger">{{ vencidos | default(0) }} vencidos</span>
+                            <span class="badge bg-primary">{{ pagos | default(0) }} pagos</span>
+                        </div>
+                    </div>
+                </button>
+            </h2>
+            <div id="collapseFiltros"
+                 class="accordion-collapse collapse {% if request.args.get('empresa') or request.args.get('titulo_nf') or request.args.get('status') %}show{% endif %}"
+                 aria-labelledby="headingFiltros" data-bs-parent="#accordionFiltros">
+                <div class="accordion-body">
+                    <!-- Filtros -->
+                    <form method="GET" id="formFiltros">
+                        <div class="row g-2">
+                            <!-- Linha 1 -->
+                            <div class="col-md-2">
+                                <label class="form-label small">Empresa</label>
+                                <select name="empresa" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">Todas</option>
+                                    <option value="1" {% if request.args.get('empresa') == '1' %}selected{% endif %}>FB (Fábrica)</option>
+                                    <option value="2" {% if request.args.get('empresa') == '2' %}selected{% endif %}>SC (Santa Catarina)</option>
+                                    <option value="3" {% if request.args.get('empresa') == '3' %}selected{% endif %}>CD (Centro Dist.)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">NF</label>
+                                <input type="text" name="titulo_nf" class="form-control form-control-sm"
+                                       placeholder="Número NF" value="{{ request.args.get('titulo_nf', '') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">CNPJ</label>
+                                <input type="text" name="cnpj" class="form-control form-control-sm"
+                                       placeholder="CNPJ" value="{{ request.args.get('cnpj', '') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Cliente</label>
+                                <input type="text" name="cliente" class="form-control form-control-sm"
+                                       placeholder="Razão Social" value="{{ request.args.get('cliente', '') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">UF</label>
+                                <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">Todas</option>
+                                    {% for uf in ufs_disponiveis %}
+                                    <option value="{{ uf }}" {% if request.args.get('uf') == uf %}selected{% endif %}>{{ uf }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Status</label>
+                                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">Todos</option>
+                                    <option value="aberto" {% if request.args.get('status') == 'aberto' %}selected{% endif %}>Em Aberto</option>
+                                    <option value="pago" {% if request.args.get('status') == 'pago' %}selected{% endif %}>Pagos</option>
+                                    <option value="vencido" {% if request.args.get('status') == 'vencido' %}selected{% endif %}>Vencidos</option>
+                                    <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelados</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mt-2">
+                            <!-- Linha 2 -->
+                            <div class="col-md-2">
+                                <label class="form-label small">Vencimento De</label>
+                                <input type="date" name="venc_de" class="form-control form-control-sm"
+                                       value="{{ request.args.get('venc_de', '') }}" onchange="this.form.submit()">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Vencimento Até</label>
+                                <input type="date" name="venc_ate" class="form-control form-control-sm"
+                                       value="{{ request.args.get('venc_ate', '') }}" onchange="this.form.submit()">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Vendedor</label>
+                                <input type="text" name="vendedor" class="form-control form-control-sm"
+                                       placeholder="Vendedor" value="{{ request.args.get('vendedor', '') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Transportadora</label>
+                                <input type="text" name="transportadora" class="form-control form-control-sm"
+                                       placeholder="Transportadora" value="{{ request.args.get('transportadora', '') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Canhoto</label>
+                                <select name="canhoto" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">Todos</option>
+                                    <option value="com" {% if request.args.get('canhoto') == 'com' %}selected{% endif %}>Com Canhoto</option>
+                                    <option value="sem" {% if request.args.get('canhoto') == 'sem' %}selected{% endif %}>Sem Canhoto</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end gap-1">
+                                <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                                    <i class="fas fa-search"></i> Filtrar
+                                </button>
+                                <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <!-- Barra de Ações e Lembretes -->
+    <div class="d-flex justify-content-between align-items-center mb-3" id="barraAcoesLembretes">
+        <!-- Lembretes (lado esquerdo) -->
+        <div class="d-flex align-items-center gap-2" id="lembretesArea" style="display: none;">
+            <strong class="text-warning"><i class="fas fa-bell"></i> Lembretes:</strong>
+            <div class="lembretes-header" id="lembretesContainer"></div>
+        </div>
+        <div class="flex-grow-1" id="semLembretes"></div>
+
+        <!-- Botões de Ação (lado direito) -->
         <div class="d-flex gap-2">
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
             <button class="btn btn-outline-success btn-sm" onclick="exportarExcel()">
                 <i class="fas fa-file-excel"></i> Excel
             </button>
-            <button class="btn btn-outline-primary btn-sm" onclick="sincronizarOdoo()" id="btnSync">
-                <i class="fas fa-sync-alt"></i> Sincronizar
-            </button>
         </div>
-    </div>
-
-    <!-- Totais Resumidos -->
-    <div class="info-totais">
-        <div class="row text-center">
-            <div class="col-md-3">
-                <h5 class="mb-0">{{ paginacao.total | default(0) }}</h5>
-                <small>Total de Títulos</small>
-            </div>
-            <div class="col-md-3">
-                <h5 class="mb-0">R$ {{ "%.2f"|format(valor_total | default(0)) }}</h5>
-                <small>Valor Total (página)</small>
-            </div>
-            <div class="col-md-3">
-                <h5 class="mb-0">{{ vencidos | default(0) }}</h5>
-                <small>Vencidos</small>
-            </div>
-            <div class="col-md-3">
-                <h5 class="mb-0">{{ pagos | default(0) }}</h5>
-                <small>Pagos</small>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filtros -->
-    <div class="filtros-container">
-        <form method="GET" id="formFiltros">
-            <div class="row g-2">
-                <!-- Linha 1 -->
-                <div class="col-md-2">
-                    <label class="form-label small">Empresa</label>
-                    <select name="empresa" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        <option value="1" {% if request.args.get('empresa') == '1' %}selected{% endif %}>FB (Fábrica)</option>
-                        <option value="2" {% if request.args.get('empresa') == '2' %}selected{% endif %}>SC (Santa Catarina)</option>
-                        <option value="3" {% if request.args.get('empresa') == '3' %}selected{% endif %}>CD (Centro Dist.)</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">NF</label>
-                    <input type="text" name="titulo_nf" class="form-control form-control-sm"
-                           placeholder="Número NF" value="{{ request.args.get('titulo_nf', '') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">CNPJ</label>
-                    <input type="text" name="cnpj" class="form-control form-control-sm"
-                           placeholder="CNPJ" value="{{ request.args.get('cnpj', '') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Cliente</label>
-                    <input type="text" name="cliente" class="form-control form-control-sm"
-                           placeholder="Razão Social" value="{{ request.args.get('cliente', '') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">UF</label>
-                    <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        {% for uf in ufs_disponiveis %}
-                        <option value="{{ uf }}" {% if request.args.get('uf') == uf %}selected{% endif %}>{{ uf }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Status</label>
-                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        <option value="aberto" {% if request.args.get('status') == 'aberto' %}selected{% endif %}>Em Aberto</option>
-                        <option value="pago" {% if request.args.get('status') == 'pago' %}selected{% endif %}>Pagos</option>
-                        <option value="vencido" {% if request.args.get('status') == 'vencido' %}selected{% endif %}>Vencidos</option>
-                        <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelados</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="row g-2 mt-2">
-                <!-- Linha 2 -->
-                <div class="col-md-2">
-                    <label class="form-label small">Vencimento De</label>
-                    <input type="date" name="venc_de" class="form-control form-control-sm"
-                           value="{{ request.args.get('venc_de', '') }}" onchange="this.form.submit()">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Vencimento Até</label>
-                    <input type="date" name="venc_ate" class="form-control form-control-sm"
-                           value="{{ request.args.get('venc_ate', '') }}" onchange="this.form.submit()">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Vendedor</label>
-                    <input type="text" name="vendedor" class="form-control form-control-sm"
-                           placeholder="Vendedor" value="{{ request.args.get('vendedor', '') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Transportadora</label>
-                    <input type="text" name="transportadora" class="form-control form-control-sm"
-                           placeholder="Transportadora" value="{{ request.args.get('transportadora', '') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Canhoto</label>
-                    <select name="canhoto" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        <option value="com" {% if request.args.get('canhoto') == 'com' %}selected{% endif %}>Com Canhoto</option>
-                        <option value="sem" {% if request.args.get('canhoto') == 'sem' %}selected{% endif %}>Sem Canhoto</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end gap-1">
-                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
-                        <i class="fas fa-search"></i> Filtrar
-                    </button>
-                    <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="fas fa-times"></i>
-                    </a>
-                </div>
-            </div>
-        </form>
     </div>
 
     <!-- Tabela -->
@@ -267,7 +162,7 @@
                 <tr>
                     <!-- Empresa -->
                     {% set next_dir = 'desc' if sort == 'empresa' and direction == 'asc' else 'asc' %}
-                    <th style="width: 70px;">
+                    <th class="col-mini">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='empresa', direction=next_dir, **filtros_atuais) }}">
                             Emp {% if sort == 'empresa' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
@@ -281,68 +176,86 @@
                         </a>
                     </th>
 
-                    <!-- CNPJ -->
-                    <th style="width: 130px;">CNPJ</th>
-
                     <!-- Cliente -->
                     {% set next_dir = 'desc' if sort == 'raz_social_red' and direction == 'asc' else 'asc' %}
-                    <th>
+                    <th style="width: 200px;">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='raz_social_red', direction=next_dir, **filtros_atuais) }}">
                             Cliente {% if sort == 'raz_social_red' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
                     </th>
 
                     <!-- UF -->
-                    {% set next_dir = 'desc' if sort == 'uf_cliente' and direction == 'asc' else 'asc' %}
-                    <th style="width: 50px;">
-                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='uf_cliente', direction=next_dir, **filtros_atuais) }}">
-                            UF {% if sort == 'uf_cliente' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
+                    <th class="col-mini text-center">UF</th>
+
+                    <!-- Tipo Título -->
+                    <th style="width: 80px;">Tipo</th>
+
+                    <!-- Emissão -->
+                    {% set next_dir = 'desc' if sort == 'emissao' and direction == 'asc' else 'asc' %}
+                    <th class="col-data">
+                        <a href="{{ url_for('financeiro.listar_contas_receber', sort='emissao', direction=next_dir, **filtros_atuais) }}">
+                            Emiss {% if sort == 'emissao' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
                     </th>
 
                     <!-- Vencimento -->
                     {% set next_dir = 'desc' if sort == 'vencimento' and direction == 'asc' else 'asc' %}
-                    <th style="width: 95px;">
+                    <th class="col-data">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='vencimento', direction=next_dir, **filtros_atuais) }}">
                             Venc {% if sort == 'vencimento' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
                     </th>
 
+                    <!-- Liberação Antecipação -->
+                    <th class="col-data">Lib.Ant</th>
+
                     <!-- Valor -->
                     {% set next_dir = 'desc' if sort == 'valor_titulo' and direction == 'asc' else 'asc' %}
-                    <th style="width: 100px;">
+                    <th style="width: 90px;">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='valor_titulo', direction=next_dir, **filtros_atuais) }}">
                             Valor {% if sort == 'valor_titulo' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
                     </th>
 
-                    <!-- Tipo -->
-                    <th style="width: 100px;">Tipo</th>
+                    <!-- Abatimento -->
+                    <th style="width: 80px;">Abat.</th>
+
+                    <!-- Saldo (NOVA COLUNA) -->
+                    <th style="width: 90px;">Saldo</th>
+
+                    <!-- Confirmação -->
+                    <th style="width: 80px;">Confirm.</th>
+
+                    <!-- Ação Necessária -->
+                    <th style="width: 100px;">Ação</th>
 
                     <!-- Status Entrega -->
-                    <th style="width: 90px;">Entrega</th>
+                    <th style="width: 85px;">Entrega</th>
 
-                    <!-- Agendamento -->
-                    <th style="width: 90px;">Agend.</th>
+                    <!-- Previsão de Entrega -->
+                    <th style="width: 85px;">Prev.Ent</th>
 
                     <!-- Canhoto -->
-                    <th style="width: 50px;" class="text-center">📄</th>
-
-                    <!-- Vendedor -->
-                    <th style="width: 100px;">Vendedor</th>
-
-                    <!-- Transportadora -->
-                    <th style="width: 120px;">Transp.</th>
+                    <th class="col-mini text-center">📄</th>
 
                     <!-- Status Pago -->
-                    <th style="width: 70px;" class="text-center">Status</th>
+                    <th style="width: 65px;" class="text-center">Status</th>
                 </tr>
             </thead>
             <tbody>
                 {% for conta in contas %}
-                <tr class="{% if conta.parcela_paga %}tr-pago{% elif conta.nf_cancelada %}tr-cancelado{% elif conta.vencimento and conta.vencimento < hoje %}tr-vencido{% endif %}">
+                {# Dados dinâmicos de EntregaMonitorada #}
+                {% set em = conta.entrega_monitorada %}
+                {% set ultimo_ag = em.agendamentos|sort(attribute='criado_em', reverse=true)|first if em and em.agendamentos else none %}
+                {# Calcular abatimentos e saldo #}
+                {% set total_abat = (conta.desconto or 0) + (conta.abatimentos.all()|sum(attribute='valor') if conta.abatimentos else 0) %}
+                {% set saldo = (conta.valor_titulo or 0) - total_abat %}
+
+                <tr class="{% if conta.parcela_paga %}tr-pago{% elif (em and em.status_finalizacao == 'Cancelada') or conta.nf_cancelada %}tr-cancelado{% elif conta.vencimento and conta.vencimento < hoje %}tr-vencido{% endif %}"
+                    data-conta-id="{{ conta.id }}">
+
                     <!-- Empresa -->
-                    <td>
+                    <td class="text-center">
                         {% if conta.empresa == 1 %}
                             <span class="badge badge-empresa badge-fb">FB</span>
                         {% elif conta.empresa == 2 %}
@@ -354,19 +267,55 @@
                         {% endif %}
                     </td>
 
-                    <!-- NF-Parcela -->
+                    <!-- NF-Parcela com Alerta e Info Extra -->
                     <td>
-                        <strong>{{ conta.titulo_nf }}</strong>-{{ conta.parcela }}
+                        <div class="d-flex align-items-center gap-1">
+                            <!-- Alerta Toggle - Mais evidente -->
+                            <span class="alerta-toggle {% if conta.alerta %}alerta-on{% else %}alerta-off{% endif %}"
+                                  onclick="toggleAlerta({{ conta.id }})"
+                                  title="{% if conta.alerta %}Alerta ATIVO - Clique para desativar{% else %}Sem alerta - Clique para ativar{% endif %}"
+                                  id="alerta-{{ conta.id }}">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </span>
+                            <div>
+                                <a href="javascript:void(0)" onclick="abrirModalSnapshots({{ conta.id }})"
+                                   class="titulo-nf-link" title="Ver histórico de alterações">
+                                    <strong>{{ conta.titulo_nf }}</strong>-{{ conta.parcela }}
+                                </a>
+                                <!-- Info extra abaixo da NF -->
+                                <div class="nf-info-extra">
+                                    {% if em and em.nova_nf %}
+                                        <span class="badge bg-info" title="Substituída por NF {{ em.nova_nf }}">Nova: {{ em.nova_nf }}</span>
+                                    {% endif %}
+                                    {% if conta.nf_cancelada or (em and em.status_finalizacao == 'Cancelada') %}
+                                        <span class="badge bg-danger">CANC</span>
+                                    {% endif %}
+                                    {% if em and em.nf_cd %}
+                                        <span class="badge bg-purple" style="background-color: #6f42c1;">CD</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
                     </td>
 
-                    <!-- CNPJ -->
+                    <!-- Cliente com Observação -->
                     <td>
-                        <small>{{ conta.cnpj or '-' }}</small>
-                    </td>
-
-                    <!-- Cliente -->
-                    <td class="cliente-col" title="{{ conta.raz_social or '' }}">
-                        {{ conta.raz_social_red or conta.raz_social or '-' }}
+                        <div class="cliente-col"
+                             title="{{ conta.raz_social or '' }}"
+                             data-bs-toggle="tooltip">
+                            {{ conta.raz_social_red or conta.raz_social or '-' }}
+                        </div>
+                        <!-- Observação clicável abaixo -->
+                        <div class="obs-clicavel small text-muted"
+                             onclick="editarObservacao({{ conta.id }}, '{{ (conta.observacao or '')|e }}')"
+                             title="Clique para editar observação">
+                            {% if conta.observacao %}
+                                <i class="fas fa-sticky-note text-warning"></i>
+                                {{ conta.observacao[:30] }}{% if conta.observacao|length > 30 %}...{% endif %}
+                            {% else %}
+                                <i class="fas fa-plus-circle text-secondary"></i> <small>Add obs</small>
+                            {% endif %}
+                        </div>
                     </td>
 
                     <!-- UF -->
@@ -374,8 +323,27 @@
                         {{ conta.uf_cliente or '-' }}
                     </td>
 
-                    <!-- Vencimento -->
+                    <!-- Tipo Título -->
                     <td>
+                        <span class="tipo-titulo" title="{{ conta.tipo_titulo or '-' }}">
+                            {{ (conta.tipo_titulo or '-')[:12] }}{% if conta.tipo_titulo and conta.tipo_titulo|length > 12 %}..{% endif %}
+                        </span>
+                    </td>
+
+                    <!-- Emissão com tooltip data_embarque -->
+                    <td class="text-center">
+                        {% if conta.emissao %}
+                            <span title="{% if em and em.data_embarque %}Embarque: {{ em.data_embarque.strftime('%d/%m/%Y') }}{% else %}Sem data de embarque{% endif %}"
+                                  data-bs-toggle="tooltip">
+                                {{ conta.emissao.strftime('%d/%m/%Y') }}
+                            </span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <!-- Vencimento -->
+                    <td class="text-center">
                         {% if conta.vencimento %}
                             {% if conta.vencimento < hoje and not conta.parcela_paga %}
                                 <span class="text-danger fw-bold">{{ conta.vencimento.strftime('%d/%m/%Y') }}</span>
@@ -387,82 +355,192 @@
                         {% endif %}
                     </td>
 
-                    <!-- Valor -->
-                    <td class="text-end">
-                        {% if conta.valor_titulo %}
-                            <span class="{% if conta.valor_titulo > 0 %}valor-positivo{% else %}valor-negativo{% endif %}">
-                                R$ {{ "%.2f"|format(conta.valor_titulo) }}
-                            </span>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-
-                    <!-- Tipo -->
-                    <td class="obs-col" title="{{ conta.tipo_titulo or '' }}">
-                        <small>{{ conta.tipo_titulo or '-' }}</small>
-                    </td>
-
-                    <!-- Status Entrega -->
-                    <td>
-                        {% if conta.status_finalizacao %}
-                            <span class="badge {% if conta.status_finalizacao == 'ENTREGUE' %}bg-success{% elif conta.status_finalizacao == 'DEVOLVIDO' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">
-                                {{ conta.status_finalizacao[:10] }}
-                            </span>
-                        {% elif conta.data_hora_entrega_realizada %}
-                            <span class="badge bg-success badge-status">ENTREGUE</span>
-                        {% else %}
-                            <span class="badge bg-secondary badge-status">-</span>
-                        {% endif %}
-                    </td>
-
-                    <!-- Agendamento -->
-                    <td>
-                        {% if conta.ultimo_agendamento_data %}
-                            <small>{{ conta.ultimo_agendamento_data.strftime('%d/%m') }}</small>
-                            {% if conta.ultimo_agendamento_status %}
-                                <br><span class="badge bg-info badge-status">{{ conta.ultimo_agendamento_status[:6] }}</span>
-                            {% endif %}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-
-                    <!-- Canhoto -->
+                    <!-- Liberação Antecipação -->
                     <td class="text-center">
-                        {% if conta.canhoto_arquivo %}
-                            <i class="fas fa-file-alt canhoto-icon" title="Canhoto disponível"></i>
+                        {% if conta.liberacao_prevista_antecipacao %}
+                            {{ conta.liberacao_prevista_antecipacao.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <!-- Valor -->
+                    <td class="text-end valor-cell">
+                        {% if conta.valor_titulo %}
+                            <span class="valor-display {% if conta.valor_titulo > 0 %}valor-positivo{% else %}valor-negativo{% endif %}"
+                                  onclick="abrirModalComparativo({{ conta.id }})"
+                                  style="cursor: pointer;"
+                                  title="Clique para ver abatimentos"
+                                  id="valor-{{ conta.id }}">
+                                {{ "R$ {:,.2f}".format(conta.valor_titulo).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Abatimento (usa modal comparativo) -->
+                    <td class="text-end valor-cell">
+                        <span class="abat-display {% if total_abat > 0 %}abat-valor{% else %}abat-zero{% endif %}"
+                              onclick="abrirModalComparativo({{ conta.id }})"
+                              title="{% if total_abat > 0 %}Ver abatimentos (Sistema × Odoo){% else %}Ver/Adicionar abatimentos{% endif %}"
+                              id="abat-cell-{{ conta.id }}">
+                            {% if total_abat > 0 %}
+                                {{ "R$ {:,.2f}".format(total_abat).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                            {% else %}
+                                <i class="fas fa-plus-circle"></i>
+                            {% endif %}
+                        </span>
+                    </td>
+
+                    <!-- Saldo (NOVA COLUNA) -->
+                    <td class="text-end valor-cell">
+                        <span class="saldo-display {% if saldo > 0 %}saldo-positivo{% elif saldo < 0 %}saldo-negativo{% else %}saldo-zero{% endif %}"
+                              id="saldo-{{ conta.id }}">
+                            {{ "R$ {:,.2f}".format(saldo).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                        </span>
+                    </td>
+
+                    <!-- Confirmação -->
+                    <td class="text-center">
+                        <span class="confirmacao-display {% if conta.confirmacao_tipo_id %}confirmacao-ok{% else %}confirmacao-aberto{% endif %}"
+                              onclick="abrirModalConfirmacao({{ conta.id }})"
+                              title="{% if conta.confirmacao_tipo %}{{ conta.confirmacao_tipo.tipo }}{% if conta.confirmado_por %} - por {{ conta.confirmado_por }}{% endif %}{% else %}Clique para confirmar{% endif %}"
+                              id="conf-cell-{{ conta.id }}">
+                            {% if conta.confirmacao_tipo %}
+                                {{ conta.confirmacao_tipo.tipo[:12] }}{% if conta.confirmacao_tipo.tipo|length > 12 %}..{% endif %}
+                            {% else %}
+                                ABERTO
+                            {% endif %}
+                        </span>
+                    </td>
+
+                    <!-- Ação Necessária (COM TEXTO) -->
+                    <td class="text-center">
+                        <span class="acao-display {% if conta.acao_necessaria_tipo_id %}acao-ativa{% else %}acao-vazia{% endif %}"
+                              onclick="abrirModalAcao({{ conta.id }})"
+                              title="{% if conta.obs_acao_necessaria %}{{ conta.obs_acao_necessaria }}{% elif conta.acao_necessaria_tipo %}{{ conta.acao_necessaria_tipo.tipo }}{% else %}Adicionar ação{% endif %}"
+                              data-bs-toggle="tooltip"
+                              id="acao-cell-{{ conta.id }}">
+                            {% if conta.acao_necessaria_tipo %}
+                                {{ conta.acao_necessaria_tipo.tipo[:10] }}{% if conta.acao_necessaria_tipo.tipo|length > 10 %}..{% endif %}
+                                {% if conta.data_lembrete %}
+                                    <small class="d-block text-muted">{{ conta.data_lembrete.strftime('%d/%m') }}</small>
+                                {% endif %}
+                            {% else %}
+                                <i class="fas fa-plus text-muted"></i>
+                            {% endif %}
+                        </span>
+                    </td>
+
+                    <!-- Status Entrega (dinâmico de EntregaMonitorada) + Pendência Financeira -->
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            {% if em and em.status_finalizacao == 'Entregue' %}
+                                <span class="badge bg-success badge-status" title="Entregue em {{ em.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') if em.data_hora_entrega_realizada else '-' }}">
+                                    {{ em.data_hora_entrega_realizada.strftime('%d/%m') if em.data_hora_entrega_realizada else 'Entregue' }}
+                                </span>
+                            {% elif em and em.status_finalizacao %}
+                                <span class="badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% else %}bg-warning text-dark{% endif %} badge-status">
+                                    {{ em.status_finalizacao[:10] }}
+                                </span>
+                            {% elif em and em.data_hora_entrega_realizada %}
+                                <span class="badge bg-success badge-status" title="Entregue em {{ em.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') }}">
+                                    {{ em.data_hora_entrega_realizada.strftime('%d/%m') }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary badge-status">-</span>
+                            {% endif %}
+
+                            <!-- Reagendar -->
+                            {% if em and em.reagendar %}
+                                <span class="badge bg-warning text-dark badge-status">Reag</span>
+                            {% endif %}
+
+                            <!-- Botão Pendência Financeira -->
+                            {% set tem_pendencia_aberta = em and em.pendencias_financeiras|selectattr('respondida_em', 'none')|list %}
+                            <button type="button"
+                                    class="btn btn-xs {% if tem_pendencia_aberta %}btn-danger{% else %}btn-outline-secondary{% endif %} btn-pendencia"
+                                    data-conta-id="{{ conta.id }}"
+                                    data-titulo-nf="{{ conta.titulo_nf }}"
+                                    onclick="abrirModalPendencia(this.dataset.contaId, this.dataset.tituloNf)"
+                                    title="{% if tem_pendencia_aberta %}Pendência aberta{% else %}Registrar pendência{% endif %}">
+                                <i class="fas fa-truck"></i>
+                            </button>
+                        </div>
+                    </td>
+
+                    <!-- Previsão de Entrega (com lógica de cores) -->
+                    <td>
+                        {% if ultimo_ag and ultimo_ag.data_agendada %}
+                            {# Tem agendamento #}
+                            {% if ultimo_ag.status == 'confirmado' %}
+                                <span class="previsao-confirmado"
+                                      title="Agend: {{ ultimo_ag.data_agendada.strftime('%d/%m/%Y') }} | Status: {{ ultimo_ag.status }} | Protocolo: {{ ultimo_ag.protocolo_agendamento or '-' }}"
+                                      data-bs-toggle="tooltip">
+                                    Agend. {{ ultimo_ag.data_agendada.strftime('%d/%m') }}
+                                </span>
+                            {% else %}
+                                <span class="previsao-agendado"
+                                      title="Agend: {{ ultimo_ag.data_agendada.strftime('%d/%m/%Y') }} | Status: {{ ultimo_ag.status }} | Protocolo: {{ ultimo_ag.protocolo_agendamento or '-' }}"
+                                      data-bs-toggle="tooltip">
+                                    Agend. {{ ultimo_ag.data_agendada.strftime('%d/%m') }}
+                                </span>
+                            {% endif %}
+                        {% elif em and em.data_entrega_prevista %}
+                            {# Só tem previsão #}
+                            <span class="previsao-prevista"
+                                  title="Previsão de entrega"
+                                  data-bs-toggle="tooltip">
+                                Prev. {{ em.data_entrega_prevista.strftime('%d/%m') }}
+                            </span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <!-- Canhoto (dinâmico de EntregaMonitorada) -->
+                    <td class="text-center">
+                        {% if em and em.possui_canhoto %}
+                            <a href="{{ url_for('monitoramento.visualizar_canhoto', id=em.id) }}"
+                               target="_blank"
+                               class="canhoto-icon"
+                               title="Visualizar canhoto">
+                                <i class="fas fa-file-alt"></i>
+                            </a>
                         {% else %}
                             <i class="fas fa-times no-canhoto-icon" title="Sem canhoto"></i>
                         {% endif %}
                     </td>
 
-                    <!-- Vendedor -->
-                    <td class="obs-col" title="{{ conta.vendedor or '' }}">
-                        <small>{{ conta.vendedor or '-' }}</small>
-                    </td>
-
-                    <!-- Transportadora -->
-                    <td class="obs-col" title="{{ conta.transportadora or '' }}">
-                        <small>{{ conta.transportadora or '-' }}</small>
-                    </td>
-
-                    <!-- Status Pago -->
+                    <!-- Status Pago + Abatimentos (abre modal comparativo) -->
                     <td class="text-center">
-                        {% if conta.nf_cancelada %}
+                        {% if conta.nf_cancelada or (em and em.status_finalizacao == 'Cancelada') %}
                             <span class="badge bg-secondary">CANC</span>
                         {% elif conta.parcela_paga %}
-                            <span class="badge bg-success">PAGO</span>
+                            <span class="badge bg-success badge-clicavel" style="cursor: pointer;"
+                                  onclick="abrirModalComparativo({{ conta.id }})"
+                                  title="Ver abatimentos e baixas">
+                                PAGO <i class="fas fa-balance-scale ms-1"></i>
+                            </span>
                         {% elif conta.vencimento and conta.vencimento < hoje %}
-                            <span class="badge bg-danger">VENC</span>
+                            <span class="badge bg-danger badge-clicavel" style="cursor: pointer;"
+                                  onclick="abrirModalComparativo({{ conta.id }})"
+                                  title="Ver abatimentos e baixas">
+                                VENC <i class="fas fa-balance-scale ms-1"></i>
+                            </span>
                         {% else %}
-                            <span class="badge bg-warning text-dark">ABERTO</span>
+                            <span class="badge bg-warning text-dark badge-clicavel" style="cursor: pointer;"
+                                  onclick="abrirModalComparativo({{ conta.id }})"
+                                  title="Ver abatimentos e baixas">
+                                ABERTO <i class="fas fa-balance-scale ms-1"></i>
+                            </span>
                         {% endif %}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="14" class="text-center text-muted py-4">
+                    <td colspan="16" class="text-center text-muted py-4">
                         <i class="fas fa-inbox fa-2x mb-2"></i>
                         <p class="mb-0">Nenhuma conta encontrada com os filtros aplicados.</p>
                     </td>
@@ -516,72 +594,408 @@
     </nav>
     {% endif %}
 </div>
+
+<!-- Modal Abatimentos antigo REMOVIDO em 2025-11-28 -->
+<!-- Agora usa modalComparativo (Sistema × Odoo) -->
+
+<!-- Modal Confirmação -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1" data-bs-backdrop="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-check-circle text-success"></i> Confirmação de Entrega</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="fecharModalConfirmacao()"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formConfirmacao">
+                    <input type="hidden" id="conf-conta-id">
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Confirmação</label>
+                        <select class="form-select" id="conf-tipo"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Forma de Confirmação</label>
+                        <select class="form-select" id="conf-forma"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observações da Confirmação</label>
+                        <textarea class="form-control" id="conf-obs" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3 text-muted small">
+                        <span id="conf-info-log"></span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="fecharModalConfirmacao()">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarConfirmacao()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ação Necessária -->
+<div class="modal fade" id="modalAcao" tabindex="-1" data-bs-backdrop="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-danger"></i> Ação Necessária</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="fecharModalAcao()"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAcao">
+                    <input type="hidden" id="acao-conta-id">
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Ação</label>
+                        <select class="form-select" id="acao-tipo"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observações</label>
+                        <textarea class="form-control" id="acao-obs" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Data Lembrete</label>
+                        <input type="date" class="form-control" id="acao-lembrete">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" onclick="limparAcao()">
+                    <i class="fas fa-trash"></i> Limpar
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="fecharModalAcao()">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="salvarAcao()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Snapshots (Histórico de Alterações) -->
+<div class="modal fade" id="modalSnapshots" tabindex="-1" data-bs-backdrop="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-history text-info"></i> Histórico de Alterações - NF <span id="snap-nf"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="snapshots-loading" class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                    <p class="text-muted mt-2">Carregando histórico...</p>
+                </div>
+                <div id="snapshots-empty" class="text-center py-4" style="display: none;">
+                    <i class="fas fa-inbox fa-2x text-muted"></i>
+                    <p class="text-muted mt-2">Nenhuma alteração registrada para este título.</p>
+                </div>
+                <div id="snapshots-content" style="display: none;">
+                    <table class="table table-sm table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Campo</th>
+                                <th>Valor Anterior</th>
+                                <th>Valor Novo</th>
+                                <th>Alterado Por</th>
+                            </tr>
+                        </thead>
+                        <tbody id="snapshots-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pendência Financeira -->
+<div class="modal fade" id="modalPendencia" tabindex="-1" data-bs-backdrop="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-comment-dollar text-danger"></i> Pendência Financeira - NF <span id="pend-nf"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="pend-conta-id">
+
+                <!-- Lista de pendências existentes -->
+                <div id="pend-lista" class="mb-3">
+                    <h6 class="text-muted">Pendências Anteriores</h6>
+                    <div id="pend-lista-container"></div>
+                </div>
+
+                <hr>
+
+                <!-- Formulário para nova pendência -->
+                <h6><i class="fas fa-plus-circle text-success"></i> Nova Pendência para Logística</h6>
+                <div class="mb-3">
+                    <label class="form-label">Observação (o que a logística precisa verificar?)</label>
+                    <textarea class="form-control" id="pend-observacao" rows="3"
+                              placeholder="Descreva a pendência que a logística precisa resolver..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="enviarPendencia()">
+                    <i class="fas fa-paper-plane"></i> Enviar para Logística
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL COMPARATIVO: Sistema × Odoo             -->
+<!-- Sistema de Dupla Conferência                  -->
+<!-- ============================================== -->
+<div class="modal fade" id="modalComparativo" tabindex="-1" data-bs-backdrop="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white py-2">
+                <h5 class="modal-title">
+                    <i class="fas fa-balance-scale"></i>
+                    ABATIMENTOS - NF <span id="comp-nf"></span>
+                    <span id="comp-status-badge" class="badge ms-2">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+
+                <!-- DADOS DO TÍTULO -->
+                <div class="row mb-2 g-2 small">
+                    <div class="col-md-3">
+                        <span class="text-muted">Cliente:</span>
+                        <strong id="comp-cliente">-</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="text-muted">CNPJ:</span>
+                        <span id="comp-cnpj">-</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="text-muted">Valor Original:</span>
+                        <strong class="text-primary" id="comp-valor-original">R$ 0,00</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="text-muted">Desconto:</span>
+                        <span class="text-warning" id="comp-desconto">R$ 0,00</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="text-muted">Valor Título:</span>
+                        <strong class="text-success" id="comp-valor-titulo">R$ 0,00</strong>
+                    </div>
+                </div>
+
+                <!-- CARD COMPARATIVO (Resumo Visual) -->
+                <div class="card mb-3" id="card-comparativo">
+                    <div class="card-header py-2">
+                        <strong><i class="fas fa-chart-bar"></i> Comparativo Sistema × Odoo</strong>
+                        <span id="comp-icon" class="float-end fs-4">-</span>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <small class="text-muted">Abatimentos Sistema</small>
+                                <h5 class="mb-0 text-primary" id="comp-total-sistema">R$ 0,00</h5>
+                                <small class="text-muted" id="comp-qtd-sistema">(0 itens)</small>
+                            </div>
+                            <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                <i class="fas fa-arrows-alt-h text-muted fs-4"></i>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Abatimentos Odoo</small>
+                                <h5 class="mb-0 text-info" id="comp-total-odoo">R$ 0,00</h5>
+                                <small class="text-muted" id="comp-qtd-odoo">(0 itens)</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted">Diferença</small>
+                                <h5 class="mb-0" id="comp-diferenca">R$ 0,00</h5>
+                                <small class="text-muted">Tolerância: R$ 0,02</small>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Pagamentos Odoo</small>
+                                <h5 class="mb-0 text-success" id="comp-total-pagamentos">R$ 0,00</h5>
+                                <small class="text-muted" id="comp-qtd-pagamentos">(0 itens)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <!-- COLUNA ESQUERDA: ABATIMENTOS DO SISTEMA -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                                <strong><i class="fas fa-edit"></i> Abatimentos do Sistema</strong>
+                                <button class="btn btn-success btn-sm" id="btn-toggle-novo-abat" onclick="toggleNovoAbatimento()">
+                                    <i class="fas fa-plus"></i> Novo
+                                </button>
+                            </div>
+
+                            <!-- FORMULÁRIO NOVO ABATIMENTO (inicialmente oculto) -->
+                            <div id="painel-novo-abatimento" class="bg-light border-bottom p-2" style="display: none;">
+                                <form id="formNovoAbatimentoComp" onsubmit="criarNovoAbatimento(event); return false;">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-3">
+                                            <label class="form-label small mb-0">Tipo</label>
+                                            <select class="form-select form-select-sm" id="novo-abat-tipo" required>
+                                                <option value="">Tipo...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small mb-0">Valor</label>
+                                            <input type="number" step="0.01" class="form-control form-control-sm" id="novo-abat-valor" placeholder="0,00" required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small mb-0">Previsto</label>
+                                            <select class="form-select form-select-sm" id="novo-abat-previsto">
+                                                <option value="true">Sim</option>
+                                                <option value="false">Não</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small mb-0">Data</label>
+                                            <input type="date" class="form-control form-control-sm" id="novo-abat-data">
+                                        </div>
+                                        <div class="col-md-1">
+                                            <button type="submit" class="btn btn-success btn-sm w-100" id="btn-criar-abatimento">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-md-6">
+                                            <input type="text" class="form-control form-control-sm" id="novo-abat-motivo" placeholder="Motivo (opcional)">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <input type="text" class="form-control form-control-sm" id="novo-abat-doc" placeholder="Documento referência (opcional)">
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="card-body p-0" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0 small">
+                                    <thead class="table-secondary sticky-top">
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Motivo</th>
+                                            <th class="text-end">Valor</th>
+                                            <th class="text-center">Status</th>
+                                            <th class="text-center">Vínculo Odoo</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-abatimentos-sistema">
+                                        <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer py-1 small">
+                                <span class="badge bg-warning text-dark" id="badge-pendentes">0</span> Pendentes
+                                <span class="badge bg-success ms-2" id="badge-vinculados">0</span> Vinculados
+                                <span class="badge bg-danger ms-2" id="badge-nao-encontrados">0</span> Não Encontrados
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUNA DIREITA: BAIXAS DO ODOO -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                                <strong><i class="fas fa-cloud-download-alt"></i> Baixas do Odoo</strong>
+                                <button class="btn btn-outline-primary btn-sm" onclick="sincronizarBaixasOdoo()" id="btn-sync-odoo">
+                                    <i class="fas fa-sync-alt"></i> Sincronizar
+                                </button>
+                            </div>
+
+                            <!-- Sub-abas: Abatimentos vs Pagamentos -->
+                            <ul class="nav nav-tabs nav-fill" id="tabsOdoo" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active py-1 small" id="tab-odoo-abatimentos" data-bs-toggle="tab" data-bs-target="#panel-odoo-abatimentos" type="button">
+                                        <i class="fas fa-receipt"></i> Abatimentos <span class="badge bg-info" id="badge-odoo-abat">0</span>
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link py-1 small" id="tab-odoo-pagamentos" data-bs-toggle="tab" data-bs-target="#panel-odoo-pagamentos" type="button">
+                                        <i class="fas fa-money-bill-wave"></i> Pagamentos <span class="badge bg-success" id="badge-odoo-pag">0</span>
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content" style="max-height: 350px; overflow-y: auto;">
+                                <!-- ABA: Abatimentos Odoo -->
+                                <div class="tab-pane fade show active" id="panel-odoo-abatimentos" role="tabpanel">
+                                    <table class="table table-sm table-hover mb-0 small">
+                                        <thead class="table-secondary sticky-top">
+                                            <tr>
+                                                <th>Documento</th>
+                                                <th>Tipo</th>
+                                                <th>Ref</th>
+                                                <th class="text-end">Valor</th>
+                                                <th>Data</th>
+                                                <th class="text-center">Vínculo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-odoo-abatimentos">
+                                            <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- ABA: Pagamentos Odoo -->
+                                <div class="tab-pane fade" id="panel-odoo-pagamentos" role="tabpanel">
+                                    <table class="table table-sm table-hover mb-0 small">
+                                        <thead class="table-secondary sticky-top">
+                                            <tr>
+                                                <th>Documento</th>
+                                                <th>Tipo</th>
+                                                <th>Ref</th>
+                                                <th class="text-end">Valor</th>
+                                                <th>Data</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-odoo-pagamentos">
+                                            <tr><td colspan="5" class="text-center text-muted">Carregando...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-info btn-sm" onclick="vincularPendentesAuto()">
+                    <i class="fas fa-magic"></i> Vincular Automaticamente
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/contas_receber.js') }}"></script>
+<script src="{{ url_for('static', filename='js/contas_receber_comparativo.js') }}"></script>
 <script>
-function exportarExcel() {
-    // Construir URL com filtros atuais
-    const params = new URLSearchParams(window.location.search);
-    const url = "{{ url_for('financeiro.exportar_contas_receber_excel') }}" +
-                (params.toString() ? '?' + params.toString() : '');
-
-    // Criar link e baixar
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'contas_receber.xlsx';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    toastr.info('Gerando arquivo Excel...', 'Aguarde');
-}
-
-function sincronizarOdoo() {
-    const btn = document.getElementById('btnSync');
-    const textoOriginal = btn.innerHTML;
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
-
-    fetch("{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            toastr.success(
-                `Novos: ${data.novos} | Atualizados: ${data.atualizados} | Enriquecidos: ${data.enriquecidos}`,
-                'Sincronização Concluída!'
-            );
-            // Recarregar página para mostrar dados atualizados
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            toastr.error(data.error || 'Erro desconhecido', 'Erro na Sincronização');
-        }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        toastr.error('Erro ao conectar com o servidor', 'Erro');
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.innerHTML = textoOriginal;
-    });
-}
-
-// Auto submit ao pressionar Enter nos campos de texto
-document.querySelectorAll('#formFiltros input[type="text"]').forEach(input => {
-    input.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('formFiltros').submit();
-        }
-    });
-});
+// Inicializar URLs para o JS
+initContasReceber(
+    "{{ url_for('financeiro.listar_contas_receber') }}",
+    "{{ url_for('financeiro.exportar_contas_receber_excel') }}",
+    "{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}"
+);
 </script>
 {% endblock %}

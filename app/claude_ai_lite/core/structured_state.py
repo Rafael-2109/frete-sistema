@@ -701,17 +701,26 @@ class EstadoManager:
             if filtros_aplicados.get("num_pedido"):
                 pedido_extraido = filtros_aplicados["num_pedido"]
 
-        # v5: Atualiza REFERENCIA como PONTE de contexto
-        # Isso é CRÍTICO para follow-ups funcionarem!
-        EstadoManager.definir_referencia(
-            usuario_id,
-            pedido=pedido_extraido,
-            cliente=cliente_extraido,
-            # Campos de PONTE v5
-            cliente_atual=cliente_extraido,
-            dominio_atual=dominio or "carteira",
-            consulta_ativa=True  # Sinaliza que há contexto válido
-        )
+        # v5.1: Atualiza REFERENCIA como PONTE de contexto COMPLETA
+        # Agora também preserva cod_produto, cod_uf, rota dos filtros
+        ref_update = {
+            'pedido': pedido_extraido,
+            'cliente': cliente_extraido,
+            'cliente_atual': cliente_extraido,
+            'dominio_atual': dominio or "carteira",
+            'consulta_ativa': True
+        }
+        
+        # Herda campos adicionais dos filtros aplicados
+        if filtros_aplicados:
+            if filtros_aplicados.get('cod_produto'):
+                ref_update['produto'] = filtros_aplicados['cod_produto']
+            if filtros_aplicados.get('cod_uf'):
+                ref_update['cod_uf'] = filtros_aplicados['cod_uf']
+            if filtros_aplicados.get('rota'):
+                ref_update['rota'] = filtros_aplicados['rota']
+        
+        EstadoManager.definir_referencia(usuario_id, **ref_update)
 
         e.atualizado_em = datetime.now().isoformat()
 

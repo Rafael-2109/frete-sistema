@@ -100,6 +100,23 @@ class BaseCapability(ABC):
                 return campo, str(valor)
         return None, None
 
+    def extrair_todos_valores_busca(self, entidades: Dict) -> Dict[str, str]:
+        """
+        Extrai TODOS os campos de busca presentes nas entidades.
+        
+        Diferente de extrair_valor_busca que retorna apenas o primeiro,
+        este método retorna todos os campos válidos para filtros combinados.
+        
+        Returns:
+            Dict com {campo: valor} para todos os campos com valor válido
+        """
+        resultado = {}
+        for campo in self.CAMPOS_BUSCA:
+            valor = entidades.get(campo)
+            if valor and str(valor).lower() not in ("null", "none", ""):
+                resultado[campo] = str(valor)
+        return resultado
+
     def validar_campo(self, campo: str) -> bool:
         """Valida se campo de busca é aceito."""
         return campo in self.CAMPOS_BUSCA
@@ -161,8 +178,10 @@ class BaseCapability(ABC):
                         logger.info(f"[FILTRO] Estruturado aplicado: {campo} {operador} {valor}")
 
             except Exception as e:
-                logger.warning(f"[FILTRO] Erro ao aplicar filtro {filtro.get('nome', filtro.get('campo'))}: {e}")
-                # Continua sem aplicar este filtro
+                nome_filtro = filtro.get('nome', filtro.get('campo', 'desconhecido'))
+                logger.error(f"[FILTRO] Erro ao aplicar filtro '{nome_filtro}': {e}")
+                # Propaga erro - melhor falhar do que retornar dados incorretos
+                raise ValueError(f"Filtro '{nome_filtro}' falhou: {e}")
 
         return query
 

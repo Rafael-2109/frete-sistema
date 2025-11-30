@@ -1,5 +1,5 @@
 """
-Orquestrador do Claude AI Lite v5.7.
+Orquestrador do Claude AI Lite v6.0.
 
 Coordena o fluxo completo:
 1. Obter estado estruturado (CONDICIONAL via roteamento)
@@ -13,7 +13,7 @@ Coordena o fluxo completo:
 9. Gerar resposta
 10. Registrar na memória COM CONTEXTO COMPLETO
 
-FILOSOFIA v5.7:
+FILOSOFIA v6.0:
 - O Claude é o CÉREBRO - planeja E executa
 - AgentPlanner substitui find_capability() -> cap.executar()
 - Suporta múltiplas etapas (até 10 com justificativa)
@@ -23,10 +23,12 @@ FILOSOFIA v5.7:
 - Fluxo flexível com roteamento (Claude decide etapas)
 - Registro de contexto completo (filtros, domínio, capacidade)
 - Fallback de herança trata CLARIFICAÇÃO
-- NOVO v5.7: HISTÓRICO INTELIGENTE v2!
-  - Busca por TEMPO (últimos 30min) ao invés de quantidade
-  - Agrupa por INTERAÇÃO (nunca corta conversa pela metade)
-  - Detecta INÍCIO DE CONVERSA por gap de 10min de inatividade
+- Histórico INTELIGENTE v2 (tempo/interação/gap)
+- NOVO v6.0: CLARIFICAÇÃO ENRIQUECIDA!
+  - Detecta O QUE está faltando (cliente, pedido, produto, data)
+  - Busca sugestões REAIS do sistema
+  - Oferece opções clicáveis/numeradas ao usuário
+  - Usa histórico de conversas para contextualizar
 
 Criado em: 24/11/2025
 Atualizado: 26/11/2025 - AgentPlanner v5.0, removido ConversationContext
@@ -37,9 +39,11 @@ Atualizado: 27/11/2025 - v5.4: "detalhar" removido do follow_up, preserva tipo/t
 Atualizado: 27/11/2025 - v5.5: Fallback herança trata clarificação → domínio anterior
 Atualizado: 27/11/2025 - v5.6: Histórico da conversa passado para o extrator
 Atualizado: 27/11/2025 - v5.7: Histórico INTELIGENTE v2 (tempo/interação/gap)
+Atualizado: 28/11/2025 - v6.0: Clarificação ENRIQUECIDA (clarification_enricher.py)
 """
 
 import logging
+import re
 from typing import Dict, Any, Optional, List, Callable, Tuple
 
 logger = logging.getLogger(__name__)
@@ -229,7 +233,10 @@ def processar_consulta(
         if heranca_aplicada:
             dominio = intencao.get("dominio", dominio)
             intencao_tipo = intencao.get("intencao", intencao_tipo)
-            logger.debug(f"[ORCHESTRATOR] Pós-herança: dominio={dominio}, intencao={intencao_tipo}")
+            # Log INFO (não debug) com valores das entidades críticas
+            entidades_criticas = {k: v for k, v in entidades.items() 
+                                  if k in ['raz_social_red', 'num_pedido', 'cod_produto']}
+            logger.info(f"[ORCHESTRATOR] Herança aplicada: {entidades_criticas}")
 
     # 5.2 Atualiza estado estruturado com entidades extraídas
     if usuario_id and entidades:
@@ -304,9 +311,15 @@ def processar_consulta(
         )
 
         # 7.0 NOVO: Verifica se precisa reprocessar (dados não correspondem ao contexto)
-        if resposta.startswith('[REPROCESSAR]'):
-            problema = resposta.replace('[REPROCESSAR]', '').replace('[/REPROCESSAR]', '')
+        if '[REPROCESSAR]' in resposta:
+            match = re.search(r'\[REPROCESSAR](.*?)\[/REPROCESSAR]', resposta, re.DOTALL)
+            if match:
+                problema = match.group(1).strip()
+            else:
+                problema = resposta.replace('[REPROCESSAR]', '').replace('[/REPROCESSAR]', '').strip()
+
             logger.warning(f"[ORCHESTRATOR] Reprocessando: {problema}")
+
 
             # Tenta novamente com direcionamento mais específico
             entidades_forcadas = entidades.copy()
@@ -475,27 +488,62 @@ def _verificar_aprendizado(consulta: str, usuario_id: int, usuario: str) -> Opti
 
 
 def _processar_clarificacao(intencao: Dict, usuario_id: int) -> str:
-    """Processa situações onde o Claude detectou ambiguidade."""
+    """
+    Processa situações onde o Claude detectou ambiguidade.
+
+    v6.0: ENRIQUECIDO - Busca dados reais do sistema para oferecer opções úteis.
+
+    ANTES (v5.x):
+    - Pergunta genérica + opções vazias
+    - Usuário precisava digitar tudo
+
+    AGORA (v6.0):
+    - Detecta O QUE está faltando (cliente, pedido, produto, data)
+    - Busca sugestões REAIS do sistema
+    - Oferece opções clicáveis/numeradas
+    - Usa histórico de conversas para contextualizar
+    """
     from .structured_state import EstadoManager
+    from .clarification_enricher import gerar_resposta_clarificacao_enriquecida
 
     ambiguidade = intencao.get('ambiguidade', {})
     entidades = intencao.get('entidades', {})
+    pergunta_original = ambiguidade.get('pergunta', 'Poderia esclarecer sua solicitação?')
 
-    pergunta = ambiguidade.get('pergunta', 'Poderia esclarecer sua solicitação?')
-    opcoes = ambiguidade.get('opcoes', [])
+    # v6.0: Gera resposta ENRIQUECIDA com dados reais
+    try:
+        # Busca contexto de memória para ajudar
+        contexto_conversa = None
+        if usuario_id:
+            from ..memory import MemoryService
+            contexto_conversa = MemoryService.buscar_historico_para_extrator(usuario_id)
 
-    resposta = f"🤔 **Preciso de uma clarificação:**\n\n{pergunta}"
+        resposta = gerar_resposta_clarificacao_enriquecida(
+            ambiguidade=ambiguidade,
+            entidades=entidades,
+            usuario_id=usuario_id,
+            contexto_conversa=contexto_conversa
+        )
 
-    if opcoes:
-        resposta += "\n\n**Opções:**"
-        for i, opcao in enumerate(opcoes, 1):
-            resposta += f"\n{i}. {opcao}"
+        logger.info(f"[ORCHESTRATOR] Clarificação ENRIQUECIDA: {pergunta_original[:50]}...")
 
-    if entidades:
-        resposta += "\n\n📋 **O que já entendi:**"
-        for chave, valor in list(entidades.items())[:5]:
-            if not chave.startswith('_'):
-                resposta += f"\n- {chave}: {valor}"
+    except Exception as e:
+        # Fallback para comportamento antigo se enriquecimento falhar
+        logger.warning(f"[ORCHESTRATOR] Fallback clarificação (erro: {e})")
+        opcoes = ambiguidade.get('opcoes', [])
+
+        resposta = f"🤔 **Preciso de uma clarificação:**\n\n{pergunta_original}"
+
+        if opcoes:
+            resposta += "\n\n**Opções:**"
+            for i, opcao in enumerate(opcoes, 1):
+                resposta += f"\n{i}. {opcao}"
+
+        if entidades:
+            resposta += "\n\n📋 **O que já entendi:**"
+            for chave, valor in list(entidades.items())[:5]:
+                if not chave.startswith('_'):
+                    resposta += f"\n- {chave}: {valor}"
 
     # Atualiza estado para aguardar clarificação
     if usuario_id:
@@ -503,7 +551,6 @@ def _processar_clarificacao(intencao: Dict, usuario_id: int) -> str:
         estado.estado_dialogo = 'aguardando_clarificacao'
         estado.acao_atual = 'clarificacao'
 
-    logger.info(f"[ORCHESTRATOR] Solicitando clarificação: {pergunta}")
     return resposta
 
 
@@ -1041,76 +1088,102 @@ def _aplicar_fallback_heranca(
     intencao: Dict
 ) -> Tuple[Dict, Dict, bool]:
     """
-    Fallback de herança v5.5 - Garante que contexto seja herdado.
-
-    Se o Claude do extrator NÃO incluiu raz_social_red nas entidades,
-    mas existe REFERENCIA.cliente_atual no estado E consulta_ativa=true,
-    então herdamos automaticamente.
-
-    v5.5: Agora também aplica para domínio "clarificacao"!
-    Isso evita que o Claude pergunte "de qual cliente?" quando
-    já existe um cliente_atual válido no contexto.
-    Quando herda em clarificação, MUDA o domínio para o domínio anterior!
-
-    Isso é um SAFETY NET caso o Claude "esqueça" de herdar.
-
+    Fallback de herança COMPLETO v2 - herda TODAS as entidades relevantes do contexto.
+    
+    MUDANÇAS v2:
+    - Herda não apenas raz_social_red, mas também num_pedido, cod_produto, etc.
+    - Usa filtros_aplicados da última consulta como fonte secundária
+    - Detecta mudança explícita de assunto para NÃO herdar
+    
     Args:
         usuario_id: ID do usuário
         entidades: Dict de entidades extraídas pelo Claude
-        dominio: Domínio da consulta
-        intencao: Dict completo da intenção (será modificado se necessário)
-
+        dominio: Domínio da consulta atual
+        intencao: Dict completo da intenção
+    
     Returns:
-        Tuple (entidades, intencao_modificada, heranca_aplicada)
-        - entidades: Dict de entidades (possivelmente enriquecido com herança)
-        - intencao: Dict de intenção (possivelmente com domínio alterado)
-        - heranca_aplicada: True se herança foi aplicada
+        Tuple (entidades_enriquecidas, intencao_ajustada, heranca_aplicada)
     """
+    from .structured_state import EstadoManager
+    
     heranca_aplicada = False
-
+    entidades_modificadas = entidades.copy()
+    intencao_modificada = intencao
+    
     try:
-        from .structured_state import EstadoManager
-
         estado = EstadoManager.obter(usuario_id)
         ref = estado.referencia
-
-        # Verifica condições para herança:
-        # 1. consulta_ativa = True (há contexto válido)
-        # 2. cliente_atual existe
-        # 3. raz_social_red NÃO está nas entidades (Claude não herdou)
-        # 4. Domínio é compatível OU é clarificação (v5.5)
-        dominios_compativeis = ['carteira', 'geral', 'clarificacao', None, '']
-
-        if (ref.get('consulta_ativa') and
-            ref.get('cliente_atual') and
-            not entidades.get('raz_social_red') and
-            dominio in dominios_compativeis):
-
-            # Aplica herança
-            entidades = entidades.copy()  # Não modifica original
-            entidades['raz_social_red'] = ref['cliente_atual']
-            heranca_aplicada = True
-
-            # v5.5: Se era clarificação, muda para o domínio anterior
-            # Isso evita que o handler de clarificação seja chamado
-            if dominio == 'clarificacao':
-                dominio_anterior = ref.get('dominio_atual', 'carteira')
-                intencao = intencao.copy()
-                intencao['dominio'] = dominio_anterior
-                # Se a intenção era pedir clarificação, muda para consulta genérica
-                if intencao.get('intencao') in ['pedir_cliente', 'pedir_clarificacao', 'clarificacao']:
-                    intencao['intencao'] = 'consultar_pendentes'  # Intenção padrão
-
-                logger.info(f"[ORCHESTRATOR] FALLBACK HERANÇA (clarificacao→{dominio_anterior}): "
-                           f"herdou raz_social_red='{ref['cliente_atual']}' do contexto")
-            else:
-                logger.info(f"[ORCHESTRATOR] FALLBACK HERANÇA: "
-                           f"herdou raz_social_red='{ref['cliente_atual']}' do contexto")
-
-        return entidades, intencao, heranca_aplicada
-
+        consulta = estado.consulta or {}
+        filtros_anteriores = consulta.get('filtros_aplicados', {})
+        
+        # Domínios onde herança faz sentido
+        dominios_compativeis = ['carteira', 'estoque', 'geral', 'clarificacao', 'follow_up', None, '']
+        
+        # Só aplica herança se:
+        # 1. Há contexto ativo
+        # 2. Domínio é compatível
+        # 3. Usuário NÃO mudou explicitamente de assunto
+        if not ref.get('consulta_ativa'):
+            return entidades, intencao, False
+        
+        if dominio not in dominios_compativeis:
+            return entidades, intencao, False
+        
+        # Detecta se usuário mudou de assunto explicitamente
+        # Se entidades tem um valor DIFERENTE do contexto, é mudança intencional
+        mudou_cliente = (
+            entidades.get('raz_social_red') and 
+            ref.get('cliente_atual') and 
+            entidades['raz_social_red'].upper() != ref['cliente_atual'].upper()
+        )
+        mudou_pedido = (
+            entidades.get('num_pedido') and 
+            ref.get('pedido') and 
+            entidades['num_pedido'] != ref['pedido']
+        )
+        
+        if mudou_cliente or mudou_pedido:
+            # Usuário mudou de assunto intencionalmente - atualiza referência, não herda
+            logger.info(f"[HERANCA] Mudança de assunto detectada: cliente={mudou_cliente}, pedido={mudou_pedido}")
+            return entidades, intencao, False
+        
+        # Lista de campos para herdar (prioridade: ref > filtros_anteriores)
+        campos_heranca = [
+            ('raz_social_red', ref.get('cliente_atual') or filtros_anteriores.get('raz_social_red')),
+            ('num_pedido', ref.get('pedido') or filtros_anteriores.get('num_pedido')),
+            ('cod_produto', ref.get('produto') or filtros_anteriores.get('cod_produto')),
+            ('cod_uf', filtros_anteriores.get('cod_uf')),
+            ('rota', filtros_anteriores.get('rota')),
+            ('vendedor', filtros_anteriores.get('vendedor')),
+        ]
+        
+        # Aplica herança para campos ausentes
+        campos_herdados = []
+        for campo, valor in campos_heranca:
+            if valor and not entidades_modificadas.get(campo):
+                entidades_modificadas[campo] = valor
+                campos_herdados.append(f"{campo}={valor}")
+                heranca_aplicada = True
+        
+        if campos_herdados:
+            logger.info(f"[HERANCA] Campos herdados: {', '.join(campos_herdados)}")
+        
+        # Se era clarificação mas agora tem contexto, muda domínio
+        if heranca_aplicada and dominio == 'clarificacao':
+            dominio_anterior = ref.get('dominio_atual', 'carteira')
+            intencao_modificada = intencao.copy()
+            intencao_modificada['dominio'] = dominio_anterior
+            
+            # Ajusta intenção se era pedido de clarificação
+            if intencao_modificada.get('intencao') in ['pedir_cliente', 'pedir_clarificacao', 'clarificacao']:
+                intencao_modificada['intencao'] = 'consultar_pendentes'
+            
+            logger.info(f"[HERANCA] Clarificação resolvida: domínio mudou para '{dominio_anterior}'")
+        
+        return entidades_modificadas, intencao_modificada, heranca_aplicada
+    
     except Exception as e:
-        logger.warning(f"[ORCHESTRATOR] Erro no fallback de herança: {e}")
+        logger.warning(f"[HERANCA] Erro no fallback: {e}")
         return entidades, intencao, False
 
 

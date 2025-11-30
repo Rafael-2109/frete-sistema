@@ -112,7 +112,7 @@ class AnalisarEstoqueClienteCapability(BaseCapability):
                         "num_pedido": item.num_pedido,
                         "cliente": item.raz_social_red,
                         "cnpj": item.cnpj_cpf,
-                        "expedicao": item.expedicao,
+                        "data_entrega": item.data_entrega_pedido,  # CarteiraPrincipal usa data_entrega_pedido
                         "produtos": []
                     }
 

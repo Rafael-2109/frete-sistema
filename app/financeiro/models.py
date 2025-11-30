@@ -55,6 +55,80 @@ class ContasAReceberTipo(db.Model):
         }
 
 
+class MapeamentoTipoOdoo(db.Model):
+    """
+    Mapeia tipos de abatimento do SISTEMA para tipos de baixa do ODOO.
+
+    Relacionamento N:1 - Múltiplos tipos do sistema podem mapear para 1 tipo Odoo.
+    Isso permite que o sistema tenha granularidade maior que o Odoo.
+
+    Tipos Odoo (baseado em account.partial.reconcile):
+    - pagamento: payment_id IS NOT NULL (entrada de dinheiro)
+    - devolucao: move_type='out_refund' (nota de crédito de cliente)
+    - abatimento_acordo: move_type='entry' + journal PACORD (acordos comerciais)
+    - abatimento_devolucao: move_type='entry' + journal PDEVOL (abatimentos de devolução)
+    - abatimento_st: move_type='entry' + ref contém "ST" (substituição tributária)
+    - abatimento_outros: move_type='entry' + outros casos
+    """
+    __tablename__ = 'mapeamento_tipo_odoo'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para ContasAReceberTipo (tipo do sistema)
+    tipo_sistema_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=False, index=True)
+
+    # Tipo correspondente no Odoo
+    # Valores: pagamento, devolucao, abatimento_acordo, abatimento_devolucao, abatimento_st, abatimento_outros
+    tipo_odoo = db.Column(db.String(50), nullable=False, index=True)
+
+    # Prioridade de match (menor = maior prioridade)
+    prioridade = db.Column(db.Integer, default=100)
+
+    # Tolerância de valor para match (padrão 0.02)
+    tolerancia_valor = db.Column(db.Float, default=0.02)
+
+    # Controle
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)
+
+    # Relacionamento
+    tipo_sistema = relationship('ContasAReceberTipo', foreign_keys=[tipo_sistema_id])
+
+    __table_args__ = (
+        UniqueConstraint('tipo_sistema_id', 'tipo_odoo', name='uq_mapeamento_tipo_sistema_odoo'),
+        Index('idx_mapeamento_tipo_odoo', 'tipo_odoo'),
+    )
+
+    def __repr__(self):
+        return f'<MapeamentoTipoOdoo {self.tipo_sistema_id} -> {self.tipo_odoo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'tipo_sistema_id': self.tipo_sistema_id,
+            'tipo_sistema': self.tipo_sistema.tipo if self.tipo_sistema else None,
+            'tipo_odoo': self.tipo_odoo,
+            'prioridade': self.prioridade,
+            'tolerancia_valor': self.tolerancia_valor,
+            'ativo': self.ativo
+        }
+
+    @staticmethod
+    def get_tipos_odoo_disponiveis():
+        """Retorna lista de tipos Odoo disponíveis para mapeamento"""
+        return [
+            {'valor': 'pagamento', 'label': 'Pagamento (Entrada de Dinheiro)', 'descricao': 'payment_id IS NOT NULL'},
+            {'valor': 'devolucao', 'label': 'Devolução (Nota de Crédito)', 'descricao': 'move_type=out_refund'},
+            {'valor': 'abatimento_acordo', 'label': 'Abatimento - Acordo', 'descricao': 'journal PACORD'},
+            {'valor': 'abatimento_devolucao', 'label': 'Abatimento - Devolução', 'descricao': 'journal PDEVOL'},
+            {'valor': 'abatimento_st', 'label': 'Abatimento - ST', 'descricao': 'ref contém "ST"'},
+            {'valor': 'abatimento_outros', 'label': 'Abatimento - Outros', 'descricao': 'outros casos'},
+        ]
+
+
 class LiberacaoAntecipacao(db.Model):
     """
     Configuração de prazos de liberação para antecipação de recebíveis.
@@ -286,6 +360,7 @@ class ContasAReceber(db.Model):
     confirmacao_tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=True)
     forma_confirmacao_tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_tipos.id'), nullable=True)
     data_confirmacao = db.Column(db.DateTime, nullable=True)  # Log automático
+    confirmado_por = db.Column(db.String(100), nullable=True)  # Quem confirmou (para fins financeiros)
     confirmacao_entrega = db.Column(db.Text, nullable=True)
 
     # Observações e alertas
@@ -298,31 +373,17 @@ class ContasAReceber(db.Model):
     data_lembrete = db.Column(db.Date, nullable=True)
 
     # =========================================================================
-    # CAMPOS ENRIQUECIDOS (via EntregaMonitorada e FaturamentoProduto)
+    # CAMPOS DE RELACIONAMENTO (dados obtidos dinamicamente)
     # =========================================================================
 
-    # EntregaMonitorada
+    # EntregaMonitorada - FK para obter dados dinamicamente
+    # Campos disponíveis via relacionamento entrega_monitorada:
+    # - status_finalizacao, data_hora_entrega_realizada, nova_nf, reagendar
+    # - data_embarque, transportadora, vendedor, canhoto_arquivo, nf_cd
+    # - data_entrega_prevista, agendamentos (último agendamento)
     entrega_monitorada_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=True)
-    data_entrega_prevista = db.Column(db.Date, nullable=True)
-    data_hora_entrega_realizada = db.Column(db.DateTime, nullable=True)
-    status_finalizacao = db.Column(db.String(50), nullable=True)
-    nova_nf = db.Column(db.String(20), nullable=True)
-    reagendar = db.Column(db.Boolean, default=False)
-    data_embarque = db.Column(db.Date, nullable=True)
-    transportadora = db.Column(db.String(255), nullable=True)
-    vendedor = db.Column(db.String(100), nullable=True)
-    canhoto_arquivo = db.Column(db.String(500), nullable=True)  # Caminho do canhoto
 
-    # AgendamentoEntrega (último)
-    ultimo_agendamento_data = db.Column(db.Date, nullable=True)
-    ultimo_agendamento_status = db.Column(db.String(20), nullable=True)
-    ultimo_agendamento_protocolo = db.Column(db.String(100), nullable=True)
-
-    # FaturamentoProduto
-    nf_cancelada = db.Column(db.Boolean, default=False, nullable=False)  # Se FaturamentoProduto.ativo = False
-
-    # NF no CD (EntregaMonitorada)
-    nf_cd = db.Column(db.Boolean, default=False, nullable=False)  # Indica se a NF está no CD
+    # FaturamentoProduto - nf_cancelada é obtido dinamicamente via property
 
     # =========================================================================
     # AUDITORIA E CONTROLE
@@ -379,6 +440,21 @@ class ContasAReceber(db.Model):
         }
         return nomes.get(self.empresa, f'Empresa {self.empresa}')
 
+    @property
+    def nf_cancelada(self) -> bool:
+        """
+        Verifica dinamicamente se a NF está cancelada via FaturamentoProduto.
+        Retorna True se qualquer produto da NF tiver status_nf = 'Cancelado'.
+        """
+        from app.faturamento.models import FaturamentoProduto
+
+        existe_cancelado = FaturamentoProduto.query.filter_by(
+            numero_nf=self.titulo_nf,
+            status_nf='Cancelado'
+        ).first()
+
+        return existe_cancelado is not None
+
     def calcular_valor_titulo(self) -> float:
         """
         Calcula o valor do título: valor_original - desconto - SUM(abatimentos)
@@ -399,9 +475,14 @@ class ContasAReceber(db.Model):
     def calcular_liberacao_antecipacao(self):
         """
         Calcula a data de liberação prevista para antecipação.
-        Usa LiberacaoAntecipacao + data_hora_entrega_realizada.
+        Usa LiberacaoAntecipacao + data_hora_entrega_realizada (via entrega_monitorada).
         """
-        if not self.data_hora_entrega_realizada:
+        # Obtém data_hora_entrega_realizada via relacionamento
+        data_entrega = None
+        if self.entrega_monitorada:
+            data_entrega = self.entrega_monitorada.data_hora_entrega_realizada
+
+        if not data_entrega:
             self.liberacao_prevista_antecipacao = None
             return
 
@@ -413,13 +494,16 @@ class ContasAReceber(db.Model):
 
         if config:
             self.liberacao_prevista_antecipacao = LiberacaoAntecipacao.calcular_data_liberacao(
-                self.data_hora_entrega_realizada,
+                data_entrega,
                 config.dias_uteis_previsto
             )
         else:
             self.liberacao_prevista_antecipacao = None
 
     def to_dict(self):
+        # Dados do relacionamento EntregaMonitorada
+        em = self.entrega_monitorada
+
         return {
             'id': self.id,
             'empresa': self.empresa,
@@ -443,26 +527,26 @@ class ContasAReceber(db.Model):
             'confirmacao_tipo': self.confirmacao_tipo.tipo if self.confirmacao_tipo else None,
             'forma_confirmacao_tipo': self.forma_confirmacao_tipo.tipo if self.forma_confirmacao_tipo else None,
             'data_confirmacao': self.data_confirmacao.isoformat() if self.data_confirmacao else None,
+            'confirmado_por': self.confirmado_por,
             'confirmacao_entrega': self.confirmacao_entrega,
             'observacao': self.observacao,
             'alerta': self.alerta,
             'acao_necessaria_tipo': self.acao_necessaria_tipo.tipo if self.acao_necessaria_tipo else None,
             'obs_acao_necessaria': self.obs_acao_necessaria,
             'data_lembrete': self.data_lembrete.isoformat() if self.data_lembrete else None,
-            'data_entrega_prevista': self.data_entrega_prevista.isoformat() if self.data_entrega_prevista else None,
-            'data_hora_entrega_realizada': self.data_hora_entrega_realizada.isoformat() if self.data_hora_entrega_realizada else None,
-            'status_finalizacao': self.status_finalizacao,
-            'nova_nf': self.nova_nf,
-            'reagendar': self.reagendar,
-            'data_embarque': self.data_embarque.isoformat() if self.data_embarque else None,
-            'transportadora': self.transportadora,
-            'vendedor': self.vendedor,
-            'canhoto_arquivo': self.canhoto_arquivo,
-            'ultimo_agendamento_data': self.ultimo_agendamento_data.isoformat() if self.ultimo_agendamento_data else None,
-            'ultimo_agendamento_status': self.ultimo_agendamento_status,
-            'ultimo_agendamento_protocolo': self.ultimo_agendamento_protocolo,
+            # Campos obtidos via relacionamento entrega_monitorada
+            'entrega_monitorada_id': self.entrega_monitorada_id,
+            'data_entrega_prevista': em.data_entrega_prevista.isoformat() if em and em.data_entrega_prevista else None,
+            'data_hora_entrega_realizada': em.data_hora_entrega_realizada.isoformat() if em and em.data_hora_entrega_realizada else None,
+            'status_finalizacao': em.status_finalizacao if em else None,
+            'nova_nf': em.nova_nf if em else None,
+            'reagendar': em.reagendar if em else False,
+            'data_embarque': em.data_embarque.isoformat() if em and em.data_embarque else None,
+            'transportadora': em.transportadora if em else None,
+            'vendedor': em.vendedor if em else None,
+            'canhoto_arquivo': em.canhoto_arquivo if em else None,
+            'nf_cd': em.nf_cd if em else False,
             'nf_cancelada': self.nf_cancelada,
-            'nf_cd': self.nf_cd,
             'total_abatimentos': sum(ab.valor or 0 for ab in self.abatimentos.all())
         }
 
@@ -471,6 +555,11 @@ class ContasAReceberAbatimento(db.Model):
     """
     Abatimentos vinculados a Contas a Receber.
     Relacionamento: 1 ContasAReceber : N Abatimentos
+
+    Sistema de dupla conferência:
+    - Registros criados manualmente pelo usuário no sistema (mais detalhados)
+    - Podem ser vinculados a reconciliações do Odoo (fonte oficial)
+    - Flag de comparação indica se totais batem (tolerância 0.02)
     """
     __tablename__ = 'contas_a_receber_abatimento'
 
@@ -494,29 +583,81 @@ class ContasAReceberAbatimento(db.Model):
     data = db.Column(db.Date, nullable=True)
     data_vencimento = db.Column(db.Date, nullable=True)
 
-    # Auditoria
+    # =========================================================================
+    # VÍNCULO COM ODOO (Dupla Conferência)
+    # =========================================================================
+
+    # FK para reconciliação do Odoo (opcional - vinculação automática ou manual)
+    reconciliacao_odoo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_reconciliacao.id'), nullable=True, index=True)
+
+    # Status de vinculação com Odoo
+    # PENDENTE: Aguardando vinculação (ainda não sincronizou ou não encontrou match)
+    # VINCULADO: Vinculado a uma reconciliação do Odoo
+    # NAO_ENCONTRADO: Sincronizou mas não encontrou match no Odoo
+    # NAO_APLICAVEL: Não precisa vincular ao Odoo (ex: abatimentos locais)
+    status_vinculacao = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
+
+    # Data/hora da última tentativa de vinculação
+    ultima_tentativa_vinculacao = db.Column(db.DateTime, nullable=True)
+
+    # =========================================================================
+    # AUDITORIA
+    # =========================================================================
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100), nullable=True)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
-    # Relacionamento
+    # Relacionamentos
     tipo = relationship('ContasAReceberTipo', foreign_keys=[tipo_id])
+    reconciliacao_odoo = relationship('ContasAReceberReconciliacao', foreign_keys=[reconciliacao_odoo_id],
+                                       backref=db.backref('abatimentos_vinculados', lazy='dynamic'))
+
+    __table_args__ = (
+        Index('idx_abatimento_status_vinculacao', 'status_vinculacao'),
+        Index('idx_abatimento_reconciliacao', 'reconciliacao_odoo_id'),
+    )
 
     def __repr__(self):
-        return f'<ContasAReceberAbatimento {self.id} - R$ {self.valor}>'
+        return f'<ContasAReceberAbatimento {self.id} - R$ {self.valor} ({self.status_vinculacao})>'
+
+    @property
+    def status_vinculacao_display(self) -> str:
+        """Retorna o status de vinculação formatado para exibição"""
+        status_map = {
+            'PENDENTE': '⏳ Pendente',
+            'VINCULADO': '✅ Vinculado',
+            'NAO_ENCONTRADO': '❌ Não Encontrado',
+            'NAO_APLICAVEL': '➖ N/A'
+        }
+        return status_map.get(self.status_vinculacao, self.status_vinculacao)
+
+    @property
+    def documento_odoo(self) -> str:
+        """Retorna o documento do Odoo vinculado (se houver)"""
+        if self.reconciliacao_odoo:
+            return self.reconciliacao_odoo.credit_move_name or '-'
+        return '-'
 
     def to_dict(self):
         return {
             'id': self.id,
             'conta_a_receber_id': self.conta_a_receber_id,
+            'tipo_id': self.tipo_id,
             'tipo': self.tipo.tipo if self.tipo else None,
             'motivo': self.motivo,
             'doc_motivo': self.doc_motivo,
             'valor': self.valor,
             'previsto': self.previsto,
             'data': self.data.isoformat() if self.data else None,
-            'data_vencimento': self.data_vencimento.isoformat() if self.data_vencimento else None
+            'data_vencimento': self.data_vencimento.isoformat() if self.data_vencimento else None,
+            # Campos de vinculação Odoo
+            'reconciliacao_odoo_id': self.reconciliacao_odoo_id,
+            'status_vinculacao': self.status_vinculacao,
+            'status_vinculacao_display': self.status_vinculacao_display,
+            'documento_odoo': self.documento_odoo,
+            'ultima_tentativa_vinculacao': self.ultima_tentativa_vinculacao.isoformat() if self.ultima_tentativa_vinculacao else None,
         }
 
 
@@ -596,6 +737,178 @@ class ContasAReceberSnapshot(db.Model):
             'valor_novo': self.valor_novo,
             'alterado_em': self.alterado_em.isoformat() if self.alterado_em else None,
             'alterado_por': self.alterado_por
+        }
+
+
+class ContasAReceberReconciliacao(db.Model):
+    """
+    Espelha account.partial.reconcile do Odoo (VERSÃO SIMPLIFICADA).
+
+    Esta é a TABELA CHAVE do mecanismo de baixa. Cada registro representa uma
+    "ligação" entre uma linha de DÉBITO (título) e uma linha de CRÉDITO (pagamento/abatimento).
+
+    Sistema de Dupla Conferência:
+    - Dados do Odoo são importados aqui (fonte oficial)
+    - Abatimentos do sistema (ContasAReceberAbatimento) podem ser vinculados
+    - Comparação visual: totais sistema vs totais Odoo
+
+    Tipos de Baixa (alinhados com MapeamentoTipoOdoo):
+    - pagamento: payment_id IS NOT NULL (entrada de dinheiro)
+    - devolucao: move_type='out_refund' (nota de crédito de cliente)
+    - abatimento_acordo: move_type='entry' + journal PACORD
+    - abatimento_devolucao: move_type='entry' + journal PDEVOL
+    - abatimento_st: move_type='entry' + ref contém "ST"
+    - abatimento_outros: move_type='entry' + outros casos
+    """
+    __tablename__ = 'contas_a_receber_reconciliacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para ContasAReceber (título)
+    conta_a_receber_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), nullable=False, index=True)
+
+    # =========================================================================
+    # IDENTIFICAÇÃO ODOO
+    # =========================================================================
+
+    odoo_id = db.Column(db.Integer, nullable=False, unique=True, index=True)  # ID no Odoo (account.partial.reconcile)
+
+    # =========================================================================
+    # VALOR E DATA
+    # =========================================================================
+
+    amount = db.Column(db.Float, nullable=True)  # Valor reconciliado (sempre positivo)
+    max_date = db.Column(db.Date, nullable=True)  # Data da reconciliação
+
+    # =========================================================================
+    # CLASSIFICAÇÃO DO TIPO DE BAIXA
+    # =========================================================================
+
+    # Tipo classificado (alinhado com MapeamentoTipoOdoo para vinculação)
+    # Valores: pagamento, devolucao, abatimento_acordo, abatimento_devolucao, abatimento_st, abatimento_outros
+    tipo_baixa = db.Column(db.String(50), nullable=True, index=True)
+
+    # Dados originais do Odoo para classificação
+    tipo_baixa_odoo = db.Column(db.String(20), nullable=True)  # move_type: entry, out_refund, etc
+    payment_odoo_id = db.Column(db.Integer, nullable=True)  # payment_id do Odoo (se for pagamento)
+    journal_code = db.Column(db.String(20), nullable=True)  # Código do diário (PACORD, PDEVOL, GRAFENO, etc)
+
+    # =========================================================================
+    # REFERÊNCIA VISUAL (para exibição no modal)
+    # =========================================================================
+
+    credit_move_name = db.Column(db.String(255), nullable=True)  # Ex: "PGRA1/2025/01834", "RVND/2025/00036"
+    credit_move_ref = db.Column(db.String(255), nullable=True)  # Ex: "ABATIMENTO DE ST", "Estorno de: VND/..."
+
+    # =========================================================================
+    # IDENTIFICADORES ODOO (para busca de detalhes em tempo real)
+    # =========================================================================
+
+    credit_move_id = db.Column(db.Integer, nullable=True)  # ID da linha de crédito no Odoo (account.move.line)
+    debit_move_id = db.Column(db.Integer, nullable=True)  # ID da linha de débito (título) no Odoo
+
+    # =========================================================================
+    # EMPRESA
+    # =========================================================================
+
+    company_id = db.Column(db.Integer, nullable=True)
+
+    # =========================================================================
+    # AUDITORIA ODOO
+    # =========================================================================
+
+    odoo_create_date = db.Column(db.DateTime, nullable=True)
+    odoo_write_date = db.Column(db.DateTime, nullable=True)
+
+    # =========================================================================
+    # CONTROLE LOCAL
+    # =========================================================================
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    ultima_sincronizacao = db.Column(db.DateTime, nullable=True)
+
+    # =========================================================================
+    # RELACIONAMENTOS
+    # =========================================================================
+
+    conta_a_receber = relationship('ContasAReceber', backref=db.backref('reconciliacoes', lazy='dynamic'))
+
+    __table_args__ = (
+        Index('idx_reconciliacao_odoo_id', 'odoo_id'),
+        Index('idx_reconciliacao_conta', 'conta_a_receber_id'),
+        Index('idx_reconciliacao_tipo_baixa', 'tipo_baixa'),
+    )
+
+    def __repr__(self):
+        return f'<ContasAReceberReconciliacao {self.odoo_id} - R$ {self.amount} ({self.tipo_baixa})>'
+
+    @property
+    def tipo_baixa_display(self) -> str:
+        """Retorna o tipo de baixa formatado para exibição"""
+        tipos = {
+            'pagamento': '💰 Pagamento',
+            'devolucao': '🔵 Devolução',
+            'abatimento_acordo': '🟡 Abat. Acordo',
+            'abatimento_devolucao': '🟠 Abat. Devolução',
+            'abatimento_st': '🟣 Abat. ST',
+            'abatimento_outros': '⚪ Abat. Outros',
+        }
+        return tipos.get(self.tipo_baixa, self.tipo_baixa or 'Não identificado')
+
+    @property
+    def tipo_baixa_simplificado(self) -> str:
+        """Retorna tipo simplificado (pagamento ou abatimento)"""
+        if self.tipo_baixa == 'pagamento':
+            return 'pagamento'
+        return 'abatimento'
+
+    @property
+    def eh_pagamento(self) -> bool:
+        """Retorna True se for um pagamento (entrada de dinheiro)"""
+        return self.tipo_baixa == 'pagamento'
+
+    @property
+    def eh_abatimento(self) -> bool:
+        """Retorna True se for um abatimento/devolução (não é entrada de dinheiro)"""
+        return self.tipo_baixa != 'pagamento'
+
+    def to_dict(self):
+        """Retorna campos essenciais para o frontend"""
+        return {
+            # Identificação
+            'id': self.id,
+            'conta_a_receber_id': self.conta_a_receber_id,
+            'odoo_id': self.odoo_id,
+
+            # Valor e data
+            'amount': self.amount,
+            'max_date': self.max_date.isoformat() if self.max_date else None,
+
+            # Classificação
+            'tipo_baixa': self.tipo_baixa,
+            'tipo_baixa_display': self.tipo_baixa_display,
+            'tipo_baixa_odoo': self.tipo_baixa_odoo,
+            'eh_pagamento': self.eh_pagamento,
+            'eh_abatimento': self.eh_abatimento,
+
+            # Referência visual
+            'credit_move_name': self.credit_move_name,
+            'credit_move_ref': self.credit_move_ref,
+            'journal_code': self.journal_code,
+
+            # IDs para detalhes
+            'credit_move_id': self.credit_move_id,
+            'debit_move_id': self.debit_move_id,
+            'payment_odoo_id': self.payment_odoo_id,
+
+            # Empresa
+            'company_id': self.company_id,
+
+            # Auditoria
+            'odoo_create_date': self.odoo_create_date.isoformat() if self.odoo_create_date else None,
+            'odoo_write_date': self.odoo_write_date.isoformat() if self.odoo_write_date else None,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'ultima_sincronizacao': self.ultima_sincronizacao.isoformat() if self.ultima_sincronizacao else None,
         }
 
 

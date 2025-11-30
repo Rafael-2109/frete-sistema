@@ -138,6 +138,10 @@ class AgentPlanner:
                 conhecimento_negocio=conhecimento_negocio
             )
 
+            # 2.1 VALIDAÇÃO: Garante que entidades críticas estão nos filtros
+            if plano.get('etapas'):
+                plano = self._validar_e_corrigir_plano(plano, entidades)
+
             if not plano.get('etapas'):
                 # Claude não conseguiu planejar
                 logger.warning(f"[AGENT_PLANNER] Claude não retornou etapas para: {consulta[:50]}")
@@ -595,6 +599,120 @@ Retorne APENAS o JSON, sem explicações adicionais."""
             logger.warning(f"[AGENT_PLANNER] JSON inválido no plano: {e}")
             return {'etapas': []}
 
+    # Métodos sugeridos pelo Claude para melhoria do plano
+
+    def _extrair_filtros_flat(self, filtros) -> List[Dict]:
+        """
+        Extrai filtros de estrutura aninhada (and/or) para lista flat.
+        
+        Suporta:
+        - Lista simples: [filtro1, filtro2]
+        - Dict com and/or: {"and": [filtro1, filtro2]}
+        - Aninhados: {"and": [filtro1, {"or": [filtro2, filtro3]}]}
+        """
+        if not filtros:
+            return []
+        
+        if isinstance(filtros, list):
+            resultado = []
+            for f in filtros:
+                resultado.extend(self._extrair_filtros_flat(f))
+            return resultado
+        
+        if isinstance(filtros, dict):
+            if 'and' in filtros:
+                return self._extrair_filtros_flat(filtros['and'])
+            if 'or' in filtros:
+                return self._extrair_filtros_flat(filtros['or'])
+            if 'campo' in filtros:
+                return [filtros]
+        
+        return []
+
+    def _validar_e_corrigir_plano(self, plano: Dict, entidades: Dict) -> Dict:
+        """
+        Valida que o plano respeita as entidades extraídas.
+        Se filtros obrigatórios estiverem ausentes, INJETA automaticamente.
+        
+        Args:
+            plano: Plano gerado pelo Claude
+            entidades: Entidades extraídas (devem virar filtros)
+        
+        Returns:
+            Plano corrigido (pode ser o mesmo se já estava correto)
+        """
+        if not plano.get('etapas'):
+            return plano
+        
+        # Campos que DEVEM estar nos filtros se presentes nas entidades
+        # Formato: campo -> (operador, função para formatar valor)
+        campos_obrigatorios = {
+            'raz_social_red': ('ilike', lambda v: f'%{v.upper()}%'),
+            'num_pedido': ('==', lambda v: v),
+            'cod_produto': ('ilike', lambda v: f'%{v}%'),
+        }
+        
+        correcoes_feitas = []
+        
+        for i, etapa in enumerate(plano.get('etapas', [])):
+            loader_json = etapa.get('loader_json')
+            if not loader_json:
+                continue
+            
+            filtros = loader_json.get('filtros', [])
+            
+            # Extrai campos já presentes nos filtros
+            filtros_flat = self._extrair_filtros_flat(filtros)
+            campos_presentes = {f.get('campo') for f in filtros_flat}
+            
+            # Verifica cada campo obrigatório
+            for campo, (operador, formatar_valor) in campos_obrigatorios.items():
+                valor_entidade = entidades.get(campo)
+                
+                # Se entidade existe mas não está nos filtros -> INJETAR
+                if valor_entidade and campo not in campos_presentes:
+                    novo_filtro = {
+                        'campo': campo,
+                        'operador': operador,
+                        'valor': formatar_valor(valor_entidade)
+                    }
+                    
+                    # Injeta o filtro
+                    if isinstance(filtros, list):
+                        filtros.append(novo_filtro)
+                    elif isinstance(filtros, dict):
+                        if 'and' in filtros:
+                            filtros['and'].append(novo_filtro)
+                        elif 'or' in filtros:
+                            # Transforma em AND com o OR existente + novo filtro
+                            loader_json['filtros'] = {'and': [filtros, novo_filtro]}
+                        else:
+                            # Filtro único, transforma em lista
+                            loader_json['filtros'] = [filtros, novo_filtro]
+                    else:
+                        # Sem filtros, cria lista nova
+                        loader_json['filtros'] = [novo_filtro]
+                    
+                    correcoes_feitas.append(f"Etapa {i+1}: injetado {campo}={valor_entidade}")
+            
+            # Garante que campos de identificação estão no retorno
+            campos_retorno = loader_json.get('campos_retorno', [])
+            for campo in ['raz_social_red', 'num_pedido']:
+                if campo in entidades and entidades[campo]:
+                    if campo not in campos_retorno:
+                        campos_retorno.append(campo)
+                        correcoes_feitas.append(f"Etapa {i+1}: adicionado {campo} ao retorno")
+            
+            if campos_retorno:
+                loader_json['campos_retorno'] = campos_retorno
+        
+        if correcoes_feitas:
+            logger.warning(f"[AGENT_PLANNER] Plano corrigido: {correcoes_feitas}")
+        
+        return plano            
+
+    # Fim dos métodos sugeridos pelo Claude
+
     def _executar_etapa(
         self,
         etapa: Dict,
@@ -681,6 +799,76 @@ Retorne APENAS o JSON, sem explicações adicionais."""
         except Exception as e:
             logger.error(f"[AGENT_PLANNER] Erro ao executar capability: {e}")
             return {'sucesso': False, 'erro': str(e)}
+
+    def _obter_filtros_aprendidos(self, usuario_id: int) -> List[Dict]:
+        """
+        Obtém filtros aprendidos do IA Trainer.
+        
+        Busca em CodigoSistemaGerado onde tipo_codigo='filtro' e ativo=True.
+        
+        Returns:
+            Lista de filtros no formato estruturado que aplicar_filtros_aprendidos espera
+        """
+        try:
+            from ..ia_trainer.models import CodigoSistemaGerado
+            import json
+            
+            # Busca filtros ativos
+            codigos = CodigoSistemaGerado.query.filter_by(
+                tipo_codigo='filtro',
+                ativo=True
+            ).all()
+            
+            filtros = []
+            for codigo in codigos:
+                try:
+                    # definicao_tecnica pode ser JSON string ou dict
+                    definicao = codigo.definicao_tecnica
+                    if isinstance(definicao, str):
+                        # Tenta parsear como JSON estruturado
+                        try:
+                            definicao_dict = json.loads(definicao)
+                            # Formato estruturado: {"campo": "x", "operador": "==", "valor": "y"}
+                            if 'campo' in definicao_dict and 'operador' in definicao_dict:
+                                filtros.append({
+                                    'nome': codigo.nome,
+                                    'campo': definicao_dict['campo'],
+                                    'operador': definicao_dict['operador'],
+                                    'valor': definicao_dict.get('valor'),
+                                    'modelo': codigo.models_referenciados[0] if codigo.models_referenciados else None
+                                })
+                                continue
+                        except json.JSONDecodeError:
+                            pass
+                        
+                        # Formato SQL direto (legado)
+                        filtros.append({
+                            'nome': codigo.nome,
+                            'filtro': definicao,  # SQL direto
+                            'modelo': codigo.models_referenciados[0] if codigo.models_referenciados else None
+                        })
+                    elif isinstance(definicao, dict):
+                        # Já é dict estruturado
+                        filtros.append({
+                            'nome': codigo.nome,
+                            'campo': definicao.get('campo'),
+                            'operador': definicao.get('operador'),
+                            'valor': definicao.get('valor'),
+                            'modelo': codigo.models_referenciados[0] if codigo.models_referenciados else None
+                        })
+                        
+                except Exception as e:
+                    logger.warning(f"[AGENT_PLANNER] Erro ao processar filtro '{codigo.nome}': {e}")
+                    continue
+            
+            if filtros:
+                logger.info(f"[AGENT_PLANNER] {len(filtros)} filtros aprendidos carregados")
+            
+            return filtros
+            
+        except Exception as e:
+            logger.warning(f"[AGENT_PLANNER] Erro ao carregar filtros aprendidos: {e}")
+            return []
 
     def _executar_codigo_gerado(self, codigo, params: Dict) -> Dict[str, Any]:
         """Executa um CodigoSistemaGerado."""

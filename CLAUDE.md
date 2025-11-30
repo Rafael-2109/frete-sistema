@@ -7,12 +7,14 @@
 2. **MOSTRAR EVIDÊNCIAS**: Citar arquivo:linha ANTES de qualquer modificação
 3. **VERIFICAR TUDO**: Ler arquivos completos, verificar imports, testar mentalmente
 4. **QUESTIONAR**: Se algo não estiver 100% claro, PARAR e PERGUNTAR
+5. **AMBIENTE VIRTUAL**: Sempre utilize o ambiente virtual quando for necessario "source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate"
 
 ### ❌ NUNCA FAZER:
 1. **NUNCA assumir** comportamento pelo nome da função
 2. **NUNCA inventar** imports ou caminhos
 3. **NUNCA modificar** sem mostrar o código atual primeiro
 4. **NUNCA pular** direto para a solução
+5. **NUNCA mantenha lixo** Caso um código seja substituido, REMOVA o anterior, mantenha o código limpo.
 
 ### 📋 FORMATO OBRIGATÓRIO DE RESPOSTA:
 ```
@@ -684,26 +686,24 @@ acao_necessaria_tipo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber_
 obs_acao_necessaria = db.Column(db.Text, nullable=True)
 data_lembrete = db.Column(db.Date, nullable=True)
 
-# CAMPOS ENRIQUECIDOS (via EntregaMonitorada):
+# RELACIONAMENTOS (dados obtidos dinamicamente - NÃO são colunas):
 entrega_monitorada_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=True)
-data_entrega_prevista = db.Column(db.Date, nullable=True)
-data_hora_entrega_realizada = db.Column(db.DateTime, nullable=True)
-status_finalizacao = db.Column(db.String(50), nullable=True)
-nova_nf = db.Column(db.String(20), nullable=True)
-reagendar = db.Column(db.Boolean, default=False)
-data_embarque = db.Column(db.Date, nullable=True)
-transportadora = db.Column(db.String(255), nullable=True)
-vendedor = db.Column(db.String(100), nullable=True)
-canhoto_arquivo = db.Column(db.String(500), nullable=True)
-nf_cd = db.Column(db.Boolean, default=False, nullable=False)  # ✅ NF está no CD
 
-# AgendamentoEntrega (último):
-ultimo_agendamento_data = db.Column(db.Date, nullable=True)
-ultimo_agendamento_status = db.Column(db.String(20), nullable=True)
-ultimo_agendamento_protocolo = db.Column(db.String(100), nullable=True)
+# ⚠️ CAMPOS OBTIDOS VIA RELACIONAMENTO entrega_monitorada (NÃO existem como colunas):
+# - data_entrega_prevista (via entrega_monitorada.data_entrega_prevista)
+# - data_hora_entrega_realizada (via entrega_monitorada.data_hora_entrega_realizada)
+# - status_finalizacao (via entrega_monitorada.status_finalizacao)
+# - nova_nf (via entrega_monitorada.nova_nf)
+# - reagendar (via entrega_monitorada.reagendar)
+# - data_embarque (via entrega_monitorada.data_embarque)
+# - transportadora (via entrega_monitorada.transportadora)
+# - vendedor (via entrega_monitorada.vendedor)
+# - canhoto_arquivo (via entrega_monitorada.canhoto_arquivo)
+# - nf_cd (via entrega_monitorada.nf_cd)
+# - ultimo_agendamento_* (via entrega_monitorada.agendamentos)
 
-# FaturamentoProduto:
-nf_cancelada = db.Column(db.Boolean, default=False, nullable=False)  # ✅ Se FaturamentoProduto.ativo = False
+# ⚠️ PROPERTY nf_cancelada (NÃO é coluna, é calculado dinamicamente):
+# nf_cancelada = @property que busca FaturamentoProduto.status_nf == 'Cancelado'
 
 # Auditoria:
 criado_em = db.Column(db.DateTime, default=datetime.utcnow)

@@ -154,8 +154,8 @@
         </div>
     </div>
 
-    <!-- Cards de Navegação -->
-    <div class="row g-4">
+    <!-- Cards de Navegação - Linha 1: Principais -->
+    <div class="row g-4 mb-4">
         <!-- Consultar Títulos -->
         <div class="col-md-6 col-lg-4">
             <div class="card hub-card position-relative">
@@ -197,7 +197,7 @@
             </div>
         </div>
 
-        <!-- Sincronização (placeholder para futuro) -->
+        <!-- Sincronização -->
         <div class="col-md-6 col-lg-4">
             <div class="card hub-card">
                 <div class="card-body">
@@ -216,6 +216,68 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Cards de Navegação - Linha 2: Configurações -->
+    <h5 class="text-muted mb-3"><i class="fas fa-cogs"></i> Configurações</h5>
+    <div class="row g-4">
+        <!-- Tipos (Confirmação, Ação, etc) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card hub-card">
+                <div class="card-body">
+                    <div class="hub-icon secondary">
+                        <i class="fas fa-tags"></i>
+                    </div>
+                    <h4>Tipos</h4>
+                    <p>
+                        Gerencie tipos de Confirmação, Ação Necessária e Abatimento.
+                    </p>
+                    <a href="{{ url_for('financeiro.listar_tipos') }}" class="btn btn-secondary btn-hub w-100">
+                        <i class="fas fa-cog me-2"></i>
+                        Gerenciar Tipos
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Abatimentos (Cadastro geral) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card hub-card">
+                <div class="card-body">
+                    <div class="hub-icon" style="background: linear-gradient(135deg, #fd7e14 0%, #dc3545 100%); color: white;">
+                        <i class="fas fa-minus-circle"></i>
+                    </div>
+                    <h4>Abatimentos</h4>
+                    <p>
+                        Visualize e gerencie todos os abatimentos cadastrados no sistema.
+                    </p>
+                    <a href="{{ url_for('financeiro.listar_abatimentos') }}" class="btn btn-outline-danger btn-hub w-100">
+                        <i class="fas fa-list me-2"></i>
+                        Ver Abatimentos
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Liberação Antecipação -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card hub-card">
+                <div class="card-body">
+                    <div class="hub-icon" style="background: linear-gradient(135deg, #20c997 0%, #28a745 100%); color: white;">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h4>Liberação Antecipação</h4>
+                    <p>
+                        Configure dias úteis para liberação de antecipação por cliente.
+                    </p>
+                    <a href="{{ url_for('financeiro.listar_liberacao_antecipacao') }}" class="btn btn-outline-success btn-hub w-100">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Configurar
+                    </a>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Informações Adicionais -->

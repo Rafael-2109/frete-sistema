@@ -336,7 +336,9 @@ Analise a mensagem do usuário e retorne um JSON com:
     "ambiguidade": {{
         "existe": false,
         "pergunta": "pergunta para esclarecer (se existe=true)",
-        "opcoes": ["opção 1", "opção 2"]
+        "opcoes": ["opção 1", "opção 2"],
+        "tipo_faltante": "cliente|pedido|produto|data|acao",  // O QUE está faltando
+        "motivo": "por que precisa de clarificação"
     }},
     "confianca": 0.0 a 1.0,
 
@@ -370,7 +372,7 @@ Analise a mensagem do usuário e retorne um JSON com:
    - "amanhã" → calcule baseado em hoje ({hoje})
    - Ano padrão: {ano_atual}
 
-4. AMBIGUIDADE (v5 - HERANÇA PRIMEIRO):
+4. AMBIGUIDADE (v6 - HERANÇA PRIMEIRO, CLARIFICAÇÃO ÚTIL):
    - ANTES de pedir clarificação, VERIFIQUE se REFERENCIA.consulta_ativa = true
    - Se sim E a pergunta é sobre o MESMO domínio → HERDE cliente_atual
    - Só pergunte se:
@@ -378,6 +380,17 @@ Analise a mensagem do usuário e retorne um JSON com:
      b) Usuário EXPLICITAMENTE mudou de assunto ("e o Atacadão?")
      c) A pergunta é claramente sobre OUTRO domínio
    - NUNCA pergunte "de qual cliente?" se cliente_atual existe e a pergunta é compatível
+
+   QUANDO PEDIR CLARIFICAÇÃO (v6 - SEJA ESPECÍFICO):
+   - SEMPRE informe tipo_faltante = qual campo está faltando (cliente, pedido, produto, data)
+   - A pergunta deve ser ESPECÍFICA: "Qual cliente?" não "Poderia esclarecer?"
+   - Opções devem ter formato útil (não invente nomes de clientes)
+   - O sistema irá buscar opções REAIS para mostrar ao usuário
+
+   EXEMPLOS DE CLARIFICAÇÃO BOA:
+   - tipo_faltante="cliente", pergunta="Qual cliente você quer consultar?"
+   - tipo_faltante="pedido", pergunta="Qual número do pedido?"
+   - tipo_faltante="data", pergunta="Para qual data deseja programar?"
 
 5. CONTEXTO (v5 - PONTE):
    - REFERENCIA.cliente_atual = cliente da conversa atual (HERDAR em follow-ups)

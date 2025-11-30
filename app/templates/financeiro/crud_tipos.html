@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+{% block title %}Tipos - Contas a Receber{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4><i class="fas fa-tags text-primary"></i> Tipos - Contas a Receber</h4>
+            <small class="text-muted">Gerenciar tipos de confirmação, ação necessária e abatimento</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <button class="btn btn-success btn-sm" onclick="abrirModalNovo()">
+                <i class="fas fa-plus"></i> Novo Tipo
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Tabela</label>
+                    <select name="tabela" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        <option value="contas_a_receber" {% if request.args.get('tabela') == 'contas_a_receber' %}selected{% endif %}>contas_a_receber</option>
+                        <option value="contas_a_receber_abatimento" {% if request.args.get('tabela') == 'contas_a_receber_abatimento' %}selected{% endif %}>contas_a_receber_abatimento</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Campo</label>
+                    <select name="campo" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="confirmacao" {% if request.args.get('campo') == 'confirmacao' %}selected{% endif %}>confirmacao</option>
+                        <option value="forma_confirmacao" {% if request.args.get('campo') == 'forma_confirmacao' %}selected{% endif %}>forma_confirmacao</option>
+                        <option value="acao_necessaria" {% if request.args.get('campo') == 'acao_necessaria' %}selected{% endif %}>acao_necessaria</option>
+                        <option value="tipo" {% if request.args.get('campo') == 'tipo' %}selected{% endif %}>tipo (abatimento)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="ativo" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="true" {% if request.args.get('ativo') == 'true' %}selected{% endif %}>Ativos</option>
+                        <option value="false" {% if request.args.get('ativo') == 'false' %}selected{% endif %}>Inativos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <a href="{{ url_for('financeiro.listar_tipos') }}" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Tipo</th>
+                        <th>Tabela</th>
+                        <th>Campo</th>
+                        <th class="text-center">Considera A Receber</th>
+                        <th>Explicação</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tipo in tipos %}
+                    <tr class="{% if not tipo.ativo %}table-secondary{% endif %}">
+                        <td>{{ tipo.id }}</td>
+                        <td><strong>{{ tipo.tipo }}</strong></td>
+                        <td><code>{{ tipo.tabela }}</code></td>
+                        <td><code>{{ tipo.campo }}</code></td>
+                        <td class="text-center">
+                            {% if tipo.considera_a_receber %}
+                                <i class="fas fa-check-circle text-success"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-danger"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if tipo.explicacao %}
+                                <span class="text-truncate d-inline-block" style="max-width: 200px;" title="{{ tipo.explicacao }}">
+                                    {{ tipo.explicacao }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if tipo.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editarTipo({{ tipo.id }})" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            {% if tipo.ativo %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="desativarTipo({{ tipo.id }})" title="Desativar">
+                                <i class="fas fa-ban"></i>
+                            </button>
+                            {% else %}
+                            <button class="btn btn-sm btn-outline-success" onclick="ativarTipo({{ tipo.id }})" title="Ativar">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                            Nenhum tipo encontrado
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Tipo -->
+<div class="modal fade" id="modalTipo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTipoTitle">Novo Tipo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formTipo">
+                    <input type="hidden" id="tipo-id">
+                    <div class="mb-3">
+                        <label class="form-label">Nome do Tipo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="tipo-nome" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tabela <span class="text-danger">*</span></label>
+                            <select class="form-select" id="tipo-tabela" required>
+                                <option value="">Selecione...</option>
+                                <option value="contas_a_receber">contas_a_receber</option>
+                                <option value="contas_a_receber_abatimento">contas_a_receber_abatimento</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Campo <span class="text-danger">*</span></label>
+                            <select class="form-select" id="tipo-campo" required>
+                                <option value="">Selecione...</option>
+                                <option value="confirmacao">confirmacao</option>
+                                <option value="forma_confirmacao">forma_confirmacao</option>
+                                <option value="acao_necessaria">acao_necessaria</option>
+                                <option value="tipo">tipo (abatimento)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Explicação</label>
+                        <textarea class="form-control" id="tipo-explicacao" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tipo-considera" checked>
+                                <label class="form-check-label" for="tipo-considera">
+                                    Considera A Receber
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tipo-ativo" checked>
+                                <label class="form-check-label" for="tipo-ativo">
+                                    Ativo
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarTipo()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const URL_API = "{{ url_for('financeiro.api_tipos_crud_list') }}";
+let modalTipo = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    modalTipo = new bootstrap.Modal(document.getElementById('modalTipo'));
+});
+
+function abrirModalNovo() {
+    document.getElementById('modalTipoTitle').textContent = 'Novo Tipo';
+    document.getElementById('formTipo').reset();
+    document.getElementById('tipo-id').value = '';
+    document.getElementById('tipo-considera').checked = true;
+    document.getElementById('tipo-ativo').checked = true;
+    modalTipo.show();
+}
+
+function editarTipo(tipoId) {
+    fetch(`{{ url_for('financeiro.listar_tipos') }}/api/${tipoId}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('modalTipoTitle').textContent = 'Editar Tipo';
+            document.getElementById('tipo-id').value = data.tipo.id;
+            document.getElementById('tipo-nome').value = data.tipo.tipo;
+            document.getElementById('tipo-tabela').value = data.tipo.tabela;
+            document.getElementById('tipo-campo').value = data.tipo.campo;
+            document.getElementById('tipo-explicacao').value = data.tipo.explicacao || '';
+            document.getElementById('tipo-considera').checked = data.tipo.considera_a_receber;
+            document.getElementById('tipo-ativo').checked = data.tipo.ativo;
+            modalTipo.show();
+        } else {
+            toastr.error(data.error);
+        }
+    });
+}
+
+function salvarTipo() {
+    const tipoId = document.getElementById('tipo-id').value;
+    const dados = {
+        tipo: document.getElementById('tipo-nome').value,
+        tabela: document.getElementById('tipo-tabela').value,
+        campo: document.getElementById('tipo-campo').value,
+        explicacao: document.getElementById('tipo-explicacao').value,
+        considera_a_receber: document.getElementById('tipo-considera').checked,
+        ativo: document.getElementById('tipo-ativo').checked
+    };
+
+    const url = tipoId
+        ? `{{ url_for('financeiro.listar_tipos') }}/api/${tipoId}`
+        : `{{ url_for('financeiro.api_tipos_crud_list') }}`;
+    const method = tipoId ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(dados)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(data.message);
+            modalTipo.hide();
+            location.reload();
+        } else {
+            toastr.error(data.error);
+        }
+    });
+}
+
+function desativarTipo(tipoId) {
+    Swal.fire({
+        title: 'Desativar tipo?',
+        text: 'O tipo não estará mais disponível para seleção.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Sim, desativar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`{{ url_for('financeiro.listar_tipos') }}/api/${tipoId}`, {
+                method: 'DELETE'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success(data.message);
+                    location.reload();
+                } else {
+                    toastr.error(data.error);
+                }
+            });
+        }
+    });
+}
+
+function ativarTipo(tipoId) {
+    fetch(`{{ url_for('financeiro.listar_tipos') }}/api/${tipoId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ativo: true})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Tipo ativado com sucesso!');
+            location.reload();
+        } else {
+            toastr.error(data.error);
+        }
+    });
+}
+</script>
+{% endblock %}

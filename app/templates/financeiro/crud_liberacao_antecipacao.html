@@ -1,0 +1,333 @@
+{% extends 'base.html' %}
+{% block title %}Liberação Antecipação - Configurações{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4><i class="fas fa-clock text-success"></i> Liberação Antecipação</h4>
+            <small class="text-muted">Configurar dias úteis para liberação de antecipação por cliente</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <button class="btn btn-success btn-sm" onclick="abrirModalNovo()">
+                <i class="fas fa-plus"></i> Nova Configuração
+            </button>
+        </div>
+    </div>
+
+    <!-- Info Card -->
+    <div class="alert alert-info mb-3">
+        <strong><i class="fas fa-info-circle"></i> Prioridade de Match:</strong>
+        <ol class="mb-0 mt-2">
+            <li><strong>Prefixo CNPJ</strong>: Primeiros 8 dígitos do CNPJ (XX.XXX.XXX)</li>
+            <li><strong>Nome Exato</strong>: Match exato da razão social</li>
+            <li><strong>Contém Nome</strong>: Substring no nome do cliente</li>
+        </ol>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Critério</label>
+                    <select name="criterio" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="prefixo_cnpj" {% if request.args.get('criterio') == 'prefixo_cnpj' %}selected{% endif %}>Prefixo CNPJ</option>
+                        <option value="nome_exato" {% if request.args.get('criterio') == 'nome_exato' %}selected{% endif %}>Nome Exato</option>
+                        <option value="contem_nome" {% if request.args.get('criterio') == 'contem_nome' %}selected{% endif %}>Contém Nome</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="ativo" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="true" {% if request.args.get('ativo') == 'true' %}selected{% endif %}>Ativos</option>
+                        <option value="false" {% if request.args.get('ativo') == 'false' %}selected{% endif %}>Inativos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <a href="{{ url_for('financeiro.listar_liberacao_antecipacao') }}" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Critério</th>
+                        <th>Identificador</th>
+                        <th>UF</th>
+                        <th class="text-center">Dias Úteis</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for config in configs %}
+                    <tr class="{% if not config.ativo %}table-secondary{% endif %}">
+                        <td>{{ config.id }}</td>
+                        <td>
+                            {% if config.criterio_identificacao == 'prefixo_cnpj' %}
+                                <span class="badge bg-primary">Prefixo CNPJ</span>
+                            {% elif config.criterio_identificacao == 'nome_exato' %}
+                                <span class="badge bg-success">Nome Exato</span>
+                            {% else %}
+                                <span class="badge bg-info">Contém Nome</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ config.identificador }}</strong>
+                        </td>
+                        <td>
+                            {% if config.uf == 'TODOS' %}
+                                <span class="text-muted">Todas UFs</span>
+                            {% else %}
+                                <code>{{ config.uf }}</code>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-dark fs-6">{{ config.dias_uteis_previsto }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if config.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editarConfig({{ config.id }})" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            {% if config.ativo %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="desativarConfig({{ config.id }})" title="Desativar">
+                                <i class="fas fa-ban"></i>
+                            </button>
+                            {% else %}
+                            <button class="btn btn-sm btn-outline-success" onclick="ativarConfig({{ config.id }})" title="Ativar">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                            Nenhuma configuração encontrada
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Config -->
+<div class="modal fade" id="modalConfig" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfigTitle">Nova Configuração</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formConfig">
+                    <input type="hidden" id="config-id">
+                    <div class="mb-3">
+                        <label class="form-label">Critério de Identificação <span class="text-danger">*</span></label>
+                        <select class="form-select" id="config-criterio" required onchange="atualizarPlaceholder()">
+                            <option value="">Selecione...</option>
+                            <option value="prefixo_cnpj">Prefixo CNPJ (8 dígitos)</option>
+                            <option value="nome_exato">Nome Exato</option>
+                            <option value="contem_nome">Contém Nome</option>
+                        </select>
+                        <small class="text-muted" id="criterio-help"></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Identificador <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="config-identificador" required>
+                        <small class="text-muted" id="identificador-help"></small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">UF(s)</label>
+                            <input type="text" class="form-control" id="config-uf" value="TODOS">
+                            <small class="text-muted">TODOS ou lista: SP,RJ,MG</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Dias Úteis <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="config-dias" min="1" max="365" required>
+                        </div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="config-ativo" checked>
+                        <label class="form-check-label" for="config-ativo">
+                            Configuração Ativa
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarConfig()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const URL_API = "{{ url_for('financeiro.api_liberacao_list') }}";
+let modalConfig = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    modalConfig = new bootstrap.Modal(document.getElementById('modalConfig'));
+});
+
+function atualizarPlaceholder() {
+    const criterio = document.getElementById('config-criterio').value;
+    const help = document.getElementById('identificador-help');
+    const input = document.getElementById('config-identificador');
+
+    switch(criterio) {
+        case 'prefixo_cnpj':
+            help.textContent = 'Ex: 12345678 (8 primeiros dígitos do CNPJ)';
+            input.placeholder = '12345678';
+            break;
+        case 'nome_exato':
+            help.textContent = 'Razão social exata do cliente (será normalizado)';
+            input.placeholder = 'EMPRESA XYZ LTDA';
+            break;
+        case 'contem_nome':
+            help.textContent = 'Substring que será buscada no nome do cliente';
+            input.placeholder = 'CARREFOUR';
+            break;
+        default:
+            help.textContent = '';
+            input.placeholder = '';
+    }
+}
+
+function abrirModalNovo() {
+    document.getElementById('modalConfigTitle').textContent = 'Nova Configuração';
+    document.getElementById('formConfig').reset();
+    document.getElementById('config-id').value = '';
+    document.getElementById('config-uf').value = 'TODOS';
+    document.getElementById('config-ativo').checked = true;
+    document.getElementById('identificador-help').textContent = '';
+    modalConfig.show();
+}
+
+function editarConfig(configId) {
+    fetch(`{{ url_for('financeiro.listar_liberacao_antecipacao') }}/api/${configId}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('modalConfigTitle').textContent = 'Editar Configuração';
+            document.getElementById('config-id').value = data.config.id;
+            document.getElementById('config-criterio').value = data.config.criterio_identificacao;
+            document.getElementById('config-identificador').value = data.config.identificador;
+            document.getElementById('config-uf').value = data.config.uf;
+            document.getElementById('config-dias').value = data.config.dias_uteis_previsto;
+            document.getElementById('config-ativo').checked = data.config.ativo;
+            atualizarPlaceholder();
+            modalConfig.show();
+        } else {
+            toastr.error(data.error);
+        }
+    });
+}
+
+function salvarConfig() {
+    const configId = document.getElementById('config-id').value;
+    const dados = {
+        criterio_identificacao: document.getElementById('config-criterio').value,
+        identificador: document.getElementById('config-identificador').value,
+        uf: document.getElementById('config-uf').value || 'TODOS',
+        dias_uteis_previsto: document.getElementById('config-dias').value,
+        ativo: document.getElementById('config-ativo').checked
+    };
+
+    const url = configId
+        ? `{{ url_for('financeiro.listar_liberacao_antecipacao') }}/api/${configId}`
+        : `{{ url_for('financeiro.api_liberacao_list') }}`;
+    const method = configId ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(dados)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(data.message);
+            modalConfig.hide();
+            location.reload();
+        } else {
+            toastr.error(data.error);
+        }
+    });
+}
+
+function desativarConfig(configId) {
+    Swal.fire({
+        title: 'Desativar configuração?',
+        text: 'A regra não será mais aplicada aos clientes.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Sim, desativar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`{{ url_for('financeiro.listar_liberacao_antecipacao') }}/api/${configId}`, {
+                method: 'DELETE'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success(data.message);
+                    location.reload();
+                } else {
+                    toastr.error(data.error);
+                }
+            });
+        }
+    });
+}
+
+function ativarConfig(configId) {
+    fetch(`{{ url_for('financeiro.listar_liberacao_antecipacao') }}/api/${configId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ativo: true})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Configuração ativada com sucesso!');
+            location.reload();
+        } else {
+            toastr.error(data.error);
+        }
+    });
+}
+</script>
+{% endblock %}

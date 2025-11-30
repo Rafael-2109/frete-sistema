@@ -1,0 +1,406 @@
+/* ==============================================
+   CSS: Contas a Receber - Listagem
+   ============================================== */
+
+/* Accordion customizado */
+.accordion-button:not(.collapsed) {
+    background-color: #e7f5ff;
+    color: #0d6efd;
+}
+
+.accordion-button .badge {
+    font-size: 0.75rem;
+}
+
+/* Barra de ações e lembretes */
+#barraAcoesLembretes {
+    min-height: 38px;
+}
+
+.filtros-container {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.table-contas {
+    font-size: 0.8rem;
+}
+
+.table-contas th {
+    background: #343a40;
+    color: white;
+    font-weight: 500;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-contas th a {
+    color: white;
+    text-decoration: none;
+}
+
+.table-contas th a:hover {
+    color: #20c997;
+}
+
+.badge-empresa {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.4rem;
+}
+
+.badge-fb { background-color: #28a745; }
+.badge-sc { background-color: #007bff; }
+.badge-cd { background-color: #6f42c1; }
+
+.badge-status {
+    font-size: 0.7rem;
+}
+
+/* Valores - Harmonizados */
+.valor-cell {
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.valor-display, .abat-display, .saldo-display {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.75rem;
+    min-width: 70px;
+    text-align: right;
+}
+
+.valor-display {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.valor-positivo {
+    color: #198754;
+    background-color: rgba(25, 135, 84, 0.1);
+}
+.valor-positivo:hover {
+    background-color: rgba(25, 135, 84, 0.2);
+}
+.valor-negativo {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+/* Abatimento */
+.abat-display {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.abat-valor {
+    color: #fd7e14;
+    background-color: rgba(253, 126, 20, 0.1);
+}
+.abat-valor:hover {
+    background-color: rgba(253, 126, 20, 0.2);
+}
+.abat-zero {
+    color: #adb5bd;
+    background-color: transparent;
+}
+.abat-zero:hover {
+    color: #6c757d;
+    background-color: #f8f9fa;
+}
+
+/* Saldo (NOVO) */
+.saldo-positivo {
+    color: #198754;
+    background-color: rgba(25, 135, 84, 0.15);
+    font-weight: 600;
+}
+.saldo-negativo {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.15);
+    font-weight: 600;
+}
+.saldo-zero {
+    color: #6c757d;
+    background-color: rgba(108, 117, 125, 0.1);
+}
+
+/* Confirmação */
+.confirmacao-display {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+}
+.confirmacao-ok {
+    color: #fff;
+    background-color: #198754;
+}
+.confirmacao-ok:hover {
+    background-color: #157347;
+}
+.confirmacao-aberto {
+    color: #856404;
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+}
+.confirmacao-aberto:hover {
+    background-color: #ffe69c;
+}
+
+/* Ação Necessária (NOVO ESTILO) */
+.acao-display {
+    display: inline-block;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 60px;
+    text-align: center;
+}
+.acao-ativa {
+    color: #fff;
+    background-color: #dc3545;
+    font-weight: 500;
+}
+.acao-ativa:hover {
+    background-color: #bb2d3b;
+}
+.acao-vazia {
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border: 1px dashed #dee2e6;
+}
+.acao-vazia:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.cliente-col {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.obs-col {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-acao {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.08);
+}
+
+.tr-pago {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.tr-vencido {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+.tr-cancelado {
+    background-color: rgba(108, 117, 125, 0.2) !important;
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.info-totais {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.canhoto-icon {
+    color: #28a745;
+    cursor: pointer;
+}
+
+.no-canhoto-icon {
+    color: #dc3545;
+}
+
+/* Tooltip customizado */
+.tooltip-custom {
+    cursor: help;
+}
+
+/* Responsividade da tabela */
+.table-responsive {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+/* Alerta toggle - NOVO estilo mais evidente */
+.alerta-toggle {
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+.alerta-on {
+    color: #fff;
+    background-color: #dc3545;
+    animation: pulse-alert 1.5s infinite;
+}
+.alerta-off {
+    color: #dee2e6;
+    background-color: transparent;
+}
+.alerta-off:hover {
+    color: #6c757d;
+    background-color: #f8f9fa;
+}
+@keyframes pulse-alert {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Observação clicável */
+.obs-clicavel {
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+.obs-clicavel:hover {
+    color: #007bff;
+}
+
+/* Previsão de entrega */
+.previsao-agendado { color: #ffc107; font-weight: 600; }
+.previsao-confirmado { color: #007bff; font-weight: 600; }
+.previsao-prevista { color: #6c757d; }
+
+/* NF info adicional */
+.nf-info-extra {
+    font-size: 0.65rem;
+    line-height: 1.2;
+}
+.nf-info-extra .badge {
+    font-size: 0.6rem;
+    padding: 0.15rem 0.3rem;
+}
+
+/* Link do título NF (para abrir snapshots) */
+.titulo-nf-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.titulo-nf-link:hover {
+    color: #0d6efd;
+    text-decoration: underline;
+}
+.titulo-nf-link strong {
+    color: inherit;
+}
+
+/* Lembretes no cabeçalho */
+.lembretes-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+    font-size: 0.75rem;
+}
+.lembrete-item {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+}
+.lembrete-item:hover {
+    background: #ffc107;
+}
+.lembrete-item.passado {
+    background: #f8d7da;
+    border-color: #dc3545;
+}
+.lembrete-item.hoje {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+/* Colunas compactas */
+.col-mini {
+    width: 50px;
+    max-width: 50px;
+}
+.col-data {
+    width: 85px;
+    max-width: 85px;
+    font-size: 0.75rem;
+}
+
+/* Modal Abatimentos - melhorias */
+#modalAbatimentos .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#modalAbatimentos .card {
+    border: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Corrigir backdrop do modal */
+.modal-backdrop {
+    z-index: 1040;
+}
+.modal {
+    z-index: 1050;
+}
+
+/* Botão Pendência Financeira */
+.btn-pendencia {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    line-height: 1;
+}
+.btn-pendencia.btn-danger {
+    animation: pulse-pendencia 1.5s infinite;
+    box-shadow: 0 0 4px rgba(220, 53, 69, 0.5);
+}
+.btn-pendencia.btn-outline-secondary {
+    opacity: 0.6;
+}
+.btn-pendencia.btn-outline-secondary:hover {
+    opacity: 1;
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+@keyframes pulse-pendencia {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 4px rgba(220, 53, 69, 0.5); }
+    50% { transform: scale(1.05); box-shadow: 0 0 8px rgba(220, 53, 69, 0.8); }
+}
+
+/* Coluna Tipo Título */
+.tipo-titulo {
+    font-size: 0.75rem;
+    color: #6c757d;
+    cursor: default;
+}
