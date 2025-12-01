@@ -478,7 +478,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
 .table thead th {
   position: -webkit-sticky !important; /* Safari */
   position: sticky !important;
-  top: 90px !important; /* Abaixo da paginação */
+  top: 40px !important; /* Abaixo da paginação (~40px de altura) */
   z-index: 102 !important; /* Abaixo da paginação (1040) mas acima do conteúdo */
   background: #212529 !important; /* Fundo escuro (table-dark) */
   color: #ffffff !important;
@@ -533,126 +533,124 @@ nav.navbar .navbar-brand .badge.bg-primary {
 }
 
 /* ===========================
-   OBSERVAÇÃO RÁPIDA - LINHA ABAIXO DAS 3 COLUNAS
+   OBSERVAÇÃO RÁPIDA - DENTRO DA LINHA (3ª sub-linha)
    =========================== */
 
-/* Linha de observação */
-.obs-row {
-  background: #fafafa !important;
-}
-
-.obs-row:hover {
-  background: #f5f5f5 !important;
-}
-
-[data-theme="dark"] .obs-row {
-  background: #1a1d21 !important;
-}
-
-[data-theme="dark"] .obs-row:hover {
-  background: #22262e !important;
-}
-
-/* Células vazias (spacer) */
-.obs-spacer {
-  padding: 0 !important;
-  border-top: none !important;
-  height: 0;
-}
-
-/* Célula que contém a observação */
-.obs-cell {
-  padding: 4px 8px !important;
-  border-top: none !important;
-  vertical-align: top;
-}
-
-/* Wrapper da observação */
-.obs-wrapper {
+/* Célula container (Prevista) - precisa de position relative */
+.obs-cell-container {
   position: relative;
-  cursor: text;
+  vertical-align: top !important;
+  overflow: visible !important;
 }
 
-/* Textarea da observação */
-.obs-textarea {
+/* Wrapper da observação - posicionado na parte inferior, estende para DIREITA */
+.obs-inline-wrapper {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 300%;  /* Estende para cobrir as 2 colunas seguintes (Status e Alertas) */
+  height: 22px;
+  z-index: 100;
+}
+
+/* Input da observação */
+.obs-inline-input {
   width: 100%;
-  min-height: 38px;
-  max-height: 38px;
-  padding: 6px 10px;
+  height: 100%;
+  padding: 2px 24px 2px 8px;
   border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
   line-height: 1.4;
   resize: none;
   overflow: hidden;
-  background: #fff;
+  background: #fafafa;
   color: #495057;
-  transition: max-height 0.3s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.2s ease;
 }
 
-.obs-textarea::placeholder {
+.obs-inline-input::placeholder {
   color: #adb5bd;
   font-style: italic;
 }
 
-/* Estado expandido */
-.obs-textarea.expanded {
-  max-height: 120px;
-  overflow-y: auto;
-  border-color: #80bdff;
-  box-shadow: 0 2px 8px rgba(0,123,255,0.15);
+.obs-inline-input:hover {
+  border-color: #ced4da;
+  background: #fff;
 }
 
-.obs-textarea:focus {
+.obs-inline-input:focus {
   outline: none;
   border-color: #80bdff;
-  box-shadow: 0 2px 8px rgba(0,123,255,0.15);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,123,255,0.15);
+}
+
+/* Estado expandido - cresce para cima */
+.obs-inline-input.expanded {
+  height: 60px;
+  overflow-y: auto;
+  border-color: #80bdff;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Wrapper expandido precisa ajustar altura */
+.obs-inline-wrapper:has(.obs-inline-input.expanded) {
+  height: auto;
 }
 
 /* Dark theme */
-[data-theme="dark"] .obs-textarea {
+[data-theme="dark"] .obs-inline-input {
   background: #2d3139;
   border-color: #3a3f47;
   color: #e4e6eb;
 }
 
-[data-theme="dark"] .obs-textarea::placeholder {
+[data-theme="dark"] .obs-inline-input::placeholder {
   color: #6c757d;
 }
 
-[data-theme="dark"] .obs-textarea.expanded,
-[data-theme="dark"] .obs-textarea:focus {
+[data-theme="dark"] .obs-inline-input:hover {
+  border-color: #4a5568;
+  background: #353a42;
+}
+
+[data-theme="dark"] .obs-inline-input:focus,
+[data-theme="dark"] .obs-inline-input.expanded {
   border-color: #4a9eff;
-  box-shadow: 0 2px 8px rgba(74,158,255,0.2);
+  background: #22262e;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* Indicador de status */
-.obs-status {
+.obs-inline-status {
   position: absolute;
-  right: 8px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   pointer-events: none;
+  z-index: 101;
 }
 
-.obs-status.salvando {
+.obs-inline-status.salvando {
   color: #6c757d;
 }
 
-.obs-status.salvo {
+.obs-inline-status.salvo {
   color: #28a745;
 }
 
-.obs-status.erro {
+.obs-inline-status.erro {
   color: #dc3545;
 }
 
 /* Spinner de loading */
 .obs-spinner {
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border: 2px solid #dee2e6;
   border-top-color: #6c757d;
   border-radius: 50%;
@@ -660,7 +658,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
 }
 
 @keyframes obs-spin {
-  to { transform: translateY(-50%) rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
 {% endblock %}
@@ -1504,7 +1502,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
               </button>
             {% endif %}
           </td>
-          <td>
+          <td class="obs-cell-container">
             {% if e.data_entrega_prevista %}
               <button class="btn btn-sm btn-primary w-100 text-white" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')">
                 📅 {{ e.data_entrega_prevista | formatar_data_segura }}
@@ -1514,6 +1512,18 @@ nav.navbar .navbar-brand .badge.bg-primary {
                 ➕ Definir Data
               </button>
             {% endif %}
+            <!-- 📝 OBSERVAÇÃO RÁPIDA (estende para direita sobre Status e Alertas) -->
+            <div class="obs-inline-wrapper">
+              <textarea
+                class="obs-inline-input"
+                id="obs-textarea-{{ e.id }}"
+                data-entrega-id="{{ e.id }}"
+                placeholder="+ obs..."
+                oninput="debounceObsRapida({{ e.id }})"
+                onfocus="expandirObs({{ e.id }})"
+              >{{ e.observacao_operacional or '' }}</textarea>
+              <span class="obs-inline-status" id="obs-status-{{ e.id }}"></span>
+            </div>
           </td>
           <td>
             {# ✅ CORREÇÃO: status_finalizacao tem prioridade sobre nf_cd #}
@@ -1616,24 +1626,6 @@ nav.navbar .navbar-brand .badge.bg-primary {
               {% endif %}
             </form>
           </td>
-        </tr>
-        <!-- 📝 LINHA DE OBSERVAÇÃO (abaixo das 3 colunas: Prevista, Status, Alertas) -->
-        <tr class="obs-row" data-entrega-id="{{ e.id }}">
-          <td colspan="6" class="obs-spacer"></td>
-          <td colspan="3" class="obs-cell">
-            <div class="obs-wrapper" onclick="focarObs({{ e.id }})">
-              <textarea
-                class="obs-textarea"
-                id="obs-textarea-{{ e.id }}"
-                data-entrega-id="{{ e.id }}"
-                placeholder="+ adicionar observação..."
-                oninput="debounceObsRapida({{ e.id }})"
-                onfocus="expandirObs({{ e.id }})"
-              >{{ e.observacao_operacional or '' }}</textarea>
-              <span class="obs-status" id="obs-status-{{ e.id }}"></span>
-            </div>
-          </td>
-          <td class="obs-spacer"></td>
         </tr>
         {% endfor %}
 
@@ -2014,14 +2006,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Armazena os timers de debounce por entrega
   const obsDebounceTimers = {};
 
-  // Foca no textarea ao clicar no wrapper
-  window.focarObs = function(entregaId) {
-    const textarea = document.getElementById('obs-textarea-' + entregaId);
-    if (textarea) {
-      textarea.focus();
-    }
-  };
-
   // Expande o textarea ao focar
   window.expandirObs = function(entregaId) {
     const textarea = document.getElementById('obs-textarea-' + entregaId);
@@ -2032,8 +2016,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Recolhe ao clicar fora
   document.addEventListener('click', function(event) {
-    if (!event.target.closest('.obs-wrapper')) {
-      document.querySelectorAll('.obs-textarea.expanded').forEach(textarea => {
+    if (!event.target.closest('.obs-inline-wrapper')) {
+      document.querySelectorAll('.obs-inline-input.expanded').forEach(textarea => {
         textarea.classList.remove('expanded');
       });
     }
@@ -2048,8 +2032,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Limpa status anterior
     const statusSpan = document.getElementById('obs-status-' + entregaId);
-    statusSpan.innerHTML = '';
-    statusSpan.className = 'obs-status';
+    if (statusSpan) {
+      statusSpan.innerHTML = '';
+      statusSpan.className = 'obs-inline-status';
+    }
 
     // Cria novo timer
     obsDebounceTimers[entregaId] = setTimeout(() => {
@@ -2064,8 +2050,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const observacao = textarea.value.trim();
 
     // Mostra indicador de salvando
-    statusSpan.innerHTML = '<span class="obs-spinner"></span>';
-    statusSpan.className = 'obs-status salvando';
+    if (statusSpan) {
+      statusSpan.innerHTML = '<span class="obs-spinner"></span>';
+      statusSpan.className = 'obs-inline-status salvando';
+    }
 
     fetch(`/monitoramento/${entregaId}/atualizar_observacao_rapida`, {
       method: 'POST',
@@ -2079,24 +2067,30 @@ document.addEventListener('DOMContentLoaded', function() {
     .then(data => {
       if (data.success) {
         // Mostra indicador de sucesso
-        statusSpan.innerHTML = '✓';
-        statusSpan.className = 'obs-status salvo';
+        if (statusSpan) {
+          statusSpan.innerHTML = '✓';
+          statusSpan.className = 'obs-inline-status salvo';
 
-        // Limpa mensagem após 1.5 segundos
-        setTimeout(() => {
-          statusSpan.innerHTML = '';
-          statusSpan.className = 'obs-status';
-        }, 1500);
+          // Limpa mensagem após 1.5 segundos
+          setTimeout(() => {
+            statusSpan.innerHTML = '';
+            statusSpan.className = 'obs-inline-status';
+          }, 1500);
+        }
       } else {
         // Mostra erro
-        statusSpan.innerHTML = '✗';
-        statusSpan.className = 'obs-status erro';
+        if (statusSpan) {
+          statusSpan.innerHTML = '✗';
+          statusSpan.className = 'obs-inline-status erro';
+        }
       }
     })
     .catch(error => {
       console.error('Erro ao salvar observação:', error);
-      statusSpan.innerHTML = '✗';
-      statusSpan.className = 'obs-status erro';
+      if (statusSpan) {
+        statusSpan.innerHTML = '✗';
+        statusSpan.className = 'obs-inline-status erro';
+      }
     });
   }
 </script>
