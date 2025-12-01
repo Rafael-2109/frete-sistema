@@ -1,9 +1,9 @@
 ---
-name: analisando-logistica-frete
+name: agente-logistico
 description: Analisa e consulta dados do sistema de fretes. Responde perguntas sobre disponibilidade de pedidos, estoque, rupturas, atrasos, prazos de entrega e programacao de producao. Use quando o usuario perguntar sobre carteira de pedidos, separacoes, projecoes de estoque ou prazos de entrega.
 ---
 
-# Analisando Logistica de Frete
+# Agente Logístico - Sistema de Fretes
 
 ## Quando Usar Este Skill
 

@@ -738,6 +738,16 @@ def create_app(config_name=None):
     except ImportError as e:
         app.logger.warning(f"⚠️ Claude AI Lite não disponível: {e}")
 
+    # 🤖 Agente Logístico - Claude Agent SDK (substitui Claude AI Lite)
+    try:
+        from app.agente import init_app as init_agente
+        init_agente(app)
+        app.logger.info("✅ Agente Logístico (Claude Agent SDK) registrado com sucesso")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Agente Logístico não disponível: {e}")
+    except Exception as e:
+        app.logger.error(f"❌ Erro ao inicializar Agente Logístico: {e}")
+
     # 🔐 Sistema de Permissões
 
     # 🎭 Registrar helpers de permissão nos templates
