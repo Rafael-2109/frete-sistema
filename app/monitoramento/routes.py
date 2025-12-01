@@ -467,6 +467,22 @@ def finalizar_entrega(id):
     entrega.data_hora_entrega_realizada = None
     entrega.nova_nf = None
 
+    # ✅ CORREÇÃO: Resetar nf_cd ao finalizar entrega
+    # Se a entrega está sendo finalizada, ela não está mais "no CD"
+    if entrega.nf_cd:
+        entrega.nf_cd = False
+        # Sincronizar com Separacao
+        if entrega.separacao_lote_id:
+            Separacao.query.filter_by(
+                separacao_lote_id=entrega.separacao_lote_id
+            ).update({'nf_cd': False})
+            print(f"[FINALIZAR] 🔄 Separacao nf_cd=False para lote {entrega.separacao_lote_id}")
+        elif entrega.numero_nf:
+            Separacao.query.filter_by(
+                numero_nf=entrega.numero_nf
+            ).update({'nf_cd': False})
+            print(f"[FINALIZAR] 🔄 Separacao nf_cd=False para NF {entrega.numero_nf}")
+
     descricao_log = ""
 
     if status_finalizacao in ["Troca de NF", "Cancelada", "Devolvida"]:
@@ -1308,6 +1324,20 @@ def excluir_evento(evento_id):
         if entrega:
             entrega.nf_cd = False
 
+            # ✅ CORREÇÃO: Sincronizar nf_cd com Separacao
+            # Ao excluir evento "NF no CD", também resetar flag em Separacao
+            if entrega.separacao_lote_id:
+                Separacao.query.filter_by(
+                    separacao_lote_id=entrega.separacao_lote_id
+                ).update({'nf_cd': False})
+                print(f"[SYNC] 🔄 Separacao nf_cd=False para lote {entrega.separacao_lote_id}")
+            elif entrega.numero_nf:
+                # Fallback: buscar por NF
+                Separacao.query.filter_by(
+                    numero_nf=entrega.numero_nf
+                ).update({'nf_cd': False})
+                print(f"[SYNC] 🔄 Separacao nf_cd=False para NF {entrega.numero_nf}")
+
     db.session.delete(evento)
     db.session.commit()
 
@@ -1590,6 +1620,38 @@ def alterar_data_prevista(id):
         flash(f'❌ Erro ao alterar data: {str(e)}', 'danger')
     
     return redirect(request.referrer)
+
+@monitoramento_bp.route('/<int:id>/atualizar_observacao_rapida', methods=['POST'])
+@login_required
+def atualizar_observacao_rapida(id):
+    """
+    Atualiza a observação operacional de uma entrega via AJAX.
+    Usado pelo campo de observação rápida na listagem de entregas.
+    """
+    entrega = EntregaMonitorada.query.get_or_404(id)
+
+    # Verificar permissão de vendedor
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=entrega.vendedor, numero_nf=entrega.numero_nf):
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+
+    try:
+        data = request.get_json()
+        observacao = data.get('observacao', '').strip() if data else ''
+
+        # Atualiza o campo (permite string vazia para limpar)
+        entrega.observacao_operacional = observacao if observacao else None
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Observação salva',
+            'observacao': entrega.observacao_operacional or ''
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @monitoramento_bp.route('/<int:id>/historico_data_prevista')
 @login_required

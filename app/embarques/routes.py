@@ -1531,7 +1531,7 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                 # ✅ LÓGICA CONSOLIDADA
                 if not outros_embarques_ativos:
                     # NÃO HÁ OUTROS EMBARQUES ATIVOS
-                    
+
                     if entregas_vinculadas:
                         # ✅ HÁ ENTREGAS VINCULADAS → NF voltou para CD
                         Separacao.query.filter_by(
@@ -1539,7 +1539,15 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                         ).update({'nf_cd': True})
                         # MANTÉM numero_nf (não apaga)
                         print(f"[SYNC] 📦 NF {pedido.nf} voltou para o CD (nf_cd=True)")
-                        
+
+                        # ✅ CORREÇÃO: Limpar data_embarque e transportadora de EntregaMonitorada
+                        # Quando cancelamos o embarque, a NF volta ao CD sem vínculo com embarque
+                        for entrega in entregas_vinculadas:
+                            entrega.data_embarque = None
+                            entrega.transportadora = "-"
+                            entrega.nf_cd = True  # Sincroniza flag
+                            print(f"[SYNC] 🔄 EntregaMonitorada NF {entrega.numero_nf}: data_embarque e transportadora limpos")
+
                     else:
                         # ✅ NÃO HÁ ENTREGAS VINCULADAS → Reset completo
                         Separacao.query.filter_by(

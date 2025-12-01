@@ -583,12 +583,14 @@ async function handleStreamResponse(response) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let currentText = '';
     let currentEventType = null;
 
-    // ✅ Elemento de mensagem - criado sob demanda quando texto chegar
-    let msgElement = null;
-    let bubbleElement = null;
+    // Estado da mensagem atual
+    const state = {
+        text: '',           // Texto acumulado
+        msgElement: null,   // Elemento DOM da mensagem
+        bubbleElement: null // Elemento do bubble
+    };
 
     while (true) {
         const { done, value } = await reader.read();
@@ -607,17 +609,16 @@ async function handleStreamResponse(response) {
                 try {
                     const data = JSON.parse(line.slice(5));
 
-                    // ✅ Cria elemento apenas quando primeiro texto chegar
-                    if (currentEventType === 'text' && !msgElement) {
+                    // Cria elemento apenas quando primeiro texto chegar
+                    if (currentEventType === 'text' && !state.msgElement) {
                         hideTyping();
-                        msgElement = createMessageElement('', 'assistant');
-                        chatMessages.appendChild(msgElement);
-                        bubbleElement = msgElement.querySelector('.message-bubble');
+                        state.msgElement = createMessageElement('', 'assistant');
+                        chatMessages.appendChild(state.msgElement);
+                        state.bubbleElement = state.msgElement.querySelector('.message-bubble');
                     }
 
-                    // Processa o evento
-                    await processSSEEvent(currentEventType, data, bubbleElement, currentText);
-                    if (data.content) currentText += data.content;
+                    // Processa o evento com estado compartilhado
+                    processSSEEvent(currentEventType, data, state);
                     currentEventType = null;
                 } catch (e) {
                     console.error('[SSE] Erro ao parsear:', e);
@@ -629,31 +630,30 @@ async function handleStreamResponse(response) {
     hideTyping();
 }
 
-// Processa evento SSE
-// ✅ CORRIGIDO: Recebe eventType como primeiro parâmetro (do "event:" line)
-async function processSSEEvent(eventType, data, bubbleElement, currentText) {
-    console.log('[SSE] Processando evento:', eventType, data);
-
+// Processa evento SSE com estado compartilhado
+function processSSEEvent(eventType, data, state) {
     switch (eventType) {
         case 'start':
-            console.log('[SSE] Stream iniciado');
+            // Stream iniciado
             break;
 
         case 'init':
             // Captura session_id do SDK
-            sessionId = data.session_id;
-            console.log('[SSE] Session ID:', sessionId);
+            if (data.session_id) sessionId = data.session_id;
             break;
 
         case 'text':
-            currentText += data.content || '';
-            bubbleElement.innerHTML = formatMessage(currentText);
-            scrollToBottom();
-            hideTyping();  // Esconde "Pensando..." quando texto começa
+            // Acumula texto no estado compartilhado
+            state.text += data.content || '';
+            if (state.bubbleElement) {
+                state.bubbleElement.innerHTML = formatMessage(state.text);
+                scrollToBottom();
+            }
+            hideTyping();
             break;
 
         case 'tool_call':
-            showTyping(`🔧 Executando ${data.tool_name || 'ferramenta'}...`);
+            showTyping(`🔧 Executando ${data.tool_name || data.content || 'ferramenta'}...`);
             break;
 
         case 'tool_result':
@@ -668,18 +668,14 @@ async function processSSEEvent(eventType, data, bubbleElement, currentText) {
 
         case 'error':
             hideTyping();
-            addMessage(`❌ ${data.message || 'Erro desconhecido'}`, 'assistant');
+            addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
             break;
 
         case 'done':
             hideTyping();
             if (data.session_id) sessionId = data.session_id;
             updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
-            console.log('[SSE] Concluído:', data);
             break;
-
-        default:
-            console.warn('[SSE] Evento desconhecido:', eventType, data);
     }
 }
 

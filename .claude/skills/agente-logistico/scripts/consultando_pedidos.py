@@ -11,6 +11,9 @@ Uso:
     --verificar-bonificacao               # Q14: Pedidos faltando bonificacao
     --pedido VCD123 --status              # Q16: Status do pedido
     --consolidar-com "assai 123"          # Q19: Pedidos para consolidar
+    --produto "azeitona verde"            # Pedidos com produto especifico
+    --produto palmito --ate-data amanha   # Filtrar por data de expedicao
+    --produto pessego --em-separacao      # Buscar em Separacao (nao faturados)
 """
 import sys
 import os
@@ -26,6 +29,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Importar modulo centralizado de resolucao de entidades
 from resolver_entidades import (
     resolver_pedido,
+    resolver_produto_unico,
+    formatar_sugestao_produto,
     get_prefixos_grupo,
     listar_grupos_disponiveis,
     formatar_sugestao_pedido,
@@ -40,6 +45,62 @@ def decimal_default(obj):
     if isinstance(obj, (date, datetime)):
         return obj.isoformat()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def parse_data_natural(termo: str) -> date:
+    """
+    Interpreta termo de data em linguagem natural ou formato brasileiro.
+
+    Formatos aceitos:
+    - "hoje" -> date.today()
+    - "amanha" ou "amanhã" -> date.today() + 1 dia
+    - "dd/mm/yyyy" -> data completa
+    - "dd/mm" -> assume ano atual
+    - "dd" -> assume mes e ano atuais
+
+    Args:
+        termo: String representando a data
+
+    Returns:
+        date: Data interpretada
+
+    Raises:
+        ValueError: Se nao conseguir interpretar
+    """
+    termo = termo.strip().lower()
+    hoje = date.today()
+
+    # Termos naturais
+    if termo in ('hoje', 'today'):
+        return hoje
+    if termo in ('amanha', 'amanhã', 'tomorrow'):
+        return hoje + timedelta(days=1)
+    if termo in ('ontem', 'yesterday'):
+        return hoje - timedelta(days=1)
+
+    # Formatos com barra (dd/mm/yyyy, dd/mm, dd)
+    partes = termo.replace('-', '/').split('/')
+
+    try:
+        if len(partes) == 3:
+            # dd/mm/yyyy
+            dia, mes, ano = int(partes[0]), int(partes[1]), int(partes[2])
+            # Se ano com 2 digitos, assume 2000+
+            if ano < 100:
+                ano += 2000
+            return date(ano, mes, dia)
+        elif len(partes) == 2:
+            # dd/mm - assume ano atual
+            dia, mes = int(partes[0]), int(partes[1])
+            return date(hoje.year, mes, dia)
+        elif len(partes) == 1 and partes[0].isdigit():
+            # dd - assume mes e ano atuais
+            dia = int(partes[0])
+            return date(hoje.year, hoje.month, dia)
+    except (ValueError, TypeError):
+        pass
+
+    raise ValueError(f"Formato de data nao reconhecido: '{termo}'. Use: hoje, amanha, dd/mm/yyyy, dd/mm ou dd")
 
 
 def consultar_pedidos_grupo(args):
@@ -578,6 +639,167 @@ def consultar_consolidacao(args):
     return resultado
 
 
+def consultar_pedidos_por_produto(args):
+    """
+    Consulta pedidos que contem um produto especifico.
+
+    Fluxo:
+    1. Resolve termo do produto para cod_produto via resolver_produto_unico
+    2. Busca em Separacao (--em-separacao) ou CarteiraPrincipal (padrao)
+    3. Filtra por data de expedicao se --ate-data informado
+    4. Agrupa por pedido
+
+    Args:
+        args: Argumentos parseados (produto, ate_data, em_separacao, limit)
+
+    Returns:
+        dict: Resultado com pedidos encontrados
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from app.producao.models import CadastroPalletizacao
+
+    resultado = {
+        'sucesso': True,
+        'tipo_analise': 'PEDIDOS_POR_PRODUTO',
+        'termo_busca': args.produto,
+        'produto': None,
+        'filtro_data': None,
+        'fonte': 'separacao' if args.em_separacao else 'carteira',
+        'pedidos': [],
+        'resumo': {}
+    }
+
+    # 1. Resolver produto
+    produto_info, info_busca = resolver_produto_unico(args.produto)
+
+    if not produto_info:
+        resultado['sucesso'] = False
+        resultado['erro'] = f"Produto '{args.produto}' nao encontrado"
+        resultado['sugestao'] = formatar_sugestao_produto(info_busca)
+        if info_busca.get('candidatos'):
+            resultado['candidatos'] = info_busca['candidatos']
+        return resultado
+
+    cod_produto = produto_info['cod_produto']
+    nome_produto = produto_info['nome_produto']
+
+    resultado['produto'] = {
+        'cod_produto': cod_produto,
+        'nome_produto': nome_produto
+    }
+    resultado['busca'] = {
+        'encontrado': info_busca.get('encontrado', False),
+        'multiplos': info_busca.get('multiplos', False)
+    }
+    if info_busca.get('candidatos'):
+        resultado['busca']['outros_candidatos'] = info_busca['candidatos']
+
+    # 2. Parsear data limite se informada
+    data_limite = None
+    if args.ate_data:
+        try:
+            data_limite = parse_data_natural(args.ate_data)
+            resultado['filtro_data'] = {
+                'termo': args.ate_data,
+                'data': data_limite.isoformat()
+            }
+        except ValueError as e:
+            resultado['sucesso'] = False
+            resultado['erro'] = str(e)
+            return resultado
+
+    # 3. Buscar pedidos
+    pedidos_dict = defaultdict(lambda: {
+        'num_pedido': None,
+        'cliente': None,
+        'cnpj': None,
+        'cidade': None,
+        'uf': None,
+        'expedicao': None,
+        'qtd_produto': 0.0,
+        'valor_produto': 0.0,
+        'total_itens': 0
+    })
+
+    if args.em_separacao:
+        # Buscar em Separacao (nao faturados)
+        query = Separacao.query.filter(
+            Separacao.cod_produto == cod_produto,
+            Separacao.sincronizado_nf == False
+        )
+
+        if data_limite:
+            query = query.filter(Separacao.expedicao <= data_limite)
+
+        itens = query.all()
+
+        for item in itens:
+            num = item.num_pedido
+            if pedidos_dict[num]['num_pedido'] is None:
+                pedidos_dict[num]['num_pedido'] = num
+                pedidos_dict[num]['cliente'] = item.raz_social_red
+                pedidos_dict[num]['cnpj'] = item.cnpj_cpf
+                pedidos_dict[num]['cidade'] = item.nome_cidade
+                pedidos_dict[num]['uf'] = item.cod_uf
+                pedidos_dict[num]['expedicao'] = item.expedicao.isoformat() if item.expedicao else None
+
+            pedidos_dict[num]['qtd_produto'] += float(item.qtd_saldo or 0)
+            pedidos_dict[num]['valor_produto'] += float(item.valor_saldo or 0)
+            pedidos_dict[num]['total_itens'] += 1
+    else:
+        # Buscar em CarteiraPrincipal (saldo pendente > 0)
+        query = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.cod_produto == cod_produto,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        )
+
+        if data_limite:
+            query = query.filter(CarteiraPrincipal.data_entrega_pedido <= data_limite)
+
+        itens = query.all()
+
+        for item in itens:
+            num = item.num_pedido
+            if pedidos_dict[num]['num_pedido'] is None:
+                pedidos_dict[num]['num_pedido'] = num
+                pedidos_dict[num]['cliente'] = item.raz_social_red
+                pedidos_dict[num]['cnpj'] = item.cnpj_cpf
+                pedidos_dict[num]['cidade'] = item.nome_cidade
+                pedidos_dict[num]['uf'] = item.cod_uf
+                pedidos_dict[num]['expedicao'] = item.data_entrega_pedido.isoformat() if item.data_entrega_pedido else None
+
+            qtd = float(item.qtd_saldo_produto_pedido or 0)
+            preco = float(item.preco_produto_pedido or 0)
+            pedidos_dict[num]['qtd_produto'] += qtd
+            pedidos_dict[num]['valor_produto'] += qtd * preco
+            pedidos_dict[num]['total_itens'] += 1
+
+    # 4. Converter para lista e ordenar por valor
+    pedidos_lista = list(pedidos_dict.values())
+    pedidos_lista.sort(key=lambda x: -x['valor_produto'])
+
+    resultado['pedidos'] = pedidos_lista[:args.limit]
+
+    # 5. Resumo
+    total_qtd = sum(p['qtd_produto'] for p in pedidos_lista)
+    total_valor = sum(p['valor_produto'] for p in pedidos_lista)
+    fonte_texto = 'em separacao' if args.em_separacao else 'na carteira'
+    data_texto = f" ate {data_limite.strftime('%d/%m/%Y')}" if data_limite else ""
+
+    resultado['resumo'] = {
+        'total_pedidos': len(pedidos_lista),
+        'total_quantidade': total_qtd,
+        'total_valor': total_valor,
+        'mensagem': (
+            f"{len(pedidos_lista)} pedido(s) {fonte_texto} com {nome_produto}{data_texto}. "
+            f"Total: {total_qtd:,.0f} unid, R$ {total_valor:,.2f}"
+        ) if pedidos_lista else f"Nenhum pedido encontrado {fonte_texto} com {nome_produto}{data_texto}"
+    }
+
+    return resultado
+
+
 def main():
     from app import create_app
 
@@ -591,6 +813,9 @@ Exemplos:
   python consultando_pedidos.py --verificar-bonificacao
   python consultando_pedidos.py --pedido VCD123 --status
   python consultando_pedidos.py --consolidar-com "assai 123"
+  python consultando_pedidos.py --produto "azeitona verde pouch" --em-separacao
+  python consultando_pedidos.py --produto palmito --ate-data amanha
+  python consultando_pedidos.py --produto pessego --ate-data 15/12
         """
     )
 
@@ -601,6 +826,9 @@ Exemplos:
     parser.add_argument('--verificar-bonificacao', action='store_true', help='Verificar bonificacoes faltando')
     parser.add_argument('--status', action='store_true', help='Mostrar status detalhado do pedido')
     parser.add_argument('--consolidar-com', help='Buscar pedidos para consolidar com este')
+    parser.add_argument('--produto', help='Termo de busca do produto (nome, abreviacao)')
+    parser.add_argument('--ate-data', dest='ate_data', help='Data limite de expedicao (hoje, amanha, dd/mm/yyyy, dd/mm, dd)')
+    parser.add_argument('--em-separacao', dest='em_separacao', action='store_true', help='Buscar em Separacao ao inves de CarteiraPrincipal')
     parser.add_argument('--limit', type=int, default=100, help='Limite de resultados (default: 100)')
 
     args = parser.parse_args()
@@ -618,10 +846,12 @@ Exemplos:
             resultado = consultar_status_pedido(args)
         elif args.consolidar_com:
             resultado = consultar_consolidacao(args)
+        elif args.produto:
+            resultado = consultar_pedidos_por_produto(args)
         else:
             resultado = {
                 'sucesso': False,
-                'erro': 'Informe ao menos um filtro: --grupo, --atrasados, --verificar-bonificacao, --pedido com --status, ou --consolidar-com'
+                'erro': 'Informe ao menos um filtro: --grupo, --atrasados, --verificar-bonificacao, --pedido com --status, --consolidar-com, ou --produto'
             }
 
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))

@@ -10,9 +10,10 @@ Seguindo recomendacoes da Anthropic:
 Este modulo resolve:
 - Pedidos: por numero parcial, grupo empresarial, cliente
 - Produtos: por nome, abreviacoes, caracteristicas (CadastroPalletizacao)
+- Cidades: por nome normalizado (sem acentos, case-insensitive)
 
 Uso:
-    from resolver_entidades import resolver_pedido, resolver_produto
+    from resolver_entidades import resolver_pedido, resolver_produto, resolver_cidade, normalizar_texto
 
     # Resolver pedido
     itens, num_pedido, info = resolver_pedido("VCD1")        # Parcial
@@ -23,12 +24,53 @@ Uso:
     produtos = resolver_produto("pessego")        # Termo unico
     produtos = resolver_produto("pf mezzani")     # Abreviacoes
     produtos = resolver_produto("bd ind azeitona") # Combinacao
+
+    # Resolver cidade (normaliza acentos)
+    pedidos = resolver_cidade("itanhaem")  # Encontra "Itanhaém", "ITANHAEM", etc.
+    pedidos = resolver_cidade("peruibe")   # Encontra "Peruíbe", "PERUIBE", etc.
+
+    # Normalizar texto (util para comparacoes)
+    normalizar_texto("Itanhaém")  # -> "itanhaem"
+    normalizar_texto("São Paulo") # -> "sao paulo"
 """
 import sys
 import os
+import unicodedata
 
 # Adicionar path do projeto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+
+
+# ============================================================
+# FUNCOES DE NORMALIZACAO
+# ============================================================
+def normalizar_texto(texto: str) -> str:
+    """
+    Normaliza texto removendo acentos e convertendo para minusculas.
+
+    Util para comparacoes de cidades, clientes, produtos onde
+    podem haver variacoes de acentuacao e case.
+
+    Args:
+        texto: Texto original (ex: "Itanhaém", "São Paulo")
+
+    Returns:
+        str: Texto normalizado (ex: "itanhaem", "sao paulo")
+
+    Exemplos:
+        normalizar_texto("Itanhaém") -> "itanhaem"
+        normalizar_texto("São Paulo") -> "sao paulo"
+        normalizar_texto("PERUÍBE") -> "peruibe"
+        normalizar_texto("Mongaguá") -> "mongagua"
+    """
+    if not texto:
+        return ""
+    # Remove acentos via NFD (decomposicao) e remove combining characters
+    texto_sem_acento = ''.join(
+        c for c in unicodedata.normalize('NFD', texto)
+        if unicodedata.category(c) != 'Mn'
+    )
+    return texto_sem_acento.lower().strip()
 
 # ============================================================
 # GRUPOS EMPRESARIAIS
@@ -293,6 +335,190 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
     # Nenhuma estrategia funcionou
     info['estrategia'] = 'NAO_ENCONTRADO'
     return [], None, info
+
+
+# ============================================================
+# RESOLVER CIDADE
+# Busca pedidos por cidade com normalizacao de acentos
+# ============================================================
+def resolver_cidade(termo: str, fonte: str = 'separacao', apenas_pendentes: bool = True):
+    """
+    Resolve termo de cidade para pedidos, normalizando acentos e case.
+
+    Resolve problemas como:
+    - "itanhaem" encontra "Itanhaém", "ITANHAEM", "itanhaém"
+    - "peruibe" encontra "Peruíbe", "PERUIBE"
+    - "sao paulo" encontra "São Paulo", "SAO PAULO"
+
+    Estrategia:
+    1. Normaliza o termo de busca (remove acentos, lowercase)
+    2. Busca todas as cidades unicas no banco
+    3. Compara normalizado com normalizado
+    4. Retorna pedidos das cidades que casam
+
+    Args:
+        termo: Nome da cidade (pode ter ou nao acentos)
+        fonte: 'carteira', 'separacao' ou 'ambos'
+        apenas_pendentes: Se True, filtra apenas pendentes (qtd_saldo > 0 ou sincronizado_nf=False)
+
+    Returns:
+        dict: {
+            'sucesso': bool,
+            'cidades_encontradas': list,  # Cidades que casaram
+            'pedidos': list,              # Pedidos agrupados
+            'total_pedidos': int,
+            'termo_normalizado': str
+        }
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from collections import defaultdict
+
+    termo_normalizado = normalizar_texto(termo)
+
+    resultado = {
+        'sucesso': True,
+        'termo_original': termo,
+        'termo_normalizado': termo_normalizado,
+        'cidades_encontradas': [],
+        'pedidos': [],
+        'total_pedidos': 0
+    }
+
+    if not termo_normalizado:
+        resultado['sucesso'] = False
+        resultado['erro'] = 'Termo de busca vazio'
+        return resultado
+
+    cidades_encontradas = set()
+    pedidos_dict = defaultdict(lambda: {
+        'num_pedido': None,
+        'cliente': None,
+        'cidade': None,
+        'uf': None,
+        'valor': 0.0,
+        'itens': 0
+    })
+
+    # Buscar em Separacao
+    if fonte in ('separacao', 'ambos'):
+        query = Separacao.query
+        if apenas_pendentes:
+            query = query.filter(Separacao.sincronizado_nf == False)
+
+        itens = query.all()
+
+        for item in itens:
+            cidade_item = item.nome_cidade or ''
+            cidade_normalizada = normalizar_texto(cidade_item)
+
+            # Verifica se o termo esta contido na cidade normalizada
+            if termo_normalizado in cidade_normalizada:
+                cidades_encontradas.add(cidade_item)
+                num = item.num_pedido
+                if pedidos_dict[num]['num_pedido'] is None:
+                    pedidos_dict[num]['num_pedido'] = num
+                    pedidos_dict[num]['cliente'] = item.raz_social_red
+                    pedidos_dict[num]['cidade'] = cidade_item
+                    pedidos_dict[num]['uf'] = item.cod_uf
+                    pedidos_dict[num]['fonte'] = 'separacao'
+
+                pedidos_dict[num]['valor'] += float(item.valor_saldo or 0)
+                pedidos_dict[num]['itens'] += 1
+
+    # Buscar em Carteira
+    if fonte in ('carteira', 'ambos'):
+        query = CarteiraPrincipal.query
+        if apenas_pendentes:
+            query = query.filter(CarteiraPrincipal.qtd_saldo_produto_pedido > 0)
+
+        itens = query.all()
+
+        for item in itens:
+            cidade_item = item.nome_cidade or ''
+            cidade_normalizada = normalizar_texto(cidade_item)
+
+            if termo_normalizado in cidade_normalizada:
+                cidades_encontradas.add(cidade_item)
+                num = item.num_pedido
+                # So adiciona se nao veio da separacao
+                if pedidos_dict[num]['num_pedido'] is None:
+                    pedidos_dict[num]['num_pedido'] = num
+                    pedidos_dict[num]['cliente'] = item.raz_social_red
+                    pedidos_dict[num]['cidade'] = cidade_item
+                    pedidos_dict[num]['uf'] = item.cod_uf
+                    pedidos_dict[num]['fonte'] = 'carteira'
+
+                    preco = float(item.preco_produto_pedido or 0)
+                    qtd = float(item.qtd_saldo_produto_pedido or 0)
+                    pedidos_dict[num]['valor'] += preco * qtd
+                    pedidos_dict[num]['itens'] += 1
+
+    resultado['cidades_encontradas'] = sorted(list(cidades_encontradas))
+    resultado['pedidos'] = list(pedidos_dict.values())
+    resultado['total_pedidos'] = len(pedidos_dict)
+
+    if not resultado['pedidos']:
+        resultado['sucesso'] = False
+        resultado['erro'] = f"Nenhum pedido encontrado para cidade '{termo}'"
+        resultado['sugestao'] = "Verifique a grafia da cidade ou tente sem acentos"
+
+    return resultado
+
+
+def resolver_cidades_multiplas(cidades: list, fonte: str = 'separacao', apenas_pendentes: bool = True):
+    """
+    Resolve multiplas cidades de uma vez.
+
+    Util para buscas como "litoral sul" que pode incluir
+    Itanhaem, Peruibe, Mongagua, etc.
+
+    Args:
+        cidades: Lista de nomes de cidades
+        fonte: 'carteira', 'separacao' ou 'ambos'
+        apenas_pendentes: Se True, filtra apenas pendentes
+
+    Returns:
+        dict: Resultado agregado de todas as cidades
+    """
+    from collections import defaultdict
+
+    resultado_final = {
+        'sucesso': True,
+        'cidades_buscadas': cidades,
+        'cidades_encontradas': [],
+        'pedidos': [],
+        'total_pedidos': 0,
+        'por_cidade': {}
+    }
+
+    pedidos_unicos = {}
+
+    for cidade in cidades:
+        resultado = resolver_cidade(cidade, fonte=fonte, apenas_pendentes=apenas_pendentes)
+
+        if resultado['sucesso']:
+            resultado_final['cidades_encontradas'].extend(resultado['cidades_encontradas'])
+            resultado_final['por_cidade'][cidade] = {
+                'encontradas': resultado['cidades_encontradas'],
+                'total': resultado['total_pedidos']
+            }
+
+            # Merge pedidos evitando duplicatas
+            for pedido in resultado['pedidos']:
+                num = pedido['num_pedido']
+                if num not in pedidos_unicos:
+                    pedidos_unicos[num] = pedido
+
+    resultado_final['pedidos'] = list(pedidos_unicos.values())
+    resultado_final['total_pedidos'] = len(pedidos_unicos)
+    resultado_final['cidades_encontradas'] = list(set(resultado_final['cidades_encontradas']))
+
+    if not resultado_final['pedidos']:
+        resultado_final['sucesso'] = False
+        resultado_final['erro'] = f"Nenhum pedido encontrado para as cidades: {', '.join(cidades)}"
+
+    return resultado_final
 
 
 # ============================================================
