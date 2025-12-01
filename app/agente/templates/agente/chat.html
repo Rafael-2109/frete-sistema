@@ -395,6 +395,7 @@
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-3">
+                        {% if current_user.perfil == 'administrador' %}
                         <div class="metrics-bar" id="metrics-bar" style="display: none;">
                             <span class="metric" title="Tokens usados">
                                 <i class="fas fa-coins"></i>
@@ -405,6 +406,7 @@
                                 <span id="metric-cost">$0.00</span>
                             </span>
                         </div>
+                        {% endif %}
                         <span class="status-badge online">
                             <i class="fas fa-circle"></i>
                             Online
@@ -771,14 +773,19 @@ function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Atualiza métricas
+// Atualiza métricas (apenas para administradores)
 function updateMetrics(inputTokens, outputTokens, costUsd) {
     totalTokens += (inputTokens || 0) + (outputTokens || 0);
     totalCost += costUsd || 0;
 
-    document.getElementById('metric-tokens').textContent = totalTokens.toLocaleString();
-    document.getElementById('metric-cost').textContent = `$${totalCost.toFixed(4)}`;
-    metricsBar.style.display = 'flex';
+    // Só atualiza UI se elementos existirem (admin only)
+    const tokenEl = document.getElementById('metric-tokens');
+    const costEl = document.getElementById('metric-cost');
+    if (tokenEl && costEl && metricsBar) {
+        tokenEl.textContent = totalTokens.toLocaleString();
+        costEl.textContent = `$${totalCost.toFixed(4)}`;
+        metricsBar.style.display = 'flex';
+    }
 }
 
 // Envia sugestão
@@ -820,7 +827,7 @@ function clearSession() {
     sessionId = null;
     totalTokens = 0;
     totalCost = 0;
-    metricsBar.style.display = 'none';
+    if (metricsBar) metricsBar.style.display = 'none';
 
     // Remove mensagens (exceto boas-vindas)
     const messages = chatMessages.querySelectorAll('.message');

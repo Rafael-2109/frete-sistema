@@ -47,9 +47,10 @@ class AgentSettings:
     cost_tracking_enabled: bool = True
     cost_alert_threshold_usd: float = 1.0  # Alerta por sessão
 
-    # Preços Opus (por 1M tokens) - VERIFICAR VALORES ATUAIS
-    opus_input_price_per_million: float = 15.00
-    opus_output_price_per_million: float = 75.00
+    # Preços Opus 4.5 (por 1M tokens)
+    # Ref: https://www.anthropic.com/pricing
+    opus_input_price_per_million: float = 5.00
+    opus_output_price_per_million: float = 25.00
 
     # System prompt
     system_prompt_path: str = "app/agente/prompts/system_prompt.md"

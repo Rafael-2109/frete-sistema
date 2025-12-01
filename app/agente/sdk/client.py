@@ -354,9 +354,16 @@ Nunca invente informações."""
                 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
                 if isinstance(message, AssistantMessage):
                     # Captura usage de AssistantMessage (conforme documentação Anthropic)
+                    # usage pode ser dict ou objeto com atributos
                     if hasattr(message, 'usage') and message.usage:
-                        input_tokens = message.usage.get('input_tokens', 0)
-                        output_tokens = message.usage.get('output_tokens', 0)
+                        usage = message.usage
+                        if isinstance(usage, dict):
+                            input_tokens = usage.get('input_tokens', 0)
+                            output_tokens = usage.get('output_tokens', 0)
+                        else:
+                            # Objeto com atributos
+                            input_tokens = getattr(usage, 'input_tokens', 0) or 0
+                            output_tokens = getattr(usage, 'output_tokens', 0) or 0
 
                     # Captura message.id para deduplicação (conforme documentação)
                     if hasattr(message, 'id') and message.id:
