@@ -584,22 +584,15 @@ async function handleStreamResponse(response) {
     let currentText = '';
     let currentEventType = null;
 
-    // Cria elemento da mensagem e ADICIONA ao DOM
-    const msgElement = createMessageElement('', 'assistant');
-    chatMessages.appendChild(msgElement);  // ✅ CORRIGIDO: Adiciona ao DOM
-    const bubbleElement = msgElement.querySelector('.message-bubble');
-
-    console.log('[SSE] Iniciando leitura do stream...');
+    // ✅ Elemento de mensagem - criado sob demanda quando texto chegar
+    let msgElement = null;
+    let bubbleElement = null;
 
     while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-            console.log('[SSE] Stream finalizado');
-            break;
-        }
+        if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        console.log('[SSE] Buffer recebido:', buffer.substring(0, 100));
 
         // Processa eventos SSE (formato: event: tipo\ndata: json\n\n)
         const lines = buffer.split('\n');
@@ -607,18 +600,25 @@ async function handleStreamResponse(response) {
 
         for (const line of lines) {
             if (line.startsWith('event:')) {
-                // ✅ CORRIGIDO: Captura o tipo do evento
                 currentEventType = line.slice(6).trim();
-                console.log('[SSE] Tipo de evento:', currentEventType);
             } else if (line.startsWith('data:')) {
                 try {
                     const data = JSON.parse(line.slice(5));
-                    // ✅ CORRIGIDO: Passa o tipo do evento para processamento
+
+                    // ✅ Cria elemento apenas quando primeiro texto chegar
+                    if (currentEventType === 'text' && !msgElement) {
+                        hideTyping();
+                        msgElement = createMessageElement('', 'assistant');
+                        chatMessages.appendChild(msgElement);
+                        bubbleElement = msgElement.querySelector('.message-bubble');
+                    }
+
+                    // Processa o evento
                     await processSSEEvent(currentEventType, data, bubbleElement, currentText);
                     if (data.content) currentText += data.content;
-                    currentEventType = null;  // Reset após processar
+                    currentEventType = null;
                 } catch (e) {
-                    console.error('[SSE] Erro ao parsear JSON:', e, line);
+                    console.error('[SSE] Erro ao parsear:', e);
                 }
             }
         }

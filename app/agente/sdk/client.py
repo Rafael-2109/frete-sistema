@@ -395,12 +395,10 @@ Nunca invente informações."""
                 # Mensagem de resultado final
                 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
                 if isinstance(message, ResultMessage):
-                    # Resultado final do agente
-                    if message.result and message.result != full_text:
-                        yield StreamEvent(
-                            type='text',
-                            content=message.result
-                        )
+                    # ✅ NÃO emite texto aqui - já foi emitido pelos TextBlocks do AssistantMessage
+                    # O ResultMessage.result contém o texto completo, mas duplicaria o que já foi enviado
+                    # Apenas captura o texto final para métricas
+                    if message.result:
                         full_text = message.result
 
                     # Session ID do resultado
