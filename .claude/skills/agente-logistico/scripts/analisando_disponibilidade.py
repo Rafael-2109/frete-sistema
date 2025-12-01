@@ -396,22 +396,32 @@ def analisar_grupo(args):
         produtos_analise[cod]['pedidos_afetados'].add(item.num_pedido)
         produtos_analise[cod]['valor_total'] += float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
 
-    # Verificar gargalos
+    # Verificar gargalos (usando projecao para considerar producao programada)
     gargalos = []
     for cod, dados in produtos_analise.items():
-        estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod)
+        # CORRECAO: Usar calcular_projecao() para considerar producao programada
+        projecao = ServicoEstoqueSimples.calcular_projecao(cod, 14)
+        estoque_atual = projecao.get('estoque_atual', 0)
+        menor_estoque_d7 = projecao.get('menor_estoque_d7', estoque_atual)
+        dia_ruptura = projecao.get('dia_ruptura')
         demanda = dados['demanda_cliente']
 
-        if estoque_atual < demanda:
+        # Verifica se vai dar falta considerando producao programada
+        if menor_estoque_d7 < demanda or estoque_atual < demanda:
             falta = demanda - estoque_atual
+            falta_projetada = demanda - menor_estoque_d7 if menor_estoque_d7 < demanda else 0
             gargalo = {
                 'cod_produto': cod,
                 'nome_produto': dados['nome_produto'],
                 'estoque_atual': estoque_atual,
+                'menor_estoque_d7': menor_estoque_d7,  # NOVO: Considera producao
+                'dia_ruptura': dia_ruptura,  # NOVO: Quando vai faltar
                 'demanda_cliente': demanda,
                 'falta': round(falta, 2),
+                'falta_projetada': round(falta_projetada, 2),  # NOVO: Falta apos producao
                 'pedidos_afetados': len(dados['pedidos_afetados']),
-                'valor_impactado': round(dados['valor_total'], 2)
+                'valor_impactado': round(dados['valor_total'], 2),
+                'producao_resolve': menor_estoque_d7 >= demanda  # NOVO: Se producao resolve
             }
 
             if args.diagnosticar_origem:
@@ -711,21 +721,32 @@ def diagnosticar_causa_atraso(num_pedido: str) -> tuple:
 
     itens = Separacao.query.filter(
         Separacao.num_pedido == num_pedido,
-        Separacao.sincronizado_nf == False
+        Separacao.sincronizado_nf == False,
+        Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
     ).all()
 
     itens_faltantes = []
     for item in itens:
         qtd_necessaria = float(item.qtd_saldo or 0)
-        estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(item.cod_produto)
+        # CORRECAO: Usar calcular_projecao() para considerar producao programada
+        projecao = ServicoEstoqueSimples.calcular_projecao(item.cod_produto, 14)
+        estoque_atual = projecao.get('estoque_atual', 0)
+        menor_estoque_d7 = projecao.get('menor_estoque_d7', estoque_atual)
+        dia_ruptura = projecao.get('dia_ruptura')
 
         if estoque_atual < qtd_necessaria:
+            falta_atual = qtd_necessaria - estoque_atual
+            falta_projetada = qtd_necessaria - menor_estoque_d7 if menor_estoque_d7 < qtd_necessaria else 0
             itens_faltantes.append({
                 'cod_produto': item.cod_produto,
                 'nome_produto': item.nome_produto,
                 'qtd_necessaria': qtd_necessaria,
                 'estoque_atual': estoque_atual,
-                'falta': round(qtd_necessaria - estoque_atual, 2)
+                'menor_estoque_d7': menor_estoque_d7,  # NOVO
+                'falta': round(falta_atual, 2),
+                'falta_projetada': round(falta_projetada, 2),  # NOVO
+                'dia_ruptura': dia_ruptura,  # NOVO
+                'producao_resolve': menor_estoque_d7 >= qtd_necessaria  # NOVO
             })
 
     return ('FALTA_ESTOQUE', itens_faltantes) if itens_faltantes else ('OUTRO_MOTIVO', [])
@@ -770,16 +791,27 @@ def ranking_impacto(args):
     for cod, dem in demanda_separacao:
         demanda_total[cod] += float(dem or 0)
 
-    # Identificar rupturas
+    # Identificar rupturas (usando projecao para considerar producao programada)
     produtos_ruptura = []
     for cod_produto, demanda in demanda_total.items():
-        estoque = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+        # CORRECAO: Usar calcular_projecao() para considerar producao programada
+        projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, 14)
+        estoque = projecao.get('estoque_atual', 0)
+        menor_estoque_d7 = projecao.get('menor_estoque_d7', estoque)
+        dia_ruptura = projecao.get('dia_ruptura')
+
         if estoque < demanda:
+            deficit_atual = demanda - estoque
+            deficit_projetado = demanda - menor_estoque_d7 if menor_estoque_d7 < demanda else 0
             produtos_ruptura.append({
                 'cod_produto': cod_produto,
                 'estoque_atual': estoque,
+                'menor_estoque_d7': menor_estoque_d7,  # NOVO
                 'demanda_total': demanda,
-                'deficit': demanda - estoque
+                'deficit': deficit_atual,
+                'deficit_projetado': deficit_projetado,  # NOVO
+                'dia_ruptura': dia_ruptura,  # NOVO
+                'producao_resolve': menor_estoque_d7 >= demanda  # NOVO
             })
 
     if not produtos_ruptura:

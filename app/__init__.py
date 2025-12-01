@@ -646,11 +646,6 @@ def create_app(config_name=None):
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
     from app.odoo.routes.manufatura_routes import manufatura_odoo_bp  # Integração Manufatura/Odoo
 
-    # Claude AI - importar apenas se habilitado
-    if os.getenv("ENABLE_CLAUDE_AI", "false").lower() == "true":
-        from app.claude_ai import claude_ai_bp
-    else:
-        claude_ai_bp = None
 
     # 🔍 Blueprint de diagnóstico PG
     try:
@@ -721,22 +716,6 @@ def create_app(config_name=None):
     from app.odoo.routes_circuit_breaker import circuit_breaker_bp
     app.register_blueprint(circuit_breaker_bp)
 
-    # 🤖 Claude AI Integration
-    # Claude AI - registrar apenas se habilitado
-    if claude_ai_bp:
-        app.register_blueprint(claude_ai_bp)
-
-    # 🤖 Claude AI Lite - Sistema simplificado e funcional
-    try:
-        from app.claude_ai_lite.routes import claude_lite_bp
-        from app.claude_ai_lite.routes_admin import claude_lite_admin_bp
-        from app.claude_ai_lite.ia_trainer.routes import bp as ia_trainer_bp
-        app.register_blueprint(claude_lite_bp)
-        app.register_blueprint(claude_lite_admin_bp)
-        app.register_blueprint(ia_trainer_bp)
-        app.logger.info("✅ Claude AI Lite registrado com sucesso (+ admin + IA Trainer)")
-    except ImportError as e:
-        app.logger.warning(f"⚠️ Claude AI Lite não disponível: {e}")
 
     # 🤖 Agente Logístico - Claude Agent SDK (substitui Claude AI Lite)
     try:
@@ -915,29 +894,6 @@ def create_app(config_name=None):
     app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
     app.register_blueprint(tagplus_oauth_bp)  # Rotas OAuth2
 
-    # ✅ INICIALIZAR CLAUDE AI DE FORMA EXPLÍCITA
-    try:
-        # Tentar obter Redis cache se disponível
-        redis_cache_instance = None
-        try:
-            from app.utils.redis_cache import redis_cache
-
-            redis_cache_instance = redis_cache
-        except ImportError:
-            pass
-
-        # Configurar Claude AI (apenas se habilitado)
-        if os.getenv("ENABLE_CLAUDE_AI", "false").lower() == "true":
-            from app.claude_ai import setup_claude_ai
-
-            if setup_claude_ai(app, redis_cache_instance):
-                app.logger.info("✅ Claude AI configurado com sucesso")
-            else:
-                app.logger.warning("⚠️ Claude AI configurado com funcionalidades limitadas")
-        else:
-            app.logger.info("⏭️ Claude AI desabilitado por configuração")
-    except Exception as e:
-        app.logger.error(f"❌ Erro ao configurar Claude AI: {e}")
 
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():
@@ -1021,31 +977,5 @@ def create_app(config_name=None):
         finally:
             # Sempre remover a sessão
             db.session.remove()
-
-    # ✅ MIDDLEWARE DE LOGGING E PERFORMANCE
-
-    # Inicializar sistemas de autonomia do Claude AI (apenas se habilitado)
-    if os.getenv("ENABLE_CLAUDE_AI", "false").lower() == "true":
-        try:
-            from app.claude_ai.security_guard import init_security_guard
-            from app.claude_ai.auto_command_processor import init_auto_processor
-            from app.claude_ai.claude_code_generator import init_code_generator
-
-            with app.app_context():
-                # Inicializar sistema de segurança
-                security_guard = init_security_guard()
-                app.logger.info("🔒 Sistema de segurança Claude AI inicializado")
-
-                # Inicializar processador automático de comandos
-                auto_processor = init_auto_processor()
-                app.logger.info("🤖 Processador automático de comandos inicializado")
-
-                # Inicializar gerador de código
-                code_generator = init_code_generator()
-                app.logger.info("🚀 Gerador de código Claude AI inicializado")
-
-        except Exception as e:
-            app.logger.warning(f"⚠️ Erro ao inicializar sistemas de autonomia: {e}")
-            # Sistema continua funcionando sem autonomia
 
     return app

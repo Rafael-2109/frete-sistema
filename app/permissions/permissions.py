@@ -27,7 +27,7 @@ PERMISSIONS = {
     'logistica': {
         # Tudo exceto auth/permissions
         'modules': [
-            'cadastros_agendamento', 'carteira', 'claude_ai', 'cotacao',
+            'cadastros_agendamento', 'carteira', 'agente', 'cotacao',
             'embarques', 'estoque', 'faturamento', 'financeiro', 'fretes',
             'localidades', 'main', 'manufatura', 'monitoramento', 'odoo',
             'pedidos', 'portaria', 'producao', 'separacao', 'tabelas',
@@ -39,7 +39,7 @@ PERMISSIONS = {
     'financeiro': {
         # Tudo exceto auth/permissions
         'modules': [
-            'cadastros_agendamento', 'carteira', 'claude_ai', 'cotacao',
+            'cadastros_agendamento', 'carteira', 'agente', 'cotacao',
             'embarques', 'estoque', 'faturamento', 'financeiro', 'fretes',
             'localidades', 'main', 'manufatura', 'monitoramento', 'odoo',
             'pedidos', 'portaria', 'producao', 'separacao', 'tabelas',

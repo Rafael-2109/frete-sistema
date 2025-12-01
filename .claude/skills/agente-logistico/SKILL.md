@@ -302,5 +302,8 @@ Agente: [Executa simulacao com --excluir-produtos]
 ## Referencias
 
 - [QUERIES.md](reference/QUERIES.md) - Mapeamento detalhado das 20 queries
-- [TABELAS.md](TABELAS.md) - Esquema das tabelas do banco
-- [REGRAS_NEGOCIO.md](REGRAS_NEGOCIO.md) - Regras de negocio especificas
+- [MODELOS_CAMPOS.md](../../references/MODELOS_CAMPOS.md) - Esquema completo das tabelas do banco
+- [REGRAS_NEGOCIO.md](../../references/REGRAS_NEGOCIO.md) - Regras de negocio detalhadas
+
+> **NOTA**: Os arquivos TABELAS.md e REGRAS_NEGOCIO.md foram consolidados em `.claude/references/`
+> para evitar duplicacao com o CLAUDE.md principal.

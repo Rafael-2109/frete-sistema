@@ -16,7 +16,10 @@
       "Bash(which:*)",
       "Bash(pwd)",
       "Bash(ls:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebFetch(platform.claude.com)",
+      "WebFetch(docs.anthropic.com)",
+      "WebFetch(code.claude.com)"
     ],
     "deny": [
       "Bash(rm -rf /)",

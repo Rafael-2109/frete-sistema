@@ -102,10 +102,6 @@ config_local.py
 
 
 
-# Claude Flow / ruv-swarm (removidos permanentemente)
-.claude-flow/
-.swarm/
-
 # Claude settings
 .claude/settings.local.json
 .mcp.json

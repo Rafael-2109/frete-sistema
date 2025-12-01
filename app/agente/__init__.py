@@ -2,7 +2,6 @@
 Agente Logístico - Claude Agent SDK
 
 Módulo principal do agente inteligente baseado no Claude Agent SDK oficial.
-Substitui completamente o módulo claude_ai_lite.
 
 Versão: 1.0
 Data: 30/11/2025

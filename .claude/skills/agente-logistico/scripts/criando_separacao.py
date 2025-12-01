@@ -182,25 +182,48 @@ def verificar_separacao_existente(num_pedido: str) -> dict:
     return {'existe': False, 'lote_id': None, 'mensagem': None}
 
 
-def calcular_estoque_disponivel(cod_produto: str) -> float:
-    """Calcula estoque disponivel (atual - separacoes nao faturadas)"""
+def calcular_estoque_disponivel(cod_produto: str, data_expedicao: date = None) -> float:
+    """
+    Calcula estoque disponivel para a data de expedicao especificada.
+
+    Usa calcular_projecao() que considera:
+    - Estoque atual
+    - Entradas programadas (ProgramacaoProducao)
+    - Saidas previstas (Separacoes nao faturadas) por data
+
+    Args:
+        cod_produto: Codigo do produto
+        data_expedicao: Data para verificar disponibilidade (default: hoje)
+
+    Returns:
+        Estoque projetado para a data especificada
+    """
     from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-    from app.separacao.models import Separacao
-    from sqlalchemy import func
-    from app import db
+    from datetime import timedelta
 
-    # Estoque atual
-    estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+    hoje = date.today()
+    data_alvo = data_expedicao or hoje
 
-    # Separacoes nao faturadas
-    separado = db.session.query(
-        func.sum(Separacao.qtd_saldo)
-    ).filter(
-        Separacao.cod_produto == cod_produto,
-        Separacao.sincronizado_nf == False
-    ).scalar() or 0
+    # Calcular dias ate a data alvo
+    dias = (data_alvo - hoje).days
+    if dias < 0:
+        dias = 0  # Data passada = considerar estoque de hoje
 
-    return float(estoque_atual) - float(separado)
+    # Usar projecao que ja considera tudo (estoque, entradas, saidas por data)
+    projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, dias=max(dias, 1))
+
+    # Buscar estoque do dia especifico na projecao
+    if dias == 0:
+        return projecao.get('estoque_atual', 0)
+
+    # Buscar na lista de projecao diaria
+    projecao_diaria = projecao.get('projecao', [])
+    for dia_proj in projecao_diaria:
+        if dia_proj.get('data') == data_alvo.isoformat():
+            return dia_proj.get('saldo', 0)
+
+    # Fallback: retornar menor estoque nos proximos dias
+    return projecao.get('menor_estoque_d7', projecao.get('estoque_atual', 0))
 
 
 def buscar_palletizacao(cod_produto: str) -> dict:
@@ -412,8 +435,8 @@ def simular_separacao(
         # Buscar dados de palletizacao
         pallet_info = buscar_palletizacao(item.cod_produto)
 
-        # Calcular estoque disponivel
-        estoque_disp = calcular_estoque_disponivel(item.cod_produto)
+        # Calcular estoque disponivel para a data de expedicao
+        estoque_disp = calcular_estoque_disponivel(item.cod_produto, data_expedicao)
 
         # Quantidade desejada
         qtd_desejada = float(item.qtd_saldo_produto_pedido)

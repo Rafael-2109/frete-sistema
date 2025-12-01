@@ -175,7 +175,8 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
             else:
                 itens_pedido = Model.query.filter(
                     Model.num_pedido == num_pedido,
-                    Model.sincronizado_nf == False
+                    Model.sincronizado_nf == False,
+                    Model.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
                 ).all()
 
             info['estrategia'] = estrategia
@@ -204,7 +205,8 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
     if fonte in ('separacao', 'ambos'):
         itens = Separacao.query.filter(
             Separacao.num_pedido == termo,
-            Separacao.sincronizado_nf == False
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
         ).all()
 
         if itens:
@@ -226,7 +228,8 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
     if fonte in ('separacao', 'ambos'):
         itens = Separacao.query.filter(
             Separacao.num_pedido.ilike(f'%{termo}%'),
-            Separacao.sincronizado_nf == False
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
         ).all()
 
         if itens:
@@ -264,7 +267,8 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
                     Separacao.cnpj_cpf.ilike(f'%{termo}%'),
                     Separacao.cnpj_cpf.ilike(f'%{termo_limpo[:8]}%')
                 ),
-                Separacao.sincronizado_nf == False
+                Separacao.sincronizado_nf == False,
+                Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
             ).all()
 
             if itens:
@@ -301,7 +305,8 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
                 itens = Separacao.query.filter(
                     or_(*filtros_cnpj),
                     Separacao.raz_social_red.ilike(f'%{busca_loja}%'),
-                    Separacao.sincronizado_nf == False
+                    Separacao.sincronizado_nf == False,
+                    Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
                 ).all()
 
                 if itens:
@@ -325,7 +330,8 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
     if fonte in ('separacao', 'ambos'):
         itens = Separacao.query.filter(
             Separacao.raz_social_red.ilike(f'%{termo}%'),
-            Separacao.sincronizado_nf == False
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
         ).all()
 
         if itens:
@@ -404,7 +410,10 @@ def resolver_cidade(termo: str, fonte: str = 'separacao', apenas_pendentes: bool
     if fonte in ('separacao', 'ambos'):
         query = Separacao.query
         if apenas_pendentes:
-            query = query.filter(Separacao.sincronizado_nf == False)
+            query = query.filter(
+                Separacao.sincronizado_nf == False,
+                Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
+            )
 
         itens = query.all()
 

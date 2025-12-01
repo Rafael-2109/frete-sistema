@@ -202,10 +202,11 @@ def consultar_pedidos_atrasados(args):
 
     hoje = date.today()
 
-    # Buscar separacoes atrasadas (expedicao < hoje E nao faturadas)
+    # Buscar separacoes atrasadas (expedicao < hoje E nao faturadas E com saldo)
     itens = Separacao.query.filter(
         Separacao.expedicao < hoje,
-        Separacao.sincronizado_nf == False
+        Separacao.sincronizado_nf == False,
+        Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
     ).all()
 
     if not itens:
@@ -726,7 +727,8 @@ def consultar_pedidos_por_produto(args):
         # Buscar em Separacao (nao faturados)
         query = Separacao.query.filter(
             Separacao.cod_produto == cod_produto,
-            Separacao.sincronizado_nf == False
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0  # CORRECAO: Filtrar itens com saldo zerado
         )
 
         if data_limite:
