@@ -244,3 +244,179 @@ concentracao = valor_item / valor_total_pedido
 | "Falta embarcar" | qtd na carteira ainda nao separada |
 | "Vai sobrar" | Estoque apos atender toda demanda |
 | "Mandar junto" | Consolidar entregas na mesma viagem |
+| "Criar separacao" | Gerar registros em Separacao com status ABERTO |
+| "Enviar o que tem" | Separar apenas quantidade disponivel em estoque |
+
+---
+
+## 13. Criacao de Separacao
+
+### 13.1 Prerequisitos Obrigatorios
+
+| Campo | Obrigatorio | Fonte |
+|-------|-------------|-------|
+| num_pedido | SIM | Usuario informa |
+| expedicao | SIM | Usuario informa |
+| Tipo (completa/parcial) | SIM | Usuario informa ou deduzir |
+| agendamento | CONDICIONAL | Se cliente exige (contatos_agendamento) |
+| protocolo | CONDICIONAL | Se cliente exige agendamento |
+| agendamento_confirmado | CONDICIONAL | Se cliente exige agendamento |
+
+### 13.2 Validacoes Antes de Criar
+
+**OBRIGATORIO validar:**
+1. Pedido existe na CarteiraPrincipal com qtd_saldo > 0
+2. Pedido NAO possui separacao existente (sincronizado_nf=False)
+3. Estoque disponivel para cada produto
+
+**Se pedido ja tem separacao:**
+- Retornar erro com lote_id existente
+- Sugerir: "Este pedido ja possui separacao no lote [X]. Deseja adicionar mais itens?"
+
+### 13.3 Calculo de Pallets
+
+**Formula:**
+```
+pallets = quantidade / palletizacao
+```
+
+Onde `palletizacao` vem de CadastroPalletizacao.
+
+**Modos de distribuicao:**
+
+| Modo | Descricao | Calculo |
+|------|-----------|---------|
+| Proporcional | Distribuir pallets proporcionalmente | `pallets_item = pallets_total * (valor_item / valor_total)` |
+| Inteiros | Cada item = numero inteiro de pallets | `qtd = floor(pallets) * palletizacao` |
+| Fracionado | Permite pallets fracionados | `qtd = pallets * palletizacao` |
+
+**Priorizacao para pallets inteiros:**
+1. Ordenar itens por palletizacao (maior primeiro)
+2. Alocar pallets inteiros ate esgotar meta
+3. Arredondar ultimo item se necessario
+
+### 13.4 Rota e Incoterm
+
+**Regra de Rota:**
+```
+Se incoterm IN ('RED', 'FOB'):
+    rota = incoterm  # RED ou FOB
+Senao:
+    rota = buscar_rota_por_uf(cod_uf)
+```
+
+**Sub-rota:** Sempre calculada por UF + cidade via CadastroSubRota.
+
+### 13.5 Tipo de Envio
+
+| Tipo | Quando Usar |
+|------|-------------|
+| `total` | Separando TODOS os itens com TODAS as quantidades |
+| `parcial` | Separando alguns itens OU quantidades parciais |
+
+**Calculo automatico:**
+```python
+Se (produtos_separando == todos_produtos_pedido)
+   E (qtds_separando == qtds_totais):
+    tipo_envio = 'total'
+Senao:
+    tipo_envio = 'parcial'
+```
+
+### 13.6 Status Inicial
+
+| Situacao | Status Inicial |
+|----------|----------------|
+| Separacao via agente | ABERTO |
+| Pre-separacao (workspace) | PREVISAO |
+
+**Importante:** Separacoes criadas pelo agente vao SEMPRE com status='ABERTO'.
+
+### 13.7 Campos Criados Automaticamente
+
+| Campo | Fonte/Calculo |
+|-------|---------------|
+| separacao_lote_id | gerar_lote_id() - formato: SEP-YYYYMMDD-NNNN |
+| peso | qtd * peso_bruto (CadastroPalletizacao) |
+| pallet | qtd / palletizacao (CadastroPalletizacao) |
+| valor_saldo | qtd * preco_produto_pedido (CarteiraPrincipal) |
+| rota | buscar_rota_por_uf(cod_uf) ou incoterm |
+| sub_rota | buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade) |
+| sincronizado_nf | False (SEMPRE) |
+| criado_em | agora_brasil() |
+
+### 13.8 Validacao de Estoque
+
+**Antes de criar, verificar para cada produto:**
+```python
+estoque_disponivel = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+                   - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+
+Se estoque_disponivel < quantidade_solicitada:
+    ALERTAR usuario
+    Sugerir: --apenas-estoque ou excluir produto
+```
+
+### 13.9 Modo Apenas Estoque
+
+Quando `--apenas-estoque`:
+```python
+Para cada produto:
+    estoque = calcular_estoque_atual(cod_produto)
+    qtd_final = min(qtd_solicitada, estoque)
+    Se qtd_final <= 0:
+        IGNORAR produto
+```
+
+### 13.10 Exclusao de Produtos
+
+Quando `--excluir-produtos '[...]'`:
+```python
+produtos_excluir = json.loads(excluir_produtos)
+Para cada item_carteira:
+    Se cod_produto IN produtos_excluir
+       OU nome_produto ILIKE qualquer termo em produtos_excluir:
+        IGNORAR produto
+```
+
+**Match por nome:** Usar ILIKE para permitir "ketchup" casar com "KETCHUP 400G".
+
+---
+
+## 14. Agendamento para Criacao de Separacao
+
+### 14.1 Verificacao Automatica
+
+**SEMPRE verificar antes de criar separacao:**
+```sql
+SELECT forma, contato, observacao
+FROM contatos_agendamento
+WHERE cnpj = [cnpj_do_pedido]
+```
+
+### 14.2 Resultados Possiveis
+
+| Resultado | Acao |
+|-----------|------|
+| Nao encontrado | Informar: "Cliente nao precisa de agendamento" |
+| forma = 'SEM AGENDAMENTO' | Informar: "Cliente nao precisa de agendamento" |
+| forma != 'SEM AGENDAMENTO' | SOLICITAR: agendamento, protocolo, confirmado |
+
+### 14.3 Formas de Agendamento
+
+| Forma | Descricao |
+|-------|-----------|
+| Portal | Agendamento via portal web do cliente |
+| Telefone | Agendamento por ligacao |
+| E-mail | Agendamento por e-mail |
+| WhatsApp | Agendamento por WhatsApp |
+
+### 14.4 Campos Opcionais
+
+Se usuario NAO informar agendamento/protocolo quando exigido:
+- AVISAR que faltam informacoes
+- PERMITIR continuar (campos ficam NULL)
+- NAO bloquear criacao
+
+Se usuario INFORMAR mesmo quando nao exigido:
+- REGISTRAR normalmente (campos serao preenchidos)

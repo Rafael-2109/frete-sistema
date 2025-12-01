@@ -1,12 +1,13 @@
 ---
 name: agente-logistico
-description: Analisa e consulta dados do sistema de fretes. Responde perguntas sobre disponibilidade de pedidos, estoque, rupturas, atrasos, prazos de entrega e programacao de producao. Use quando o usuario perguntar sobre carteira de pedidos, separacoes, projecoes de estoque ou prazos de entrega.
+description: Analisa, consulta e CRIA separacoes no sistema de fretes. Responde perguntas sobre disponibilidade, estoque, rupturas, atrasos e prazos. CRIA separacoes via linguagem natural (completas, parciais, por pallets). Use quando o usuario perguntar sobre carteira, separacoes, estoque OU quando pedir para criar/gerar separacao de pedido.
 ---
 
 # Agente Logístico - Sistema de Fretes
 
 ## Quando Usar Este Skill
 
+### Consultas (somente leitura)
 - Perguntas sobre disponibilidade de pedidos ou estoque
 - Consultas sobre pedidos pendentes, atrasados ou em separacao
 - Analise de rupturas, gargalos e impactos
@@ -14,15 +15,29 @@ description: Analisa e consulta dados do sistema de fretes. Responde perguntas s
 - Verificacao de bonificacoes e consolidacao de cargas
 - Reprogramacao de producao para resolver rupturas
 
+### Acoes (criacao/modificacao)
+- **Criar separacao de pedido** (completa ou parcial)
+- Gerar separacao com quantidade especifica de pallets
+- Separar pedido excluindo determinados produtos
+- Separar apenas o que tem em estoque
+
 ## Fluxo de Trabalho
 
+### Para Consultas
 1. **Identificar a intencao** do usuario (consulta, analise, simulacao)
 2. **Selecionar script apropriado** com base no dominio
 3. **Executar via bash** com parametros adequados
 4. **Interpretar resultado** e formatar resposta clara
 5. **Verificar se responde** completamente a pergunta
 
-## Scripts Disponiveis (5 scripts consolidados)
+### Para Criacao de Separacao
+1. **Identificar pedido** e validar existencia na carteira
+2. **Coletar informacoes obrigatorias** (ver checklist abaixo)
+3. **Validar estoque** antes de confirmar
+4. **Executar criacao** via script com --executar
+5. **Confirmar resultado** ao usuario
+
+## Scripts Disponiveis (6 scripts consolidados)
 
 ### analisando_disponibilidade.py (9 queries)
 Analisa disponibilidade de estoque para pedidos ou grupos de clientes.
@@ -95,6 +110,27 @@ Simula reprogramacao de producao para resolver rupturas.
 
 **Queries cobertas:** Q15
 
+### criando_separacao.py (ACAO)
+Cria separacoes de pedidos via linguagem natural. **SEMPRE executar primeiro SEM --executar para validar.**
+
+| Parametro | Descricao | Exemplo |
+|-----------|-----------|---------|
+| `--pedido` | Numero do pedido (OBRIGATORIO) | `--pedido VCD123` |
+| `--expedicao` | Data de expedicao (OBRIGATORIO) | `--expedicao 2025-12-20` |
+| `--tipo` | Tipo de separacao | `--tipo completa` ou `--tipo parcial` |
+| `--pallets` | Quantidade de pallets desejada | `--pallets 28` |
+| `--pallets-inteiros` | Forcar pallets inteiros por item | flag |
+| `--excluir-produtos` | Produtos a excluir (JSON) | `--excluir-produtos '["KETCHUP","MOSTARDA"]'` |
+| `--apenas-estoque` | Separar apenas o que tem em estoque | flag |
+| `--agendamento` | Data de agendamento | `--agendamento 2025-12-22` |
+| `--protocolo` | Protocolo de agendamento | `--protocolo AG12345` |
+| `--agendamento-confirmado` | Marcar agendamento como confirmado | flag |
+| `--executar` | Efetivamente criar a separacao | flag |
+
+**Modos de operacao:**
+- **Sem --executar**: Apenas SIMULA e mostra o que seria criado (SEMPRE usar primeiro!)
+- **Com --executar**: Cria efetivamente a separacao no banco
+
 ## Como Executar
 
 ```bash
@@ -152,6 +188,116 @@ Sempre incluir:
 2. **Dados quantitativos** relevantes (valores, %, quantidades)
 3. **Lista de itens** quando aplicavel (pedidos, produtos) - iniciar com 3-5, expandir se pedido
 4. **Sugestao de acao** quando pertinente
+
+## Fluxo Conversacional: Criacao de Separacao
+
+### Checklist Obrigatorio (SEMPRE coletar antes de criar)
+
+| Campo | Obrigatorio | Como Obter |
+|-------|-------------|------------|
+| Pedido | SIM | Usuario informa |
+| Data expedicao | SIM | Usuario informa |
+| Tipo (completa/parcial) | SIM | Perguntar se nao especificado |
+| Agendamento | CONDICIONAL | Verificar `contatos_agendamento` pelo CNPJ |
+| Protocolo | CONDICIONAL | Se exige agendamento |
+| Agendamento confirmado | CONDICIONAL | Se exige agendamento |
+
+### Verificacao de Agendamento
+
+**ANTES de criar separacao, SEMPRE verificar:**
+```
+Se CNPJ existe em contatos_agendamento E forma != 'SEM AGENDAMENTO':
+    -> Cliente EXIGE agendamento
+    -> Solicitar: data agendamento, protocolo, confirmacao
+    -> Se usuario nao informar algum, AVISAR mas permitir continuar
+
+Se CNPJ NAO existe em contatos_agendamento OU forma = 'SEM AGENDAMENTO':
+    -> Informar: "Pelo cadastro, este cliente nao precisa de agendamento"
+    -> Se usuario informar mesmo assim, registrar
+```
+
+### Tipos de Separacao
+
+| Tipo | Descricao | Parametros |
+|------|-----------|------------|
+| **Completa** | Todos os itens com qtd total | `--tipo completa` |
+| **Parcial - itens completos** | N itens com qtd total cada | `--tipo parcial` |
+| **Parcial - qtds parciais** | N itens com qtds especificas | `--tipo parcial` + JSON |
+| **Por pallets** | Somar X pallets total | `--pallets N` |
+| **Por pallets inteiros** | Cada item = pallets inteiros | `--pallets N --pallets-inteiros` |
+| **Apenas estoque** | So o que tem disponivel | `--apenas-estoque` |
+| **Excluindo produtos** | Tudo exceto lista | `--excluir-produtos '[...]'` |
+
+### Validacao de Estoque (CRITICA)
+
+**SEMPRE validar estoque ANTES de confirmar criacao:**
+
+1. Executar script SEM --executar (simulacao)
+2. Verificar campo `alertas_estoque` na resposta
+3. Se houver alertas:
+   - Mostrar ao usuario quais produtos tem falta
+   - Perguntar se deseja continuar
+   - Sugerir alternativas (--apenas-estoque, excluir produtos)
+
+### Exemplos de Conversacao
+
+**Exemplo 1: Separacao completa simples**
+```
+Usuario: Crie uma separacao do pedido VCD123
+Agente: Para criar a separacao do pedido VCD123, preciso de algumas informacoes:
+        - Data de expedicao (embarque)?
+        [Verifica agendamento...] Pelo cadastro, este cliente nao precisa de agendamento.
+        - Separacao completa ou parcial?
+
+Usuario: Dia 20/12, completa
+Agente: [Executa simulacao, valida estoque]
+        Simulacao da separacao VCD123:
+        - 5 itens, R$ 45.000
+        - Estoque: OK para todos os itens
+        Confirma criacao?
+
+Usuario: Sim
+Agente: [Executa com --executar]
+        Separacao criada com sucesso! Lote: SEP-20251201-XXXX
+```
+
+**Exemplo 2: Separacao por pallets**
+```
+Usuario: Crie separacao do VCD456 com 28 pallets para dia 20/12
+Agente: [Verifica agendamento...] Este cliente EXIGE agendamento (Portal).
+        Preciso de:
+        - Data de agendamento?
+        - Protocolo?
+        - Agendamento ja confirmado?
+
+Usuario: Agendamento 22/12, protocolo AG999, confirmado
+Agente: [Executa simulacao com --pallets 28]
+        Simulacao VCD456 (28 pallets):
+        - Produto A: 15 pallets (1.500 un)
+        - Produto B: 10 pallets (800 un)
+        - Produto C: 3 pallets (240 un)
+        ALERTA: Produto B tem apenas 600 un em estoque (faltam 200)
+        Deseja continuar com quantidade reduzida ou excluir produto?
+```
+
+**Exemplo 3: Separacao com exclusao**
+```
+Usuario: Pode enviar o VCD789 sem o ketchup e a mostarda dia 15/12
+Agente: [Executa simulacao com --excluir-produtos]
+        Separacao VCD789 (excluindo Ketchup e Mostarda):
+        - 8 itens restantes, R$ 32.000
+        Confirma?
+```
+
+### Mensagens Padrao
+
+| Situacao | Mensagem |
+|----------|----------|
+| Cliente sem agendamento | "Pelo cadastro, este cliente nao precisa de agendamento" |
+| Cliente com agendamento | "Este cliente EXIGE agendamento via [forma]. Preciso de: data, protocolo, confirmacao" |
+| Falta de estoque | "ALERTA: [produto] tem apenas [qtd] em estoque (precisa [qtd]). Deseja continuar?" |
+| Simulacao OK | "Simulacao concluida. [N] itens, R$ [valor]. Confirma criacao?" |
+| Criacao OK | "Separacao criada com sucesso! Lote: [lote_id]" |
 
 ## Referencias
 
