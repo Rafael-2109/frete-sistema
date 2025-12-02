@@ -235,6 +235,18 @@ sincronizado_nf = db.Column(db.Boolean, default=False, nullable=True)  # GATILHO
 | Protocolo | NAO TEM | `protocolo` |
 | Status | NAO TEM | `status` |
 
+Campos Calculados ao Criar Separação
+
+
+| Campo | Cálculo | Fonte |
+|-------|---------|-------|
+| peso | qtd_saldo × peso_bruto | CadastroPalletizacao |
+| pallet | qtd_saldo / palletizacao | CadastroPalletizacao |
+| rota | buscar_rota_por_uf(cod_uf) | app.carteira.utils.separacao_utils |
+| sub_rota | buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade) | app.carteira.utils.separacao_utils |
+
+Referência: .claude/skills/agente-logistico/scripts/criando_separacao.py
+
 ---
 
 # REGRAS DE OURO

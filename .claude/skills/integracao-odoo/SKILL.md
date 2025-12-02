@@ -1,11 +1,14 @@
 ---
 name: integracao-odoo
-description: Skill para implementar integrações com Odoo no sistema de fretes. Cobre lançamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas com auditoria completa. Use quando precisar criar novos fluxos de lançamento no Odoo ou modificar existentes.
+description: "[DESENVOLVIMENTO] Skill para CRIAR novas integracoes com Odoo. Cobre lancamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas. Use quando precisar IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS use a skill consultando-odoo."
 ---
 
-# Integração Odoo - Sistema de Fretes
+# Integracao Odoo - Sistema de Fretes
 
-Este skill documenta o processo completo de integração com o Odoo ERP para lançamento de documentos fiscais (CTe) no sistema de fretes.
+> **ATENCAO**: Esta skill eh para DESENVOLVIMENTO (criar/modificar integracoes).
+> Para CONSULTAS em producao, use a skill `consultando-odoo`.
+
+Skill de desenvolvimento que documenta o processo completo de integracao com o Odoo ERP para lancamento de documentos fiscais (CTe) no sistema de fretes.
 
 ## Quando Usar Este Skill
 
@@ -244,3 +247,24 @@ odoo.execute_method(modelo, metodo, args)
 5. **NUNCA** lançar documento que já foi lançado (verificar `odoo_invoice_id`)
 6. **SEMPRE** usar transação para atualizar registro local no final
 7. **SEMPRE** capturar tempo de execução de cada etapa para diagnóstico
+
+## Relacionado
+
+| Skill | Uso |
+|-------|-----|
+| consultando-odoo-dfe | Para CONSULTAS em producao (DFE, devolucoes, CTe, tributos) |
+| consultando-odoo-cadastros | Para CONSULTAS de parceiros e transportadoras |
+| consultando-odoo-financeiro | Para CONSULTAS de contas a pagar/receber, vencimentos |
+| descobrindo-odoo-estrutura | Para descobrir campos/modelos nao mapeados |
+| agente-logistico | Para consultas de carteira, separacoes e estoque |
+
+## Templates Disponiveis
+
+Os templates em `resources/` auxiliam na criacao de novas integracoes:
+
+| Template | Descricao |
+|----------|-----------|
+| `template_modelo_campos.py` | Campos SQLAlchemy para integracao Odoo |
+| `template_service.py` | Estrutura base do Service de lancamento |
+| `template_migracao.py` | Script de migracao para novos campos |
+| `template_route.py` | Routes Flask para lancamento e auditoria |

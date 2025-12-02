@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(source:*)",
-      "Bash(python scripts/testes/test_claude_ai_lite_v2.py:*)"
+      "Bash(python scripts/testes/test_claude_ai_lite_v2.py:*)",
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo/scripts/consultando_desconhecidas.py:*)"
     ],
     "deny": []
   },
