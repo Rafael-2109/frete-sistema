@@ -6,9 +6,11 @@ Recebe mensagens do Teams e retorna Adaptive Cards como resposta.
 from flask import request, jsonify
 from app.teams import teams_bp
 from app.teams.services import processar_mensagem_teams
+from app import csrf
 
 
 @teams_bp.route('/webhook', methods=['POST'])
+@csrf.exempt  # ⚠️ CSRF desabilitado: Webhook externo do Teams Workflow
 def webhook_teams():
     """
     Endpoint que recebe mensagens do Teams Workflow.
