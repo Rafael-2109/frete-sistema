@@ -894,6 +894,9 @@ def create_app(config_name=None):
     app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
     app.register_blueprint(tagplus_oauth_bp)  # Rotas OAuth2
 
+    # 💬 Teams Integration - Webhook para Agente Claude
+    from app.teams import teams_bp
+    app.register_blueprint(teams_bp)
 
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():
