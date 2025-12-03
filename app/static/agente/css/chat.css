@@ -1,0 +1,1631 @@
+/**
+ * Agente Logistico - Chat Styles
+ * Versao: 2.0
+ * Data: 03/12/2025
+ *
+ * FEAT-025: Layout Fullscreen
+ * - Chat ocupa 100% da tela (menos navbar)
+ * - Header compacto com controles inline
+ * - Modal para sessões (substitui sidebar)
+ */
+
+/* ============================================
+   RESET E BASE
+   ============================================ */
+* {
+    box-sizing: border-box;
+}
+
+/* ============================================
+   WRAPPER FULLSCREEN
+   ============================================ */
+.chat-fullscreen-wrapper {
+    position: fixed;
+    top: 56px; /* Altura do navbar Bootstrap */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #f8f9fa;
+    overflow: hidden;
+}
+
+/* ============================================
+   CONTAINER PRINCIPAL
+   ============================================ */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: white;
+    /* FEAT-027: Removido max-width e centralização para usar tela toda */
+}
+
+/* ============================================
+   HEADER COMPACTO
+   ============================================ */
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 6px 12px;
+    flex-shrink: 0;
+    gap: 10px;
+}
+
+.chat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.chat-header-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
+}
+
+.chat-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Botão de Sessões */
+.btn-sessions {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-sessions:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.sessions-count-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: #dc3545;
+    color: white;
+    border-radius: 9px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Título */
+.chat-title h5 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.chat-title small {
+    font-size: 0.7rem;
+    opacity: 0.8;
+}
+
+/* Controles do Header */
+.header-control {
+    display: flex;
+    align-items: center;
+}
+
+/* Seletor de Modelo */
+.model-select {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    min-width: 100px;
+}
+
+.model-select:focus {
+    outline: none;
+    border-color: rgba(255,255,255,0.5);
+}
+
+.model-select option {
+    color: #333;
+    background: white;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 4px;
+}
+
+.toggle-switch input {
+    display: none;
+}
+
+.toggle-slider {
+    width: 32px;
+    height: 18px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 9px;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    top: 2px;
+    left: 2px;
+    transition: all 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: #ffc107;
+}
+
+.toggle-switch.plan input:checked + .toggle-slider {
+    background: #17a2b8;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(14px);
+}
+
+.toggle-icon {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.toggle-switch input:checked ~ .toggle-icon {
+    opacity: 1;
+}
+
+/* ============================================
+   TOOLTIPS DOS CONTROLES
+   ============================================ */
+.header-control.has-tooltip {
+    position: relative;
+}
+
+.control-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 10px;
+    background: white;
+    color: #333;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    font-size: 0.8rem;
+    width: 220px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 1000;
+    text-align: left;
+    line-height: 1.4;
+}
+
+.control-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 6px solid white;
+}
+
+.header-control.has-tooltip:hover .control-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.control-tooltip strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+}
+
+.control-tooltip ul {
+    margin: 6px 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.control-tooltip li {
+    margin: 4px 0;
+    font-size: 0.75rem;
+}
+
+.control-tooltip p {
+    margin: 6px 0;
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.control-tooltip small {
+    display: block;
+    margin-top: 6px;
+    color: #888;
+    font-size: 0.7rem;
+}
+
+/* Token Budget Mini */
+.token-budget-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.1);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+}
+
+.token-count {
+    font-weight: 600;
+}
+
+.token-cost {
+    opacity: 0.8;
+}
+
+/* Status Indicator */
+.status-indicator {
+    font-size: 0.5rem;
+}
+
+.status-indicator.online {
+    color: #28a745;
+}
+
+/* Menu Button */
+.btn-menu {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.btn-menu:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+/* ============================================
+   BARRA DE PROGRESSO
+   ============================================ */
+.progress-bar-container {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 6px 16px;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.progress-bar-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 0.75rem;
+}
+
+#progress-status {
+    color: #495057;
+    font-weight: 500;
+}
+
+#progress-percentage {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.progress-bar-track {
+    height: 4px;
+    background: #dee2e6;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.progress-bar-fill.completed {
+    background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+}
+
+/* ============================================
+   ÁREA DE MENSAGENS
+   ============================================ */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    scroll-behavior: smooth;
+    min-height: 0;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* ============================================
+   MENSAGENS
+   ============================================ */
+.message {
+    display: flex;
+    margin-bottom: 10px;
+    animation: fadeIn 0.3s ease;
+    /* FEAT-027: Removido max-width e centralização - alinhado à esquerda */
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+}
+
+.message.assistant .message-avatar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    margin-right: 8px;
+}
+
+.message.user .message-avatar {
+    background: #28a745;
+    color: white;
+    margin-left: 8px;
+}
+
+.message-content {
+    max-width: calc(100% - 40px);
+    flex: 1;
+}
+
+.message-bubble {
+    padding: 8px 12px;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    line-height: 1.45;
+}
+
+.message.assistant .message-bubble {
+    background: white;
+    border-bottom-left-radius: 4px;
+}
+
+.message.user .message-bubble {
+    background: #007bff;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message-time {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.message.user .message-time {
+    text-align: right;
+}
+
+/* ============================================
+   TYPING INDICATOR
+   ============================================ */
+.typing-container {
+    padding: 0 16px 8px;
+}
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    background: white;
+    border-radius: 12px;
+    width: fit-content;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #667eea;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+}
+
+.typing-text {
+    margin-left: 8px;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+/* ============================================
+   PAINEL DE THINKING
+   ============================================ */
+.thinking-panel {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 3px solid #667eea;
+    margin: 0 16px 8px;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    flex-shrink: 0;
+}
+
+.thinking-content {
+    width: 100%;
+}
+
+.thinking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.thinking-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.btn-minimize {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.btn-minimize:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.thinking-body {
+    font-style: italic;
+    color: #495057;
+    font-size: 0.85rem;
+    max-height: 120px;
+    overflow-y: auto;
+    line-height: 1.4;
+}
+
+/* ============================================
+   INPUT AREA - Textarea com Shift+Enter
+   ============================================ */
+.chat-input {
+    padding: 8px 12px;
+    background: white;
+    border-top: 1px solid #e9ecef;
+    flex-shrink: 0;
+}
+
+.chat-input form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    /* FEAT-027: Removido max-width - usa largura total */
+}
+
+.chat-input textarea {
+    flex: 1;
+    padding: 10px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 20px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    resize: none;
+    min-height: 44px;
+    max-height: 150px;
+    line-height: 1.4;
+    overflow-y: auto;
+}
+
+.chat-input textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.chat-input textarea::placeholder {
+    color: #adb5bd;
+}
+
+.input-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.chat-input button[type="submit"] {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    flex-shrink: 0;
+}
+
+.chat-input button[type="submit"]:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.chat-input button[type="submit"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Botão Stop */
+.btn-stop {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: #dc3545;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse-stop 1.5s infinite;
+}
+
+.btn-stop:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
+@keyframes pulse-stop {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+}
+
+/* Hint abaixo do input */
+.input-hint {
+    text-align: center;
+    margin-top: 4px;
+}
+
+.input-hint small {
+    color: #adb5bd;
+    font-size: 0.7rem;
+}
+
+/* ============================================
+   MODAL DE SESSÕES
+   ============================================ */
+.sessions-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sessions-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    animation: fadeIn 0.2s ease;
+}
+
+.sessions-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.sessions-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.sessions-modal-header h5 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.btn-close-modal {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f3f4;
+    color: #5f6368;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.btn-close-modal:hover {
+    background: #e9ecef;
+}
+
+.sessions-modal-actions {
+    padding: 12px 20px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.btn-new-session {
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-new-session:hover {
+    opacity: 0.9;
+}
+
+.sessions-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.sessions-list {
+    padding: 0;
+}
+
+.sessions-loading,
+.sessions-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.sessions-empty i {
+    color: #dee2e6;
+}
+
+/* Session Item */
+.session-item {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 20px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.session-item:hover {
+    background: #f8f9fa;
+}
+
+.session-item.active {
+    background: linear-gradient(135deg, #e9ecef 0%, #f8f9fa 100%);
+    border-left: 3px solid #667eea;
+}
+
+.session-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4px;
+}
+
+.session-item-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #333;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
+}
+
+.session-item-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.session-item:hover .session-item-actions {
+    opacity: 1;
+}
+
+.session-item-actions button {
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+.session-item-actions button:hover {
+    background: #e9ecef;
+    color: #333;
+}
+
+.session-item-actions button.delete:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.session-item-preview {
+    font-size: 0.8rem;
+    color: #6c757d;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+
+.session-item-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    color: #adb5bd;
+}
+
+.session-item-meta .badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+}
+
+/* ============================================
+   CONFIRMATION MODAL
+   ============================================ */
+.confirmation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+}
+
+.confirmation-modal {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+.confirmation-modal h5 {
+    margin: 0 0 12px;
+}
+
+.confirmation-modal p {
+    color: #6c757d;
+    margin-bottom: 20px;
+}
+
+.confirmation-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.confirmation-buttons button {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-cancel {
+    background: #f1f3f4;
+    color: #5f6368;
+}
+
+.btn-confirm {
+    background: #28a745;
+    color: white;
+}
+
+/* ============================================
+   TIMELINE DE AÇÕES
+   ============================================ */
+.action-timeline-container {
+    position: fixed;
+    right: 12px;
+    top: 70px;
+    width: 260px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    z-index: 100;
+    max-height: 280px;
+    overflow: hidden;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.action-timeline-container.collapsed {
+    max-height: 44px;
+}
+
+.action-timeline-container.hidden {
+    transform: translateX(320px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.timeline-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    font-weight: 500;
+    gap: 8px;
+}
+
+.timeline-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+/* FEAT-027: Botão de fechar nos painéis */
+.btn-close-panel {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-close-panel:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.timeline-body {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.timeline-empty {
+    padding: 20px;
+    text-align: center;
+    color: #adb5bd;
+    font-size: 0.8rem;
+}
+
+.timeline-item {
+    display: flex;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    align-items: flex-start;
+    font-size: 0.8rem;
+}
+
+.timeline-item:last-child {
+    border-bottom: none;
+}
+
+.timeline-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+.timeline-icon.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.timeline-icon.success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.timeline-icon.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.timeline-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.timeline-info .tool-name {
+    font-weight: 500;
+    font-size: 0.8rem;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.timeline-info .tool-duration {
+    font-size: 0.7rem;
+    color: #adb5bd;
+}
+
+/* ============================================
+   TODO LIST
+   ============================================ */
+.todo-panel-container {
+    position: fixed;
+    right: 12px;
+    top: 360px;
+    width: 260px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    z-index: 100;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.todo-panel-container.hidden {
+    transform: translateX(320px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.todo-header {
+    background: #28a745;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    font-weight: 500;
+    gap: 8px;
+}
+
+.todo-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.todo-body {
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.todo-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.8rem;
+}
+
+.todo-item:last-child {
+    border-bottom: none;
+}
+
+.todo-status {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    flex-shrink: 0;
+    font-size: 0.6rem;
+}
+
+.todo-status.pending {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.todo-status.in_progress {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.todo-status.completed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.todo-text {
+    flex: 1;
+    line-height: 1.3;
+}
+
+.todo-text.in_progress {
+    font-weight: 600;
+    color: #004085;
+}
+
+.todo-text.completed {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+
+.todo-progress-container {
+    padding: 8px 10px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.todo-progress {
+    height: 4px;
+    background: #e9ecef;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.todo-progress-bar {
+    height: 100%;
+    background: #28a745;
+    transition: width 0.3s ease;
+}
+
+/* ============================================
+   MARKDOWN STYLING
+   ============================================ */
+.message-bubble h1, .message-bubble h2, .message-bubble h3,
+.message-bubble h4, .message-bubble h5, .message-bubble h6 {
+    margin: 0.5em 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.message-bubble h1 { font-size: 1.3em; }
+.message-bubble h2 { font-size: 1.2em; }
+.message-bubble h3 { font-size: 1.1em; }
+.message-bubble h4 { font-size: 1em; }
+
+.message-bubble table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75em 0;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.message-bubble th, .message-bubble td {
+    padding: 8px 10px;
+    border: 1px solid #e9ecef;
+    text-align: left;
+}
+
+.message-bubble th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 0.75em;
+}
+
+.message-bubble tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.message-bubble code {
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: 'Monaco', 'Menlo', monospace;
+    color: #e83e8c;
+}
+
+.message-bubble pre {
+    background: #282c34;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 0.75em 0;
+}
+
+.message-bubble pre code {
+    background: transparent;
+    padding: 0;
+    color: #abb2bf;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+
+.message-bubble blockquote {
+    border-left: 3px solid #667eea;
+    padding: 8px 12px;
+    margin: 0.75em 0;
+    background: #f8f9fa;
+    border-radius: 0 6px 6px 0;
+    color: #495057;
+    font-style: italic;
+}
+
+.message-bubble ul, .message-bubble ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+
+.message-bubble li {
+    margin: 0.3em 0;
+    line-height: 1.4;
+}
+
+.message-bubble a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.message-bubble a:hover {
+    text-decoration: underline;
+}
+
+.message-bubble p {
+    margin: 0.5em 0;
+    line-height: 1.5;
+}
+
+.message-bubble p:first-child {
+    margin-top: 0;
+}
+
+.message-bubble p:last-child {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1200px) {
+    .action-timeline-container,
+    .todo-panel-container {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .chat-header-center {
+        display: none;
+    }
+
+    .chat-title small {
+        display: none;
+    }
+
+    .token-budget-mini {
+        display: none;
+    }
+
+    .chat-messages {
+        padding: 12px;
+    }
+
+    .message {
+        max-width: 100%;
+    }
+
+    .chat-input {
+        padding: 8px 12px;
+    }
+
+    .sessions-modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+}
+
+@media (max-width: 480px) {
+    .chat-fullscreen-wrapper {
+        top: 56px;
+    }
+
+    .chat-header {
+        padding: 6px 12px;
+    }
+
+    .btn-sessions {
+        width: 32px;
+        height: 32px;
+    }
+
+    .chat-title h5 {
+        font-size: 0.85rem;
+    }
+
+    .btn-attach {
+        display: none;
+    }
+}
+
+/* ============================================
+   FEAT-028: UPLOAD/DOWNLOAD DE ARQUIVOS
+   ============================================ */
+
+/* Botão de Anexar */
+.btn-attach {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f3f4;
+    color: #5f6368;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-attach:hover {
+    background: #e8eaed;
+    color: #667eea;
+}
+
+.btn-attach.has-files {
+    background: #667eea;
+    color: white;
+}
+
+/* Painel de Arquivos */
+.files-panel {
+    background: white;
+    border-top: 1px solid #e9ecef;
+    padding: 8px 12px;
+    flex-shrink: 0;
+}
+
+.files-section {
+    margin-bottom: 8px;
+}
+
+.files-section:last-child {
+    margin-bottom: 0;
+}
+
+.files-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.btn-clear-files {
+    padding: 2px 6px;
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.7rem;
+}
+
+.btn-clear-files:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Lista de Arquivos */
+.files-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Item de Arquivo */
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    max-width: 200px;
+    border: 1px solid #e9ecef;
+}
+
+.file-item.uploading {
+    opacity: 0.7;
+    background: #fff3cd;
+    border-color: #ffc107;
+}
+
+.file-item.error {
+    background: #f8d7da;
+    border-color: #dc3545;
+}
+
+.file-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+.file-icon.pdf {
+    background: #dc3545;
+    color: white;
+}
+
+.file-icon.excel {
+    background: #28a745;
+    color: white;
+}
+
+.file-icon.csv {
+    background: #17a2b8;
+    color: white;
+}
+
+.file-icon.image {
+    background: #6f42c1;
+    color: white;
+}
+
+.file-icon.file {
+    background: #6c757d;
+    color: white;
+}
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.file-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #333;
+}
+
+.file-size {
+    font-size: 0.65rem;
+    color: #6c757d;
+}
+
+.file-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.file-actions button {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+}
+
+.file-actions button:hover {
+    background: #e9ecef;
+}
+
+.file-actions button.download:hover {
+    background: #d4edda;
+    color: #155724;
+}
+
+.file-actions button.remove:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Seção de Downloads */
+.downloads-section .file-item {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.downloads-section .file-name {
+    color: #155724;
+}
+
+/* Progress bar para upload */
+.file-progress {
+    width: 100%;
+    height: 3px;
+    background: #e9ecef;
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.file-progress-bar {
+    height: 100%;
+    background: #667eea;
+    transition: width 0.3s ease;
+}
+
+/* Badge de contagem */
+.attach-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    background: #dc3545;
+    color: white;
+    border-radius: 8px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .files-panel {
+        padding: 6px 10px;
+    }
+
+    .file-item {
+        max-width: 150px;
+    }
+}

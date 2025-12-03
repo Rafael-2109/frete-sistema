@@ -4,498 +4,267 @@
 
 {% block extra_css %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<style>
-/* Container principal */
-.chat-container {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 120px);
-    max-height: 800px;
-}
-
-/* Header do chat */
-.chat-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 1rem 1.5rem;
-    border-radius: 12px 12px 0 0;
-}
-
-.chat-header h5 {
-    margin: 0;
-    font-weight: 600;
-}
-
-.chat-header small {
-    opacity: 0.8;
-}
-
-/* Área de mensagens */
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
-    background: #f8f9fa;
-    scroll-behavior: smooth;
-}
-
-.chat-messages::-webkit-scrollbar {
-    width: 6px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-/* Mensagens */
-.message {
-    display: flex;
-    margin-bottom: 1rem;
-    animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.message.user {
-    flex-direction: row-reverse;
-}
-
-.message-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.message.assistant .message-avatar {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    margin-right: 12px;
-}
-
-.message.user .message-avatar {
-    background: #28a745;
-    color: white;
-    margin-left: 12px;
-}
-
-.message-content {
-    max-width: 75%;
-}
-
-.message-bubble {
-    padding: 12px 16px;
-    border-radius: 16px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.message.assistant .message-bubble {
-    background: white;
-    border-bottom-left-radius: 4px;
-}
-
-.message.user .message-bubble {
-    background: #007bff;
-    color: white;
-    border-bottom-right-radius: 4px;
-}
-
-.message-time {
-    font-size: 0.75rem;
-    color: #6c757d;
-    margin-top: 4px;
-}
-
-.message.user .message-time {
-    text-align: right;
-}
-
-/* Indicador de digitação */
-.typing-indicator {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-    background: white;
-    border-radius: 16px;
-    width: fit-content;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.typing-dots {
-    display: flex;
-    gap: 4px;
-}
-
-.typing-dots span {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #667eea;
-    animation: typing 1.4s infinite ease-in-out;
-}
-
-.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes typing {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-8px); opacity: 1; }
-}
-
-/* Tool call indicator */
-.tool-indicator {
-    display: inline-flex;
-    align-items: center;
-    background: #e3f2fd;
-    color: #1976d2;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 0.85rem;
-    margin: 8px 0;
-}
-
-.tool-indicator i {
-    margin-right: 6px;
-}
-
-/* Input area */
-.chat-input {
-    padding: 1rem 1.5rem;
-    background: white;
-    border-top: 1px solid #e9ecef;
-    border-radius: 0 0 12px 12px;
-}
-
-.chat-input form {
-    display: flex;
-    gap: 12px;
-}
-
-.chat-input input {
-    flex: 1;
-    padding: 12px 16px;
-    border: 2px solid #e9ecef;
-    border-radius: 24px;
-    font-size: 1rem;
-    transition: border-color 0.2s;
-}
-
-.chat-input input:focus {
-    outline: none;
-    border-color: #667eea;
-}
-
-.chat-input button {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: none;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.chat-input button:hover:not(:disabled) {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.chat-input button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Sugestões */
-.suggestions {
-    padding: 0.75rem 1.5rem;
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.suggestion-btn {
-    padding: 6px 12px;
-    border: 1px solid #dee2e6;
-    border-radius: 16px;
-    background: white;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.suggestion-btn:hover {
-    background: #667eea;
-    color: white;
-    border-color: #667eea;
-}
-
-/* Status badge */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-
-.status-badge.online {
-    background: rgba(40, 167, 69, 0.1);
-    color: #28a745;
-}
-
-.status-badge i {
-    font-size: 6px;
-    margin-right: 6px;
-}
-
-/* Métricas */
-.metrics-bar {
-    display: flex;
-    gap: 16px;
-    font-size: 0.8rem;
-    color: #6c757d;
-    padding: 8px 16px;
-    background: rgba(255,255,255,0.9);
-    border-radius: 8px;
-}
-
-.metric {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* Markdown rendering */
-.message-bubble h1, .message-bubble h2, .message-bubble h3,
-.message-bubble h4, .message-bubble h5, .message-bubble h6 {
-    margin: 0.5em 0;
-}
-
-.message-bubble table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0.5em 0;
-    font-size: 0.9rem;
-}
-
-.message-bubble th, .message-bubble td {
-    padding: 6px 10px;
-    border: 1px solid #dee2e6;
-    text-align: left;
-}
-
-.message-bubble th {
-    background: #f8f9fa;
-}
-
-.message-bubble code {
-    background: #f1f3f4;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-.message-bubble pre {
-    background: #f1f3f4;
-    padding: 12px;
-    border-radius: 8px;
-    overflow-x: auto;
-}
-
-.message-bubble ul, .message-bubble ol {
-    margin: 0.5em 0;
-    padding-left: 1.5em;
-}
-
-/* Confirmation modal */
-.confirmation-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.confirmation-modal {
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-}
-
-.confirmation-modal h5 {
-    margin: 0 0 12px;
-}
-
-.confirmation-modal p {
-    color: #6c757d;
-    margin-bottom: 20px;
-}
-
-.confirmation-buttons {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-}
-
-.confirmation-buttons button {
-    padding: 8px 20px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.btn-cancel {
-    background: #f1f3f4;
-    color: #5f6368;
-}
-
-.btn-confirm {
-    background: #28a745;
-    color: white;
-}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='agente/css/chat.css') }}">
+<!-- FEAT-023: Highlight.js para syntax highlighting -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-    <div class="row justify-content-center">
-        <div class="col-lg-10 col-xl-8">
-            <div class="card chat-container shadow-lg">
-                <!-- Header -->
-                <div class="chat-header d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-robot fa-2x me-3"></i>
-                        <div>
-                            <h5>Agente Logístico</h5>
-                            <small>Claude Agent SDK • Opus 4.5</small>
-                        </div>
-                    </div>
-                    <div class="d-flex align-items-center gap-3">
-                        {% if current_user.perfil == 'administrador' %}
-                        <div class="metrics-bar" id="metrics-bar" style="display: none;">
-                            <span class="metric" title="Tokens usados">
-                                <i class="fas fa-coins"></i>
-                                <span id="metric-tokens">0</span>
-                            </span>
-                            <span class="metric" title="Custo">
-                                <i class="fas fa-dollar-sign"></i>
-                                <span id="metric-cost">$0.00</span>
-                            </span>
-                        </div>
-                        {% endif %}
-                        <span class="status-badge online">
-                            <i class="fas fa-circle"></i>
-                            Online
-                        </span>
-                        <div class="dropdown">
-                            <button class="btn btn-link text-white" data-bs-toggle="dropdown">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="#" onclick="clearSession()">
-                                    <i class="fas fa-eraser me-2"></i>Limpar Conversa
-                                </a></li>
-                                <li><a class="dropdown-item" href="#" onclick="showHelp()">
-                                    <i class="fas fa-question-circle me-2"></i>Ajuda
-                                </a></li>
-                            </ul>
-                        </div>
+<!-- FEAT-025: Layout Fullscreen -->
+<div class="chat-fullscreen-wrapper">
+    <div class="chat-container">
+        <!-- Header Compacto -->
+        <div class="chat-header">
+            <div class="chat-header-left">
+                <!-- Botão de Sessões -->
+                <button class="btn-sessions" onclick="openSessionsModal()" title="Conversas anteriores">
+                    <i class="fas fa-comments"></i>
+                    <span class="sessions-count-badge" id="sessions-count-badge" style="display: none;">0</span>
+                </button>
+                <div class="chat-title">
+                    <h5>Nacom Goya IA</h5>
+                    <small id="model-display">Claude Agent SDK • Sonnet</small>
+                </div>
+            </div>
+
+            <div class="chat-header-center">
+                <!-- FEAT-001: Seletor de Modelo com Tooltip -->
+                <div class="header-control has-tooltip">
+                    <select id="model-selector" class="model-select">
+                        <option value="claude-haiku-4-5-20251001">⚡ Haiku</option>
+                        <option value="claude-sonnet-4-5-20250929" selected>⚡⚡ Sonnet</option>
+                        <option value="claude-opus-4-5-20251101">🧠 Opus</option>
+                    </select>
+                    <div class="control-tooltip">
+                        <strong>Escolha o Modelo</strong>
+                        <ul>
+                            <li><b>⚡ Haiku:</b> Rápido e econômico</li>
+                            <li><b>⚡⚡ Sonnet:</b> Equilibrado (recomendado)</li>
+                            <li><b>🧠 Opus:</b> Mais potente</li>
+                        </ul>
                     </div>
                 </div>
 
-                <!-- Mensagens -->
-                <div class="chat-messages" id="chat-messages">
-                    <!-- Mensagem de boas-vindas -->
-                    <div class="message assistant">
-                        <div class="message-avatar">
-                            <i class="fas fa-robot"></i>
-                        </div>
-                        <div class="message-content">
-                            <div class="message-bubble">
-                                <h6>👋 Olá! Sou o Agente Logístico</h6>
-                                <p>Posso ajudar você com:</p>
-                                <ul>
-                                    <li>📦 Consultar pedidos e status</li>
-                                    <li>📊 Analisar disponibilidade de estoque</li>
-                                    <li>🚛 Calcular prazos de entrega</li>
-                                    <li>✅ Criar separações de pedidos</li>
-                                </ul>
-                                <p><strong>Como posso ajudar?</strong></p>
-                            </div>
-                            <div class="message-time">Agora</div>
-                        </div>
+                <!-- FEAT-002: Toggle Thinking com Tooltip -->
+                <div class="header-control has-tooltip">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="thinking-toggle">
+                        <span class="toggle-slider"></span>
+                        <i class="fas fa-brain toggle-icon"></i>
+                    </label>
+                    <div class="control-tooltip">
+                        <strong><i class="fas fa-brain"></i> Pensamento Profundo</strong>
+                        <p>Quando ativado, o agente analisa mais antes de responder.</p>
+                        <small>Ideal para decisões complexas.</small>
                     </div>
                 </div>
 
-                <!-- Indicador de digitação -->
-                <div id="typing-container" class="px-4 pb-2" style="display: none;">
-                    <div class="message assistant">
-                        <div class="message-avatar">
-                            <i class="fas fa-robot"></i>
-                        </div>
-                        <div class="typing-indicator">
-                            <div class="typing-dots">
-                                <span></span><span></span><span></span>
-                            </div>
-                            <span class="ms-2" id="typing-text">Pensando...</span>
-                        </div>
+                <!-- FEAT-010: Toggle Plan Mode com Tooltip -->
+                <div class="header-control has-tooltip">
+                    <label class="toggle-switch plan">
+                        <input type="checkbox" id="plan-mode-toggle">
+                        <span class="toggle-slider"></span>
+                        <i class="fas fa-clipboard-list toggle-icon"></i>
+                    </label>
+                    <div class="control-tooltip">
+                        <strong><i class="fas fa-clipboard-list"></i> Modo Planejamento</strong>
+                        <p>Apenas analisa e sugere, sem executar ações.</p>
+                        <small>Use para revisar antes de confirmar.</small>
                     </div>
                 </div>
+            </div>
 
-                <!-- Sugestões -->
-                <div class="suggestions">
-                    <button class="suggestion-btn" onclick="sendSuggestion('Tem pedido pendente pro Atacadão?')">
-                        📦 Pedidos Atacadão
+            <div class="chat-header-right">
+                <!-- FEAT-004: Budget de Tokens (Admin) -->
+                {% if current_user.perfil == 'administrador' %}
+                <div class="token-budget-mini" id="token-budget" style="display: none;">
+                    <span class="token-count" id="token-total" title="Tokens usados">0</span>
+                    <span class="token-cost" id="token-cost" title="Custo USD">$0.00</span>
+                </div>
+                {% endif %}
+
+                <span class="status-indicator online" title="Online">
+                    <i class="fas fa-circle"></i>
+                </span>
+
+                <!-- Menu de opções -->
+                <div class="dropdown">
+                    <button class="btn-menu" data-bs-toggle="dropdown" title="Opções">
+                        <i class="fas fa-ellipsis-v"></i>
                     </button>
-                    <button class="suggestion-btn" onclick="sendSuggestion('Quais pedidos estão atrasados?')">
-                        ⏰ Atrasados
-                    </button>
-                    <button class="suggestion-btn" onclick="sendSuggestion('Chegou palmito?')">
-                        🥫 Estoque Palmito
-                    </button>
-                    <button class="suggestion-btn" onclick="sendSuggestion('O que vai dar falta essa semana?')">
-                        📉 Previsão Ruptura
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="openSessionsModal()">
+                            <i class="fas fa-comments me-2"></i>Conversas
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="startNewSession()">
+                            <i class="fas fa-plus me-2"></i>Nova Conversa
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="toggleTimeline()">
+                            <i class="fas fa-history me-2"></i>Timeline
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="clearSession()">
+                            <i class="fas fa-eraser me-2"></i>Limpar
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="showHelp()">
+                            <i class="fas fa-question-circle me-2"></i>Ajuda
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEAT-009: Barra de Progresso -->
+        <div id="progress-bar-container" class="progress-bar-container" style="display: none;">
+            <div class="progress-bar-info">
+                <span id="progress-status">Processando...</span>
+                <span id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Área de Mensagens -->
+        <div class="chat-messages" id="chat-messages">
+            <!-- Mensagem de boas-vindas -->
+            <div class="message assistant">
+                <div class="message-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-content">
+                    <div class="message-bubble">
+                        <h6>👋 Olá! Sou o Agente Nacom Goya</h6>
+                        <p>Posso ajudar você com:</p>
+                        <ul>
+                            <li>📦 Consultar pedidos e status</li>
+                            <li>📊 Analisar disponibilidade de estoque</li>
+                            <li>🚛 Calcular prazos de entrega</li>
+                            <li>✅ Criar separações de pedidos</li>
+                        </ul>
+                        <p><strong>Como posso ajudar?</strong></p>
+                    </div>
+                    <div class="message-time">Agora</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indicador de digitação -->
+        <div id="typing-container" class="typing-container" style="display: none;">
+            <div class="message assistant">
+                <div class="message-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="typing-indicator">
+                    <div class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span class="typing-text" id="typing-text">Pensando...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEAT-003: Painel de Thinking -->
+        <div id="thinking-panel" class="thinking-panel" style="display: none;">
+            <div class="thinking-content">
+                <div class="thinking-header">
+                    <span class="thinking-label">
+                        <i class="fas fa-brain me-1"></i>
+                        <span id="thinking-status">Pensando...</span>
+                    </span>
+                    <button class="btn-minimize" onclick="toggleThinkingPanel()" title="Minimizar">
+                        <i class="fas fa-chevron-up" id="thinking-toggle-icon"></i>
                     </button>
                 </div>
+                <div class="thinking-body" id="thinking-text"></div>
+            </div>
+        </div>
 
-                <!-- Input -->
-                <div class="chat-input">
-                    <form id="chat-form" onsubmit="sendMessage(event)">
-                        <input
-                            type="text"
-                            id="message-input"
-                            placeholder="Digite sua pergunta..."
-                            maxlength="500"
-                            autocomplete="off"
-                        >
-                        <button type="submit" id="send-btn" disabled>
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </form>
+        <!-- FEAT-028: Área de Arquivos -->
+        <div id="files-panel" class="files-panel" style="display: none;">
+            <!-- Arquivos Anexados (upload do usuário) -->
+            <div class="files-section attachments-section" id="attachments-section" style="display: none;">
+                <div class="files-section-header">
+                    <span><i class="fas fa-paperclip me-1"></i>Anexos</span>
+                    <button class="btn-clear-files" onclick="clearAttachments()" title="Remover todos">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div class="files-list" id="attachments-list"></div>
+            </div>
+            <!-- Downloads Disponíveis (gerados pelo agente) -->
+            <div class="files-section downloads-section" id="downloads-section" style="display: none;">
+                <div class="files-section-header">
+                    <span><i class="fas fa-download me-1"></i>Downloads</span>
+                    <button class="btn-clear-files" onclick="clearDownloads()" title="Limpar">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div class="files-list" id="downloads-list"></div>
+            </div>
+        </div>
+
+        <!-- Input com Textarea e Botão Stop -->
+        <div class="chat-input">
+            <form id="chat-form">
+                <!-- FEAT-028: Input file oculto -->
+                <input type="file" id="file-input" multiple accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.gif" style="display: none;">
+
+                <!-- FEAT-028: Botão Anexar -->
+                <button type="button" class="btn-attach" onclick="document.getElementById('file-input').click()" title="Anexar arquivo (PDF, Excel, CSV, Imagens)">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+
+                <textarea
+                    id="message-input"
+                    placeholder="Digite sua pergunta... (Enter envia, Shift+Enter nova linha)"
+                    maxlength="2000"
+                    rows="1"
+                    autocomplete="off"
+                ></textarea>
+                <div class="input-actions">
+                    <!-- Botão Stop (visível durante processamento) -->
+                    <button type="button" id="stop-btn" class="btn-stop" style="display: none;" onclick="stopGeneration()" title="Parar geração">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                    <!-- Botão Enviar -->
+                    <button type="submit" id="send-btn" disabled title="Enviar (Enter)">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+            <div class="input-hint">
+                <small>Enter envia • Shift+Enter nova linha</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FEAT-025: Modal de Sessões -->
+<div id="sessions-modal" class="sessions-modal" style="display: none;">
+    <div class="sessions-modal-backdrop" onclick="closeSessionsModal()"></div>
+    <div class="sessions-modal-content">
+        <div class="sessions-modal-header">
+            <h5><i class="fas fa-comments me-2"></i>Conversas</h5>
+            <button class="btn-close-modal" onclick="closeSessionsModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sessions-modal-actions">
+            <button class="btn-new-session" onclick="startNewSession(); closeSessionsModal();">
+                <i class="fas fa-plus me-2"></i>Nova Conversa
+            </button>
+        </div>
+        <div class="sessions-modal-body">
+            <div id="sessions-list" class="sessions-list">
+                <div class="sessions-loading" id="sessions-loading">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Carregando...
+                </div>
+                <div class="sessions-empty" id="sessions-empty" style="display: none;">
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p>Nenhuma conversa ainda</p>
+                    <small class="text-muted">Suas conversas aparecerão aqui</small>
                 </div>
             </div>
         </div>
@@ -514,358 +283,45 @@
     </div>
 </div>
 
-<script>
-// Estado
-let sessionId = null;
-let pendingAction = null;
-let totalTokens = 0;
-let totalCost = 0;
-
-// Elementos
-const chatMessages = document.getElementById('chat-messages');
-const messageInput = document.getElementById('message-input');
-const sendBtn = document.getElementById('send-btn');
-const typingContainer = document.getElementById('typing-container');
-const typingText = document.getElementById('typing-text');
-const metricsBar = document.getElementById('metrics-bar');
-
-// Habilita/desabilita botão
-messageInput.addEventListener('input', () => {
-    sendBtn.disabled = !messageInput.value.trim();
-});
-
-// Envia mensagem
-async function sendMessage(event) {
-    event.preventDefault();
-
-    const message = messageInput.value.trim();
-    if (!message) return;
-
-    // Adiciona mensagem do usuário
-    addMessage(message, 'user');
-    messageInput.value = '';
-    sendBtn.disabled = true;
-
-    // Mostra indicador
-    showTyping('Processando...');
-
-    try {
-        const response = await fetch('/agente/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify({
-                message: message,
-                session_id: sessionId
-            })
-        });
-
-        if (response.headers.get('content-type')?.includes('text/event-stream')) {
-            // Streaming
-            await handleStreamResponse(response);
-        } else {
-            // JSON
-            const data = await response.json();
-            handleJsonResponse(data);
-        }
-
-    } catch (error) {
-        console.error('Erro:', error);
-        hideTyping();
-        addMessage('❌ Erro de conexão. Tente novamente.', 'assistant');
-    }
-}
-
-// Processa resposta streaming (SSE)
-async function handleStreamResponse(response) {
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let currentEventType = null;
-
-    // Estado da mensagem atual
-    const state = {
-        text: '',           // Texto acumulado
-        msgElement: null,   // Elemento DOM da mensagem
-        bubbleElement: null // Elemento do bubble
-    };
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Processa eventos SSE (formato: event: tipo\ndata: json\n\n)
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-            if (line.startsWith('event:')) {
-                currentEventType = line.slice(6).trim();
-            } else if (line.startsWith('data:')) {
-                try {
-                    const data = JSON.parse(line.slice(5));
-
-                    // Cria elemento apenas quando primeiro texto chegar
-                    if (currentEventType === 'text' && !state.msgElement) {
-                        hideTyping();
-                        state.msgElement = createMessageElement('', 'assistant');
-                        chatMessages.appendChild(state.msgElement);
-                        state.bubbleElement = state.msgElement.querySelector('.message-bubble');
-                    }
-
-                    // Processa o evento com estado compartilhado
-                    processSSEEvent(currentEventType, data, state);
-                    currentEventType = null;
-                } catch (e) {
-                    console.error('[SSE] Erro ao parsear:', e);
-                }
-            }
-        }
-    }
-
-    hideTyping();
-}
-
-// Processa evento SSE com estado compartilhado
-function processSSEEvent(eventType, data, state) {
-    switch (eventType) {
-        case 'start':
-            // Stream iniciado
-            break;
-
-        case 'init':
-            // Captura session_id do SDK
-            if (data.session_id) sessionId = data.session_id;
-            break;
-
-        case 'text':
-            // Acumula texto no estado compartilhado
-            state.text += data.content || '';
-            if (state.bubbleElement) {
-                state.bubbleElement.innerHTML = formatMessage(state.text);
-                scrollToBottom();
-            }
-            hideTyping();
-            break;
-
-        case 'tool_call':
-            showTyping(`🔧 Executando ${data.tool_name || data.content || 'ferramenta'}...`);
-            break;
-
-        case 'tool_result':
-            showTyping('📊 Analisando dados...');
-            break;
-
-        case 'action_pending':
-            hideTyping();
-            pendingAction = data;
-            showConfirmation(data.message || 'Confirmar ação?');
-            break;
-
-        case 'error':
-            hideTyping();
-            addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
-            break;
-
-        case 'done':
-            hideTyping();
-            if (data.session_id) sessionId = data.session_id;
-            updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
-            break;
-    }
-}
-
-// Processa resposta JSON (síncrono)
-function handleJsonResponse(data) {
-    hideTyping();
-
-    if (data.success) {
-        addMessage(data.response, 'assistant');
-        sessionId = data.session_id;
-
-        if (data.metrics) {
-            updateMetrics(
-                data.metrics.input_tokens,
-                data.metrics.output_tokens,
-                data.metrics.cost_usd
-            );
-        }
-
-        if (data.pending_action) {
-            pendingAction = data.pending_action;
-            showConfirmation(pendingAction.message || 'Confirmar ação?');
-        }
-    } else {
-        addMessage(`❌ ${data.error || 'Erro desconhecido'}`, 'assistant');
-    }
-}
-
-// Adiciona mensagem ao chat
-function addMessage(text, role) {
-    const element = createMessageElement(text, role);
-    chatMessages.appendChild(element);
-    scrollToBottom();
-}
-
-// Cria elemento de mensagem
-function createMessageElement(text, role) {
-    const div = document.createElement('div');
-    div.className = `message ${role}`;
-
-    const icon = role === 'user' ? 'fa-user' : 'fa-robot';
-    const formattedText = role === 'user' ? escapeHtml(text) : formatMessage(text);
-
-    div.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas ${icon}"></i>
+<!-- FEAT-006: Timeline de Ações (flutuante) -->
+<div id="action-timeline" class="action-timeline-container hidden">
+    <div class="timeline-header">
+        <span class="timeline-header-title"><i class="fas fa-history"></i>Ações</span>
+        <span class="badge bg-light text-dark" id="action-count">0</span>
+        <button class="btn-close-panel" onclick="hideTimeline()" title="Fechar">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div class="timeline-body" id="timeline-body">
+        <div class="timeline-empty" id="timeline-empty">
+            <i class="fas fa-clock fa-2x mb-2"></i>
+            <p class="mb-0">Nenhuma ação ainda</p>
         </div>
-        <div class="message-content">
-            <div class="message-bubble">${formattedText}</div>
-            <div class="message-time">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+        <div id="timeline-items"></div>
+    </div>
+</div>
+
+<!-- FEAT-008: Todo List Visual (flutuante) -->
+<div id="todo-panel" class="todo-panel-container hidden">
+    <div class="todo-header">
+        <span class="todo-header-title"><i class="fas fa-tasks"></i>Tarefas</span>
+        <span class="badge bg-light text-success" id="todo-progress-badge">0%</span>
+        <button class="btn-close-panel" onclick="hideTodoPanel()" title="Fechar">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div class="todo-body">
+        <ul id="todo-list" class="todo-list"></ul>
+    </div>
+    <div class="todo-progress-container">
+        <div class="todo-progress">
+            <div class="todo-progress-bar" id="todo-progress-bar" style="width: 0%"></div>
         </div>
-    `;
+    </div>
+</div>
 
-    return div;
-}
-
-// Formata mensagem (markdown básico)
-function formatMessage(text) {
-    return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/### (.*?)$/gm, '<h6>$1</h6>')
-        .replace(/## (.*?)$/gm, '<h5>$1</h5>')
-        .replace(/# (.*?)$/gm, '<h4>$1</h4>')
-        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
-}
-
-// Escapa HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Mostra indicador de digitação
-function showTyping(text = 'Pensando...') {
-    typingText.textContent = text;
-    typingContainer.style.display = 'block';
-    scrollToBottom();
-}
-
-// Esconde indicador
-function hideTyping() {
-    typingContainer.style.display = 'none';
-}
-
-// Scroll para o final
-function scrollToBottom() {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-// Atualiza métricas (apenas para administradores)
-function updateMetrics(inputTokens, outputTokens, costUsd) {
-    totalTokens += (inputTokens || 0) + (outputTokens || 0);
-    totalCost += costUsd || 0;
-
-    // Só atualiza UI se elementos existirem (admin only)
-    const tokenEl = document.getElementById('metric-tokens');
-    const costEl = document.getElementById('metric-cost');
-    if (tokenEl && costEl && metricsBar) {
-        tokenEl.textContent = totalTokens.toLocaleString();
-        costEl.textContent = `$${totalCost.toFixed(4)}`;
-        metricsBar.style.display = 'flex';
-    }
-}
-
-// Envia sugestão
-function sendSuggestion(text) {
-    messageInput.value = text;
-    sendBtn.disabled = false;
-    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
-}
-
-// Mostra modal de confirmação
-function showConfirmation(message) {
-    document.getElementById('confirmation-message').textContent = message;
-    document.getElementById('confirmation-overlay').style.display = 'flex';
-}
-
-// Cancela ação (responde "não" no chat)
-function cancelAction() {
-    document.getElementById('confirmation-overlay').style.display = 'none';
-    pendingAction = null;
-    // Envia "não" como resposta para cancelar
-    messageInput.value = 'não';
-    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
-}
-
-// Confirma ação (responde "sim" no chat)
-function confirmAction() {
-    document.getElementById('confirmation-overlay').style.display = 'none';
-    pendingAction = null;
-    // Envia "sim" como resposta para confirmar
-    messageInput.value = 'sim, confirmar';
-    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
-}
-
-// Limpa sessão (local apenas - SDK gerencia sessions automaticamente)
-function clearSession() {
-    if (!confirm('Limpar toda a conversa?')) return;
-
-    // Limpa estado local (SDK cria nova session automaticamente no próximo chat)
-    sessionId = null;
-    totalTokens = 0;
-    totalCost = 0;
-    if (metricsBar) metricsBar.style.display = 'none';
-
-    // Remove mensagens (exceto boas-vindas)
-    const messages = chatMessages.querySelectorAll('.message');
-    messages.forEach((msg, index) => {
-        if (index > 0) msg.remove();
-    });
-
-    addMessage('🔄 Conversa limpa. Uma nova sessão será iniciada na próxima mensagem.', 'assistant');
-}
-
-// Mostra ajuda
-function showHelp() {
-    addMessage(`## 📖 Ajuda do Agente Logístico
-
-**Consultas disponíveis:**
-- "Tem pedido pendente pro [cliente]?"
-- "Quais pedidos estão atrasados?"
-- "Quando o pedido [número] estará disponível?"
-- "Chegou [produto]?"
-- "O que vai dar falta essa semana?"
-
-**Ações:**
-- "Criar separação do pedido [número]"
-- "Programar envio do [cliente] para [data]"
-
-**Dicas:**
-- Seja específico com nomes de clientes
-- Use números de pedido exatos quando possível
-- Para criar separações, confirme a opção desejada (A, B ou C)
-`, 'assistant');
-}
-
-// Verifica saúde do serviço
-fetch('/agente/api/health')
-    .then(r => r.json())
-    .then(data => {
-        if (!data.success || data.status !== 'healthy') {
-            addMessage('⚠️ O serviço pode estar com problemas. Algumas funcionalidades podem não funcionar corretamente.', 'assistant');
-        }
-    })
-    .catch(() => {
-        // Silencioso
-    });
-</script>
+<!-- FEAT-023: Markdown Avançado - Bibliotecas -->
+<script src="https://cdn.jsdelivr.net/npm/marked@13.0.0/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
+<script src="{{ url_for('static', filename='agente/js/chat.js') }}"></script>
 {% endblock %}

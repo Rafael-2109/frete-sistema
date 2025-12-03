@@ -9,7 +9,7 @@ Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/
 
 import logging
 import asyncio
-from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, Union
+from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, Union 
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -130,6 +130,104 @@ Ajude o usuário com consultas sobre pedidos, estoque e separações.
 Use as ferramentas disponíveis para buscar dados reais do sistema.
 Nunca invente informações."""
 
+    def _extract_tool_description(
+        self,
+        tool_name: str,
+        tool_input: Dict[str, Any]
+    ) -> str:
+        """
+        FEAT-024: Extrai descrição amigável do tool_call.
+
+        Em vez de mostrar "Read" ou "Bash", mostra uma descrição
+        do que a ferramenta está fazendo, similar ao Claude Code.
+
+        Args:
+            tool_name: Nome da ferramenta (Read, Bash, Skill, etc.)
+            tool_input: Input da ferramenta
+
+        Returns:
+            Descrição amigável da ação
+        """
+        if not tool_input:
+            return tool_name
+
+        # Mapeamento de ferramentas para descrições
+        if tool_name == 'Read':
+            file_path = tool_input.get('file_path', '')
+            if file_path:
+                # Extrai apenas o nome do arquivo
+                file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+                return f"Lendo {file_name}"
+            return "Lendo arquivo"
+
+        elif tool_name == 'Bash':
+            # Bash tem campo description explícito
+            description = tool_input.get('description', '')
+            if description:
+                return description
+            command = tool_input.get('command', '')
+            if command:
+                # Extrai comando principal
+                cmd_parts = command.split()
+                if cmd_parts:
+                    main_cmd = cmd_parts[0]
+                    if main_cmd == 'python':
+                        return "Executando script Python"
+                    elif main_cmd in ('pip', 'npm', 'yarn'):
+                        return f"Instalando dependências ({main_cmd})"
+                    elif main_cmd == 'git':
+                        return f"Git: {' '.join(cmd_parts[1:3])}"
+                    else:
+                        return f"Executando {main_cmd}"
+            return "Executando comando"
+
+        elif tool_name == 'Skill':
+            skill_name = tool_input.get('skill', '')
+            if skill_name:
+                return f"Usando skill: {skill_name}"
+            return "Invocando skill"
+
+        elif tool_name == 'Glob':
+            pattern = tool_input.get('pattern', '')
+            if pattern:
+                return f"Buscando arquivos: {pattern}"
+            return "Buscando arquivos"
+
+        elif tool_name == 'Grep':
+            pattern = tool_input.get('pattern', '')
+            if pattern:
+                return f"Buscando: {pattern[:30]}..."
+            return "Buscando no código"
+
+        elif tool_name == 'Write':
+            file_path = tool_input.get('file_path', '')
+            if file_path:
+                file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+                return f"Escrevendo {file_name}"
+            return "Escrevendo arquivo"
+
+        elif tool_name == 'Edit':
+            file_path = tool_input.get('file_path', '')
+            if file_path:
+                file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+                return f"Editando {file_name}"
+            return "Editando arquivo"
+
+        elif tool_name == 'TodoWrite':
+            todos = tool_input.get('todos', [])
+            if todos:
+                # Conta tarefas por status
+                in_progress = sum(1 for t in todos if t.get('status') == 'in_progress')
+                if in_progress > 0:
+                    current = next((t for t in todos if t.get('status') == 'in_progress'), None)
+                    if current:
+                        return current.get('activeForm', 'Atualizando tarefas')
+                return f"Gerenciando {len(todos)} tarefas"
+            return "Atualizando tarefas"
+
+        # Default: usa o nome da ferramenta
+        return tool_name
+
     def _format_system_prompt(
         self,
         user_name: str = "Usuário",
@@ -168,6 +266,8 @@ Nunca invente informações."""
         can_use_tool: Optional[Callable] = None,
         max_turns: int = 10,
         fork_session: bool = False,
+        model: Optional[str] = None,
+        thinking_enabled: bool = False,
     ) -> ClaudeAgentOptions:
         """
         Constrói ClaudeAgentOptions conforme documentação oficial Anthropic.
@@ -192,6 +292,8 @@ Nunca invente informações."""
             can_use_tool: Callback de permissão (retorna {behavior, updatedInput})
             max_turns: Máximo de turnos
             fork_session: Se deve bifurcar a sessão
+            model: Modelo a usar (FEAT-001) - sobrescreve settings.model
+            thinking_enabled: Ativar Extended Thinking (FEAT-002)
 
         Returns:
             ClaudeAgentOptions configurado
@@ -218,8 +320,8 @@ Nunca invente informações."""
             # https://platform.claude.com/docs/pt-BR/agent-sdk/skills
             # ========================================
 
-            # Modelo a ser usado
-            "model": self.settings.model,
+            # FEAT-001: Modelo a ser usado (usa o passado por parâmetro ou o padrão)
+            "model": model if model else self.settings.model,
 
             # Máximo de turnos (quantas vezes o agente pode responder)
             "max_turns": max_turns,
@@ -274,6 +376,14 @@ Nunca invente informações."""
         else:
             options_dict["permission_mode"] = "default"
 
+        # FEAT-002: Extended Thinking (Pensamento Profundo)
+        # Referência: Parâmetro max_thinking_tokens do ClaudeAgentOptions
+        # Quando ativado, o Claude usa mais tokens para raciocinar antes de responder
+        if thinking_enabled:
+            # Budget de 20.000 tokens para thinking (ajustável)
+            options_dict["max_thinking_tokens"] = 20000
+            logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
+
         # Callback de permissão (formato: {behavior, updatedInput, message})
         # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
         if can_use_tool:
@@ -290,6 +400,9 @@ Nunca invente informações."""
         allowed_tools: Optional[List[str]] = None,
         can_use_tool: Optional[Callable] = None,
         max_turns: int = 10,
+        model: Optional[str] = None,
+        thinking_enabled: bool = False,
+        plan_mode: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando SDK oficial.
@@ -302,17 +415,26 @@ Nunca invente informações."""
             allowed_tools: Lista de tools permitidas
             can_use_tool: Callback de permissão
             max_turns: Máximo de turnos
+            model: Modelo a usar (FEAT-001)
+            thinking_enabled: Ativar Extended Thinking (FEAT-002)
+            plan_mode: Ativar modo somente-leitura (FEAT-010)
 
         Yields:
             StreamEvent com tipo e conteúdo
         """
+        # FEAT-010: Plan Mode força permission_mode="plan"
+        permission_mode = "plan" if plan_mode else "default"
+
         options = self._build_options(
             session_id=session_id,
             user_name=user_name,
             extra_context=extra_context,
             allowed_tools=allowed_tools,
+            permission_mode=permission_mode,
             can_use_tool=can_use_tool,
             max_turns=max_turns,
+            model=model,
+            thinking_enabled=thinking_enabled,
         )
 
         current_session_id = session_id
@@ -389,14 +511,31 @@ Nunca invente informações."""
                                 )
                                 tool_calls.append(tool_call)
 
+                                # FEAT-024: Extrai descrição amigável do input
+                                tool_description = self._extract_tool_description(
+                                    block.name,
+                                    block.input
+                                )
+
                                 yield StreamEvent(
                                     type='tool_call',
                                     content=block.name,
                                     metadata={
                                         'tool_id': block.id,
-                                        'input': block.input
+                                        'input': block.input,
+                                        'description': tool_description  # FEAT-024
                                     }
                                 )
+
+                                # FEAT-024: Se for TodoWrite, emite evento de todos
+                                if block.name == 'TodoWrite' and block.input:
+                                    todos = block.input.get('todos', [])
+                                    if todos:
+                                        yield StreamEvent(
+                                            type='todos',
+                                            content={'todos': todos},
+                                            metadata={'tool_id': block.id}
+                                        )
                     continue
 
                 # Mensagem de resultado final
