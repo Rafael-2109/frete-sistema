@@ -4,7 +4,10 @@
       "Bash(python3:*)",
       "Bash(source:*)",
       "Bash(python scripts/testes/test_claude_ai_lite_v2.py:*)",
-      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo/scripts/consultando_desconhecidas.py:*)"
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo/scripts/consultando_desconhecidas.py:*)",
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py:*)",
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo-compras/scripts/consulta.py:*)",
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo-produtos/scripts/consulta.py:*)"
     ],
     "deny": []
   },

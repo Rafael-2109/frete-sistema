@@ -55,8 +55,10 @@ Os principais dominios de dados relevantes para o sistema de fretes sao:
 | delivery.carrier | ✅ IMPLEMENTADO | consultando-odoo-cadastros/reference/CARRIER.md | consultando-odoo-cadastros |
 | account.move | ✅ IMPLEMENTADO | consultando-odoo-financeiro/reference/FINANCEIRO.md | consultando-odoo-financeiro |
 | account.move.line | ✅ IMPLEMENTADO | consultando-odoo-financeiro/reference/FINANCEIRO.md | consultando-odoo-financeiro |
-| purchase.order | 📋 MAPEADO | Este documento | - |
-| product.product | ⬜ PENDENTE | - | - |
+| purchase.order | ✅ IMPLEMENTADO | consultando-odoo-compras/reference/PURCHASE.md | consultando-odoo-compras |
+| purchase.order.line | ✅ IMPLEMENTADO | consultando-odoo-compras/reference/PURCHASE.md | consultando-odoo-compras |
+| product.product | ✅ IMPLEMENTADO | consultando-odoo-produtos/reference/PRODUCT.md | consultando-odoo-produtos |
+| product.template | ✅ IMPLEMENTADO | consultando-odoo-produtos/reference/PRODUCT.md | consultando-odoo-produtos |
 
 **Legenda:**
 - ✅ IMPLEMENTADO: Script funcional e documentacao completa
@@ -614,23 +616,32 @@ Os principais dominios de dados relevantes para o sistema de fretes sao:
 6. [x] Filtros avancados: --valor-min, --valor-max, --dias-atraso
 7. [x] Opcoes de saida: --detalhes (parcelas), --resumo (totalizadores), --json
 
-### Fase 4: Compras (Medio Prazo)
+### Fase 4: Compras (Medio Prazo) ✅ CONCLUIDA
 **Prioridade:** Media
 **Esforco:** Medio
+**Data conclusao:** 02/12/2025
+**Skill criada:** consultando-odoo-compras
 
-1. [ ] Mapear campos purchase.order
-2. [ ] Criar documentacao reference/PURCHASE.md
-3. [ ] Implementar `--tipo purchase`
-4. [ ] Filtros: --fornecedor, --status, --periodo
+1. [x] Mapear campos purchase.order (165 campos) e purchase.order.line (201 campos)
+2. [x] Criar skill separada: consultando-odoo-compras
+3. [x] Criar documentacao reference/PURCHASE.md
+4. [x] Implementar subtipos: pendentes, confirmados, recebidos, a-faturar, cancelados, todos
+5. [x] Filtros: --fornecedor, --cnpj, --numero-po, --data-inicio, --data-fim
+6. [x] Filtros avancados: --valor-min, --valor-max, --produto, --origem
+7. [x] Opcoes de saida: --detalhes (linhas), --fiscais (tributos), --resumo (totalizadores), --json
 
-### Fase 5: Produtos (Longo Prazo)
+### Fase 5: Produtos (Longo Prazo) ✅ CONCLUIDA
 **Prioridade:** Baixa
 **Esforco:** Medio
+**Data conclusao:** 02/12/2025
+**Skill criada:** consultando-odoo-produtos
 
-1. [ ] Mapear campos product.product
-2. [ ] Criar documentacao reference/PRODUCT.md
-3. [ ] Implementar `--tipo product`
-4. [ ] Filtros: --codigo, --ncm, --categoria
+1. [x] Mapear campos product.product (229 campos) e product.template (196 campos)
+2. [x] Criar skill separada: consultando-odoo-produtos
+3. [x] Criar documentacao reference/PRODUCT.md
+4. [x] Implementar subtipos: ativos, inativos, vendaveis, compraveis, estocaveis, servicos, consumiveis, todos
+5. [x] Filtros: --codigo, --nome, --barcode, --categoria, --ncm, --fornecedor, --preco-min/max, --com-estoque, --sem-estoque
+6. [x] Opcoes de saida: --detalhes (fornecedores, estoque), --fiscais (NCM, origem), --resumo (totalizadores), --json
 
 ---
 
@@ -792,6 +803,7 @@ odoo.execute_kw(modelo, metodo, args, kwargs)
 | 02/12/2025 | Fase 1 concluida: filtros avancados (NCM, CFOP, ICMS-ST, IPI, valor) e pagamentos |
 | 02/12/2025 | Fase 2 concluida: nova skill consultando-odoo-cadastros (res.partner, delivery.carrier) |
 | 02/12/2025 | Fase 3 concluida: nova skill consultando-odoo-financeiro (account.move, account.move.line) |
+| 02/12/2025 | Fase 4 concluida: nova skill consultando-odoo-compras (purchase.order, purchase.order.line) |
 
 ---
 
@@ -802,8 +814,14 @@ odoo.execute_kw(modelo, metodo, args, kwargs)
 3. ✅ ~~Criar reference/PARTNER.md~~ - Documentacao criada
 4. ✅ ~~Implementar --tipo partner~~ - Nova skill consultando-odoo-cadastros
 5. ✅ ~~Fase 3: Financeiro~~ - Nova skill consultando-odoo-financeiro (691 campos)
-6. **Fase 4: Compras** - Mapear purchase.order para pedidos de compra
-7. **Fase 5: Produtos** - Mapear product.product para catalogo
+6. ✅ ~~Fase 4: Compras~~ - Nova skill consultando-odoo-compras (366 campos)
+7. ✅ ~~Fase 5: Produtos~~ - Nova skill consultando-odoo-produtos (425 campos)
+
+**ROADMAP COMPLETO!** Todas as fases de implementacao foram concluidas.
+As proximas evolucoes podem incluir:
+- Consultas de vendas (sale.order)
+- Consultas de estoque (stock.move, stock.picking)
+- Consultas de pagamentos (account.payment)
 
 ---
 
@@ -819,7 +837,8 @@ Cada dominio significativo deve ter **skill separada** para melhor match do Agen
 ├── descobrindo-odoo-estrutura/     # Descoberta de campos/modelos (IMPLEMENTADO)
 ├── consultando-odoo-cadastros/     # Parceiros/Transportadoras (IMPLEMENTADO)
 ├── consultando-odoo-financeiro/    # Contas a pagar/receber (IMPLEMENTADO)
-└── consultando-odoo-compras/       # Purchase Orders (FUTURO)
+├── consultando-odoo-compras/       # Pedidos de Compra (IMPLEMENTADO)
+└── consultando-odoo-produtos/      # Catalogo de Produtos (IMPLEMENTADO)
 ```
 
 ### Template para Nova Skill
@@ -900,8 +919,9 @@ a nota, historico de compras de fornecedor."
 1. ✅ **Fase 1 concluida:** consultando-odoo-dfe cobre DFE, CTe, pagamentos
 2. ✅ **Fase 2 concluida:** consultando-odoo-cadastros cobre parceiros e transportadoras
 3. ✅ **Fase 3 concluida:** consultando-odoo-financeiro cobre contas a pagar/receber
-4. **Ao implementar Fase 4 (Compras):** Criar consultando-odoo-compras
-5. **Manter ROADMAP centralizado:** Este documento permanece como referencia unica
+4. ✅ **Fase 4 concluida:** consultando-odoo-compras cobre pedidos de compra
+5. ✅ **Fase 5 concluida:** consultando-odoo-produtos cobre catalogo de produtos
+6. **ROADMAP COMPLETO:** Todas as fases foram implementadas! Este documento permanece como referencia unica
 
 ---
 

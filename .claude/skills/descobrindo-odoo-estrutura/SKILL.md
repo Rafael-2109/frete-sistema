@@ -123,5 +123,7 @@ Agent verifica: modelo/campo conhecido?
 | consultando-odoo-dfe | Consultas DFE em producao (campos ja mapeados) |
 | consultando-odoo-cadastros | Consultas de parceiros e transportadoras |
 | consultando-odoo-financeiro | Consultas de contas a pagar/receber, vencimentos |
+| consultando-odoo-compras | Consultas de pedidos de compra (purchase.order) |
+| consultando-odoo-produtos | Consultas de catalogo de produtos (product.product) |
 | integracao-odoo | Desenvolvimento de novas integracoes |
 | agente-logistico | Consultas de carteira, separacoes e estoque |

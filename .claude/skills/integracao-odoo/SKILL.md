@@ -255,6 +255,8 @@ odoo.execute_method(modelo, metodo, args)
 | consultando-odoo-dfe | Para CONSULTAS em producao (DFE, devolucoes, CTe, tributos) |
 | consultando-odoo-cadastros | Para CONSULTAS de parceiros e transportadoras |
 | consultando-odoo-financeiro | Para CONSULTAS de contas a pagar/receber, vencimentos |
+| consultando-odoo-compras | Para CONSULTAS de pedidos de compra (purchase.order) |
+| consultando-odoo-produtos | Para CONSULTAS de catalogo de produtos (product.product) |
 | descobrindo-odoo-estrutura | Para descobrir campos/modelos nao mapeados |
 | agente-logistico | Para consultas de carteira, separacoes e estoque |
 

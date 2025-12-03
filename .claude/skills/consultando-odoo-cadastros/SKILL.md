@@ -153,6 +153,8 @@ python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-
 |-------|-----|
 | consultando-odoo-dfe | Consultas DFE (documentos fiscais, tributos) |
 | consultando-odoo-financeiro | Consultas de contas a pagar/receber, vencimentos |
+| consultando-odoo-compras | Consultas de pedidos de compra (purchase.order) |
+| consultando-odoo-produtos | Consultas de catalogo de produtos (product.product) |
 | descobrindo-odoo-estrutura | Descobrir campos/modelos nao mapeados |
 | integracao-odoo | Criar novas integracoes (desenvolvimento) |
 | agente-logistico | Consultas de carteira, separacoes e estoque |
@@ -161,3 +163,5 @@ python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-
 > Para descobrir campos desconhecidos, use `descobrindo-odoo-estrutura`.
 > Para documentos fiscais (DFE, CTe), use `consultando-odoo-dfe`.
 > Para contas a pagar/receber, use `consultando-odoo-financeiro`.
+> Para pedidos de compra, use `consultando-odoo-compras`.
+> Para catalogo de produtos, use `consultando-odoo-produtos`.

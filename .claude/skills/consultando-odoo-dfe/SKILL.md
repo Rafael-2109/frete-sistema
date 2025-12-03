@@ -163,9 +163,9 @@ python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-
 
 ## Referencias
 
-- [ROADMAP_IMPLEMENTACAO.md](reference/ROADMAP_IMPLEMENTACAO.md) - Roadmap completo com campos e relacionamentos
-- [MODELOS_CONHECIDOS.md](reference/MODELOS_CONHECIDOS.md) - Indice de modelos e status
 - [DFE.md](reference/DFE.md) - Campos do modelo DFE com tributos
+- [ROADMAP_IMPLEMENTACAO.md](../../references/ROADMAP_IMPLEMENTACAO.md) - Roadmap completo de todas as skills Odoo
+- [MODELOS_CONHECIDOS.md](../../references/MODELOS_CONHECIDOS.md) - Indice de modelos e status
 
 ## Relacionado
 
@@ -173,6 +173,8 @@ python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-
 |-------|-----|
 | consultando-odoo-cadastros | Consultas de parceiros (clientes, fornecedores, transportadoras) |
 | consultando-odoo-financeiro | Consultas de contas a pagar/receber, vencimentos |
+| consultando-odoo-compras | Consultas de pedidos de compra (purchase.order) |
+| consultando-odoo-produtos | Consultas de catalogo de produtos (product.product) |
 | descobrindo-odoo-estrutura | Descobrir campos/modelos nao mapeados |
 | integracao-odoo | Criar novas integracoes (desenvolvimento) |
 | agente-logistico | Consultas de carteira, separacoes e estoque |
