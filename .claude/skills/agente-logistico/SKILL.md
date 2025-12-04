@@ -37,18 +37,93 @@ description: Analisa, consulta e CRIA separacoes no sistema de fretes. Responde 
 4. **Executar criacao** via script com --executar
 5. **Confirmar resultado** ao usuario
 
+## Resolvedores Disponíveis
+
+Os resolvedores são funções auxiliares em `resolver_entidades.py` que convertem termos de busca em dados estruturados.
+
+### resolver_grupo(grupo, uf=None, loja=None, fonte='carteira')
+
+Resolve grupo empresarial retornando prefixos CNPJ + lista de pedidos.
+
+**Quando usar:**
+- "Pedidos do Atacadão"
+- "Atacadão de SP"
+- "Assaí loja 123"
+
+**Retorna:**
+```json
+{
+  "sucesso": true,
+  "grupo": "atacadao",
+  "prefixos_cnpj": ["93.209.76", "75.315.33", "00.063.96"],
+  "pedidos": [
+    {
+      "num_pedido": "VCD2565291",
+      "cliente": "ATACADAO 183",
+      "cidade": "Jacareí",
+      "uf": "SP",
+      "total_itens": 15,
+      "valor_total": 1885496.64
+    }
+  ],
+  "resumo": {
+    "total_pedidos": 2,
+    "total_valor": 2168165.64,
+    "ufs": ["SP"],
+    "cidades": ["Jacareí"]
+  }
+}
+```
+
+### resolver_uf(uf, fonte='carteira')
+
+Resolve pedidos de uma UF específica.
+
+**Quando usar:**
+- "Pedidos de São Paulo"
+- "Carteira de SP"
+
+**Retorna:** Formato similar a `resolver_grupo()`
+
+### resolver_pedido(termo, fonte='ambos')
+
+Resolve termo de pedido usando 5 estratégias:
+1. Número exato
+2. Número parcial (LIKE)
+3. CNPJ direto
+4. Grupo + loja (usa `resolver_grupo()` internamente)
+5. Cliente por nome
+
+**Quando usar:**
+- Qualquer menção a pedido específico
+- Termo ambíguo que pode ser pedido
+
+### resolver_produto(termo, limit=10)
+
+Resolve produto por tokenização + scoring.
+
+**Quando usar:**
+- "palmito", "azeitona verde", "pf mezzani"
+
+---
+
 ## Scripts Disponiveis (6 scripts consolidados)
 
 ### analisando_disponibilidade.py (9 queries)
 Analisa disponibilidade de estoque para pedidos ou grupos de clientes.
 
+**QUANDO USAR:**
+- "Quando o Atacadão estará disponível?" → Análise de GARGALOS
+- "O que está faltando para o Assaí?" → Produtos COM FALTA
+- "Pedidos atrasados do grupo X" → Com `--atrasados`
+
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
 | `--pedido` | Numero do pedido | `--pedido VCD123` |
-| `--grupo` | Grupo empresarial | `--grupo atacadao` |
+| `--grupo` | Grupo empresarial (analisa GARGALOS) | `--grupo atacadao` |
 | `--loja` | Identificador da loja (em raz_social_red) | `--loja 183` |
 | `--uf` | Filtrar por UF | `--uf SP` |
-| `--data` | Data alvo (padrao: hoje) | `--data amanha` |
+| `--data` | Data OBJETIVO para análise de disponibilidade (default: hoje) | `--data amanha` |
 | `--sem-agendamento` | Apenas pedidos sem exigencia de agendamento | flag |
 | `--sugerir-adiamento` | Identificar pedidos competidores para adiar | flag |
 | `--diagnosticar-origem` | Distinguir falta absoluta vs relativa | flag |
@@ -57,22 +132,59 @@ Analisa disponibilidade de estoque para pedidos ou grupos de clientes.
 | `--diagnosticar-causa` | Detalhar causa do atraso (falta ou outro) | flag |
 | `--ranking-impacto` | Rankear pedidos que mais travam carteira | flag |
 
+**RETORNA:** Lista de produtos com falta/gargalos (não lista pedidos diretamente)
+
 **Queries cobertas:** Q1, Q2, Q3, Q4, Q5, Q6, Q9, Q11, Q12
+
+---
 
 ### consultando_pedidos.py (5 queries)
 Consulta pedidos por diversos filtros e perspectivas.
 
+**QUANDO USAR:**
+- "Listar pedidos do Atacadão" → LISTA de pedidos
+- "Pedidos atrasados" → SEM análise de causa
+- "Status do pedido VCD123" → Separado, pendente, faturado
+
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
 | `--pedido` | Numero do pedido | `--pedido VCD123` |
-| `--grupo` | Grupo empresarial | `--grupo assai` |
+| `--grupo` | Grupo empresarial (LISTA pedidos) | `--grupo assai` |
 | `--atrasados` | Apenas pedidos com expedicao < hoje | flag |
 | `--verificar-bonificacao` | Verificar se venda+bonif estao juntos | flag |
 | `--consolidar-com` | Buscar pedidos proximos para consolidar | `--consolidar-com "assai 123"` |
 | `--status` | Detalhar status (separado, parcial, pendente) | flag |
 | `--limit` | Limite de resultados | `--limit 20` |
 
+**RETORNA:** Lista de pedidos (não analisa gargalos)
+
 **Queries cobertas:** Q8, Q10, Q14, Q16, Q19
+
+---
+
+## ⚠️ DIFERENÇAS IMPORTANTES
+
+### `--grupo` em scripts diferentes
+
+| Script | `--grupo atacadao` retorna | Quando usar |
+|--------|----------------------------|-------------|
+| `analisando_disponibilidade.py` | Produtos com GARGALOS do grupo | "O que falta pro Atacadão?" |
+| `consultando_pedidos.py` | LISTA de pedidos do grupo | "Pedidos do Atacadão" |
+
+### `--atrasados` em scripts diferentes
+
+| Script | `--atrasados` retorna | Quando usar |
+|--------|----------------------|-------------|
+| `analisando_disponibilidade.py` | Pedidos atrasados + DIAGNÓSTICO de causa | "Por que está atrasado?" |
+| `consultando_pedidos.py` | LISTA de pedidos atrasados (sem análise) | "Quais estão atrasados?" |
+
+**NOTA sobre `--data`:**
+- Em `analisando_disponibilidade.py`: Data OBJETIVO para verificar disponibilidade
+  - Exemplo: `--data amanha` = "Estará disponível amanhã?"
+- Em `criando_separacao.py`: Data de EXPEDIÇÃO (saída do CD)
+  - Exemplo: `--expedicao amanha` = "Embarcar amanhã"
+
+---
 
 ### consultando_estoque.py (4 queries)
 Consulta estoque atual, movimentacoes, pendencias e projecoes.
@@ -307,3 +419,4 @@ Agente: [Executa simulacao com --excluir-produtos]
 
 > **NOTA**: Os arquivos TABELAS.md e REGRAS_NEGOCIO.md foram consolidados em `.claude/references/`
 > para evitar duplicacao com o CLAUDE.md principal.
+

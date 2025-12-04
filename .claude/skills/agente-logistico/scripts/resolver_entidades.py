@@ -11,27 +11,40 @@ Este modulo resolve:
 - Pedidos: por numero parcial, grupo empresarial, cliente
 - Produtos: por nome, abreviacoes, caracteristicas (CadastroPalletizacao)
 - Cidades: por nome normalizado (sem acentos, case-insensitive)
+- Grupos: prefixos CNPJ + pedidos do grupo
+- UF: pedidos de uma UF especifica
 
 Uso:
-    from resolver_entidades import resolver_pedido, resolver_produto, resolver_cidade, normalizar_texto
+    from resolver_entidades import (
+        resolver_pedido,
+        resolver_produto,
+        resolver_cidade,
+        resolver_grupo,
+        resolver_uf,
+        normalizar_texto
+    )
 
     # Resolver pedido
     itens, num_pedido, info = resolver_pedido("VCD1")        # Parcial
     itens, num_pedido, info = resolver_pedido("atacadao 183") # Grupo + loja
-    itens, num_pedido, info = resolver_pedido("barueri")      # Cliente
+
+    # Resolver grupo (NOVO - formato rico)
+    resultado = resolver_grupo("atacadao", uf="SP", loja="183")
+    # → {'sucesso': True, 'grupo': 'atacadao', 'pedidos': [...], 'resumo': {...}}
+
+    # Resolver UF (NOVO)
+    resultado = resolver_uf("SP")
+    # → {'sucesso': True, 'uf': 'SP', 'pedidos': [...], 'resumo': {...}}
 
     # Resolver produto
     produtos = resolver_produto("pessego")        # Termo unico
     produtos = resolver_produto("pf mezzani")     # Abreviacoes
-    produtos = resolver_produto("bd ind azeitona") # Combinacao
 
     # Resolver cidade (normaliza acentos)
     pedidos = resolver_cidade("itanhaem")  # Encontra "Itanhaém", "ITANHAEM", etc.
-    pedidos = resolver_cidade("peruibe")   # Encontra "Peruíbe", "PERUIBE", etc.
 
     # Normalizar texto (util para comparacoes)
     normalizar_texto("Itanhaém")  # -> "itanhaem"
-    normalizar_texto("São Paulo") # -> "sao paulo"
 """
 import sys
 import os
@@ -99,6 +112,294 @@ def get_prefixos_grupo(grupo: str) -> list:
 def listar_grupos_disponiveis() -> list:
     """Retorna lista de grupos empresariais disponiveis"""
     return list(GRUPOS_EMPRESARIAIS.keys())
+
+
+def resolver_grupo(grupo: str, uf: str = None, loja: str = None, fonte: str = 'carteira') -> dict:
+    """
+    Resolve grupo empresarial retornando prefixos CNPJ + pedidos.
+
+    Args:
+        grupo: Nome do grupo (atacadao, assai, tenda)
+        uf: Filtro opcional por UF (ex: 'SP')
+        loja: Filtro opcional por identificador da loja em raz_social_red (ex: '183')
+        fonte: 'carteira', 'separacao' ou 'ambos'
+
+    Returns:
+        dict: {
+            'sucesso': bool,
+            'grupo': str,
+            'prefixos_cnpj': list,
+            'filtros_aplicados': dict,
+            'pedidos': list[dict],  # Lista de pedidos únicos com metadados
+            'resumo': dict,
+            'erro': str (se sucesso=False)
+        }
+
+    Exemplo:
+        >>> resolver_grupo('atacadao', uf='SP', loja='183')
+        {
+            'sucesso': True,
+            'grupo': 'atacadao',
+            'prefixos_cnpj': ['93.209.76', '75.315.33', '00.063.96'],
+            'filtros_aplicados': {'uf': 'SP', 'loja': '183'},
+            'pedidos': [
+                {
+                    'num_pedido': 'VCD2565291',
+                    'cnpj': '75.315.333/0183-18',
+                    'cliente': 'ATACADAO 183',
+                    'cidade': 'Jacareí',
+                    'uf': 'SP',
+                    'total_itens': 15,
+                    'valor_total': 1885496.64
+                }
+            ],
+            'resumo': {
+                'total_pedidos': 2,
+                'total_valor': 2168165.64,
+                'ufs': ['SP'],
+                'cidades': ['Jacareí'],
+                'lojas': ['183']
+            }
+        }
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from sqlalchemy import or_, func
+    from collections import defaultdict
+
+    grupo_lower = grupo.lower().strip()
+
+    # Buscar prefixos CNPJ
+    prefixos = get_prefixos_grupo(grupo_lower)
+
+    if not prefixos:
+        return {
+            'sucesso': False,
+            'grupo': grupo,
+            'erro': f"Grupo '{grupo}' não encontrado",
+            'grupos_disponiveis': listar_grupos_disponiveis()
+        }
+
+    # Montar filtros
+    filtros_aplicados = {}
+    if uf:
+        filtros_aplicados['uf'] = uf.upper()
+    if loja:
+        filtros_aplicados['loja'] = loja
+
+    # Escolher fonte
+    if fonte == 'carteira':
+        Model = CarteiraPrincipal
+        filtro_saldo = CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+    elif fonte == 'separacao':
+        Model = Separacao
+        filtro_saldo = Separacao.sincronizado_nf == False
+    else:  # ambos - priorizar carteira
+        Model = CarteiraPrincipal
+        filtro_saldo = CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+
+    # Construir query base com filtros de CNPJ
+    filtros_cnpj = [Model.cnpj_cpf.like(f'{prefixo}%') for prefixo in prefixos]
+    query = Model.query.filter(or_(*filtros_cnpj), filtro_saldo)
+
+    # Aplicar filtros adicionais
+    if uf:
+        query = query.filter(Model.cod_uf == uf.upper())
+
+    if loja:
+        query = query.filter(Model.raz_social_red.ilike(f'%{loja}%'))
+
+    # Executar query
+    itens = query.all()
+
+    if not itens:
+        return {
+            'sucesso': False,
+            'grupo': grupo,
+            'prefixos_cnpj': prefixos,
+            'filtros_aplicados': filtros_aplicados,
+            'erro': 'Nenhum pedido encontrado com os filtros aplicados',
+            'sugestao': 'Tente remover filtros de UF ou loja'
+        }
+
+    # Agrupar por pedido
+    pedidos_dict = defaultdict(lambda: {
+        'itens': [],
+        'valor_total': 0,
+        'total_itens': 0
+    })
+
+    for item in itens:
+        num = item.num_pedido
+        pedidos_dict[num]['num_pedido'] = num
+        pedidos_dict[num]['cnpj'] = item.cnpj_cpf
+        pedidos_dict[num]['cliente'] = item.raz_social_red or item.raz_social
+        pedidos_dict[num]['cidade'] = item.nome_cidade or item.municipio
+        pedidos_dict[num]['uf'] = item.cod_uf or item.estado
+        pedidos_dict[num]['itens'].append(item)
+        pedidos_dict[num]['total_itens'] += 1 # type: ignore
+
+        # Calcular valor
+        if fonte == 'carteira':
+            valor_item = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+        else:
+            valor_item = float(item.valor_saldo or 0)
+
+        pedidos_dict[num]['valor_total'] += valor_item # type: ignore
+
+    # Converter para lista
+    pedidos = []
+    for num, dados in pedidos_dict.items():
+        pedidos.append({
+            'num_pedido': num,
+            'cnpj': dados['cnpj'],
+            'cliente': dados['cliente'],
+            'cidade': dados['cidade'],
+            'uf': dados['uf'],
+            'total_itens': dados['total_itens'],
+            'valor_total': round(dados['valor_total'], 2)
+        })
+
+    # Ordenar por valor (maior primeiro)
+    pedidos.sort(key=lambda p: p['valor_total'], reverse=True)
+
+    # Calcular resumo
+    total_valor = sum(p['valor_total'] for p in pedidos)
+    ufs = sorted(set(p['uf'] for p in pedidos if p['uf']))
+    cidades = sorted(set(p['cidade'] for p in pedidos if p['cidade']))
+    lojas = sorted(set(p['cliente'].split()[-1] for p in pedidos if p['cliente']))  # Extrai numero da loja
+
+    return {
+        'sucesso': True,
+        'grupo': grupo,
+        'prefixos_cnpj': prefixos,
+        'filtros_aplicados': filtros_aplicados,
+        'fonte': fonte,
+        'pedidos': pedidos,
+        'resumo': {
+            'total_pedidos': len(pedidos),
+            'total_valor': round(total_valor, 2),
+            'ufs': ufs,
+            'cidades': cidades,
+            'lojas': lojas
+        }
+    }
+
+
+def resolver_uf(uf: str, fonte: str = 'carteira') -> dict:
+    """
+    Resolve pedidos de uma UF específica.
+
+    Args:
+        uf: Sigla da UF (ex: 'SP', 'RJ')
+        fonte: 'carteira', 'separacao' ou 'ambos'
+
+    Returns:
+        dict: Similar a resolver_grupo, mas filtrado por UF
+
+    Exemplo:
+        >>> resolver_uf('SP')
+        {
+            'sucesso': True,
+            'uf': 'SP',
+            'pedidos': [...],
+            'resumo': {...}
+        }
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from collections import defaultdict
+
+    uf_upper = uf.upper().strip()
+
+    # Validar UF (lista de UFs válidas)
+    UFS_VALIDAS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+                   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+                   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']
+
+    if uf_upper not in UFS_VALIDAS:
+        return {
+            'sucesso': False,
+            'uf': uf,
+            'erro': f"UF '{uf}' inválida",
+            'ufs_validas': UFS_VALIDAS
+        }
+
+    # Escolher fonte
+    if fonte == 'carteira':
+        Model = CarteiraPrincipal
+        filtro_saldo = CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+    elif fonte == 'separacao':
+        Model = Separacao
+        filtro_saldo = Separacao.sincronizado_nf == False
+    else:
+        Model = CarteiraPrincipal
+        filtro_saldo = CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+
+    # Query
+    itens = Model.query.filter(
+        Model.cod_uf == uf_upper,
+        filtro_saldo
+    ).all()
+
+    if not itens:
+        return {
+            'sucesso': False,
+            'uf': uf_upper,
+            'erro': f"Nenhum pedido encontrado para UF {uf_upper}"
+        }
+
+    # Agrupar por pedido (mesmo código de resolver_grupo)
+    pedidos_dict = defaultdict(lambda: {
+        'itens': [],
+        'valor_total': 0,
+        'total_itens': 0
+    })
+
+    for item in itens:
+        num = item.num_pedido
+        pedidos_dict[num]['num_pedido'] = num
+        pedidos_dict[num]['cnpj'] = item.cnpj_cpf
+        pedidos_dict[num]['cliente'] = item.raz_social_red or item.raz_social
+        pedidos_dict[num]['cidade'] = item.nome_cidade or item.municipio
+        pedidos_dict[num]['uf'] = item.cod_uf or item.estado
+        pedidos_dict[num]['total_itens'] += 1 # type: ignore
+
+        if fonte == 'carteira':
+            valor_item = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+        else:
+            valor_item = float(item.valor_saldo or 0)
+
+        pedidos_dict[num]['valor_total'] += valor_item # type: ignore
+
+    pedidos = []
+    for num, dados in pedidos_dict.items():
+        pedidos.append({
+            'num_pedido': num,
+            'cnpj': dados['cnpj'],
+            'cliente': dados['cliente'],
+            'cidade': dados['cidade'],
+            'uf': dados['uf'],
+            'total_itens': dados['total_itens'],
+            'valor_total': round(dados['valor_total'], 2)
+        })
+
+    pedidos.sort(key=lambda p: p['valor_total'], reverse=True)
+
+    total_valor = sum(p['valor_total'] for p in pedidos)
+    cidades = sorted(set(p['cidade'] for p in pedidos if p['cidade']))
+
+    return {
+        'sucesso': True,
+        'uf': uf_upper,
+        'fonte': fonte,
+        'pedidos': pedidos,
+        'resumo': {
+            'total_pedidos': len(pedidos),
+            'total_valor': round(total_valor, 2),
+            'cidades': cidades
+        }
+    }
 
 
 # ============================================================
@@ -432,8 +733,8 @@ def resolver_cidade(termo: str, fonte: str = 'separacao', apenas_pendentes: bool
                     pedidos_dict[num]['uf'] = item.cod_uf
                     pedidos_dict[num]['fonte'] = 'separacao'
 
-                pedidos_dict[num]['valor'] += float(item.valor_saldo or 0)
-                pedidos_dict[num]['itens'] += 1
+                pedidos_dict[num]['valor'] += float(item.valor_saldo or 0) # type: ignore
+                pedidos_dict[num]['itens'] += 1 # type: ignore
 
     # Buscar em Carteira
     if fonte in ('carteira', 'ambos'):
@@ -460,8 +761,8 @@ def resolver_cidade(termo: str, fonte: str = 'separacao', apenas_pendentes: bool
 
                     preco = float(item.preco_produto_pedido or 0)
                     qtd = float(item.qtd_saldo_produto_pedido or 0)
-                    pedidos_dict[num]['valor'] += preco * qtd
-                    pedidos_dict[num]['itens'] += 1
+                    pedidos_dict[num]['valor'] += preco * qtd # type: ignore
+                    pedidos_dict[num]['itens'] += 1 # type: ignore
 
     resultado['cidades_encontradas'] = sorted(list(cidades_encontradas))
     resultado['pedidos'] = list(pedidos_dict.values())
@@ -730,7 +1031,7 @@ def formatar_sugestao_pedido(info: dict) -> str:
             f"Outros candidatos: {', '.join(candidatos[1:5])}"
         )
 
-    return None
+    return None # type: ignore
 
 
 def formatar_sugestao_produto(info: dict) -> str:
@@ -764,7 +1065,7 @@ def formatar_sugestao_produto(info: dict) -> str:
             f"Especifique melhor o termo."
         )
 
-    return None
+    return None # type: ignore
 
 
 # ============================================================

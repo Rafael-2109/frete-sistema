@@ -1164,7 +1164,7 @@ class CarteiraAgrupada {
                     agendamento: sep.agendamento,
                     protocolo: sep.protocolo,
                     agendamento_confirmado: sep.agendamento_confirmado,
-                    embarque: sep.embarque
+                    obs_separacao: sep.obs_separacao  // Observação da separação
                 };
             })
         };
@@ -1314,7 +1314,7 @@ class CarteiraAgrupada {
                     agendamento: sep.agendamento,
                     protocolo: sep.protocolo,
                     agendamento_confirmado: sep.agendamento_confirmado,
-                    embarque: sep.embarque,
+                    obs_separacao: sep.obs_separacao,  // Observação da separação
                     isSeparacao: true
                 });
             });
@@ -1342,7 +1342,7 @@ class CarteiraAgrupada {
                                 <th class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Agendamento</th>
                                 <th style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Protocolo</th>
                                 <th class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Confirmação</th>
-                                <th style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Embarque</th>
+                                <th style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Obs. Separação</th>
                                 <th width="220" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Ações</th>
                             </tr>
                         </thead>
@@ -1373,9 +1373,12 @@ class CarteiraAgrupada {
                 '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Confirmado</span>' :
                 '<span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Aguardando</span>') : '-';
 
-        const embarqueInfo = item.embarque ?
-            `<span title="${item.embarque.transportadora || 'Sem transportadora'}" style="cursor: help;">
-                #${item.embarque.numero || '-'} | ${item.embarque.data_prevista_embarque ? this.formatarData(item.embarque.data_prevista_embarque) : '-'}
+        // Observação da separação com tooltip
+        const obsSeparacao = item.obs_separacao ?
+            `<span class="obs-separacao-texto"
+                   title="${item.obs_separacao.replace(/"/g, '&quot;')}"
+                   style="cursor: help; display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <i class="fas fa-comment-alt text-muted me-1"></i>${item.obs_separacao}
              </span>` : '-';
 
         return `
@@ -1389,7 +1392,7 @@ class CarteiraAgrupada {
                 <td class="text-center" data-field="agendamento">${item.agendamento ? this.formatarData(item.agendamento) : '-'}</td>
                 <td data-field="protocolo"><small>${item.protocolo || '-'}</small></td>
                 <td class="text-center" data-field="confirmacao">${confirmacaoBadge}</td>
-                <td data-field="embarque"><small>${embarqueInfo}</small></td>
+                <td data-field="obs_separacao"><small>${obsSeparacao}</small></td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-primary btn-sm" 

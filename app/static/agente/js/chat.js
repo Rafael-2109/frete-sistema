@@ -62,10 +62,22 @@ messageInput.addEventListener('input', () => {
     autoResizeTextarea();
 });
 
+// FEAT-029: Listener no FORM para capturar submit (CORRIGE BUG DE RELOAD NO MOBILE)
+// O botão é type="submit", então precisamos capturar o evento no form
+const chatForm = document.getElementById('chat-form');
+chatForm.addEventListener('submit', function(e) {
+    e.preventDefault(); // CRÍTICO: Impede reload da página
+    if (messageInput.value.trim() && !sendBtn.disabled) {
+        sendMessage(e);
+    }
+});
+
 // FEAT-026: Shift+Enter = nova linha, Enter = enviar
 messageInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        // Não precisa mais chamar sendMessage aqui, pois o form.submit será disparado
+        // Mas como estamos prevenindo o submit via Enter, precisamos disparar manualmente
         if (messageInput.value.trim() && !sendBtn.disabled) {
             sendMessage(e);
         }

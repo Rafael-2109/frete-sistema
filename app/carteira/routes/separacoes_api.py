@@ -266,7 +266,8 @@ def obter_separacoes_compactas_lote():
             Separacao.tipo_envio,
             Separacao.valor_saldo,
             Separacao.peso,
-            Separacao.pallet
+            Separacao.pallet,
+            Separacao.obs_separacao  # Campo de observação da separação
         ).filter(
             Separacao.num_pedido.in_(pedidos),
             Separacao.sincronizado_nf == False  # Apenas não faturadas
@@ -304,7 +305,8 @@ def obter_separacoes_compactas_lote():
                     'tipo_envio': sep.tipo_envio,
                     'valor': float(sep.valor_saldo or 0),
                     'peso': float(sep.peso or 0),
-                    'pallet': float(sep.pallet or 0)
+                    'pallet': float(sep.pallet or 0),
+                    'obs_separacao': sep.obs_separacao  # Observação da separação
                 }
                 lotes_processados[chave_lote] = lote_data
                 separacoes_por_pedido[num_pedido].append(lote_data)
