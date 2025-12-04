@@ -2039,51 +2039,47 @@ def embarque_fob():
             embarque_item.icms_destino = None
             db.session.add(embarque_item)
 
-        # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens FOB
-        cotacao_fob = None  # Inicializar variável fora do if
-        for pedido in pedidos:
-            # FOB não tem cotação, mas precisa de cotacao_id para ficar como COTADO
-            # Vamos criar uma cotação fictícia para FOB
-            if not pedido.cotacao_id:
-                # Cria uma cotação FOB fictícia se não existir
-                from app.cotacao.models import Cotacao
-                # Prepara dados para cotação FOB
-                dados_fob = TabelaFreteManager.preparar_cotacao_fob()
-                
-                cotacao_fob = Cotacao(
-                    usuario_id=1,  # Sistema
-                    transportadora_id=transportadora_fob.id,
-                    status='Fechado',
-                    data_criacao=datetime.now(),
-                    data_fechamento=datetime.now(),
-                    tipo_carga='FOB',
-                    valor_total=sum(p.valor_saldo_total or 0 for p in pedidos),
-                    peso_total=sum(p.peso_total or 0 for p in pedidos),
-                    **dados_fob  # Desempacota todos os campos FOB
-                )
-                db.session.add(cotacao_fob)
-                db.session.flush()
-                
-                # Atualiza o embarque com a cotação FOB
-                embarque.cotacao_id = cotacao_fob.id
-            
-        # Commit antes de atualizar separações (Embarque e itens já criados)
+        # ✅ CORRIGIDO: Criar cotação FOB SEMPRE (fora do loop)
+        # FOB precisa de cotacao_id para que status_calculado retorne "COTADO"
+        from app.cotacao.models import Cotacao
+        dados_fob = TabelaFreteManager.preparar_cotacao_fob()
+
+        cotacao_fob = Cotacao(
+            usuario_id=1,  # Sistema
+            transportadora_id=transportadora_fob.id,
+            status='Fechado',
+            data_criacao=datetime.now(),
+            data_fechamento=datetime.now(),
+            tipo_carga='FOB',
+            valor_total=valor_total,
+            peso_total=peso_total,
+            **dados_fob  # Desempacota todos os campos FOB
+        )
+        db.session.add(cotacao_fob)
+        db.session.flush()
+
+        # Atualiza o embarque com a cotação FOB
+        embarque.cotacao_id = cotacao_fob.id
+
+        # Commit embarque e cotação antes de atualizar separações
         db.session.commit()
 
-        # ✅ NOVO: Atualizar pedidos com cotação FOB
-        # Usa método Separacao.atualizar_cotacao() que já faz commit internamente
-        for pedido in pedidos:
-            if pedido.separacao_lote_id:
-                cotacao_id_final = embarque.cotacao_id or (cotacao_fob.id if cotacao_fob else None)
+        # ✅ CORRIGIDO: Atualizar separações DIRETAMENTE (mais seguro que via VIEW)
+        lote_ids = [p.separacao_lote_id for p in pedidos if p.separacao_lote_id]
 
-                if cotacao_id_final:
-                    # Usa método que dispara event listeners para atualizar status automaticamente
-                    Separacao.atualizar_cotacao(
-                        separacao_lote_id=pedido.separacao_lote_id,
-                        cotacao_id=cotacao_id_final,
-                        nf_cd=False
-                    )
-                    # Status será calculado automaticamente como COTADO pelo listener
+        if lote_ids:
+            # Busca separações diretamente na tabela
+            separacoes = Separacao.query.filter(
+                Separacao.separacao_lote_id.in_(lote_ids)
+            ).all()
+
+            # Atualiza cada separação via ORM (dispara event listeners)
+            for sep in separacoes:
+                sep.cotacao_id = cotacao_fob.id
+                sep.nf_cd = False
+
+            db.session.commit()
+            # Status será calculado automaticamente como COTADO pelo status_calculado
 
         flash(f"Embarque FOB #{embarque.numero} criado com sucesso! Transportadora: FOB - COLETA", "success")
         return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
