@@ -36,7 +36,8 @@ from app.monitoramento.forms import (
 )
 
 from app.financeiro.models import PendenciaFinanceiraNF
-from app.faturamento.models import RelatorioFaturamentoImportado
+from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
+from app.carteira.models import CarteiraPrincipal
 from app.embarques.models import EmbarqueItem  # ✅ Adicionar import
 
 from app.cadastros_agendamento.models import ContatoAgendamento
@@ -864,6 +865,17 @@ def listar_entregas():
                 # ✅ ADICIONAR INCOTERM E MODALIDADE
                 entrega.incoterm = faturamento.incoterm if faturamento else None
 
+                # ✅ BUSCAR observ_ped_1 da CarteiraPrincipal
+                if entrega.num_pedido:
+                    carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=entrega.num_pedido).first()
+                    entrega.observ_ped_1 = carteira_item.observ_ped_1 if carteira_item else None
+                else:
+                    entrega.observ_ped_1 = None
+
+                # ✅ VERIFICAR SE NF ESTÁ CANCELADA (FaturamentoProduto)
+                faturamento_produto = FaturamentoProduto.query.filter_by(numero_nf=entrega.numero_nf).first()
+                entrega.nf_cancelada = (faturamento_produto and faturamento_produto.status_nf == 'Cancelado')
+
                 # Buscar modalidade do embarque/item do embarque
                 embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
                 if embarque_item:
@@ -993,6 +1005,17 @@ def listar_entregas():
 
         # ✅ ADICIONAR INCOTERM E MODALIDADE
         entrega.incoterm = faturamento.incoterm if faturamento else None
+
+        # ✅ BUSCAR observ_ped_1 da CarteiraPrincipal
+        if entrega.num_pedido:
+            carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=entrega.num_pedido).first()
+            entrega.observ_ped_1 = carteira_item.observ_ped_1 if carteira_item else None
+        else:
+            entrega.observ_ped_1 = None
+
+        # ✅ VERIFICAR SE NF ESTÁ CANCELADA (FaturamentoProduto)
+        faturamento_produto = FaturamentoProduto.query.filter_by(numero_nf=entrega.numero_nf).first()
+        entrega.nf_cancelada = (faturamento_produto and faturamento_produto.status_nf == 'Cancelado')
 
         # Buscar modalidade do embarque/item do embarque
         embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
