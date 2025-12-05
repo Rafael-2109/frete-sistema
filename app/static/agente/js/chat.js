@@ -601,6 +601,11 @@ async function handleStreamResponse(response) {
     }
 
     hideTyping();
+
+    // FIX: Garante que items pendentes sejam finalizados mesmo se stream terminar sem 'done'
+    // Isso resolve o problema de "Ações spinning" quando conexão quebra ou timeout
+    finalizePendingTimelineItems('success');
+    finalizePendingTodos(true);
 }
 
 // Processa evento SSE com estado compartilhado
@@ -1661,17 +1666,33 @@ function getAttachedFilesForMessage() {
 
 /**
  * Detecta URLs de arquivos na resposta do agente e adiciona aos downloads
+ *
+ * Padroes detectados:
+ * - URLs HTTP completas terminando em extensoes de arquivo
+ * - URLs relativas /agente/api/files/...
+ * - Links markdown [texto](url)
  */
 function detectDownloadUrls(text) {
     // Detecta padrões de URL de arquivo
-    const urlPattern = /(?:https?:\/\/[^\s]+\.(?:xlsx|xls|csv|pdf|png|jpg|jpeg|gif))|(?:\/agente\/api\/files\/[^\s"']+)/gi;
+    // [^\s\)\"\'\]\>] exclui espacos, ), ", ', ], > para nao capturar marcadores markdown
+    const urlPattern = /(?:https?:\/\/[^\s\)\"\'\]\>]+\.(?:xlsx|xls|csv|pdf|png|jpg|jpeg|gif))|(?:\/agente\/api\/files\/[^\s\)\"\'\]\>]+)/gi;
     const matches = text.match(urlPattern);
 
     if (matches) {
         matches.forEach(url => {
+            // Remove caracteres extras que podem ter sido capturados
+            url = url.replace(/[\)\]\>]+$/, '');
+
             const filename = url.split('/').pop().split('?')[0];
+
+            // Extrai nome original (remove prefixo UUID se existir)
+            let displayName = filename;
+            if (filename.match(/^[a-f0-9]{8}_/)) {
+                displayName = filename.substring(9); // Remove "xxxxxxxx_"
+            }
+
             addDownloadFile({
-                name: filename,
+                name: displayName,
                 url: url,
                 type: getFileType(filename)
             });

@@ -20,7 +20,9 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ResultMessage,
     AssistantMessage,
+    UserMessage,       # Contém resultados de ferramentas
     ToolUseBlock,
+    ToolResultBlock,   # Resultado de execução de ferramenta
     TextBlock,
 )
 
@@ -536,6 +538,33 @@ Nunca invente informações."""
                                             content={'todos': todos},
                                             metadata={'tool_id': block.id}
                                         )
+                    continue
+
+                # Mensagem do usuário (contém resultados de ferramentas executadas)
+                # Quando o SDK executa uma ferramenta, o resultado vem como UserMessage
+                if isinstance(message, UserMessage):
+                    content = getattr(message, 'content', None)
+                    if content and isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, ToolResultBlock):
+                                # Extrai conteúdo do resultado (pode ser string ou lista)
+                                result_content = block.content
+                                if isinstance(result_content, list):
+                                    # Se for lista de dicts, converte para string
+                                    result_content = str(result_content)[:500]
+                                elif result_content:
+                                    result_content = str(result_content)[:500]
+                                else:
+                                    result_content = "(sem resultado)"
+
+                                yield StreamEvent(
+                                    type='tool_result',
+                                    content=result_content,
+                                    metadata={
+                                        'tool_use_id': block.tool_use_id,
+                                        'is_error': getattr(block, 'is_error', False) or False,
+                                    }
+                                )
                     continue
 
                 # Mensagem de resultado final

@@ -966,19 +966,38 @@ def create_app(config_name=None):
     # ✅ MIDDLEWARE PARA LIMPAR CONEXÕES APÓS CADA REQUEST
     @app.teardown_appcontext
     def shutdown_session(exception=None):
-        """Remove a sessão do banco ao final de cada requisição"""
+        """
+        Remove a sessão do banco ao final de cada requisição.
+
+        NOTA: Durante streams de longa duração (como o chat do agente),
+        a conexão SSL pode expirar. O tratamento de exceção robusto evita
+        erros quando o usuário interrompe um stream.
+        """
         try:
             if exception is not None:
                 # Se houve erro, fazer rollback
-                db.session.rollback()
+                try:
+                    db.session.rollback()
+                except Exception as rollback_err:
+                    # Conexão pode estar morta (SSL closed), apenas log debug
+                    logger.debug(f"Rollback ignorado (conexão fechada): {type(rollback_err).__name__}")
             else:
                 # Se não houve erro, tentar commit de mudanças pendentes
                 try:
                     db.session.commit()
                 except Exception:
-                    db.session.rollback()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass  # Ignora se conexão morta
+        except Exception as e:
+            # Captura qualquer erro inesperado para não quebrar o teardown
+            logger.debug(f"Erro no shutdown_session: {type(e).__name__}")
         finally:
-            # Sempre remover a sessão
-            db.session.remove()
+            # Sempre remover a sessão (pode falhar se conexão morta)
+            try:
+                db.session.remove()
+            except Exception:
+                pass  # Ignora erro ao remover sessão morta
 
     return app

@@ -53,7 +53,10 @@ ALLOWED_EXTENSIONS = {'pdf', 'xlsx', 'xls', 'csv', 'png', 'jpg', 'jpeg', 'gif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # FEAT-030: Configuração de heartbeat
-HEARTBEAT_INTERVAL_SECONDS = 20  # Envia heartbeat a cada 20s
+HEARTBEAT_INTERVAL_SECONDS = 10  # Envia heartbeat a cada 10s (reduzido de 20s)
+
+# Timeout global do stream (9 minutos - deixa 1 min de margem antes do timeout do Render)
+MAX_STREAM_DURATION_SECONDS = 540
 
 # Erros conhecidos de sessão expirada
 SDK_SESSION_EXPIRED_ERRORS = [
@@ -349,12 +352,17 @@ def _stream_chat_response(
                     'session_expired': response_state['session_expired'],
                 }))
 
-            finally:
-                logger.info("[AGENTE] async_stream() finalizado")
-                event_queue.put(None)  # Sinaliza fim
-
-        asyncio.run(async_stream())
-        logger.info("[AGENTE] asyncio.run() completado")
+        # CRÍTICO: Try/except/finally na thread para GARANTIR que None seja colocado na fila
+        try:
+            asyncio.run(async_stream())
+            logger.info("[AGENTE] asyncio.run() completado")
+        except Exception as e:
+            logger.error(f"[AGENTE] ERRO FATAL na thread: {e}", exc_info=True)
+            event_queue.put(_sse_event('error', {'message': f'Erro interno: {str(e)}'}))
+        finally:
+            # CRÍTICO: SEMPRE colocar None para finalizar o loop de streaming
+            event_queue.put(None)
+            logger.info("[AGENTE] Thread finalizada (finally)")
 
     try:
         logger.info("[AGENTE] _stream_chat_response iniciado")
@@ -366,14 +374,24 @@ def _stream_chat_response(
         thread = Thread(target=run_async_stream, daemon=True)
         thread.start()
 
-        # FEAT-030: Loop com heartbeats
+        # FEAT-030: Loop com heartbeats + timeout global
         last_heartbeat = time.time()
+        stream_start_time = time.time()
         event_count = 0
 
         while True:
+            # SEGURANÇA: Timeout global para evitar travamento indefinido
+            elapsed = time.time() - stream_start_time
+            if elapsed > MAX_STREAM_DURATION_SECONDS:
+                logger.warning(f"[AGENTE] Stream timeout após {elapsed:.1f}s")
+                yield _sse_event('error', {'message': 'Tempo limite excedido (9 min)'})
+                break
+
             try:
-                # Timeout para permitir heartbeats
-                event = event_queue.get(timeout=HEARTBEAT_INTERVAL_SECONDS)
+                # Timeout para permitir heartbeats (usa o menor entre heartbeat e tempo restante)
+                remaining_time = MAX_STREAM_DURATION_SECONDS - elapsed
+                queue_timeout = min(HEARTBEAT_INTERVAL_SECONDS, remaining_time)
+                event = event_queue.get(timeout=queue_timeout)
 
                 if event is None:  # Fim do stream
                     logger.info(f"[AGENTE] Fim do stream, {event_count} eventos processados")
@@ -390,7 +408,11 @@ def _stream_chat_response(
                     last_heartbeat = current_time
                     logger.debug("[AGENTE] Heartbeat enviado")
 
-        thread.join(timeout=2.0)
+        # Aguarda thread finalizar com timeout maior (10s)
+        thread.join(timeout=10.0)
+
+        if thread.is_alive():
+            logger.warning("[AGENTE] Thread ainda ativa após timeout de 10s")
 
         # FEAT-030: Salva mensagens no banco após streaming completo
         _save_messages_to_db(
