@@ -58,9 +58,10 @@ def endereco_pedido(num_pedido):
             # Dados do pedido
             'vendedor': pedido_info.vendedor,
             'equipe_vendas': pedido_info.equipe_vendas,
-            'rota': getattr(pedido_info, 'rota', None),
-            'sub_rota': getattr(pedido_info, 'sub_rota', None),
-            'expedicao': pedido_info.expedicao.isoformat() if pedido_info.expedicao else None
+            # NOTA: Campos rota, sub_rota e expedicao foram REMOVIDOS de CarteiraPrincipal
+            # Esses dados agora estão em Separacao (fonte única da verdade para dados operacionais)
+            'rota': None,
+            'sub_rota': None
         })
 
     except Exception as e:

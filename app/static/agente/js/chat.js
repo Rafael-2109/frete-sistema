@@ -611,8 +611,13 @@ function processSSEEvent(eventType, data, state) {
             break;
 
         case 'init':
-            // Captura session_id do SDK
+            // FEAT-030: Captura nosso session_id (não o do SDK)
             if (data.session_id) sessionId = data.session_id;
+            break;
+
+        // FEAT-030: Heartbeat para manter conexão viva (ignorar)
+        case 'heartbeat':
+            console.log('[SSE] Heartbeat recebido:', data.timestamp);
             break;
 
         case 'text':
@@ -681,12 +686,17 @@ function processSSEEvent(eventType, data, state) {
             hideTyping();
             hideThinkingPanel();
 
-            // Atualiza timeline com erro
-            updateLastTimelineItem({
-                status: 'error'
-            });
+            // FEAT-030: Finaliza todos os items pendentes (timeline e todos)
+            finalizePendingTimelineItems('error');
+            finalizePendingTodos(false);  // Não marca como completed, apenas para o spinner
 
-            addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
+            // FEAT-030: Trata sessão expirada
+            if (data.session_expired) {
+                console.log('[SSE] Sessão SDK expirada, será criada nova na próxima mensagem');
+                addMessage(`⚠️ A sessão anterior expirou no servidor.\n\n**Mas não se preocupe!** Seu histórico está salvo e a conversa continuará normalmente.`, 'assistant');
+            } else {
+                addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
+            }
             break;
 
         case 'done':
@@ -694,7 +704,46 @@ function processSSEEvent(eventType, data, state) {
             hideThinkingPanel();
             if (data.session_id) sessionId = data.session_id;
             updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
+
+            // FEAT-030: Finaliza items pendentes (timeline e todos)
+            finalizePendingTimelineItems('success');
+            finalizePendingTodos(true);  // Marca como completed
             break;
+    }
+}
+
+/**
+ * FEAT-030: Finaliza todos os items pendentes da timeline.
+ * Chamado quando o stream termina (done ou error).
+ */
+function finalizePendingTimelineItems(status = 'success') {
+    actionTimeline.forEach(item => {
+        if (item.status === 'pending') {
+            item.status = status;
+        }
+    });
+    renderTimeline();
+}
+
+/**
+ * FEAT-030: Finaliza todos os todos que estão em 'in_progress'.
+ * Chamado quando o stream termina (done ou error).
+ */
+function finalizePendingTodos(markAsCompleted = true) {
+    if (!currentTodos || currentTodos.length === 0) return;
+
+    let changed = false;
+    currentTodos.forEach(todo => {
+        if (todo.status === 'in_progress') {
+            // Se markAsCompleted=true, marca como completed
+            // Se markAsCompleted=false (erro), mantém in_progress mas para o spinner
+            todo.status = markAsCompleted ? 'completed' : 'pending';
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        updateTodoList(currentTodos);
     }
 }
 
@@ -1084,13 +1133,13 @@ function renderSessions() {
 }
 
 /**
- * Seleciona uma sessão para retomar.
+ * FEAT-030: Seleciona uma sessão e carrega histórico de mensagens.
  */
-function selectSession(session) {
+async function selectSession(session) {
     sessionId = session.session_id;
     console.log('[SESSIONS] Sessão selecionada:', sessionId);
 
-    // FEAT-025: Fecha modal
+    // Fecha modal
     closeSessionsModal();
 
     // Limpa chat atual (exceto boas-vindas)
@@ -1099,8 +1148,50 @@ function selectSession(session) {
         if (index > 0) msg.remove();
     });
 
-    // Adiciona mensagem de retomada
-    addMessage(`📂 Retomando sessão: **${session.title || 'Sem título'}**\n\nContinue de onde parou...`, 'assistant');
+    // Limpa timeline e todos
+    clearTimeline();
+    clearTodoList();
+
+    // Mostra loading
+    showTyping('Carregando histórico...');
+
+    try {
+        // FEAT-030: Busca histórico de mensagens do servidor
+        const response = await fetch(`/agente/api/sessions/${sessionId}/messages`, {
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+
+        const data = await response.json();
+        hideTyping();
+
+        if (data.success && data.messages && data.messages.length > 0) {
+            console.log(`[SESSIONS] Carregando ${data.messages.length} mensagens`);
+
+            // Renderiza cada mensagem do histórico
+            data.messages.forEach(msg => {
+                const role = msg.role === 'user' ? 'user' : 'assistant';
+                addMessage(msg.content, role);
+            });
+
+            // Info de retomada
+            addMessage(`📂 **Sessão "${session.title || 'Sem título'}" carregada**\n\nContinue a conversa abaixo...`, 'assistant');
+
+        } else if (data.success && (!data.messages || data.messages.length === 0)) {
+            // Sessão existe mas sem mensagens
+            addMessage(`📂 Retomando sessão: **${session.title || 'Sem título'}**\n\nNenhuma mensagem anterior encontrada. Inicie a conversa!`, 'assistant');
+
+        } else {
+            console.error('[SESSIONS] Erro ao carregar histórico:', data.error);
+            addMessage(`⚠️ Não foi possível carregar o histórico da sessão.\n\nContinue de onde parou...`, 'assistant');
+        }
+
+    } catch (error) {
+        console.error('[SESSIONS] Erro ao carregar histórico:', error);
+        hideTyping();
+        addMessage(`⚠️ Erro de conexão ao carregar histórico.\n\nContinue de onde parou...`, 'assistant');
+    }
 
     // Atualiza lista para mostrar ativo
     renderSessions();

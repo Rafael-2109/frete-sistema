@@ -64,15 +64,15 @@ def criar_standby():
             
             if palletizacao:
                 # Usar cálculos da palletização
-                peso_calculado = qtd_saldo * float(palletizacao.peso_bruto) if palletizacao.peso_bruto else item.peso
-                pallet_calculado = qtd_saldo / float(palletizacao.palletizacao) if palletizacao.palletizacao and palletizacao.palletizacao > 0 else item.pallet
+                peso_calculado = qtd_saldo * float(palletizacao.peso_bruto) if palletizacao.peso_bruto else 0
+                pallet_calculado = qtd_saldo / float(palletizacao.palletizacao) if palletizacao.palletizacao and palletizacao.palletizacao > 0 else 0
             else:
-                # Usar valores originais se não houver palletização
-                peso_calculado = item.peso
-                pallet_calculado = item.pallet
+                # NOTA: Campos peso e pallet não existem em CarteiraPrincipal - usar 0 como default
+                peso_calculado = 0
+                pallet_calculado = 0
             
             novo_standby = SaldoStandby(
-                origem_separacao_lote_id=item.separacao_lote_id or "",
+                origem_separacao_lote_id="",  # Campo removido de CarteiraPrincipal - mantido vazio para compatibilidade
                 num_pedido=item.num_pedido,
                 cod_produto=item.cod_produto,
                 cnpj_cliente=item.cnpj_cpf,

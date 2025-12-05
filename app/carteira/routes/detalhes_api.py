@@ -55,12 +55,14 @@ def detalhes_pedido(num_pedido):
                     "valor_total": valor_item,
                     "peso_unitario": None,
                     "peso_total": peso_item,
-                    "estoque_hoje": float(item.estoque or 0),
-                    "data_disponibilidade": None,  # Campo não existe no modelo - seria calculado dinamicamente
-                    "separacao_lote_id": item.separacao_lote_id,
-                    "expedicao": item.expedicao.isoformat() if item.expedicao else None,
-                    "agendamento": item.agendamento.isoformat() if item.agendamento else None,
-                    "protocolo": item.protocolo,
+                    # NOTA: Campos estoque, separacao_lote_id, expedicao, agendamento, protocolo
+                    # foram REMOVIDOS de CarteiraPrincipal - esses dados estão em Separacao
+                    "estoque_hoje": 0,
+                    "data_disponibilidade": None,
+                    "separacao_lote_id": None,
+                    "expedicao": None,
+                    "agendamento": None,
+                    "protocolo": None,
                 }
             )
 

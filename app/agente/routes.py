@@ -6,19 +6,24 @@ Implementação conforme documentação oficial Anthropic:
 - https://platform.claude.com/docs/pt-BR/agent-sdk/streaming-vs-single-mode
 - https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
 
-O SDK gerencia sessions automaticamente. Não é necessário session manager customizado.
+FEAT-030: Histórico de Mensagens Persistente
+- Mensagens salvas no banco (campo data JSONB)
+- Heartbeats para manter conexão viva no Render
+- Tratamento de sessão expirada no SDK
+- Endpoint para buscar histórico
 
 Endpoints:
 - GET  /agente/              - Página de chat
 - POST /agente/api/chat      - Chat com streaming (SSE)
 - GET  /agente/api/health    - Health check
-- GET  /agente/api/sessions  - Lista sessões do usuário (FEAT-011)
-- DELETE /agente/api/sessions/<id> - Excluir sessão (FEAT-011)
-- PUT  /agente/api/sessions/<id>/rename - Renomear sessão (FEAT-011)
-- POST /agente/api/upload    - Upload de arquivo (FEAT-028)
-- GET  /agente/api/files/<filename> - Download de arquivo (FEAT-028)
-- GET  /agente/api/files     - Lista arquivos da sessão (FEAT-028)
-- DELETE /agente/api/files/<filename> - Remove arquivo (FEAT-028)
+- GET  /agente/api/sessions  - Lista sessões do usuário
+- GET  /agente/api/sessions/<id>/messages - Histórico de mensagens (FEAT-030)
+- DELETE /agente/api/sessions/<id> - Excluir sessão
+- PUT  /agente/api/sessions/<id>/rename - Renomear sessão
+- POST /agente/api/upload    - Upload de arquivo
+- GET  /agente/api/files/<filename> - Download de arquivo
+- GET  /agente/api/files     - Lista arquivos da sessão
+- DELETE /agente/api/files/<filename> - Remove arquivo
 """
 
 import logging
@@ -26,11 +31,11 @@ import json
 import asyncio
 import os
 import uuid
-import base64
 import tempfile
 import shutil
+import time
 from datetime import datetime
-from typing import Generator
+from typing import Generator, Optional, List, Dict, Any
 from werkzeug.utils import secure_filename
 
 from flask import (
@@ -42,10 +47,21 @@ from flask_login import login_required, current_user
 from . import agente_bp
 from app import db
 
-# FEAT-028: Configuração de uploads
+# Configuração de uploads
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'agente_files')
 ALLOWED_EXTENSIONS = {'pdf', 'xlsx', 'xls', 'csv', 'png', 'jpg', 'jpeg', 'gif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# FEAT-030: Configuração de heartbeat
+HEARTBEAT_INTERVAL_SECONDS = 20  # Envia heartbeat a cada 20s
+
+# Erros conhecidos de sessão expirada
+SDK_SESSION_EXPIRED_ERRORS = [
+    'No conversation found',
+    'session not found',
+    'Session expired',
+    'Control request timeout: initialize',
+]
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +78,7 @@ def pagina_chat():
 
 
 # =============================================================================
-# API - CHAT
+# API - CHAT (FEAT-030: Refatorado)
 # =============================================================================
 
 @agente_bp.route('/api/chat', methods=['POST'])
@@ -71,19 +87,19 @@ def api_chat():
     """
     Chat com streaming (Server-Sent Events).
 
+    FEAT-030: Agora salva mensagens no banco e trata sessão expirada.
+
     POST /agente/api/chat
     {
         "message": "Tem pedido pendente pro Atacadão?",
-        "session_id": "uuid-opcional",
-        "model": "claude-sonnet-4-5-20250929",  // FEAT-001: Modelo selecionado
-        "thinking_enabled": false               // FEAT-002: Extended Thinking
+        "session_id": "uuid-da-nossa-sessao",  // Nosso ID, não do SDK
+        "model": "claude-sonnet-4-5-20250929",
+        "thinking_enabled": false,
+        "plan_mode": false,
+        "files": []
     }
 
     Response: text/event-stream
-
-    O SDK gerencia sessions automaticamente:
-    - Se session_id não fornecido: cria nova sessão
-    - Se session_id fornecido: retoma sessão existente (resume)
     """
     try:
         data = request.get_json()
@@ -95,28 +111,24 @@ def api_chat():
             }), 400
 
         message = data['message'].strip()
-        session_id = data.get('session_id')  # Opcional - SDK cria se não existir
-
-        # FEAT-001: Modelo selecionado pelo usuário
+        session_id = data.get('session_id')  # Nosso session_id (não do SDK)
         model = data.get('model')
-
-        # FEAT-002: Extended Thinking
         thinking_enabled = data.get('thinking_enabled', False)
-
-        # FEAT-010: Plan Mode (modo somente-leitura)
         plan_mode = data.get('plan_mode', False)
-
-        # FEAT-028: Arquivos anexados
         files = data.get('files', [])
 
         user_id = current_user.id
         user_name = getattr(current_user, 'nome', 'Usuário')
 
-        # FEAT-028: Adiciona info de arquivos ao log
+        # Log
         files_info = f" | Arquivos: {len(files)}" if files else ""
-        logger.info(f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | Modelo: {model or 'default'} | Thinking: {thinking_enabled} | Plan: {plan_mode}{files_info}")
+        logger.info(
+            f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | "
+            f"Modelo: {model or 'default'} | Thinking: {thinking_enabled} | "
+            f"Plan: {plan_mode}{files_info}"
+        )
 
-        # FEAT-028: Se houver arquivos, enriquece a mensagem
+        # Enriquece mensagem com arquivos
         enriched_message = message
         if files:
             files_context = "\n\n[Arquivos anexados pelo usuário:]\n"
@@ -128,6 +140,7 @@ def api_chat():
         return Response(
             stream_with_context(_stream_chat_response(
                 message=enriched_message,
+                original_message=message,  # FEAT-030: Mensagem original para salvar
                 user_id=user_id,
                 user_name=user_name,
                 session_id=session_id,
@@ -139,6 +152,7 @@ def api_chat():
             headers={
                 'Cache-Control': 'no-cache',
                 'X-Accel-Buffering': 'no',
+                'Connection': 'keep-alive',
             }
         )
 
@@ -152,6 +166,7 @@ def api_chat():
 
 def _stream_chat_response(
     message: str,
+    original_message: str,
     user_id: int,
     user_name: str,
     session_id: str = None,
@@ -162,41 +177,45 @@ def _stream_chat_response(
     """
     Gera resposta em streaming (SSE).
 
-    Conforme documentação oficial Anthropic:
-    - https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
-    - https://platform.claude.com/docs/pt-BR/agent-sdk/streaming-vs-single-mode
-    - https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
-
-    O SDK gerencia sessions automaticamente:
-    - Captura session_id no evento 'init'
-    - Usa 'resume' para retomar sessions
-
-    Cost tracking usa message.id para deduplicação.
+    FEAT-030: Melhorias:
+    - Heartbeats para manter conexão viva
+    - Salva mensagens no banco
+    - Trata sessão expirada no SDK
+    - Acumula texto para salvar resposta completa
 
     Args:
-        message: Mensagem do usuário
+        message: Mensagem enriquecida (com arquivos)
+        original_message: Mensagem original do usuário
         user_id: ID do usuário
         user_name: Nome do usuário
-        session_id: ID da sessão (opcional)
-        model: Modelo a usar (opcional, FEAT-001)
-        thinking_enabled: Ativar Extended Thinking (FEAT-002)
-        plan_mode: Ativar modo somente-leitura (FEAT-010)
+        session_id: Nosso session_id (não do SDK)
+        model: Modelo a usar
+        thinking_enabled: Extended Thinking
+        plan_mode: Modo somente-leitura
 
     Yields:
         Eventos SSE formatados
     """
-    from flask import current_app
     from .sdk import get_client, get_cost_tracker
     from .config.permissions import can_use_tool
-    from queue import Queue
+    from .models import AgentSession
+    from queue import Queue, Empty
     from threading import Thread
 
-    # FEAT-011: Captura referência ao app ANTES de criar a thread
-    # Threads não herdam o contexto Flask, então precisamos passar explicitamente
     app = current_app._get_current_object()
-
-    # Queue para comunicação thread-safe entre async e sync
     event_queue = Queue()
+
+    # FEAT-030: Estado para acumular resposta
+    response_state = {
+        'full_text': '',
+        'tools_used': [],
+        'input_tokens': 0,
+        'output_tokens': 0,
+        'sdk_session_id': None,
+        'our_session_id': session_id,
+        'session_expired': False,
+        'error_message': None,
+    }
 
     def run_async_stream():
         """Executa o stream assíncrono em uma thread separada."""
@@ -206,36 +225,73 @@ def _stream_chat_response(
             logger.info("[AGENTE] Iniciando async_stream()")
             client = get_client()
             cost_tracker = get_cost_tracker()
-            sdk_session_id = session_id
             processed_message_ids = set()
 
+            # FEAT-030: Busca sessão existente para obter sdk_session_id
+            sdk_session_id = None
+
+            with app.app_context():
+                if session_id:
+                    session = AgentSession.get_by_session_id(session_id)
+                    if session:
+                        sdk_session_id = session.get_sdk_session_id()
+                        logger.info(f"[AGENTE] Sessão encontrada: {session_id[:8]}... SDK: {sdk_session_id[:8] if sdk_session_id else 'None'}")
+
             try:
-                logger.info(f"[AGENTE] Chamando client.stream_response com prompt: {message[:50]}...")
+                # FEAT-030: Prepara prompt com contexto se necessário
+                prompt_to_send = message
+
+                # Se não temos sdk_session_id (sessão expirou ou é nova),
+                # injeta histórico de mensagens anteriores como contexto
+                if not sdk_session_id and session_id:
+                    with app.app_context():
+                        session = AgentSession.get_by_session_id(session_id)
+                        if session:
+                            previous_messages = session.get_messages_for_context()
+                            if previous_messages:
+                                # Formata histórico para injetar no prompt
+                                history_text = _format_messages_as_context(previous_messages)
+                                prompt_to_send = f"{history_text}\n\n[NOVA MENSAGEM DO USUÁRIO]\n{message}"
+                                logger.info(f"[AGENTE] Injetando {len(previous_messages)} mensagens como contexto")
+
+                logger.info(f"[AGENTE] Chamando SDK | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'}")
+
                 async for event in client.stream_response(
-                    prompt=message,
+                    prompt=prompt_to_send,
                     session_id=sdk_session_id,
                     user_name=user_name,
                     can_use_tool=can_use_tool,
-                    model=model,                          # FEAT-001: Modelo selecionado
-                    thinking_enabled=thinking_enabled,    # FEAT-002: Extended Thinking
-                    plan_mode=plan_mode,                  # FEAT-010: Plan Mode
+                    model=model,
+                    thinking_enabled=thinking_enabled,
+                    plan_mode=plan_mode,
                 ):
-                    logger.info(f"[AGENTE] Evento recebido: {event.type}")
-                    # Evento de inicialização - captura session_id do SDK
+                    # Evento de inicialização
                     if event.type == 'init':
-                        sdk_session_id = event.content.get('session_id')
-                        event_queue.put(_sse_event('init', {'session_id': sdk_session_id}))
+                        new_sdk_session_id = event.content.get('session_id')
+                        response_state['sdk_session_id'] = new_sdk_session_id
+
+                        # FEAT-030: Se não tínhamos session_id, criar novo
+                        if not response_state['our_session_id']:
+                            response_state['our_session_id'] = str(uuid.uuid4())
+
+                        event_queue.put(_sse_event('init', {
+                            'session_id': response_state['our_session_id'],
+                            'sdk_session_id': new_sdk_session_id,
+                        }))
                         continue
 
                     if event.type == 'text':
+                        response_state['full_text'] += event.content
                         event_queue.put(_sse_event('text', {'content': event.content}))
 
                     elif event.type == 'tool_call':
-                        # FEAT-024: Passa descrição amigável do tool
+                        tool_name = event.content
+                        if tool_name not in response_state['tools_used']:
+                            response_state['tools_used'].append(tool_name)
                         event_queue.put(_sse_event('tool_call', {
-                            'tool_name': event.content,
+                            'tool_name': tool_name,
                             'tool_id': event.metadata.get('tool_id'),
-                            'description': event.metadata.get('description', '')  # FEAT-024
+                            'description': event.metadata.get('description', '')
                         }))
 
                     elif event.type == 'tool_result':
@@ -244,61 +300,59 @@ def _stream_chat_response(
                             'result': event.content
                         }))
 
-                    # FEAT-024: Evento de todos (TodoWrite)
                     elif event.type == 'todos':
                         todos = event.content.get('todos', [])
                         if todos:
                             event_queue.put(_sse_event('todos', {'todos': todos}))
 
                     elif event.type == 'error':
+                        response_state['error_message'] = event.content
                         event_queue.put(_sse_event('error', {'message': event.content}))
 
                     elif event.type == 'done':
-                        # Cost Tracking com deduplicação por message.id
-                        # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
                         message_id = event.metadata.get('message_id', '') or str(datetime.utcnow().timestamp())
-                        input_tokens = event.content.get('input_tokens', 0)
-                        output_tokens = event.content.get('output_tokens', 0)
+                        response_state['input_tokens'] = event.content.get('input_tokens', 0)
+                        response_state['output_tokens'] = event.content.get('output_tokens', 0)
                         cost_usd = event.content.get('total_cost_usd', 0)
 
                         if message_id not in processed_message_ids:
                             processed_message_ids.add(message_id)
-
                             cost_tracker.record_cost(
                                 message_id=message_id,
-                                input_tokens=input_tokens,
-                                output_tokens=output_tokens,
-                                session_id=sdk_session_id,
+                                input_tokens=response_state['input_tokens'],
+                                output_tokens=response_state['output_tokens'],
+                                session_id=response_state['sdk_session_id'],
                                 user_id=user_id,
-                            )
-
-                        # FEAT-011: Persistir sessão no banco
-                        if sdk_session_id:
-                            _save_session(
-                                app=app,  # Passa o app para usar o context
-                                session_id=sdk_session_id,
-                                user_id=user_id,
-                                message=message,
-                                model=model,
-                                cost_usd=cost_usd,
                             )
 
                         event_queue.put(_sse_event('done', {
-                            'session_id': sdk_session_id,
-                            'input_tokens': input_tokens,
-                            'output_tokens': output_tokens,
+                            'session_id': response_state['our_session_id'],
+                            'input_tokens': response_state['input_tokens'],
+                            'output_tokens': response_state['output_tokens'],
                             'cost_usd': cost_usd,
                         }))
 
             except Exception as e:
-                logger.error(f"[AGENTE] Erro no async stream: {e}", exc_info=True)
-                event_queue.put(_sse_event('error', {'message': str(e)}))
+                error_str = str(e)
+                logger.error(f"[AGENTE] Erro no async stream: {error_str}", exc_info=True)
+
+                # FEAT-030: Detecta sessão expirada
+                for expired_error in SDK_SESSION_EXPIRED_ERRORS:
+                    if expired_error.lower() in error_str.lower():
+                        response_state['session_expired'] = True
+                        logger.warning(f"[AGENTE] Sessão SDK expirada detectada: {expired_error}")
+                        break
+
+                response_state['error_message'] = error_str
+                event_queue.put(_sse_event('error', {
+                    'message': error_str,
+                    'session_expired': response_state['session_expired'],
+                }))
+
             finally:
-                logger.info("[AGENTE] async_stream() finalizado, sinalizando fim")
+                logger.info("[AGENTE] async_stream() finalizado")
                 event_queue.put(None)  # Sinaliza fim
 
-        # Executa o async stream em um novo event loop
-        logger.info("[AGENTE] Executando asyncio.run(async_stream())")
         asyncio.run(async_stream())
         logger.info("[AGENTE] asyncio.run() completado")
 
@@ -307,25 +361,53 @@ def _stream_chat_response(
 
         # Inicia streaming
         yield _sse_event('start', {'message': 'Iniciando...'})
-        logger.info("[AGENTE] Evento 'start' emitido")
 
-        # Inicia thread para executar async stream
+        # Inicia thread para async stream
         thread = Thread(target=run_async_stream, daemon=True)
         thread.start()
-        logger.info("[AGENTE] Thread iniciada")
 
-        # Consome eventos da queue
+        # FEAT-030: Loop com heartbeats
+        last_heartbeat = time.time()
         event_count = 0
-        while True:
-            event = event_queue.get()
-            if event is None:  # Fim do stream
-                logger.info(f"[AGENTE] Fim do stream, {event_count} eventos processados")
-                break
-            event_count += 1
-            yield event
 
-        thread.join(timeout=1.0)
-        logger.info("[AGENTE] Thread finalizada")
+        while True:
+            try:
+                # Timeout para permitir heartbeats
+                event = event_queue.get(timeout=HEARTBEAT_INTERVAL_SECONDS)
+
+                if event is None:  # Fim do stream
+                    logger.info(f"[AGENTE] Fim do stream, {event_count} eventos processados")
+                    break
+
+                event_count += 1
+                yield event
+
+            except Empty:
+                # FEAT-030: Envia heartbeat para manter conexão viva
+                current_time = time.time()
+                if current_time - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    yield _sse_event('heartbeat', {'timestamp': datetime.utcnow().isoformat()})
+                    last_heartbeat = current_time
+                    logger.debug("[AGENTE] Heartbeat enviado")
+
+        thread.join(timeout=2.0)
+
+        # FEAT-030: Salva mensagens no banco após streaming completo
+        _save_messages_to_db(
+            app=app,
+            our_session_id=response_state['our_session_id'],
+            sdk_session_id=response_state['sdk_session_id'],
+            user_id=user_id,
+            user_message=original_message,
+            assistant_message=response_state['full_text'],
+            input_tokens=response_state['input_tokens'],
+            output_tokens=response_state['output_tokens'],
+            tools_used=response_state['tools_used'],
+            model=model,
+            session_expired=response_state['session_expired'],
+        )
+
+        logger.info("[AGENTE] Thread finalizada e mensagens salvas")
 
     except Exception as e:
         logger.error(f"[AGENTE] Erro no streaming: {e}", exc_info=True)
@@ -334,58 +416,147 @@ def _stream_chat_response(
 
 def _sse_event(event_type: str, data: dict) -> str:
     """Formata evento SSE."""
-    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _save_session(
+def _save_messages_to_db(
     app,
-    session_id: str,
+    our_session_id: str,
+    sdk_session_id: str,
     user_id: int,
-    message: str = None,
-    model: str = None,
-    cost_usd: float = 0,
+    user_message: str,
+    assistant_message: str,
+    input_tokens: int,
+    output_tokens: int,
+    tools_used: List[str],
+    model: str,
+    session_expired: bool,
 ) -> None:
     """
-    Salva ou atualiza sessão no banco (FEAT-011).
+    FEAT-030: Salva mensagens do usuário e assistente no banco.
 
     Args:
-        app: Instância do Flask app (necessário para context em threads)
-        session_id: ID da sessão do SDK
+        app: Flask app
+        our_session_id: Nosso session_id
+        sdk_session_id: Session ID do SDK
         user_id: ID do usuário
-        message: Última mensagem
+        user_message: Mensagem do usuário
+        assistant_message: Resposta do assistente
+        input_tokens: Tokens de entrada
+        output_tokens: Tokens de saída
+        tools_used: Lista de tools usadas
         model: Modelo usado
-        cost_usd: Custo em USD
+        session_expired: Se a sessão SDK expirou
     """
+    if not our_session_id:
+        logger.warning("[AGENTE] Não foi possível salvar: session_id não definido")
+        return
+
     try:
         from .models import AgentSession
 
-        # FEAT-011: Usa o app passado para criar context (threads não herdam)
         with app.app_context():
             session, created = AgentSession.get_or_create(
-                session_id=session_id,
+                session_id=our_session_id,
                 user_id=user_id,
             )
 
-            session.update_from_response(
-                message=message,
-                cost_usd=cost_usd,
-                model=model,
-            )
+            # Salva mensagem do usuário
+            if user_message:
+                session.add_user_message(user_message)
+
+            # Salva resposta do assistente
+            if assistant_message:
+                session.add_assistant_message(
+                    content=assistant_message,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    tools_used=tools_used if tools_used else None,
+                )
+
+            # Atualiza sdk_session_id se não expirou
+            if sdk_session_id and not session_expired:
+                session.set_sdk_session_id(sdk_session_id)
+            elif session_expired:
+                # Limpa sdk_session_id para forçar nova sessão no próximo request
+                session.set_sdk_session_id(None)
+                logger.info(f"[AGENTE] SDK session_id limpo devido à expiração")
+
+            # Atualiza model e custo
+            if model:
+                session.model = model
+
+            # Calcula custo aproximado (valores do Claude)
+            cost_usd = _calculate_cost(model, input_tokens, output_tokens)
+            session.total_cost_usd = float(session.total_cost_usd or 0) + cost_usd
 
             db.session.commit()
-            logger.debug(f"[AGENTE] Sessão {'criada' if created else 'atualizada'}: {session_id[:8]}...")
+            logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")
 
     except Exception as e:
-        logger.error(f"[AGENTE] Erro ao salvar sessão: {e}")
+        logger.error(f"[AGENTE] Erro ao salvar mensagens: {e}")
         try:
             with app.app_context():
                 db.session.rollback()
-        except Exception as rollback_error:
-            logger.error(f"[AGENTE] Erro ao fazer rollback: {rollback_error}")
+        except:
+            pass
+
+
+def _format_messages_as_context(messages: List[Dict[str, Any]]) -> str:
+    """
+    FEAT-030: Formata mensagens anteriores como contexto para injetar no prompt.
+
+    Quando a sessão SDK expira, precisamos injetar o histórico manualmente
+    para que o Claude tenha contexto da conversa anterior.
+
+    Args:
+        messages: Lista de mensagens do histórico
+
+    Returns:
+        String formatada com o histórico
+    """
+    if not messages:
+        return ""
+
+    lines = ["[HISTÓRICO DA CONVERSA ANTERIOR]", ""]
+
+    for msg in messages:
+        role = msg.get('role', 'user')
+        content = msg.get('content', '')
+
+        # Trunca mensagens muito longas para não estourar contexto
+        if len(content) > 2000:
+            content = content[:2000] + "... [truncado]"
+
+        if role == 'user':
+            lines.append(f"USUÁRIO: {content}")
+        else:
+            lines.append(f"ASSISTENTE: {content}")
+        lines.append("")
+
+    lines.append("[FIM DO HISTÓRICO]")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Calcula custo aproximado baseado no modelo."""
+    # Preços aproximados por 1M tokens (dezembro 2025)
+    pricing = {
+        'claude-sonnet-4-5-20250929': {'input': 3.0, 'output': 15.0},
+        'claude-opus-4-5-20251101': {'input': 5.0, 'output': 25.0},
+        'claude-haiku-4-5-20251001': {'input': 0.25, 'output': 1.25},
+    }
+
+    model_pricing = pricing.get(model, pricing['claude-sonnet-4-5-20250929'])
+    cost = (input_tokens * model_pricing['input'] / 1_000_000) + \
+           (output_tokens * model_pricing['output'] / 1_000_000)
+    return cost
 
 
 # =============================================================================
-# API - SESSIONS (FEAT-011)
+# API - SESSIONS
 # =============================================================================
 
 @agente_bp.route('/api/sessions', methods=['GET'])
@@ -395,30 +566,12 @@ def api_list_sessions():
     Lista sessões do usuário.
 
     GET /agente/api/sessions?limit=20
-
-    Response:
-    {
-        "success": true,
-        "sessions": [
-            {
-                "id": 1,
-                "session_id": "abc123...",
-                "title": "Consulta de estoque",
-                "message_count": 5,
-                "total_cost_usd": 0.0045,
-                "last_message": "Qual o estoque...",
-                "model": "claude-sonnet-4-5-20250929",
-                "created_at": "2025-12-03T10:00:00",
-                "updated_at": "2025-12-03T10:05:00"
-            }
-        ]
-    }
     """
     try:
         from .models import AgentSession
 
         limit = request.args.get('limit', 20, type=int)
-        limit = min(limit, 50)  # Máximo 50
+        limit = min(limit, 50)
 
         sessions = AgentSession.list_for_user(
             user_id=current_user.id,
@@ -438,19 +591,81 @@ def api_list_sessions():
         }), 500
 
 
-@agente_bp.route('/api/sessions/<int:session_id>', methods=['DELETE'])
+@agente_bp.route('/api/sessions/<session_id>/messages', methods=['GET'])
 @login_required
-def api_delete_session(session_id: int):
+def api_get_session_messages(session_id: str):
+    """
+    FEAT-030: Retorna histórico de mensagens de uma sessão.
+
+    GET /agente/api/sessions/{session_id}/messages
+
+    Response:
+    {
+        "success": true,
+        "session_id": "abc123",
+        "messages": [
+            {
+                "id": "msg_xxx",
+                "role": "user",
+                "content": "...",
+                "timestamp": "2025-12-05T10:00:00Z"
+            },
+            {
+                "id": "msg_yyy",
+                "role": "assistant",
+                "content": "...",
+                "timestamp": "2025-12-05T10:00:15Z",
+                "tokens": {"input": 150, "output": 320}
+            }
+        ]
+    }
+    """
+    try:
+        from .models import AgentSession
+
+        # Busca por session_id (string UUID)
+        session = AgentSession.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id,
+        ).first()
+
+        if not session:
+            return jsonify({
+                'success': False,
+                'error': 'Sessão não encontrada'
+            }), 404
+
+        messages = session.get_messages()
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'title': session.title,
+            'messages': messages,
+            'total_tokens': session.get_total_tokens(),
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro ao buscar mensagens: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@agente_bp.route('/api/sessions/<int:session_db_id>', methods=['DELETE'])
+@login_required
+def api_delete_session(session_db_id: int):
     """
     Exclui uma sessão.
 
-    DELETE /agente/api/sessions/123
+    DELETE /agente/api/sessions/123  (ID do banco, não session_id)
     """
     try:
         from .models import AgentSession
 
         session = AgentSession.query.filter_by(
-            id=session_id,
+            id=session_db_id,
             user_id=current_user.id,
         ).first()
 
@@ -477,9 +692,9 @@ def api_delete_session(session_id: int):
         }), 500
 
 
-@agente_bp.route('/api/sessions/<int:session_id>/rename', methods=['PUT'])
+@agente_bp.route('/api/sessions/<int:session_db_id>/rename', methods=['PUT'])
 @login_required
-def api_rename_session(session_id: int):
+def api_rename_session(session_db_id: int):
     """
     Renomeia uma sessão.
 
@@ -499,7 +714,7 @@ def api_rename_session(session_id: int):
             }), 400
 
         session = AgentSession.query.filter_by(
-            id=session_id,
+            id=session_db_id,
             user_id=current_user.id,
         ).first()
 
@@ -509,7 +724,7 @@ def api_rename_session(session_id: int):
                 'error': 'Sessão não encontrada'
             }), 404
 
-        session.title = new_title[:200]  # Limite de 200 chars
+        session.title = new_title[:200]
         db.session.commit()
 
         return jsonify({
@@ -527,7 +742,7 @@ def api_rename_session(session_id: int):
 
 
 # =============================================================================
-# API - FILES (FEAT-028)
+# API - FILES
 # =============================================================================
 
 def _allowed_file(filename: str) -> bool:
@@ -560,29 +775,7 @@ def _get_file_type(filename: str) -> str:
 @agente_bp.route('/api/upload', methods=['POST'])
 @login_required
 def api_upload_file():
-    """
-    Upload de arquivo para a sessão.
-
-    POST /agente/api/upload
-    Content-Type: multipart/form-data
-
-    Form fields:
-        file: arquivo
-        session_id: ID da sessão (opcional)
-
-    Response:
-    {
-        "success": true,
-        "file": {
-            "id": "abc123",
-            "name": "relatorio.pdf",
-            "original_name": "relatorio.pdf",
-            "size": 123456,
-            "type": "pdf",
-            "url": "/agente/api/files/abc123_relatorio.pdf"
-        }
-    }
-    """
+    """Upload de arquivo para a sessão."""
     try:
         if 'file' not in request.files:
             return jsonify({
@@ -604,10 +797,9 @@ def api_upload_file():
                 'error': f'Tipo de arquivo não permitido. Permitidos: {", ".join(ALLOWED_EXTENSIONS)}'
             }), 400
 
-        # Verifica tamanho
-        file.seek(0, 2)  # Vai para o final
+        file.seek(0, 2)
         file_size = file.tell()
-        file.seek(0)  # Volta para o início
+        file.seek(0)
 
         if file_size > MAX_FILE_SIZE:
             return jsonify({
@@ -618,7 +810,6 @@ def api_upload_file():
         session_id = request.form.get('session_id', 'default')
         folder = _get_session_folder(session_id)
 
-        # Gera nome único para evitar conflitos
         original_name = secure_filename(file.filename)
         file_id = str(uuid.uuid4())[:8]
         safe_name = f"{file_id}_{original_name}"
@@ -651,11 +842,7 @@ def api_upload_file():
 @agente_bp.route('/api/files/<session_id>/<filename>', methods=['GET'])
 @login_required
 def api_download_file(session_id: str, filename: str):
-    """
-    Download de arquivo.
-
-    GET /agente/api/files/{session_id}/{filename}
-    """
+    """Download de arquivo."""
     try:
         folder = _get_session_folder(session_id)
         file_path = os.path.join(folder, secure_filename(filename))
@@ -683,19 +870,7 @@ def api_download_file(session_id: str, filename: str):
 @agente_bp.route('/api/files', methods=['GET'])
 @login_required
 def api_list_files():
-    """
-    Lista arquivos da sessão.
-
-    GET /agente/api/files?session_id=xxx
-
-    Response:
-    {
-        "success": true,
-        "files": [
-            {"name": "abc123_file.pdf", "size": 123, "type": "pdf", "url": "..."}
-        ]
-    }
-    """
+    """Lista arquivos da sessão."""
     try:
         session_id = request.args.get('session_id', 'default')
         folder = _get_session_folder(session_id)
@@ -729,11 +904,7 @@ def api_list_files():
 @agente_bp.route('/api/files/<session_id>/<filename>', methods=['DELETE'])
 @login_required
 def api_delete_file(session_id: str, filename: str):
-    """
-    Remove arquivo da sessão.
-
-    DELETE /agente/api/files/{session_id}/{filename}
-    """
+    """Remove arquivo da sessão."""
     try:
         folder = _get_session_folder(session_id)
         file_path = os.path.join(folder, secure_filename(filename))
@@ -763,12 +934,7 @@ def api_delete_file(session_id: str, filename: str):
 @agente_bp.route('/api/files/cleanup', methods=['POST'])
 @login_required
 def api_cleanup_files():
-    """
-    Limpa todos os arquivos da sessão.
-
-    POST /agente/api/files/cleanup
-    {"session_id": "xxx"}
-    """
+    """Limpa todos os arquivos da sessão."""
     try:
         data = request.get_json() or {}
         session_id = data.get('session_id', 'default')
@@ -798,11 +964,7 @@ def api_cleanup_files():
 
 @agente_bp.route('/api/health', methods=['GET'])
 def api_health():
-    """
-    Health check do serviço.
-
-    GET /agente/api/health
-    """
+    """Health check do serviço."""
     try:
         from .sdk import get_client
         from .config import get_settings
