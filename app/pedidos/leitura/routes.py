@@ -648,32 +648,86 @@ def export(format, session_key):
 # ============================================================================
 
 from app.pedidos.validacao.models import TabelaRede, RegiaoTabelaRede
+from app.producao.models import CadastroPalletizacao
+from sqlalchemy.orm import aliased
 
 
 @bp.route('/tabela-precos')
 @login_required
 def tabela_precos():
-    """Lista tabela de preços por rede"""
+    """Lista tabela de preços por rede com nome do produto de CadastroPalletizacao"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     rede_filtro = request.args.get('rede', '')
     regiao_filtro = request.args.get('regiao', '')
     produto_filtro = request.args.get('produto', '')
 
-    query = TabelaRede.query
+    # Query com LEFT JOIN para pegar nome_produto de CadastroPalletizacao
+    query = db.session.query(
+        TabelaRede,
+        CadastroPalletizacao.nome_produto
+    ).outerjoin(
+        CadastroPalletizacao,
+        TabelaRede.cod_produto == CadastroPalletizacao.cod_produto
+    )
 
     if rede_filtro:
         query = query.filter(TabelaRede.rede == rede_filtro.upper())
     if regiao_filtro:
         query = query.filter(TabelaRede.regiao == regiao_filtro.upper())
     if produto_filtro:
-        query = query.filter(TabelaRede.cod_produto.ilike(f'%{produto_filtro}%'))
+        query = query.filter(
+            db.or_(
+                TabelaRede.cod_produto.ilike(f'%{produto_filtro}%'),
+                CadastroPalletizacao.nome_produto.ilike(f'%{produto_filtro}%')
+            )
+        )
 
-    registros = query.order_by(
+    # Ordena e pagina
+    query = query.order_by(
         TabelaRede.rede,
         TabelaRede.regiao,
         TabelaRede.cod_produto
-    ).paginate(page=page, per_page=per_page, error_out=False)
+    )
+
+    # Conta total antes de paginar
+    total = query.count()
+
+    # Aplica paginação manual
+    offset = (page - 1) * per_page
+    items = query.offset(offset).limit(per_page).all()
+
+    # Cria objeto de paginação para manter compatibilidade com template
+    class Pagination:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page if per_page > 0 else 1
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1
+            self.next_num = page + 1
+
+        def iter_pages(self, left_edge=2, left_current=2, right_current=2, right_edge=2):
+            pages = []
+            for num in range(1, self.pages + 1):
+                if num <= left_edge or \
+                   (num >= self.page - left_current and num <= self.page + right_current) or \
+                   num > self.pages - right_edge:
+                    pages.append(num)
+                elif pages and pages[-1] is not None:
+                    pages.append(None)
+            return pages
+
+    # Formata items para incluir nome_produto como atributo
+    formatted_items = []
+    for tabela_rede, nome_produto in items:
+        tabela_rede.nome_produto = nome_produto or ''
+        formatted_items.append(tabela_rede)
+
+    registros = Pagination(formatted_items, page, per_page, total)
 
     # Lista de redes e regiões para filtros
     redes = db.session.query(TabelaRede.rede).distinct().all()
@@ -880,6 +934,94 @@ def tabela_precos_importar():
     return redirect(url_for('leitura_pedidos.tabela_precos'))
 
 
+@bp.route('/tabela-precos/exportar')
+@login_required
+def tabela_precos_exportar():
+    """
+    Exporta tabela de preços para Excel (XLSX)
+    Inclui nome do produto de CadastroPalletizacao
+    """
+    import pandas as pd
+    from io import BytesIO
+
+    rede_filtro = request.args.get('rede', '')
+    regiao_filtro = request.args.get('regiao', '')
+    produto_filtro = request.args.get('produto', '')
+
+    # Query com LEFT JOIN para pegar nome_produto
+    query = db.session.query(
+        TabelaRede.rede,
+        TabelaRede.regiao,
+        TabelaRede.cod_produto,
+        CadastroPalletizacao.nome_produto,
+        TabelaRede.preco,
+        TabelaRede.ativo,
+        TabelaRede.vigencia_inicio,
+        TabelaRede.vigencia_fim,
+        TabelaRede.criado_em,
+        TabelaRede.atualizado_em
+    ).outerjoin(
+        CadastroPalletizacao,
+        TabelaRede.cod_produto == CadastroPalletizacao.cod_produto
+    )
+
+    if rede_filtro:
+        query = query.filter(TabelaRede.rede == rede_filtro.upper())
+    if regiao_filtro:
+        query = query.filter(TabelaRede.regiao == regiao_filtro.upper())
+    if produto_filtro:
+        query = query.filter(
+            db.or_(
+                TabelaRede.cod_produto.ilike(f'%{produto_filtro}%'),
+                CadastroPalletizacao.nome_produto.ilike(f'%{produto_filtro}%')
+            )
+        )
+
+    query = query.order_by(TabelaRede.rede, TabelaRede.regiao, TabelaRede.cod_produto)
+    registros = query.all()
+
+    # Cria DataFrame
+    dados = []
+    for r in registros:
+        dados.append({
+            'rede': r.rede,
+            'regiao': r.regiao,
+            'cod_produto': r.cod_produto,
+            'nome_produto': r.nome_produto or '',
+            'preco': float(r.preco) if r.preco else 0,
+            'ativo': 'Sim' if r.ativo else 'Não',
+            'vigencia_inicio': r.vigencia_inicio.strftime('%d/%m/%Y') if r.vigencia_inicio else '',
+            'vigencia_fim': r.vigencia_fim.strftime('%d/%m/%Y') if r.vigencia_fim else '',
+            'criado_em': r.criado_em.strftime('%d/%m/%Y %H:%M') if r.criado_em else '',
+            'atualizado_em': r.atualizado_em.strftime('%d/%m/%Y %H:%M') if r.atualizado_em else ''
+        })
+
+    df = pd.DataFrame(dados)
+
+    # Cria arquivo Excel em memória
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Tabela Preços', index=False)
+
+        # Ajusta largura das colunas
+        worksheet = writer.sheets['Tabela Preços']
+        for idx, col in enumerate(df.columns):
+            max_len = max(df[col].astype(str).apply(len).max(), len(col)) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = min(max_len, 50)
+
+    output.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'tabela_precos_{timestamp}.xlsx'
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
 # ============================================================================
 # CRUD - Regiões por UF
 # ============================================================================
@@ -1068,3 +1210,296 @@ def regioes_importar():
         flash(f'Erro ao importar: {str(e)}', 'danger')
 
     return redirect(url_for('leitura_pedidos.regioes'))
+
+
+@bp.route('/regioes/exportar')
+@login_required
+def regioes_exportar():
+    """
+    Exporta mapeamento UF → Região para Excel (XLSX)
+    """
+    import pandas as pd
+    from io import BytesIO
+
+    rede_filtro = request.args.get('rede', '')
+
+    query = RegiaoTabelaRede.query
+
+    if rede_filtro:
+        query = query.filter(RegiaoTabelaRede.rede == rede_filtro.upper())
+
+    registros = query.order_by(
+        RegiaoTabelaRede.rede,
+        RegiaoTabelaRede.uf
+    ).all()
+
+    # Cria DataFrame
+    dados = []
+    for r in registros:
+        dados.append({
+            'rede': r.rede,
+            'uf': r.uf,
+            'regiao': r.regiao,
+            'ativo': 'Sim' if r.ativo else 'Não',
+            'criado_em': r.criado_em.strftime('%d/%m/%Y %H:%M') if r.criado_em else '',
+            'criado_por': r.criado_por or ''
+        })
+
+    df = pd.DataFrame(dados)
+
+    # Cria arquivo Excel em memória
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Regiões', index=False)
+
+        # Ajusta largura das colunas
+        worksheet = writer.sheets['Regiões']
+        for idx, col in enumerate(df.columns):
+            max_len = max(df[col].astype(str).apply(len).max(), len(col)) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = min(max_len, 50)
+
+    output.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'regioes_uf_{timestamp}.xlsx'
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+# ============================================================================
+# Fila de Impostos - Monitoramento Redis Queue
+# ============================================================================
+
+@bp.route('/fila-impostos')
+@login_required
+def fila_impostos():
+    """Interface para monitorar a fila de cálculo de impostos"""
+    return render_template('pedidos/leitura/fila_impostos.html')
+
+
+@bp.route('/api/fila-impostos')
+@login_required
+def api_fila_impostos():
+    """
+    API para obter status da fila de impostos
+
+    Retorna:
+    - Estatísticas da fila (pendentes, em execução, concluídos, falhados)
+    - Lista de jobs pendentes
+    - Lista de jobs em execução
+    - Lista de jobs concluídos recentes
+    - Lista de jobs falhados recentes
+    """
+    try:
+        from rq import Queue
+        from rq.job import Job
+        from rq.registry import StartedJobRegistry, FinishedJobRegistry, FailedJobRegistry
+        from app.portal.workers import get_redis_connection
+
+        redis_conn = get_redis_connection()
+        queue = Queue('impostos', connection=redis_conn)
+
+        # Registros de jobs
+        started_registry = StartedJobRegistry(queue=queue)
+        finished_registry = FinishedJobRegistry(queue=queue)
+        failed_registry = FailedJobRegistry(queue=queue)
+
+        # Estatísticas
+        stats = {
+            'pendentes': len(queue),
+            'em_execucao': len(started_registry),
+            'concluidos': len(finished_registry),
+            'falhados': len(failed_registry)
+        }
+
+        # Jobs pendentes (na fila)
+        jobs_pendentes = []
+        for job_id in queue.job_ids[:20]:  # Limita a 20
+            try:
+                job = Job.fetch(job_id, connection=redis_conn)
+                jobs_pendentes.append({
+                    'id': job.id,
+                    'criado_em': job.created_at.isoformat() if job.created_at else None,
+                    'args': _extrair_args_job(job),
+                    'status': job.get_status()
+                })
+            except Exception:
+                pass
+
+        # Jobs em execução
+        jobs_em_execucao = []
+        for job_id in started_registry.get_job_ids()[:10]:
+            try:
+                job = Job.fetch(job_id, connection=redis_conn)
+                jobs_em_execucao.append({
+                    'id': job.id,
+                    'iniciado_em': job.started_at.isoformat() if job.started_at else None,
+                    'args': _extrair_args_job(job),
+                    'status': job.get_status()
+                })
+            except Exception:
+                pass
+
+        # Jobs concluídos recentes
+        jobs_concluidos = []
+        for job_id in finished_registry.get_job_ids()[:20]:
+            try:
+                job = Job.fetch(job_id, connection=redis_conn)
+                resultado = job.result if job.result else {}
+                jobs_concluidos.append({
+                    'id': job.id,
+                    'finalizado_em': job.ended_at.isoformat() if job.ended_at else None,
+                    'args': _extrair_args_job(job),
+                    'resultado': resultado,
+                    'sucesso': resultado.get('success', False) if isinstance(resultado, dict) else True
+                })
+            except Exception:
+                pass
+
+        # Jobs falhados
+        jobs_falhados = []
+        for job_id in failed_registry.get_job_ids()[:20]:
+            try:
+                job = Job.fetch(job_id, connection=redis_conn)
+                jobs_falhados.append({
+                    'id': job.id,
+                    'finalizado_em': job.ended_at.isoformat() if job.ended_at else None,
+                    'args': _extrair_args_job(job),
+                    'erro': str(job.exc_info) if job.exc_info else 'Erro desconhecido'
+                })
+            except Exception:
+                pass
+
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'jobs_pendentes': jobs_pendentes,
+            'jobs_em_execucao': jobs_em_execucao,
+            'jobs_concluidos': jobs_concluidos,
+            'jobs_falhados': jobs_falhados,
+            'atualizado_em': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+def _extrair_args_job(job):
+    """Extrai argumentos do job de forma segura"""
+    try:
+        if job.args:
+            order_id = job.args[0] if len(job.args) > 0 else None
+            order_name = job.args[1] if len(job.args) > 1 else None
+            return {
+                'order_id': order_id,
+                'order_name': order_name
+            }
+    except Exception:
+        pass
+    return {}
+
+
+@bp.route('/api/job-imposto/<job_id>')
+@login_required
+def api_job_imposto(job_id):
+    """
+    Detalhes de um job específico de cálculo de impostos
+    """
+    try:
+        from rq.job import Job
+        from app.portal.workers import get_redis_connection
+
+        redis_conn = get_redis_connection()
+
+        try:
+            job = Job.fetch(job_id, connection=redis_conn)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'error': 'Job não encontrado'
+            }), 404
+
+        response = {
+            'success': True,
+            'job_id': job.id,
+            'status': job.get_status(),
+            'criado_em': job.created_at.isoformat() if job.created_at else None,
+            'iniciado_em': job.started_at.isoformat() if job.started_at else None,
+            'finalizado_em': job.ended_at.isoformat() if job.ended_at else None,
+            'args': _extrair_args_job(job),
+            'resultado': job.result if job.is_finished else None,
+            'erro': str(job.exc_info) if job.is_failed and job.exc_info else None
+        }
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/api/reprocessar-imposto/<job_id>', methods=['POST'])
+@login_required
+def api_reprocessar_imposto(job_id):
+    """
+    Reprocessa um job de cálculo de impostos que falhou
+    """
+    try:
+        from rq.job import Job
+        from app.portal.workers import get_redis_connection, enqueue_job
+        from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+
+        redis_conn = get_redis_connection()
+
+        try:
+            job_original = Job.fetch(job_id, connection=redis_conn)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'error': 'Job não encontrado'
+            }), 404
+
+        # Extrair argumentos do job original
+        if not job_original.args or len(job_original.args) < 1:
+            return jsonify({
+                'success': False,
+                'error': 'Job sem argumentos válidos'
+            }), 400
+
+        order_id = job_original.args[0]
+        order_name = job_original.args[1] if len(job_original.args) > 1 else None
+
+        # Enfileirar novo job
+        novo_job = enqueue_job(
+            calcular_impostos_odoo,
+            order_id,
+            order_name,
+            queue_name='impostos',
+            timeout='3m'
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Job reprocessado para pedido {order_name or order_id}',
+            'novo_job_id': novo_job.id,
+            'order_id': order_id,
+            'order_name': order_name
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

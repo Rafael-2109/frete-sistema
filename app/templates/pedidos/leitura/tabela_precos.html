@@ -58,6 +58,10 @@
                     </form>
                 </div>
                 <div class="col-md-4 text-end">
+                    <a href="{{ url_for('leitura_pedidos.tabela_precos_exportar', rede=rede_filtro, regiao=regiao_filtro, produto=produto_filtro) }}"
+                       class="btn btn-sm btn-outline-success me-2">
+                        <i class="fas fa-download"></i> Exportar Excel
+                    </a>
                     <form method="POST" action="{{ url_for('leitura_pedidos.tabela_precos_importar') }}"
                         enctype="multipart/form-data" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -85,6 +89,7 @@
                             <th>Rede</th>
                             <th>Regiao</th>
                             <th>Cod. Produto</th>
+                            <th>Nome Produto</th>
                             <th class="text-end">Preco</th>
                             <th>Status</th>
                             <th>Atualizado</th>
@@ -97,6 +102,7 @@
                             <td><span class="badge bg-primary">{{ r.rede }}</span></td>
                             <td><span class="badge bg-info">{{ r.regiao }}</span></td>
                             <td><strong>{{ r.cod_produto }}</strong></td>
+                            <td><small class="text-muted">{{ r.nome_produto[:50] if r.nome_produto else '-' }}{% if r.nome_produto and r.nome_produto|length > 50 %}...{% endif %}</small></td>
                             <td class="text-end">R$ {{ "%.2f"|format(r.preco) }}</td>
                             <td>
                                 {% if r.ativo %}
@@ -126,7 +132,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">
+                            <td colspan="8" class="text-center py-4 text-muted">
                                 <i class="fas fa-inbox fa-2x mb-2"></i><br>
                                 Nenhum registro encontrado
                             </td>

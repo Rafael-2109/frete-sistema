@@ -8,112 +8,21 @@ Campos obrigatórios:
 - sale.order.line: product_id, product_uom_qty, price_unit, l10n_br_compra_indcom
 
 Cálculo de Impostos:
-- Usa ThreadPoolExecutor para calcular impostos em background (fire and forget)
-- Timeout de 180 segundos para conexão com Odoo
-- 4 workers simultâneos
+- Usa Redis Queue (fila 'impostos') para calcular impostos em background
+- Jobs processados pelo worker_render.py
+- Timeout de 180 segundos por job
+- Rastreabilidade via dashboard RQ
 """
 
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 import logging
-import socket
-import xmlrpc.client
-import ssl
 
 from .models import RegistroPedidoOdoo
 from app import db
 
 logger = logging.getLogger(__name__)
-
-# ============================================================
-# CONFIGURAÇÕES DE WORKERS PARA CÁLCULO DE IMPOSTOS
-# ============================================================
-WORKERS_CALCULO_IMPOSTOS = 4        # Número de workers simultâneos
-TIMEOUT_CALCULO_IMPOSTOS = 180      # Timeout em segundos (3 minutos)
-
-# ThreadPoolExecutor global para cálculo de impostos
-_executor_impostos: Optional[ThreadPoolExecutor] = None
-
-
-def _get_executor_impostos() -> ThreadPoolExecutor:
-    """Retorna executor global para cálculo de impostos"""
-    global _executor_impostos
-    if _executor_impostos is None:
-        _executor_impostos = ThreadPoolExecutor(
-            max_workers=WORKERS_CALCULO_IMPOSTOS,
-            thread_name_prefix='odoo_impostos'
-        )
-        logger.info(f"✅ ThreadPoolExecutor criado com {WORKERS_CALCULO_IMPOSTOS} workers")
-    return _executor_impostos
-
-
-def _calcular_impostos_background(order_id: int, order_name: str = None):
-    """
-    Calcula impostos em background (fire and forget)
-
-    Usa conexão XML-RPC direta com timeout de 180 segundos,
-    independente do Circuit Breaker do sistema.
-
-    Args:
-        order_id: ID do pedido no Odoo
-        order_name: Nome do pedido (para logs)
-    """
-    try:
-        from app.odoo.config.odoo_config import ODOO_CONFIG
-
-        url = ODOO_CONFIG['url']
-        database = ODOO_CONFIG['database']
-        username = ODOO_CONFIG['username']
-        api_key = ODOO_CONFIG['api_key']
-
-        # Configurar timeout para 180 segundos
-        socket.setdefaulttimeout(TIMEOUT_CALCULO_IMPOSTOS)
-
-        # SSL context
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
-        # Conexão para autenticação
-        common = xmlrpc.client.ServerProxy(
-            f'{url}/xmlrpc/2/common',
-            context=ssl_context,
-            allow_none=True
-        )
-        uid = common.authenticate(database, username, api_key, {})
-
-        if not uid:
-            logger.error(f"❌ Falha na autenticação para calcular impostos do pedido {order_name or order_id}")
-            return
-
-        # Conexão para models
-        models = xmlrpc.client.ServerProxy(
-            f'{url}/xmlrpc/2/object',
-            context=ssl_context,
-            allow_none=True
-        )
-
-        # Chamar método de cálculo de impostos
-        logger.info(f"🔄 Calculando impostos em background: {order_name or order_id}")
-
-        models.execute_kw(
-            database, uid, api_key,
-            'sale.order',
-            'onchange_l10n_br_calcular_imposto',
-            [[order_id]]
-        )
-
-        logger.info(f"✅ Impostos calculados com sucesso: {order_name or order_id}")
-
-    except Exception as e:
-        error_str = str(e)
-        if "cannot marshal None" in error_str:
-            # Este erro é esperado - o método funciona mesmo assim
-            logger.info(f"✅ Impostos calculados (marshal None): {order_name or order_id}")
-        else:
-            logger.warning(f"⚠️ Erro ao calcular impostos em background ({order_name or order_id}): {e}")
 
 
 @dataclass
@@ -340,23 +249,33 @@ class OdooIntegrationService:
             order_data = self._execute('sale.order', 'read', [order_id], fields=['name'])
             order_name = order_data[0]['name'] if order_data else f"ID:{order_id}"
 
-            # 5. Calcula impostos em BACKGROUND (fire and forget)
-            # Usa ThreadPoolExecutor com timeout de 180 segundos
+            # 5. Calcula impostos em BACKGROUND via Redis Queue
+            # Usa fila 'impostos' com timeout de 180 segundos
+            job_id = None
             if calcular_impostos:
                 try:
-                    executor = _get_executor_impostos()
-                    executor.submit(_calcular_impostos_background, order_id, order_name)
-                    logger.info(f"📤 Cálculo de impostos enviado para background: {order_name}")
+                    from app.portal.workers import enqueue_job
+                    from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+
+                    job = enqueue_job(
+                        calcular_impostos_odoo,
+                        order_id,
+                        order_name,
+                        queue_name='impostos',
+                        timeout='3m'  # 3 minutos
+                    )
+                    job_id = job.id
+                    logger.info(f"📤 Job {job_id} enfileirado para calcular impostos: {order_name}")
                 except Exception as e:
-                    # Se falhar ao submeter, apenas loga - não bloqueia criação
-                    logger.warning(f"⚠️ Erro ao submeter cálculo de impostos: {e}")
+                    # Se falhar ao enfileirar, apenas loga - não bloqueia criação
+                    logger.warning(f"⚠️ Erro ao enfileirar cálculo de impostos: {e}")
                     erros.append(f"Aviso: impostos serão calculados manualmente")
 
             return ResultadoCriacaoPedido(
                 sucesso=True,
                 order_id=order_id,
                 order_name=order_name,
-                mensagem=f"Pedido {order_name} criado com sucesso (impostos calculando em background)",
+                mensagem=f"Pedido {order_name} criado com sucesso (impostos na fila)",
                 erros=erros
             )
 

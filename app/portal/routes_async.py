@@ -547,7 +547,7 @@ def status_filas():
         
         redis_conn = get_redis_connection()
         
-        queue_names = ['atacadao', 'high', 'default', 'low']
+        queue_names = ['impostos', 'atacadao', 'high', 'default', 'low']
         status = {}
         
         for queue_name in queue_names:

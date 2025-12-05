@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+
+{% block title %}Fila de Impostos - Monitoramento{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-calculator"></i> Fila de Calculo de Impostos
+        </h1>
+        <div>
+            <button id="btnAtualizar" class="btn btn-primary me-2">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-1">Pendentes</h6>
+                    <h2 id="statPendentes" class="text-warning mb-0">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-1">Em Execucao</h6>
+                    <h2 id="statEmExecucao" class="text-primary mb-0">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-1">Concluidos</h6>
+                    <h2 id="statConcluidos" class="text-success mb-0">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-1">Falhados</h6>
+                    <h2 id="statFalhados" class="text-danger mb-0">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status de Atualizacao -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <small class="text-muted">
+            <i class="fas fa-clock"></i> Ultima atualizacao: <span id="ultimaAtualizacao">-</span>
+        </small>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+            <label class="form-check-label" for="autoRefresh">Atualizar automaticamente (5s)</label>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="filaImpostosTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pendentes-tab" data-bs-toggle="tab" data-bs-target="#pendentes" type="button" role="tab">
+                <i class="fas fa-clock text-warning"></i> Pendentes <span class="badge bg-warning text-dark" id="badgePendentes">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="execucao-tab" data-bs-toggle="tab" data-bs-target="#execucao" type="button" role="tab">
+                <i class="fas fa-spinner text-primary"></i> Em Execucao <span class="badge bg-primary" id="badgeExecucao">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="concluidos-tab" data-bs-toggle="tab" data-bs-target="#concluidos" type="button" role="tab">
+                <i class="fas fa-check text-success"></i> Concluidos <span class="badge bg-success" id="badgeConcluidos">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="falhados-tab" data-bs-toggle="tab" data-bs-target="#falhados" type="button" role="tab">
+                <i class="fas fa-times text-danger"></i> Falhados <span class="badge bg-danger" id="badgeFalhados">0</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="filaImpostosTabsContent">
+        <!-- Tab Pendentes -->
+        <div class="tab-pane fade show active" id="pendentes" role="tabpanel">
+            <div class="card border-top-0 rounded-0 rounded-bottom">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Order ID</th>
+                                    <th>Criado em</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaPendentes">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Em Execucao -->
+        <div class="tab-pane fade" id="execucao" role="tabpanel">
+            <div class="card border-top-0 rounded-0 rounded-bottom">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Order ID</th>
+                                    <th>Iniciado em</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaExecucao">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Concluidos -->
+        <div class="tab-pane fade" id="concluidos" role="tabpanel">
+            <div class="card border-top-0 rounded-0 rounded-bottom">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Order ID</th>
+                                    <th>Finalizado em</th>
+                                    <th>Resultado</th>
+                                    <th>Tempo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaConcluidos">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Falhados -->
+        <div class="tab-pane fade" id="falhados" role="tabpanel">
+            <div class="card border-top-0 rounded-0 rounded-bottom">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Order ID</th>
+                                    <th>Finalizado em</th>
+                                    <th>Erro</th>
+                                    <th>Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaFalhados">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informacoes -->
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h6 class="mb-0"><i class="fas fa-info-circle"></i> Sobre a Fila de Impostos</h6>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">
+                A fila de impostos processa o calculo automatico de CFOP e impostos para pedidos criados no Odoo.
+            </p>
+            <ul class="mb-0 small">
+                <li><strong>Timeout:</strong> 3 minutos por pedido</li>
+                <li><strong>Metodo:</strong> <code>onchange_l10n_br_calcular_imposto</code> via XML-RPC</li>
+                <li><strong>Retencao:</strong> Resultados mantidos por 24 horas</li>
+                <li><strong>Reprocessamento:</strong> Jobs falhados podem ser reprocessados manualmente</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    let autoRefreshInterval = null;
+    const REFRESH_INTERVAL = 5000; // 5 segundos
+
+    // Configura CSRF token para todas as requisicoes AJAX
+    const csrfToken = '{{ csrf_token() }}';
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", csrfToken);
+            }
+        }
+    });
+
+    function carregarDados() {
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.api_fila_impostos") }}',
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    atualizarInterface(response);
+                } else {
+                    console.error('Erro ao carregar dados:', response.error);
+                }
+            },
+            error: function(xhr) {
+                console.error('Erro na requisicao:', xhr);
+            }
+        });
+    }
+
+    function atualizarInterface(data) {
+        // Estatisticas
+        $('#statPendentes').text(data.stats.pendentes);
+        $('#statEmExecucao').text(data.stats.em_execucao);
+        $('#statConcluidos').text(data.stats.concluidos);
+        $('#statFalhados').text(data.stats.falhados);
+
+        // Badges
+        $('#badgePendentes').text(data.stats.pendentes);
+        $('#badgeExecucao').text(data.stats.em_execucao);
+        $('#badgeConcluidos').text(data.stats.concluidos);
+        $('#badgeFalhados').text(data.stats.falhados);
+
+        // Ultima atualizacao
+        const agora = new Date();
+        $('#ultimaAtualizacao').text(agora.toLocaleTimeString('pt-BR'));
+
+        // Tabela Pendentes
+        atualizarTabelaPendentes(data.jobs_pendentes);
+
+        // Tabela Em Execucao
+        atualizarTabelaExecucao(data.jobs_em_execucao);
+
+        // Tabela Concluidos
+        atualizarTabelaConcluidos(data.jobs_concluidos);
+
+        // Tabela Falhados
+        atualizarTabelaFalhados(data.jobs_falhados);
+    }
+
+    function atualizarTabelaPendentes(jobs) {
+        const tbody = $('#tabelaPendentes');
+        tbody.empty();
+
+        if (!jobs || jobs.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                        <i class="fas fa-inbox"></i> Nenhum job pendente
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        jobs.forEach(function(job) {
+            tbody.append(`
+                <tr>
+                    <td><strong>${job.args.order_name || '-'}</strong></td>
+                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td>${formatarData(job.criado_em)}</td>
+                    <td><span class="badge bg-warning text-dark">${job.status}</span></td>
+                </tr>
+            `);
+        });
+    }
+
+    function atualizarTabelaExecucao(jobs) {
+        const tbody = $('#tabelaExecucao');
+        tbody.empty();
+
+        if (!jobs || jobs.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                        <i class="fas fa-pause-circle"></i> Nenhum job em execucao
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        jobs.forEach(function(job) {
+            tbody.append(`
+                <tr>
+                    <td><strong>${job.args.order_name || '-'}</strong></td>
+                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td>${formatarData(job.iniciado_em)}</td>
+                    <td>
+                        <span class="badge bg-primary">
+                            <i class="fas fa-spinner fa-spin"></i> ${job.status}
+                        </span>
+                    </td>
+                </tr>
+            `);
+        });
+    }
+
+    function atualizarTabelaConcluidos(jobs) {
+        const tbody = $('#tabelaConcluidos');
+        tbody.empty();
+
+        if (!jobs || jobs.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="fas fa-inbox"></i> Nenhum job concluido recentemente
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        jobs.forEach(function(job) {
+            const sucesso = job.sucesso;
+            const resultado = job.resultado || {};
+            const tempo = resultado.tempo_segundos ? resultado.tempo_segundos.toFixed(1) + 's' : '-';
+            const mensagem = resultado.message || (sucesso ? 'Sucesso' : 'Falha no job');
+
+            tbody.append(`
+                <tr class="${sucesso ? '' : 'table-warning'}">
+                    <td><strong>${job.args.order_name || '-'}</strong></td>
+                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td>${formatarData(job.finalizado_em)}</td>
+                    <td>
+                        <span class="badge ${sucesso ? 'bg-success' : 'bg-warning text-dark'}">
+                            <i class="fas ${sucesso ? 'fa-check' : 'fa-exclamation-triangle'}"></i>
+                            ${sucesso ? 'OK' : 'Aviso'}
+                        </span>
+                        <small class="d-block text-muted">${mensagem}</small>
+                    </td>
+                    <td>${tempo}</td>
+                </tr>
+            `);
+        });
+    }
+
+    function atualizarTabelaFalhados(jobs) {
+        const tbody = $('#tabelaFalhados');
+        tbody.empty();
+
+        if (!jobs || jobs.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="fas fa-check-circle text-success"></i> Nenhum job falhado
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        jobs.forEach(function(job) {
+            const erroResumido = (job.erro || 'Erro desconhecido').substring(0, 100);
+
+            tbody.append(`
+                <tr class="table-danger">
+                    <td><strong>${job.args.order_name || '-'}</strong></td>
+                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td>${formatarData(job.finalizado_em)}</td>
+                    <td>
+                        <span class="badge bg-danger">Falhou</span>
+                        <small class="d-block text-danger">${erroResumido}${job.erro && job.erro.length > 100 ? '...' : ''}</small>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning btn-reprocessar" data-job-id="${job.id}" title="Reprocessar">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+    }
+
+    function formatarData(isoString) {
+        if (!isoString) return '-';
+        const data = new Date(isoString);
+        return data.toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    // Evento de reprocessar
+    $(document).on('click', '.btn-reprocessar', function() {
+        const btn = $(this);
+        const jobId = btn.data('job-id');
+        const originalHtml = btn.html();
+
+        btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+
+        $.ajax({
+            url: `{{ url_for("leitura_pedidos.api_reprocessar_imposto", job_id="__JOB_ID__") }}`.replace('__JOB_ID__', jobId),
+            type: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(response.message);
+                    } else {
+                        alert(response.message);
+                    }
+                    carregarDados(); // Recarrega dados
+                } else {
+                    btn.html(originalHtml).prop('disabled', false);
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(response.error || 'Erro ao reprocessar');
+                    } else {
+                        alert(response.error || 'Erro ao reprocessar');
+                    }
+                }
+            },
+            error: function(xhr) {
+                btn.html(originalHtml).prop('disabled', false);
+                const resp = xhr.responseJSON || {};
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(resp.error || 'Erro ao reprocessar');
+                } else {
+                    alert(resp.error || 'Erro ao reprocessar');
+                }
+            }
+        });
+    });
+
+    // Botao Atualizar
+    $('#btnAtualizar').on('click', function() {
+        const btn = $(this);
+        const originalHtml = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Atualizando...').prop('disabled', true);
+
+        carregarDados();
+
+        setTimeout(function() {
+            btn.html(originalHtml).prop('disabled', false);
+        }, 500);
+    });
+
+    // Auto-refresh toggle
+    $('#autoRefresh').on('change', function() {
+        if ($(this).is(':checked')) {
+            startAutoRefresh();
+        } else {
+            stopAutoRefresh();
+        }
+    });
+
+    function startAutoRefresh() {
+        stopAutoRefresh(); // Para qualquer intervalo existente
+        autoRefreshInterval = setInterval(carregarDados, REFRESH_INTERVAL);
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+
+    // Carrega dados iniciais
+    carregarDados();
+
+    // Inicia auto-refresh se checkbox estiver marcado
+    if ($('#autoRefresh').is(':checked')) {
+        startAutoRefresh();
+    }
+});
+</script>
+{% endblock %}

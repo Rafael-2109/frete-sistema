@@ -223,6 +223,25 @@
                     </p>
                 </div>
             </div>
+
+            <!-- Card de Monitoramento -->
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-line"></i> Monitoramento
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('leitura_pedidos.fila_impostos') }}" class="btn btn-outline-warning btn-sm">
+                            <i class="fas fa-calculator"></i> Fila de Impostos
+                        </a>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">
+                        Acompanhe o calculo de impostos dos pedidos em tempo real.
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
