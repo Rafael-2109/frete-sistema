@@ -270,151 +270,40 @@
         </div>
     </div>
 
-    <!-- 🤖 Seção MCP v4.0 - NOVA -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow border-left-dark">
-                <div
-                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-dark">
-                    <h6 class="m-0 font-weight-bold text-black">🤖 Claude AI - MCP v4.0</h6>
-                    <div>
-                        <span class="badge bg-success text-black">✅ ATIVO</span>
-                        <span class="badge bg-info text-black ms-1">11 Ferramentas</span>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h5 class="text-dark mb-2">Sistema Inteligente Avançado</h5>
-                            <p class="text-muted mb-3">
-                                Consulte dados em <strong>linguagem natural</strong>, detecte anomalias, analise
-                                tendências e otimize rotas usando inteligência artificial conectada aos dados reais do
-                                sistema.
-                            </p>
-                            <div class="row">
-                            </div>
-                        </div>
-                        <div class="col-md-4 text-center">
-                            <div class="mb-3">
-                                <i class="fas fa-robot fa-3x text-primary mb-2"></i>
-                                <p class="text-muted small">NLP com 90% precisão</p>
-                            </div>
-                            <div class="btn-group-vertical w-100" role="group">
-                                <a href="/claude-ai/v4/dashboard" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-tachometer-alt"></i> Dashboard v4.0
-                                </a>
-                                <a href="/claude-ai/chat" class="btn btn-success btn-sm">
-                                    <i class="fas fa-comments"></i> Chat Inteligente
-                                </a>
-                                <a href="/claude-ai/real" class="btn btn-warning btn-sm">
-                                    <i class="fas fa-brain"></i> Claude REAL (Beta)
-                                </a>
-                                <button type="button" class="btn btn-info btn-sm" onclick="mostrarExemplos()">
-                                    <i class="fas fa-lightbulb"></i> Ver Exemplos
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Exemplos ocultos inicialmente -->
-                    <div id="exemplos-mcp" class="mt-4" style="display: none;">
-                        <hr>
-                        <h6 class="text-primary mb-3">💬 Exemplos de Consultas em Linguagem Natural:</h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="bg-light p-3 rounded mb-2">
-                                    <strong>"Como estão os fretes do Assai em SP?"</strong>
-                                    <br><small class="text-muted">→ Consulta inteligente por cliente e UF</small>
-                                </div>
-                                <div class="bg-light p-3 rounded mb-2">
-                                    <strong>"Detectar problemas nos custos"</strong>
-                                    <br><small class="text-muted">→ Análise automática de anomalias</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="bg-light p-3 rounded mb-2">
-                                    <strong>"Análise de tendências dos últimos 30 dias"</strong>
-                                    <br><small class="text-muted">→ Analytics avançado com dados reais</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-center mt-3">
-                            <a href="/claude-ai/v4/dashboard" class="btn btn-primary">
-                                🚀 Testar Agora
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- 🆕 Tabela com Últimos Embarques da API -->
     <div class="row">
-        <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">Últimos Embarques (via API)</h6>
-                    <button class="btn btn-sm btn-outline-primary" onclick="recarregarDados()">
-                        <i class="fas fa-sync-alt"></i> Atualizar
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div id="loading-embarques" class="text-center">
-                        <i class="fas fa-spinner fa-spin"></i> Carregando dados da API...
-                    </div>
-                    <div id="tabela-embarques" style="display: none;">
-                        <div class="table-responsive">
-                            <table class="table table-bordered" width="100%" cellspacing="0">
-                                <thead>
-                                    <tr>
-                                        <th>Embarque</th>
-                                        <th>Status</th>
-                                        <th>Transportadora</th>
-                                        <th>Data</th>
-                                        <th>Fretes</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-embarques">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Últimos Embarques (via API)</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="recarregarDados()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
             </div>
-        </div>
-
-        <div class="col-lg-4">
-            <!-- 🤖 Link rápido para MCP v4.0 -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">🤖 Claude AI - MCP v4.0</h6>
+            <div class="card-body">
+                <div id="loading-embarques" class="text-center">
+                    <i class="fas fa-spinner fa-spin"></i> Carregando dados da API...
                 </div>
-                <div class="card-body">
-                    <p class="text-muted mb-3">
-                        Acesse o sistema inteligente com processamento de linguagem natural avançado.
-                    </p>
-
-                    <div class="mb-3">
-                        <strong>💬 Exemplos de consultas:</strong>
-                        <ul class="mt-2 text-sm">
-                            <li>"Status do sistema"</li>
-                            <li>"Transportadoras cadastradas"</li>
-                            <li>"Análise de tendências"</li>
-                            <li>"Embarques ativos"</li>
-                        </ul>
-                    </div>
-
-                    <div class="btn-group-vertical w-100">
-                        <a href="/claude-ai/v4/dashboard" class="btn btn-primary btn-sm">
-                            <i class="fas fa-tachometer-alt"></i> Dashboard v4.0
-                        </a>
-                        <a href="/claude-ai/chat" class="btn btn-success btn-sm">
-                            <i class="fas fa-comments"></i> Chat Inteligente
-                        </a>
-                        <a href="/claude-ai/real" class="btn btn-warning btn-sm">
-                            <i class="fas fa-brain"></i> Claude REAL (Beta)
-                        </a>
+                <div id="tabela-embarques" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Embarque</th>
+                                    <th>Status</th>
+                                    <th>Transportadora</th>
+                                    <th>Data Prevista</th>
+                                    <th>Data de Embarque</th>
+                                    <th>Tipo de Carga</th>
+                                    <th>Modalidade</th>
+                                    <th>Valor Total</th>
+                                    <th>Pallet Total</th>
+                                    <th>Peso Total</th>
+                                    <th>Fretes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-embarques">
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -487,10 +376,14 @@
                             </span>
                         </td>
                         <td>${embarque.transportadora || 'N/A'}</td>
-                        <td>${embarque.data_embarque ? new Date(embarque.data_embarque).toLocaleDateString('pt-BR') : 'N/A'}</td>
-                        <td>
-                            <span class="badge bg-info">${embarque.total_fretes} fretes</span>
-                        </td>
+                        <td>${embarque.data_prevista_embarque ? new Date(embarque.data_prevista_embarque).toLocaleDateString('pt-BR') : '-'}</td>
+                        <td>${embarque.data_embarque ? new Date(embarque.data_embarque).toLocaleDateString('pt-BR') : '-'}</td>
+                        <td>${embarque.tipo_carga}</td>
+                        <td>${embarque.modalidade}</td>
+                        <td>${embarque.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        <td>${embarque.pallet_total.toFixed(2)}</td>
+                        <td>${embarque.peso_total.toFixed(0)}</td>
+                        <td>${embarque.total_fretes} fretes</td>
                     </tr>
                 `;
                     tbody.innerHTML += row;

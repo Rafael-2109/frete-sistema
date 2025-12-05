@@ -10,11 +10,11 @@ from app import db
 from app.pedidos.models import Pedido
 from app.faturamento.models import RelatorioFaturamentoImportado
 from app.monitoramento.models import EntregaMonitorada
-from app.embarques.models import Embarque
+from app.embarques.models import Embarque, EmbarqueItem
 from app.fretes.models import Frete
 from app.transportadoras.models import Transportadora
 from sqlalchemy import desc
-
+from sqlalchemy.orm import joinedload
 main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/dashboard')
@@ -361,13 +361,21 @@ def api_embarques_internos():
         
         resultado = []
         for embarque in embarques:
+            modalidade = None
+            if embarque.itens and len(embarque.itens) > 0:
+                modalidade = embarque.itens[0].modalidade
             resultado.append({
                 'id': embarque.id,
                 'numero': embarque.numero,
                 'status': embarque.status,
-                'data_embarque': embarque.data_embarque.isoformat() if embarque.data_embarque else None,
+                'data_prevista_embarque': embarque.data_prevista_embarque.isoformat() if embarque.data_prevista_embarque else None,
+                'tipo_carga': embarque.tipo_carga,
+                'modalidade': modalidade,
                 'transportadora': embarque.transportadora.razao_social if embarque.transportadora else None,
-                'total_fretes': len(embarque.fretes) if embarque.fretes else 0
+                'total_fretes': len(embarque.fretes) if embarque.fretes else 0,
+                'valor_total': embarque.valor_total,
+                'pallet_total': embarque.pallet_total,
+                'peso_total': embarque.peso_total
             })
         
         return jsonify({
