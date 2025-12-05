@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}{% if registro %}Editar{% else %}Novo{% endif %} Preco{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-dollar-sign"></i> {% if registro %}Editar{% else %}Novo{% endif %} Preco
+        </h1>
+        <a href="{{ url_for('leitura_pedidos.tabela_precos') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                        <div class="mb-3">
+                            <label for="rede" class="form-label">Rede *</label>
+                            <select name="rede" id="rede" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="ATACADAO" {% if registro and registro.rede == 'ATACADAO' %}selected{% endif %}>ATACADAO</option>
+                                <option value="TENDA" {% if registro and registro.rede == 'TENDA' %}selected{% endif %}>TENDA</option>
+                                <option value="ASSAI" {% if registro and registro.rede == 'ASSAI' %}selected{% endif %}>ASSAI</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="regiao" class="form-label">Regiao *</label>
+                            <input type="text" name="regiao" id="regiao" class="form-control"
+                                value="{{ registro.regiao if registro else '' }}"
+                                list="regioes-list" placeholder="Ex: SUDESTE, SUL, NORDESTE..." required>
+                            <datalist id="regioes-list">
+                                {% for r in regioes_existentes %}
+                                <option value="{{ r }}">
+                                {% endfor %}
+                                <option value="SUDESTE">
+                                <option value="SUL">
+                                <option value="NORDESTE">
+                                <option value="NORTE">
+                                <option value="CENTRO-OESTE">
+                            </datalist>
+                            <div class="form-text">Digite ou selecione uma regiao existente</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="cod_produto" class="form-label">Codigo do Produto (Nacom) *</label>
+                            <input type="text" name="cod_produto" id="cod_produto" class="form-control"
+                                value="{{ registro.cod_produto if registro else '' }}"
+                                placeholder="Ex: 35642" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="preco" class="form-label">Preco (R$) *</label>
+                            <input type="text" name="preco" id="preco" class="form-control"
+                                value="{{ '%.2f'|format(registro.preco) if registro else '' }}"
+                                placeholder="Ex: 199.48" required>
+                        </div>
+
+                        {% if registro %}
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="ativo" id="ativo" class="form-check-input"
+                                    {% if registro.ativo %}checked{% endif %}>
+                                <label for="ativo" class="form-check-label">Ativo</label>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> Instrucoes
+                </div>
+                <div class="card-body">
+                    <h6>Campos</h6>
+                    <ul class="small">
+                        <li><strong>Rede:</strong> Nome da rede de atacarejo (ATACADAO, TENDA, ASSAI)</li>
+                        <li><strong>Regiao:</strong> Nome da regiao geografica para precificacao</li>
+                        <li><strong>Codigo Produto:</strong> Codigo interno Nacom do produto</li>
+                        <li><strong>Preco:</strong> Valor unitario negociado com a rede</li>
+                    </ul>
+
+                    <h6 class="mt-3">Como funciona</h6>
+                    <p class="small text-muted">
+                        Quando um pedido e processado, o sistema busca o preco nesta tabela
+                        usando a combinacao Rede + Regiao + Produto. Se encontrar, compara
+                        com o preco do documento e indica divergencias.
+                    </p>
+
+                    <h6 class="mt-3">Regioes Sugeridas</h6>
+                    <div class="small">
+                        <span class="badge bg-secondary me-1">SUDESTE</span>
+                        <span class="badge bg-secondary me-1">SUL</span>
+                        <span class="badge bg-secondary me-1">NORDESTE</span>
+                        <span class="badge bg-secondary me-1">NORTE</span>
+                        <span class="badge bg-secondary me-1">CENTRO-OESTE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

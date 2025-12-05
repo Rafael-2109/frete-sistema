@@ -255,9 +255,9 @@ python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/agente-logis
 ### Grupos Empresariais
 | Nome | Prefixos CNPJ |
 |------|---------------|
-| Atacadao | 93209765, 75315333, 00063960 |
-| Assai | 06057223 |
-| Tenda | 01157555 |
+| Atacadao | 93.209.765, 75.315.333, 00.063.960 |
+| Assai | 06.057.223 |
+| Tenda | 01.157.555 |
 
 ### Termos do Dominio
 - **Matar pedido** = Completar 100% do pedido

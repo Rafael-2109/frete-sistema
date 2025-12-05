@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Historico de Pedidos Inseridos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-history"></i> Historico de Pedidos Inseridos
+        </h1>
+        <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Pedido
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Rede</th>
+                            <th>Tipo</th>
+                            <th>Numero Doc.</th>
+                            <th>Cliente</th>
+                            <th>Pedido Odoo</th>
+                            <th>Status</th>
+                            <th>Usuario</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for registro in registros.items %}
+                        <tr>
+                            <td>
+                                {{ registro.criado_em.strftime('%d/%m/%Y %H:%M') if registro.criado_em else '-' }}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ registro.rede }}</span>
+                            </td>
+                            <td>{{ registro.tipo_documento }}</td>
+                            <td>{{ registro.numero_documento or '-' }}</td>
+                            <td>
+                                <strong>{{ registro.nome_cliente or 'N/A' }}</strong><br>
+                                <small class="text-muted">{{ registro.cnpj_cliente }}</small>
+                            </td>
+                            <td>
+                                {% if registro.odoo_order_name %}
+                                <span class="badge bg-success">{{ registro.odoo_order_name }}</span>
+                                <small class="text-muted d-block">ID: {{ registro.odoo_order_id }}</small>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if registro.status_odoo == 'SUCESSO' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check"></i> Sucesso
+                                </span>
+                                {% elif registro.status_odoo == 'ERRO' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times"></i> Erro
+                                </span>
+                                {% else %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-clock"></i> {{ registro.status_odoo }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ registro.inserido_por }}</small>
+                                {% if registro.divergente %}
+                                <br><span class="badge bg-warning text-dark">Divergente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if registro.arquivo_pdf_s3 %}
+                                    <a href="#" class="btn btn-outline-primary" title="Ver PDF"
+                                        onclick="alert('Funcionalidade em desenvolvimento')">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% endif %}
+                                    <button class="btn btn-outline-info" title="Detalhes"
+                                        onclick="verDetalhes({{ registro.id }})">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                Nenhum registro encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginacao -->
+            {% if registros.pages > 1 %}
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if registros.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('leitura_pedidos.historico', page=registros.prev_num) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for p in registros.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                        {% if p %}
+                            {% if p == registros.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ p }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('leitura_pedidos.historico', page=p) }}">{{ p }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if registros.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('leitura_pedidos.historico', page=registros.next_num) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Detalhes do Registro
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalhesBody">
+                <!-- Conteudo sera preenchido dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verDetalhes(id) {
+    // Por enquanto mostra alerta
+    alert('Funcionalidade de detalhes em desenvolvimento.\nID do registro: ' + id);
+}
+</script>
+
+{% endblock %}

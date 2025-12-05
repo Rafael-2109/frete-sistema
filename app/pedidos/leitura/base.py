@@ -64,7 +64,8 @@ class PDFExtractor(ABC):
         
         try:
             return Decimal(value)
-        except:
+        except Exception as e:
+            print(f"Erro ao converter para Decimal: {e}")
             return Decimal('0')
     
     def sanitize_quantity(self, qty: str) -> int:
@@ -77,7 +78,8 @@ class PDFExtractor(ABC):
         
         try:
             return int(qty)
-        except:
+        except Exception as e:
+            print(f"Erro ao converter para inteiro: {e}")
             return 0
     
     def parse_date(self, date_str: str) -> Optional[datetime]:
@@ -97,7 +99,8 @@ class PDFExtractor(ABC):
         for fmt in formats:
             try:
                 return datetime.strptime(date_str.strip(), fmt)
-            except:
+            except Exception as e:
+                print(f"Erro ao converter para datetime: {e}")
                 continue
         
         return None

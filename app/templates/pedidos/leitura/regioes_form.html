@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}{% if registro %}Editar{% else %}Novo{% endif %} Mapeamento UF{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-map"></i> {% if registro %}Editar{% else %}Novo{% endif %} Mapeamento UF → Regiao
+        </h1>
+        <a href="{{ url_for('leitura_pedidos.regioes') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                        <div class="mb-3">
+                            <label for="rede" class="form-label">Rede *</label>
+                            <select name="rede" id="rede" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="ATACADAO" {% if registro and registro.rede == 'ATACADAO' %}selected{% endif %}>ATACADAO</option>
+                                <option value="TENDA" {% if registro and registro.rede == 'TENDA' %}selected{% endif %}>TENDA</option>
+                                <option value="ASSAI" {% if registro and registro.rede == 'ASSAI' %}selected{% endif %}>ASSAI</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="uf" class="form-label">UF (Estado) *</label>
+                            <select name="uf" id="uf" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="AC" {% if registro and registro.uf == 'AC' %}selected{% endif %}>AC - Acre</option>
+                                <option value="AL" {% if registro and registro.uf == 'AL' %}selected{% endif %}>AL - Alagoas</option>
+                                <option value="AP" {% if registro and registro.uf == 'AP' %}selected{% endif %}>AP - Amapa</option>
+                                <option value="AM" {% if registro and registro.uf == 'AM' %}selected{% endif %}>AM - Amazonas</option>
+                                <option value="BA" {% if registro and registro.uf == 'BA' %}selected{% endif %}>BA - Bahia</option>
+                                <option value="CE" {% if registro and registro.uf == 'CE' %}selected{% endif %}>CE - Ceara</option>
+                                <option value="DF" {% if registro and registro.uf == 'DF' %}selected{% endif %}>DF - Distrito Federal</option>
+                                <option value="ES" {% if registro and registro.uf == 'ES' %}selected{% endif %}>ES - Espirito Santo</option>
+                                <option value="GO" {% if registro and registro.uf == 'GO' %}selected{% endif %}>GO - Goias</option>
+                                <option value="MA" {% if registro and registro.uf == 'MA' %}selected{% endif %}>MA - Maranhao</option>
+                                <option value="MT" {% if registro and registro.uf == 'MT' %}selected{% endif %}>MT - Mato Grosso</option>
+                                <option value="MS" {% if registro and registro.uf == 'MS' %}selected{% endif %}>MS - Mato Grosso do Sul</option>
+                                <option value="MG" {% if registro and registro.uf == 'MG' %}selected{% endif %}>MG - Minas Gerais</option>
+                                <option value="PA" {% if registro and registro.uf == 'PA' %}selected{% endif %}>PA - Para</option>
+                                <option value="PB" {% if registro and registro.uf == 'PB' %}selected{% endif %}>PB - Paraiba</option>
+                                <option value="PR" {% if registro and registro.uf == 'PR' %}selected{% endif %}>PR - Parana</option>
+                                <option value="PE" {% if registro and registro.uf == 'PE' %}selected{% endif %}>PE - Pernambuco</option>
+                                <option value="PI" {% if registro and registro.uf == 'PI' %}selected{% endif %}>PI - Piaui</option>
+                                <option value="RJ" {% if registro and registro.uf == 'RJ' %}selected{% endif %}>RJ - Rio de Janeiro</option>
+                                <option value="RN" {% if registro and registro.uf == 'RN' %}selected{% endif %}>RN - Rio Grande do Norte</option>
+                                <option value="RS" {% if registro and registro.uf == 'RS' %}selected{% endif %}>RS - Rio Grande do Sul</option>
+                                <option value="RO" {% if registro and registro.uf == 'RO' %}selected{% endif %}>RO - Rondonia</option>
+                                <option value="RR" {% if registro and registro.uf == 'RR' %}selected{% endif %}>RR - Roraima</option>
+                                <option value="SC" {% if registro and registro.uf == 'SC' %}selected{% endif %}>SC - Santa Catarina</option>
+                                <option value="SP" {% if registro and registro.uf == 'SP' %}selected{% endif %}>SP - Sao Paulo</option>
+                                <option value="SE" {% if registro and registro.uf == 'SE' %}selected{% endif %}>SE - Sergipe</option>
+                                <option value="TO" {% if registro and registro.uf == 'TO' %}selected{% endif %}>TO - Tocantins</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="regiao" class="form-label">Regiao *</label>
+                            <select name="regiao" id="regiao" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="SAO PAULO" {% if registro and registro.regiao == 'SAO PAULO' %}selected{% endif %}>SAO PAULO</option>
+                                <option value="SUDESTE/SUL" {% if registro and registro.regiao == 'SUDESTE/SUL' %}selected{% endif %}>SUDESTE/SUL</option>
+                                <option value="ES + CENTRO OESTE" {% if registro and registro.regiao == 'ES + CENTRO OESTE' %}selected{% endif %}>ES + CENTRO OESTE</option>
+                                <option value="NORTE/NORDESTE" {% if registro and registro.regiao == 'NORTE/NORDESTE' %}selected{% endif %}>NORTE/NORDESTE</option>
+                                <option value="NORTE TODOS" {% if registro and registro.regiao == 'NORTE TODOS' %}selected{% endif %}>NORTE TODOS</option>
+                            </select>
+                        </div>
+
+                        {% if registro %}
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="ativo" id="ativo" class="form-check-input"
+                                    {% if registro.ativo %}checked{% endif %}>
+                                <label for="ativo" class="form-check-label">Ativo</label>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> Mapeamento Sugerido por Regiao
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Regiao</th>
+                                <th>Estados</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge bg-primary">SAO PAULO</span></td>
+                                <td>SP</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-info">SUDESTE/SUL</span></td>
+                                <td>RJ, MG, RS, SC, PR</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">ES + CENTRO OESTE</span></td>
+                                <td>ES, GO, MT, MS, DF</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-success">NORTE/NORDESTE</span></td>
+                                <td>BA, SE, AL, PE, PB, RN, CE, PI, MA, PA, AM, AC, RO, RR, AP, TO</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-secondary">NORTE TODOS</span></td>
+                                <td>Todos os estados (tabela unica)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="small text-muted mt-3 mb-0">
+                        <strong>Nota:</strong> Cada rede pode ter seu proprio mapeamento. Configure
+                        de acordo com a negociacao especifica de cada rede.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

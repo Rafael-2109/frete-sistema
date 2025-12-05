@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}Leitura de Pedidos PDF{% endblock %}
+{% block title %}Importador de Pedidos de Redes{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3">
-            <i class="fas fa-file-pdf"></i> Leitura de Pedidos em PDF
+            <i class="fas fa-file-pdf"></i> Importador de Pedidos de Redes
         </h1>
-        <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
+        <div>
+            <a href="{{ url_for('leitura_pedidos.historico') }}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-history"></i> Historico
+            </a>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
     </div>
 
     <!-- Card Principal -->
@@ -28,40 +33,85 @@
                         <div class="mb-3">
                             <label for="fileInput" class="form-label">Selecione o arquivo PDF</label>
                             <input type="file" class="form-control" id="fileInput" name="file" accept=".pdf" required>
-                            <div class="form-text">Formatos suportados: PDF de Proposta de Compra</div>
+                            <div class="form-text">Formatos suportados: Proposta ou Pedido de Compra das redes</div>
                         </div>
-                        
+
                         <div class="mb-3">
-                            <label for="formatoSelect" class="form-label">Formato do Pedido</label>
+                            <label for="formatoSelect" class="form-label">Formato do Documento</label>
                             <select class="form-select" id="formatoSelect" name="formato">
                                 <option value="auto">Detectar Automaticamente</option>
-                                <option value="atacadao">Atacadão - Proposta de Compra</option>
-                                <!-- Adicionar outros formatos no futuro -->
-                                <option value="sendas" disabled>Sendas/Assaí (Em breve)</option>
+                                <option value="atacadao_proposta">Atacadao - Proposta de Compra</option>
+                                <option value="atacadao_pedido">Atacadao - Pedido de Compra</option>
+                                <option value="sendas" disabled>Sendas/Assai (Em breve)</option>
                                 <option value="tenda" disabled>Tenda (Em breve)</option>
                             </select>
                         </div>
-                        
+
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-cog"></i> Processar PDF
                         </button>
                     </form>
                 </div>
             </div>
-            
-            <!-- Área de Resultados -->
+
+            <!-- Card de Identificacao do Documento -->
+            <div id="identificacaoCard" class="card mt-4" style="display: none;">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-id-card"></i> Documento Identificado
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Rede:</strong>
+                            <h4 id="idRede" class="text-primary">-</h4>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Tipo:</strong>
+                            <h4 id="idTipo" class="text-info">-</h4>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Numero:</strong>
+                            <h4 id="idNumero" class="text-secondary">-</h4>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Confianca:</strong>
+                            <h4 id="idConfianca" class="text-success">-</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerta de Itens sem De-Para -->
+            <div id="alertaDepara" class="alert alert-warning mt-4" style="display: none;">
+                <h5><i class="fas fa-exclamation-triangle"></i> Itens sem De-Para</h5>
+                <p>Existem itens que nao possuem mapeamento De-Para. Complete o cadastro antes de inserir no Odoo.</p>
+                <button class="btn btn-warning" onclick="abrirModalDepara()">
+                    <i class="fas fa-link"></i> Cadastrar De-Para
+                </button>
+            </div>
+
+            <!-- Alerta de Divergencia de Precos -->
+            <div id="alertaDivergencia" class="alert alert-danger mt-4" style="display: none;">
+                <h5><i class="fas fa-exclamation-circle"></i> Divergencia de Precos</h5>
+                <p class="mb-0">Foram encontradas divergencias entre os precos do documento e a tabela cadastrada.</p>
+                <p class="mb-0"><small>Informe a justificativa no campo de cada filial divergente antes de inserir no Odoo.</small></p>
+            </div>
+
+            <!-- Area de Resultados -->
             <div id="resultArea" class="mt-4" style="display: none;">
                 <!-- Resumo Geral -->
                 <div class="card mb-3">
                     <div class="card-header bg-success text-white">
                         <h5 class="mb-0">
-                            <i class="fas fa-check-circle"></i> Dados Extraídos com Sucesso
+                            <i class="fas fa-check-circle"></i> Dados Extraidos com Sucesso
                         </h5>
                     </div>
                     <div class="card-body">
                         <div id="summaryArea"></div>
-                        
-                        <!-- Botões de Export -->
+
+                        <!-- Botoes de Acao -->
                         <div class="mt-3">
                             <button id="btnExportExcel" class="btn btn-success" style="display: none;">
                                 <i class="fas fa-file-excel"></i> Exportar Excel
@@ -69,26 +119,43 @@
                             <button id="btnExportCSV" class="btn btn-info ms-2" style="display: none;">
                                 <i class="fas fa-file-csv"></i> Exportar CSV
                             </button>
-                            <button id="btnSaveOdoo" class="btn btn-warning ms-2" disabled>
-                                <i class="fas fa-database"></i> Salvar no Odoo (Em breve)
+                            <button id="btnInserirTodosOdoo" class="btn btn-warning ms-2" style="display: none;">
+                                <i class="fas fa-database"></i> Inserir Todos no Odoo
                             </button>
                         </div>
                     </div>
                 </div>
-                
+
+                <!-- Indicador de Progresso -->
+                <div id="progressArea" class="card mb-3" style="display: none;">
+                    <div class="card-body">
+                        <h6 class="mb-2">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span id="progressText">Inserindo pedidos no Odoo...</span>
+                        </h6>
+                        <div class="progress" style="height: 25px;">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <span id="progressPercent">0%</span>
+                            </div>
+                        </div>
+                        <small id="progressDetail" class="text-muted mt-1 d-block"></small>
+                    </div>
+                </div>
+
                 <!-- Cards de Filiais -->
                 <div id="cardsFiliais"></div>
             </div>
-            
-            <!-- Área de Erros -->
+
+            <!-- Area de Erros -->
             <div id="errorArea" class="mt-4" style="display: none;">
                 <div class="alert alert-danger">
                     <h5><i class="fas fa-exclamation-triangle"></i> Erros ao Processar</h5>
                     <ul id="errorList" class="mb-0"></ul>
                 </div>
             </div>
-            
-            <!-- Área de Avisos -->
+
+            <!-- Area de Avisos -->
             <div id="warningArea" class="mt-4" style="display: none;">
                 <div class="alert alert-warning">
                     <h5><i class="fas fa-info-circle"></i> Avisos</h5>
@@ -96,8 +163,8 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Coluna Lateral - Instruções -->
+
+        <!-- Coluna Lateral - Instrucoes -->
         <div class="col-lg-4">
             <div class="card">
                 <div class="card-header">
@@ -106,91 +173,109 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <h6>Processo de Extração</h6>
+                    <h6>Fluxo do Importador</h6>
                     <ol class="small">
-                        <li>Faça upload do PDF do pedido</li>
-                        <li>O sistema detecta automaticamente o formato</li>
-                        <li>Extrai os dados principais:
-                            <ul>
-                                <li>CNPJ da filial de entrega</li>
-                                <li>Código do produto (sem sufixo)</li>
-                                <li>Quantidade em caixas</li>
-                                <li>Valor unitário</li>
-                            </ul>
-                        </li>
-                        <li>Busca dados do cliente no sistema</li>
-                        <li>Agrupa pedidos por CNPJ</li>
-                        <li>Permite exportar para Excel/CSV</li>
+                        <li><strong>Upload:</strong> Faca upload do PDF</li>
+                        <li><strong>Identificacao:</strong> Sistema detecta rede e tipo</li>
+                        <li><strong>Extracao:</strong> Dados sao extraidos automaticamente</li>
+                        <li><strong>De-Para:</strong> Codigos sao convertidos para Nacom</li>
+                        <li><strong>Validacao:</strong> Precos sao validados contra tabela</li>
+                        <li><strong>Aprovacao:</strong> Divergencias requerem justificativa</li>
+                        <li><strong>Insercao:</strong> Pedido e criado no Odoo</li>
                     </ol>
-                    
-                    <h6 class="mt-3">Formatos Suportados</h6>
+
+                    <h6 class="mt-3">Redes Suportadas</h6>
                     <ul class="small">
-                        <li><strong>Atacadão:</strong> Proposta de Compra (CCPMERM01)</li>
-                        <li class="text-muted">Sendas/Assaí: Em desenvolvimento</li>
+                        <li><strong>Atacadao:</strong> Proposta e Pedido de Compra</li>
+                        <li class="text-muted">Sendas/Assai: Em desenvolvimento</li>
                         <li class="text-muted">Tenda: Em desenvolvimento</li>
                     </ul>
-                    
-                    <h6 class="mt-3">Validações Aplicadas</h6>
+
+                    <h6 class="mt-3">Validacoes Realizadas</h6>
                     <ul class="small">
-                        <li>Mantém formatação original do CNPJ</li>
-                        <li>Busca dados do cliente (UF, Cidade, Nome)</li>
-                        <li>Extrai código base (antes do hífen)</li>
-                        <li>Converte valores para formato numérico</li>
-                        <li>Valida quantidades positivas</li>
-                        <li>Calcula valor total automaticamente</li>
+                        <li>Identificacao automatica da rede</li>
+                        <li>Conversao De-Para de codigos</li>
+                        <li>Validacao de precos vs Tabela de Precos</li>
+                        <li>Verificacao de cliente no Odoo</li>
+                        <li>Verificacao de produtos no Odoo</li>
                     </ul>
                 </div>
             </div>
-            
-            <!-- Card de Exemplo -->
+
+            <!-- Card de Configuracoes -->
             <div class="card mt-3">
-                <div class="card-header">
+                <div class="card-header bg-secondary text-white">
                     <h6 class="mb-0">
-                        <i class="fas fa-file-alt"></i> Exemplo de Dados Extraídos
+                        <i class="fas fa-cog"></i> Configuracoes
                     </h6>
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Campo</th>
-                                    <th>Valor</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>CNPJ Filial</td>
-                                    <td>75.315.333/0183-18</td>
-                                </tr>
-                                <tr>
-                                    <td>Cliente</td>
-                                    <td>Atacadão SA</td>
-                                </tr>
-                                <tr>
-                                    <td>Local</td>
-                                    <td>JACAREI - SP</td>
-                                </tr>
-                                <tr>
-                                    <td>Código</td>
-                                    <td>35642</td>
-                                </tr>
-                                <tr>
-                                    <td>Descrição</td>
-                                    <td>AZEITONA VERDE</td>
-                                </tr>
-                                <tr>
-                                    <td>Qtde</td>
-                                    <td>770</td>
-                                </tr>
-                                <tr>
-                                    <td>Vlr Unit</td>
-                                    <td>199,48</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('leitura_pedidos.tabela_precos') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-dollar-sign"></i> Tabela de Precos
+                        </a>
+                        <a href="{{ url_for('leitura_pedidos.regioes') }}" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-map"></i> Mapeamento UF → Regiao
+                        </a>
                     </div>
+                    <p class="small text-muted mt-2 mb-0">
+                        Configure precos e regioes para validacao automatica dos pedidos.
+                    </p>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal De-Para -->
+<div class="modal fade" id="modalDepara" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="fas fa-link"></i> Cadastrar De-Para
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Itens sem mapeamento De-Para:</p>
+                <table class="table table-sm" id="tabelaDepara">
+                    <thead>
+                        <tr>
+                            <th>Codigo Rede</th>
+                            <th>Descricao</th>
+                            <th>Nosso Codigo</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deparaBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="reprocessarDados()">
+                    <i class="fas fa-sync"></i> Reprocessar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Resultado Odoo -->
+<div class="modal fade" id="modalResultadoOdoo" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" id="modalResultadoHeader">
+                <h5 class="modal-title">
+                    <i class="fas fa-database"></i> Resultado da Insercao
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalResultadoBody">
+                <!-- Resultado sera preenchido dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -199,27 +284,38 @@
 <script>
 $(document).ready(function() {
     let currentSessionKey = null;
-    
+    let currentResponse = null;
+
+    // Configura CSRF token para todas as requisicoes AJAX
+    const csrfToken = '{{ csrf_token() }}';
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", csrfToken);
+            }
+        }
+    });
+
     // Upload e processamento
     $('#uploadForm').on('submit', function(e) {
         e.preventDefault();
-        
+
         const formData = new FormData(this);
         const fileInput = $('#fileInput')[0];
-        
+
         if (!fileInput.files.length) {
             alert('Por favor, selecione um arquivo PDF');
             return;
         }
-        
+
         // Mostra loading
         const submitBtn = $(this).find('button[type="submit"]');
         const originalText = submitBtn.html();
         submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Processando...').prop('disabled', true);
-        
+
         // Limpa resultados anteriores
-        $('#resultArea, #errorArea, #warningArea').hide();
-        
+        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaDivergencia').hide();
+
         $.ajax({
             url: '{{ url_for("leitura_pedidos.upload") }}',
             type: 'POST',
@@ -229,37 +325,23 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     currentSessionKey = response.session_key;
+                    currentResponse = response;
                     showResults(response);
                 } else {
                     showErrors(response.errors || ['Erro ao processar arquivo']);
                 }
             },
             error: function(xhr) {
-                console.error('Erro na requisição:', xhr);
+                console.error('Erro na requisicao:', xhr);
                 const response = xhr.responseJSON || {};
-                
-                // Melhora o tratamento de erros
                 let errorMessages = [];
                 if (response.errors && Array.isArray(response.errors)) {
                     errorMessages = response.errors;
                 } else if (response.error) {
                     errorMessages = [response.error];
-                } else if (xhr.responseText) {
-                    try {
-                        const text = xhr.responseText;
-                        if (text.length < 500) {
-                            errorMessages = ['Erro ao processar: ' + text];
-                        } else {
-                            errorMessages = ['Erro ao processar arquivo. Verifique o console para mais detalhes.'];
-                            console.error('Resposta completa:', text);
-                        }
-                    } catch(e) {
-                        errorMessages = ['Erro ao processar arquivo'];
-                    }
                 } else {
                     errorMessages = ['Erro desconhecido ao processar arquivo'];
                 }
-                
                 showErrors(errorMessages);
             },
             complete: function() {
@@ -267,37 +349,62 @@ $(document).ready(function() {
             }
         });
     });
-    
+
     function showResults(response) {
-        // Valida se response tem os dados necessários
         if (!response || !response.summary) {
-            showErrors(['Resposta inválida do servidor']);
+            showErrors(['Resposta invalida do servidor']);
             return;
         }
-        
+
+        // Mostra identificacao
+        if (response.identificacao) {
+            $('#idRede').text(response.identificacao.rede || '-');
+            $('#idTipo').text(response.identificacao.tipo || '-');
+            $('#idNumero').text(response.identificacao.numero_documento || '-');
+            $('#idConfianca').text((response.identificacao.confianca * 100).toFixed(0) + '%');
+            $('#identificacaoCard').show();
+        }
+
+        // Mostra alerta de De-Para se necessario
+        if (response.itens_sem_depara && response.itens_sem_depara.length > 0) {
+            $('#alertaDepara').show();
+            populateDeParaModal(response.itens_sem_depara, response.identificacao?.rede || 'ATACADAO');
+        }
+
+        // Mostra alerta de divergencia se necessario
+        if (response.tem_divergencia) {
+            $('#alertaDivergencia').show();
+        }
+
         // Mostra resumo geral
         const summary = response.summary;
         let summaryHtml = `
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="text-center">
-                        <h6>Total de Itens</h6>
+                        <h6>Total Itens</h6>
                         <h4 class="text-primary">${summary.total_itens || 0}</h4>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="text-center">
                         <h6>Filiais</h6>
                         <h4 class="text-info">${summary.total_filiais || 0}</h4>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="text-center">
                         <h6>Produtos</h6>
                         <h4 class="text-success">${summary.total_produtos || 0}</h4>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <div class="text-center">
+                        <h6>Sem De-Para</h6>
+                        <h4 class="${(summary.sem_depara || 0) > 0 ? 'text-danger' : 'text-success'}">${summary.sem_depara || 0}</h4>
+                    </div>
+                </div>
+                <div class="col-md-4">
                     <div class="text-center">
                         <h6>Valor Total</h6>
                         <h4 class="text-warning">R$ ${formatMoney(summary.valor_total || 0)}</h4>
@@ -305,112 +412,170 @@ $(document).ready(function() {
                 </div>
             </div>
         `;
-        
+
         $('#summaryArea').html(summaryHtml);
-        
+
         // Cria cards por filial
         const cardsContainer = $('#cardsFiliais');
         cardsContainer.empty();
-        
+
         if (summary.por_filial && summary.por_filial.length > 0) {
             summary.por_filial.forEach(function(filial, index) {
-                // Cria um card para cada filial
-                const cardHtml = createFilialCard(filial, index);
+                const cardHtml = createFilialCard(filial, index, response.validacao_precos);
                 cardsContainer.append(cardHtml);
             });
         }
-        
-        // Mostra área de resultados e botões de export
+
+        // Mostra area de resultados e botoes
         $('#resultArea').show();
         $('#btnExportExcel, #btnExportCSV').show();
-        
+
+        // Mostra botao de inserir todos apenas se pode inserir (sem itens sem De-Para)
+        if (response.pode_inserir) {
+            $('#btnInserirTodosOdoo').show().prop('disabled', false);
+        } else {
+            $('#btnInserirTodosOdoo').show().prop('disabled', true);
+        }
+
         // Mostra avisos se houver
         if (response.warnings && response.warnings.length > 0) {
             showWarnings(response.warnings);
         }
     }
-    
-    function createFilialCard(filial, index) {
-        // Valida dados da filial
-        if (!filial) {
-            return '';
-        }
-        
-        // Determina a cor do card baseado no índice
+
+    function createFilialCard(filial, index, validacao_precos) {
+        if (!filial) return '';
+
         const colors = ['primary', 'success', 'info', 'warning', 'secondary'];
         const color = colors[index % colors.length];
-        
-        // Header do card com informações da filial
+        const cnpjSafe = filial.cnpj.replace(/[^0-9]/g, ''); // Remove pontuacao para usar como ID
+
+        // Verifica divergencia da filial
+        let temDivergenciaFilial = false;
+        let validacoesFilial = [];
+        if (validacao_precos && validacao_precos.por_filial) {
+            const valFilial = validacao_precos.por_filial.find(v => v.cnpj === filial.cnpj);
+            if (valFilial) {
+                temDivergenciaFilial = valFilial.tem_divergencia;
+                validacoesFilial = valFilial.validacoes || [];
+            }
+        }
+
+        // Verifica se pode inserir esta filial
+        const temSemDepara = (filial.sem_depara || 0) > 0;
+        const podeInserir = !temSemDepara;
+
+        let headerClass = `bg-${color}`;
+        if (temDivergenciaFilial) {
+            headerClass = 'bg-danger';
+        } else if (temSemDepara) {
+            headerClass = 'bg-warning';
+        }
+
         let cardHtml = `
-            <div class="card mb-3 border-${color}">
-                <div class="card-header bg-${color} text-white">
+            <div class="card mb-3 border-${color}" id="card-filial-${cnpjSafe}" data-cnpj="${filial.cnpj}" data-tem-divergencia="${temDivergenciaFilial}">
+                <div class="card-header ${headerClass} text-white">
                     <div class="row align-items-center">
-                        <div class="col-md-8">
+                        <div class="col-md-6">
                             <h5 class="mb-0">
-                                <i class="fas fa-building"></i> ${filial.nome_cliente || 'Cliente não identificado'}
+                                <i class="fas fa-building"></i> ${filial.nome_cliente || 'Cliente nao identificado'}
+                                ${temDivergenciaFilial ? '<span class="badge bg-light text-danger ms-2"><i class="fas fa-exclamation-circle"></i> Divergencia</span>' : ''}
+                                ${temSemDepara ? '<span class="badge bg-light text-warning ms-2"><i class="fas fa-link"></i> Sem De-Para</span>' : ''}
                             </h5>
                             <small>
-                                CNPJ: ${filial.cnpj} | 
-                                ${filial.municipio || 'Cidade não identificada'} - ${filial.estado || 'UF'}
+                                CNPJ: ${filial.cnpj} |
+                                ${filial.municipio || 'Cidade nao identificada'} - ${filial.estado || 'UF'}
                             </small>
                         </div>
-                        <div class="col-md-4 text-end">
+                        <div class="col-md-3 text-end">
                             <div>
                                 <strong>${filial.itens || 0}</strong> itens<br>
                                 <strong>R$ ${formatMoney(filial.valor || 0)}</strong>
                             </div>
                         </div>
+                        <div class="col-md-3 text-end">
+                            <button class="btn btn-sm ${podeInserir ? 'btn-light' : 'btn-secondary'} btn-inserir-filial"
+                                data-cnpj="${filial.cnpj}"
+                                data-nome="${filial.nome_cliente || ''}"
+                                data-tem-divergencia="${temDivergenciaFilial}"
+                                ${!podeInserir ? 'disabled title="Complete o De-Para primeiro"' : ''}>
+                                <i class="fas fa-database"></i> Inserir Odoo
+                            </button>
+                            <span id="status-filial-${cnpjSafe}" class="ms-2" style="display: none;"></span>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body">
                     <p class="text-muted mb-2">
-                        <i class="fas fa-map-marker-alt"></i> Local de Entrega: <strong>${filial.local || 'Não especificado'}</strong>
+                        <i class="fas fa-map-marker-alt"></i> Local de Entrega: <strong>${filial.local || 'Nao especificado'}</strong>
                     </p>
-                    
-                    <!-- Tabela de produtos -->
+        `;
+
+        // Campo de justificativa se tiver divergencia
+        if (temDivergenciaFilial) {
+            cardHtml += `
+                    <div class="alert alert-danger py-2 mb-2">
+                        <small><i class="fas fa-exclamation-circle"></i> Esta filial possui divergencia de precos. Informe a justificativa para aprovar:</small>
+                        <textarea class="form-control form-control-sm mt-1 justificativa-filial"
+                            id="justificativa-${cnpjSafe}"
+                            data-cnpj="${filial.cnpj}"
+                            rows="2"
+                            placeholder="Justificativa obrigatoria..."></textarea>
+                    </div>
+            `;
+        }
+
+        cardHtml += `
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
                                 <tr>
-                                    <th>Cód. Atacadão</th>
-                                    <th>Nosso Código</th>
-                                    <th>Descrição</th>
+                                    <th>Cod. Rede</th>
+                                    <th>Nosso Cod.</th>
+                                    <th>Descricao</th>
                                     <th class="text-end">Qtde</th>
-                                    <th class="text-end">Vlr Unit</th>
-                                    <th class="text-end">Vlr Total</th>
+                                    <th class="text-end">Vlr Doc</th>
+                                    <th class="text-end">Vlr Tabela</th>
+                                    <th class="text-end">Dif %</th>
                                 </tr>
                             </thead>
                             <tbody>
         `;
-        
-        // Adiciona produtos da filial
+
         if (filial.produtos && filial.produtos.length > 0) {
             filial.produtos.forEach(function(produto) {
+                // Busca validacao do produto
+                const validacao = validacoesFilial.find(v => v.codigo === produto.nosso_codigo);
+                const divergente = validacao?.divergente || false;
+                const precoTabela = validacao?.preco_tabela;
+                const difPercentual = validacao?.diferenca_percentual || 0;
+
                 const nossoCodigoClass = produto.nosso_codigo ? '' : 'text-danger';
                 const nossoCodigoText = produto.nosso_codigo || '<i class="fas fa-exclamation-triangle"></i> Sem De-Para';
-                
+
+                const rowClass = divergente ? 'table-danger' : (produto.nosso_codigo ? '' : 'table-warning');
+
                 cardHtml += `
-                    <tr>
+                    <tr class="${rowClass}">
                         <td><span class="badge bg-secondary">${produto.codigo || ''}</span></td>
                         <td class="${nossoCodigoClass}"><strong>${nossoCodigoText}</strong></td>
                         <td>${produto.descricao || ''}</td>
                         <td class="text-end">${produto.quantidade || 0}</td>
                         <td class="text-end">R$ ${formatMoney(produto.valor_unitario || 0)}</td>
-                        <td class="text-end">R$ ${formatMoney(produto.valor_total || 0)}</td>
+                        <td class="text-end">${precoTabela !== null && precoTabela !== undefined ? 'R$ ' + formatMoney(precoTabela) : '-'}</td>
+                        <td class="text-end ${divergente ? 'text-danger fw-bold' : ''}">${precoTabela !== null && precoTabela !== undefined ? (difPercentual > 0 ? '+' : '') + difPercentual.toFixed(2) + '%' : '-'}</td>
                     </tr>
                 `;
             });
         }
-        
-        // Footer do card com totais
+
         cardHtml += `
                             </tbody>
                             <tfoot class="table-light">
                                 <tr>
                                     <th colspan="3">Total</th>
                                     <th class="text-end">${filial.quantidade || 0}</th>
-                                    <th></th>
-                                    <th class="text-end">R$ ${formatMoney(filial.valor || 0)}</th>
+                                    <th class="text-end" colspan="3">R$ ${formatMoney(filial.valor || 0)}</th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -418,46 +583,484 @@ $(document).ready(function() {
                 </div>
             </div>
         `;
-        
+
         return cardHtml;
     }
-    
+
+    function populateDeParaModal(itens, rede) {
+        const tbody = $('#deparaBody');
+        tbody.empty();
+
+        itens.forEach(function(item, index) {
+            tbody.append(`
+                <tr>
+                    <td>
+                        <strong>${item.codigo_rede}</strong>
+                    </td>
+                    <td>${item.descricao || '-'}</td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm nosso-codigo-input"
+                            id="nosso_codigo_${index}" data-codigo-rede="${item.codigo_rede}"
+                            data-descricao="${item.descricao}" data-rede="${rede}"
+                            placeholder="Digite nosso codigo">
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-success btn-salvar-depara" data-index="${index}">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <button class="btn btn-sm btn-info btn-validar-odoo" data-index="${index}">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+
+        // Evento para salvar De-Para
+        $('.btn-salvar-depara').off('click').on('click', function() {
+            const index = $(this).data('index');
+            const input = $(`#nosso_codigo_${index}`);
+            const codigoNosso = input.val().trim();
+            const codigoRede = input.data('codigo-rede');
+            const descricao = input.data('descricao');
+            const rede = input.data('rede');
+
+            if (!codigoNosso) {
+                alert('Digite nosso codigo');
+                return;
+            }
+
+            salvarDepara(codigoRede, codigoNosso, descricao, rede, $(this));
+        });
+
+        // Evento para validar no Odoo
+        $('.btn-validar-odoo').off('click').on('click', function() {
+            const index = $(this).data('index');
+            const input = $(`#nosso_codigo_${index}`);
+            const codigo = input.val().trim();
+
+            if (!codigo) {
+                alert('Digite nosso codigo para validar');
+                return;
+            }
+
+            validarProdutoOdoo(codigo, $(this));
+        });
+    }
+
+    function salvarDepara(codigoRede, codigoNosso, descricao, rede, btn) {
+        const originalHtml = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.criar_depara") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                codigo_rede: codigoRede,
+                codigo_nosso: codigoNosso,
+                descricao_rede: descricao,
+                rede: rede
+            }),
+            success: function(response) {
+                if (response.success) {
+                    btn.html('<i class="fas fa-check"></i>').removeClass('btn-success').addClass('btn-secondary');
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success('De-Para salvo com sucesso!');
+                    } else {
+                        alert('De-Para salvo com sucesso!');
+                    }
+                } else {
+                    btn.html(originalHtml).prop('disabled', false);
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(response.error || 'Erro ao salvar De-Para');
+                    } else {
+                        alert(response.error || 'Erro ao salvar De-Para');
+                    }
+                }
+            },
+            error: function(xhr) {
+                btn.html(originalHtml).prop('disabled', false);
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Erro ao salvar De-Para');
+                } else {
+                    alert('Erro ao salvar De-Para');
+                }
+            }
+        });
+    }
+
+    function validarProdutoOdoo(codigo, btn) {
+        const originalHtml = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.validar_produto_odoo") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ codigo: codigo }),
+            success: function(response) {
+                btn.html(originalHtml).prop('disabled', false);
+                if (response.existe) {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(`Produto ${codigo} encontrado no Odoo (ID: ${response.product_id})`);
+                    } else {
+                        alert(`Produto ${codigo} encontrado no Odoo (ID: ${response.product_id})`);
+                    }
+                } else {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.warning(`Produto ${codigo} NAO encontrado no Odoo`);
+                    } else {
+                        alert(`Produto ${codigo} NAO encontrado no Odoo`);
+                    }
+                }
+            },
+            error: function(xhr) {
+                btn.html(originalHtml).prop('disabled', false);
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Erro ao validar produto');
+                } else {
+                    alert('Erro ao validar produto');
+                }
+            }
+        });
+    }
+
+    window.abrirModalDepara = function() {
+        $('#modalDepara').modal('show');
+    };
+
+    window.reprocessarDados = function() {
+        if (!currentSessionKey) return;
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.reprocessar") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ session_key: currentSessionKey }),
+            success: function(response) {
+                if (response.success) {
+                    currentResponse.summary = response.summary;
+                    currentResponse.itens_sem_depara = response.itens_sem_depara;
+                    currentResponse.pode_inserir = response.pode_inserir;
+
+                    // Atualiza interface
+                    if (response.itens_sem_depara.length === 0) {
+                        $('#alertaDepara').hide();
+                        $('#btnInserirOdoo').prop('disabled', false);
+                        $('#modalDepara').modal('hide');
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success('Todos os itens agora possuem De-Para!');
+                        } else {
+                            alert('Todos os itens agora possuem De-Para!');
+                        }
+                    } else {
+                        populateDeParaModal(response.itens_sem_depara, currentResponse.identificacao?.rede || 'ATACADAO');
+                        if (typeof toastr !== 'undefined') {
+                            toastr.info(`Ainda restam ${response.itens_sem_depara.length} itens sem De-Para`);
+                        }
+                    }
+
+                    // Atualiza cards
+                    showResults(currentResponse);
+                }
+            },
+            error: function() {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Erro ao reprocessar dados');
+                } else {
+                    alert('Erro ao reprocessar dados');
+                }
+            }
+        });
+    };
+
+    // Evento para botoes de inserir filial individual (delegado)
+    $(document).on('click', '.btn-inserir-filial', function() {
+        if (!currentSessionKey) return;
+
+        const btn = $(this);
+        const cnpj = btn.data('cnpj');
+        const nome = btn.data('nome');
+        const temDivergencia = btn.data('tem-divergencia') === true || btn.data('tem-divergencia') === 'true';
+        const cnpjSafe = cnpj.replace(/[^0-9]/g, '');
+
+        // Verifica justificativa para filiais com divergencia
+        let justificativa = '';
+        if (temDivergencia) {
+            justificativa = $(`#justificativa-${cnpjSafe}`).val() || '';
+            if (!justificativa.trim()) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Informe a justificativa para aprovar esta filial com divergencia');
+                } else {
+                    alert('Informe a justificativa para aprovar esta filial com divergencia');
+                }
+                $(`#justificativa-${cnpjSafe}`).focus();
+                return;
+            }
+        }
+
+        const originalHtml = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+
+        // Prepara justificativas por filial
+        const justificativasPorFilial = {};
+        if (justificativa) {
+            justificativasPorFilial[cnpj] = justificativa;
+        }
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.inserir_odoo") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_key: currentSessionKey,
+                cnpj_filial: cnpj,
+                justificativas_por_filial: justificativasPorFilial
+            }),
+            success: function(response) {
+                const resultado = response.resultados && response.resultados[0];
+                if (resultado && resultado.sucesso) {
+                    btn.html('<i class="fas fa-check"></i> Inserido').removeClass('btn-light').addClass('btn-success').prop('disabled', true);
+                    $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-success">${resultado.order_name}</span>`).show();
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(`Pedido ${resultado.order_name} criado para ${nome}`);
+                    }
+                } else {
+                    btn.html(originalHtml).prop('disabled', false);
+                    const erro = resultado?.mensagem || response.error || 'Erro ao inserir';
+                    $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(erro);
+                    } else {
+                        alert(erro);
+                    }
+                }
+            },
+            error: function(xhr) {
+                btn.html(originalHtml).prop('disabled', false);
+                const resp = xhr.responseJSON || {};
+                $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(resp.error || 'Erro ao inserir no Odoo');
+                } else {
+                    alert(resp.error || 'Erro ao inserir no Odoo');
+                }
+            }
+        });
+    });
+
+    // Inserir TODOS no Odoo (com progresso)
+    $('#btnInserirTodosOdoo').on('click', function() {
+        if (!currentSessionKey) return;
+        if (!currentResponse || !currentResponse.summary || !currentResponse.summary.por_filial) return;
+
+        const filiais = currentResponse.summary.por_filial;
+        const filiaisParaInserir = filiais.filter(f => (f.sem_depara || 0) === 0);
+
+        if (filiaisParaInserir.length === 0) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Nenhuma filial disponivel para inserir');
+            } else {
+                alert('Nenhuma filial disponivel para inserir');
+            }
+            return;
+        }
+
+        // Coleta justificativas por filial
+        const justificativasPorFilial = {};
+        let faltaJustificativa = false;
+
+        filiaisParaInserir.forEach(function(filial) {
+            const cnpjSafe = filial.cnpj.replace(/[^0-9]/g, '');
+            const $textarea = $(`#justificativa-${cnpjSafe}`);
+            if ($textarea.length > 0) {
+                const justificativa = $textarea.val() || '';
+                if (!justificativa.trim()) {
+                    faltaJustificativa = true;
+                    $textarea.addClass('is-invalid');
+                } else {
+                    justificativasPorFilial[filial.cnpj] = justificativa;
+                    $textarea.removeClass('is-invalid');
+                }
+            }
+        });
+
+        if (faltaJustificativa) {
+            if (typeof toastr !== 'undefined') {
+                toastr.error('Preencha todas as justificativas para filiais com divergencia');
+            } else {
+                alert('Preencha todas as justificativas para filiais com divergencia');
+            }
+            return;
+        }
+
+        // Mostra progresso
+        const btn = $(this);
+        const originalHtml = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Inserindo...').prop('disabled', true);
+
+        $('#progressArea').show();
+        $('#progressBar').css('width', '0%');
+        $('#progressPercent').text('0%');
+        $('#progressText').text('Iniciando insercao...');
+
+        // Insere filiais uma a uma para mostrar progresso
+        inserirFiliaisSequencialmente(filiaisParaInserir, justificativasPorFilial, 0, [], function(resultados) {
+            btn.html(originalHtml).prop('disabled', false);
+            $('#progressArea').hide();
+            showResultadoOdoo({
+                success: resultados.some(r => r.sucesso),
+                todos_sucesso: resultados.every(r => r.sucesso),
+                resultados: resultados
+            });
+        });
+    });
+
+    function inserirFiliaisSequencialmente(filiais, justificativas, index, resultados, callback) {
+        if (index >= filiais.length) {
+            callback(resultados);
+            return;
+        }
+
+        const filial = filiais[index];
+        const cnpj = filial.cnpj;
+        const cnpjSafe = cnpj.replace(/[^0-9]/g, '');
+        const total = filiais.length;
+        const atual = index + 1;
+        const percent = Math.round((atual / total) * 100);
+
+        // Atualiza progresso
+        $('#progressBar').css('width', percent + '%');
+        $('#progressPercent').text(percent + '%');
+        $('#progressText').text(`Inserindo filial ${atual} de ${total}...`);
+        $('#progressDetail').text(`${filial.nome_cliente || 'Cliente'} - ${cnpj}`);
+
+        // Marca botao como processando
+        const btn = $(`.btn-inserir-filial[data-cnpj="${cnpj}"]`);
+        btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+
+        const justificativasPorFilial = {};
+        if (justificativas[cnpj]) {
+            justificativasPorFilial[cnpj] = justificativas[cnpj];
+        }
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.inserir_odoo") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_key: currentSessionKey,
+                cnpj_filial: cnpj,
+                justificativas_por_filial: justificativasPorFilial
+            }),
+            success: function(response) {
+                const resultado = response.resultados && response.resultados[0];
+                if (resultado) {
+                    resultados.push(resultado);
+                    if (resultado.sucesso) {
+                        btn.html('<i class="fas fa-check"></i>').removeClass('btn-light').addClass('btn-success');
+                        $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-success">${resultado.order_name}</span>`).show();
+                    } else {
+                        btn.html('<i class="fas fa-times"></i>').removeClass('btn-light').addClass('btn-danger');
+                        $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
+                    }
+                }
+                // Proximo
+                setTimeout(function() {
+                    inserirFiliaisSequencialmente(filiais, justificativas, index + 1, resultados, callback);
+                }, 300);
+            },
+            error: function(xhr) {
+                const resp = xhr.responseJSON || {};
+                resultados.push({
+                    cnpj: cnpj,
+                    nome_cliente: filial.nome_cliente,
+                    sucesso: false,
+                    mensagem: resp.error || 'Erro de conexao'
+                });
+                btn.html('<i class="fas fa-times"></i>').removeClass('btn-light').addClass('btn-danger');
+                $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
+
+                // Proximo
+                setTimeout(function() {
+                    inserirFiliaisSequencialmente(filiais, justificativas, index + 1, resultados, callback);
+                }, 300);
+            }
+        });
+    }
+
+    function showResultadoOdoo(response) {
+        const modal = $('#modalResultadoOdoo');
+        const header = $('#modalResultadoHeader');
+        const body = $('#modalResultadoBody');
+
+        if (response.todos_sucesso) {
+            header.removeClass('bg-danger bg-warning').addClass('bg-success text-white');
+        } else if (response.success) {
+            header.removeClass('bg-danger bg-success').addClass('bg-warning');
+        } else {
+            header.removeClass('bg-success bg-warning').addClass('bg-danger text-white');
+        }
+
+        let html = '<table class="table table-sm"><thead><tr><th>Cliente</th><th>Resultado</th><th>Pedido</th></tr></thead><tbody>';
+
+        response.resultados.forEach(function(r) {
+            const statusClass = r.sucesso ? 'table-success' : 'table-danger';
+            html += `
+                <tr class="${statusClass}">
+                    <td>
+                        <strong>${r.nome_cliente || 'N/A'}</strong><br>
+                        <small>${r.cnpj}</small>
+                    </td>
+                    <td>
+                        ${r.sucesso ? '<i class="fas fa-check text-success"></i> Sucesso' : '<i class="fas fa-times text-danger"></i> Erro'}
+                        <br><small>${r.mensagem}</small>
+                    </td>
+                    <td>
+                        ${r.order_name ? `<strong>${r.order_name}</strong><br><small>ID: ${r.order_id}</small>` : '-'}
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        body.html(html);
+        modal.modal('show');
+    }
+
     function showErrors(errors) {
         const errorList = $('#errorList');
         errorList.empty();
-        
         errors.forEach(function(error) {
             errorList.append(`<li>${error}</li>`);
         });
-        
         $('#errorArea').show();
     }
-    
+
     function showWarnings(warnings) {
         const warningList = $('#warningList');
         warningList.empty();
-        
         warnings.forEach(function(warning) {
             warningList.append(`<li>${warning}</li>`);
         });
-        
         $('#warningArea').show();
     }
-    
+
     function formatMoney(value) {
         return new Intl.NumberFormat('pt-BR', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(value);
     }
-    
+
     // Export Excel
     $('#btnExportExcel').on('click', function() {
         if (currentSessionKey) {
             window.location.href = `{{ url_for("leitura_pedidos.export", format="excel", session_key="") }}${currentSessionKey}`;
         }
     });
-    
+
     // Export CSV
     $('#btnExportCSV').on('click', function() {
         if (currentSessionKey) {

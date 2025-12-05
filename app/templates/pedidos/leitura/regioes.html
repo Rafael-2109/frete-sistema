@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Mapeamento UF para Regiao{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-map"></i> Mapeamento UF → Regiao
+        </h1>
+        <div>
+            <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('leitura_pedidos.tabela_precos') }}" class="btn btn-info me-2">
+                <i class="fas fa-dollar-sign"></i> Precos
+            </a>
+            <a href="{{ url_for('leitura_pedidos.regioes_criar') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Novo Mapeamento
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros e Importacao -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <form method="GET" class="row g-2">
+                        <div class="col-md-6">
+                            <select name="rede" class="form-select form-select-sm">
+                                <option value="">Todas as Redes</option>
+                                {% for r in redes %}
+                                <option value="{{ r }}" {% if r == rede_filtro %}selected{% endif %}>{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{{ url_for('leitura_pedidos.regioes') }}" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+                <div class="col-md-6 text-end">
+                    <form method="POST" action="{{ url_for('leitura_pedidos.regioes_importar') }}"
+                        enctype="multipart/form-data" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="file" name="file" accept=".xlsx,.xls" class="d-none" id="xlsxFileRegioes"
+                            onchange="this.form.submit()">
+                        <button type="button" class="btn btn-sm btn-success" onclick="document.getElementById('xlsxFileRegioes').click()">
+                            <i class="fas fa-file-excel"></i> Importar Excel
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-header">
+            <strong>{{ registros.total }}</strong> mapeamentos encontrados
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Rede</th>
+                            <th>UF</th>
+                            <th>Regiao</th>
+                            <th>Status</th>
+                            <th>Criado em</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in registros.items %}
+                        <tr>
+                            <td><span class="badge bg-primary">{{ r.rede }}</span></td>
+                            <td><strong>{{ r.uf }}</strong></td>
+                            <td><span class="badge bg-info">{{ r.regiao }}</span></td>
+                            <td>
+                                {% if r.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ r.criado_em.strftime('%d/%m/%Y') }}</small>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('leitura_pedidos.regioes_editar', id=r.id) }}"
+                                        class="btn btn-outline-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('leitura_pedidos.regioes_excluir', id=r.id) }}"
+                                        style="display: inline;" onsubmit="return confirm('Confirma exclusao?')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-outline-danger" title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                Nenhum mapeamento encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Paginacao -->
+        {% if registros.pages > 1 %}
+        <div class="card-footer">
+            <nav>
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                    {% if registros.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('leitura_pedidos.regioes', page=registros.prev_num, rede=rede_filtro) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for p in registros.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                        {% if p %}
+                            {% if p == registros.page %}
+                            <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('leitura_pedidos.regioes', page=p, rede=rede_filtro) }}">{{ p }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if registros.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('leitura_pedidos.regioes', page=registros.next_num, rede=rede_filtro) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Info Excel e Explicacao -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> Formato do Excel para Importacao
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">O arquivo Excel deve ter as seguintes colunas:</p>
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>rede</th>
+                                <th>uf</th>
+                                <th>regiao</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>ATACADAO</td><td>SP</td><td>SAO PAULO</td></tr>
+                            <tr><td>ATACADAO</td><td>RJ</td><td>SUDESTE/SUL</td></tr>
+                            <tr><td>ATACADAO</td><td>MG</td><td>SUDESTE/SUL</td></tr>
+                            <tr><td>ATACADAO</td><td>ES</td><td>ES + CENTRO OESTE</td></tr>
+                            <tr><td>ATACADAO</td><td>BA</td><td>NORTE/NORDESTE</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-question-circle"></i> Como Funciona
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">
+                        O mapeamento UF → Regiao permite que voce defina precos por regiao ao inves de
+                        por estado individual. Quando um pedido e processado:
+                    </p>
+                    <ol class="small text-muted">
+                        <li>O sistema identifica a UF do cliente (ex: SP)</li>
+                        <li>Busca nesta tabela a regiao correspondente (ex: SUDESTE)</li>
+                        <li>Usa a regiao para buscar o preco na Tabela de Precos</li>
+                    </ol>
+                    <p class="small text-muted mb-0">
+                        <strong>Importante:</strong> Cada rede pode ter seu proprio mapeamento de regioes.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
