@@ -767,6 +767,10 @@
                         data-row-index="${index}" title="Adicionar +1 dia útil">
                         D1
                     </button>
+                    <button type="button" class="btn btn-info btn-sm-custom btn-d1-all"
+                        data-row-index="${index}" title="Adicionar +1 dia útil em todo o pedido">
+                        D1»
+                    </button>
                 </td>
 
                 <td>
@@ -937,6 +941,10 @@
                     <button type="button" class="btn btn-warning btn-sm-custom btn-d1"
                         data-row-index="${index}" title="Adicionar +1 dia útil">
                         D1
+                    </button>
+                    <button type="button" class="btn btn-info btn-sm-custom btn-d1-all"
+                        data-row-index="${index}" title="Adicionar +1 dia útil em todo o pedido">
+                        D1»
                     </button>
                 </td>
 
@@ -1205,6 +1213,12 @@
         else if (target.classList.contains('btn-d1')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             adicionarDiaUtil(rowIndex);
+        }
+
+        // Botão D1» (D1 para todo o pedido)
+        else if (target.classList.contains('btn-d1-all')) {
+            const rowIndex = parseInt(target.dataset.rowIndex);
+            adicionarDiaUtilTodos(rowIndex);
         }
 
         // Botão confirmar
@@ -1626,6 +1640,55 @@
 
         // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
         recalcularTodasLinhasProduto(item.cod_produto);
+    }
+
+    // ✅ FUNÇÃO PARA ADICIONAR D+1 EM TODAS AS LINHAS DO PEDIDO (D1»)
+    async function adicionarDiaUtilTodos(rowIndex) {
+        const item = state.dados[rowIndex];
+        const numPedido = item.num_pedido;
+
+        // Coletar todos os produtos únicos afetados
+        const produtosAfetados = new Set();
+
+        // Calcular a nova data (D+1) baseada na data atual ou hoje
+        const inputIdBase = item.tipo === 'separacao' ? `dt-exped-sep-${rowIndex}` : `dt-exped-${rowIndex}`;
+        const inputDataBase = document.getElementById(inputIdBase);
+        const dataAtual = inputDataBase && inputDataBase.value ? new Date(inputDataBase.value + 'T00:00:00') : new Date();
+
+        // Adicionar 1 dia
+        dataAtual.setDate(dataAtual.getDate() + 1);
+
+        // Se cair no fim de semana, avançar para segunda
+        const diaSemana = dataAtual.getDay();
+        if (diaSemana === 0) { // Domingo
+            dataAtual.setDate(dataAtual.getDate() + 1);
+        } else if (diaSemana === 6) { // Sábado
+            dataAtual.setDate(dataAtual.getDate() + 2);
+        }
+
+        const novaData = dataAtual.toISOString().split('T')[0];
+
+        // Encontrar todos os itens do mesmo pedido e aplicar a data
+        for (const [idx, d] of state.dados.entries()) {
+            if (d.num_pedido === numPedido) {
+                const inputId = d.tipo === 'separacao' ? `dt-exped-sep-${idx}` : `dt-exped-${idx}`;
+                const inputData = document.getElementById(inputId);
+                if (inputData) {
+                    inputData.value = novaData;
+                    produtosAfetados.add(d.cod_produto);
+
+                    // Se for separação, atualizar no backend também
+                    if (d.tipo === 'separacao' && d.separacao_lote_id) {
+                        await atualizarCampoSeparacaoLote(d.separacao_lote_id, 'expedicao', novaData);
+                    }
+                }
+            }
+        }
+
+        // Recalcular estoques para cada produto afetado
+        produtosAfetados.forEach(codProduto => {
+            recalcularTodasLinhasProduto(codProduto);
+        });
     }
 
     // ✅ FUNÇÃO GENÉRICA PARA ATUALIZAR QUALQUER CAMPO DE UM LOTE DE SEPARAÇÃO

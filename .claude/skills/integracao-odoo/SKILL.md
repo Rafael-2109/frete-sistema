@@ -1,6 +1,6 @@
 ---
 name: integracao-odoo
-description: "[DESENVOLVIMENTO] Skill para CRIAR novas integracoes com Odoo. Cobre lancamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas. Use quando precisar IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS use a skill consultando-odoo."
+description: "Skill para CRIAR novas integracoes com Odoo. Cobre lancamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas. Use quando precisar IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS use a skill consultando-odoo."
 ---
 
 # Integracao Odoo - Sistema de Fretes
