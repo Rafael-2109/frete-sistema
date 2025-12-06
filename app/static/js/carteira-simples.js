@@ -684,7 +684,13 @@
                 data-qtd-saldo="${item.qtd_saldo}">
 
                 <!-- Dados básicos -->
-                <td>${item.num_pedido}</td>
+                <td>
+                    <span class="num-pedido-standby" data-num-pedido="${item.num_pedido}"
+                          style="cursor: pointer; text-decoration: underline; color: #0d6efd;"
+                          title="Clique para enviar para standby">
+                        ${item.num_pedido}
+                    </span>
+                </td>
                 <td>${item.pedido_cliente || ''}</td>
                 <td>${item.data_pedido ? new Date(item.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
                 <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
@@ -857,7 +863,13 @@
                 data-qtd-saldo="${item.qtd_saldo}">
 
                 <!-- Dados básicos -->
-                <td>${item.num_pedido}</td>
+                <td>
+                    <span class="num-pedido-standby" data-num-pedido="${item.num_pedido}"
+                          style="cursor: pointer; text-decoration: underline; color: #0d6efd;"
+                          title="Clique para enviar para standby">
+                        ${item.num_pedido}
+                    </span>
+                </td>
                 <td>${item.pedido_cliente || ''}</td>
                 <td>${item.data_pedido ? new Date(item.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
                 <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
@@ -1174,6 +1186,15 @@
             const codProduto = target.dataset.codProduto;
             if (codProduto) {
                 rastrearProduto(codProduto);
+                return;
+            }
+        }
+
+        // 🆕 FUNCIONALIDADE 3: Clique em número do pedido → Enviar para standby
+        if (target.classList.contains('num-pedido-standby')) {
+            const numPedido = target.dataset.numPedido;
+            if (numPedido) {
+                abrirModalStandby(numPedido);
                 return;
             }
         }
@@ -2950,6 +2971,80 @@
         header.className = `modal-header bg-${tipo} text-white`;
 
         bsModal.show();
+    }
+
+    // ==============================================
+    // FUNÇÕES DE STANDBY
+    // ==============================================
+
+    /**
+     * Abre o modal de seleção de tipo de standby
+     * @param {string} numPedido - Número do pedido a enviar para standby
+     */
+    function abrirModalStandby(numPedido) {
+        const modal = document.getElementById('modalStandby');
+        const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+
+        // Preencher número do pedido no modal
+        document.getElementById('modalStandbyPedido').textContent = numPedido;
+
+        // Configurar event listeners para os botões de tipo
+        const botoesTipo = modal.querySelectorAll('.btn-standby-tipo');
+        botoesTipo.forEach(btn => {
+            // Remover listeners anteriores
+            const novoBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(novoBtn, btn);
+
+            // Adicionar novo listener
+            novoBtn.addEventListener('click', async () => {
+                const tipoStandby = novoBtn.dataset.tipo;
+                await enviarParaStandby(numPedido, tipoStandby);
+                bsModal.hide();
+            });
+        });
+
+        bsModal.show();
+    }
+
+    /**
+     * Envia um pedido para standby via API
+     * @param {string} numPedido - Número do pedido
+     * @param {string} tipoStandby - Tipo de standby (Saldo, Aguardar Comercial, Aguardar PCP)
+     */
+    async function enviarParaStandby(numPedido, tipoStandby) {
+        try {
+            // Mostrar loading
+            const modalLoading = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalLoading'));
+            modalLoading.show();
+
+            const response = await fetch('/carteira/api/standby/criar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    num_pedido: numPedido,
+                    tipo_standby: tipoStandby
+                })
+            });
+
+            const resultado = await response.json();
+            modalLoading.hide();
+
+            if (resultado.success) {
+                mostrarToast('Sucesso', `Pedido ${numPedido} enviado para standby (${tipoStandby})`, 'success');
+                // Recarregar dados para remover o pedido da lista
+                await carregarDados();
+            } else {
+                mostrarMensagem('Erro', resultado.message || 'Erro ao enviar para standby', 'danger');
+            }
+
+        } catch (erro) {
+            console.error('Erro ao enviar para standby:', erro);
+            const modalLoading = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalLoading'));
+            modalLoading.hide();
+            mostrarMensagem('Erro', `Erro ao enviar para standby: ${erro.message}`, 'danger');
+        }
     }
 
     /**

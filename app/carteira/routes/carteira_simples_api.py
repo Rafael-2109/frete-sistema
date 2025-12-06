@@ -9,7 +9,7 @@ from sqlalchemy import and_, func
 import logging
 
 from app import db
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
@@ -217,6 +217,11 @@ def obter_dados():
         offset = int(request.args.get('offset', 0))
 
         # 🔧 CORREÇÃO: Query base com JOINs para Rota e Sub-rota
+        # 🆕 SUBQUERY: Buscar pedidos em standby ativo para EXCLUIR
+        pedidos_em_standby = db.session.query(SaldoStandby.num_pedido).filter(
+            SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+        ).distinct().subquery()
+
         query = db.session.query(CarteiraPrincipal).outerjoin(
             CadastroRota,
             CarteiraPrincipal.estado == CadastroRota.cod_uf
@@ -228,7 +233,8 @@ def obter_dados():
             )
         ).filter(
             CarteiraPrincipal.ativo == True,
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+            ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)  # 🆕 EXCLUIR STANDBY
         )
 
         # Aplicar filtros
