@@ -528,13 +528,39 @@ AUTH_PAGE_TEMPLATE = """
 @login_required
 def index():
     """Página principal de autorização OAuth2"""
-    # Verifica tokens na sessão
-    tokens_clientes = session.get('tagplus_clientes_access_token')
-    tokens_notas = session.get('tagplus_notas_access_token')
+    from app.integracoes.tagplus.models import TagPlusOAuthToken
 
-    # Mostra o token completo (removido limite ridículo)
-    tokens_clientes_display = tokens_clientes if tokens_clientes else None
-    tokens_notas_display = tokens_notas if tokens_notas else None
+    # ✅ CORRIGIDO: Verifica PRIMEIRO no banco de dados, depois session como fallback
+    tokens_clientes = None
+    tokens_notas = None
+    tokens_clientes_display = None
+    tokens_notas_display = None
+
+    # Busca token de clientes no banco
+    token_clientes_db = TagPlusOAuthToken.query.filter_by(api_type='clientes', ativo=True).first()
+    if token_clientes_db and token_clientes_db.access_token:
+        tokens_clientes = token_clientes_db.access_token
+        tokens_clientes_display = f"{tokens_clientes[:30]}... (banco)"
+        # Sincroniza com session (cache)
+        session['tagplus_clientes_access_token'] = tokens_clientes
+    else:
+        # Fallback: session
+        tokens_clientes = session.get('tagplus_clientes_access_token')
+        if tokens_clientes:
+            tokens_clientes_display = f"{tokens_clientes[:30]}... (session)"
+
+    # Busca token de notas no banco
+    token_notas_db = TagPlusOAuthToken.query.filter_by(api_type='notas', ativo=True).first()
+    if token_notas_db and token_notas_db.access_token:
+        tokens_notas = token_notas_db.access_token
+        tokens_notas_display = f"{tokens_notas[:30]}... (banco)"
+        # Sincroniza com session (cache)
+        session['tagplus_notas_access_token'] = tokens_notas
+    else:
+        # Fallback: session
+        tokens_notas = session.get('tagplus_notas_access_token')
+        if tokens_notas:
+            tokens_notas_display = f"{tokens_notas[:30]}... (session)"
 
     status = request.args.get('status')
     status_type = request.args.get('status_type', 'success')
@@ -647,8 +673,10 @@ def test_connection(api_type):
 @oauth_bp.route('/set-tokens', methods=['POST'])
 @login_required
 def set_tokens_manual():
-    """Define tokens manualmente"""
+    """Define tokens manualmente - ✅ CORRIGIDO: Salva no BANCO DE DADOS"""
     import time
+    from app.integracoes.tagplus.models import TagPlusOAuthToken
+    from app import db
 
     api_type = request.form.get('api_type')
     access_token = request.form.get('access_token', '').strip()
@@ -659,38 +687,70 @@ def set_tokens_manual():
                               status='API e Access Token são obrigatórios',
                               status_type='error'))
 
-    # IMPORTANTE: Salva tokens DIRETAMENTE na sessão Flask
-    # Usa EXATAMENTE as mesmas chaves que são verificadas no index()
+    # ✅ CORRIGIDO: Salva no BANCO DE DADOS (persistente entre deploys)
+    try:
+        # Busca ou cria registro no banco
+        token_record = TagPlusOAuthToken.query.filter_by(api_type=api_type).first()
+        if not token_record:
+            token_record = TagPlusOAuthToken(api_type=api_type)
+            db.session.add(token_record)
+
+        # Calcula expiração (24h menos 5 min de margem)
+        expires_at = datetime.utcnow() + timedelta(hours=24) - timedelta(minutes=5)
+
+        # Atualiza tokens no banco
+        token_record.access_token = access_token
+        if refresh_token:
+            token_record.refresh_token = refresh_token
+        token_record.expires_at = expires_at
+        token_record.token_type = 'Bearer'
+        token_record.ativo = True
+        token_record.atualizado_em = datetime.utcnow()
+
+        db.session.commit()
+        logger.info(f"✅ Token manual salvo no BANCO para {api_type}")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao salvar token no banco: {e}")
+        return redirect(url_for('tagplus_oauth.index',
+                              status=f'Erro ao salvar token: {e}',
+                              status_type='error'))
+
+    # Também salva na session (cache)
     session[f'tagplus_{api_type}_access_token'] = access_token
     if refresh_token:
         session[f'tagplus_{api_type}_refresh_token'] = refresh_token
-    session[f'tagplus_{api_type}_expires_at'] = time.time() + 86400 - 300  # 24h menos 5 min
-
-    # CRÍTICO: Força o Flask a salvar a sessão
+    session[f'tagplus_{api_type}_expires_at'] = time.time() + 86400 - 300
     session.modified = True
-
-    logger.info(f"Token manual salvo para {api_type}: {access_token[:20]}...")
 
     # Agora testa a conexão para validar o token
     oauth = TagPlusOAuth2V2(api_type=api_type)
-    # OAuth vai carregar o token da sessão que acabamos de salvar
 
     # Testa conexão
     success, info = oauth.test_connection()
 
     if success:
-        logger.info(f"Token manual validado com sucesso para {api_type}")
+        logger.info(f"✅ Token manual validado com sucesso para {api_type}")
         return redirect(url_for('tagplus_oauth.index',
-                              status=f'✅ Token configurado e validado com sucesso para {api_type}!',
+                              status=f'✅ Token configurado e validado com sucesso para {api_type}! (salvo no banco)',
                               status_type='success'))
     else:
-        # Remove token inválido da sessão
+        # Remove token inválido do banco e session
+        try:
+            token_record = TagPlusOAuthToken.query.filter_by(api_type=api_type).first()
+            if token_record:
+                token_record.ativo = False
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+
         session.pop(f'tagplus_{api_type}_access_token', None)
         session.pop(f'tagplus_{api_type}_refresh_token', None)
         session.pop(f'tagplus_{api_type}_expires_at', None)
         session.modified = True
 
-        logger.error(f"Token manual inválido para {api_type}: {info}")
+        logger.error(f"❌ Token manual inválido para {api_type}: {info}")
         return redirect(url_for('tagplus_oauth.index',
                               status=f'❌ Token inválido: {info}',
                               status_type='error'))
@@ -1016,14 +1076,46 @@ def importar_nf_individual():
 @oauth_bp.route('/status')
 @login_required
 def status():
-    """Retorna status das autorizações (JSON)"""
-    return jsonify({
-        'clientes': {
-            'authorized': bool(session.get('tagplus_clientes_access_token')),
-            'expires_at': session.get('tagplus_clientes_expires_at')
-        },
-        'notas': {
-            'authorized': bool(session.get('tagplus_notas_access_token')),
-            'expires_at': session.get('tagplus_notas_expires_at')
+    """Retorna status das autorizações (JSON) - ✅ CORRIGIDO: Verifica banco primeiro"""
+    from app.integracoes.tagplus.models import TagPlusOAuthToken
+
+    result = {
+        'clientes': {'authorized': False, 'expires_at': None, 'source': None},
+        'notas': {'authorized': False, 'expires_at': None, 'source': None}
+    }
+
+    # Verifica token de clientes no banco
+    token_clientes = TagPlusOAuthToken.query.filter_by(api_type='clientes', ativo=True).first()
+    if token_clientes and token_clientes.access_token:
+        result['clientes'] = {
+            'authorized': True,
+            'expires_at': token_clientes.expires_at.isoformat() if token_clientes.expires_at else None,
+            'source': 'banco',
+            'esta_expirado': token_clientes.esta_expirado,
+            'tem_refresh': token_clientes.tem_refresh_token
         }
-    })
+    elif session.get('tagplus_clientes_access_token'):
+        result['clientes'] = {
+            'authorized': True,
+            'expires_at': session.get('tagplus_clientes_expires_at'),
+            'source': 'session'
+        }
+
+    # Verifica token de notas no banco
+    token_notas = TagPlusOAuthToken.query.filter_by(api_type='notas', ativo=True).first()
+    if token_notas and token_notas.access_token:
+        result['notas'] = {
+            'authorized': True,
+            'expires_at': token_notas.expires_at.isoformat() if token_notas.expires_at else None,
+            'source': 'banco',
+            'esta_expirado': token_notas.esta_expirado,
+            'tem_refresh': token_notas.tem_refresh_token
+        }
+    elif session.get('tagplus_notas_access_token'):
+        result['notas'] = {
+            'authorized': True,
+            'expires_at': session.get('tagplus_notas_expires_at'),
+            'source': 'session'
+        }
+
+    return jsonify(result)
