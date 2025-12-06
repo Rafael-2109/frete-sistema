@@ -48,7 +48,9 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nivel d
 | Campos de Carteira/Separacao | **Este arquivo (abaixo)** | Desenvolvendo features principais |
 | Campos de outros modelos | `.claude/references/MODELOS_CAMPOS.md` | Pedido, Embarque, Faturamento, DespesaExtra, ContasAReceber |
 | Regras de negocio detalhadas | `.claude/references/REGRAS_NEGOCIO.md` | Grupos CNPJ, bonificacao, roteirizacao, calculos |
+| Fluxo de dados comercial | `.claude/references/MODULO_COMERCIAL_FLUXO_DADOS.md` | Agregacao de dados, JOINs, APIs do modulo comercial |
 | Consultas estoque/carteira | Skill `agente-logistico` | Perguntas sobre disponibilidade, pedidos, estoque |
+| Consultas comerciais | Skill `consultando-comercial` | Valor em aberto, status de pedidos, documentos, ranking clientes |
 | Integracao Odoo | Skill `integracao-odoo` | Lancamentos fiscais, CTe, 16 etapas |
 
 ## Documentos Externos

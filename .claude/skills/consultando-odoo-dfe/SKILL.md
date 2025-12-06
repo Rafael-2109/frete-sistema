@@ -1,6 +1,6 @@
 ---
 name: consultando-odoo-dfe
-description: "Busca documentos fiscais (DFE) no Odoo: devolucoes, CTe de frete, notas de entrada, tributos (ICMS, PIS, COFINS, IPI, ST). Use para: NF de devolucao, CTe de transportadora, nota de fornecedor, impostos de nota fiscal, localizar documento por chave, CNPJ, nome, numero NF, produto ou periodo."
+description: "Busca documentos fiscais (DFE) no Odoo: devolucoes, CTe de frete, notas de entrada, tributos (ICMS, PIS, COFINS, IPI, ST). Use para: NF de devolucao, CTe de transportadora, nota de fornecedor, impostos de nota fiscal, localizar documento por chave, CNPJ, nome, numero NF, produto ou periodo. Não representam a entrada efetiva, apenas que foi emitido contra a empresa."
 ---
 
 # Consultando Odoo - Documentos Fiscais (DFE)

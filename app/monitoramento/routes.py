@@ -2157,7 +2157,7 @@ def exportar_entregas():
             # Nome do arquivo para download
             nome_arquivo = form.nome_arquivo.data
             if not nome_arquivo.endswith('.xlsx'):
-                nome_arquivo += '.xlsx'
+                nome_arquivo += '.xlsx' # type: ignore
             
             # 🔒 Adiciona informação do vendedor no nome do arquivo se for vendedor
             if current_user.perfil == 'vendedor':
@@ -2171,7 +2171,7 @@ def exportar_entregas():
             flash(f'✅ Exportação concluída! {len(entregas)} entregas exportadas em {total_time:.2f}s.', 'success')
             
             # Envia arquivo para download
-            def cleanup_file():
+            def cleanup_file(): # type: ignore
                 try:
                     os.unlink(arquivo_path)
                 except Exception as e:

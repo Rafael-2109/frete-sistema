@@ -1,6 +1,6 @@
 ---
 name: agente-logistico
-description: Analisa, consulta e CRIA separacoes no sistema de fretes. Responde perguntas sobre disponibilidade, estoque, rupturas, atrasos e prazos. CRIA separacoes via linguagem natural (completas, parciais, por pallets). Use quando o usuario perguntar sobre carteira, separacoes, estoque OU quando pedir para criar/gerar separacao de pedido.
+description: "Analisa, consulta e CRIA separacoes no sistema de fretes. Responde perguntas sobre disponibilidade, estoque, rupturas, atrasos e prazos. CRIA separacoes via linguagem natural (completas, parciais, por pallets). Use quando o usuario perguntar sobre carteira, separacoes, estoque OU quando pedir para criar/gerar separacao de pedido."
 ---
 
 # Agente Logístico - Sistema de Fretes
