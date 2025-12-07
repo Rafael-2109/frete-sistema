@@ -30,8 +30,8 @@ Skill para **descoberta de campos e estrutura** de modelos do Odoo.
 ### descobrindo.py
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes]
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes]
 ```
 
 ### Operacoes Disponiveis

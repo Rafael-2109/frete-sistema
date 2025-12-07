@@ -1,422 +1,358 @@
 ---
 name: agente-logistico
-description: "Analisa, consulta e CRIA separacoes no sistema de fretes. Responde perguntas sobre disponibilidade, estoque, rupturas, atrasos e prazos. CRIA separacoes via linguagem natural (completas, parciais, por pallets). Use quando o usuario perguntar sobre carteira, separacoes, estoque OU quando pedir para criar/gerar separacao de pedido."
+description: "Consultas rapidas sobre carteira, estoque e pedidos da Nacom Goya. Use para: 'tem pedido do Atacadao?', 'quanto tem de palmito?', 'pedidos atrasados', 'status do pedido VCD123', 'estoque de azeitona', 'o que vai dar falta?', 'quando fica disponivel?', 'o que esta travando a carteira?'. Para analise COMPLETA de carteira ou criacao de separacoes em lote, delegue ao subagente 'agente-logistico' via Task tool."
 ---
 
-# Agente Logístico - Sistema de Fretes
+# Agente Logistico - Consultas e Separacoes
 
-## Quando Usar Este Skill
+## Quando Usar Esta Skill
 
-### Consultas (somente leitura)
-- Perguntas sobre disponibilidade de pedidos ou estoque
-- Consultas sobre pedidos pendentes, atrasados ou em separacao
-- Analise de rupturas, gargalos e impactos
-- Projecoes de entrega e prazos
-- Verificacao de bonificacoes e consolidacao de cargas
-- Reprogramacao de producao para resolver rupturas
+### USE para consultas RAPIDAS:
+- "Tem pedido pendente pro Atacadao?"
+- "Quanto tem de palmito no estoque?"
+- "Pedidos atrasados pra embarcar"
+- "Status do pedido VCD123"
+- "O que vai dar falta essa semana?"
+- "Chegou o cogumelo?"
+- "Quando o pedido VCD123 estara disponivel?"
+- "O que esta travando a carteira?"
 
-### Acoes (criacao/modificacao)
-- **Criar separacao de pedido** (completa ou parcial)
-- Gerar separacao com quantidade especifica de pallets
-- Separar pedido excluindo determinados produtos
-- Separar apenas o que tem em estoque
-
-## Fluxo de Trabalho
-
-### Para Consultas
-1. **Identificar a intencao** do usuario (consulta, analise, simulacao)
-2. **Selecionar script apropriado** com base no dominio
-3. **Executar via bash** com parametros adequados
-4. **Interpretar resultado** e formatar resposta clara
-5. **Verificar se responde** completamente a pergunta
-
-### Para Criacao de Separacao
-1. **Identificar pedido** e validar existencia na carteira
-2. **Coletar informacoes obrigatorias** (ver checklist abaixo)
-3. **Validar estoque** antes de confirmar
-4. **Executar criacao** via script com --executar
-5. **Confirmar resultado** ao usuario
-
-## Resolvedores Disponíveis
-
-Os resolvedores são funções auxiliares em `resolver_entidades.py` que convertem termos de busca em dados estruturados.
-
-### resolver_grupo(grupo, uf=None, loja=None, fonte='carteira')
-
-Resolve grupo empresarial retornando prefixos CNPJ + lista de pedidos.
-
-**Quando usar:**
-- "Pedidos do Atacadão"
-- "Atacadão de SP"
-- "Assaí loja 123"
-
-**Retorna:**
-```json
-{
-  "sucesso": true,
-  "grupo": "atacadao",
-  "prefixos_cnpj": ["93.209.76", "75.315.33", "00.063.96"],
-  "pedidos": [
-    {
-      "num_pedido": "VCD2565291",
-      "cliente": "ATACADAO 183",
-      "cidade": "Jacareí",
-      "uf": "SP",
-      "total_itens": 15,
-      "valor_total": 1885496.64
-    }
-  ],
-  "resumo": {
-    "total_pedidos": 2,
-    "total_valor": 2168165.64,
-    "ufs": ["SP"],
-    "cidades": ["Jacareí"]
-  }
-}
-```
-
-### resolver_uf(uf, fonte='carteira')
-
-Resolve pedidos de uma UF específica.
-
-**Quando usar:**
-- "Pedidos de São Paulo"
-- "Carteira de SP"
-
-**Retorna:** Formato similar a `resolver_grupo()`
-
-### resolver_pedido(termo, fonte='ambos')
-
-Resolve termo de pedido usando 5 estratégias:
-1. Número exato
-2. Número parcial (LIKE)
-3. CNPJ direto
-4. Grupo + loja (usa `resolver_grupo()` internamente)
-5. Cliente por nome
-
-**Quando usar:**
-- Qualquer menção a pedido específico
-- Termo ambíguo que pode ser pedido
-
-### resolver_produto(termo, limit=10)
-
-Resolve produto por tokenização + scoring.
-
-**Quando usar:**
-- "palmito", "azeitona verde", "pf mezzani"
+### DELEGUE ao subagente para:
+- Analise completa da carteira
+- Criacao de separacoes em lote
+- Comunicacao com PCP/Comercial
+- Decisoes de priorizacao complexas
 
 ---
 
-## Scripts Disponiveis (6 scripts consolidados)
+## Scripts Disponiveis
 
-### analisando_disponibilidade.py (9 queries)
-Analisa disponibilidade de estoque para pedidos ou grupos de clientes.
+### 1. analisando_disponibilidade.py
 
-**QUANDO USAR:**
-- "Quando o Atacadão estará disponível?" → Análise de GARGALOS
-- "O que está faltando para o Assaí?" → Produtos COM FALTA
-- "Pedidos atrasados do grupo X" → Com `--atrasados`
-
-| Parametro | Descricao | Exemplo |
-|-----------|-----------|---------|
-| `--pedido` | Numero do pedido | `--pedido VCD123` |
-| `--grupo` | Grupo empresarial (analisa GARGALOS) | `--grupo atacadao` |
-| `--loja` | Identificador da loja (em raz_social_red) | `--loja 183` |
-| `--uf` | Filtrar por UF | `--uf SP` |
-| `--data` | Data OBJETIVO para análise de disponibilidade (default: hoje) | `--data amanha` |
-| `--sem-agendamento` | Apenas pedidos sem exigencia de agendamento | flag |
-| `--sugerir-adiamento` | Identificar pedidos competidores para adiar | flag |
-| `--diagnosticar-origem` | Distinguir falta absoluta vs relativa | flag |
-| `--completude` | Mostrar % faturado vs pendente | flag |
-| `--atrasados` | Analisar apenas pedidos com expedicao vencida | flag |
-| `--diagnosticar-causa` | Detalhar causa do atraso (falta ou outro) | flag |
-| `--ranking-impacto` | Rankear pedidos que mais travam carteira | flag |
-
-**RETORNA:** Lista de produtos com falta/gargalos (não lista pedidos diretamente)
+**Proposito:** Analisa disponibilidade de estoque para pedidos ou grupos de clientes.
 
 **Queries cobertas:** Q1, Q2, Q3, Q4, Q5, Q6, Q9, Q11, Q12
 
----
-
-### consultando_pedidos.py (5 queries)
-Consulta pedidos por diversos filtros e perspectivas.
-
-**QUANDO USAR:**
-- "Listar pedidos do Atacadão" → LISTA de pedidos
-- "Pedidos atrasados" → SEM análise de causa
-- "Status do pedido VCD123" → Separado, pendente, faturado
+```bash
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/agente-logistico/scripts/analisando_disponibilidade.py [parametros]
+```
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
-| `--pedido` | Numero do pedido | `--pedido VCD123` |
-| `--grupo` | Grupo empresarial (LISTA pedidos) | `--grupo assai` |
-| `--atrasados` | Apenas pedidos com expedicao < hoje | flag |
-| `--verificar-bonificacao` | Verificar se venda+bonif estao juntos | flag |
-| `--consolidar-com` | Buscar pedidos proximos para consolidar | `--consolidar-com "assai 123"` |
-| `--status` | Detalhar status (separado, parcial, pendente) | flag |
-| `--limit` | Limite de resultados | `--limit 20` |
+| `--pedido` | Numero do pedido ou "grupo termo" | `--pedido VCD123` ou `--pedido "atacadao 183"` |
+| `--grupo` | Grupo empresarial | `--grupo atacadao`, `--grupo assai`, `--grupo tenda` |
+| `--loja` | Identificador da loja (em raz_social_red) | `--loja 183` |
+| `--uf` | Filtrar por UF | `--uf SP` |
+| `--data` | Data para analise (hoje, amanha, dd/mm, YYYY-MM-DD) | `--data amanha` |
+| `--sem-agendamento` | Apenas pedidos sem exigencia de agendamento | flag |
+| `--sugerir-adiamento` | Sugerir pedidos para adiar (liberar estoque) | flag |
+| `--diagnosticar-origem` | Distinguir falta absoluta vs relativa | flag |
+| `--completude` | Calcular % faturado vs pendente | flag |
+| `--atrasados` | Analisar pedidos com expedicao vencida | flag |
+| `--diagnosticar-causa` | Detalhar causa do atraso | flag |
+| `--ranking-impacto` | Ranking de pedidos que mais travam carteira | flag |
+| `--limit` | Limite de resultados (default: 100) | `--limit 20` |
 
-**RETORNA:** Lista de pedidos (não analisa gargalos)
+**Exemplos de uso:**
+
+| Pergunta do Usuario | Comando |
+|---------------------|---------|
+| "Quando VCD123 estara disponivel?" | `--pedido VCD123` |
+| "O que vai ter de ruptura se enviar VCD123 amanha?" | `--pedido VCD123 --data amanha` |
+| "Qual pedido adiar pra enviar VCD123 amanha?" | `--pedido VCD123 --data amanha --sugerir-adiamento` |
+| "O que falta pro Assai de SP?" | `--grupo assai --uf SP` |
+| "Falta absoluta ou relativa?" | `--grupo assai --diagnosticar-origem` |
+| "Pedidos sem agendamento para amanha?" | `--data amanha --sem-agendamento` |
+| "Falta muito pra matar o Atacadao 183?" | `--grupo atacadao --loja 183 --completude` |
+| "Os atrasados sao por falta?" | `--atrasados --diagnosticar-causa` |
+| "O que esta travando a carteira?" | `--ranking-impacto` |
+
+---
+
+### 2. consultando_pedidos.py
+
+**Proposito:** Consulta pedidos por diversos filtros e perspectivas.
 
 **Queries cobertas:** Q8, Q10, Q14, Q16, Q19
 
----
-
-## ⚠️ DIFERENÇAS IMPORTANTES
-
-### `--grupo` em scripts diferentes
-
-| Script | `--grupo atacadao` retorna | Quando usar |
-|--------|----------------------------|-------------|
-| `analisando_disponibilidade.py` | Produtos com GARGALOS do grupo | "O que falta pro Atacadão?" |
-| `consultando_pedidos.py` | LISTA de pedidos do grupo | "Pedidos do Atacadão" |
-
-### `--atrasados` em scripts diferentes
-
-| Script | `--atrasados` retorna | Quando usar |
-|--------|----------------------|-------------|
-| `analisando_disponibilidade.py` | Pedidos atrasados + DIAGNÓSTICO de causa | "Por que está atrasado?" |
-| `consultando_pedidos.py` | LISTA de pedidos atrasados (sem análise) | "Quais estão atrasados?" |
-
-**NOTA sobre `--data`:**
-- Em `analisando_disponibilidade.py`: Data OBJETIVO para verificar disponibilidade
-  - Exemplo: `--data amanha` = "Estará disponível amanhã?"
-- Em `criando_separacao.py`: Data de EXPEDIÇÃO (saída do CD)
-  - Exemplo: `--expedicao amanha` = "Embarcar amanhã"
-
----
-
-### consultando_estoque.py (4 queries)
-Consulta estoque atual, movimentacoes, pendencias e projecoes.
+```bash
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/agente-logistico/scripts/consultando_pedidos.py [parametros]
+```
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
-| `--produto` | Nome ou termo do produto | `--produto palmito` |
-| `--entradas` | Mostrar entradas recentes (qtd > 0) | flag |
-| `--saidas` | Mostrar saidas recentes (qtd < 0) | flag |
-| `--pendente` | Quantidade pendente + lista de pedidos | flag |
-| `--sobra` | Calcular sobra apos atender demanda | flag |
-| `--ruptura` | Previsao de rupturas | flag |
-| `--dias` | Horizonte de projecao (padrao: 7) | `--dias 14` |
+| `--pedido` | Numero do pedido ou termo de busca | `--pedido VCD123` |
+| `--grupo` | Grupo empresarial | `--grupo atacadao` |
+| `--atrasados` | Listar pedidos atrasados | flag |
+| `--verificar-bonificacao` | Verificar bonificacoes faltando | flag |
+| `--status` | Mostrar status detalhado | flag |
+| `--consolidar-com` | Buscar pedidos para consolidar | `--consolidar-com "assai 123"` |
+| `--produto` | Filtrar por produto | `--produto palmito` |
+| `--ate-data` | Data limite de expedicao | `--ate-data amanha`, `--ate-data 15/12` |
+| `--em-separacao` | Buscar em Separacao (nao CarteiraPrincipal) | flag |
+| `--limit` | Limite de resultados (default: 100) | `--limit 20` |
+
+**Exemplos de uso:**
+
+| Pergunta do Usuario | Comando |
+|---------------------|---------|
+| "Tem pedido pendente pro Atacadao?" | `--grupo atacadao` |
+| "Pedidos atrasados pra embarcar?" | `--atrasados` |
+| "Tem pedido faltando bonificacao?" | `--verificar-bonificacao` |
+| "Pedido VCD123 ta em separacao?" | `--pedido VCD123 --status` |
+| "Tem mais pedido pra mandar junto com Assai 123?" | `--consolidar-com "assai 123"` |
+| "Pedidos de palmito ate amanha?" | `--produto palmito --ate-data amanha` |
+| "Pedidos de azeitona ja separados?" | `--produto azeitona --em-separacao` |
+
+---
+
+### 3. consultando_estoque.py
+
+**Proposito:** Consulta estoque atual, movimentacoes, pendencias e projecoes.
 
 **Queries cobertas:** Q13, Q17, Q18, Q20
 
-### calculando_prazo.py (1 query)
-Calcula data de entrega baseada em lead time de transportadoras.
+```bash
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/agente-logistico/scripts/consultando_estoque.py [parametros]
+```
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
-| `--pedido` | Numero do pedido | `--pedido VCD123` |
-| `--data-embarque` | Data de embarque | `--data-embarque amanha` |
-| `--limit` | Limite de opcoes de transportadora | `--limit 5` |
+| `--produto` | Nome ou termo do produto | `--produto palmito`, `--produto "az verde"` |
+| `--entradas` | Mostrar entradas recentes (qtd > 0) | flag |
+| `--saidas` | Mostrar saidas recentes (qtd < 0) | flag |
+| `--pendente` | Quantidade pendente de embarque + lista pedidos | flag |
+| `--sobra` | Calcular sobra de estoque apos demanda | flag |
+| `--ruptura` | Previsao de rupturas | flag |
+| `--dias` | Horizonte de projecao em dias (default: 7) | `--dias 14` |
+| `--limit` | Limite de resultados (default: 100) | `--limit 50` |
+| `--limit-entradas` | Limite de movimentacoes por produto (default: 100) | `--limit-entradas 20` |
+
+**Exemplos de uso:**
+
+| Pergunta do Usuario | Comando |
+|---------------------|---------|
+| "Chegou o palmito?" | `--produto palmito --entradas` |
+| "Saiu muito cogumelo?" | `--produto cogumelo --saidas` |
+| "Falta embarcar muito pessego?" | `--produto pessego --pendente` |
+| "Quanto vai sobrar de pessego?" | `--produto pessego --sobra` |
+| "O que vai dar falta essa semana?" | `--ruptura --dias 7` |
+| "Rupturas nos proximos 14 dias?" | `--ruptura --dias 14` |
+
+---
+
+### 4. calculando_prazo.py
+
+**Proposito:** Calcula data de entrega baseada em lead time de transportadoras.
 
 **Queries cobertas:** Q7
 
-### analisando_programacao.py (1 query)
-Simula reprogramacao de producao para resolver rupturas.
+```bash
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/agente-logistico/scripts/calculando_prazo.py [parametros]
+```
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
-| `--produto` | Nome ou termo do produto | `--produto "VF pouch 150"` |
-| `--linha` | Linha de producao especifica | `--linha 3` |
+| `--pedido` | Numero do pedido ou termo de busca | `--pedido VCD123`, `--pedido "atacadao 183"` |
+| `--data-embarque` | Data de embarque (hoje, amanha, dd/mm, YYYY-MM-DD) | `--data-embarque amanha` |
+| `--limit` | Limite de opcoes de transportadora (default: 5) | `--limit 3` |
 
-**Queries cobertas:** Q15
+**Exemplos de uso:**
 
-### criando_separacao.py (ACAO)
-Cria separacoes de pedidos via linguagem natural. **SEMPRE executar primeiro SEM --executar para validar.**
+| Pergunta do Usuario | Comando |
+|---------------------|---------|
+| "Se embarcar VCD123 amanha, quando chega?" | `--pedido VCD123 --data-embarque amanha` |
+| "Prazo de entrega pro Atacadao 183?" | `--pedido "atacadao 183" --data-embarque hoje` |
+
+---
+
+### 5. criando_separacao.py
+
+**Proposito:** Cria separacoes de pedidos via linguagem natural.
+
+**IMPORTANTE:** Sempre executar primeiro SEM `--executar` para simular!
+
+```bash
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/agente-logistico/scripts/criando_separacao.py [parametros]
+```
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
 | `--pedido` | Numero do pedido (OBRIGATORIO) | `--pedido VCD123` |
-| `--expedicao` | Data de expedicao (OBRIGATORIO) | `--expedicao 2025-12-20` |
-| `--tipo` | Tipo de separacao | `--tipo completa` ou `--tipo parcial` |
+| `--expedicao` | Data de expedicao (OBRIGATORIO) | `--expedicao amanha`, `--expedicao 20/12` |
+| `--tipo` | Tipo de separacao | `--tipo completa`, `--tipo parcial` |
 | `--pallets` | Quantidade de pallets desejada | `--pallets 28` |
 | `--pallets-inteiros` | Forcar pallets inteiros por item | flag |
-| `--excluir-produtos` | Produtos a excluir (JSON) | `--excluir-produtos '["KETCHUP","MOSTARDA"]'` |
 | `--apenas-estoque` | Separar apenas o que tem em estoque | flag |
-| `--agendamento` | Data de agendamento | `--agendamento 2025-12-22` |
+| `--excluir-produtos` | JSON array de produtos a excluir | `--excluir-produtos '["KETCHUP","MOSTARDA"]'` |
+| `--agendamento` | Data de agendamento | `--agendamento 22/12` |
 | `--protocolo` | Protocolo de agendamento | `--protocolo AG12345` |
 | `--agendamento-confirmado` | Marcar agendamento como confirmado | flag |
-| `--executar` | Efetivamente criar a separacao | flag |
+| `--executar` | Efetivamente criar (sem isso, apenas simula) | flag |
 
 **Modos de operacao:**
-- **Sem --executar**: Apenas SIMULA e mostra o que seria criado (SEMPRE usar primeiro!)
-- **Com --executar**: Cria efetivamente a separacao no banco
 
-## Como Executar
+| Modo | Descricao |
+|------|-----------|
+| Sem `--executar` | SIMULA e mostra o que seria criado |
+| Com `--executar` | CRIA efetivamente a separacao |
+
+**Tipos de separacao:**
+
+| Tipo | Parametros | Descricao |
+|------|------------|-----------|
+| Completa | `--tipo completa` | Todos os itens com qtd total |
+| Parcial | `--tipo parcial` | N itens com qtds especificas |
+| Por pallets | `--pallets N` | Distribuir N pallets proporcionalmente |
+| Pallets inteiros | `--pallets N --pallets-inteiros` | Cada item = pallets inteiros |
+| Apenas estoque | `--apenas-estoque` | So o que tem disponivel |
+| Excluindo produtos | `--excluir-produtos '[...]'` | Tudo exceto lista |
+
+**Exemplos de uso:**
+
+| Pedido do Usuario | Comando (simular) |
+|-------------------|-------------------|
+| "Crie separacao completa do VCD123 pra amanha" | `--pedido VCD123 --expedicao amanha --tipo completa` |
+| "Separacao VCD456 com 28 pallets dia 20/12" | `--pedido VCD456 --expedicao 20/12 --pallets 28` |
+| "VCD789 com pallets inteiros" | `--pedido VCD789 --expedicao amanha --pallets 28 --pallets-inteiros` |
+| "Enviar o que tem do VCD123" | `--pedido VCD123 --expedicao amanha --apenas-estoque` |
+| "VCD123 sem ketchup e mostarda" | `--pedido VCD123 --expedicao amanha --excluir-produtos '["KETCHUP","MOSTARDA"]'` |
+
+---
+
+### 6. analisando_carteira_completa.py
+
+**Proposito:** Analisa a carteira completa seguindo o algoritmo de priorizacao do Rafael.
+
+**A CEREJA DO BOLO** - Orquestrador que segue exatamente a ordem de prioridades definida:
+1. Pedidos com `data_entrega_pedido` (cliente ja negociou)
+2. Cargas diretas fora de SP (>=26 pallets OU >=20.000kg)
+3. Atacadao
+4. Assai
+5. Resto ordenado por CNPJ + Rota
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/agente-logistico/scripts/NOME_SCRIPT.py [parametros]
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/agente-logistico/scripts/analisando_carteira_completa.py [parametros]
 ```
 
-## Regras de Interpretacao
+| Parametro | Descricao | Exemplo |
+|-----------|-----------|---------|
+| `--resumo` | Mostrar apenas resumo executivo | flag |
+| `--prioridade` | Filtrar por prioridade (1-5) | `--prioridade 1`, `--prioridade 3` |
+| `--limit` | Limite de pedidos (default: todos) | `--limit 20` |
+| `--acoes` | Mostrar apenas acoes imediatas | flag |
 
-### Grupos Empresariais
-| Nome | Prefixos CNPJ |
-|------|---------------|
-| Atacadao | 93.209.765, 75.315.333, 00.063.960 |
-| Assai | 06.057.223 |
-| Tenda | 01.157.555 |
+**Saida inclui:**
+- Pedidos classificados por prioridade
+- Gestor responsavel (extraido de `equipe_vendas`)
+- Acoes imediatas recomendadas
+- Separacoes sugeridas
+- Status de agendamento
 
-### Termos do Dominio
-- **Matar pedido** = Completar 100% do pedido
-- **Ruptura** = Falta de estoque para atender demanda
-- **Separacao** = Pedido reservado para envio (sincronizado_nf=False)
-- **Pendente** = Na carteira mas nao separado
-- **Bonificacao** = forma_pgto_pedido LIKE 'Sem Pagamento%'
-- **Falta absoluta** = Estoque < demanda (mesmo sem outros pedidos)
-- **Falta relativa** = Estoque comprometido com outros pedidos
+**Exemplos de uso:**
 
-### Calculos Chave
-- **Estoque disponivel** = MovimentacaoEstoque - Separacao(sincronizado_nf=False)
-- **Valor pendente** = qtd_saldo * preco (do pedido)
-- **Completude** = 1 - (valor_pendente / valor_original)
+| Pergunta do Usuario | Comando |
+|---------------------|---------|
+| "Analise a carteira" | sem parametros (mostra tudo) |
+| "Resumo da carteira" | `--resumo` |
+| "O que precisa de atencao imediata?" | `--resumo --limit 10` |
+| "Pedidos com data negociada" | `--prioridade 1` |
+| "Status do Atacadao" | `--prioridade 3` |
+| "Acoes pra hoje" | `--acoes` |
 
-### Resolucao de Produtos
+**Identificacao de Gestores (via `equipe_vendas`):**
+
+| Valor no campo | Gestor | Canal |
+|----------------|--------|-------|
+| VENDA EXTERNA ATACADÃO | Junior | WhatsApp |
+| VENDA EXTERNA SENDAS SP | Junior | WhatsApp |
+| VENDA EXTERNA MILER | Miler | WhatsApp |
+| VENDA EXTERNA FERNANDO | Fernando | WhatsApp |
+| VENDA EXTERNA JUNIOR | Junior | WhatsApp |
+| VENDA INTERNA DENISE | Denise | Teams |
+
+---
+
+## Grupos Empresariais
+
+| Grupo | Prefixos CNPJ | Exemplo |
+|-------|---------------|---------|
+| Atacadao | 93.209.76, 75.315.33, 00.063.96 | `--grupo atacadao` |
+| Assai | 06.057.22 | `--grupo assai` |
+| Tenda | 01.157.55 | `--grupo tenda` |
+
+---
+
+## Resolucao de Produtos
+
 Usuarios podem usar termos abreviados:
-- AZ = Azeitona | PF = Preta Fatiada | VF = Verde Fatiada
-- BD = Balde | IND = Industrial | POUCH = Pouch
-- Exemplo: "pf mezzani" = Azeitona Preta Fatiada Mezzani
+
+| Abreviacao | Significado |
+|------------|-------------|
+| AZ | Azeitona |
+| PF | Preta Fatiada |
+| VF | Verde Fatiada |
+| VI | Verde Inteira |
+| BD | Balde |
+| IND | Industrial |
+| POUCH | Pouch |
+
+**Exemplo:** "pf mezzani" = Azeitona Preta Fatiada Mezzani
+
+---
+
+## Termos do Dominio
+
+| Termo | Significado |
+|-------|-------------|
+| Matar pedido | Completar 100% do pedido |
+| Ruptura | Falta de estoque para atender demanda |
+| Falta absoluta | Estoque < demanda (mesmo sem outros pedidos) |
+| Falta relativa | Estoque comprometido com outros pedidos |
+| RED | Redespacho via SP |
+| FOB | Cliente coleta no CD |
+| BD IND | Balde Industrial |
+
+---
 
 ## Nivel de Detalhes (Progressive Disclosure)
 
-Os scripts retornam dados completos. Claude decide o que mostrar:
-
 1. **Resposta inicial**: Resumo com 3-5 itens principais
-2. **Se usuario pedir mais**: Mostrar mais itens do mesmo JSON (sem re-executar)
-3. **Se usuario pedir "todos"**: Mostrar lista completa
+2. **Se pedir mais**: Mostrar mais itens do mesmo JSON
+3. **Se pedir "todos"**: Lista completa
 
-Exemplos de pedidos para expandir:
-- "me mostre todos os pedidos"
-- "quero ver a lista completa"
-- "detalhe mais"
-- "tem mais?"
+---
 
-## Formato de Resposta
+## Fluxo de Criacao de Separacao
 
-Sempre incluir:
-1. **Resposta direta** a pergunta (sim/nao, data, quantidade)
-2. **Dados quantitativos** relevantes (valores, %, quantidades)
-3. **Lista de itens** quando aplicavel (pedidos, produtos) - iniciar com 3-5, expandir se pedido
-4. **Sugestao de acao** quando pertinente
-
-## Fluxo Conversacional: Criacao de Separacao
-
-### Checklist Obrigatorio (SEMPRE coletar antes de criar)
+### Checklist Obrigatorio
 
 | Campo | Obrigatorio | Como Obter |
 |-------|-------------|------------|
 | Pedido | SIM | Usuario informa |
 | Data expedicao | SIM | Usuario informa |
 | Tipo (completa/parcial) | SIM | Perguntar se nao especificado |
-| Agendamento | CONDICIONAL | Verificar `contatos_agendamento` pelo CNPJ |
+| Agendamento | CONDICIONAL | Verificar ContatoAgendamento pelo CNPJ |
 | Protocolo | CONDICIONAL | Se exige agendamento |
-| Agendamento confirmado | CONDICIONAL | Se exige agendamento |
 
-### Verificacao de Agendamento
+### Sequencia
 
-**ANTES de criar separacao, SEMPRE verificar:**
-```
-Se CNPJ existe em contatos_agendamento E forma != 'SEM AGENDAMENTO':
-    -> Cliente EXIGE agendamento
-    -> Solicitar: data agendamento, protocolo, confirmacao
-    -> Se usuario nao informar algum, AVISAR mas permitir continuar
+1. **SIMULAR** primeiro (sem --executar)
+2. Verificar alertas de estoque
+3. Mostrar resultado ao usuario
+4. Solicitar confirmacao
+5. **EXECUTAR** (com --executar)
 
-Se CNPJ NAO existe em contatos_agendamento OU forma = 'SEM AGENDAMENTO':
-    -> Informar: "Pelo cadastro, este cliente nao precisa de agendamento"
-    -> Se usuario informar mesmo assim, registrar
-```
-
-### Tipos de Separacao
-
-| Tipo | Descricao | Parametros |
-|------|-----------|------------|
-| **Completa** | Todos os itens com qtd total | `--tipo completa` |
-| **Parcial - itens completos** | N itens com qtd total cada | `--tipo parcial` |
-| **Parcial - qtds parciais** | N itens com qtds especificas | `--tipo parcial` + JSON |
-| **Por pallets** | Somar X pallets total | `--pallets N` |
-| **Por pallets inteiros** | Cada item = pallets inteiros | `--pallets N --pallets-inteiros` |
-| **Apenas estoque** | So o que tem disponivel | `--apenas-estoque` |
-| **Excluindo produtos** | Tudo exceto lista | `--excluir-produtos '[...]'` |
-
-### Validacao de Estoque (CRITICA)
-
-**SEMPRE validar estoque ANTES de confirmar criacao:**
-
-1. Executar script SEM --executar (simulacao)
-2. Verificar campo `alertas_estoque` na resposta
-3. Se houver alertas:
-   - Mostrar ao usuario quais produtos tem falta
-   - Perguntar se deseja continuar
-   - Sugerir alternativas (--apenas-estoque, excluir produtos)
-
-### Exemplos de Conversacao
-
-**Exemplo 1: Separacao completa simples**
-```
-Usuario: Crie uma separacao do pedido VCD123
-Agente: Para criar a separacao do pedido VCD123, preciso de algumas informacoes:
-        - Data de expedicao (embarque)?
-        [Verifica agendamento...] Pelo cadastro, este cliente nao precisa de agendamento.
-        - Separacao completa ou parcial?
-
-Usuario: Dia 20/12, completa
-Agente: [Executa simulacao, valida estoque]
-        Simulacao da separacao VCD123:
-        - 5 itens, R$ 45.000
-        - Estoque: OK para todos os itens
-        Confirma criacao?
-
-Usuario: Sim
-Agente: [Executa com --executar]
-        Separacao criada com sucesso! Lote: SEP-20251201-XXXX
-```
-
-**Exemplo 2: Separacao por pallets**
-```
-Usuario: Crie separacao do VCD456 com 28 pallets para dia 20/12
-Agente: [Verifica agendamento...] Este cliente EXIGE agendamento (Portal).
-        Preciso de:
-        - Data de agendamento?
-        - Protocolo?
-        - Agendamento ja confirmado?
-
-Usuario: Agendamento 22/12, protocolo AG999, confirmado
-Agente: [Executa simulacao com --pallets 28]
-        Simulacao VCD456 (28 pallets):
-        - Produto A: 15 pallets (1.500 un)
-        - Produto B: 10 pallets (800 un)
-        - Produto C: 3 pallets (240 un)
-        ALERTA: Produto B tem apenas 600 un em estoque (faltam 200)
-        Deseja continuar com quantidade reduzida ou excluir produto?
-```
-
-**Exemplo 3: Separacao com exclusao**
-```
-Usuario: Pode enviar o VCD789 sem o ketchup e a mostarda dia 15/12
-Agente: [Executa simulacao com --excluir-produtos]
-        Separacao VCD789 (excluindo Ketchup e Mostarda):
-        - 8 itens restantes, R$ 32.000
-        Confirma?
-```
-
-### Mensagens Padrao
-
-| Situacao | Mensagem |
-|----------|----------|
-| Cliente sem agendamento | "Pelo cadastro, este cliente nao precisa de agendamento" |
-| Cliente com agendamento | "Este cliente EXIGE agendamento via [forma]. Preciso de: data, protocolo, confirmacao" |
-| Falta de estoque | "ALERTA: [produto] tem apenas [qtd] em estoque (precisa [qtd]). Deseja continuar?" |
-| Simulacao OK | "Simulacao concluida. [N] itens, R$ [valor]. Confirma criacao?" |
-| Criacao OK | "Separacao criada com sucesso! Lote: [lote_id]" |
+---
 
 ## Referencias
 
-- [QUERIES.md](reference/QUERIES.md) - Mapeamento detalhado das 20 queries
-- [MODELOS_CAMPOS.md](../../references/MODELOS_CAMPOS.md) - Esquema completo das tabelas do banco
-- [REGRAS_NEGOCIO.md](../../references/REGRAS_NEGOCIO.md) - Regras de negocio detalhadas
-
-> **NOTA**: Os arquivos TABELAS.md e REGRAS_NEGOCIO.md foram consolidados em `.claude/references/`
-> para evitar duplicacao com o CLAUDE.md principal.
-
+- [AGENT.md](AGENT.md) - Regras completas de negocio
+- [QUERIES.md](reference/QUERIES.md) - Mapeamento das 20 queries
+- [REGRAS_NEGOCIO.md](../../references/REGRAS_NEGOCIO.md) - Regras gerais

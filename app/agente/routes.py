@@ -520,7 +520,7 @@ def _save_messages_to_db(
         try:
             with app.app_context():
                 db.session.rollback()
-        except:
+        except Exception:
             pass
 
 
@@ -794,6 +794,26 @@ def _get_file_type(filename: str) -> str:
     return 'file'
 
 
+def _get_mimetype(filename: str) -> str:
+    """Retorna o MIME type correto para o arquivo (prioriza Excel e PDF)."""
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    mimetypes = {
+        # Excel - CRÍTICO para abrir corretamente
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'xls': 'application/vnd.ms-excel',
+        # PDF - CRÍTICO para abrir corretamente
+        'pdf': 'application/pdf',
+        # CSV
+        'csv': 'text/csv; charset=utf-8',
+        # Imagens
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+    }
+    return mimetypes.get(ext, 'application/octet-stream')
+
+
 @agente_bp.route('/api/upload', methods=['POST'])
 @login_required
 def api_upload_file():
@@ -864,25 +884,59 @@ def api_upload_file():
 @agente_bp.route('/api/files/<session_id>/<filename>', methods=['GET'])
 @login_required
 def api_download_file(session_id: str, filename: str):
-    """Download de arquivo."""
+    """
+    Download de arquivo (Excel, PDF, CSV, imagens).
+
+    Suporta dois caminhos:
+    1. /tmp/agente_files/{user_id}/{session_id}/ (uploads do chat)
+    2. /tmp/agente_files/{session_id}/ (arquivos gerados por skills CLI)
+    """
     try:
+        safe_filename = secure_filename(filename)
+        logger.info(f"[AGENTE] Download solicitado: session={session_id}, file={safe_filename}")
+
+        # Tentar caminho com user_id primeiro (uploads do chat)
         folder = _get_session_folder(session_id)
-        file_path = os.path.join(folder, secure_filename(filename))
+        file_path = os.path.join(folder, safe_filename)
+        logger.debug(f"[AGENTE] Tentando path 1: {file_path}")
+
+        # Fallback: caminho sem user_id (arquivos gerados por skills/scripts CLI)
+        if not os.path.exists(file_path):
+            fallback_folder = os.path.join(UPLOAD_FOLDER, session_id or 'default')
+            fallback_path = os.path.join(fallback_folder, safe_filename)
+            logger.debug(f"[AGENTE] Tentando path 2 (fallback): {fallback_path}")
+            if os.path.exists(fallback_path):
+                file_path = fallback_path
 
         if not os.path.exists(file_path):
+            logger.warning(f"[AGENTE] Arquivo não encontrado: {safe_filename}")
             return jsonify({
                 'success': False,
                 'error': 'Arquivo não encontrado'
             }), 404
 
+        # Extrai nome original (remove prefixo UUID se existir: "abc12345_nome.xlsx" -> "nome.xlsx")
+        # UUID[:8] é sempre hexadecimal (0-9, a-f)
+        original_name = safe_filename
+        if '_' in safe_filename:
+            prefix = safe_filename.split('_')[0]
+            # Verifica se é um prefixo UUID válido (8 caracteres hexadecimais)
+            if len(prefix) == 8 and all(c in '0123456789abcdef' for c in prefix.lower()):
+                original_name = safe_filename.split('_', 1)[1]
+
+        # Obtém MIME type correto (CRÍTICO para Excel e PDF)
+        mimetype = _get_mimetype(safe_filename)
+        logger.info(f"[AGENTE] Enviando arquivo: {original_name} ({mimetype})")
+
         return send_file(
             file_path,
+            mimetype=mimetype,
             as_attachment=True,
-            download_name=filename.split('_', 1)[1] if '_' in filename else filename
+            download_name=original_name
         )
 
     except Exception as e:
-        logger.error(f"[AGENTE] Erro no download: {e}")
+        logger.error(f"[AGENTE] Erro no download: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

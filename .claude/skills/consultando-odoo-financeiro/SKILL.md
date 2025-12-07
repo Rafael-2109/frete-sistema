@@ -16,8 +16,8 @@ Skill para consultas **financeiras** no Odoo ERP.
 ### consulta.py
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo-financeiro/scripts/consulta.py [opcoes]
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/consultando-odoo-financeiro/scripts/consulta.py [opcoes]
 ```
 
 ## Tipos de Consulta
@@ -171,8 +171,8 @@ python .../consulta.py --tipo financeiro --subtipo vencidos --resumo
 Se precisar de um campo que nao esta mapeado, use a skill **descobrindo-odoo-estrutura**:
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
   --modelo account.move \
   --buscar-campo "nome_do_campo"
 ```

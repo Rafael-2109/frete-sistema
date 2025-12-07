@@ -16,8 +16,8 @@ Skill para **leitura de arquivos** enviados pelo usuario via upload.
 ### ler.py
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/lendo-arquivos/scripts/ler.py [opcoes]
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/lendo-arquivos/scripts/ler.py [opcoes]
 ```
 
 ## Tipos de Arquivo
@@ -53,8 +53,8 @@ FORMATOS SUPORTADOS
 
 ### Ler arquivo Excel
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/lendo-arquivos/scripts/ler.py \
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/lendo-arquivos/scripts/ler.py \
   --url "/agente/api/files/default/abc123_planilha.xlsx"
 ```
 

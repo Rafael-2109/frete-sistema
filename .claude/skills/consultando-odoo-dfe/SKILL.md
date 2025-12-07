@@ -15,8 +15,8 @@ Skill para consultas de **documentos fiscais** no Odoo ERP.
 ### consulta.py
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo-dfe/scripts/consulta.py [opcoes]
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/consultando-odoo-dfe/scripts/consulta.py [opcoes]
 ```
 
 ## Tipos de Consulta
@@ -155,8 +155,8 @@ python .../consulta.py --tipo dfe --subtipo normal --cliente "fornecedor" --paga
 Se precisar de um campo que nao esta mapeado, use a skill **descobrindo-odoo-estrutura**:
 
 ```bash
-source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate && \
-python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
   --modelo l10n_br_ciel_it_account.dfe \
   --buscar-campo "nome_do_campo"
 ```
