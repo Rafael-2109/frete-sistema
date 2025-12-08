@@ -4437,3 +4437,180 @@ def api_despesas_pendentes_lancamento():
             for d in despesas
         ]
     })
+
+
+# =================== AUDITORIA DE LANÇAMENTOS ODOO ===================
+
+@fretes_bp.route('/auditoria-lancamentos')
+@login_required
+@require_financeiro()
+def auditoria_lancamentos():
+    """
+    Tela de listagem dos lançamentos de frete/despesa no Odoo.
+    Mostra status geral de cada lançamento com visualização inline das etapas.
+    """
+    from app.fretes.models import LancamentoFreteOdooAuditoria
+    from sqlalchemy import func, case
+
+    # Parâmetros de filtro
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    filtro_status = request.args.get('status', '')  # SUCESSO, ERRO, todos
+    filtro_tipo = request.args.get('tipo', '')  # frete, despesa, todos
+    data_inicio = request.args.get('data_inicio', '')
+    data_fim = request.args.get('data_fim', '')
+
+    # Subquery para pegar a última etapa de cada lançamento (agrupado por chave_cte)
+    # e verificar se teve erro em alguma etapa
+    subquery_lancamentos = db.session.query(
+        LancamentoFreteOdooAuditoria.chave_cte,
+        LancamentoFreteOdooAuditoria.frete_id,
+        LancamentoFreteOdooAuditoria.despesa_extra_id,
+        func.max(LancamentoFreteOdooAuditoria.etapa).label('ultima_etapa'),
+        func.max(LancamentoFreteOdooAuditoria.executado_em).label('ultimo_executado'),
+        func.max(LancamentoFreteOdooAuditoria.dfe_id).label('dfe_id'),
+        func.max(LancamentoFreteOdooAuditoria.purchase_order_id).label('po_id'),
+        func.max(LancamentoFreteOdooAuditoria.invoice_id).label('invoice_id'),
+        func.max(LancamentoFreteOdooAuditoria.executado_por).label('executado_por'),
+        func.sum(case((LancamentoFreteOdooAuditoria.status == 'ERRO', 1), else_=0)).label('qtd_erros'),
+    ).group_by(
+        LancamentoFreteOdooAuditoria.chave_cte,
+        LancamentoFreteOdooAuditoria.frete_id,
+        LancamentoFreteOdooAuditoria.despesa_extra_id
+    )
+
+    # Aplicar filtros
+    if filtro_tipo == 'frete':
+        subquery_lancamentos = subquery_lancamentos.filter(
+            LancamentoFreteOdooAuditoria.frete_id.isnot(None)
+        )
+    elif filtro_tipo == 'despesa':
+        subquery_lancamentos = subquery_lancamentos.filter(
+            LancamentoFreteOdooAuditoria.despesa_extra_id.isnot(None)
+        )
+
+    if data_inicio:
+        try:
+            dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+            subquery_lancamentos = subquery_lancamentos.filter(
+                LancamentoFreteOdooAuditoria.executado_em >= dt_inicio
+            )
+        except ValueError:
+            pass
+
+    if data_fim:
+        try:
+            dt_fim = datetime.strptime(data_fim, '%Y-%m-%d')
+            dt_fim = dt_fim.replace(hour=23, minute=59, second=59)
+            subquery_lancamentos = subquery_lancamentos.filter(
+                LancamentoFreteOdooAuditoria.executado_em <= dt_fim
+            )
+        except ValueError:
+            pass
+
+    # Ordenar por data mais recente
+    subquery_lancamentos = subquery_lancamentos.order_by(desc('ultimo_executado'))
+
+    # Executar subquery
+    lancamentos_raw = subquery_lancamentos.all()
+
+    # Filtrar por status após agregar
+    if filtro_status == 'SUCESSO':
+        lancamentos_raw = [l for l in lancamentos_raw if l.qtd_erros == 0 and l.ultima_etapa == 16]
+    elif filtro_status == 'ERRO':
+        lancamentos_raw = [l for l in lancamentos_raw if l.qtd_erros > 0 or l.ultima_etapa < 16]
+    elif filtro_status == 'INCOMPLETO':
+        lancamentos_raw = [l for l in lancamentos_raw if l.qtd_erros == 0 and l.ultima_etapa < 16]
+
+    # Paginação manual
+    total = len(lancamentos_raw)
+    total_pages = math.ceil(total / per_page)
+    start = (page - 1) * per_page
+    end = start + per_page
+    lancamentos_paginated = lancamentos_raw[start:end]
+
+    # Buscar detalhes dos fretes e despesas
+    lancamentos = []
+    for l in lancamentos_paginated:
+        item = {
+            'chave_cte': l.chave_cte,
+            'frete_id': l.frete_id,
+            'despesa_extra_id': l.despesa_extra_id,
+            'ultima_etapa': l.ultima_etapa,
+            'ultimo_executado': l.ultimo_executado,
+            'dfe_id': l.dfe_id,
+            'po_id': l.po_id,
+            'invoice_id': l.invoice_id,
+            'executado_por': l.executado_por,
+            'qtd_erros': l.qtd_erros,
+            'status': 'SUCESSO' if l.qtd_erros == 0 and l.ultima_etapa == 16 else ('ERRO' if l.qtd_erros > 0 else 'INCOMPLETO'),
+            'tipo': 'frete' if l.frete_id else 'despesa',
+            'frete': None,
+            'despesa': None
+        }
+
+        # Buscar frete ou despesa
+        if l.frete_id:
+            item['frete'] = Frete.query.get(l.frete_id)
+        if l.despesa_extra_id:
+            item['despesa'] = DespesaExtra.query.get(l.despesa_extra_id)
+
+        lancamentos.append(item)
+
+    return render_template(
+        'fretes/auditoria_lancamentos.html',
+        lancamentos=lancamentos,
+        page=page,
+        per_page=per_page,
+        total=total,
+        total_pages=total_pages,
+        filtro_status=filtro_status,
+        filtro_tipo=filtro_tipo,
+        data_inicio=data_inicio,
+        data_fim=data_fim
+    )
+
+
+@fretes_bp.route('/api/auditoria-lancamentos/<chave_cte>')
+@login_required
+def api_auditoria_detalhes(chave_cte):
+    """
+    API: Retorna detalhes das etapas de um lançamento específico.
+    Usado para exibir inline na tela de listagem.
+    """
+    from app.fretes.models import LancamentoFreteOdooAuditoria
+
+    frete_id = request.args.get('frete_id', type=int)
+    despesa_id = request.args.get('despesa_id', type=int)
+
+    query = LancamentoFreteOdooAuditoria.query.filter_by(chave_cte=chave_cte)
+
+    if frete_id:
+        query = query.filter_by(frete_id=frete_id)
+    if despesa_id:
+        query = query.filter_by(despesa_extra_id=despesa_id)
+
+    auditorias = query.order_by(LancamentoFreteOdooAuditoria.etapa).all()
+
+    return jsonify({
+        'total': len(auditorias),
+        'etapas': [
+            {
+                'id': a.id,
+                'etapa': a.etapa,
+                'etapa_descricao': a.etapa_descricao,
+                'modelo_odoo': a.modelo_odoo,
+                'metodo_odoo': a.metodo_odoo,
+                'acao': a.acao,
+                'status': a.status,
+                'mensagem': a.mensagem,
+                'erro_detalhado': a.erro_detalhado[:500] if a.erro_detalhado else None,
+                'tempo_execucao_ms': a.tempo_execucao_ms,
+                'executado_em': a.executado_em.strftime('%d/%m/%Y %H:%M:%S') if a.executado_em else None,
+                'dfe_id': a.dfe_id,
+                'purchase_order_id': a.purchase_order_id,
+                'invoice_id': a.invoice_id
+            }
+            for a in auditorias
+        ]
+    })

@@ -172,6 +172,12 @@
                 Análises
             </a>
         </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="btn btn-outline-secondary btn-lg btn-block">
+                <i class="fas fa-clipboard-check"></i><br>
+                Auditoria Odoo
+            </a>
+        </div>
 
         {% if fretes_sem_nfs > 0 %}
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">

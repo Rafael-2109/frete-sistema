@@ -35,6 +35,14 @@
         color: #6c757d;
         line-height: 1.2;
     }
+
+    /* Badges de características do produto (Comp, Prod, Vend) */
+    #tabelaPalletizacao .badge {
+        min-width: 22px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.35em 0.5em;
+    }
 </style>
 {% endblock %}
 
@@ -215,23 +223,23 @@
                                         </td>
                                         <td class="text-center">
                                             {% if item.produto_comprado %}
-                                                <i class="fas fa-check-circle text-success"></i>
+                                                <span class="badge bg-primary" title="Produto Comprado">C</span>
                                             {% else %}
-                                                <i class="fas fa-times-circle text-muted"></i>
+                                                <span class="badge bg-light text-muted border" title="Não Comprado">-</span>
                                             {% endif %}
                                         </td>
                                         <td class="text-center">
                                             {% if item.produto_produzido %}
-                                                <i class="fas fa-check-circle text-success"></i>
+                                                <span class="badge bg-success" title="Produto Produzido">P</span>
                                             {% else %}
-                                                <i class="fas fa-times-circle text-muted"></i>
+                                                <span class="badge bg-light text-muted border" title="Não Produzido">-</span>
                                             {% endif %}
                                         </td>
                                         <td class="text-center">
                                             {% if item.produto_vendido %}
-                                                <i class="fas fa-check-circle text-success"></i>
+                                                <span class="badge bg-warning text-dark" title="Produto Vendido">V</span>
                                             {% else %}
-                                                <i class="fas fa-times-circle text-muted"></i>
+                                                <span class="badge bg-light text-muted border" title="Não Vendido">-</span>
                                             {% endif %}
                                         </td>
                                         <td class="text-center">

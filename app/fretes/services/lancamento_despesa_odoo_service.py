@@ -304,7 +304,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 'l10n_br_ciel_it_account.dfe',
                 [dfe_id],
                 {
-                    'l10n_br_date_in': data_entrada,
+                    'l10n_br_data_entrada': data_entrada,  # Campo correto (não l10n_br_date_in)
                     'payment_reference': f'DESPESA-{despesa_id}'
                 }
             )
@@ -320,7 +320,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 acao='write',
                 status='SUCESSO',
                 mensagem=f"Data entrada: {data_entrada}, Ref: DESPESA-{despesa_id}",
-                campos_alterados=['l10n_br_date_in', 'payment_reference'],
+                campos_alterados=['l10n_br_data_entrada', 'payment_reference'],
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id
             )
@@ -331,7 +331,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             self.odoo.write(
                 'l10n_br_ciel_it_account.dfe',
                 [dfe_id],
-                {'tipo_pedido': 'servico'}
+                {'l10n_br_tipo_pedido': 'servico'}  # Campo correto (não tipo_pedido)
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -340,12 +340,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=3,
-                etapa_descricao="Definir tipo_pedido = servico",
+                etapa_descricao="Definir l10n_br_tipo_pedido = servico",
                 modelo_odoo='l10n_br_ciel_it_account.dfe',
                 acao='write',
                 status='SUCESSO',
-                mensagem="tipo_pedido definido como 'servico'",
-                campos_alterados=['tipo_pedido'],
+                mensagem="l10n_br_tipo_pedido definido como 'servico'",
+                campos_alterados=['l10n_br_tipo_pedido'],
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id
             )
@@ -353,33 +353,39 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
             # ETAPA 4: Atualizar linha do DFe com produto de serviço
             lines_ids = dfe_data[0].get('lines_ids', [])
-            if lines_ids:
-                line_id = lines_ids[0]
-                inicio = time.time()
-                self.odoo.write(
-                    'l10n_br_ciel_it_account.dfe.line',
-                    [line_id],
-                    {
-                        'product_id': self.PRODUTO_SERVICO_FRETE_ID,
-                        'analytic_distribution': {str(self.CONTA_ANALITICA_LOGISTICA_ID): 100}
-                    }
-                )
-                tempo_ms = int((time.time() - inicio) * 1000)
+            if not lines_ids:
+                resultado['erro'] = "DFe não possui linhas"
+                resultado['mensagem'] = "Erro na etapa 4: DFe não possui linhas"
+                resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
+                return resultado
 
-                self._registrar_auditoria_despesa(
-                    despesa_extra_id=despesa_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=4,
-                    etapa_descricao="Atualizar linha DFe com produto SERVICO DE FRETE",
-                    modelo_odoo='l10n_br_ciel_it_account.dfe.line',
-                    acao='write',
-                    status='SUCESSO',
-                    mensagem=f"Linha {line_id} atualizada com produto {self.PRODUTO_SERVICO_FRETE_ID}",
-                    campos_alterados=['product_id', 'analytic_distribution'],
-                    tempo_execucao_ms=tempo_ms,
-                    dfe_id=dfe_id
-                )
+            line_id = lines_ids[0]
+            inicio = time.time()
+            self.odoo.write(
+                'l10n_br_ciel_it_account.dfe.line',
+                [line_id],
+                {
+                    'product_id': self.PRODUTO_SERVICO_FRETE_ID,
+                    'l10n_br_quantidade': 1.0,
+                    'product_uom_id': 1  # UN
+                }
+            )
+            tempo_ms = int((time.time() - inicio) * 1000)
+
+            self._registrar_auditoria_despesa(
+                despesa_extra_id=despesa_id,
+                cte_id=cte_id,
+                chave_cte=cte_chave,
+                etapa=4,
+                etapa_descricao="Atualizar linha com produto SERVICO DE FRETE",
+                modelo_odoo='l10n_br_ciel_it_account.dfe.line',
+                acao='write',
+                status='SUCESSO',
+                mensagem=f"Linha {line_id} atualizada com produto {self.PRODUTO_SERVICO_FRETE_ID}",
+                campos_alterados=['product_id', 'l10n_br_quantidade', 'product_uom_id'],
+                tempo_execucao_ms=tempo_ms,
+                dfe_id=dfe_id
+            )
             resultado['etapas_concluidas'] = 4
 
             # ETAPA 5: Atualizar vencimento
@@ -390,7 +396,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 self.odoo.write(
                     'l10n_br_ciel_it_account.dfe.pagamento',
                     [dup_id],
-                    {'date_due': data_vencimento_str}
+                    {'cobr_dup_dvenc': data_vencimento_str}  # Campo correto (não date_due)
                 )
                 tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -399,12 +405,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                     cte_id=cte_id,
                     chave_cte=cte_chave,
                     etapa=5,
-                    etapa_descricao="Atualizar vencimento",
+                    etapa_descricao=f"Atualizar vencimento para {data_vencimento_str}",
                     modelo_odoo='l10n_br_ciel_it_account.dfe.pagamento',
                     acao='write',
                     status='SUCESSO',
                     mensagem=f"Vencimento: {data_vencimento_str}",
-                    campos_alterados=['date_due'],
+                    campos_alterados=['cobr_dup_dvenc'],
                     tempo_execucao_ms=tempo_ms,
                     dfe_id=dfe_id
                 )
