@@ -67,7 +67,6 @@ def _obter_resposta_agente(mensagem: str, usuario: str) -> Optional[str]:
             client.get_response(
                 prompt=mensagem,
                 user_name=usuario,
-                max_turns=5,  # Limita turnos para resposta rápida
             )
         )
         return response.text
@@ -124,7 +123,7 @@ def criar_card_resposta(texto: str, usuario: str) -> dict:
             {
                 "type": "Action.OpenUrl",
                 "title": "Abrir Sistema",
-                "url": "https://www.sistema-fretes.onrender.com/agente"
+                "url": "https://sistema-fretes.onrender.com/agente"
             }
         ]
     }
