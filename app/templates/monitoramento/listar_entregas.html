@@ -1251,7 +1251,14 @@ nav.navbar .navbar-brand .badge.bg-primary {
                    </td>
                                      <td>
                      {% if e.data_entrega_prevista %}
-                       <button class="btn btn-sm btn-primary w-100 text-white" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')">
+                       {% set ultimo_hist = e.historico_data_prevista | sort(attribute='alterado_em', reverse=true) | first %}
+                       <button class="btn btn-sm btn-primary w-100 text-white"
+                               onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')"
+                               {% if ultimo_hist %}
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               title="Motivo: {{ ultimo_hist.motivo_alteracao }}"
+                               {% endif %}>
                          📅 {{ e.data_entrega_prevista | formatar_data_segura }}
                        </button>
                      {% else %}
@@ -1510,7 +1517,14 @@ nav.navbar .navbar-brand .badge.bg-primary {
           </td>
           <td class="obs-cell-container">
             {% if e.data_entrega_prevista %}
-              <button class="btn btn-sm btn-primary w-100 text-white" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')">
+              {% set ultimo_hist_mobile = e.historico_data_prevista | sort(attribute='alterado_em', reverse=true) | first %}
+              <button class="btn btn-sm btn-primary w-100 text-white"
+                      onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')"
+                      {% if ultimo_hist_mobile %}
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="top"
+                      title="Motivo: {{ ultimo_hist_mobile.motivo_alteracao }}"
+                      {% endif %}>
                 📅 {{ e.data_entrega_prevista | formatar_data_segura }}
               </button>
             {% else %}
@@ -1930,6 +1944,14 @@ nav.navbar .navbar-brand .badge.bg-primary {
 <!-- ✅ SCRIPT BÁSICO -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // ===========================
+  // INICIALIZAR TOOLTIPS BOOTSTRAP
+  // ===========================
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+    new bootstrap.Tooltip(tooltipTriggerEl);
+  });
+
   // ===========================
   // PRESERVAR FILTROS NOS LINKS DE ORDENAÇÃO
   // ===========================

@@ -628,13 +628,14 @@ class LancamentoOdooService:
                 'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
             }
 
-            # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD
+            # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
             # O Odoo pode criar o PO com operação da empresa FB, precisamos corrigir para CD
+            operacao_correta_id = None
             try:
                 po_operacao = self.odoo.read(
                     'purchase.order',
                     [purchase_order_id],
-                    ['l10n_br_operacao_id']
+                    ['l10n_br_operacao_id', 'order_line']
                 )
                 if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
                     operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
@@ -644,15 +645,27 @@ class LancamentoOdooService:
                         operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
                         dados_po['l10n_br_operacao_id'] = operacao_correta_id
                         current_app.logger.info(
-                            f"🔄 Corrigindo operação fiscal: {operacao_atual_id} ({operacao_atual_nome}) "
+                            f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
                             f"→ {operacao_correta_id} (empresa CD)"
                         )
+
+                        # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO
+                        line_ids = po_operacao[0].get('order_line', [])
+                        if line_ids:
+                            self.odoo.write(
+                                'purchase.order.line',
+                                line_ids,
+                                {'l10n_br_operacao_id': operacao_correta_id}
+                            )
+                            current_app.logger.info(
+                                f"🔄 Corrigindo operação fiscal nas {len(line_ids)} linha(s) do PO"
+                            )
                     else:
                         current_app.logger.info(
                             f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
                         )
             except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao verificar operação fiscal: {e}")
+                current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
 
             # ✅ ADICIONAR partner_ref com número da fatura (se houver)
             if frete.fatura_frete_id and frete.fatura_frete:
