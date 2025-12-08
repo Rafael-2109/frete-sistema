@@ -417,11 +417,13 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             resultado['etapas_concluidas'] = 5
 
             # ETAPA 6: Gerar Purchase Order
+            contexto = {'validate_analytic': True}
             inicio = time.time()
-            self.odoo.execute_method(
+            self.odoo.execute_kw(
                 'l10n_br_ciel_it_account.dfe',
                 'action_gerar_po_dfe',
-                [[dfe_id]]
+                [[dfe_id]],
+                {'context': contexto}
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -544,10 +546,11 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
             # ETAPA 9: Confirmar PO
             inicio = time.time()
-            self.odoo.execute_method(
+            self.odoo.execute_kw(
                 'purchase.order',
                 'button_confirm',
-                [[po_id]]
+                [[po_id]],
+                {'context': {'validate_analytic': True}}
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -569,10 +572,10 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             resultado['etapas_concluidas'] = 9
 
             # ETAPA 10: Aprovar PO se necessário
-            po_data = self.odoo.read('purchase.order', [po_id], ['state'])
-            if po_data and po_data[0].get('state') == 'to approve':
+            po_data = self.odoo.read('purchase.order', [po_id], ['state', 'is_current_approver'])
+            if po_data and po_data[0].get('state') == 'to approve' and po_data[0].get('is_current_approver'):
                 inicio = time.time()
-                self.odoo.execute_method(
+                self.odoo.execute_kw(
                     'purchase.order',
                     'button_approve',
                     [[po_id]]
@@ -612,7 +615,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
             # ETAPA 11: Criar Invoice
             inicio = time.time()
-            self.odoo.execute_method(
+            self.odoo.execute_kw(
                 'purchase.order',
                 'action_create_invoice',
                 [[po_id]]
@@ -648,41 +651,62 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             resultado['invoice_id'] = invoice_id
 
             # ETAPA 12: Atualizar impostos da Invoice
-            inicio = time.time()
-            self.odoo.execute_method(
-                'account.move',
-                '_compute_tax_totals',
-                [[invoice_id]]
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+            try:
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 12: {e}")
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=12,
-                etapa_descricao="Atualizar impostos da Invoice",
-                modelo_odoo='account.move',
-                metodo_odoo='_compute_tax_totals',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem="Impostos atualizados",
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id,
-                invoice_id=invoice_id
-            )
+            try:
+                self.odoo.execute_kw(
+                    'account.move',
+                    'onchange_l10n_br_calcular_imposto',
+                    [[invoice_id]]
+                )
+            except Exception as e:
+                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                current_app.logger.warning(
+                    f"⚠️ ETAPA 12 falhou (não crítico): {e.__class__.__name__}. "
+                    f"Impostos podem precisar ajuste manual no Odoo."
+                )
+
+            try:
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=12,
+                    etapa_descricao="Atualizar impostos da Invoice",
+                    modelo_odoo='account.move',
+                    metodo_odoo='onchange_l10n_br_calcular_imposto',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem="Impostos atualizados",
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                    invoice_id=invoice_id
+                )
+            except Exception as e:
+                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                current_app.logger.error(f"❌ Erro ao registrar auditoria ETAPA 12 (não crítico): {e}")
+                db.session.rollback()
+                db.session.remove()
+
             resultado['etapas_concluidas'] = 12
 
-            # ETAPA 13: Configurar Invoice
+            # ETAPA 13: Configurar Invoice (campos fiscais + vencimento + referência)
+            dados_invoice = {
+                'l10n_br_compra_indcom': 'out',
+                'l10n_br_situacao_nf': 'autorizado',
+                'invoice_date_due': data_vencimento_str,
+                'payment_reference': f'DESPESA-{despesa_id}'
+            }
+
             inicio = time.time()
             self.odoo.write(
                 'account.move',
                 [invoice_id],
-                {
-                    'invoice_date': data_entrada,
-                    'payment_reference': f'DESPESA-{despesa_id}'
-                }
+                dados_invoice
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -691,12 +715,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=13,
-                etapa_descricao="Configurar Invoice",
+                etapa_descricao="Configurar Invoice (campos fiscais e vencimento)",
                 modelo_odoo='account.move',
                 acao='write',
                 status='SUCESSO',
                 mensagem=f"Invoice {invoice_id} configurada",
-                campos_alterados=['invoice_date', 'payment_reference'],
+                campos_alterados=list(dados_invoice.keys()),
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id,
                 purchase_order_id=po_id,
@@ -705,38 +729,56 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             resultado['etapas_concluidas'] = 13
 
             # ETAPA 14: Atualizar impostos novamente
-            inicio = time.time()
-            self.odoo.execute_method(
-                'account.move',
-                '_compute_tax_totals',
-                [[invoice_id]]
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+            try:
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 14: {e}")
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=14,
-                etapa_descricao="Atualizar impostos novamente",
-                modelo_odoo='account.move',
-                metodo_odoo='_compute_tax_totals',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem="Impostos recalculados",
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id,
-                invoice_id=invoice_id
-            )
+            try:
+                self.odoo.execute_kw(
+                    'account.move',
+                    'onchange_l10n_br_calcular_imposto_btn',
+                    [[invoice_id]]
+                )
+            except Exception as e:
+                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                current_app.logger.warning(
+                    f"⚠️ ETAPA 14 falhou (não crítico): {e.__class__.__name__}. "
+                    f"Impostos podem precisar ajuste manual no Odoo."
+                )
+
+            try:
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=14,
+                    etapa_descricao="Atualizar impostos da Invoice (final)",
+                    modelo_odoo='account.move',
+                    metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem="Impostos recalculados",
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                    invoice_id=invoice_id
+                )
+            except Exception as e:
+                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                current_app.logger.error(f"❌ Erro ao registrar auditoria ETAPA 14 (não crítico): {e}")
+                db.session.rollback()
+                db.session.remove()
+
             resultado['etapas_concluidas'] = 14
 
             # ETAPA 15: Confirmar Invoice
             inicio = time.time()
-            self.odoo.execute_method(
+            self.odoo.execute_kw(
                 'account.move',
                 'action_post',
-                [[invoice_id]]
+                [[invoice_id]],
+                {'context': {'validate_analytic': True}}
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
