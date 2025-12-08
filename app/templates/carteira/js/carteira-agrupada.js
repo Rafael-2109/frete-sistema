@@ -1333,17 +1333,17 @@ class CarteiraAgrupada {
                     <table class="table table-sm table-hover mb-0">
                         <thead style="background-color: #1a2332 !important; border-bottom: 2px solid #2a3442;">
                             <tr>
-                                <th width="100" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Tipo</th>
-                                <th width="80" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Status</th>
-                                <th class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Valor</th>
-                                <th class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Peso</th>
-                                <th class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Pallet</th>
-                                <th class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Expedição</th>
-                                <th class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Agendamento</th>
-                                <th style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Protocolo</th>
-                                <th class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Confirmação</th>
-                                <th style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Obs. Separação</th>
-                                <th width="220" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Ações</th>
+                                <th width="80" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Tipo</th>
+                                <th width="70" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Status</th>
+                                <th width="90" class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Valor</th>
+                                <th width="70" class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Peso</th>
+                                <th width="60" class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Pallet</th>
+                                <th width="85" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Expedição</th>
+                                <th width="85" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Agendamento</th>
+                                <th width="80" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Protocolo</th>
+                                <th width="90" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Confirmação</th>
+                                <th width="200" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Obs. Separação</th>
+                                <th width="280" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1377,7 +1377,7 @@ class CarteiraAgrupada {
         const obsSeparacao = item.obs_separacao ?
             `<span class="obs-separacao-texto"
                    title="${item.obs_separacao.replace(/"/g, '&quot;')}"
-                   style="cursor: help; display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                   style="cursor: help; display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 <i class="fas fa-comment-alt text-muted me-1"></i>${item.obs_separacao}
              </span>` : '-';
 
@@ -1401,16 +1401,10 @@ class CarteiraAgrupada {
                             <i class="fas fa-calendar-alt"></i> Datas
                         </button>
                         ${item.status === 'PREVISAO' ? `
-                            <button class="btn btn-outline-success btn-sm" 
+                            <button class="btn btn-outline-success btn-sm"
                                     onclick="carteiraAgrupada.alterarStatusSeparacao('${item.loteId}', 'ABERTO')"
                                     title="Confirmar separação">
                                 <i class="fas fa-check"></i> Confirmar
-                            </button>
-                        ` : item.status === 'ABERTO' ? `
-                            <button class="btn btn-outline-warning btn-sm" 
-                                    onclick="carteiraAgrupada.alterarStatusSeparacao('${item.loteId}', 'PREVISAO')"
-                                    title="Voltar para previsão">
-                                <i class="fas fa-undo"></i> Previsão
                             </button>
                         ` : ''}
                         <button class="btn btn-outline-info btn-sm" 
