@@ -4,7 +4,7 @@ Tools do Agente Logístico.
 NOTA: As funcionalidades do agente são implementadas via SKILLS
 seguindo as melhores práticas da Anthropic.
 
-Skills localização: .claude/skills/agente-logistico/
+Skills localização: .claude/skills/ (gerindo-expedicao, memoria-usuario, etc.)
 - Scripts são executados via ferramenta Bash
 - Claude invoca Skills automaticamente baseado na descrição
 

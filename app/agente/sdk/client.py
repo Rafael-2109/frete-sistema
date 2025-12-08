@@ -66,7 +66,7 @@ class AgentClient:
     Cliente do Claude Agent SDK oficial.
 
     ARQUITETURA (conforme melhores práticas Anthropic):
-    - Usa SKILLS para funcionalidades (.claude/skills/agente-logistico/)
+    - Usa SKILLS para funcionalidades (.claude/skills/)
     - Skills são invocadas automaticamente baseado na descrição
     - Scripts são executados via Bash tool
     - NÃO usa Custom Tools MCP (evita duplicação)
@@ -233,7 +233,8 @@ Nunca invente informações."""
     def _format_system_prompt(
         self,
         user_name: str = "Usuário",
-        extra_context: str = ""
+        extra_context: str = "",
+        user_id: int = None
     ) -> str:
         """
         Formata system prompt com variáveis.
@@ -241,6 +242,7 @@ Nunca invente informações."""
         Args:
             user_name: Nome do usuário
             extra_context: Contexto adicional
+            user_id: ID do usuário (para Memory Tool)
 
         Returns:
             System prompt formatado
@@ -250,6 +252,12 @@ Nunca invente informações."""
             datetime.now().strftime("%d/%m/%Y %H:%M")
         )
         prompt = prompt.replace("{usuario_nome}", user_name)
+
+        # Memory Tool: passa user_id para os scripts
+        if user_id:
+            prompt = prompt.replace("{user_id}", str(user_id))
+        else:
+            prompt = prompt.replace("{user_id}", "NAO_DISPONIVEL")
 
         if extra_context:
             prompt = prompt.replace("{conhecimento_negocio}", extra_context)
@@ -270,12 +278,13 @@ Nunca invente informações."""
         fork_session: bool = False,
         model: Optional[str] = None,
         thinking_enabled: bool = False,
+        user_id: int = None,
     ) -> ClaudeAgentOptions:
         """
         Constrói ClaudeAgentOptions conforme documentação oficial Anthropic.
 
         ARQUITETURA (conforme melhores práticas):
-        - Usa SKILLS para funcionalidades (.claude/skills/agente-logistico/)
+        - Usa SKILLS para funcionalidades (.claude/skills/)
         - Skills são invocadas automaticamente baseado na descrição
         - Scripts são executados via Bash tool
         - NÃO usa Custom Tools MCP (evita duplicação)
@@ -302,11 +311,11 @@ Nunca invente informações."""
         """
         import os
 
-        # System prompt customizado
-        custom_instructions = self._format_system_prompt(user_name, extra_context)
+        # System prompt customizado (com user_id para Memory Tool)
+        custom_instructions = self._format_system_prompt(user_name, extra_context, user_id)
 
         # Diretório do projeto para carregar Skills
-        # Skills estão em: .claude/skills/agente-logistico/
+        # Skills estão em: .claude/skills/
         project_cwd = os.path.dirname(
             os.path.dirname(
                 os.path.dirname(
@@ -405,6 +414,7 @@ Nunca invente informações."""
         model: Optional[str] = None,
         thinking_enabled: bool = False,
         plan_mode: bool = False,
+        user_id: int = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando SDK oficial.
@@ -420,6 +430,7 @@ Nunca invente informações."""
             model: Modelo a usar (FEAT-001)
             thinking_enabled: Ativar Extended Thinking (FEAT-002)
             plan_mode: Ativar modo somente-leitura (FEAT-010)
+            user_id: ID do usuário (para Memory Tool)
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -437,6 +448,7 @@ Nunca invente informações."""
             max_turns=max_turns,
             model=model,
             thinking_enabled=thinking_enabled,
+            user_id=user_id,
         )
 
         current_session_id = session_id

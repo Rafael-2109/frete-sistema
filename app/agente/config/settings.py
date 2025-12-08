@@ -33,11 +33,12 @@ class AgentSettings:
 
     # Tools do SDK (ferramentas padrão permitidas)
     # NOTA: Funcionalidades são implementadas via SKILLS, não Custom Tools MCP
-    # Skills estão em: .claude/skills/agente-logistico/
+    # Skills estão em: .claude/skills/ (gerindo-expedicao, memoria-usuario, etc.)
     # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/skills
     tools_enabled: List[str] = field(default_factory=lambda: [
         'Skill',    # OBRIGATÓRIO - permite invocar Skills
         'Bash',     # OBRIGATÓRIO - executa scripts das Skills
+        'Task',     # Invocar subagentes (.claude/agents/)
         'Read',     # Leitura de arquivos
         'Glob',     # Busca de arquivos
         'Grep',     # Busca em conteúdo

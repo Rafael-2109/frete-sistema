@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: analisando_disponibilidade.py
+Script: analisando_disponibilidade_estoque.py
 Queries cobertas: Q1, Q2, Q3, Q4, Q5, Q6, Q9, Q11, Q12
 
 Analisa disponibilidade de estoque para pedidos ou grupos de clientes.
@@ -910,15 +910,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  python analisando_disponibilidade.py --pedido VCD123                          # Q1
-  python analisando_disponibilidade.py --pedido VCD123 --data amanha            # Q2
-  python analisando_disponibilidade.py --pedido VCD123 --data amanha --sugerir-adiamento  # Q3
-  python analisando_disponibilidade.py --grupo assai --uf SP                    # Q4
-  python analisando_disponibilidade.py --grupo assai --diagnosticar-origem      # Q5
-  python analisando_disponibilidade.py --data amanha --sem-agendamento          # Q6
-  python analisando_disponibilidade.py --grupo atacadao --loja 183 --completude # Q9
-  python analisando_disponibilidade.py --atrasados --diagnosticar-causa         # Q11
-  python analisando_disponibilidade.py --ranking-impacto                        # Q12
+  python analisando_disponibilidade_estoque.py --pedido VCD123                          # Q1
+  python analisando_disponibilidade_estoque.py --pedido VCD123 --data amanha            # Q2
+  python analisando_disponibilidade_estoque.py --pedido VCD123 --data amanha --sugerir-adiamento  # Q3
+  python analisando_disponibilidade_estoque.py --grupo assai --uf SP                    # Q4
+  python analisando_disponibilidade_estoque.py --grupo assai --diagnosticar-origem      # Q5
+  python analisando_disponibilidade_estoque.py --data amanha --sem-agendamento          # Q6
+  python analisando_disponibilidade_estoque.py --grupo atacadao --loja 183 --completude # Q9
+  python analisando_disponibilidade_estoque.py --atrasados --diagnosticar-causa         # Q11
+  python analisando_disponibilidade_estoque.py --ranking-impacto                        # Q12
         """
     )
     # Filtros

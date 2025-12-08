@@ -1,12 +1,93 @@
 # Regras de Negocio - Sistema de Fretes
 
-**Ultima Atualizacao**: 01/12/2025
+**Ultima Atualizacao**: 07/12/2025
 **Uso**: Consultar quando precisar de logica de dominio detalhada
 
 > **NOTA**: As regras CRITICAS de `sincronizado_nf` e `status` estao no `CLAUDE.md` principal.
 > Este arquivo contem regras de negocio detalhadas e especificas.
 
 Este documento descreve as regras de negocio especificas do sistema logistico.
+
+---
+
+## 0. A Empresa: Nacom Goya
+
+### Estrutura do Grupo
+
+```
+NACOM GOYA (Empresa Principal)
+├── Planta Fabril (Conservas) - Fracionamento
+├── CD/Armazem (4.000 pallets) - 2km das fabricas
+└── LA FAMIGLIA (Subcontratada)
+    ├── Galpao Molhos (6 tanques + 6 envasadoras)
+    └── Galpao Oleos
+```
+
+### Escala de Operacao
+
+| Metrica | Valor |
+|---------|-------|
+| Faturamento mensal | ~R$ 16.000.000 |
+| Volume mensal | ~1.000.000 kg |
+| Pedidos/mes | ~500 |
+| Capacidade CD | 4.000 pallets |
+| Expedicao maxima/dia | 500 pallets |
+
+### Produtos
+
+| Categoria | Origem | Marcas Proprias |
+|-----------|--------|-----------------|
+| Conservas | Importadas em bombonas, fracionadas | Campo Belo, La Famiglia, St Isabel, Casablanca, Dom Gameiro |
+| Molhos | Produzidos (La Famiglia) | La Famiglia |
+| Oleos | Produzidos (La Famiglia) | La Famiglia |
+
+### Top Clientes (75% do faturamento)
+
+| # | Cliente | Tipo | Fat/Mes | % Total | Gestor |
+|---|---------|------|---------|---------|--------|
+| 1 | **Atacadao** | Atacarejo | R$ 8MM | **50%** | Junior |
+| 2 | **Assai** | Atacarejo | R$ 2.1MM | 13% | Junior (SP) / Miler (outros) |
+| 3 | Gomes da Costa | Industria | R$ 700K | 4% | Fernando |
+| 4 | Mateus | Atacarejo | R$ 500K | 3% | Miler |
+| 5 | Dia a Dia | Atacarejo | R$ 350K | 2% | Miler |
+| 6 | Tenda | Atacarejo | R$ 350K | 2% | Junior |
+
+**REGRA CRITICA:** Atacadao = 50% do faturamento. Se Atacadao atrasa, a empresa SENTE.
+
+### Estrutura Comercial
+
+```
+GESTORES:
+├── JUNIOR (~4-5 vendedores) - KEY ACCOUNTS
+│   ├── Atacadao (Brasil inteiro)
+│   ├── Assai SP (40% do Assai)
+│   ├── Tenda (so SP)
+│   └── Spani (SP e RJ)
+│   └── Contato: WhatsApp
+│
+├── MILER (~50 vendedores)
+│   ├── Brasil EXCETO SP
+│   ├── Assai (fora SP), Mateus, Dia a Dia
+│   └── Contato: WhatsApp
+│
+├── FERNANDO (~4-5 vendedores)
+│   ├── Industrias (Gomes da Costa, Camil, Seara, Heinz)
+│   └── Contato: WhatsApp
+│
+└── DENISE (2 vendedoras)
+    ├── Vendas internas
+    └── Contato: Microsoft Teams
+
+PCP:
+└── Contato: Microsoft Teams (ou ramal)
+└── SLA de resposta: 30 minutos
+```
+
+### Gargalos (Ordem de Frequencia)
+
+1. **AGENDAS** (Gargalo #1) - Cliente DEMORA para aprovar agenda
+2. **MATERIA-PRIMA** (Gargalo #2) - MP importada com lead time longo
+3. **PRODUCAO** (Gargalo #3) - Capacidade de linhas
 
 ---
 

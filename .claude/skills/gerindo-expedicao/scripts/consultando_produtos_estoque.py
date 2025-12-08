@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: consultando_estoque.py
+Script: consultando_produtos_estoque.py
 Queries cobertas: Q13, Q17, Q18, Q20
 
 Consulta estoque atual, entradas, pendencias e projecoes.
@@ -175,17 +175,17 @@ def consultar_movimentacoes(args, tipo='entradas'):
     return resultado
 
 
-def consultar_entradas(args):
+def consultar_produtos_entradas(args):
     """Wrapper para manter compatibilidade"""
     return consultar_movimentacoes(args, tipo='entradas')
 
 
-def consultar_saidas(args):
+def consultar_produtos_saidas(args):
     """Wrapper para consultar saidas"""
     return consultar_movimentacoes(args, tipo='saidas')
 
 
-def consultar_pendente_embarque(args):
+def consultar_produtos_pendente_embarque(args):
     """
     Query 17: Falta embarcar muito pessego?
     Calcula quantidade na carteira vs em separacao.
@@ -324,7 +324,7 @@ def consultar_pendente_embarque(args):
     return resultado
 
 
-def consultar_sobra_estoque(args):
+def consultar_produtos_sobra_estoque(args):
     """
     Query 18: Quanto vai sobrar de pessego no estoque?
     Calcula: estoque - carteira_total = sobra.
@@ -438,7 +438,7 @@ def consultar_sobra_estoque(args):
     return resultado
 
 
-def consultar_previsao_ruptura(args):
+def consultar_produtos_previsao_ruptura(args):
     """
     Query 20: O que vai dar falta essa semana?
     Lista produtos com ruptura prevista nos proximos N dias.
@@ -560,11 +560,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  python consultando_estoque.py --produto palmito --entradas
-  python consultando_estoque.py --produto palmito --saidas
-  python consultando_estoque.py --produto pessego --pendente
-  python consultando_estoque.py --produto pessego --sobra
-  python consultando_estoque.py --ruptura --dias 7
+  python consultando_produtos_estoque.py --produto palmito --entradas
+  python consultando_produtos_estoque.py --produto palmito --saidas
+  python consultando_produtos_estoque.py --produto pessego --pendente
+  python consultando_produtos_estoque.py --produto pessego --sobra
+  python consultando_produtos_estoque.py --ruptura --dias 7
         """
     )
 
@@ -586,15 +586,15 @@ Exemplos:
     with app.app_context():
         # Determinar qual analise executar
         if args.produto and args.entradas:
-            resultado = consultar_entradas(args)
+            resultado = consultar_produtos_entradas(args)
         elif args.produto and args.saidas:
-            resultado = consultar_saidas(args)
+            resultado = consultar_produtos_saidas(args)
         elif args.produto and args.pendente:
-            resultado = consultar_pendente_embarque(args)
+            resultado = consultar_produtos_pendente_embarque(args)
         elif args.produto and args.sobra:
-            resultado = consultar_sobra_estoque(args)
+            resultado = consultar_produtos_sobra_estoque(args)
         elif args.ruptura:
-            resultado = consultar_previsao_ruptura(args)
+            resultado = consultar_produtos_previsao_ruptura(args)
         else:
             resultado = {
                 'sucesso': False,

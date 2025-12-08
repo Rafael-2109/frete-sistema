@@ -157,7 +157,7 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
 | consultando-odoo-produtos | Consultas de catalogo de produtos (product.product) |
 | descobrindo-odoo-estrutura | Descobrir campos/modelos nao mapeados |
 | integracao-odoo | Criar novas integracoes (desenvolvimento) |
-| agente-logistico | Consultas de carteira, separacoes e estoque |
+| gerindo-expedicao | Consultas de carteira, separacoes e estoque |
 
 > **NOTA**: Esta skill eh para CONSULTAS de cadastros em producao.
 > Para descobrir campos desconhecidos, use `descobrindo-odoo-estrutura`.

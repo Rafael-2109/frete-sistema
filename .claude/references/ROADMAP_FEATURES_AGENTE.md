@@ -497,7 +497,7 @@ claude --model sonnet
 
 | Skill | Descricao |
 |-------|-----------|
-| agente-logistico | Separacoes e estoque |
+| gerindo-expedicao | Separacoes e estoque |
 | consultando-odoo-produtos | Produtos Odoo |
 | consultando-odoo-compras | Pedidos de compra |
 | consultando-odoo-dfe | Documentos fiscais |

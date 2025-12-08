@@ -127,7 +127,7 @@ echo '{"dados": [...]}' | python .../exportar.py \
 
 Quando o usuario pedir "exporte os 10 maiores pedidos para Excel":
 
-1. **Buscar dados** usando skill apropriada (ex: `agente-logistico`)
+1. **Buscar dados** usando skill apropriada (ex: `gerindo-expedicao`)
 2. **Formatar como JSON**: `{"dados": [...]}`
 3. **Executar script**:
    ```bash
@@ -170,7 +170,7 @@ Quando o usuario pedir "exporte os 10 maiores pedidos para Excel":
 | Skill | Uso |
 |-------|-----|
 | lendo-arquivos | LER arquivos enviados pelo usuario |
-| agente-logistico | Consultas de carteira para exportar |
+| gerindo-expedicao | Consultas de carteira para exportar |
 | consultando-odoo-produtos | Consultas de produtos para exportar |
 | consultando-odoo-cadastros | Consultas de cadastros para exportar |
 

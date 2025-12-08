@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: consultando_pedidos.py
+Script: consultando_situacao_pedidos.py
 Queries cobertas: Q8, Q10, Q14, Q16, Q19
 
 Consulta pedidos por diversos filtros e perspectivas.
@@ -103,7 +103,7 @@ def parse_data_natural(termo: str) -> date:
     raise ValueError(f"Formato de data nao reconhecido: '{termo}'. Use: hoje, amanha, dd/mm/yyyy, dd/mm ou dd")
 
 
-def consultar_pedidos_grupo(args):
+def consultar_situacao_pedidos_grupo(args):
     """
     Query 8: Tem pedido pendente pro Atacadao?
     Busca pedidos pendentes de um grupo empresarial.
@@ -185,7 +185,7 @@ def consultar_pedidos_grupo(args):
     return resultado
 
 
-def consultar_pedidos_atrasados(args):
+def consultar_situacao_pedidos_atrasados(args):
     """
     Query 10: Tem pedido atrasado pra embarcar?
     Busca pedidos com expedicao < hoje em Separacao (sincronizado_nf=False).
@@ -640,7 +640,7 @@ def consultar_consolidacao(args):
     return resultado
 
 
-def consultar_pedidos_por_produto(args):
+def consultar_situacao_pedidos_por_produto(args):
     """
     Consulta pedidos que contem um produto especifico.
 
@@ -810,14 +810,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  python consultando_pedidos.py --grupo atacadao
-  python consultando_pedidos.py --atrasados
-  python consultando_pedidos.py --verificar-bonificacao
-  python consultando_pedidos.py --pedido VCD123 --status
-  python consultando_pedidos.py --consolidar-com "assai 123"
-  python consultando_pedidos.py --produto "azeitona verde pouch" --em-separacao
-  python consultando_pedidos.py --produto palmito --ate-data amanha
-  python consultando_pedidos.py --produto pessego --ate-data 15/12
+  python consultando_situacao_pedidos.py --grupo atacadao
+  python consultando_situacao_pedidos.py --atrasados
+  python consultando_situacao_pedidos.py --verificar-bonificacao
+  python consultando_situacao_pedidos.py --pedido VCD123 --status
+  python consultando_situacao_pedidos.py --consolidar-com "assai 123"
+  python consultando_situacao_pedidos.py --produto "azeitona verde pouch" --em-separacao
+  python consultando_situacao_pedidos.py --produto palmito --ate-data amanha
+  python consultando_situacao_pedidos.py --produto pessego --ate-data 15/12
         """
     )
 
@@ -839,9 +839,9 @@ Exemplos:
     with app.app_context():
         # Determinar qual analise executar
         if args.grupo:
-            resultado = consultar_pedidos_grupo(args)
+            resultado = consultar_situacao_pedidos_grupo(args)
         elif args.atrasados:
-            resultado = consultar_pedidos_atrasados(args)
+            resultado = consultar_situacao_pedidos_atrasados(args)
         elif args.verificar_bonificacao:
             resultado = verificar_bonificacao(args)
         elif args.pedido and args.status:
@@ -849,7 +849,7 @@ Exemplos:
         elif args.consolidar_com:
             resultado = consultar_consolidacao(args)
         elif args.produto:
-            resultado = consultar_pedidos_por_produto(args)
+            resultado = consultar_situacao_pedidos_por_produto(args)
         else:
             resultado = {
                 'sucesso': False,

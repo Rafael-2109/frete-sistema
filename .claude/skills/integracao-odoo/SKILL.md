@@ -258,7 +258,7 @@ odoo.execute_method(modelo, metodo, args)
 | consultando-odoo-compras | Para CONSULTAS de pedidos de compra (purchase.order) |
 | consultando-odoo-produtos | Para CONSULTAS de catalogo de produtos (product.product) |
 | descobrindo-odoo-estrutura | Para descobrir campos/modelos nao mapeados |
-| agente-logistico | Para consultas de carteira, separacoes e estoque |
+| gerindo-expedicao | Para consultas de carteira, separacoes e estoque |
 
 ## Templates Disponiveis
 

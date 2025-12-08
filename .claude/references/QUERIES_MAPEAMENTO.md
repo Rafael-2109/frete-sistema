@@ -3,7 +3,7 @@
 ## Indice
 
 1. [Scripts Consolidados](#scripts-consolidados)
-2. [analisando_disponibilidade.py](#script-analisando_disponibilidadepy)
+2. [analisando_disponibilidade_estoque.py](#script-analisando_disponibilidade_estoquepy)
    - [Q1: Quando pedido estara disponivel](#q1-quando-o-pedido-vcd123-estara-disponivel)
    - [Q2: Ruptura se enviar amanha](#q2-o-que-vai-ter-de-ruptura-se-eu-enviar-o-pedido-vcd123-amanha)
    - [Q3: Qual pedido adiar](#q3-qual-pedido-eu-precisaria-alterar-a-data-para-enviar-o-vcd123-amanha)
@@ -13,20 +13,20 @@
    - [Q9: Falta muito pra matar pedido](#q9-falta-muito-pra-matar-o-pedido-do-atacadao-183)
    - [Q11: Atrasados sao por falta](#q11-os-pedidos-atrasados-sao-por-falta)
    - [Q12: Pedidos travando carteira](#q12-quais-pedidos-mais-estao-travando-a-carteira)
-3. [consultando_pedidos.py](#script-consultando_pedidospy)
+3. [consultando_situacao_pedidos.py](#script-consultando_situacao_pedidospy)
    - [Q8: Pedido pendente pro cliente](#q8-tem-pedido-pendente-pro-atacadao)
    - [Q10: Pedido atrasado](#q10-tem-pedido-atrasado-pra-embarcar)
    - [Q14: Faltando bonificacao](#q14-tem-pedido-faltando-bonificacao)
    - [Q16: Status do pedido](#q16-pedido-vcd123-ta-em-separacao)
    - [Q19: Pedidos para consolidar](#q19-tem-mais-pedido-pra-mandar-junto-com-o-assai-lj-123)
-4. [consultando_estoque.py](#script-consultando_estoquepy)
+4. [consultando_produtos_estoque.py](#script-consultando_produtos_estoquepy)
    - [Q13: Chegou produto](#q13-chegou-o-palmito)
    - [Q17: Falta embarcar produto](#q17-falta-embarcar-muito-pessego)
    - [Q18: Sobra de estoque](#q18-quanto-vai-sobrar-de-pessego-no-estoque)
    - [Q20: Previsao de falta](#q20-o-que-vai-dar-falta-essa-semana)
-5. [calculando_prazo.py](#script-calculando_prazopy)
+5. [calculando_leadtime_entrega.py](#script-calculando_leadtime_entregapy)
    - [Q7: Quando chega no cliente](#q7-se-embarcar-o-pedido-vcd123-amanha-quando-chega-no-cliente)
-6. [analisando_programacao.py](#script-analisando_programacaopy)
+6. [consultando_programacao_producao.py](#script-consultando_programacao_producaopy)
    - [Q15: Alterar programacao](#q15-o-que-da-pra-alterar-na-programacao-pra-matar-a-ruptura)
 
 ---
@@ -35,19 +35,21 @@
 
 | Script | Queries | Dominio |
 |--------|---------|---------|
-| `analisando_disponibilidade.py` | 1, 2, 3, 4, 5, 6, 9, 11, 12 | Disponibilidade e impacto |
-| `consultando_pedidos.py` | 8, 10, 14, 16, 19 | Consulta de pedidos |
-| `consultando_estoque.py` | 13, 17, 18, 20 | Estoque e projecoes |
-| `calculando_prazo.py` | 7 | Lead time e entrega |
-| `analisando_programacao.py` | 15 | Producao |
+| `analisando_disponibilidade_estoque.py` | 1, 2, 3, 4, 5, 6, 9, 11, 12 | Disponibilidade e impacto |
+| `consultando_situacao_pedidos.py` | 8, 10, 14, 16, 19 | Consulta de pedidos |
+| `consultando_produtos_estoque.py` | 13, 17, 18, 20 | Estoque e projecoes |
+| `calculando_leadtime_entrega.py` | 7 | Lead time e entrega |
+| `consultando_programacao_producao.py` | 15 | Producao |
+
+**Caminho dos scripts:** `.claude/skills/gerindo-expedicao/scripts/`
 
 ---
 
-## Script: analisando_disponibilidade.py
+## Script: analisando_disponibilidade_estoque.py
 
 ### Q1: "Quando o pedido VCD123 estara disponivel?"
 
-**Comando:** `analisando_disponibilidade.py --pedido VCD123`
+**Comando:** `--pedido VCD123`
 
 **Logica:**
 1. Buscar itens: CarteiraPrincipal WHERE num_pedido = 'VCD123' AND qtd_saldo > 0
@@ -67,7 +69,7 @@ Itens limitantes:
 
 ### Q2: "O que vai ter de ruptura se eu enviar o pedido VCD123 amanha?"
 
-**Comando:** `analisando_disponibilidade.py --pedido VCD123 --data amanha`
+**Comando:** `--pedido VCD123 --data amanha`
 
 **Logica:**
 1. Buscar itens do VCD123
@@ -86,7 +88,7 @@ Se enviar VCD123 amanha, faltarao os produtos:
 
 ### Q3: "Qual pedido eu precisaria alterar a data para enviar o VCD123 amanha?"
 
-**Comando:** `analisando_disponibilidade.py --pedido VCD123 --data amanha --sugerir-adiamento`
+**Comando:** `--pedido VCD123 --data amanha --sugerir-adiamento`
 
 **Logica:**
 1. Identificar produtos do VCD123 com estoque insuficiente
@@ -105,7 +107,7 @@ Para enviar VCD123 amanha, voce poderia adiar:
 
 ### Q4: "O que esta impactando para enviar os pedidos do Assai de SP completo?"
 
-**Comando:** `analisando_disponibilidade.py --grupo assai --uf SP`
+**Comando:** `--grupo assai --uf SP`
 
 **Logica:**
 1. Buscar pedidos: cnpj_cpf LIKE '06057223%' AND estado = 'SP'
@@ -123,7 +125,7 @@ Gargalos para enviar Assai SP completo:
 
 ### Q5: "Esses itens sao por conta de outros pedidos ou falta mesmo?"
 
-**Comando:** `analisando_disponibilidade.py --grupo assai --diagnosticar-origem`
+**Comando:** `--grupo assai --diagnosticar-origem`
 
 **Logica:**
 1. Para cada produto em ruptura:
@@ -146,7 +148,7 @@ Palmito Inteiro:
 
 ### Q6: "Quais pedidos sem agendamento posso enviar amanha?"
 
-**Comando:** `analisando_disponibilidade.py --data amanha --sem-agendamento`
+**Comando:** `--data amanha --sem-agendamento`
 
 **Logica:**
 1. Calcular pendentes: CarteiraPrincipal - Separacao.sincronizado_nf=False
@@ -165,7 +167,7 @@ Total: 15 pedidos, R$ 450.000
 
 ### Q9: "Falta muito pra matar o pedido do Atacadao 183?"
 
-**Comando:** `analisando_disponibilidade.py --grupo atacadao --loja 183 --completude`
+**Comando:** `--grupo atacadao --loja 183 --completude`
 
 **Logica:**
 1. Buscar: grupo atacadao + raz_social_red ILIKE '%183%'
@@ -185,7 +187,7 @@ Itens pendentes com falta: Azeitona, Palmito
 
 ### Q11: "Os pedidos atrasados sao por falta?"
 
-**Comando:** `analisando_disponibilidade.py --atrasados --diagnosticar-causa`
+**Comando:** `--atrasados --diagnosticar-causa`
 
 **Logica:**
 1. Pegar pedidos atrasados (expedicao < HOJE)
@@ -205,7 +207,7 @@ OUTRO MOTIVO: 3 pedidos
 
 ### Q12: "Quais pedidos mais estao travando a carteira?"
 
-**Comando:** `analisando_disponibilidade.py --ranking-impacto`
+**Comando:** `--ranking-impacto`
 
 **Logica:**
 1. Identificar produtos em ruptura
@@ -221,11 +223,11 @@ OUTRO MOTIVO: 3 pedidos
 
 ---
 
-## Script: consultando_pedidos.py
+## Script: consultando_situacao_pedidos.py
 
 ### Q8: "Tem pedido pendente pro Atacadao?"
 
-**Comando:** `consultando_pedidos.py --grupo atacadao`
+**Comando:** `--grupo atacadao`
 
 **Logica:**
 1. Buscar: cnpj_cpf LIKE '93209765%' OR '75315333%' OR '00063960%'
@@ -243,7 +245,7 @@ Total pendente: R$ 180.000
 
 ### Q10: "Tem pedido atrasado pra embarcar?"
 
-**Comando:** `consultando_pedidos.py --atrasados`
+**Comando:** `--atrasados`
 
 **Logica:**
 1. Buscar: Separacao WHERE expedicao < HOJE AND sincronizado_nf = False
@@ -261,7 +263,7 @@ Total em atraso: R$ 250.000
 
 ### Q14: "Tem pedido faltando bonificacao?"
 
-**Comando:** `consultando_pedidos.py --verificar-bonificacao`
+**Comando:** `--verificar-bonificacao`
 
 **Logica:**
 1. Identificar CNPJs com bonificacao (forma_pgto LIKE 'Sem Pagamento%')
@@ -280,7 +282,7 @@ FALTA BONIFICACAO NA SEPARACAO:
 
 ### Q16: "Pedido VCD123 ta em separacao?"
 
-**Comando:** `consultando_pedidos.py --pedido VCD123 --status`
+**Comando:** `--pedido VCD123 --status`
 
 **Logica:**
 1. Buscar CarteiraPrincipal: qtd_saldo_produto_pedido
@@ -299,7 +301,7 @@ Status: PARCIALMENTE SEPARADO
 
 ### Q19: "Tem mais pedido pra mandar junto com o Assai lj 123?"
 
-**Comando:** `consultando_pedidos.py --consolidar-com "assai 123"`
+**Comando:** `--consolidar-com "assai 123"`
 
 **Logica:**
 1. Buscar dados do Assai lj 123: CEP, cidade, sub_rota
@@ -316,12 +318,12 @@ MESMA SUB-ROTA: 2 pedidos
 
 ---
 
-## Script: consultando_estoque.py
+## Script: consultando_produtos_estoque.py
 
 ### Q13: "Chegou o palmito?" / "Saiu muito palmito?"
 
-**Comando (entradas):** `consultando_estoque.py --produto palmito --entradas`
-**Comando (saidas):** `consultando_estoque.py --produto palmito --saidas`
+**Comando (entradas):** `--produto palmito --entradas`
+**Comando (saidas):** `--produto palmito --saidas`
 
 **Logica:**
 1. Buscar codigos: CadastroPalletizacao WHERE nome ILIKE '%palmito%'
@@ -340,7 +342,7 @@ Estoque atual: 1.200 un
 
 ### Q17: "Falta embarcar muito pessego?"
 
-**Comando:** `consultando_estoque.py --produto pessego --pendente`
+**Comando:** `--produto pessego --pendente`
 
 **Logica:**
 1. Buscar codigos de pessego
@@ -364,7 +366,7 @@ Pedidos na carteira:
 
 ### Q18: "Quanto vai sobrar de pessego no estoque?"
 
-**Comando:** `consultando_estoque.py --produto pessego --sobra`
+**Comando:** `--produto pessego --sobra`
 
 **Logica:**
 1. estoque = estoque_atual
@@ -383,7 +385,7 @@ Pessego em Calda 400g:
 
 ### Q20: "O que vai dar falta essa semana?"
 
-**Comando:** `consultando_estoque.py --ruptura --dias 7`
+**Comando:** `--ruptura --dias 7`
 
 **Logica:**
 1. Para cada produto ativo: calcular projecao 7 dias
@@ -401,11 +403,11 @@ ALERTA (3-5 dias):
 
 ---
 
-## Script: calculando_prazo.py
+## Script: calculando_leadtime_entrega.py
 
 ### Q7: "Se embarcar o pedido VCD123 amanha quando chega no cliente?"
 
-**Comando:** `calculando_prazo.py --pedido VCD123 --data-embarque amanha`
+**Comando:** `--pedido VCD123 --data-embarque amanha`
 
 **Logica:**
 1. Buscar dados do pedido: cidade, UF, codigo_ibge
@@ -422,11 +424,11 @@ Opcao 2: Transp. ABC - Lead time 3 dias -> Chega 03/12
 
 ---
 
-## Script: analisando_programacao.py
+## Script: consultando_programacao_producao.py
 
 ### Q15: "O que da pra alterar na programacao pra matar a ruptura?"
 
-**Comando:** `analisando_programacao.py --produto "VF pouch 150"`
+**Comando:** `--produto "VF pouch 150"`
 
 **Logica:**
 1. Identificar produto por nome/categoria/subcategoria

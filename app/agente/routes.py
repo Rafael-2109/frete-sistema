@@ -267,6 +267,7 @@ def _stream_chat_response(
                     model=model,
                     thinking_enabled=thinking_enabled,
                     plan_mode=plan_mode,
+                    user_id=user_id,  # Para Memory Tool
                 ):
                     # Evento de inicialização
                     if event.type == 'init':

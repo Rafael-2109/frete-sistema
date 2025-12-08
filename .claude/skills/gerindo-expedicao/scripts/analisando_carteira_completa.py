@@ -4,11 +4,20 @@ Script: analisando_carteira_completa.py
 A CEREJA DO BOLO - Clone do Rafael
 
 Analisa a carteira COMPLETA seguindo o algoritmo do Rafael:
-1. Pedidos com data_entrega_pedido (cliente ja negociou)
-2. Cargas diretas fora de SP (>=26 pallets ou >=20.000kg)
-3. Atacadao
-4. Assai
-5. Resto ordenado por CNPJ + Rota
+1. Pedidos com data_entrega_pedido (cliente ja negociou) - NAO AVALIAR, EXECUTAR
+2. FOB (cliente coleta) - SEMPRE COMPLETO
+3. Cargas diretas fora de SP (>=26 pallets ou >=20.000kg) - Sugerir agendamento D+3+leadtime
+4. Atacadao (EXCETO loja 183) - 50% do faturamento
+5. Assai
+6. Resto ordenado por data_pedido (mais antigo primeiro)
+7. Atacadao 183 (por ultimo - evitar ruptura em outros)
+
+Regras de Parcial:
+- FOB: SEMPRE COMPLETO (saldo cancelado se nao for)
+- Pedido pequeno (<R$15K): Tentar COMPLETO
+- <=10% falta + >3 dias: PARCIAL automatico
+- 10-20% falta + >3 dias: CONSULTAR comercial
+- >20% falta + >3 dias + >R$10K: CONSULTAR comercial
 
 Para cada pedido:
 - Verifica disponibilidade de estoque
@@ -20,7 +29,9 @@ Para cada pedido:
 Uso:
     python analisando_carteira_completa.py                    # Analise completa
     python analisando_carteira_completa.py --resumo           # Apenas resumo executivo
-    python analisando_carteira_completa.py --prioridade 1     # Apenas prioridade 1
+    python analisando_carteira_completa.py --prioridade 1     # Apenas prioridade 1 (data_entrega)
+    python analisando_carteira_completa.py --prioridade 2     # Apenas prioridade 2 (FOB)
+    python analisando_carteira_completa.py --prioridade 7     # Apenas Atacadao 183
     python analisando_carteira_completa.py --limit 50         # Limitar pedidos analisados
 """
 import sys
@@ -58,9 +69,21 @@ LIMITE_PALLETS_ENVIO_PARCIAL = 30
 LIMITE_PESO_ENVIO_PARCIAL = 25000
 UFS_CARGA_DIRETA_D2 = ['SC', 'PR']
 LIMITE_FALTA_PARCIAL_AUTO = 0.10  # 10%
-LIMITE_FALTA_CONSULTAR = 0.20     # 20%
+LIMITE_FALTA_CONSULTAR_FAIXA_MEDIA = 0.20  # 20% - faixa 10-20% consultar comercial
+LIMITE_FALTA_CONSULTAR = 0.20     # 20% - acima disso + >R$10K consultar comercial
 DIAS_DEMORA_PARA_PARCIAL = 3
 VALOR_MINIMO_CONSULTAR_COMERCIAL = 10000
+
+# NOVO: Pedido pequeno - tentar COMPLETO (saldo pode nao compensar frete)
+# Regra: falta >= 10% → AGUARDAR | falta < 10% + demora > 5 dias → PARCIAL | falta < 10% + demora <= 5 dias → AGUARDAR
+VALOR_PEDIDO_PEQUENO = 15000
+DIAS_DEMORA_PEDIDO_PEQUENO = 5  # dias úteis - se falta < 10% e demora > 5 dias, pode enviar parcial
+
+# NOVO: Atacadao 183 - Identificar pelo nome do cliente (filiais do Atacadao)
+# A loja 183 compra muito volume com muitas opcoes de montagem
+# Se priorizada, pode gerar ruptura em outros clientes
+# Melhor atender o resto e formar carga com o que sobra
+IDENTIFICADOR_ATACADAO_183 = '183'  # Buscar "183" no nome do cliente
 
 
 def identificar_grupo_cliente(cnpj: str) -> str:
@@ -72,6 +95,18 @@ def identificar_grupo_cliente(cnpj: str) -> str:
             if cnpj.startswith(prefixo):
                 return grupo
     return 'outros'
+
+
+def eh_atacadao_183(cliente: str) -> bool:
+    """
+    Verifica se o cliente é o Atacadão 183.
+    A loja 183 compra muito volume com muitas opções de montagem.
+    Se priorizada, pode gerar ruptura em outros clientes.
+    """
+    if not cliente:
+        return False
+    # Buscar "183" no nome do cliente
+    return IDENTIFICADOR_ATACADAO_183 in str(cliente)
 
 
 def extrair_gestor_de_equipe_vendas(equipe_vendas: str) -> dict:
@@ -108,6 +143,59 @@ def subtrair_dias_uteis(data_base: date, dias_uteis: int) -> date:
         if resultado.weekday() < 5:  # Não é fim de semana
             dias_restantes -= 1
     return resultado
+
+
+def adicionar_dias_uteis(data_base: date, dias_uteis: int) -> date:
+    """
+    Adiciona dias úteis a uma data (exclui sábado e domingo).
+    """
+    resultado = data_base
+    dias_restantes = dias_uteis
+    while dias_restantes > 0:
+        resultado = resultado + timedelta(days=1)
+        # 0=segunda, 5=sábado, 6=domingo
+        if resultado.weekday() < 5:  # Não é fim de semana
+            dias_restantes -= 1
+    return resultado
+
+
+def calcular_sugestao_agendamento(lead_time: int = 3) -> dict:
+    """
+    Calcula sugestão de agendamento para P3 (cargas diretas que exigem agenda).
+
+    Fluxo:
+    - D+0 (hoje): Solicitar agendamento
+    - D+2: Retorno do cliente (esperar confirmação)
+    - D+3: Expedição se aprovado
+    - D+3+leadtime: Entrega
+
+    Args:
+        lead_time: dias úteis de trânsito (default 3)
+
+    Returns:
+        {
+            'data_solicitar': date,
+            'data_retorno': date,
+            'data_expedicao': date,
+            'data_entrega': date,
+            'lead_time': int
+        }
+    """
+    hoje = date.today()
+
+    data_solicitar = hoje  # D+0
+    data_retorno = adicionar_dias_uteis(hoje, 2)  # D+2
+    data_expedicao = adicionar_dias_uteis(hoje, 3)  # D+3
+    data_entrega = adicionar_dias_uteis(data_expedicao, lead_time)  # D+3+leadtime
+
+    return {
+        'data_solicitar': data_solicitar.isoformat(),
+        'data_retorno': data_retorno.isoformat(),
+        'data_expedicao': data_expedicao.isoformat(),
+        'data_entrega': data_entrega.isoformat(),
+        'lead_time': lead_time,
+        'resumo': f"Solicitar agendamento HOJE. Expedição em {data_expedicao.strftime('%d/%m')} → Entrega {data_entrega.strftime('%d/%m')}"
+    }
 
 
 def calcular_data_expedicao(data_entrega: date, uf: str, peso: float, incoterm: str = None) -> dict:
@@ -313,6 +401,7 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
     """
     Analisa disponibilidade de um pedido especifico.
     USA PROJEÇÃO para calcular data_100_disponivel.
+    PERCENTUAL calculado por VALOR (não por número de linhas).
 
     Args:
         projecao_dict: Dict com projeção por produto {cod: {projecao: [...], dia_ruptura: ...}}
@@ -320,7 +409,7 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
     Retorna:
         {
             'disponivel': bool,
-            'percentual_disponivel': float (0-100),
+            'percentual_disponivel': float (0-100) - baseado em VALOR
             'itens_disponiveis': list,
             'itens_com_falta': list,
             'data_100_disponivel': str (ISO date) ou None,
@@ -330,10 +419,14 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
     itens_disponiveis = []
     itens_com_falta = []
     data_disponibilidade_maxima = None  # Maior data entre todos os itens
+    valor_total = 0  # Valor total do pedido
+    valor_disponivel = 0  # Valor dos itens 100% disponíveis
 
     for item in itens_pedido:
         cod_produto = item['cod_produto']
         qtd_necessaria = item['qtd_saldo']
+        valor_item = item.get('valor', 0)  # Valor do item (qtd * preco)
+        valor_total += valor_item
 
         # Buscar estoque atual
         estoque_atual = estoque_dict.get(cod_produto, 0)
@@ -343,11 +436,13 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
         projecao = proj_produto.get('projecao', [])
 
         if estoque_atual >= qtd_necessaria:
+            valor_disponivel += valor_item
             itens_disponiveis.append({
                 'cod_produto': cod_produto,
                 'nome_produto': item['nome_produto'],
                 'qtd_necessaria': qtd_necessaria,
                 'estoque_atual': estoque_atual,
+                'valor': valor_item,
                 'status': 'DISPONIVEL'
             })
         else:
@@ -361,6 +456,7 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
                 'qtd_necessaria': qtd_necessaria,
                 'estoque_atual': estoque_atual,
                 'falta': round(falta, 2),
+                'valor': valor_item,
                 'data_disponibilidade': data_disp,
                 'status': 'FALTA'
             })
@@ -370,9 +466,10 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
                 if data_disponibilidade_maxima is None or data_disp > data_disponibilidade_maxima:
                     data_disponibilidade_maxima = data_disp
 
+    # PERCENTUAL POR VALOR (não por linhas)
     total_itens = len(itens_pedido)
     qtd_disponiveis = len(itens_disponiveis)
-    percentual = (qtd_disponiveis / total_itens * 100) if total_itens > 0 else 0
+    percentual = (valor_disponivel / valor_total * 100) if valor_total > 0 else 0
 
     # Calcular dias para 100% disponível
     dias_para_100 = None
@@ -380,7 +477,7 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
         try:
             data_max = datetime.strptime(data_disponibilidade_maxima, '%Y-%m-%d').date()
             dias_para_100 = (data_max - date.today()).days
-        except:
+        except (ValueError, TypeError):
             pass
 
     return {
@@ -397,17 +494,29 @@ def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque
     }
 
 
-def aplicar_regras_decisao(disponibilidade: dict, valor_pedido: float, pallets: float = 0, peso: float = 0, dias_demora: int = 5) -> dict:
+def aplicar_regras_decisao(
+    disponibilidade: dict,
+    valor_pedido: float,
+    pallets: float = 0,
+    peso: float = 0,
+    dias_demora: int = 5,
+    incoterm: str = None
+) -> dict:
     """
     Aplica regras de decisao do Rafael.
 
-    Regras:
-    - Acima de 30 pallets OU 25.000 kg → SEMPRE PARCIAL (o que atingir primeiro)
-    - <=10% falta + >3 dias demora → PARCIAL_AUTOMATICO
-    - >20% falta + >3 dias + >R$10K → CONSULTAR_COMERCIAL
-    - Outros → AGUARDAR
+    Regras (ordem de prioridade):
+    1. FOB: SEMPRE COMPLETO (saldo cancelado se nao for - cliente nao quer vir 2x)
+    2. Pedido pequeno (<R$15K): Tentar COMPLETO (saldo pode nao compensar frete)
+    3. Acima de 30 pallets OU 25.000 kg → SEMPRE PARCIAL (limite fisico)
+    4. <=10% falta + >3 dias demora → PARCIAL_AUTOMATICO
+    5. 10-20% falta + >3 dias demora → CONSULTAR_COMERCIAL
+    6. >20% falta + >3 dias + >R$10K → CONSULTAR_COMERCIAL
+    7. Outros → AGUARDAR
     """
     percentual_falta = disponibilidade['percentual_falta'] / 100  # Converter para 0-1
+    eh_fob = incoterm and incoterm.upper() == 'FOB'
+    eh_pedido_pequeno = valor_pedido < VALOR_PEDIDO_PEQUENO
 
     # REGRA DE CARGA MÁXIMA: acima de 30 pallets OU 25.000 kg SEMPRE envia parcial
     excede_carga = pallets >= LIMITE_PALLETS_ENVIO_PARCIAL or peso >= LIMITE_PESO_ENVIO_PARCIAL
@@ -418,6 +527,7 @@ def aplicar_regras_decisao(disponibilidade: dict, valor_pedido: float, pallets: 
         else:
             motivo_carga = f'Excede {LIMITE_PESO_ENVIO_PARCIAL:,.0f}kg ({peso:,.0f}kg)'
 
+    # SE DISPONIVEL (100% em estoque)
     if disponibilidade['disponivel']:
         if excede_carga:
             return {
@@ -431,6 +541,36 @@ def aplicar_regras_decisao(disponibilidade: dict, valor_pedido: float, pallets: 
             'motivo': 'Todos os itens disponiveis'
         }
 
+    # COM FALTA - aplicar regras especiais primeiro
+
+    # REGRA FOB: SEMPRE aguardar COMPLETO (cliente nao quer vir 2x ao CD)
+    if eh_fob:
+        return {
+            'decisao': 'AGUARDAR_COMPLETO_FOB',
+            'acao': 'Aguardar 100% - FOB nao aceita parcial',
+            'motivo': f'FOB: Cliente coleta. Saldo seria cancelado se enviar parcial.'
+        }
+
+    # REGRA PEDIDO PEQUENO: Tentar COMPLETO (saldo pode nao compensar frete)
+    # - falta >= 10% → AGUARDAR COMPLETO (saldo grande demais para perder)
+    # - falta < 10% + demora <= 5 dias → AGUARDAR (vale esperar)
+    # - falta < 10% + demora > 5 dias → deixar cair nas regras normais (PARCIAL)
+    if eh_pedido_pequeno:
+        if percentual_falta >= LIMITE_FALTA_PARCIAL_AUTO:  # >= 10% falta
+            return {
+                'decisao': 'AGUARDAR_COMPLETO_PEQUENO',
+                'acao': 'Tentar aguardar 100% - pedido pequeno',
+                'motivo': f'Pedido < R$ {VALOR_PEDIDO_PEQUENO:,.0f} com falta de {disponibilidade["percentual_falta"]:.0f}%: Saldo pode nao compensar frete separado.'
+            }
+        elif dias_demora <= DIAS_DEMORA_PEDIDO_PEQUENO:  # falta < 10% e demora <= 5 dias
+            return {
+                'decisao': 'AGUARDAR_COMPLETO_PEQUENO',
+                'acao': 'Aguardar 100% - pedido pequeno com falta pequena',
+                'motivo': f'Pedido < R$ {VALOR_PEDIDO_PEQUENO:,.0f} com falta de {disponibilidade["percentual_falta"]:.0f}%: Vale esperar {dias_demora} dias.'
+            }
+        # else: falta < 10% e demora > 5 dias → deixar cair nas regras normais (PARCIAL_AUTOMATICO)
+
+    # REGRA <=10%: PARCIAL AUTOMATICO
     if percentual_falta <= LIMITE_FALTA_PARCIAL_AUTO and dias_demora > DIAS_DEMORA_PARA_PARCIAL:
         return {
             'decisao': 'PARCIAL_AUTOMATICO',
@@ -438,6 +578,15 @@ def aplicar_regras_decisao(disponibilidade: dict, valor_pedido: float, pallets: 
             'motivo': f'Falta {disponibilidade["percentual_falta"]:.0f}% e demora > {DIAS_DEMORA_PARA_PARCIAL} dias' + (f' + {motivo_carga}' if excede_carga else '')
         }
 
+    # REGRA 10-20%: CONSULTAR COMERCIAL (faixa que antes ia para AGUARDAR)
+    if percentual_falta > LIMITE_FALTA_PARCIAL_AUTO and percentual_falta <= LIMITE_FALTA_CONSULTAR_FAIXA_MEDIA and dias_demora > DIAS_DEMORA_PARA_PARCIAL:
+        return {
+            'decisao': 'CONSULTAR_COMERCIAL',
+            'acao': 'Perguntar ao gestor: parcial ou aguarda?',
+            'motivo': f'Falta {disponibilidade["percentual_falta"]:.0f}% (faixa 10-20%), demora > {DIAS_DEMORA_PARA_PARCIAL} dias'
+        }
+
+    # REGRA >20% + >R$10K: CONSULTAR COMERCIAL
     if percentual_falta > LIMITE_FALTA_CONSULTAR and dias_demora > DIAS_DEMORA_PARA_PARCIAL and valor_pedido > VALOR_MINIMO_CONSULTAR_COMERCIAL:
         return {
             'decisao': 'CONSULTAR_COMERCIAL',
@@ -559,8 +708,8 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
     pedidos_dict = defaultdict(lambda: {
         'itens': [], 'valor_total': 0, 'peso_total': 0, 'pallets_total': 0,
         'cnpj': None, 'cliente': None, 'cidade': None, 'uf': None,
-        'data_entrega_pedido': None, 'equipe_vendas': None,
-        'incoterm': None, 'codigo_ibge': None  # NOVO: para calcular frete
+        'data_entrega_pedido': None, 'data_pedido': None, 'equipe_vendas': None,
+        'incoterm': None, 'codigo_ibge': None  # Para calcular frete
     })
 
     for item in itens_carteira:
@@ -586,11 +735,10 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
         pedidos_dict[num]['cidade'] = item.nome_cidade
         pedidos_dict[num]['uf'] = item.cod_uf
         pedidos_dict[num]['data_entrega_pedido'] = item.data_entrega_pedido
+        pedidos_dict[num]['data_pedido'] = getattr(item, 'data_pedido', None)  # Para ordenar P6
         pedidos_dict[num]['equipe_vendas'] = item.equipe_vendas
-        # NOVO: incoterm para regra RED
-        pedidos_dict[num]['incoterm'] = getattr(item, 'incoterm', None)
-        # NOVO: codigo_ibge para calcular frete (se disponível)
-        pedidos_dict[num]['codigo_ibge'] = getattr(item, 'codigo_ibge', None)
+        pedidos_dict[num]['incoterm'] = getattr(item, 'incoterm', None)  # Para regra RED/FOB
+        pedidos_dict[num]['codigo_ibge'] = getattr(item, 'codigo_ibge', None)  # Para calcular frete
 
     # ==========================================================
     # 4. ANALISAR CADA PEDIDO
@@ -613,18 +761,31 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
         grupo = identificar_grupo_cliente(cnpj)
         gestor = extrair_gestor_de_equipe_vendas(dados['equipe_vendas'])
         tipo_cliente = 'industria' if gestor['nome'] == 'Fernando' else 'varejo'
+        incoterm = dados.get('incoterm')
+        cliente = dados['cliente']
 
-        # Classificar prioridade
+        # Classificar prioridade (P1-P7 conforme algoritmo do Rafael)
+        # P1: Pedidos com data_entrega_pedido (NAO AVALIAR, EXECUTAR)
         if dados['data_entrega_pedido']:
             prioridade = 1
-        elif (pallets >= LIMITE_PALLETS_CARGA_DIRETA or peso >= LIMITE_PESO_CARGA_DIRETA) and uf != 'SP':
+        # P2: FOB (cliente coleta) - SEMPRE COMPLETO
+        elif incoterm and incoterm.upper() == 'FOB':
             prioridade = 2
-        elif grupo == 'atacadao':
+        # P3: Cargas diretas fora de SP (>=26 pallets ou >=20.000kg)
+        elif (pallets >= LIMITE_PALLETS_CARGA_DIRETA or peso >= LIMITE_PESO_CARGA_DIRETA) and uf != 'SP':
             prioridade = 3
-        elif grupo == 'assai':
+        # P7: Atacadao 183 - por ultimo (evitar ruptura em outros)
+        elif grupo == 'atacadao' and eh_atacadao_183(cliente):
+            prioridade = 7
+        # P4: Atacadao (EXCETO loja 183)
+        elif grupo == 'atacadao':
             prioridade = 4
-        else:
+        # P5: Assai
+        elif grupo == 'assai':
             prioridade = 5
+        # P6: Resto ordenado por data_pedido (mais antigo primeiro)
+        else:
+            prioridade = 6
 
         # Filtrar por prioridade se especificado
         if prioridade_filtro and prioridade != prioridade_filtro:
@@ -647,7 +808,11 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
         else:
             # Usar dias_para_100 da projeção (ou 5 como default se não houver previsão)
             dias_demora = disponibilidade.get('dias_para_100') or 5
-            decisao = aplicar_regras_decisao(disponibilidade, valor_total, pallets=pallets, peso=peso, dias_demora=dias_demora)
+            decisao = aplicar_regras_decisao(
+                disponibilidade, valor_total,
+                pallets=pallets, peso=peso, dias_demora=dias_demora,
+                incoterm=incoterm  # Para regra FOB
+            )
 
         # Calcular data de expedicao (SO para prioridade 1)
         data_expedicao = None
@@ -808,10 +973,11 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
             'cliente': dados['cliente'],
             'cidade': dados['cidade'],
             'uf': uf,
-            'incoterm': dados.get('incoterm'),  # NOVO: incoterm do pedido
+            'incoterm': dados.get('incoterm'),
+            'data_pedido': dados['data_pedido'].isoformat() if dados.get('data_pedido') else None,  # Para ordenar P6
             'data_entrega_pedido': dados['data_entrega_pedido'].isoformat() if dados['data_entrega_pedido'] else None,
             'data_expedicao': data_expedicao.isoformat() if data_expedicao else None,
-            'regra_expedicao': regra_expedicao,  # NOVO: regra aplicada
+            'regra_expedicao': regra_expedicao,
             'valor_total': round(valor_total, 2),
             'qtd_itens': len(dados['itens']),
             'peso_total': round(peso, 2),
@@ -838,8 +1004,14 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
             'opcoes_frete': opcoes_frete_output  # NOVO: opções de frete (para regiões não-SP/RED)
         })
 
-    # Ordenar por prioridade, depois valor
-    pedidos.sort(key=lambda x: (x['prioridade'], -x['valor_total']))
+    # Ordenar por prioridade, depois por data_pedido (mais antigo primeiro)
+    # Para P6 (resto): data_pedido mais antiga primeiro
+    # Para outras prioridades: mantém ordem por valor decrescente como fallback
+    pedidos.sort(key=lambda x: (
+        x['prioridade'],
+        x['data_pedido'] if x['data_pedido'] else '9999-12-31',  # Mais antigo primeiro, None vai pro final
+        -x['valor_total']  # Fallback: maior valor primeiro
+    ))
 
     # Limitar
     if limit:
@@ -864,19 +1036,30 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
 
         # Pedidos DISPONIVEIS para criar separação (ainda NÃO estão em separação)
         if ped['decisao']['decisao'] in ['DISPONIVEL', 'PARCIAL_AUTOMATICO', 'PARCIAL_CARGA_MAXIMA'] and not ped['ja_separado']:
+            # P3 com agenda: calcular sugestão D+3+leadtime
+            sugestao_agendamento = None
+            if ped['prioridade'] == 3 and ped['exige_agenda']:
+                # Buscar lead_time das opções de frete, ou usar default 3
+                lead_time = 3
+                if ped.get('opcoes_frete') and ped['opcoes_frete'].get('mais_rapida'):
+                    lead_time = ped['opcoes_frete']['mais_rapida'].get('lead_time', 3)
+                sugestao_agendamento = calcular_sugestao_agendamento(lead_time)
+
             pedidos_disponiveis.append({
                 'pedido': ped['num_pedido'],
                 'cliente': ped['cliente'],
                 'uf': ped['uf'],
+                'prioridade': ped['prioridade'],  # Para identificar P3
                 'valor': ped['valor_total'],
                 'data_entrega': ped['data_entrega_pedido'],  # Data negociada com cliente
                 'expedicao': ped['data_expedicao'],          # Data calculada para expedição
-                'regra_expedicao': ped.get('regra_expedicao'),  # NOVO: regra aplicada (D-1, D-2, etc)
+                'regra_expedicao': ped.get('regra_expedicao'),  # Regra aplicada (D-1, D-2, etc)
                 'tipo': ped['decisao']['decisao'],           # DISPONIVEL, PARCIAL_AUTOMATICO ou PARCIAL_CARGA_MAXIMA
                 'exige_agendamento': ped['exige_agenda'],
                 'forma_agendamento': ped['forma_agenda'],
+                'sugestao_agendamento': sugestao_agendamento,  # P3 com agenda: D+3+leadtime
                 'comando': ped['comando_separacao'],
-                'opcoes_frete': ped.get('opcoes_frete')  # NOVO: opções de frete (se calculadas)
+                'opcoes_frete': ped.get('opcoes_frete')  # Opções de frete (se calculadas)
             })
 
     # Formatar PCP por PRODUTO - calcular FALTA REAL = demanda - estoque
@@ -966,10 +1149,12 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
         # Detalhes por prioridade (opcional, para drill-down)
         'prioridades': {
             '1_data_entrega': resultado_por_prioridade.get(1, []),
-            '2_carga_direta': resultado_por_prioridade.get(2, []),
-            '3_atacadao': resultado_por_prioridade.get(3, []),
-            '4_assai': resultado_por_prioridade.get(4, []),
-            '5_outros': resultado_por_prioridade.get(5, [])
+            '2_fob': resultado_por_prioridade.get(2, []),
+            '3_carga_direta': resultado_por_prioridade.get(3, []),
+            '4_atacadao': resultado_por_prioridade.get(4, []),
+            '5_assai': resultado_por_prioridade.get(5, []),
+            '6_outros': resultado_por_prioridade.get(6, []),
+            '7_atacadao_183': resultado_por_prioridade.get(7, [])
         }
     }
 
@@ -1028,6 +1213,11 @@ def gerar_resumo_executivo(analise: dict) -> str:
                         if mr['transportadora'] != mb['transportadora']:
                             linhas.append(f"    🚀 MAIS RAPIDA: {mr['transportadora']} R$ {mr['valor_frete']:,.0f} (D-{mr['lead_time']})")
 
+            # P3 com agenda: mostrar sugestão de agendamento D+3+leadtime
+            if ped.get('sugestao_agendamento'):
+                sug = ped['sugestao_agendamento']
+                linhas.append(f"    📅 AGENDAR: {sug['resumo']}")
+
     # PCP (por produto)
     if pcp:
         linhas.extend(["", "-" * 70, "PCP - PRODUTOS COM FALTA:", "-" * 70])
@@ -1073,17 +1263,28 @@ def main():
         description='Analisa carteira completa seguindo algoritmo do Rafael (Clone)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Prioridades:
+  1 = Pedidos com data_entrega_pedido (NAO AVALIAR, EXECUTAR)
+  2 = FOB (cliente coleta) - SEMPRE COMPLETO
+  3 = Cargas diretas fora de SP (>=26 pallets ou >=20.000kg)
+  4 = Atacadao (EXCETO loja 183)
+  5 = Assai
+  6 = Resto ordenado por data_pedido (mais antigo primeiro)
+  7 = Atacadao 183 (por ultimo - evitar ruptura)
+
 Exemplos:
   python analisando_carteira_completa.py                    # Analise completa
   python analisando_carteira_completa.py --resumo           # Apenas resumo executivo
-  python analisando_carteira_completa.py --prioridade 1     # Apenas prioridade 1
-  python analisando_carteira_completa.py --prioridade 3     # Apenas Atacadao
+  python analisando_carteira_completa.py --prioridade 1     # Pedidos com data negociada
+  python analisando_carteira_completa.py --prioridade 2     # Pedidos FOB
+  python analisando_carteira_completa.py --prioridade 4     # Atacadao (exceto 183)
+  python analisando_carteira_completa.py --prioridade 7     # Atacadao 183
   python analisando_carteira_completa.py --limit 20         # Limitar a 20 pedidos
         """
     )
 
     parser.add_argument('--resumo', action='store_true', help='Mostrar apenas resumo executivo')
-    parser.add_argument('--prioridade', type=int, choices=[1, 2, 3, 4, 5], help='Filtrar por prioridade')
+    parser.add_argument('--prioridade', type=int, choices=[1, 2, 3, 4, 5, 6, 7], help='Filtrar por prioridade (1-7)')
     parser.add_argument('--limit', type=int, default=None, help='Limite de pedidos')
     parser.add_argument('--acoes', action='store_true', help='Mostrar apenas acoes')
 

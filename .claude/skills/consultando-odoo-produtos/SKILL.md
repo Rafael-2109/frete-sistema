@@ -219,7 +219,7 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
 | consultando-odoo-compras | Consultas de pedidos de compra (purchase.order) |
 | descobrindo-odoo-estrutura | Descobrir campos/modelos nao mapeados |
 | integracao-odoo | Criar novas integracoes (desenvolvimento) |
-| agente-logistico | Consultas de carteira, separacoes e estoque |
+| gerindo-expedicao | Consultas de carteira, separacoes e estoque |
 
 > **NOTA**: Esta skill eh para CONSULTAS de produtos em producao.
 > Para consultar cadastros, use `consultando-odoo-cadastros`.

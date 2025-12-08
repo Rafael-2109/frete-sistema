@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: calculando_prazo.py
+Script: calculando_leadtime_entrega.py
 Queries cobertas: Q7
 
 Calcula data de entrega baseada em lead time de transportadoras.
@@ -50,7 +50,7 @@ def parse_data(data_str: str) -> date:
         raise ValueError(f"Formato de data invalido: {data_str}")
 
 
-def calcular_prazo(args):
+def calcular_leadtime_entrega(args):
     """
     Query 7: Se embarcar o pedido X em data Y, quando chega no cliente?
     """
@@ -175,8 +175,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  python calculando_prazo.py --pedido VCD123 --data-embarque amanha
-  python calculando_prazo.py --pedido "atacadao 183" --data-embarque hoje
+  python calculando_leadtime_entrega.py --pedido VCD123 --data-embarque amanha
+  python calculando_leadtime_entrega.py --pedido "atacadao 183" --data-embarque hoje
         """
     )
     parser.add_argument('--pedido', required=True, help='Numero do pedido ou termo de busca')
@@ -187,7 +187,7 @@ Exemplos:
 
     app = create_app()
     with app.app_context():
-        resultado = calcular_prazo(args)
+        resultado = calcular_leadtime_entrega(args)
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))
 
 

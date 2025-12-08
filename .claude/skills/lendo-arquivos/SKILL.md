@@ -142,7 +142,7 @@ Quando o usuario anexar um arquivo e pedir "analise essa planilha":
 |-------|-----|
 | exportando-arquivos | CRIAR/EXPORTAR arquivos para download |
 | consultando-odoo-produtos | Consultas de produtos no Odoo |
-| agente-logistico | Consultas de carteira, separacoes e estoque |
+| gerindo-expedicao | Consultas de carteira, separacoes e estoque |
 
 > **NOTA**: Esta skill eh para LEITURA de arquivos do usuario.
 > Para criar arquivos para download, use `exportando-arquivos`.

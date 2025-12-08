@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: analisando_programacao.py
+Script: consultando_programacao_producao.py
 Queries cobertas: Q15
 
 Simula reprogramacao de producao para resolver rupturas.
@@ -37,7 +37,7 @@ def decimal_default(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def analisar_programacao(args):
+def consultar_programacao_producao(args):
     """
     Query 15: O que da pra alterar na programacao pra matar a ruptura do produto X?
     """
@@ -205,9 +205,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  python analisando_programacao.py --produto "VF pouch 150"
-  python analisando_programacao.py --produto "azeitona preta mezzani"
-  python analisando_programacao.py --cod-produto AZ001
+  python consultando_programacao_producao.py --produto "VF pouch 150"
+  python consultando_programacao_producao.py --produto "azeitona preta mezzani"
+  python consultando_programacao_producao.py --cod-produto AZ001
         """
     )
     parser.add_argument('--produto', help='Nome ou termo do produto')
@@ -219,7 +219,7 @@ Exemplos:
 
     app = create_app()
     with app.app_context():
-        resultado = analisar_programacao(args)
+        resultado = consultar_programacao_producao(args)
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))
 
 

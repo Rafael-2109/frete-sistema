@@ -126,4 +126,4 @@ Agent verifica: modelo/campo conhecido?
 | consultando-odoo-compras | Consultas de pedidos de compra (purchase.order) |
 | consultando-odoo-produtos | Consultas de catalogo de produtos (product.product) |
 | integracao-odoo | Desenvolvimento de novas integracoes |
-| agente-logistico | Consultas de carteira, separacoes e estoque |
+| gerindo-expedicao | Consultas de carteira, separacoes e estoque |

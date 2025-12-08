@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: criando_separacao.py
+Script: criando_separacao_pedidos.py
 Acao: Cria separacoes de pedidos via linguagem natural.
 
 SEMPRE executar primeiro SEM --executar para validar!
@@ -655,22 +655,22 @@ def main():
         epilog="""
 Exemplos:
   # Simular separacao completa (sempre simular primeiro!)
-  python criando_separacao.py --pedido VCD123 --expedicao amanha --tipo completa
+  python criando_separacao_pedidos.py --pedido VCD123 --expedicao amanha --tipo completa
 
   # Simular com 28 pallets
-  python criando_separacao.py --pedido VCD123 --expedicao 20/12 --pallets 28
+  python criando_separacao_pedidos.py --pedido VCD123 --expedicao 20/12 --pallets 28
 
   # Simular com pallets inteiros
-  python criando_separacao.py --pedido VCD123 --expedicao amanha --pallets 28 --pallets-inteiros
+  python criando_separacao_pedidos.py --pedido VCD123 --expedicao amanha --pallets 28 --pallets-inteiros
 
   # Simular apenas com estoque disponivel
-  python criando_separacao.py --pedido VCD123 --expedicao amanha --apenas-estoque
+  python criando_separacao_pedidos.py --pedido VCD123 --expedicao amanha --apenas-estoque
 
   # Simular excluindo produtos
-  python criando_separacao.py --pedido VCD123 --expedicao amanha --excluir-produtos '["KETCHUP","MOSTARDA"]'
+  python criando_separacao_pedidos.py --pedido VCD123 --expedicao amanha --excluir-produtos '["KETCHUP","MOSTARDA"]'
 
   # EXECUTAR (criar de verdade) - use --executar
-  python criando_separacao.py --pedido VCD123 --expedicao amanha --tipo completa --executar
+  python criando_separacao_pedidos.py --pedido VCD123 --expedicao amanha --tipo completa --executar
         """
     )
 

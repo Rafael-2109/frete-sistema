@@ -131,7 +131,7 @@ Normalmente os clientes que precisam de agendamento são mais cheios e há algum
 Sim, mas hoje não conseguimos avaliar/controlar.
 5.3 Exato, Natal e Páscoa.
 Todos os produtos aumentam a demanda nessas épocas, mas as almofadas (tipo_embalagem=SACHET 80 G) tem uma demanda mais expressiva no final do ano pois vendemos para o pessoal que embala cesta de natal e que costumam comprar bastante esses itens.
-6.1- "Formar uma {veiculo}" onde buscamos chegar próximo a capacidade do veiculo e diante da mercadoria se palletizada, o limite nos carros menores se da no peso e nos maiores se da na qtd de pallets, portanto o limite dos veiculos até Toco é atingido pelo peso e normalmente o limite do truck se da na qtd de pallets onde truck cabem 16 pallets e carreta varia de 26 a 30 pallets e peso limite de 24 a 32 toneladas, portanto as vezes podem falar "formar uma carreta" que significa dar pelo menos 24 pallets mas 90% das vezes "formar uma carreta" se refere a formar uma separação / N separações do mesmo cliente que somando dão 28 pallets.
+6.1- "Formar uma {veiculo}" onde buscamos chegar próximo a capacidade do veiculo e diante da mercadoria se palletizada, o limite nos carros menores se da no peso e nos maiores se da na qtd de pallets, portanto o limite dos veiculos até Toco é atingido pelo peso e normalmente o limite do truck se da na qtd de pallets onde truck cabem 16 pallets e carreta varia de 26 a 30 pallets e peso limite de 24 a 32 toneladas, portanto as vezes podem falar "formar uma carreta" que significa dar pelo menos 24 pallets mas 90% das vezes "formar uma carreta" se refere a formar uma separação / N separações do mesmo cliente que somando até 30 pallets.
 "Lote" se refere normalmente as cargas que vão para o RJ pois nesse caso há uma operação mais pulverizada com pedidos apartir de 1.500,00 e que a separação consiste em juntar todos os pedidos em apenas 1 separação para a transportadora realizar a separação por pedido posteriormente (Sistema ainda não tem regra pra isso)
 "cliente industria" normalmente se referem a clientes que compram produtos em embalagens institucionais que são os baldes com tipo_embalagem="BD IND", produtos que compram barricas, tambores, bombonas, MP ou produtos em BAG.
 Quando um pedido vai parcial, alguns perguntam se "vai ter corte".
@@ -1170,3 +1170,124 @@ Quando retornar OPÇÕES de frete, o sistema deve:
 Apenas listar as opções com valores e leadtimes?
 Ou já sugerir a opção mais barata/mais rápida?
 O lead_time em CidadeAtendida está em dias úteis ou dias corridos?
+
+
+from app.carteira.utils.separacao_utils import buscar_rota_por_uf
+        if hasattr(item_carteira, 'incoterm') and item_carteira.incoterm in ['RED', 'FOB']:
+            return item_carteira.incoterm
+        else:
+            return buscar_rota_por_uf(item_carteira.cod_uf or 'SP')
+
+Sugerir mais barata/mais rapida (2 sugestões)
+CidadeAtendida.lead_time em dias úteis.
+
+
+
+
+AUDITORIA DE FLUXO - INCONSISTÊNCIAS NO PROCESSO
+🔴 CRÍTICO - REGRAS NÃO IMPLEMENTADAS
+1. Regra FOB NÃO IMPLEMENTADA
+Fonte	Definição
+historia.md:370-371	"Pedido FOB → Mandar COMPLETO", "FOB incompleto → Saldo geralmente CANCELADO"
+agente-logistico.md:101	"FOB: Mandar COMPLETO (saldo cancelado se nao for)"
+analisando_carteira_completa.py	❌ NÃO IMPLEMENTADO - Campo incoterm é lido mas só para verificar RED, não FOB
+Impacto: Pedidos FOB podem estar sendo tratados como parciais quando deveriam ser completos.
+2. Regra "Pedido Pequeno de Rede" NÃO IMPLEMENTADA
+Fonte	Definição
+historia.md:372	"Pedido pequeno de rede: Tentar COMPLETO (saldo pode não compensar entrega)"
+agente-logistico.md:102	"Pedido pequeno de rede: Tentar COMPLETO"
+analisando_carteira_completa.py	❌ NÃO IMPLEMENTADO - Não há lógica para identificar "pedido pequeno"
+Pergunta: Qual é o limite de valor/peso para considerar "pedido pequeno"?
+3. Ordenação P5 (Resto) INCORRETA
+Fonte	Definição	Implementado
+historia.md	P5: Resto ordenado por CNPJ + Rota	❌
+agente-logistico.md:87	"PRIORIDADE 5: Resto (ordenar por CNPJ → Rota)"	❌
+analisando_carteira_completa.py:842	pedidos.sort(key=lambda x: (x['prioridade'], -x['valor_total']))	⚠️ Ordena por VALOR
+Problema: Script documenta "CNPJ + Rota" mas ordena por valor decrescente. Campo rota: Nem é calculado/buscado para os pedidos da CarteiraPrincipal.
+4. Prioridade 2 - Lógica de Agenda D+3 NÃO IMPLEMENTADA
+Fonte	Definição
+agente-logistico.md:80-83	"P2: Cargas Diretas → Verificar agenda? SIM → Solicitar para D+3 + leadtime"
+analisando_carteira_completa.py	❌ Apenas verifica exige_agenda mas não calcula D+3 + leadtime
+🟡 GAPS NO FLUXO DE DECISÃO
+5. Faixa 10-20% de Falta NÃO TRATADA
+agente-logistico.md:94-98:
+| Falta | Demora | Valor | Decisao |
+|-------|--------|-------|---------|
+| ≤10%  | >3 dias | Qualquer | PARCIAL automatico |
+| >20%  | >3 dias | >R$10K   | Consultar comercial |
+| Outros | -      | -        | Avaliar caso a caso |
+analisando_carteira_completa.py:434-452:
+if percentual_falta <= 0.10 and dias > 3:  # ≤10%
+    return 'PARCIAL_AUTOMATICO'
+    
+if percentual_falta > 0.20 and dias > 3 and valor > 10000:  # >20%
+    return 'CONSULTAR_COMERCIAL'
+    
+return 'AGUARDAR'  # Tudo que não se encaixa
+Gap: Falta entre 10-20% com demora >3 dias e valor >10K vai para AGUARDAR, mas deveria ser "avaliar caso a caso" (o que significa isso na prática?).
+6. Campo codigo_ibge Pode Não Existir na CarteiraPrincipal
+analisando_carteira_completa.py:593:
+pedidos_dict[num]['codigo_ibge'] = getattr(item, 'codigo_ibge', None)
+Verificar: O campo codigo_ibge existe em CarteiraPrincipal? Se não, o cálculo de frete para regiões que não são SP/RED/SC-PR vai falhar.
+🟢 SUGESTÕES DE MELHORIA
+#	Item	Status Atual	Sugestão
+1	Implementar regra FOB	Não implementada	Adicionar verificação incoterm == 'FOB' → forçar COMPLETO
+2	Definir "pedido pequeno"	Não definido	Perguntar ao Rafael: valor < R$X?
+3	Ordenar P5 por CNPJ+Rota	Ordena por valor	Buscar rota da Separação ou calcular
+4	P2 com agenda D+3	Não implementada	Calcular data_expedicao = D+3 + leadtime
+5	Tratar faixa 10-20%	AGUARDAR genérico	Definir comportamento específico
+6	Validar codigo_ibge	getattr com None	Verificar se campo existe no modelo
+
+
+
+
+1- Sim, tem razão, devemos alterar a ordem em mais 1 fator tambem:
+A. Acrescentar FOB acima de Atacadao 
+B. Colocar o ATACADAO 183 em ultimo (compram muito volume e há inumeras formas de montar uma separação, portanto se estiver como prioridade, corre o risco de usar um item que gere ruptura em outro cliente, portanto é melhor priorizar o restante e por ultimo formar carga para ele.
+
+2- Abaixo de 15.000
+
+3- Vamos mudar, o resto deve ser ordenado pelo mais antigo (data_pedido)
+
+4- Nesse caso deveria Informar a necessidade de agendar para essa data, pois se o sistema não tem ferramenta para agendar esses casos, como faremos?
+É melhor sugerir o agendamento.
+Lembrando que D+3+Leadtime é na verdade
+D 0 - Solicitado agendamento
+D+2 - Retorno do agendamento, se aceito para o dia solicitado, portanto dia de expedicao será D+3 para entregar em D+3 + lead_time.
+
+5- Na verdade deveria verificar com o comercial tambem.
+
+6- Não sei, mas o calculo nao falha.
+
+
+
+Resumo das Correções Implementadas
+1. Nova Ordem de Prioridades (P1-P7)
+Prioridade	Descrição	Antes	Depois
+P1	Pedidos com data_entrega_pedido	✓	✓
+P2	FOB (cliente coleta)	❌	✅ NOVO
+P3	Cargas diretas fora de SP	Era P2	✓
+P4	Atacadão (EXCETO 183)	Era P3	✓
+P5	Assaí	Era P4	✓
+P6	Resto ordenado por data_pedido	Era P5 (valor)	✅ CORRIGIDO
+P7	Atacadão 183 (por último)	❌	✅ NOVO
+2. Regras de Decisão Atualizadas em aplicar_regras_decisao
+Regra	Status
+FOB → AGUARDAR_COMPLETO_FOB	✅ Implementado
+Pedido pequeno (<R$15K) → tentar COMPLETO	✅ Implementado
+Faixa 10-20% → CONSULTAR_COMERCIAL	✅ Corrigido (antes ia para AGUARDAR)
+Faixa >20% + >R$10K → CONSULTAR_COMERCIAL	✓ Mantido
+3. Sugestão de Agendamento para P3 em calcular_sugestao_agendamento
+Para cargas diretas que exigem agendamento:
+D+0: Solicitar agendamento
+D+2: Retorno do cliente
+D+3: Expedição
+D+3+leadtime: Entrega
+4. Novas Constantes Adicionadas
+VALOR_PEDIDO_PEQUENO = 15000  # Tentar COMPLETO
+IDENTIFICADOR_ATACADAO_183 = '183'  # Identificar loja 183
+5. Output Atualizado
+Prioridades no JSON: '1_data_entrega' até '7_atacadao_183'
+Argparse aceita --prioridade 1-7
+Resumo executivo mostra sugestão de agendamento (📅 AGENDAR)
+O script está testado e com sintaxe válida. Todas as 6 correções solicitadas foram implementadas.

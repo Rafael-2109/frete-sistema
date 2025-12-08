@@ -324,3 +324,214 @@ class AgentSession(db.Model):
             .order_by(cls.updated_at.desc())\
             .limit(limit)\
             .all()
+
+
+class AgentMemory(db.Model):
+    """
+    Memória persistente do agente por usuário.
+
+    Implementa armazenamento para a Memory Tool da Anthropic.
+    Simula um filesystem virtual onde cada "arquivo" é um registro no banco.
+
+    Referência: https://platform.claude.com/docs/pt-BR/agents-and-tools/tool-use/memory-tool
+
+    Estrutura de paths:
+        /memories/                      # Raiz (diretório virtual)
+        /memories/preferences.xml       # Preferências do usuário
+        /memories/context/company.xml   # Informações da empresa
+        /memories/learned/terms.xml     # Termos aprendidos
+
+    Uso:
+        - Claude usa a Memory Tool para criar/ler/editar arquivos
+        - Cada usuário tem sua própria árvore de memórias
+        - Memórias persistem entre sessões (cross-session)
+    """
+    __tablename__ = 'agent_memories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
+
+    # Path do arquivo virtual (ex: /memories/preferences.xml)
+    path = db.Column(db.String(500), nullable=False)
+
+    # Conteúdo do arquivo (None para diretórios)
+    content = db.Column(db.Text, nullable=True)
+
+    # Flag para indicar se é diretório
+    is_directory = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamento
+    user = db.relationship('Usuario', backref=db.backref('agent_memories', lazy='dynamic'))
+
+    # Constraint única: um usuário não pode ter dois arquivos com mesmo path
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'path', name='uq_user_memory_path'),
+    )
+
+    def __repr__(self):
+        tipo = 'DIR' if self.is_directory else 'FILE'
+        return f'<AgentMemory {tipo} {self.path} user={self.user_id}>'
+
+    # =========================================================================
+    # MÉTODOS DE CLASSE PARA OPERAÇÕES CRUD
+    # =========================================================================
+
+    @classmethod
+    def get_by_path(cls, user_id: int, path: str) -> Optional['AgentMemory']:
+        """Busca memória por path."""
+        return cls.query.filter_by(user_id=user_id, path=path).first()
+
+    @classmethod
+    def list_directory(cls, user_id: int, dir_path: str) -> List['AgentMemory']:
+        """
+        Lista conteúdo de um diretório.
+
+        Args:
+            user_id: ID do usuário
+            dir_path: Path do diretório (ex: /memories/context)
+
+        Returns:
+            Lista de arquivos/diretórios filhos diretos
+        """
+        # Normaliza path
+        if not dir_path.endswith('/'):
+            dir_path = dir_path + '/'
+
+        # Busca todos que começam com o path do diretório
+        all_children = cls.query.filter(
+            cls.user_id == user_id,
+            cls.path.like(f'{dir_path}%'),
+            cls.path != dir_path.rstrip('/')
+        ).all()
+
+        # Filtra apenas filhos diretos (sem subdiretórios)
+        direct_children = []
+        for item in all_children:
+            # Remove o prefixo do diretório
+            relative = item.path[len(dir_path):]
+            # Se não tem '/', é filho direto
+            if '/' not in relative:
+                direct_children.append(item)
+
+        return direct_children
+
+    @classmethod
+    def create_file(cls, user_id: int, path: str, content: str) -> 'AgentMemory':
+        """
+        Cria arquivo de memória.
+
+        Args:
+            user_id: ID do usuário
+            path: Path do arquivo
+            content: Conteúdo
+
+        Returns:
+            AgentMemory criado
+        """
+        # Cria diretórios pai se necessário
+        cls._ensure_parent_dirs(user_id, path)
+
+        memory = cls(
+            user_id=user_id,
+            path=path,
+            content=content,
+            is_directory=False
+        )
+        db.session.add(memory)
+        return memory
+
+    @classmethod
+    def create_directory(cls, user_id: int, path: str) -> 'AgentMemory':
+        """Cria diretório de memória."""
+        existing = cls.get_by_path(user_id, path)
+        if existing:
+            return existing
+
+        # Cria diretórios pai se necessário
+        cls._ensure_parent_dirs(user_id, path)
+
+        memory = cls(
+            user_id=user_id,
+            path=path,
+            content=None,
+            is_directory=True
+        )
+        db.session.add(memory)
+        return memory
+
+    @classmethod
+    def _ensure_parent_dirs(cls, user_id: int, path: str) -> None:
+        """Cria diretórios pai se não existirem."""
+        parts = path.split('/')
+        # Remove o último elemento (arquivo) e elementos vazios
+        parts = [p for p in parts[:-1] if p]
+
+        current_path = ''
+        for part in parts:
+            current_path = f'{current_path}/{part}'
+            existing = cls.get_by_path(user_id, current_path)
+            if not existing:
+                dir_memory = cls(
+                    user_id=user_id,
+                    path=current_path,
+                    content=None,
+                    is_directory=True
+                )
+                db.session.add(dir_memory)
+
+    @classmethod
+    def delete_by_path(cls, user_id: int, path: str) -> int:
+        """
+        Deleta memória por path (e filhos se for diretório).
+
+        Returns:
+            Número de registros deletados
+        """
+        # Se for diretório, deleta todos os filhos também
+        count = cls.query.filter(
+            cls.user_id == user_id,
+            db.or_(
+                cls.path == path,
+                cls.path.like(f'{path}/%')
+            )
+        ).delete(synchronize_session=False)
+
+        return count
+
+    @classmethod
+    def clear_all_for_user(cls, user_id: int) -> int:
+        """Limpa todas as memórias de um usuário."""
+        count = cls.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        return count
+
+    @classmethod
+    def rename(cls, user_id: int, old_path: str, new_path: str) -> bool:
+        """
+        Renomeia arquivo ou diretório.
+
+        Returns:
+            True se sucesso, False se não encontrado
+        """
+        memory = cls.get_by_path(user_id, old_path)
+        if not memory:
+            return False
+
+        # Cria diretórios pai do novo path
+        cls._ensure_parent_dirs(user_id, new_path)
+
+        # Se for diretório, renomeia todos os filhos também
+        if memory.is_directory:
+            children = cls.query.filter(
+                cls.user_id == user_id,
+                cls.path.like(f'{old_path}/%')
+            ).all()
+
+            for child in children:
+                child.path = child.path.replace(old_path, new_path, 1)
+
+        memory.path = new_path
+        return True

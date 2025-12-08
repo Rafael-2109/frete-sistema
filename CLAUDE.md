@@ -49,7 +49,7 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nivel d
 | Campos de outros modelos | `.claude/references/MODELOS_CAMPOS.md` | Pedido, Embarque, Faturamento, DespesaExtra, ContasAReceber |
 | Regras de negocio detalhadas | `.claude/references/REGRAS_NEGOCIO.md` | Grupos CNPJ, bonificacao, roteirizacao, calculos |
 | Fluxo de dados comercial | `.claude/references/MODULO_COMERCIAL_FLUXO_DADOS.md` | Agregacao de dados, JOINs, APIs do modulo comercial |
-| Consultas estoque/carteira | Skill `agente-logistico` | Perguntas sobre disponibilidade, pedidos, estoque |
+| Consultas estoque/carteira | Skill `gerindo-expedicao` | Perguntas sobre disponibilidade, pedidos, estoque |
 | Consultas comerciais | Skill `consultando-comercial` | Valor em aberto, status de pedidos, documentos, ranking clientes |
 | Integracao Odoo | Skill `integracao-odoo` | Lancamentos fiscais, CTe, 16 etapas |
 
@@ -247,7 +247,7 @@ Campos Calculados ao Criar Separação
 | rota | buscar_rota_por_uf(cod_uf) | app.carteira.utils.separacao_utils |
 | sub_rota | buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade) | app.carteira.utils.separacao_utils |
 
-Referência: .claude/skills/agente-logistico/scripts/criando_separacao.py
+Referência: .claude/skills/gerindo-expedicao/scripts/criando_separacao_pedidos.py
 
 ---
 
