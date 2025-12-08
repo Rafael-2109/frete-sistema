@@ -232,8 +232,9 @@ sincronizado_nf = db.Column(db.Boolean, default=False, nullable=True)  # GATILHO
 |-------|-------------------|-----------|
 | Quantidade | `qtd_saldo_produto_pedido` | `qtd_saldo` |
 | Valor | `preco_produto_pedido` | `valor_saldo` |
-| Data entrega | `data_entrega_pedido` | `expedicao` |
-| Agendamento | NAO TEM | `agendamento` |
+| Data entrega cliente | `data_entrega_pedido` (cliente solicita, exp = data - leadtime) | NAO TEM |
+| Data expedição | NAO TEM | `expedicao` (nós definimos) |
+| Agendamento | NAO TEM | `agendamento` (nós solicitamos = exp + leadtime) |
 | Protocolo | NAO TEM | `protocolo` |
 | Status | NAO TEM | `status` |
 

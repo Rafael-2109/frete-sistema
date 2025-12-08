@@ -373,9 +373,16 @@ def consultar_status_pedido(args):
     """
     Query 16: Pedido VCD123 ta em separacao?
     Verifica status detalhado: faturado, 100% separado, parcial, nao separado.
+
+    LOGICA CORRETA (conforme Rafael):
+    - CarteiraPrincipal.qtd_saldo_produto_pedido = saldo TOTAL do pedido (nao diminui ao separar)
+    - Separacao.qtd_saldo = quantidade JA separada (sincronizado_nf=False = nao faturado)
+    - Saldo pendente = cp.qtd_saldo - SUM(s.qtd_saldo WHERE mesmo produto E sincronizado_nf=False)
+    - % separado = valor_separado / valor_total_pedido (NAO somar os dois!)
     """
     from app.carteira.models import CarteiraPrincipal
     from app.separacao.models import Separacao
+    from app.producao.models import CadastroPalletizacao
 
     resultado = {
         'sucesso': True,
@@ -388,7 +395,7 @@ def consultar_status_pedido(args):
     # Usar resolver_pedido centralizado
     itens_carteira, num_pedido, info_busca = resolver_pedido(args.pedido, fonte='carteira')
 
-    # Buscar em separacao tambem
+    # Buscar em separacao tambem (sincronizado_nf=False)
     itens_separacao, _, info_sep = resolver_pedido(args.pedido, fonte='separacao')
 
     # Incluir metadados da busca
@@ -413,17 +420,22 @@ def consultar_status_pedido(args):
     if not num_pedido:
         num_pedido = itens_separacao[0].num_pedido if itens_separacao else None
 
-    # Calcular valores
-    valor_carteira = sum(
+    # ============================================================
+    # CALCULO CORRETO: Carteira eh o TODO, Separacao eh a PARTE
+    # ============================================================
+
+    # 1. Valor TOTAL do pedido (da carteira - saldo original)
+    valor_total_pedido = sum(
         float(i.qtd_saldo_produto_pedido or 0) * float(i.preco_produto_pedido or 0)
         for i in itens_carteira
     )
     itens_carteira_count = len(itens_carteira)
 
-    valor_separacao = sum(float(i.valor_saldo or 0) for i in itens_separacao)
+    # 2. Valor JA SEPARADO (nao faturado)
+    valor_separado = sum(float(i.valor_saldo or 0) for i in itens_separacao)
     itens_separacao_count = len(itens_separacao)
 
-    # Verificar faturados (sincronizado_nf = True)
+    # 3. Verificar faturados (sincronizado_nf = True)
     itens_faturados = Separacao.query.filter(
         Separacao.num_pedido == num_pedido,
         Separacao.sincronizado_nf == True
@@ -431,48 +443,184 @@ def consultar_status_pedido(args):
     valor_faturado = sum(float(i.valor_saldo or 0) for i in itens_faturados)
     itens_faturados_count = len(itens_faturados)
 
-    # Determinar status
-    valor_total = valor_carteira + valor_separacao + valor_faturado
+    # 4. Calcular saldo PENDENTE de separacao por produto
+    # Agrupar separacoes por cod_produto
+    separado_por_produto = defaultdict(float)
+    for s in itens_separacao:
+        separado_por_produto[s.cod_produto] += float(s.qtd_saldo or 0)
 
-    if valor_faturado > 0 and valor_carteira == 0 and valor_separacao == 0:
+    # Calcular pendente = carteira - separado (por produto)
+    valor_pendente = 0.0
+    qtd_pendente_total = 0.0
+    itens_pendentes = []
+    for cp in itens_carteira:
+        qtd_carteira = float(cp.qtd_saldo_produto_pedido or 0)
+        qtd_sep = separado_por_produto.get(cp.cod_produto, 0)
+        qtd_pendente = max(0, qtd_carteira - qtd_sep)
+        preco = float(cp.preco_produto_pedido or 0)
+        valor_item_pendente = qtd_pendente * preco
+
+        valor_pendente += valor_item_pendente
+        qtd_pendente_total += qtd_pendente
+
+        if qtd_pendente > 0:
+            itens_pendentes.append({
+                'cod_produto': cp.cod_produto,
+                'nome_produto': cp.nome_produto,
+                'qtd_carteira': qtd_carteira,
+                'qtd_separada': qtd_sep,
+                'qtd_pendente': qtd_pendente,
+                'valor_pendente': valor_item_pendente
+            })
+
+    # 5. Calcular peso/pallet do pedido
+    peso_total = 0.0
+    pallet_total = 0.0
+    palletizacao_cache = {}
+
+    # Buscar palletizacao uma vez
+    for cp in itens_carteira:
+        if cp.cod_produto not in palletizacao_cache:
+            pallet_info = CadastroPalletizacao.query.filter_by(
+                cod_produto=cp.cod_produto, ativo=True
+            ).first()
+            if pallet_info:
+                palletizacao_cache[cp.cod_produto] = {
+                    'peso_bruto': float(pallet_info.peso_bruto or 0),
+                    'palletizacao': float(pallet_info.palletizacao or 100)
+                }
+            else:
+                palletizacao_cache[cp.cod_produto] = {'peso_bruto': 1.0, 'palletizacao': 100}
+
+        qtd = float(cp.qtd_saldo_produto_pedido or 0)
+        info = palletizacao_cache[cp.cod_produto]
+        peso_total += qtd * info['peso_bruto']
+        pallet_total += qtd / info['palletizacao'] if info['palletizacao'] > 0 else 0
+
+    # 6. Determinar status
+    # Usar valor_total_pedido como base (carteira eh a referencia)
+    if valor_total_pedido == 0 and valor_faturado > 0:
         status = 'FATURADO'
         status_descricao = '100% faturado'
-    elif itens_separacao_count > 0 and itens_carteira_count == 0:
+        pct_separado = 100.0
+    elif valor_total_pedido == 0 and itens_separacao_count > 0:
+        # Pedido ja foi todo separado e saiu da carteira
         status = 'SEPARADO'
         status_descricao = '100% em separacao'
-    elif itens_separacao_count > 0 and itens_carteira_count > 0:
+        pct_separado = 100.0
+    elif valor_separado > 0 and valor_pendente > 0:
         status = 'PARCIALMENTE_SEPARADO'
-        pct_separado = (valor_separacao / (valor_carteira + valor_separacao)) * 100 if (valor_carteira + valor_separacao) > 0 else 0
+        # CORRECAO: % = separado / total (NAO somar separado + carteira!)
+        pct_separado = (valor_separado / valor_total_pedido * 100) if valor_total_pedido > 0 else 0
         status_descricao = f'{pct_separado:.0f}% separado'
+    elif valor_separado > 0 and valor_pendente == 0:
+        status = 'SEPARADO'
+        status_descricao = '100% em separacao'
+        pct_separado = 100.0
     elif itens_carteira_count > 0:
         status = 'PENDENTE'
         status_descricao = 'Nao separado (pendente na carteira)'
+        pct_separado = 0.0
     else:
         status = 'NAO_ENCONTRADO'
         status_descricao = 'Status indefinido'
+        pct_separado = 0.0
 
-    # Extrair info do cliente
+    # Extrair info do cliente e data_entrega_pedido
     primeiro_item = itens_carteira[0] if itens_carteira else (itens_separacao[0] if itens_separacao else None)
+
+    # Buscar campos importantes da carteira
+    data_entrega = None
+    observacao = None
+    incoterm = None
+    forma_pgto = None
+    vendedor = None
+    equipe_vendas = None
+    pedido_cliente = None
+    tags_pedido = None
+    cep = None
+
+    if itens_carteira:
+        for cp in itens_carteira:
+            if cp.data_entrega_pedido and not data_entrega:
+                data_entrega = cp.data_entrega_pedido.isoformat() if hasattr(cp.data_entrega_pedido, 'isoformat') else str(cp.data_entrega_pedido)
+            if cp.observ_ped_1 and not observacao:
+                observacao = cp.observ_ped_1
+            if hasattr(cp, 'incoterm') and cp.incoterm and not incoterm:
+                incoterm = cp.incoterm
+            if hasattr(cp, 'forma_pgto_pedido') and cp.forma_pgto_pedido and not forma_pgto:
+                forma_pgto = cp.forma_pgto_pedido
+            if hasattr(cp, 'vendedor') and cp.vendedor and not vendedor:
+                vendedor = cp.vendedor
+            if hasattr(cp, 'equipe_vendas') and cp.equipe_vendas and not equipe_vendas:
+                equipe_vendas = cp.equipe_vendas
+            if hasattr(cp, 'pedido_cliente') and cp.pedido_cliente and not pedido_cliente:
+                pedido_cliente = cp.pedido_cliente
+            if hasattr(cp, 'tags_pedido') and cp.tags_pedido and not tags_pedido:
+                tags_pedido = cp.tags_pedido
+            if hasattr(cp, 'cep_endereco_ent') and cp.cep_endereco_ent and not cep:
+                cep = cp.cep_endereco_ent
+
+    # Identificar se é bonificação
+    eh_bonificacao = forma_pgto and 'sem pagamento' in forma_pgto.lower() if forma_pgto else False
+
+    # Buscar lotes de separação existentes (detalhado)
+    lotes_separacao = []
+    if itens_separacao:
+        lotes_dict = {}
+        for s in itens_separacao:
+            lote_id = s.separacao_lote_id or 'SEM_LOTE'
+            if lote_id not in lotes_dict:
+                lotes_dict[lote_id] = {
+                    'lote_id': lote_id,
+                    'expedicao': s.expedicao.isoformat() if s.expedicao else None,
+                    'status': s.status,
+                    'itens': 0,
+                    'valor': 0.0
+                }
+            lotes_dict[lote_id]['itens'] += 1
+            lotes_dict[lote_id]['valor'] += float(s.valor_saldo or 0)
+        lotes_separacao = list(lotes_dict.values())
 
     resultado['pedido'] = {
         'num_pedido': num_pedido,
         'cliente': primeiro_item.raz_social_red if primeiro_item else None,
         'cnpj': primeiro_item.cnpj_cpf if primeiro_item else None,
         'cidade': primeiro_item.nome_cidade if primeiro_item else None,
-        'uf': primeiro_item.cod_uf if primeiro_item else None
+        'uf': primeiro_item.cod_uf if primeiro_item else None,
+        'cep': cep,
+        'data_entrega_pedido': data_entrega,
+        'observ_ped_1': observacao,
+        'peso_total_kg': round(peso_total, 2),
+        'pallets_total': round(pallet_total, 2),
+        # Campos CRITICOS para regras de negocio
+        'incoterm': incoterm,
+        'forma_pgto': forma_pgto,
+        'eh_bonificacao': eh_bonificacao,
+        'eh_fob': incoterm and incoterm.upper() == 'FOB',
+        # Campos para comunicacao
+        'vendedor': vendedor,
+        'equipe_vendas': equipe_vendas,
+        'pedido_cliente': pedido_cliente,
+        'tags_pedido': tags_pedido,
+        # Lotes de separacao existentes
+        'lotes_separacao': lotes_separacao
     }
 
     resultado['status'] = status
     resultado['detalhes'] = {
         'status_descricao': status_descricao,
+        'percentual_separado': round(pct_separado, 1),
         'em_separacao': {
             'itens': itens_separacao_count,
-            'valor': valor_separacao
+            'valor': valor_separado
         },
-        'pendente_carteira': {
-            'itens': itens_carteira_count,
-            'valor': valor_carteira
+        'pendente_separar': {
+            'itens': len(itens_pendentes),
+            'valor': valor_pendente,
+            'detalhes': itens_pendentes[:10]  # Limitar para nao poluir
         },
+        'valor_total_pedido': valor_total_pedido,
         'faturado': {
             'itens': itens_faturados_count,
             'valor': valor_faturado
@@ -547,16 +695,25 @@ def consultar_consolidacao(args):
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).all()
 
-        # Agrupar por pedido
+        # Agrupar por pedido com campos criticos
         pedidos_cep = {}
         for item in itens_mesmo_cep:
             if item.num_pedido not in pedidos_cep:
                 valor = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+                data_ent = item.data_entrega_pedido.isoformat() if item.data_entrega_pedido and hasattr(item.data_entrega_pedido, 'isoformat') else None
+                inco = getattr(item, 'incoterm', None)
+                fpgto = getattr(item, 'forma_pgto_pedido', None)
                 pedidos_cep[item.num_pedido] = {
                     'num_pedido': item.num_pedido,
                     'cliente': item.raz_social_red,
                     'cidade': item.nome_cidade,
-                    'valor': valor
+                    'valor': valor,
+                    # Campos CRITICOS para decisao
+                    'data_entrega_pedido': data_ent,
+                    'observ_ped_1': item.observ_ped_1,
+                    'incoterm': inco,
+                    'eh_fob': inco and inco.upper() == 'FOB',
+                    'eh_bonificacao': fpgto and 'sem pagamento' in fpgto.lower() if fpgto else False
                 }
             else:
                 pedidos_cep[item.num_pedido]['valor'] += float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
@@ -578,11 +735,20 @@ def consultar_consolidacao(args):
         for item in itens_mesma_cidade:
             if item.num_pedido not in pedidos_cep_nums and item.num_pedido not in pedidos_cidade:
                 valor = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+                data_ent = item.data_entrega_pedido.isoformat() if item.data_entrega_pedido and hasattr(item.data_entrega_pedido, 'isoformat') else None
+                inco = getattr(item, 'incoterm', None)
+                fpgto = getattr(item, 'forma_pgto_pedido', None)
                 pedidos_cidade[item.num_pedido] = {
                     'num_pedido': item.num_pedido,
                     'cliente': item.raz_social_red,
                     'cidade': item.nome_cidade,
-                    'valor': valor
+                    'valor': valor,
+                    # Campos CRITICOS para decisao
+                    'data_entrega_pedido': data_ent,
+                    'observ_ped_1': item.observ_ped_1,
+                    'incoterm': inco,
+                    'eh_fob': inco and inco.upper() == 'FOB',
+                    'eh_bonificacao': fpgto and 'sem pagamento' in fpgto.lower() if fpgto else False
                 }
             elif item.num_pedido in pedidos_cidade:
                 pedidos_cidade[item.num_pedido]['valor'] += float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
@@ -606,12 +772,21 @@ def consultar_consolidacao(args):
         for item in itens_mesma_rota:
             if item.num_pedido not in pedidos_anteriores and item.num_pedido not in pedidos_rota:
                 valor = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+                data_ent = item.data_entrega_pedido.isoformat() if item.data_entrega_pedido and hasattr(item.data_entrega_pedido, 'isoformat') else None
+                inco = getattr(item, 'incoterm', None)
+                fpgto = getattr(item, 'forma_pgto_pedido', None)
                 pedidos_rota[item.num_pedido] = {
                     'num_pedido': item.num_pedido,
                     'cliente': item.raz_social_red,
                     'cidade': item.nome_cidade,
                     'sub_rota': sub_rota_base,
-                    'valor': valor
+                    'valor': valor,
+                    # Campos CRITICOS para decisao
+                    'data_entrega_pedido': data_ent,
+                    'observ_ped_1': item.observ_ped_1,
+                    'incoterm': inco,
+                    'eh_fob': inco and inco.upper() == 'FOB',
+                    'eh_bonificacao': fpgto and 'sem pagamento' in fpgto.lower() if fpgto else False
                 }
             elif item.num_pedido in pedidos_rota:
                 pedidos_rota[item.num_pedido]['valor'] += float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)

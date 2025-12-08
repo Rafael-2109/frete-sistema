@@ -146,12 +146,79 @@ def analisar_pedido(args):
         resultado['busca']['outros_candidatos'] = info_busca['pedidos_candidatos']
 
     primeiro_item = itens_carteira[0]
+
+    # Buscar campos importantes (CRITICO para decisao de embarque)
+    data_entrega = None
+    observacao = None
+    incoterm = None
+    forma_pgto = None
+    vendedor = None
+    equipe_vendas = None
+    pedido_cliente = None
+    tags_pedido = None
+    cep = None
+
+    for cp in itens_carteira:
+        if cp.data_entrega_pedido and not data_entrega:
+            data_entrega = cp.data_entrega_pedido.isoformat() if hasattr(cp.data_entrega_pedido, 'isoformat') else str(cp.data_entrega_pedido)
+        if cp.observ_ped_1 and not observacao:
+            observacao = cp.observ_ped_1
+        if hasattr(cp, 'incoterm') and cp.incoterm and not incoterm:
+            incoterm = cp.incoterm
+        if hasattr(cp, 'forma_pgto_pedido') and cp.forma_pgto_pedido and not forma_pgto:
+            forma_pgto = cp.forma_pgto_pedido
+        if hasattr(cp, 'vendedor') and cp.vendedor and not vendedor:
+            vendedor = cp.vendedor
+        if hasattr(cp, 'equipe_vendas') and cp.equipe_vendas and not equipe_vendas:
+            equipe_vendas = cp.equipe_vendas
+        if hasattr(cp, 'pedido_cliente') and cp.pedido_cliente and not pedido_cliente:
+            pedido_cliente = cp.pedido_cliente
+        if hasattr(cp, 'tags_pedido') and cp.tags_pedido and not tags_pedido:
+            tags_pedido = cp.tags_pedido
+        if hasattr(cp, 'cep_endereco_ent') and cp.cep_endereco_ent and not cep:
+            cep = cp.cep_endereco_ent
+
+    # Identificar flags criticas para regras de negocio
+    eh_bonificacao = forma_pgto and 'sem pagamento' in forma_pgto.lower() if forma_pgto else False
+    eh_fob = incoterm and incoterm.upper() == 'FOB'
+
+    # Calcular peso/pallet total do pedido
+    from app.producao.models import CadastroPalletizacao
+    peso_total = 0.0
+    pallet_total = 0.0
+    for cp in itens_carteira:
+        pallet_info = CadastroPalletizacao.query.filter_by(
+            cod_produto=cp.cod_produto, ativo=True
+        ).first()
+        qtd = float(cp.qtd_saldo_produto_pedido or 0)
+        if pallet_info:
+            peso_total += qtd * float(pallet_info.peso_bruto or 0)
+            palletizacao = float(pallet_info.palletizacao or 100)
+            pallet_total += qtd / palletizacao if palletizacao > 0 else 0
+        else:
+            peso_total += qtd * 1.0  # Default 1kg
+
     resultado['pedido'] = {
         'num_pedido': num_pedido,
         'cliente': primeiro_item.raz_social_red,
         'cnpj': primeiro_item.cnpj_cpf,
         'cidade': primeiro_item.nome_cidade,
-        'uf': primeiro_item.cod_uf
+        'uf': primeiro_item.cod_uf,
+        'cep': cep,
+        'data_entrega_pedido': data_entrega,
+        'observ_ped_1': observacao,
+        'peso_total_kg': round(peso_total, 2),
+        'pallets_total': round(pallet_total, 2),
+        # Campos CRITICOS para regras de negocio
+        'incoterm': incoterm,
+        'forma_pgto': forma_pgto,
+        'eh_bonificacao': eh_bonificacao,
+        'eh_fob': eh_fob,
+        # Campos para comunicacao
+        'vendedor': vendedor,
+        'equipe_vendas': equipe_vendas,
+        'pedido_cliente': pedido_cliente,
+        'tags_pedido': tags_pedido
     }
 
     data_analise = None
