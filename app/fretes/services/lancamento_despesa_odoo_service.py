@@ -206,8 +206,8 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             if not despesa.despesa_cte_id:
                 raise ValueError("Despesa não possui CTe Complementar vinculado")
 
-            # Validar tipo de documento
-            if despesa.tipo_documento != 'CTe':
+            # Validar tipo de documento (case-insensitive: aceita CTE, CTe, cte, etc.)
+            if not despesa.tipo_documento or despesa.tipo_documento.upper() != 'CTE':
                 raise ValueError(f"Tipo de documento '{despesa.tipo_documento}' não suportado para lançamento Odoo")
 
             # Validar status
@@ -451,16 +451,43 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             po_id = dfe_atualizado[0]['purchase_fiscal_id'][0]
             resultado['purchase_order_id'] = po_id
 
-            # ETAPA 7: Configurar PO
+            # ETAPA 7: Configurar PO (incluindo correção da operação fiscal)
+            dados_po = {
+                'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
+                'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
+                'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID
+            }
+
+            # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD
+            try:
+                po_operacao = self.odoo.read(
+                    'purchase.order',
+                    [po_id],
+                    ['l10n_br_operacao_id']
+                )
+                if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
+                    operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
+                    operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
+
+                    if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
+                        operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
+                        dados_po['l10n_br_operacao_id'] = operacao_correta_id
+                        current_app.logger.info(
+                            f"🔄 Corrigindo operação fiscal: {operacao_atual_id} ({operacao_atual_nome}) "
+                            f"→ {operacao_correta_id} (empresa CD)"
+                        )
+                    else:
+                        current_app.logger.info(
+                            f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
+                        )
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao verificar operação fiscal: {e}")
+
             inicio = time.time()
             self.odoo.write(
                 'purchase.order',
                 [po_id],
-                {
-                    'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
-                    'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
-                    'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID
-                }
+                dados_po
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -469,12 +496,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=7,
-                etapa_descricao="Configurar Purchase Order",
+                etapa_descricao="Configurar PO (operação fiscal, team, payment, picking_type)",
                 modelo_odoo='purchase.order',
                 acao='write',
                 status='SUCESSO',
                 mensagem=f"PO {po_id} configurado",
-                campos_alterados=['team_id', 'payment_provider_id', 'picking_type_id'],
+                campos_alterados=list(dados_po.keys()),
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id,
                 purchase_order_id=po_id

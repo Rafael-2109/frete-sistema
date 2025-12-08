@@ -46,6 +46,15 @@ class LancamentoOdooService:
     COMPANY_NACOM_GOYA_CD_ID = 4
     PICKING_TYPE_CD_RECEBIMENTO_ID = 13  # ✅ CD: Recebimento (CD)
 
+    # De-Para: Operação Fiscal FB → CD
+    # Quando o PO é criado com operação da empresa FB, corrigir para a equivalente da CD
+    OPERACAO_FB_PARA_CD = {
+        2022: 2632,  # Aquisição transporte INTERNA
+        3041: 3038,  # Aquisição transporte INTERESTADUAL
+        2738: 2739,  # Aquisição transporte Simples Nacional INTERNA
+        3040: 3037,  # Aquisição transporte Simples Nacional INTERESTADUAL
+    }
+
     def __init__(self, usuario_nome: str, usuario_ip: Optional[str] = None):
         """
         Inicializa o service
@@ -619,6 +628,32 @@ class LancamentoOdooService:
                 'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
             }
 
+            # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD
+            # O Odoo pode criar o PO com operação da empresa FB, precisamos corrigir para CD
+            try:
+                po_operacao = self.odoo.read(
+                    'purchase.order',
+                    [purchase_order_id],
+                    ['l10n_br_operacao_id']
+                )
+                if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
+                    operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
+                    operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
+
+                    if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
+                        operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
+                        dados_po['l10n_br_operacao_id'] = operacao_correta_id
+                        current_app.logger.info(
+                            f"🔄 Corrigindo operação fiscal: {operacao_atual_id} ({operacao_atual_nome}) "
+                            f"→ {operacao_correta_id} (empresa CD)"
+                        )
+                    else:
+                        current_app.logger.info(
+                            f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
+                        )
+            except Exception as e:
+                current_app.logger.warning(f"⚠️ Erro ao verificar operação fiscal: {e}")
+
             # ✅ ADICIONAR partner_ref com número da fatura (se houver)
             if frete.fatura_frete_id and frete.fatura_frete:
                 referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
@@ -657,7 +692,7 @@ class LancamentoOdooService:
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=7,
-                etapa_descricao="Atualizar team_id, payment_provider_id, company_id, picking_type_id e partner_ref",
+                etapa_descricao="Atualizar campos do PO (operação fiscal, team, payment, company, picking_type)",
                 modelo_odoo='purchase.order',
                 acao='write',
                 dfe_id=dfe_id,
