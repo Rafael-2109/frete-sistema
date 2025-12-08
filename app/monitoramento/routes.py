@@ -486,7 +486,7 @@ def finalizar_entrega(id):
 
     descricao_log = ""
 
-    if status_finalizacao in ["Troca de NF", "Cancelada", "Devolvida"]:
+    if status_finalizacao in ["Troca de NF", "Cancelada", "Devolvida", "Sinistro"]:
         entrega.status_finalizacao = status_finalizacao
         descricao_log = f"Entrega finalizada com status: {status_finalizacao}"
 
@@ -616,6 +616,8 @@ def listar_entregas():
         query = query.filter(EntregaMonitorada.status_finalizacao == 'Cancelada')
     elif status == 'devolvida':
         query = query.filter(EntregaMonitorada.status_finalizacao == 'Devolvida')
+    elif status == 'sinistro':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Sinistro')
     if status == 'nf_cd':
         query = query.filter(EntregaMonitorada.nf_cd == True)
     
@@ -822,7 +824,7 @@ def listar_entregas():
             if e.status_finalizacao:
                 if e.status_finalizacao == 'Entregue':
                     entregas_agrupadas['✅ Entregues'].append(e)
-                # Outros status de finalização (Cancelada, Devolvida, etc.) não entram no agrupamento
+                # Outros status de finalização (Cancelada, Devolvida, Sinistro, etc.) não entram no agrupamento
             # ✅ CORREÇÃO: Reagendar tem segunda prioridade
             elif e.reagendar:
                 entregas_agrupadas['🔁 Reagendar'].append(e)
@@ -2006,6 +2008,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'Entregas Entregues': len([e for e in entregas if e.status_finalizacao == 'Entregue']),
                 'Entregas Canceladas': len([e for e in entregas if e.status_finalizacao == 'Cancelada']),
                 'Entregas Devolvidas': len([e for e in entregas if e.status_finalizacao == 'Devolvida']),
+                'Entregas Sinistradas': len([e for e in entregas if e.status_finalizacao == 'Sinistro']),
                 'Pendências Financeiras': len([e for e in entregas if e.pendencia_financeira]),
                 'NFs no CD': len([e for e in entregas if e.nf_cd]),
                 'Total Agendamentos': len(dados_agendamentos),

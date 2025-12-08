@@ -83,7 +83,8 @@ class ExportarMonitoramentoForm(FlaskForm):
         ('Entregue', 'Entregue'),
         ('Cancelada', 'Cancelada'),
         ('Devolvida', 'Devolvida'),
-        ('Troca de NF', 'Troca de NF')
+        ('Troca de NF', 'Troca de NF'),
+        ('Sinistro', 'Sinistro')
     ], validators=[Optional()])
     
     # Filtros predefinidos

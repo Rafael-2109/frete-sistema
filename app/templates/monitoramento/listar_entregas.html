@@ -938,6 +938,12 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </a>
                 </li>
                 <li>
+                  <a class="dropdown-item {% if request.args.get('status') == 'sinistro' %}active{% endif %}" 
+                     href="?status=sinistro">
+                    <span class="badge bg-danger me-2">🔴</span> Sinistro
+                  </a>
+                </li>
+                <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'nf_cd' %}active{% endif %}" 
                      href="?status=nf_cd">
                     <span class="badge bg-primary me-2">🏢</span> NF no CD

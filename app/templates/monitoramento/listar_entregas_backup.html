@@ -54,6 +54,10 @@
            class="btn {% if request.args.get('status') == 'devolvida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
           📦 Devolvida
         </a>
+        <a href="?status=sinistro" 
+           class="btn {% if request.args.get('status') == 'sinistro' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+          🔴 Sinistro
+        </a>
         <a href="?status=nf_cd" 
            class="btn {% if request.args.get('status') == 'nf_cd' %}btn-primary{% else %}btn-outline-primary{% endif %}">
           🏢 NF no CD {% if contadores.nf_cd %}({{ contadores.nf_cd }}){% endif %}

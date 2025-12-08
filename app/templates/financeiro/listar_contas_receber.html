@@ -441,7 +441,7 @@
                                     {{ em.data_hora_entrega_realizada.strftime('%d/%m') if em.data_hora_entrega_realizada else 'Entregue' }}
                                 </span>
                             {% elif em and em.status_finalizacao %}
-                                <span class="badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% else %}bg-warning text-dark{% endif %} badge-status">
+                                <span class="badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% elif em.status_finalizacao == 'Sinistro' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">
                                     {{ em.status_finalizacao[:10] }}
                                 </span>
                             {% elif em and em.data_hora_entrega_realizada %}

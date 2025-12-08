@@ -57,6 +57,32 @@ def _obter_resposta_agente(mensagem: str, usuario: str) -> Optional[str]:
 
     client = get_client()
 
+    # Contexto especial para Teams: instruir agente a dar resposta direta
+    contexto_teams = """
+IMPORTANTE - Resposta via Microsoft Teams (Adaptive Card):
+- Esta mensagem vem do Microsoft Teams
+- Você terá APENAS UMA chance de responder
+- NÃO diga "vou consultar...", "deixa eu verificar...", "um momento..."
+- Faça todas as consultas necessárias SILENCIOSAMENTE
+- Responda APENAS quando tiver a informação completa e final
+
+FORMATAÇÃO OBRIGATÓRIA (Adaptive Card não suporta markdown):
+- NÃO use tabelas markdown (| col1 | col2 |)
+- NÃO use headers (##, ###)
+- NÃO use listas com asterisco (*)
+- USE apenas texto simples com quebras de linha
+- USE **negrito** e _itálico_ (únicos suportados)
+- Para listar itens, use: "• item" ou "- item" em linhas separadas
+- Para dados estruturados, use formato: "Campo: Valor" em linhas separadas
+
+Exemplo de resposta BEM formatada:
+📦 Pedido VCD123456
+• Cliente: Atacadão
+• Cidade: São Paulo/SP
+• Valor: R$ 15.000,00
+• Status: Disponível ✅
+"""
+
     # Executa a coroutine de forma síncrona
     # (Flask não é async, então usamos asyncio.run)
     loop = asyncio.new_event_loop()
@@ -67,6 +93,7 @@ def _obter_resposta_agente(mensagem: str, usuario: str) -> Optional[str]:
             client.get_response(
                 prompt=mensagem,
                 user_name=usuario,
+                extra_context=contexto_teams,
             )
         )
         return response.text
@@ -96,6 +123,9 @@ def criar_card_resposta(texto: str, usuario: str) -> dict:
         "type": "AdaptiveCard",
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "version": "1.4",
+        "msteams": {
+            "width": "Full"
+        },
         "body": [
             {
                 "type": "TextBlock",
