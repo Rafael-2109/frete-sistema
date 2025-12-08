@@ -423,7 +423,7 @@ Senao:
 
 | Campo | Fonte/Calculo |
 |-------|---------------|
-| separacao_lote_id | gerar_lote_id() - formato: SEP-YYYYMMDD-NNNN |
+| separacao_lote_id | app/utils/lote_utils.py gerar_lote_id() |
 | peso | qtd * peso_bruto (CadastroPalletizacao) |
 | pallet | qtd / palletizacao (CadastroPalletizacao) |
 | valor_saldo | qtd * preco_produto_pedido (CarteiraPrincipal) |
@@ -466,7 +466,8 @@ Para cada item_carteira:
         IGNORAR produto
 ```
 
-**Match por nome:** Usar ILIKE para permitir "ketchup" casar com "KETCHUP 400G".
+**Match por nome:** Usar sempre resolver_produto localizado em .claude/skills/gerindo-expedicao/scripts/resolver_entidades.py.
+
 
 ---
 
