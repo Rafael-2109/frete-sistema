@@ -52,13 +52,15 @@ def exportar_separacoes():
         for sep in separacoes:
             dados.append({
                 'Lote Separação': sep.separacao_lote_id,
+                'Status': sep.status or '',  # Status da própria Separacao
+                'Status Calculado': sep.status_calculado or '',  # Status calculado dinamicamente
                 'Nº Pedido': sep.num_pedido,
-                'Cód. Produto': sep.cod_produto,
-                'Nome Produto': sep.nome_produto,
                 'CNPJ/CPF': sep.cnpj_cpf,
                 'Razão Social': sep.raz_social_red,
                 'Cidade': sep.nome_cidade,
                 'UF': sep.cod_uf,
+                'Cód. Produto': sep.cod_produto,
+                'Nome Produto': sep.nome_produto,
                 'Qtd': float(sep.qtd_saldo) if sep.qtd_saldo else 0,
                 'Valor': float(sep.valor_saldo) if sep.valor_saldo else 0,
                 'Peso': float(sep.peso) if sep.peso else 0,
@@ -67,13 +69,15 @@ def exportar_separacoes():
                 'Data Expedição': sep.expedicao if sep.expedicao else None,
                 'Data Agendamento': sep.agendamento if sep.agendamento else None,
                 'Protocolo': sep.protocolo or '',
-                'Status': sep.status or '',  # Status da própria Separacao
+                'Agendamento Confirmado': sep.agendamento_confirmado or '',
+                'Observações da Sep': sep.obs_separacao or '',
                 'Nota Fiscal': sep.numero_nf or '',  # Campo correto: numero_nf
+                'Sincronizado com NF': sep.sincronizado_nf or '',
                 'Tipo Envio': sep.tipo_envio,
                 'Transportadora': sep.roteirizacao or '',
                 'Rota': sep.rota or '',
                 'Sub-Rota': sep.sub_rota or '',
-                'Observações': sep.observ_ped_1 or '',
+                'Observações do Pdd': sep.observ_ped_1 or '',
                 'Criado Em': sep.criado_em if sep.criado_em else None
             })
         
