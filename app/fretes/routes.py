@@ -976,19 +976,33 @@ def lancar_frete_odoo(frete_id):
             }), 400
 
         # ========================================
-        # VALIDAÇÃO: Buscar CTe
+        # VALIDAÇÃO: Buscar CTe - PRIORIZA SEMPRE O CTe VINCULADO
         # ========================================
         cte = None
         chave_cte = None
 
-        # PRIORIDADE 1: Vínculo explícito (frete_cte_id)
+        # PRIORIDADE 1: Vínculo explícito (frete_cte_id) - SEMPRE priorizar
         if frete.frete_cte_id:
+            # Tentar pelo relationship primeiro
             cte = frete.cte
+
+            # Se relationship falhar, buscar explicitamente pelo ID
+            if not cte:
+                cte = ConhecimentoTransporte.query.get(frete.frete_cte_id)
+
             if cte:
                 chave_cte = cte.chave_acesso
-                logger.info(f"✅ Usando CTe vinculado explicitamente: {cte.numero_cte} (ID {cte.id})")
+                logger.info(f"✅ Usando CTe VINCULADO: {cte.numero_cte} (ID {cte.id})")
+            else:
+                # CTe vinculado não existe mais
+                logger.warning(f"⚠️ CTe vinculado ID {frete.frete_cte_id} não encontrado!")
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'CTe vinculado não encontrado',
+                    'erro': f'O CTe vinculado (ID {frete.frete_cte_id}) não existe mais. Vincule outro CTe.'
+                }), 400
 
-        # FALLBACK: Busca automática por NFs + CNPJ
+        # FALLBACK: Busca automática por NFs + CNPJ (SOMENTE se não houver CTe vinculado)
         if not cte:
             logger.info("🔍 Buscando CTe por NFs em comum + CNPJ...")
             ctes_relacionados = frete.buscar_ctes_relacionados()
@@ -997,13 +1011,19 @@ def lancar_frete_odoo(frete_id):
                 return jsonify({
                     'sucesso': False,
                     'mensagem': 'Nenhum CTe relacionado encontrado',
-                    'erro': 'É necessário ter um CTe vinculado para lançar no Odoo'
+                    'erro': 'É necessário vincular um CTe manualmente para lançar no Odoo'
                 }), 400
 
             if len(ctes_relacionados) > 1:
+                # Listar CTes sugeridos na mensagem de erro
+                ctes_info = [f"CTe {c.numero_cte}" for c in ctes_relacionados[:5]]
+                ctes_msg = ', '.join(ctes_info)
+                if len(ctes_relacionados) > 5:
+                    ctes_msg += f" e mais {len(ctes_relacionados) - 5}..."
+
                 return jsonify({
                     'sucesso': False,
-                    'mensagem': f'Múltiplos CTes encontrados ({len(ctes_relacionados)})',
+                    'mensagem': f'Múltiplos CTes sugeridos ({len(ctes_relacionados)}): {ctes_msg}',
                     'erro': 'Por favor, vincule manualmente o CTe correto antes de lançar'
                 }), 400
 
@@ -1085,13 +1105,29 @@ def auditoria_odoo(frete_id):
     # Calcular estatísticas
     total_tempo_ms = sum(a.tempo_execucao_ms or 0 for a in auditorias)
     etapas_sucesso = sum(1 for a in auditorias if a.status == 'SUCESSO')
-    etapas_erro = sum(1 for a in auditorias if a.status == 'ERRO')
+
+    # Calcular erros reais (descontando retentativas que foram corrigidas)
+    etapas_erro_total = sum(1 for a in auditorias if a.status == 'ERRO')
+    etapas_retentativa = 0
+
+    for auditoria in auditorias:
+        if auditoria.status == 'ERRO':
+            # Verificar se há uma etapa de sucesso posterior com mesmo número
+            for proxima in auditorias:
+                if (proxima.etapa == auditoria.etapa and
+                    proxima.status == 'SUCESSO' and
+                    proxima.executado_em > auditoria.executado_em):
+                    etapas_retentativa += 1
+                    break
+
+    etapas_erro = etapas_erro_total - etapas_retentativa
 
     return render_template('fretes/auditoria_odoo.html',
                          frete=frete,
                          auditorias=auditorias,
                          total_tempo_ms=total_tempo_ms,
                          etapas_sucesso=etapas_sucesso,
+                         etapas_retentativa=etapas_retentativa,
                          etapas_erro=etapas_erro)
 
 

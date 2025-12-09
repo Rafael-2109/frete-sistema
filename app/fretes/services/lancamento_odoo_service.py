@@ -795,25 +795,31 @@ class LancamentoOdooService:
 
             # ========================================
             # ETAPA 6: Gerar Purchase Order
+            # ⏱️ TIMEOUT ESTENDIDO: 90 segundos (operação pode demorar no Odoo)
             # ========================================
             if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
                 contexto = {'validate_analytic': True}
+
+                # 🔧 Timeout estendido de 90s para action_gerar_po_dfe
+                # Esta operação pode demorar quando o Odoo está ocupado
+                TIMEOUT_GERAR_PO = 90
 
                 sucesso, po_result, erro = self._executar_com_auditoria(
                     funcao=lambda: self.odoo.execute_kw(
                         'l10n_br_ciel_it_account.dfe',
                         'action_gerar_po_dfe',
                         [[dfe_id]],
-                        {'context': contexto}
+                        {'context': contexto},
+                        timeout_override=TIMEOUT_GERAR_PO
                     ),
                     frete_id=frete_id,
                     cte_id=cte_id,
                     chave_cte=cte_chave,
                     etapa=6,
-                    etapa_descricao="Executar action_gerar_po_dfe",
+                    etapa_descricao=f"Gerar Purchase Order (action_gerar_po_dfe) [timeout: {TIMEOUT_GERAR_PO}s]",
                     modelo_odoo='l10n_br_ciel_it_account.dfe',
                     metodo_odoo='action_gerar_po_dfe',
-                    acao='execute_method',
+                    acao='execute_method / action_gerar_po_dfe',
                     contexto_odoo=contexto,
                     dfe_id=dfe_id
                 )

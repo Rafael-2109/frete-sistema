@@ -138,10 +138,17 @@ class OdooConnection:
 
             return False
     
-    def execute_kw(self, model: str, method: str, args: list, kwargs: Optional[dict] = None) -> Any:
+    def execute_kw(self, model: str, method: str, args: list, kwargs: Optional[dict] = None, timeout_override: Optional[int] = None) -> Any:
         """
         Executa método no Odoo com retry automático
         Protegido por Circuit Breaker
+
+        Args:
+            model: Nome do modelo Odoo
+            method: Nome do método a executar
+            args: Argumentos posicionais
+            kwargs: Argumentos nomeados
+            timeout_override: Timeout específico em segundos (sobrescreve o padrão para operações longas)
         """
         def _do_execute():
             """Função interna para execução"""
@@ -152,8 +159,12 @@ class OdooConnection:
             models = self._get_models()
             kwargs_resolved = kwargs or {}
 
-            # ✅ CORRIGIDO: Sem retry interno - Circuit Breaker gerencia tentativas
-            # Falhar rápido para o Circuit Breaker detectar problemas imediatamente
+            # 🔧 Timeout específico para operações longas
+            original_timeout = socket.getdefaulttimeout()
+            if timeout_override:
+                socket.setdefaulttimeout(timeout_override)
+                logger.info(f"⏱️ Timeout temporário: {timeout_override}s para {model}.{method}")
+
             try:
                 result = models.execute_kw(
                     self.database,
@@ -170,6 +181,11 @@ class OdooConnection:
                 # ✅ Lançar exceção imediatamente para Circuit Breaker detectar
                 logger.error(f"❌ Erro na execução de {model}.{method}: {e}")
                 raise
+
+            finally:
+                # 🔧 Restaurar timeout original
+                if timeout_override:
+                    socket.setdefaulttimeout(original_timeout)
 
         # 🔧 Usar Circuit Breaker para proteger execução
         return self.circuit_breaker.call(_do_execute)

@@ -455,19 +455,28 @@ def lancar_lote_job(
                 logger.info(f"📋 [Job Lote] Processando frete #{frete.id}")
 
                 # ========================================
-                # BUSCAR CTe - MESMA LÓGICA DO LANÇAMENTO INDIVIDUAL
+                # BUSCAR CTe - PRIORIZA SEMPRE O CTe VINCULADO
                 # ========================================
                 cte = None
                 cte_chave = None
 
-                # PRIORIDADE 1: Vínculo explícito (frete_cte_id)
+                # PRIORIDADE 1: Vínculo explícito (frete_cte_id) - SEMPRE priorizar
                 if frete.frete_cte_id:
+                    # Tentar pelo relationship primeiro
                     cte = frete.cte
+
+                    # Se relationship falhar, buscar explicitamente pelo ID
+                    if not cte:
+                        cte = ConhecimentoTransporte.query.get(frete.frete_cte_id)
+
                     if cte:
                         cte_chave = cte.chave_acesso
-                        logger.info(f"✅ [Lote] Frete #{frete.id}: Usando CTe vinculado: {cte.numero_cte} (ID {cte.id})")
+                        logger.info(f"✅ [Lote] Frete #{frete.id}: Usando CTe VINCULADO: {cte.numero_cte} (ID {cte.id})")
+                    else:
+                        # CTe vinculado não existe mais - erro
+                        logger.warning(f"⚠️ [Lote] Frete #{frete.id}: CTe vinculado ID {frete.frete_cte_id} não encontrado!")
 
-                # FALLBACK: Busca automática por NFs + CNPJ (igual ao individual)
+                # FALLBACK: Busca automática por NFs + CNPJ (SOMENTE se não houver CTe vinculado)
                 if not cte:
                     logger.info(f"🔍 [Lote] Frete #{frete.id}: Buscando CTe por NFs em comum + CNPJ...")
                     ctes_relacionados = frete.buscar_ctes_relacionados()
@@ -477,7 +486,7 @@ def lancar_lote_job(
                             'frete_id': frete.id,
                             'success': False,
                             'skipped': False,
-                            'error': 'Nenhum CTe relacionado encontrado',
+                            'error': 'Nenhum CTe relacionado encontrado. Vincule um CTe manualmente.',
                             'error_type': 'CTE_NAO_ENCONTRADO'
                         }
                         resultado['detalhes_fretes'].append(detalhe)
@@ -485,11 +494,16 @@ def lancar_lote_job(
                         continue
 
                     if len(ctes_relacionados) > 1:
+                        # Listar CTes sugeridos na mensagem de erro
+                        ctes_info = ', '.join([f"CTe {c.numero_cte}" for c in ctes_relacionados[:5]])
+                        if len(ctes_relacionados) > 5:
+                            ctes_info += f" e mais {len(ctes_relacionados) - 5}..."
+
                         detalhe = {
                             'frete_id': frete.id,
                             'success': False,
                             'skipped': False,
-                            'error': f'Múltiplos CTes encontrados ({len(ctes_relacionados)}). Vincule manualmente antes de lançar.',
+                            'error': f'Múltiplos CTes sugeridos ({len(ctes_relacionados)}): {ctes_info}. Vincule manualmente o CTe correto antes de lançar.',
                             'error_type': 'MULTIPLOS_CTES'
                         }
                         resultado['detalhes_fretes'].append(detalhe)

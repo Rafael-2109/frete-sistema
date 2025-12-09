@@ -33,32 +33,41 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col">
                             <div class="text-center p-3 border rounded">
                                 <i class="fas fa-tasks fa-2x text-primary mb-2"></i>
                                 <h4>{{ auditorias|length }}</h4>
-                                <small class="text-muted">Total de Etapas</small>
+                                <small class="text-muted">Total</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col">
                             <div class="text-center p-3 border rounded">
                                 <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                                 <h4 class="text-success">{{ etapas_sucesso }}</h4>
                                 <small class="text-muted">Sucessos</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="text-center p-3 border rounded">
-                                <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
-                                <h4 class="text-danger">{{ etapas_erro }}</h4>
+                        {% if etapas_retentativa > 0 %}
+                        <div class="col">
+                            <div class="text-center p-3 border rounded bg-warning bg-opacity-10">
+                                <i class="fas fa-sync-alt fa-2x text-warning mb-2"></i>
+                                <h4 class="text-warning">{{ etapas_retentativa }}</h4>
+                                <small class="text-muted">Retentativas</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div class="col">
+                            <div class="text-center p-3 border rounded {% if etapas_erro > 0 %}bg-danger bg-opacity-10{% endif %}">
+                                <i class="fas fa-times-circle fa-2x {% if etapas_erro > 0 %}text-danger{% else %}text-muted{% endif %} mb-2"></i>
+                                <h4 class="{% if etapas_erro > 0 %}text-danger{% else %}text-muted{% endif %}">{{ etapas_erro }}</h4>
                                 <small class="text-muted">Erros</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col">
                             <div class="text-center p-3 border rounded">
                                 <i class="fas fa-clock fa-2x text-info mb-2"></i>
                                 <h4 class="text-info">{{ (total_tempo_ms / 1000)|numero_br(2) }}s</h4>
-                                <small class="text-muted">Tempo Total</small>
+                                <small class="text-muted">Tempo</small>
                             </div>
                         </div>
                     </div>
@@ -96,17 +105,42 @@
                 </div>
                 <div class="card-body">
                     {% for auditoria in auditorias %}
-                    <div class="card mb-3 {% if auditoria.status == 'SUCESSO' %}border-success{% else %}border-danger{% endif %}">
-                        <div class="card-header {% if auditoria.status == 'SUCESSO' %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    {# Verificar se é erro que foi corrigido por retentativa (próxima auditoria é mesma etapa com sucesso) #}
+                    {% set ns = namespace(erro_corrigido=false) %}
+                    {% if auditoria.status == 'ERRO' %}
+                        {% for proxima in auditorias %}
+                            {% if proxima.etapa == auditoria.etapa and proxima.status == 'SUCESSO' and proxima.executado_em > auditoria.executado_em %}
+                                {% set ns.erro_corrigido = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                    {% set erro_corrigido = ns.erro_corrigido %}
+
+                    {# Definir cores baseado no status e se foi corrigido #}
+                    {% if auditoria.status == 'SUCESSO' %}
+                        {% set cor_borda = 'border-success' %}
+                        {% set cor_header = 'bg-success' %}
+                        {% set icone = 'fa-check-circle' %}
+                        {% set status_texto = '' %}
+                    {% elif erro_corrigido %}
+                        {% set cor_borda = 'border-warning' %}
+                        {% set cor_header = 'bg-warning text-dark' %}
+                        {% set icone = 'fa-sync-alt' %}
+                        {% set status_texto = ' (Retentativa)' %}
+                    {% else %}
+                        {% set cor_borda = 'border-danger' %}
+                        {% set cor_header = 'bg-danger' %}
+                        {% set icone = 'fa-times-circle' %}
+                        {% set status_texto = '' %}
+                    {% endif %}
+
+                    <div class="card mb-3 {{ cor_borda }}">
+                        <div class="card-header {{ cor_header }} {% if not erro_corrigido or auditoria.status == 'SUCESSO' %}text-white{% endif %}">
                             <div class="row align-items-center">
                                 <div class="col-md-6">
                                     <h6 class="mb-0">
-                                        {% if auditoria.status == 'SUCESSO' %}
-                                        <i class="fas fa-check-circle"></i>
-                                        {% else %}
-                                        <i class="fas fa-times-circle"></i>
-                                        {% endif %}
-                                        Etapa {{ auditoria.etapa }} - {{ auditoria.etapa_descricao }}
+                                        <i class="fas {{ icone }}"></i>
+                                        Etapa {{ auditoria.etapa }} - {{ auditoria.etapa_descricao }}{{ status_texto }}
                                     </h6>
                                 </div>
                                 <div class="col-md-3 text-end">
@@ -148,14 +182,17 @@
                             </div>
 
                             {% if auditoria.mensagem %}
-                            <div class="alert {% if auditoria.status == 'SUCESSO' %}alert-success{% else %}alert-danger{% endif %} mb-3">
+                            <div class="alert {% if auditoria.status == 'SUCESSO' %}alert-success{% elif erro_corrigido %}alert-warning{% else %}alert-danger{% endif %} mb-3">
                                 <strong>Mensagem:</strong> {{ auditoria.mensagem }}
+                                {% if erro_corrigido %}
+                                <br><small class="text-muted"><i class="fas fa-info-circle"></i> Esta etapa foi refeita com sucesso automaticamente.</small>
+                                {% endif %}
                             </div>
                             {% endif %}
 
                             {% if auditoria.erro_detalhado %}
-                            <div class="alert alert-danger">
-                                <strong><i class="fas fa-exclamation-triangle"></i> Erro Detalhado:</strong>
+                            <div class="alert {% if erro_corrigido %}alert-warning{% else %}alert-danger{% endif %}">
+                                <strong><i class="fas fa-{% if erro_corrigido %}info-circle{% else %}exclamation-triangle{% endif %}"></i> {% if erro_corrigido %}Detalhe da Retentativa:{% else %}Erro Detalhado:{% endif %}</strong>
                                 <pre class="mb-0 mt-2" style="font-size: 12px; max-height: 200px; overflow-y: auto;">{{ auditoria.erro_detalhado }}</pre>
                             </div>
                             {% endif %}
