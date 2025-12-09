@@ -77,7 +77,8 @@ def converter_projecao_para_resumo(projecao):
             soma_carteira = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(
-                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados),
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
             ).scalar()
             qtd_total_carteira = float(soma_carteira) if soma_carteira else 0
         except Exception as e:

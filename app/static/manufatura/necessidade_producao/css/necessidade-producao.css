@@ -1,4 +1,91 @@
 /* ==================================================
+   BARRA COMPACTA (FULLSCREEN)
+   ================================================== */
+.barra-compacta {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.3rem 0.75rem;
+    border-radius: 0;
+    min-height: 32px;
+}
+
+.barra-compacta-success {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.barra-compacta .titulo-compacto {
+    font-size: 0.85rem;
+    color: white;
+}
+
+.barra-compacta .badge-compacto {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+}
+
+.barra-compacta .input-compacto,
+.barra-compacta .select-compacto {
+    height: 26px;
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+}
+
+.barra-compacta .select-compacto {
+    width: 65px;
+}
+
+.barra-compacta .btn-compacto {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    height: 26px;
+}
+
+.barra-compacta .btn-xs {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+.barra-compacta .btn-group .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+/* Filtros expandidos */
+.filtros-expandidos {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0;
+    padding: 0.4rem 0.75rem;
+}
+
+.form-check-sm {
+    margin-bottom: 0 !important;
+    margin-right: 0.4rem !important;
+}
+
+.form-check-sm .form-check-input {
+    width: 0.85rem;
+    height: 0.85rem;
+    margin-top: 0.15rem;
+}
+
+.form-check-sm .form-check-label {
+    font-size: 0.7rem;
+    padding-left: 0.1rem;
+}
+
+/* Card tabela sem header */
+.card-tabela {
+    border: 1px solid #dee2e6;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+.card-tabela .table-body {
+    padding: 0;
+}
+
+/* ==================================================
    CSS VARIABLES - TAMANHOS DINÂMICOS
    ================================================== */
 :root {
@@ -559,7 +646,7 @@ table.table-necessidade thead th.col-necessidade {
 }
 
 .table-container {
-    max-height: 600px;
+    max-height: calc(100vh - 100px); /* Ajustado via JS para precisão dinâmica */
     overflow: auto;
     position: relative;
 }

@@ -732,24 +732,20 @@ class ServicoProjecaoEstoque:
         """
         Calcula consumo necessário para atender CarteiraPrincipal
 
-        Lógica:
-        1. Verifica quais produtos PA (acabados) consomem este componente
-        2. Para cada PA, calcula necessidade de produção (Saldo Carteira - Estoque PA)
-        3. Multiplica pela estrutura (BOM) para obter consumo do componente
-        4. Considera intermediários recursivamente
+        Lógica (cobre 3 cenários):
+        1. Só componente (não vendido): consumo = via BOM
+        2. Só revenda (não componente): consumo = saldo carteira próprio
+        3. Componente + Vendido: consumo = via BOM + saldo carteira próprio
         """
         from app.carteira.models import CarteiraPrincipal  # ✅ Import correto conforme CLAUDE.md
 
         consumo_total = 0.0
 
-        # Buscar quais produtos CONSOMEM este componente
+        # PARTE 1: Consumo via BOM (se for componente de outros produtos)
         boms = ListaMateriais.query.filter(
             ListaMateriais.cod_produto_componente == cod_produto_componente,
             ListaMateriais.status == 'ativo'
         ).all()
-
-        if not boms:
-            return 0.0
 
         # Para cada produto que usa este componente
         for bom in boms:
@@ -757,11 +753,12 @@ class ServicoProjecaoEstoque:
             qtd_utilizada = float(bom.qtd_utilizada)
 
             # Calcular necessidade de produção do produto PAI
-            # Saldo Carteira
+            # Saldo Carteira (apenas itens com saldo > 0)
             saldo_carteira = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(
-                CarteiraPrincipal.cod_produto == cod_produto_pai
+                CarteiraPrincipal.cod_produto == cod_produto_pai,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
             ).scalar() or 0.0
 
             # Estoque do PA
@@ -773,6 +770,22 @@ class ServicoProjecaoEstoque:
             if necessidade > 0:
                 # Consumo = Necessidade × Qtd Utilizada
                 consumo_total += necessidade * qtd_utilizada
+
+        # PARTE 2: Consumo próprio (se o produto também é vendido diretamente)
+        produto = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_produto_componente
+        ).first()
+
+        if produto and produto.produto_vendido:
+            # Saldo da carteira do próprio produto (revenda direta)
+            saldo_carteira_proprio = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto_componente,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
+            ).scalar() or 0.0
+
+            consumo_total += float(saldo_carteira_proprio)
 
         return consumo_total
 
@@ -848,11 +861,20 @@ class ServicoProjecaoEstoque:
         qtd_pedidos_no_prazo = 0.0
 
         # PARTE 1: Buscar REQUISIÇÕES com saldo não alocado
+        # ✅ CORRIGIDO: usar NOT IN em vez de IN para não excluir status válidos
+        # ✅ Trata NULL com db.or_ para não perder registros
+        from sqlalchemy import or_
         requisicoes = RequisicaoCompras.query.filter(
             RequisicaoCompras.cod_produto == cod_produto,
             RequisicaoCompras.importado_odoo == True,
-            RequisicaoCompras.status.in_(['Aprovada', 'Aguardando Aprovação']),
-            RequisicaoCompras.status_requisicao != 'rejected'
+            or_(
+                RequisicaoCompras.status.is_(None),
+                ~RequisicaoCompras.status.in_(['Cancelada', 'Rejeitada', 'Concluída'])
+            ),
+            or_(
+                RequisicaoCompras.status_requisicao.is_(None),
+                ~RequisicaoCompras.status_requisicao.in_(['rejected', 'cancel', 'done'])
+            )
         ).all()
 
         pedidos_ja_processados = set()  # IDs de pedidos já vinculados
@@ -906,7 +928,8 @@ class ServicoProjecaoEstoque:
                                     qtd_pedidos_no_prazo += item['saldo']
 
                 # Se tem saldo não alocado, mostrar como requisição pura
-                if saldo_req > qtd_alocada_total:
+                # ✅ CORRIGIDO: era "saldo_req > qtd_alocada_total" (errado matematicamente)
+                if float(saldo_req) > 0:
                     data_chegada = req.data_necessidade
                     atrasado = data_chegada < hoje if data_chegada else False
 

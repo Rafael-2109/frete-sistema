@@ -11,6 +11,7 @@ let dadosComponentes = [];
 document.addEventListener('DOMContentLoaded', () => {
     configurarEventos();
     gerarHeadersProjecao();
+    ajustarAlturaTabela(); // Ajustar altura inicial
     calcular();
 });
 
@@ -25,6 +26,42 @@ function configurarEventos() {
     document.querySelectorAll('.col-toggle').forEach(checkbox => {
         checkbox.addEventListener('change', toggleColunas);
     });
+
+    // Ajustar altura da tabela quando accordion abre/fecha
+    const filtrosAccordion = document.getElementById('filtros-avancados');
+    if (filtrosAccordion) {
+        filtrosAccordion.addEventListener('shown.bs.collapse', ajustarAlturaTabela);
+        filtrosAccordion.addEventListener('hidden.bs.collapse', ajustarAlturaTabela);
+    }
+}
+
+function ajustarAlturaTabela() {
+    const container = document.querySelector('.table-container');
+    if (!container) return;
+
+    // Medir elementos dinamicamente
+    const navbar = document.querySelector('nav.navbar, .navbar, header');
+    const barraCompacta = document.querySelector('.barra-compacta');
+    const filtrosDiv = document.getElementById('filtros-avancados');
+
+    let alturaUsada = 0;
+
+    // Navbar
+    if (navbar) alturaUsada += navbar.offsetHeight;
+
+    // Barra compacta (sem margem extra)
+    if (barraCompacta) alturaUsada += barraCompacta.offsetHeight;
+
+    // Filtros (se expandidos)
+    if (filtrosDiv && filtrosDiv.classList.contains('show')) {
+        alturaUsada += filtrosDiv.offsetHeight;
+    }
+
+    // Pequena margem de segurança (borda do card)
+    alturaUsada += 2;
+
+    // Aplicar altura
+    container.style.maxHeight = `calc(100vh - ${alturaUsada}px)`;
 }
 
 // ============================================================
@@ -67,7 +104,7 @@ async function calcular() {
         if (data.sucesso) {
             dadosComponentes = data.componentes;
             renderizarTabela(dadosComponentes);
-            document.getElementById('total-componentes').textContent = `${data.total_componentes} componentes`;
+            document.getElementById('total-componentes').textContent = data.total_componentes;
         } else {
             alert('Erro ao calcular projeção: ' + data.erro);
         }
@@ -213,11 +250,13 @@ function mudarTamanhoFonte(tamanho) {
     // Adicionar nova classe
     document.body.classList.add(`font-${tamanho}`);
 
-    // Atualizar botões ativos
-    document.querySelectorAll('.btn-size-compact').forEach(btn => {
-        btn.classList.remove('active');
+    // Atualizar botões ativos (nova estrutura com btn-group)
+    document.querySelectorAll('.barra-compacta .btn-group .btn[data-size]').forEach(btn => {
+        btn.classList.remove('active', 'btn-outline-primary');
+        btn.classList.add('btn-outline-secondary');
         if (btn.dataset.size === tamanho) {
-            btn.classList.add('active');
+            btn.classList.add('active', 'btn-outline-primary');
+            btn.classList.remove('btn-outline-secondary');
         }
     });
 }

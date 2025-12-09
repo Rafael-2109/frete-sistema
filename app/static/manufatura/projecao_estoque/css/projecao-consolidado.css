@@ -1,10 +1,86 @@
 /* ============================================================
-   PROJEÇÃO DE ESTOQUE - LAYOUT CONSOLIDADO
+   PROJEÇÃO DE ESTOQUE - LAYOUT CONSOLIDADO (COMPACTO)
    ============================================================ */
 
-/* Container da tabela com scroll */
+/* ========== BARRA COMPACTA ========== */
+.barra-compacta {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.3rem 0.75rem;
+    border-radius: 4px;
+    min-height: 32px;
+}
+
+.barra-compacta .titulo-compacto {
+    font-size: 0.85rem;
+    color: white;
+}
+
+.barra-compacta .badge-compacto {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+}
+
+.barra-compacta .input-compacto {
+    max-width: 180px;
+    height: 26px;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+}
+
+.barra-compacta .btn-compacto {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    height: 26px;
+}
+
+.barra-compacta .btn-xs {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+/* ========== FILTROS EXPANDIDOS ========== */
+.filtros-expandidos {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+}
+
+.form-check-sm {
+    margin-bottom: 0 !important;
+    margin-right: 0.5rem !important;
+}
+
+.form-check-sm .form-check-input {
+    width: 0.9rem;
+    height: 0.9rem;
+    margin-top: 0.15rem;
+}
+
+.form-check-sm .form-check-label {
+    font-size: 0.72rem;
+    padding-left: 0.15rem;
+}
+
+/* ========== CARD TABELA (sem header) ========== */
+.card-tabela {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.card-tabela .table-body {
+    padding: 0;
+}
+
+/* ========== CONTAINER DA TABELA (MAXIMIZADO) ========== */
+/*
+   Cálculo: 100vh - navbar(56px) - barra compacta(36px) - margins(8px) = ~100px
+   Ajustado via JS para precisão dinâmica
+*/
 .table-container {
-    max-height: calc(100vh - 250px);
+    max-height: calc(100vh - 100px);
     overflow: auto;
     position: relative;
 }
@@ -90,40 +166,13 @@ thead .sticky-col-produto {
     color: #6c757d;
 }
 
-/* Customizador de colunas */
-.customizador-colunas {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 0.5rem 1rem;
+/* Botões de tamanho de fonte (na barra compacta) */
+.barra-compacta .btn-group .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
 }
 
-.form-check-inline {
-    margin-right: 1rem;
-    margin-bottom: 0;
-}
-
-.form-check-label {
-    font-size: 0.85rem;
-    cursor: pointer;
-}
-
-/* Botões de tamanho de fonte */
-.btn-size-compact {
-    border: 1px solid #dee2e6;
-    background: white;
-    padding: 0.15rem 0.5rem;
-    font-size: 0.75rem;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-size-compact:hover {
-    background: #e9ecef;
-}
-
-.btn-size-compact.active {
+.barra-compacta .btn-group .btn.active {
     background: #0d6efd;
     color: white;
     border-color: #0d6efd;
@@ -148,14 +197,6 @@ thead .sticky-col-produto {
     align-items: center;
     justify-content: center;
     z-index: 1000;
-}
-
-/* Card header customizado */
-.card-header-custom {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    font-weight: 600;
-    padding: 0.75rem 1rem;
 }
 
 /* Tamanhos de fonte */

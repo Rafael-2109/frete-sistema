@@ -5,119 +5,128 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/projecao_estoque/css/projecao-consolidado.css') }}">
+<style>
+    /* Forçar remoção de TODOS os espaços - página fullscreen */
+    main, .main-content, #content, .content { padding: 0 !important; margin: 0 !important; }
+    /* Container de flash messages - zerar margens */
+    nav.navbar + .container { margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+    nav.navbar + .container:not(:has(.alert)) { display: none !important; }
+    /* Container principal desta página */
+    .container-fluid.px-1 { margin-top: 0 !important; }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-3 py-2">
-
-    <!-- Cabeçalho com Filtros -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
+<div class="container-fluid px-1 py-0 m-0">
+    <!-- ========== BARRA COMPACTA (sempre visível) ========== -->
+    <div class="barra-compacta d-flex align-items-center justify-content-between gap-2">
+        <!-- Esquerda: Título + Badge -->
         <div class="d-flex align-items-center gap-2">
-            <h5 class="mb-0">
-                <i class="fas fa-boxes text-primary me-1"></i>
-                Projeção de Estoque - Componentes
-            </h5>
+            <i class="fas fa-boxes text-primary"></i>
+            <span class="titulo-compacto fw-semibold">Projeção de Estoque</span>
+            <span id="total-componentes" class="badge bg-secondary badge-compacto">0</span>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
-            <input type="text" id="filtro-produto" class="form-control form-control-sm" placeholder="Buscar produto..." style="width: 200px;">
-            <button id="btn-calcular" class="btn btn-primary btn-sm">
-                <i class="fas fa-calculator me-1"></i>Calcular
+        <!-- Centro: Busca + Calcular -->
+        <div class="d-flex align-items-center gap-2 flex-grow-1 justify-content-center">
+            <input type="text" id="filtro-produto" class="form-control form-control-sm input-compacto" placeholder="🔍 Buscar...">
+            <button id="btn-calcular" class="btn btn-primary btn-sm btn-compacto">
+                <i class="fas fa-calculator"></i> Calcular
             </button>
-            <a href="{{ url_for('manufatura.index') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left me-1"></i>Voltar
+        </div>
+
+        <!-- Direita: Tamanho fonte + Expandir + Voltar -->
+        <div class="d-flex align-items-center gap-1">
+            <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-outline-secondary btn-xs" data-size="very-small" onclick="mudarTamanhoFonte('very-small')" title="Muito pequeno">XS</button>
+                <button class="btn btn-outline-secondary btn-xs" data-size="small" onclick="mudarTamanhoFonte('small')" title="Pequeno">S</button>
+                <button class="btn btn-outline-primary btn-xs active" data-size="medium" onclick="mudarTamanhoFonte('medium')" title="Médio">M</button>
+                <button class="btn btn-outline-secondary btn-xs" data-size="large" onclick="mudarTamanhoFonte('large')" title="Grande">L</button>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary btn-compacto" type="button" data-bs-toggle="collapse" data-bs-target="#filtros-avancados" aria-expanded="false" aria-controls="filtros-avancados" id="btn-toggle-filtros">
+                <i class="fas fa-sliders-h"></i>
+            </button>
+            <a href="{{ url_for('manufatura.index') }}" class="btn btn-sm btn-outline-secondary btn-compacto" title="Voltar">
+                <i class="fas fa-arrow-left"></i>
             </a>
         </div>
     </div>
 
-    <!-- Customizador de Colunas -->
-    <div class="customizador-colunas mb-2">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <!-- Colunas Fixas -->
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-embalagem" value="embalagem" checked>
-                <label class="form-check-label" for="col-embalagem">Embalagem</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-mp" value="mp" checked>
-                <label class="form-check-label" for="col-mp">MP</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-marca" value="marca" checked>
-                <label class="form-check-label" for="col-marca">Marca</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-estoque" value="estoque" checked>
-                <label class="form-check-label" for="col-estoque">Estoque Atual</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-consumo" value="consumo" checked>
-                <label class="form-check-label" for="col-consumo">Consumo Carteira</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo" value="saldo" checked>
-                <label class="form-check-label" for="col-saldo">Saldo Carteira</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-programacao" value="programacao" checked>
-                <label class="form-check-label" for="col-programacao">Programação Produção</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-saldo-prog" value="saldo-prog" checked>
-                <label class="form-check-label" for="col-saldo-prog">Saldo Programação</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-requisicoes" value="requisicoes" checked>
-                <label class="form-check-label" for="col-requisicoes">Qtd Requisições</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-pedidos" value="pedidos" checked>
-                <label class="form-check-label" for="col-pedidos">Qtd Pedidos</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-atrasados" value="atrasados" checked>
-                <label class="form-check-label" for="col-atrasados">Qtd Atrasados</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-detalhes" value="detalhes" checked>
-                <label class="form-check-label" for="col-detalhes">Detalhes</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input col-toggle" type="checkbox" id="col-projecao" value="projecao" checked>
-                <label class="form-check-label" for="col-projecao"><strong>Projeção D0-D60</strong></label>
-            </div>
+    <!-- ========== FILTROS AVANÇADOS (colapsável) ========== -->
+    <div class="collapse" id="filtros-avancados">
+        <div class="filtros-expandidos mb-1">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Colunas Visíveis -->
+                <span class="text-muted small fw-bold me-1"><i class="fas fa-columns me-1"></i>Colunas:</span>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-embalagem" value="embalagem" checked>
+                    <label class="form-check-label" for="col-embalagem">Emb</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-mp" value="mp" checked>
+                    <label class="form-check-label" for="col-mp">MP</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-marca" value="marca" checked>
+                    <label class="form-check-label" for="col-marca">Marca</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-estoque" value="estoque" checked>
+                    <label class="form-check-label" for="col-estoque">Estoque</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-consumo" value="consumo" checked>
+                    <label class="form-check-label" for="col-consumo">Consumo</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-saldo" value="saldo" checked>
+                    <label class="form-check-label" for="col-saldo">Saldo</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-programacao" value="programacao" checked>
+                    <label class="form-check-label" for="col-programacao">Prog</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-saldo-prog" value="saldo-prog" checked>
+                    <label class="form-check-label" for="col-saldo-prog">Saldo Prog</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-requisicoes" value="requisicoes" checked>
+                    <label class="form-check-label" for="col-requisicoes">Req</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-pedidos" value="pedidos" checked>
+                    <label class="form-check-label" for="col-pedidos">Ped</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-atrasados" value="atrasados" checked>
+                    <label class="form-check-label" for="col-atrasados">Atr</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-detalhes" value="detalhes" checked>
+                    <label class="form-check-label" for="col-detalhes">Det</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-projecao" value="projecao" checked>
+                    <label class="form-check-label fw-bold" for="col-projecao">D0-D60</label>
+                </div>
 
-            <span class="mx-2">|</span>
+                <span class="mx-1 text-muted">|</span>
 
-            <!-- Tamanho de Fonte -->
-            <div class="d-flex align-items-center gap-1">
-                <span class="text-muted small"><i class="fas fa-text-height me-1"></i>Fonte:</span>
-                <button class="btn-size-compact" data-size="very-small" onclick="mudarTamanhoFonte('very-small')">XS</button>
-                <button class="btn-size-compact" data-size="small" onclick="mudarTamanhoFonte('small')">S</button>
-                <button class="btn-size-compact active" data-size="medium" onclick="mudarTamanhoFonte('medium')">M</button>
-                <button class="btn-size-compact" data-size="large" onclick="mudarTamanhoFonte('large')">L</button>
+                <!-- Ações rápidas -->
+                <button class="btn btn-xs btn-outline-primary" onclick="selecionarTodasColunas()">
+                    <i class="fas fa-check-double"></i>
+                </button>
+                <button class="btn btn-xs btn-outline-secondary" onclick="limparSelecaoColunas()">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-
-            <span class="mx-2">|</span>
-
-            <!-- Botões de Seleção -->
-            <button class="btn btn-xs btn-outline-primary" onclick="selecionarTodasColunas()">
-                <i class="fas fa-check-double"></i> Todas
-            </button>
-            <button class="btn btn-xs btn-outline-secondary" onclick="limparSelecaoColunas()">
-                <i class="fas fa-times"></i> Nenhuma
-            </button>
         </div>
     </div>
 
-    <!-- Tabela -->
-    <div class="card shadow">
-        <div class="card-header card-header-custom">
-            <i class="fas fa-table me-2"></i>
-            Projeção de Componentes
-            <span id="total-componentes" class="badge bg-light text-dark ms-2">0 componentes</span>
-        </div>
-        <div class="card-body p-0">
+    <!-- ========== TABELA (maximizada - sem header) ========== -->
+    <div class="card-tabela">
+        <div class="table-body">
             <div class="table-container">
                 <div id="loading-spinner" class="spinner-overlay d-none">
                     <div class="spinner-border text-primary"></div>

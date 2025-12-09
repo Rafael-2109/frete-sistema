@@ -182,10 +182,13 @@ def register_necessidade_producao_routes(bp):
             estoque_service = ServicoEstoqueSimples()
             estoque_atual = estoque_service.calcular_estoque_atual(cod_produto)
 
-            # Calcular total sem separação
+            # Calcular total sem separação (apenas saldo positivo)
             total_carteira_raw = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
-            ).filter(CarteiraPrincipal.cod_produto == cod_produto).scalar()
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
+            ).scalar()
 
             total_carteira = float(total_carteira_raw) if total_carteira_raw is not None else 0.0
             total_separado = sum(float(sep.qtd_saldo or 0) for sep in separacoes)

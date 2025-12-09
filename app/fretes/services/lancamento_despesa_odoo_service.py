@@ -299,14 +299,25 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
             # ETAPA 2: Atualizar data de entrada no DFe
             data_entrada = datetime.now().strftime('%Y-%m-%d')
+
+            # Preparar dados para atualização
+            dados_dfe = {'l10n_br_data_entrada': data_entrada}
+
+            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+            if despesa.fatura_frete_id and despesa.fatura_frete:
+                referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                dados_dfe['payment_reference'] = referencia_fatura
+                current_app.logger.info(
+                    f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao DFe {dfe_id}"
+                )
+            else:
+                dados_dfe['payment_reference'] = f'DESPESA-{despesa_id}'
+
             inicio = time.time()
             self.odoo.write(
                 'l10n_br_ciel_it_account.dfe',
                 [dfe_id],
-                {
-                    'l10n_br_data_entrada': data_entrada,  # Campo correto (não l10n_br_date_in)
-                    'payment_reference': f'DESPESA-{despesa_id}'
-                }
+                dados_dfe
             )
             tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -319,8 +330,8 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 modelo_odoo='l10n_br_ciel_it_account.dfe',
                 acao='write',
                 status='SUCESSO',
-                mensagem=f"Data entrada: {data_entrada}, Ref: DESPESA-{despesa_id}",
-                campos_alterados=['l10n_br_data_entrada', 'payment_reference'],
+                mensagem=f"Data entrada: {data_entrada}, Ref: {dados_dfe['payment_reference']}",
+                campos_alterados=list(dados_dfe.keys()),
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id
             )
@@ -463,8 +474,18 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             dados_po = {
                 'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
                 'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
+                'company_id': self.COMPANY_NACOM_GOYA_CD_ID,  # ✅ CRÍTICO: Define empresa CD (ID 4)
                 'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID
             }
+
+            # ✅ ADICIONAR partner_ref com número da fatura (se houver)
+            if despesa.fatura_frete_id and despesa.fatura_frete:
+                referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                dados_po['partner_ref'] = referencia_fatura
+                current_app.logger.info(
+                    f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao PO {po_id} "
+                    f"(partner_ref: '{referencia_fatura}')"
+                )
 
             # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
             try:
@@ -516,11 +537,11 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=7,
-                etapa_descricao="Configurar PO (operação fiscal, team, payment, picking_type)",
+                etapa_descricao="Configurar PO (operação fiscal, team, payment, company, picking_type)",
                 modelo_odoo='purchase.order',
                 acao='write',
                 status='SUCESSO',
-                mensagem=f"PO {po_id} configurado",
+                mensagem=f"PO {po_id} configurado com company_id={self.COMPANY_NACOM_GOYA_CD_ID}",
                 campos_alterados=list(dados_po.keys()),
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id,
@@ -698,9 +719,18 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             dados_invoice = {
                 'l10n_br_compra_indcom': 'out',
                 'l10n_br_situacao_nf': 'autorizado',
-                'invoice_date_due': data_vencimento_str,
-                'payment_reference': f'DESPESA-{despesa_id}'
+                'invoice_date_due': data_vencimento_str
             }
+
+            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+            if despesa.fatura_frete_id and despesa.fatura_frete:
+                referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                dados_invoice['payment_reference'] = referencia_fatura
+                current_app.logger.info(
+                    f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} à Invoice {invoice_id}"
+                )
+            else:
+                dados_invoice['payment_reference'] = f'DESPESA-{despesa_id}'
 
             inicio = time.time()
             self.odoo.write(
@@ -715,11 +745,11 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 cte_id=cte_id,
                 chave_cte=cte_chave,
                 etapa=13,
-                etapa_descricao="Configurar Invoice (campos fiscais e vencimento)",
+                etapa_descricao="Configurar Invoice (campos fiscais, vencimento e payment_reference)",
                 modelo_odoo='account.move',
                 acao='write',
                 status='SUCESSO',
-                mensagem=f"Invoice {invoice_id} configurada",
+                mensagem=f"Invoice {invoice_id} configurada com ref: {dados_invoice['payment_reference']}",
                 campos_alterados=list(dados_invoice.keys()),
                 tempo_execucao_ms=tempo_ms,
                 dfe_id=dfe_id,

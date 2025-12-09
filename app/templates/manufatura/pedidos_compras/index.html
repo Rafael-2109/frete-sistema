@@ -314,7 +314,16 @@ function filtrarPedidos(page = 1) {
     paginaAtual = page;
     const params = new URLSearchParams();
 
-    const codProduto = document.getElementById('filtro-cod-produto').value;
+    // ✅ CORRIGIDO: Usar valor digitado se campo hidden estiver vazio
+    let codProduto = document.getElementById('filtro-cod-produto').value;
+    if (!codProduto) {
+        // Se não selecionou do autocomplete, usar o texto digitado
+        const textoBusca = document.getElementById('filtro-produto-busca').value.trim();
+        if (textoBusca.length >= 2) {
+            codProduto = textoBusca;
+        }
+    }
+
     const fornecedor = document.getElementById('filtro-fornecedor').value;
     const criacaoInicio = document.getElementById('filtro-criacao-inicio').value;
     const criacaoFim = document.getElementById('filtro-criacao-fim').value;

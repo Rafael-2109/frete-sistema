@@ -291,13 +291,14 @@ class NecessidadeProducaoService:
     def _calcular_carteira_pedidos(self, codigos_relacionados: List[str]) -> float:
         """
         Calcula saldo pendente da carteira (independente do mês).
-        SUM(qtd_saldo_produto_pedido).
+        SUM(qtd_saldo_produto_pedido) WHERE qtd_saldo_produto_pedido > 0.
         """
         try:
             resultado = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('total')
             ).filter(
-                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados),
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
             ).scalar()
 
             return float(resultado or 0)
@@ -312,11 +313,12 @@ class NecessidadeProducaoService:
         Fórmula: SUM(CarteiraPrincipal.qtd_saldo_produto_pedido) - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
         """
         try:
-            # Total da carteira
+            # Total da carteira (apenas saldo positivo)
             total_carteira = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('total')
             ).filter(
-                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados),
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
             ).scalar()
 
             # Total separado (não sincronizado)

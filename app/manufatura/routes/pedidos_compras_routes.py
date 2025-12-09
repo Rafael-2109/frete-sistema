@@ -84,7 +84,13 @@ def api_listar_pedidos():
     Retorna cards agrupados com:
     - Cabeçalho: dados do pedido (num_pedido, fornecedor, datas, status)
     - Linhas: produtos do pedido
+
+    ✅ OTIMIZADO: Paginação SQL + Eager Loading (sem N+1)
     """
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import func
+    import math
+
     # Filtros independentes
     cod_produto = request.args.get('cod_produto')
     fornecedor = request.args.get('fornecedor')
@@ -97,64 +103,118 @@ def api_listar_pedidos():
     data_previsao_inicio = request.args.get('data_previsao_inicio')
     data_previsao_fim = request.args.get('data_previsao_fim')
 
-    limit = request.args.get('limit', 500, type=int)
+    # Paginação
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
 
-    # Query base
-    query = PedidoCompras.query.filter_by(importado_odoo=True)
+    # ========== ETAPA 1: Contar e buscar num_pedidos únicos (paginação SQL) ==========
 
-    # Aplicar filtros independentes
+    # Query base para filtros
+    query_base = PedidoCompras.query.filter_by(importado_odoo=True)
+
+    # Aplicar filtros
     if cod_produto:
-        query = query.filter(PedidoCompras.cod_produto.like(f'%{cod_produto}%'))
+        query_base = query_base.filter(PedidoCompras.cod_produto.ilike(f'%{cod_produto}%'))
 
     if fornecedor:
-        query = query.filter(PedidoCompras.raz_social.like(f'%{fornecedor}%'))
+        query_base = query_base.filter(PedidoCompras.raz_social.ilike(f'%{fornecedor}%'))
 
-    # Filtro de data de CRIAÇÃO
     if data_criacao_inicio:
-        query = query.filter(PedidoCompras.data_pedido_criacao >= data_criacao_inicio)
+        query_base = query_base.filter(PedidoCompras.data_pedido_criacao >= data_criacao_inicio)
 
     if data_criacao_fim:
-        query = query.filter(PedidoCompras.data_pedido_criacao <= data_criacao_fim)
+        query_base = query_base.filter(PedidoCompras.data_pedido_criacao <= data_criacao_fim)
 
-    # Filtro de data de PREVISÃO
     if data_previsao_inicio:
-        query = query.filter(PedidoCompras.data_pedido_previsao >= data_previsao_inicio)
+        query_base = query_base.filter(PedidoCompras.data_pedido_previsao >= data_previsao_inicio)
 
     if data_previsao_fim:
-        query = query.filter(PedidoCompras.data_pedido_previsao <= data_previsao_fim)
+        query_base = query_base.filter(PedidoCompras.data_pedido_previsao <= data_previsao_fim)
 
-    # ✅ ORDENAÇÃO: Por data_pedido_criacao DESC (mais recentes primeiro)
-    query_ordenada = query.order_by(
+    # Subquery: num_pedidos únicos com data mais recente (para paginação)
+    subquery_pedidos = db.session.query(
+        PedidoCompras.num_pedido,
+        func.max(PedidoCompras.data_pedido_criacao).label('max_data')
+    ).filter_by(importado_odoo=True)
+
+    # Reaplicar filtros na subquery
+    if cod_produto:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.cod_produto.ilike(f'%{cod_produto}%'))
+    if fornecedor:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.raz_social.ilike(f'%{fornecedor}%'))
+    if data_criacao_inicio:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.data_pedido_criacao >= data_criacao_inicio)
+    if data_criacao_fim:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.data_pedido_criacao <= data_criacao_fim)
+    if data_previsao_inicio:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.data_pedido_previsao >= data_previsao_inicio)
+    if data_previsao_fim:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.data_pedido_previsao <= data_previsao_fim)
+
+    subquery_pedidos = subquery_pedidos.group_by(PedidoCompras.num_pedido).subquery()
+
+    # Contar total de pedidos únicos
+    total_pedidos = db.session.query(func.count()).select_from(subquery_pedidos).scalar() or 0
+    total_pages = math.ceil(total_pedidos / per_page) if total_pedidos > 0 else 1
+
+    # Buscar num_pedidos da página atual (paginação SQL)
+    pedidos_pagina = db.session.query(
+        subquery_pedidos.c.num_pedido
+    ).order_by(
+        desc(subquery_pedidos.c.max_data)
+    ).offset((page - 1) * per_page).limit(per_page).all()
+
+    num_pedidos_pagina = [p.num_pedido for p in pedidos_pagina]
+
+    if not num_pedidos_pagina:
+        return jsonify({
+            'sucesso': True,
+            'total_pedidos': 0,
+            'total_linhas': 0,
+            'pedidos': [],
+            'paginacao': {
+                'page': page,
+                'per_page': per_page,
+                'total_pages': 1,
+                'has_prev': False,
+                'has_next': False
+            }
+        })
+
+    # ========== ETAPA 2: Buscar linhas dos pedidos da página (com eager loading) ==========
+
+    # ✅ Eager loading: carrega alocações junto (evita N+1)
+    linhas = PedidoCompras.query.options(
+        joinedload(PedidoCompras.alocacoes).joinedload(RequisicaoCompraAlocacao.requisicao)
+    ).filter(
+        PedidoCompras.num_pedido.in_(num_pedidos_pagina),
+        PedidoCompras.importado_odoo == True
+    ).order_by(
         desc(PedidoCompras.data_pedido_criacao),
         PedidoCompras.num_pedido,
         PedidoCompras.cod_produto
-    )
+    ).all()
 
-    # ✅ BUSCAR TODAS as linhas que atendem aos filtros
-    todas_linhas = query_ordenada.all()
+    total_linhas = len(linhas)
 
-    # ✅ AGRUPAR por num_pedido ANTES de paginar
+    # ========== ETAPA 3: Agrupar por num_pedido ==========
+
     pedidos_agrupados = {}
-    total_linhas = len(todas_linhas)
 
-    for linha in todas_linhas:
+    for linha in linhas:
         num_pedido = linha.num_pedido
 
-        # Criar card do pedido se não existir
         if num_pedido not in pedidos_agrupados:
             pedidos_agrupados[num_pedido] = {
-                # Cabeçalho do card (dados do pedido)
-                'id': linha.id,  # ✅ ID para links
+                'id': linha.id,
                 'num_pedido': num_pedido,
-                'company_id': linha.company_id,  # ✅ NOVO: Empresa compradora
+                'company_id': linha.company_id,
                 'fornecedor': linha.raz_social,
                 'cnpj_fornecedor': linha.cnpj_fornecedor,
                 'data_criacao': linha.data_pedido_criacao.isoformat() if linha.data_pedido_criacao else None,
                 'data_previsao': linha.data_pedido_previsao.isoformat() if linha.data_pedido_previsao else None,
                 'status_odoo': linha.status_odoo,
                 'tipo_pedido': linha.tipo_pedido,
-
-                # ✅ NOVO: Dados da NF
                 'nf_pdf_path': linha.nf_pdf_path,
                 'nf_xml_path': linha.nf_xml_path,
                 'nf_numero': linha.nf_numero,
@@ -162,17 +222,10 @@ def api_listar_pedidos():
                 'nf_chave_acesso': linha.nf_chave_acesso,
                 'nf_data_emissao': linha.nf_data_emissao.isoformat() if linha.nf_data_emissao else None,
                 'nf_valor_total': float(linha.nf_valor_total) if linha.nf_valor_total else None,
-
-                # Linhas de produtos
                 'linhas': []
             }
 
-        # Buscar alocações da linha
-        alocacoes = RequisicaoCompraAlocacao.query.filter_by(
-            pedido_compra_id=linha.id
-        ).all()
-
-        # Adicionar linha de produto
+        # ✅ Alocações já carregadas via eager loading (sem query extra)
         pedidos_agrupados[num_pedido]['linhas'].append({
             'id': linha.id,
             'cod_produto': linha.cod_produto,
@@ -189,31 +242,18 @@ def api_listar_pedidos():
                     'percentual': aloc.percentual_alocado(),
                     'status': aloc.purchase_state
                 }
-                for aloc in alocacoes
+                for aloc in linha.alocacoes
             ]
         })
 
-    # ✅ CONVERTER para lista (mantém ordem de criação DESC)
-    todos_pedidos = list(pedidos_agrupados.values())
-    total_pedidos = len(todos_pedidos)
-
-    # ✅ APLICAR PAGINAÇÃO: 20 PEDIDOS por página (não linhas!)
-    page = request.args.get('page', 1, type=int)
-    per_page = 20  # 20 PEDIDOS por página
-
-    import math
-    total_pages = math.ceil(total_pedidos / per_page) if total_pedidos > 0 else 1
-
-    # Calcular slice para paginação
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    pedidos_paginados = todos_pedidos[start_idx:end_idx]
+    # Manter ordem da paginação
+    pedidos_ordenados = [pedidos_agrupados[np] for np in num_pedidos_pagina if np in pedidos_agrupados]
 
     return jsonify({
         'sucesso': True,
         'total_pedidos': total_pedidos,
         'total_linhas': total_linhas,
-        'pedidos': pedidos_paginados,
+        'pedidos': pedidos_ordenados,
         'paginacao': {
             'page': page,
             'per_page': per_page,

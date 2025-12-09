@@ -21,11 +21,19 @@ $(document).ready(function() {
     gerarHeadersProjecao();
     carregarPreferenciasColunas();
     carregarTamanhoFonte();
-    carregarFiltrosOpcoes(); // ✅ NOVO: Carregar opções dos filtros
+    carregarFiltrosOpcoes();
+    ajustarAlturaTabela(); // ✅ Ajustar altura inicial
 
     $('#btn-calcular').on('click', calcularNecessidade);
-    $('#btn-limpar-filtros').on('click', limparFiltros); // ✅ NOVO
+    $('#btn-limpar-filtros').on('click', limparFiltros);
     $('.col-toggle').on('change', () => { aplicarVisibilidadeColunas(); salvarPreferenciasColunas(); });
+
+    // ✅ Ajustar altura da tabela quando accordion abre/fecha
+    const filtrosAccordion = document.getElementById('filtros-avancados');
+    if (filtrosAccordion) {
+        filtrosAccordion.addEventListener('shown.bs.collapse', ajustarAlturaTabela);
+        filtrosAccordion.addEventListener('hidden.bs.collapse', ajustarAlturaTabela);
+    }
 
     // ✅ NOVO: Autocomplete de produto
     let autocompleteTimer;
@@ -79,19 +87,51 @@ function mudarTamanhoFonte(tamanho) {
         htmlElement.classList.add(`size-${tamanho}`);
     }
 
-    // Atualiza botões ativos
-    document.querySelectorAll('.btn-size').forEach(btn => {
-        btn.classList.remove('active');
+    // Atualiza botões ativos (suporta btn-size e btn-group)
+    document.querySelectorAll('.btn-size, .barra-compacta .btn-group .btn[data-size]').forEach(btn => {
+        btn.classList.remove('active', 'btn-light');
+        btn.classList.add('btn-outline-light');
         if (btn.dataset.size === tamanho) {
-            btn.classList.add('active');
+            btn.classList.add('active', 'btn-light');
+            btn.classList.remove('btn-outline-light');
         }
     });
 
     // Salva preferência
     localStorage.setItem('necessidade_tamanho_fonte', tamanho);
+}
 
-    console.log(`✅ Tamanho alterado para: ${tamanho}`);
-    console.log(`📊 Classes no HTML:`, htmlElement.className);
+// ============================================================
+// AJUSTE DINÂMICO DE ALTURA DA TABELA
+// ============================================================
+
+function ajustarAlturaTabela() {
+    const container = document.querySelector('.table-container');
+    if (!container) return;
+
+    // Medir elementos dinamicamente
+    const navbar = document.querySelector('nav.navbar, .navbar, header');
+    const barraCompacta = document.querySelector('.barra-compacta');
+    const filtrosDiv = document.getElementById('filtros-avancados');
+
+    let alturaUsada = 0;
+
+    // Navbar
+    if (navbar) alturaUsada += navbar.offsetHeight;
+
+    // Barra compacta (sem margem extra)
+    if (barraCompacta) alturaUsada += barraCompacta.offsetHeight;
+
+    // Filtros (se expandidos)
+    if (filtrosDiv && filtrosDiv.classList.contains('show')) {
+        alturaUsada += filtrosDiv.offsetHeight;
+    }
+
+    // Pequena margem de segurança (borda do card)
+    alturaUsada += 2;
+
+    // Aplicar altura
+    container.style.maxHeight = `calc(100vh - ${alturaUsada}px)`;
 }
 
 function carregarTamanhoFonte() {
