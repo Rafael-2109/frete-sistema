@@ -184,7 +184,7 @@ WORKER_COUNT=${WORKER_CONCURRENCY:-2}
 echo "👷 Configuração do Worker:"
 echo "   Workers paralelos: $WORKER_COUNT"
 echo "   Timeout padrão: 30 minutos"
-echo "   Filas: atacadao, sendas, high, default"
+echo "   Filas: atacadao, odoo_lancamento, impostos, high, default"
 echo ""
 
 # Iniciar worker
@@ -197,7 +197,7 @@ echo ""
 echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
 exec python worker_render.py \
     --workers $WORKER_COUNT \
-    --queues atacadao,sendas,high,default \
+    --queues atacadao,odoo_lancamento,impostos,high,default \
     --verbose
 
 

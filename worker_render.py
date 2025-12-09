@@ -93,6 +93,8 @@ def run_worker(workers, verbose, burst, queues):
     """
     Executa o worker otimizado para o Render
     """
+#Sempre verificar a configuração das filas no arquivo start_worker_render.sh
+#Para adicionar uma nova fila, basta adicionar o nome da fila no arquivo start_worker_render.sh e no arquivo worker_render.py
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Modo verbose ativado")
