@@ -56,7 +56,16 @@ class MovimentacaoEstoque(db.Model):
     # Observações (mantido para compatibilidade)
     observacao = db.Column(db.Text, nullable=True)
 
-        
+    # Campos de Vinculação Produção/Consumo
+    # PseudoID que agrupa todas as movimentações de uma operação (PROD_YYYYMMDD_HHMMSS_XXXX)
+    operacao_producao_id = db.Column(db.String(50), nullable=True, index=True)
+    # Tipo de origem: RAIZ, CONSUMO_DIRETO, PRODUCAO_AUTO, CONSUMO_AUTO
+    tipo_origem_producao = db.Column(db.String(20), nullable=True)
+    # Código do produto raiz (produto que iniciou a cascata de produção)
+    cod_produto_raiz = db.Column(db.String(50), nullable=True, index=True)
+    # FK para produção que gerou este consumo (auto-referência)
+    producao_pai_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True, index=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
@@ -95,7 +104,12 @@ class MovimentacaoEstoque(db.Model):
             'tipo_movimentacao': self.tipo_movimentacao,
             'local_movimentacao': self.local_movimentacao,
             'qtd_movimentacao': float(self.qtd_movimentacao) if self.qtd_movimentacao else 0,
-            'observacao': self.observacao
+            'observacao': self.observacao,
+            # Campos de vinculação produção/consumo
+            'operacao_producao_id': self.operacao_producao_id,
+            'tipo_origem_producao': self.tipo_origem_producao,
+            'cod_produto_raiz': self.cod_produto_raiz,
+            'producao_pai_id': self.producao_pai_id
         }
 
 

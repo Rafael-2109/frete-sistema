@@ -121,56 +121,10 @@ class RecursosProducao(db.Model):
     )
 
 
-class OrdemProducao(db.Model):
-    __tablename__ = 'ordem_producao'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    numero_ordem = db.Column(db.String(20), unique=True, nullable=False, index=True)
-    origem_ordem = db.Column(db.String(10))
-    status = db.Column(db.String(20), default='Planejada', index=True)
-    cod_produto = db.Column(db.String(50), nullable=False, index=True)
-    nome_produto = db.Column(db.String(255))
-    materiais_necessarios = db.Column(JSONB)
-    qtd_planejada = db.Column(db.Numeric(15, 3), nullable=False)
-    qtd_produzida = db.Column(db.Numeric(15, 3), default=0)
-    data_inicio_prevista = db.Column(db.Date, nullable=False, index=True)
-    data_fim_prevista = db.Column(db.Date, nullable=False)
-    data_inicio_real = db.Column(db.Date)
-    data_fim_real = db.Column(db.Date)
-    data_necessidade = db.Column(db.Date)  # NOVO: Data calculada com lead time
-    
-    # Relacionamento Pai-Filho (NOVO)
-    ordem_pai_id = db.Column(db.Integer, db.ForeignKey('ordem_producao.id'), index=True)
-    tipo_ordem = db.Column(db.String(20), default='principal')  # 'principal', 'filha'
-    nivel_bom = db.Column(db.Integer, default=0)
-    recalculo_automatico = db.Column(db.Boolean, default=True)
-    
-    # Sequenciamento (NOVO)
-    sequencia_producao = db.Column(db.Integer)
-    disponibilidade_componentes = db.Column(db.Numeric(5, 2), default=0)  # %
-    data_disponibilidade_componentes = db.Column(db.Date)
-    maquina_alocada = db.Column(db.String(50))
-    tempo_setup_minutos = db.Column(db.Integer, default=0)
-    capacidade_maquina_hora = db.Column(db.Numeric(15, 3))
-    
-    linha_producao = db.Column(db.String(50), index=True)
-    turno = db.Column(db.String(20))
-    lote_producao = db.Column(db.String(50))
-    custo_previsto = db.Column(db.Numeric(15, 2))
-    custo_real = db.Column(db.Numeric(15, 2))
-    
-    # Campos de vínculo MTO
-    separacao_lote_id = db.Column(db.String(50), index=True)  # Vínculo principal
-    num_pedido_origem = db.Column(db.String(50))  # Para referência
-    raz_social_red = db.Column(db.String(255))  # Cliente do pedido
-    qtd_pedido_atual = db.Column(db.Numeric(15, 3))  # Quantidade atual do pedido
-    
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    criado_por = db.Column(db.String(100))
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
-    
-    # Relacionamentos
-    ordem_pai = db.relationship('OrdemProducao', remote_side=[id], backref='ordens_filhas')
+# REMOVIDO: OrdemProducao
+# Modelo deprecated - integração Manufatura/Odoo foi removida.
+# Tabela 'ordem_producao' ainda existe no banco mas não é mais usada.
+# Produção agora é gerenciada via importação Excel em app/estoque.
 
 
 class RequisicaoCompras(db.Model):

@@ -431,7 +431,45 @@ def processar_importacao_movimentacoes():
                     
                     db.session.add(produto_palletizacao)
                 
-                # ➕ CRIAR NOVO REGISTRO (sempre adiciona)
+                # 📝 CAMPOS OPCIONAIS
+                observacao = ''
+                if 'observacao' in df.columns:
+                    observacao = str(row.get('observacao', '')).strip()
+
+                # 🔧 PRODUÇÃO COM CONSUMO AUTOMÁTICO DE COMPONENTES
+                if tipo_movimentacao == 'PRODUÇÃO':
+                    from app.estoque.services.consumo_producao_service import ServicoConsumoProducao
+
+                    resultado_producao = ServicoConsumoProducao.processar_producao_com_consumo(
+                        cod_produto=cod_produto,
+                        qtd_produzida=qtd_movimentacao,
+                        data_movimentacao=data_movimentacao,
+                        nome_produto=nome_produto,
+                        local_movimentacao=local_movimentacao,
+                        observacao=observacao,
+                        usuario=current_user.nome
+                    )
+
+                    if resultado_producao['sucesso']:
+                        produtos_importados += 1
+
+                        # Log de consumos e produções automáticas
+                        n_consumos = len(resultado_producao.get('consumos', []))
+                        n_producoes_auto = len(resultado_producao.get('producoes_automaticas', []))
+                        if n_consumos > 0 or n_producoes_auto > 0:
+                            logger.info(
+                                f"📦 Produção {cod_produto}: "
+                                f"{n_consumos} consumos, {n_producoes_auto} produções automáticas"
+                            )
+
+                        # Registrar avisos (sem bloquear)
+                        for aviso in resultado_producao.get('avisos', []):
+                            logger.warning(f"⚠️ Linha {index + 1}: {aviso}")
+                    else:
+                        erros.append(f"Linha {index + 1}: {resultado_producao.get('erro', 'Erro desconhecido na produção')}")
+                    continue
+
+                # ➕ CRIAR NOVO REGISTRO para outros tipos (sempre adiciona)
                 nova_movimentacao = MovimentacaoEstoque()
                 nova_movimentacao.tipo_movimentacao = tipo_movimentacao
                 nova_movimentacao.cod_produto = cod_produto
@@ -439,14 +477,12 @@ def processar_importacao_movimentacoes():
                 nova_movimentacao.local_movimentacao = local_movimentacao
                 nova_movimentacao.data_movimentacao = data_movimentacao
                 nova_movimentacao.qtd_movimentacao = qtd_movimentacao
-                nova_movimentacao.created_by = current_user.nome
-                
-                # 📝 CAMPOS OPCIONAIS
-                if 'observacao' in df.columns:
-                    nova_movimentacao.observacao = str(row.get('observacao', '')).strip()
+                nova_movimentacao.criado_por = current_user.nome
+                nova_movimentacao.observacao = observacao
+
                 if 'documento_origem' in df.columns:
                     nova_movimentacao.documento_origem = str(row.get('documento_origem', '')).strip()
-                
+
                 db.session.add(nova_movimentacao)
                 produtos_importados += 1
                 

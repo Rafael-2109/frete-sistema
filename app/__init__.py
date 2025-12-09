@@ -644,7 +644,7 @@ def create_app(config_name=None):
 
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
-    from app.odoo.routes.manufatura_routes import manufatura_odoo_bp  # Integração Manufatura/Odoo
+    # REMOVIDO: manufatura_odoo_bp - integração Manufatura/Odoo deprecated
 
 
     # 🔍 Blueprint de diagnóstico PG
@@ -710,7 +710,7 @@ def create_app(config_name=None):
     # 🔗 API Odoo Integration - DESATIVADO (funcionalidade integrada em Carteira & Estoque)
     # app.register_blueprint(odoo_bp)  # Movido para Carteira & Estoque
     app.register_blueprint(sync_integrada_bp)  # REATIVADO - Necessário!
-    app.register_blueprint(manufatura_odoo_bp)  # Integração Manufatura/Odoo
+    # REMOVIDO: manufatura_odoo_bp - integração Manufatura/Odoo deprecated
 
     # 🔧 Circuit Breaker - Monitoramento e gestão de conexões Odoo
     from app.odoo.routes_circuit_breaker import circuit_breaker_bp

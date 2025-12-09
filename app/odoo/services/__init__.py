@@ -11,12 +11,12 @@ Data: 2025-07-14
 
 from app.odoo.services.carteira_service import CarteiraService
 from app.odoo.services.faturamento_service import FaturamentoService
-from app.odoo.services.manufatura_service import ManufaturaOdooService
+# REMOVIDO: ManufaturaOdooService - integração Manufatura/Odoo deprecated
 from app.odoo.services.pedido_sync_service import PedidoSyncService
 
 __all__ = [
     'CarteiraService',
     'FaturamentoService',
-    'ManufaturaOdooService',
+    # REMOVIDO: 'ManufaturaOdooService',
     'PedidoSyncService'
 ] 
