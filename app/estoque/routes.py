@@ -709,6 +709,12 @@ def editar_movimentacao(id):
             'odoo_move_id': movimentacao.odoo_move_id or '',
             'purchase_line_id': movimentacao.purchase_line_id or '',
 
+            # Campos de vinculação Produção/Consumo
+            'operacao_producao_id': movimentacao.operacao_producao_id or '',
+            'tipo_origem_producao': movimentacao.tipo_origem_producao or '',
+            'cod_produto_raiz': movimentacao.cod_produto_raiz or '',
+            'producao_pai_id': movimentacao.producao_pai_id or '',
+
             # Campos de auditoria
             'criado_em': movimentacao.criado_em.strftime('%d/%m/%Y %H:%M') if movimentacao.criado_em else '',
             'criado_por': movimentacao.criado_por or '',
@@ -1620,6 +1626,12 @@ def exportar_dados_movimentacoes():
                 'tipo_origem': mov.tipo_origem,
                 'status_nf': mov.status_nf,
                 'codigo_embarque': mov.codigo_embarque,
+                # Campos de Vinculação Produção/Consumo
+                'operacao_producao_id': mov.operacao_producao_id or '',
+                'tipo_origem_producao': mov.tipo_origem_producao or '',
+                'cod_produto_raiz': mov.cod_produto_raiz or '',
+                'producao_pai_id': mov.producao_pai_id or '',
+                # Auditoria
                 'criado_em': mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '',
                 'criado_por': mov.criado_por,
                 'atualizado_em': mov.atualizado_em.strftime('%d/%m/%Y %H:%M') if mov.atualizado_em else '',

@@ -7,6 +7,7 @@ from app.manufatura.routes.necessidade_producao_routes import register_necessida
 from app.manufatura.routes.historico_routes import register_historico_routes
 from app.manufatura.routes.lista_materiais_routes import register_lista_materiais_routes
 from app.manufatura.routes.requisicao_compras_routes import register_requisicao_compras_routes
+from app.manufatura.routes.analise_producao_routes import register_analise_producao_routes
 from app.manufatura.routes.pedidos_compras_routes import pedidos_compras_bp
 from app.manufatura.routes.projecao_estoque_routes import projecao_estoque_bp
 
@@ -19,6 +20,7 @@ def register_routes(bp):
     register_historico_routes(bp)
     register_lista_materiais_routes(bp)
     register_requisicao_compras_routes(bp)
+    register_analise_producao_routes(bp)
 
 
 def register_blueprints(app):

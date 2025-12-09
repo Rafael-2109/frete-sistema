@@ -500,7 +500,40 @@
                         </div>
                     </div>
 
-                    <!-- SEÇÃO 5: AUDITORIA -->
+                    <!-- SEÇÃO 5: VINCULAÇÃO PRODUÇÃO/CONSUMO -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-purple text-white" style="background-color: #6f42c1;">
+                            <h6 class="mb-0"><i class="fas fa-industry"></i> Vinculação Produção/Consumo</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_operacao_producao_id" class="form-label">ID Operação</label>
+                                    <input type="text" class="form-control bg-light" id="edit_operacao_producao_id" readonly>
+                                    <small class="text-muted">Agrupa movimentações de uma produção</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_tipo_origem_producao" class="form-label">Tipo Origem</label>
+                                    <input type="text" class="form-control bg-light" id="edit_tipo_origem_producao" readonly>
+                                    <small class="text-muted">RAIZ, CONSUMO_DIRETO, PRODUCAO_AUTO, CONSUMO_AUTO</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_cod_produto_raiz" class="form-label">Produto Raiz</label>
+                                    <input type="text" class="form-control bg-light" id="edit_cod_produto_raiz" readonly>
+                                    <small class="text-muted">Produto que iniciou a cascata</small>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit_producao_pai_id" class="form-label">Produção Pai ID</label>
+                                    <input type="text" class="form-control bg-light" id="edit_producao_pai_id" readonly>
+                                    <small class="text-muted">ID da produção que gerou este consumo</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO 6: AUDITORIA -->
                     <div class="card">
                         <div class="card-header bg-secondary text-white">
                             <h6 class="mb-0"><i class="fas fa-history"></i> Auditoria</h6>
@@ -947,6 +980,12 @@ function preencherModalEdicao(mov) {
     document.getElementById('edit_odoo_picking_id').value = mov.odoo_picking_id || '-';
     document.getElementById('edit_odoo_move_id').value = mov.odoo_move_id || '-';
     document.getElementById('edit_purchase_line_id').value = mov.purchase_line_id || '-';
+
+    // Campos de Vinculação Produção/Consumo
+    document.getElementById('edit_operacao_producao_id').value = mov.operacao_producao_id || '-';
+    document.getElementById('edit_tipo_origem_producao').value = mov.tipo_origem_producao || '-';
+    document.getElementById('edit_cod_produto_raiz').value = mov.cod_produto_raiz || '-';
+    document.getElementById('edit_producao_pai_id').value = mov.producao_pai_id || '-';
 
     // Campos de auditoria
     document.getElementById('edit_criado_em').value = mov.criado_em || '-';

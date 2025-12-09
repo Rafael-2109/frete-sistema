@@ -7,7 +7,7 @@ from flask_login import login_required
 
 def register_dashboard_routes(bp):
 
-    @bp.route('/')
+    @bp.route('/')  # type: ignore
     @login_required
     def index():
         """Tela inicial do módulo de manufatura - Hub de acesso"""
