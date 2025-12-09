@@ -953,127 +953,42 @@ def vincular_cte_ao_frete(frete_id, cte_id):
 @require_financeiro()
 def lancar_frete_odoo(frete_id):
     """
-    Lança frete no Odoo (processo completo de 16 etapas)
+    Enfileira lançamento de frete no Odoo (processamento assíncrono)
+
+    Retorna job_id para acompanhamento do status via polling.
+    O processamento real é feito pelo worker na fila 'odoo_lancamento'.
     """
     try:
-        from app.fretes.services import LancamentoOdooService
+        from app.fretes.workers.lancamento_odoo_jobs import lancar_frete_job
+        from app.portal.workers import enqueue_job
 
         # Buscar frete
         frete = Frete.query.get_or_404(frete_id)
 
         # ========================================
-        # VALIDAÇÃO ROBUSTA: Verificar status REAL do DFe no Odoo
+        # VALIDAÇÃO: Já foi lançado?
         # ========================================
-        if frete.odoo_invoice_id:
-            logger.info(f"⚠️ Frete {frete_id} possui odoo_invoice_id={frete.odoo_invoice_id}. Verificando status real no Odoo...")
+        if frete.status == 'LANCADO_ODOO' and frete.odoo_invoice_id:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Frete já foi lançado no Odoo',
+                'erro': f'Invoice ID: {frete.odoo_invoice_id}'
+            }), 400
 
-            # Buscar CTe relacionado para obter chave de acesso
-            cte_temp = None
-            chave_temp = None
-
-            if frete.frete_cte_id:
-                cte_temp = frete.cte
-                if cte_temp:
-                    chave_temp = cte_temp.chave_acesso
-
-            if not chave_temp:
-                # Tentar buscar automaticamente
-                ctes_temp = frete.buscar_ctes_relacionados()
-                if ctes_temp:
-                    cte_temp = ctes_temp[0]
-                    chave_temp = cte_temp.chave_acesso
-
-            # Se encontrou CTe, verificar status no Odoo
-            if chave_temp and len(chave_temp) == 44:
-                try:
-                    from app.odoo.utils.connection import get_odoo_connection
-                    odoo = get_odoo_connection()
-
-                    if odoo.authenticate():
-                        logger.info(f"🔍 Consultando DFe no Odoo - Chave: {chave_temp[:8]}...{chave_temp[-8:]}")
-
-                        dfe_data = odoo.search_read(
-                            'l10n_br_ciel_it_account.dfe',
-                            [('protnfe_infnfe_chnfe', '=', chave_temp)],
-                            fields=['id', 'l10n_br_status'],
-                            limit=1
-                        )
-
-                        if dfe_data:
-                            dfe_info = dfe_data[0]
-                            status_odoo = dfe_info.get('l10n_br_status')
-                            dfe_id_odoo = dfe_info.get('id')
-
-                            status_map = {
-                                '01': 'Rascunho',
-                                '02': 'Sincronizado',
-                                '03': 'Ciência/Confirmado',
-                                '04': 'PO',
-                                '05': 'Rateio',
-                                '06': 'Concluído',
-                                '07': 'Rejeitado'
-                            }
-                            status_nome = status_map.get(status_odoo, f'Desconhecido ({status_odoo})')
-
-                            logger.info(f"📊 Status do DFe no Odoo: {status_nome} (código: {status_odoo})")
-
-                            # ✅ SE STATUS = '04' (PO), significa que o lançamento foi cancelado/revertido
-                            if status_odoo == '04':
-                                logger.warning(
-                                    f"🔄 INCONSISTÊNCIA DETECTADA: Frete {frete_id} possui Invoice ID local "
-                                    f"mas DFe voltou para status PO no Odoo. Limpando campos para permitir relançamento..."
-                                )
-
-                                # Limpar campos do frete
-                                frete.odoo_dfe_id = None
-                                frete.odoo_purchase_order_id = None
-                                frete.odoo_invoice_id = None
-                                frete.lancado_odoo_em = None
-                                frete.lancado_odoo_por = None
-
-                                # Atualizar status do CTe local se necessário
-                                if cte_temp:
-                                    cte_temp.odoo_status_codigo = status_odoo
-                                    cte_temp.odoo_status_descricao = status_nome
-
-                                db.session.commit()
-
-                                logger.info(f"✅ Campos limpos com sucesso. Prosseguindo com o lançamento...")
-
-                            else:
-                                # Status diferente de PO - frete realmente foi lançado
-                                logger.info(f"✅ Confirmado: DFe possui status '{status_nome}' no Odoo (lançamento válido)")
-                                return jsonify({
-                                    'sucesso': False,
-                                    'mensagem': f'Frete já foi lançado no Odoo',
-                                    'erro': f'Status do DFe: {status_nome} | Invoice ID: {frete.odoo_invoice_id} | DFe ID: {dfe_id_odoo}'
-                                }), 400
-                        else:
-                            logger.warning(f"⚠️ DFe não encontrado no Odoo com chave {chave_temp[:8]}...")
-                    else:
-                        logger.error("❌ Falha na autenticação com Odoo")
-
-                except Exception as e:
-                    logger.error(f"❌ Erro ao verificar status no Odoo: {e}")
-                    # Em caso de erro na verificação, permite tentar lançar
-                    logger.warning("⚠️ Erro na validação do Odoo. Permitindo tentativa de lançamento...")
-            else:
-                logger.warning(f"⚠️ CTe não encontrado ou chave inválida. Permitindo tentativa de lançamento...")
-
-        # Buscar CTe relacionado pela chave
+        # ========================================
+        # VALIDAÇÃO: Buscar CTe
+        # ========================================
         cte = None
         chave_cte = None
- 
-        # ✅ PRIORIDADE 1: Vínculo explícito (frete_cte_id)
+
+        # PRIORIDADE 1: Vínculo explícito (frete_cte_id)
         if frete.frete_cte_id:
             cte = frete.cte
             if cte:
                 chave_cte = cte.chave_acesso
                 logger.info(f"✅ Usando CTe vinculado explicitamente: {cte.numero_cte} (ID {cte.id})")
-            else:
-                logger.warning(f"⚠️ frete_cte_id={frete.frete_cte_id} mas CTe não encontrado")
 
-        # ✅ FALLBACK: Busca automática por NFs + CNPJ
+        # FALLBACK: Busca automática por NFs + CNPJ
         if not cte:
             logger.info("🔍 Buscando CTe por NFs em comum + CNPJ...")
             ctes_relacionados = frete.buscar_ctes_relacionados()
@@ -1094,7 +1009,6 @@ def lancar_frete_odoo(frete_id):
 
             cte = ctes_relacionados[0]
             chave_cte = cte.chave_acesso
-            logger.info(f"✅ CTe encontrado automaticamente: {cte.numero_cte} (ID {cte.id})")
 
         if not chave_cte or len(chave_cte) != 44:
             return jsonify({
@@ -1107,50 +1021,43 @@ def lancar_frete_odoo(frete_id):
         data = request.get_json() or {}
         data_vencimento = data.get('data_vencimento')
 
-        if data_vencimento:
-            from datetime import datetime
-            try:
-                data_vencimento = datetime.strptime(data_vencimento, '%Y-%m-%d').date()
-            except ValueError:
-                return jsonify({
-                    'sucesso': False,
-                    'mensagem': 'Data de vencimento inválida',
-                    'erro': 'Formato esperado: YYYY-MM-DD'
-                }), 400
+        if not data_vencimento and frete.vencimento:
+            data_vencimento = frete.vencimento.strftime('%Y-%m-%d')
 
-        # Criar service e executar lançamento
-        service = LancamentoOdooService(
-            usuario_nome=current_user.nome,
-            usuario_ip=request.remote_addr
+        # ========================================
+        # ENFILEIRAR JOB
+        # ========================================
+        logger.info(f"📋 Enfileirando lançamento de frete #{frete_id} na fila 'odoo_lancamento'")
+
+        job = enqueue_job(
+            lancar_frete_job,
+            frete_id,
+            chave_cte,
+            current_user.nome,
+            request.remote_addr,
+            data_vencimento,
+            queue_name='odoo_lancamento',
+            timeout='10m'
         )
 
-        logger.info(f"Iniciando lançamento de frete {frete_id} no Odoo - CTe: {chave_cte}")
+        logger.info(f"✅ Job {job.id} enfileirado para frete #{frete_id}")
 
-        resultado = service.lancar_frete_odoo(
-            frete_id=frete_id,
-            cte_chave=chave_cte,
-            data_vencimento=data_vencimento
-        )
-
-        # Retornar resultado
-        if resultado['sucesso']:
-            logger.info(f"Frete {frete_id} lançado com sucesso no Odoo")
-            flash(f'Frete lançado com sucesso! {resultado["etapas_concluidas"]}/16 etapas concluídas', 'success')
-
-            return jsonify(resultado), 200
-        else:
-            logger.error(f"Erro ao lançar frete {frete_id}: {resultado['erro']}")
-
-            return jsonify(resultado), 500
+        return jsonify({
+            'sucesso': True,
+            'mensagem': 'Lançamento enfileirado com sucesso',
+            'job_id': job.id,
+            'frete_id': frete_id,
+            'status': 'queued'
+        }), 202  # 202 Accepted
 
     except Exception as e:
-        logger.error(f"Erro ao lançar frete no Odoo: {e}")
+        logger.error(f"Erro ao enfileirar lançamento de frete: {e}")
         import traceback
         traceback.print_exc()
 
         return jsonify({
             'sucesso': False,
-            'mensagem': 'Erro inesperado ao lançar frete',
+            'mensagem': 'Erro ao enfileirar lançamento',
             'erro': str(e)
         }), 500
 
@@ -4097,76 +4004,85 @@ def desvincular_cte_despesa(despesa_id):
 @login_required
 def lancar_despesa_odoo(despesa_id):
     """
-    Lança despesa extra no Odoo via API.
-    Requer CTe Complementar vinculado e status VINCULADO_CTE.
+    Enfileira lançamento de despesa extra no Odoo (processamento assíncrono)
+
+    Retorna job_id para acompanhamento do status via polling.
+    O processamento real é feito pelo worker na fila 'odoo_lancamento'.
     """
-    from app.fretes.services.lancamento_despesa_odoo_service import LancamentoDespesaOdooService
+    try:
+        from app.fretes.workers.lancamento_odoo_jobs import lancar_despesa_job
+        from app.portal.workers import enqueue_job
 
-    despesa = DespesaExtra.query.get_or_404(despesa_id)
+        despesa = DespesaExtra.query.get_or_404(despesa_id)
 
-    # Validações - aceita CTE ou CTe
-    if not despesa.tipo_documento or despesa.tipo_documento.upper() != 'CTE':
-        return jsonify({
-            'sucesso': False,
-            'mensagem': f'Tipo de documento "{despesa.tipo_documento}" não suportado para lançamento no Odoo',
-            'erro': 'Apenas despesas com documento CTe podem ser lançadas no Odoo'
-        }), 400
-
-    if not despesa.despesa_cte_id:
-        return jsonify({
-            'sucesso': False,
-            'mensagem': 'CTe não vinculado',
-            'erro': 'Vincule um CTe Complementar antes de lançar no Odoo'
-        }), 400
-
-    if despesa.status == 'LANCADO_ODOO':
-        return jsonify({
-            'sucesso': False,
-            'mensagem': 'Despesa já foi lançada no Odoo',
-            'erro': f'Invoice ID: {despesa.odoo_invoice_id}'
-        }), 400
-
-    if despesa.status != 'VINCULADO_CTE':
-        return jsonify({
-            'sucesso': False,
-            'mensagem': f'Status "{despesa.status}" não permite lançamento',
-            'erro': 'Status esperado: VINCULADO_CTE'
-        }), 400
-
-    # Obter data de vencimento do request
-    data = request.get_json() or {}
-    data_vencimento_str = data.get('data_vencimento')
-
-    data_vencimento = None
-    if data_vencimento_str:
-        try:
-            data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
-        except ValueError:
+        # ========================================
+        # VALIDAÇÕES
+        # ========================================
+        if not despesa.tipo_documento or despesa.tipo_documento.upper() != 'CTE':
             return jsonify({
                 'sucesso': False,
-                'mensagem': 'Data de vencimento inválida',
-                'erro': 'Formato esperado: YYYY-MM-DD'
+                'mensagem': f'Tipo de documento "{despesa.tipo_documento}" não suportado para lançamento no Odoo',
+                'erro': 'Apenas despesas com documento CTe podem ser lançadas no Odoo'
             }), 400
 
-    # Executar lançamento
-    try:
-        service = LancamentoDespesaOdooService(
-            usuario_nome=current_user.nome,
-            usuario_ip=request.remote_addr
+        if not despesa.despesa_cte_id:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'CTe não vinculado',
+                'erro': 'Vincule um CTe Complementar antes de lançar no Odoo'
+            }), 400
+
+        if despesa.status == 'LANCADO_ODOO':
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Despesa já foi lançada no Odoo',
+                'erro': f'Invoice ID: {despesa.odoo_invoice_id}'
+            }), 400
+
+        if despesa.status != 'VINCULADO_CTE':
+            return jsonify({
+                'sucesso': False,
+                'mensagem': f'Status "{despesa.status}" não permite lançamento',
+                'erro': 'Status esperado: VINCULADO_CTE'
+            }), 400
+
+        # Obter data de vencimento do request
+        data = request.get_json() or {}
+        data_vencimento = data.get('data_vencimento')
+
+        if not data_vencimento and despesa.vencimento_despesa:
+            data_vencimento = despesa.vencimento_despesa.strftime('%Y-%m-%d')
+
+        # ========================================
+        # ENFILEIRAR JOB
+        # ========================================
+        logger.info(f"📋 Enfileirando lançamento de despesa #{despesa_id} na fila 'odoo_lancamento'")
+
+        job = enqueue_job(
+            lancar_despesa_job,
+            despesa_id,
+            current_user.nome,
+            request.remote_addr,
+            data_vencimento,
+            queue_name='odoo_lancamento',
+            timeout='10m'
         )
 
-        resultado = service.lancar_despesa_odoo(
-            despesa_id=despesa_id,
-            data_vencimento=data_vencimento
-        )
+        logger.info(f"✅ Job {job.id} enfileirado para despesa #{despesa_id}")
 
-        return jsonify(resultado)
+        return jsonify({
+            'sucesso': True,
+            'mensagem': 'Lançamento enfileirado com sucesso',
+            'job_id': job.id,
+            'despesa_id': despesa_id,
+            'status': 'queued'
+        }), 202  # 202 Accepted
 
     except Exception as e:
-        current_app.logger.error(f"Erro ao lançar despesa no Odoo: {str(e)}")
+        current_app.logger.error(f"Erro ao enfileirar lançamento de despesa: {str(e)}")
         return jsonify({
             'sucesso': False,
-            'mensagem': f'Erro interno: {str(e)}',
+            'mensagem': f'Erro ao enfileirar lançamento',
             'erro': str(e)
         }), 500
 
@@ -4437,6 +4353,228 @@ def api_despesas_pendentes_lancamento():
             for d in despesas
         ]
     })
+
+
+# =================== JOBS ASSÍNCRONOS - LANÇAMENTO ODOO ===================
+
+@fretes_bp.route('/job/<job_id>/status', methods=['GET'])
+@login_required
+def job_status(job_id):
+    """
+    Consulta status de um job de lançamento Odoo
+
+    Usado para polling do frontend enquanto o job está processando.
+
+    Returns:
+        JSON com status do job:
+        - job_id: ID do job
+        - status: queued, started, finished, failed
+        - status_display: Texto amigável
+        - result: Resultado se concluído
+        - error: Erro se falhou
+    """
+    from app.fretes.workers.lancamento_odoo_jobs import get_job_status
+
+    try:
+        status = get_job_status(job_id)
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Erro ao consultar status do job {job_id}: {e}")
+        return jsonify({
+            'job_id': job_id,
+            'status': 'error',
+            'status_display': 'Erro ao consultar',
+            'error': str(e)
+        }), 500
+
+
+@fretes_bp.route('/faturas/<int:fatura_id>/lancar-lote', methods=['POST'])
+@login_required
+@require_financeiro()
+def lancar_lote_fatura(fatura_id):
+    """
+    Enfileira lançamento em lote de todos os fretes e despesas de uma fatura
+
+    Processa todos os itens da fatura de forma assíncrona.
+    """
+    try:
+        from app.fretes.workers.lancamento_odoo_jobs import lancar_lote_job
+        from app.portal.workers import enqueue_job
+
+        # Validar fatura
+        fatura = FaturaFrete.query.get_or_404(fatura_id)
+
+        # Contar itens
+        qtd_fretes = Frete.query.filter_by(fatura_frete_id=fatura_id).count()
+        qtd_despesas = DespesaExtra.query.filter_by(fatura_frete_id=fatura_id).count()
+
+        if qtd_fretes == 0 and qtd_despesas == 0:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Fatura não possui fretes ou despesas para lançar',
+                'erro': 'Nenhum item encontrado'
+            }), 400
+
+        # Enfileirar job de lote
+        logger.info(f"📋 Enfileirando lançamento em lote - Fatura #{fatura_id} ({qtd_fretes} fretes, {qtd_despesas} despesas)")
+
+        job = enqueue_job(
+            lancar_lote_job,
+            fatura_id,
+            current_user.nome,
+            request.remote_addr,
+            queue_name='odoo_lancamento',
+            timeout='30m'  # 30 minutos para lotes
+        )
+
+        logger.info(f"✅ Job de lote {job.id} enfileirado para fatura #{fatura_id}")
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'Lançamento em lote enfileirado ({qtd_fretes} fretes, {qtd_despesas} despesas)',
+            'job_id': job.id,
+            'fatura_id': fatura_id,
+            'total_fretes': qtd_fretes,
+            'total_despesas': qtd_despesas,
+            'status': 'queued'
+        }), 202  # 202 Accepted
+
+    except Exception as e:
+        logger.error(f"Erro ao enfileirar lançamento em lote: {e}")
+        import traceback
+        traceback.print_exc()
+
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Erro ao enfileirar lançamento em lote',
+            'erro': str(e)
+        }), 500
+
+
+@fretes_bp.route('/jobs/pendentes', methods=['GET'])
+@login_required
+def jobs_pendentes():
+    """
+    Lista jobs pendentes e em processamento na fila 'odoo_lancamento'
+
+    Usado para exibir na tela de auditoria os lançamentos em andamento.
+    """
+    from rq import Queue
+    from rq.job import Job
+    from app.portal.workers import get_redis_connection
+
+    try:
+        conn = get_redis_connection()
+        queue = Queue('odoo_lancamento', connection=conn)
+
+        # Jobs na fila (pendentes)
+        jobs_queued = []
+        for job in queue.jobs[:50]:  # Limitar a 50
+            jobs_queued.append({
+                'job_id': job.id,
+                'status': 'queued',
+                'status_display': 'Na fila',
+                'created_at': job.created_at.isoformat() if job.created_at else None,
+                'func_name': job.func_name,
+                'args': _extract_job_args(job)
+            })
+
+        # Jobs em execução
+        workers = queue.connection.smembers('rq:workers:odoo_lancamento')
+        jobs_started = []
+
+        # Buscar jobs de todos os workers
+        started_registry = queue.started_job_registry
+        for job_id in started_registry.get_job_ids()[:20]:
+            try:
+                job = Job.fetch(job_id, connection=conn)
+                jobs_started.append({
+                    'job_id': job.id,
+                    'status': 'started',
+                    'status_display': 'Em processamento',
+                    'created_at': job.created_at.isoformat() if job.created_at else None,
+                    'started_at': job.started_at.isoformat() if job.started_at else None,
+                    'func_name': job.func_name,
+                    'args': _extract_job_args(job)
+                })
+            except Exception:
+                pass
+
+        # Jobs falhados recentemente
+        failed_registry = queue.failed_job_registry
+        jobs_failed = []
+        for job_id in failed_registry.get_job_ids()[:10]:
+            try:
+                job = Job.fetch(job_id, connection=conn)
+                jobs_failed.append({
+                    'job_id': job.id,
+                    'status': 'failed',
+                    'status_display': 'Falhou',
+                    'created_at': job.created_at.isoformat() if job.created_at else None,
+                    'ended_at': job.ended_at.isoformat() if job.ended_at else None,
+                    'func_name': job.func_name,
+                    'args': _extract_job_args(job),
+                    'error': str(job.exc_info)[:200] if job.exc_info else None
+                })
+            except Exception:
+                pass
+
+        return jsonify({
+            'sucesso': True,
+            'fila': 'odoo_lancamento',
+            'total_pendentes': len(jobs_queued),
+            'total_processando': len(jobs_started),
+            'total_falhados': len(jobs_failed),
+            'jobs_pendentes': jobs_queued,
+            'jobs_processando': jobs_started,
+            'jobs_falhados': jobs_failed
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao listar jobs pendentes: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+def _extract_job_args(job):
+    """Extrai argumentos do job de forma segura para exibição"""
+    try:
+        args = job.args or []
+        if not args:
+            return {}
+
+        func_name = job.func_name or ''
+
+        # lancar_frete_job(frete_id, cte_chave, usuario_nome, usuario_ip, data_vencimento)
+        if 'lancar_frete_job' in func_name:
+            return {
+                'tipo': 'frete',
+                'frete_id': args[0] if len(args) > 0 else None,
+                'usuario': args[2] if len(args) > 2 else None
+            }
+
+        # lancar_despesa_job(despesa_id, usuario_nome, usuario_ip, data_vencimento)
+        if 'lancar_despesa_job' in func_name:
+            return {
+                'tipo': 'despesa',
+                'despesa_id': args[0] if len(args) > 0 else None,
+                'usuario': args[1] if len(args) > 1 else None
+            }
+
+        # lancar_lote_job(fatura_frete_id, usuario_nome, usuario_ip)
+        if 'lancar_lote_job' in func_name:
+            return {
+                'tipo': 'lote',
+                'fatura_id': args[0] if len(args) > 0 else None,
+                'usuario': args[1] if len(args) > 1 else None
+            }
+
+        return {'args': str(args)[:100]}
+
+    except Exception:
+        return {}
 
 
 # =================== AUDITORIA DE LANÇAMENTOS ODOO ===================

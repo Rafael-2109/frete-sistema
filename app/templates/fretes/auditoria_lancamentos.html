@@ -67,6 +67,27 @@
         </div>
     </div>
 
+    <!-- Jobs em Processamento (Fila Assíncrona) -->
+    <div class="card mb-4 border-primary" id="cardJobsPendentes">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-sync-alt fa-spin me-2" id="iconSyncJobs"></i>
+                Jobs em Processamento
+                <span class="badge bg-light text-primary ms-2" id="badgeTotalJobs">0</span>
+            </h5>
+            <button class="btn btn-sm btn-light" onclick="carregarJobsPendentes()" title="Atualizar">
+                <i class="fas fa-refresh"></i>
+            </button>
+        </div>
+        <div class="card-body" id="containerJobsPendentes">
+            <div class="text-center text-muted py-3" id="loadingJobs">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                Carregando jobs...
+            </div>
+            <!-- Jobs serão carregados aqui via JS -->
+        </div>
+    </div>
+
     <!-- Estatísticas rápidas -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -251,7 +272,160 @@
 
 {% block scripts %}
 <script>
+// =================== JOBS PENDENTES ===================
+let intervalJobsPendentes = null;
+
+function carregarJobsPendentes() {
+    const container = document.getElementById('containerJobsPendentes');
+    const badge = document.getElementById('badgeTotalJobs');
+    const iconSync = document.getElementById('iconSyncJobs');
+    const card = document.getElementById('cardJobsPendentes');
+
+    fetch('/fretes/jobs/pendentes')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.sucesso) {
+                container.innerHTML = `<div class="alert alert-danger mb-0">${data.erro}</div>`;
+                return;
+            }
+
+            const total = data.total_pendentes + data.total_processando;
+            badge.textContent = total;
+
+            // Esconder card se não houver jobs
+            if (total === 0 && data.total_falhados === 0) {
+                card.classList.add('d-none');
+                iconSync.classList.remove('fa-spin');
+                return;
+            }
+
+            card.classList.remove('d-none');
+            iconSync.classList.add('fa-spin');
+
+            let html = '';
+
+            // Jobs em processamento
+            if (data.jobs_processando.length > 0) {
+                html += '<div class="mb-3">';
+                html += '<h6 class="text-success"><i class="fas fa-cog fa-spin me-1"></i> Em Processamento</h6>';
+                html += '<div class="accordion" id="accordionProcessando">';
+                data.jobs_processando.forEach((job, idx) => {
+                    html += renderJobAccordion(job, 'processando', idx);
+                });
+                html += '</div></div>';
+            }
+
+            // Jobs na fila
+            if (data.jobs_pendentes.length > 0) {
+                html += '<div class="mb-3">';
+                html += '<h6 class="text-primary"><i class="fas fa-hourglass-half me-1"></i> Na Fila</h6>';
+                html += '<div class="accordion" id="accordionPendentes">';
+                data.jobs_pendentes.forEach((job, idx) => {
+                    html += renderJobAccordion(job, 'pendente', idx);
+                });
+                html += '</div></div>';
+            }
+
+            // Jobs falhados
+            if (data.jobs_falhados.length > 0) {
+                html += '<div class="mb-3">';
+                html += '<h6 class="text-danger"><i class="fas fa-times-circle me-1"></i> Falhados Recentemente</h6>';
+                html += '<div class="accordion" id="accordionFalhados">';
+                data.jobs_falhados.forEach((job, idx) => {
+                    html += renderJobAccordion(job, 'falhado', idx);
+                });
+                html += '</div></div>';
+            }
+
+            if (html === '') {
+                html = '<div class="text-center text-muted py-2"><i class="fas fa-check-circle text-success"></i> Nenhum job em processamento</div>';
+                iconSync.classList.remove('fa-spin');
+            }
+
+            container.innerHTML = html;
+
+            // Se tem jobs em processamento, atualizar a cada 3 segundos
+            if (data.total_processando > 0 || data.total_pendentes > 0) {
+                if (!intervalJobsPendentes) {
+                    intervalJobsPendentes = setInterval(carregarJobsPendentes, 3000);
+                }
+            } else {
+                if (intervalJobsPendentes) {
+                    clearInterval(intervalJobsPendentes);
+                    intervalJobsPendentes = null;
+                }
+            }
+        })
+        .catch(error => {
+            container.innerHTML = `<div class="alert alert-warning mb-0">Erro ao carregar jobs: ${error}</div>`;
+        });
+}
+
+function renderJobAccordion(job, tipo, idx) {
+    const tipoLabel = job.args?.tipo || 'job';
+    const id = job.args?.frete_id || job.args?.despesa_id || job.args?.fatura_id || job.job_id;
+
+    let badgeClass = 'bg-primary';
+    let badgeIcon = 'hourglass-half';
+    if (tipo === 'processando') {
+        badgeClass = 'bg-success';
+        badgeIcon = 'cog fa-spin';
+    } else if (tipo === 'falhado') {
+        badgeClass = 'bg-danger';
+        badgeIcon = 'times';
+    }
+
+    let tipoIcone = 'file-invoice';
+    let tipoBadge = 'secondary';
+    if (tipoLabel === 'frete') {
+        tipoIcone = 'truck';
+        tipoBadge = 'primary';
+    } else if (tipoLabel === 'despesa') {
+        tipoIcone = 'receipt';
+        tipoBadge = 'info';
+    } else if (tipoLabel === 'lote') {
+        tipoIcone = 'layer-group';
+        tipoBadge = 'warning';
+    }
+
+    const createdAt = job.created_at ? new Date(job.created_at).toLocaleString('pt-BR') : '-';
+    const startedAt = job.started_at ? new Date(job.started_at).toLocaleString('pt-BR') : null;
+
+    let html = `
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#job${tipo}${idx}">
+                <span class="badge ${badgeClass} me-2"><i class="fas fa-${badgeIcon}"></i></span>
+                <span class="badge bg-${tipoBadge} me-2"><i class="fas fa-${tipoIcone}"></i> ${tipoLabel.toUpperCase()}</span>
+                <span class="me-2">#${id}</span>
+                <small class="text-muted">por ${job.args?.usuario || 'N/A'}</small>
+            </button>
+        </h2>
+        <div id="job${tipo}${idx}" class="accordion-collapse collapse">
+            <div class="accordion-body py-2">
+                <div class="row">
+                    <div class="col-md-6">
+                        <small class="text-muted">Job ID:</small> <code>${job.job_id}</code><br>
+                        <small class="text-muted">Criado:</small> ${createdAt}
+                        ${startedAt ? `<br><small class="text-muted">Iniciado:</small> ${startedAt}` : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Status:</small> <span class="badge ${badgeClass}">${job.status_display}</span>
+                        ${job.error ? `<br><small class="text-danger">${job.error}</small>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+    return html;
+}
+
+// =================== DETALHES DE LANÇAMENTOS ===================
 document.addEventListener('DOMContentLoaded', function() {
+    // Carregar jobs pendentes ao iniciar
+    carregarJobsPendentes();
+
     // Expandir/recolher detalhes
     document.querySelectorAll('.btn-expand').forEach(function(btn) {
         btn.addEventListener('click', function() {

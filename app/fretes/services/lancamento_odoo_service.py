@@ -113,6 +113,135 @@ class LancamentoOdooService:
             db.session.rollback()
             return False
 
+    def _verificar_lancamento_existente(self, dfe_id: int, cte_chave: str) -> Dict[str, Any]:
+        """
+        Verifica se já existe um lançamento parcial para este DFe e determina
+        de qual etapa deve continuar.
+
+        Returns:
+            Dict com:
+            - existe_po: bool - Se já existe um PO vinculado
+            - purchase_order_id: int - ID do PO existente (se houver)
+            - po_state: str - Estado do PO (draft, purchase, done, cancel)
+            - existe_invoice: bool - Se já existe Invoice
+            - invoice_id: int - ID da Invoice (se houver)
+            - invoice_state: str - Estado da Invoice (draft, posted, cancel)
+            - continuar_de_etapa: int - Etapa de onde deve continuar (0 se novo)
+            - mensagem: str - Descrição do estado encontrado
+        """
+        resultado = {
+            'existe_po': False,
+            'purchase_order_id': None,
+            'po_state': None,
+            'po_company_id': None,
+            'existe_invoice': False,
+            'invoice_id': None,
+            'invoice_state': None,
+            'continuar_de_etapa': 0,
+            'mensagem': 'Nenhum lançamento anterior encontrado'
+        }
+
+        try:
+            # Buscar PO vinculado ao DFe
+            po_search = self.odoo.search_read(
+                'purchase.order',
+                [('dfe_id', '=', dfe_id)],
+                fields=['id', 'name', 'state', 'company_id', 'invoice_ids', 'team_id', 'picking_type_id'],
+                limit=1
+            )
+
+            if not po_search:
+                current_app.logger.info(f"✅ Nenhum PO existente para DFe {dfe_id} - Iniciando do zero")
+                return resultado
+
+            po = po_search[0]
+            resultado['existe_po'] = True
+            resultado['purchase_order_id'] = po['id']
+            resultado['po_state'] = po['state']
+            resultado['po_company_id'] = po['company_id'][0] if po.get('company_id') else None
+
+            current_app.logger.info(
+                f"🔍 PO existente encontrado: ID {po['id']} ({po['name']}), "
+                f"Estado: {po['state']}, Company: {resultado['po_company_id']}"
+            )
+
+            # Verificar se o PO está em draft e precisa ser configurado/confirmado
+            if po['state'] == 'draft':
+                # Verificar se já foi configurado (tem team_id e company correta)
+                team_ok = po.get('team_id') and po['team_id'][0] == self.TEAM_LANCAMENTO_FRETE_ID
+                company_ok = resultado['po_company_id'] == self.COMPANY_NACOM_GOYA_CD_ID
+                picking_ok = po.get('picking_type_id') and po['picking_type_id'][0] == self.PICKING_TYPE_CD_RECEBIMENTO_ID
+
+                if not team_ok or not company_ok or not picking_ok:
+                    resultado['continuar_de_etapa'] = 7  # Precisa configurar
+                    resultado['mensagem'] = (
+                        f"PO {po['name']} existe mas não foi configurado corretamente. "
+                        f"Continuando da ETAPA 7 (Configurar PO)"
+                    )
+                else:
+                    resultado['continuar_de_etapa'] = 9  # Precisa confirmar
+                    resultado['mensagem'] = (
+                        f"PO {po['name']} está configurado mas em draft. "
+                        f"Continuando da ETAPA 9 (Confirmar PO)"
+                    )
+
+            elif po['state'] == 'purchase':
+                # PO confirmado, verificar se tem Invoice
+                invoice_ids = po.get('invoice_ids', [])
+
+                if not invoice_ids:
+                    resultado['continuar_de_etapa'] = 11  # Precisa criar Invoice
+                    resultado['mensagem'] = (
+                        f"PO {po['name']} está confirmado mas sem Invoice. "
+                        f"Continuando da ETAPA 11 (Criar Invoice)"
+                    )
+                else:
+                    # Buscar estado da Invoice
+                    invoice_data = self.odoo.read(
+                        'account.move',
+                        invoice_ids,
+                        ['id', 'name', 'state']
+                    )
+
+                    if invoice_data:
+                        invoice = invoice_data[0]
+                        resultado['existe_invoice'] = True
+                        resultado['invoice_id'] = invoice['id']
+                        resultado['invoice_state'] = invoice['state']
+
+                        if invoice['state'] == 'draft':
+                            resultado['continuar_de_etapa'] = 13  # Precisa configurar/confirmar Invoice
+                            resultado['mensagem'] = (
+                                f"Invoice {invoice.get('name', invoice['id'])} existe em draft. "
+                                f"Continuando da ETAPA 13 (Configurar Invoice)"
+                            )
+                        elif invoice['state'] == 'posted':
+                            resultado['continuar_de_etapa'] = 16  # Já está tudo pronto
+                            resultado['mensagem'] = (
+                                f"Lançamento já completo! Invoice {invoice.get('name', invoice['id'])} está posted. "
+                                f"Continuando da ETAPA 16 (Finalizar)"
+                            )
+                        else:
+                            resultado['continuar_de_etapa'] = 15  # Tentar confirmar Invoice
+                            resultado['mensagem'] = (
+                                f"Invoice {invoice.get('name', invoice['id'])} em estado {invoice['state']}. "
+                                f"Tentando ETAPA 15 (Confirmar Invoice)"
+                            )
+
+            elif po['state'] in ('done', 'cancel'):
+                resultado['continuar_de_etapa'] = 0  # Não pode continuar, precisa de novo
+                resultado['mensagem'] = (
+                    f"PO {po['name']} está em estado '{po['state']}' e não pode ser retomado. "
+                    f"Será necessário cancelar manualmente e relançar."
+                )
+
+            current_app.logger.info(f"📋 {resultado['mensagem']}")
+            return resultado
+
+        except Exception as e:
+            current_app.logger.error(f"❌ Erro ao verificar lançamento existente: {e}")
+            return resultado
+
     def _registrar_auditoria(
         self,
         frete_id: Optional[int],
@@ -136,47 +265,67 @@ class LancamentoOdooService:
         invoice_id: Optional[int] = None
     ) -> LancamentoFreteOdooAuditoria:
         """
-        Registra etapa na auditoria
+        Registra etapa na auditoria com retry automático para erros de conexão
 
         Returns:
             Registro de auditoria criado
         """
-        try:
-            auditoria = LancamentoFreteOdooAuditoria(
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=chave_cte,
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id,
-                etapa=etapa,
-                etapa_descricao=etapa_descricao,
-                modelo_odoo=modelo_odoo,
-                metodo_odoo=metodo_odoo,
-                acao=acao,
-                dados_antes=json.dumps(dados_antes, default=str) if dados_antes else None,
-                dados_depois=json.dumps(dados_depois, default=str) if dados_depois else None,
-                campos_alterados=','.join(campos_alterados) if campos_alterados else None,
-                status=status,
-                mensagem=mensagem,
-                erro_detalhado=erro_detalhado,
-                contexto_odoo=json.dumps(contexto_odoo, default=str) if contexto_odoo else None,
-                tempo_execucao_ms=tempo_execucao_ms,
-                executado_por=self.usuario_nome,
-                ip_usuario=self.usuario_ip
-            )
+        max_retries = 3
 
-            db.session.add(auditoria)
-            db.session.commit()
+        for tentativa in range(max_retries):
+            try:
+                # ✅ CORREÇÃO: Remover sessão stale antes de inserir
+                if tentativa > 0:
+                    db.session.remove()
+                    current_app.logger.info(f"🔄 Retry {tentativa}/{max_retries} - Reconectando ao banco...")
 
-            self.auditoria_logs.append(auditoria.to_dict())
+                auditoria = LancamentoFreteOdooAuditoria(
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=chave_cte,
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id,
+                    etapa=etapa,
+                    etapa_descricao=etapa_descricao,
+                    modelo_odoo=modelo_odoo,
+                    metodo_odoo=metodo_odoo,
+                    acao=acao,
+                    dados_antes=json.dumps(dados_antes, default=str) if dados_antes else None,
+                    dados_depois=json.dumps(dados_depois, default=str) if dados_depois else None,
+                    campos_alterados=','.join(campos_alterados) if campos_alterados else None,
+                    status=status,
+                    mensagem=mensagem,
+                    erro_detalhado=erro_detalhado,
+                    contexto_odoo=json.dumps(contexto_odoo, default=str) if contexto_odoo else None,
+                    tempo_execucao_ms=tempo_execucao_ms,
+                    executado_por=self.usuario_nome,
+                    ip_usuario=self.usuario_ip
+                )
 
-            return auditoria
+                db.session.add(auditoria)
+                db.session.commit()
 
-        except Exception as e:
-            current_app.logger.error(f"Erro ao registrar auditoria: {e}")
-            db.session.rollback()
-            raise
+                self.auditoria_logs.append(auditoria.to_dict())
+
+                return auditoria
+
+            except Exception as e:
+                erro_str = str(e).lower()
+                # Erros de conexão que justificam retry
+                erros_conexao = ['ssl connection', 'connection', 'closed unexpectedly', 'server closed', 'lost connection']
+                eh_erro_conexao = any(erro in erro_str for erro in erros_conexao)
+
+                if eh_erro_conexao and tentativa < max_retries - 1:
+                    current_app.logger.warning(f"⚠️ Erro de conexão na auditoria (tentativa {tentativa + 1}): {e}")
+                    db.session.rollback()
+                    import time as time_module
+                    time_module.sleep(1)  # Aguardar 1s antes de retry
+                    continue
+                else:
+                    current_app.logger.error(f"❌ Erro ao registrar auditoria: {e}")
+                    db.session.rollback()
+                    raise
 
     def _executar_com_auditoria(
         self,
@@ -376,350 +525,441 @@ class LancamentoOdooService:
             current_app.logger.info(f"DFe encontrado: ID {dfe_id}, Status: {dfe_status}")
 
             # ========================================
-            # VALIDAÇÃO: Status deve ser '04' (PO)
+            # VERIFICAÇÃO DE RETOMADA: Existe lançamento parcial?
+            # (Deve vir ANTES da validação de status!)
             # ========================================
-            if dfe_status != '04':
-                status_map = {
-                    '01': 'Rascunho',
-                    '02': 'Sincronizado',
-                    '03': 'Ciência/Confirmado',
-                    '05': 'Rateio',
-                    '06': 'Concluído',
-                    '07': 'Rejeitado'
-                }
-                status_nome = status_map.get(dfe_status, f'Desconhecido ({dfe_status})')
+            lancamento_existente = self._verificar_lancamento_existente(dfe_id, cte_chave)
+            continuar_de_etapa = lancamento_existente['continuar_de_etapa']
+            purchase_order_id = lancamento_existente.get('purchase_order_id')
+            invoice_id = lancamento_existente.get('invoice_id')
 
-                resultado['erro'] = f'CTe possui status "{status_nome}" - Apenas CTes com status "PO" (04) podem ser lançados'
-                resultado['mensagem'] = f'Erro: {resultado["erro"]}'
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+            # ========================================
+            # VALIDAÇÃO DE STATUS (considera retomada)
+            # ========================================
+            # Status '04' (PO) = Pronto para gerar PO (lançamento novo)
+            # Status '06' (Concluído) = PO já foi gerado (retomada válida)
+            status_map = {
+                '01': 'Rascunho',
+                '02': 'Sincronizado',
+                '03': 'Ciência/Confirmado',
+                '04': 'PO',
+                '05': 'Rateio',
+                '06': 'Concluído',
+                '07': 'Rejeitado'
+            }
+            status_nome = status_map.get(dfe_status, f'Desconhecido ({dfe_status})')
 
-            current_app.logger.info(f"✅ DFe validado: Status PO (04), pode ser lançado")
+            if continuar_de_etapa > 0:
+                # RETOMADA: Aceita status '04' (PO) ou '06' (Concluído)
+                if dfe_status not in ('04', '06'):
+                    resultado['erro'] = (
+                        f'CTe possui status "{status_nome}" ({dfe_status}) - '
+                        f'Para retomada, esperado "PO" (04) ou "Concluído" (06)'
+                    )
+                    resultado['mensagem'] = f'Erro: {resultado["erro"]}'
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                current_app.logger.info(
+                    f"✅ DFe validado para RETOMADA: Status {status_nome} ({dfe_status}), "
+                    f"PO existente: {purchase_order_id}"
+                )
+            else:
+                # LANÇAMENTO NOVO: Exige status '04' (PO)
+                if dfe_status != '04':
+                    resultado['erro'] = (
+                        f'CTe possui status "{status_nome}" ({dfe_status}) - '
+                        f'Apenas CTes com status "PO" (04) podem ser lançados'
+                    )
+                    resultado['mensagem'] = f'Erro: {resultado["erro"]}'
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                current_app.logger.info(f"✅ DFe validado: Status PO (04), iniciando lançamento novo")
+
+            if continuar_de_etapa > 0:
+                current_app.logger.info(
+                    f"🔄 RETOMADA DE LANÇAMENTO DETECTADA! Continuando da ETAPA {continuar_de_etapa}"
+                )
+                current_app.logger.info(f"📋 {lancamento_existente['mensagem']}")
+
+                # Registrar auditoria da retomada
+                self._registrar_auditoria(
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=0,
+                    etapa_descricao="Retomada de lançamento parcial",
+                    modelo_odoo='purchase.order',
+                    acao='retomada',
+                    status='SUCESSO',
+                    mensagem=lancamento_existente['mensagem'],
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id
+                )
+
+                # Atualizar resultado com IDs existentes
+                if purchase_order_id:
+                    resultado['purchase_order_id'] = purchase_order_id
+                if invoice_id:
+                    resultado['invoice_id'] = invoice_id
+
+                # Definir etapas como já concluídas baseado na etapa de retomada
+                if continuar_de_etapa >= 7:
+                    resultado['etapas_concluidas'] = 6  # PO já existe
+                if continuar_de_etapa >= 9:
+                    resultado['etapas_concluidas'] = 8  # PO configurado
+                if continuar_de_etapa >= 11:
+                    resultado['etapas_concluidas'] = 10  # PO confirmado
+                if continuar_de_etapa >= 13:
+                    resultado['etapas_concluidas'] = 12  # Invoice existe
+                if continuar_de_etapa >= 16:
+                    resultado['etapas_concluidas'] = 15  # Invoice confirmada
 
             # ========================================
             # ETAPA 2: Atualizar data de entrada E payment_reference
             # ========================================
-            hoje = date.today().strftime('%Y-%m-%d')
+            if continuar_de_etapa < 3:  # Só executa se não está retomando de etapa posterior
+                hoje = date.today().strftime('%Y-%m-%d')
 
-            # Preparar dados para atualização
-            dados_atualizacao = {'l10n_br_data_entrada': hoje}
+                # Preparar dados para atualização
+                dados_atualizacao = {'l10n_br_data_entrada': hoje}
 
-            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-            if frete.fatura_frete_id and frete.fatura_frete:
-                referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+                # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+                if frete.fatura_frete_id and frete.fatura_frete:
+                    referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
 
-                # Buscar valor atual ANTES de atualizar
-                try:
-                    dfe_atual = self.odoo.read(
+                    # Buscar valor atual ANTES de atualizar
+                    try:
+                        dfe_atual = self.odoo.read(
+                            'l10n_br_ciel_it_account.dfe',
+                            [dfe_id],
+                            ['payment_reference']
+                        )
+                        payment_ref_atual = dfe_atual[0].get('payment_reference', '') if dfe_atual else ''
+                    except Exception as e:
+                        current_app.logger.warning(f"⚠️ Erro ao ler payment_reference atual: {e}")
+                        payment_ref_atual = ''
+
+                    # Só adiciona ao dict se for diferente ou vazio
+                    if payment_ref_atual != referencia_fatura:
+                        dados_atualizacao['payment_reference'] = referencia_fatura
+                        current_app.logger.info(
+                            f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao DFe {dfe_id} "
+                            f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
+                        )
+                    else:
+                        current_app.logger.info(
+                            f"✅ payment_reference já está correto: '{referencia_fatura}'"
+                        )
+
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.write(
                         'l10n_br_ciel_it_account.dfe',
                         [dfe_id],
-                        ['payment_reference']
-                    )
-                    payment_ref_atual = dfe_atual[0].get('payment_reference', '') if dfe_atual else ''
-                except Exception as e:
-                    current_app.logger.warning(f"⚠️ Erro ao ler payment_reference atual: {e}")
-                    payment_ref_atual = ''
+                        dados_atualizacao
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=2,
+                    etapa_descricao="Atualizar data de entrada e payment_reference",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    acao='write',
+                    dfe_id=dfe_id,
+                    campos_alterados=list(dados_atualizacao.keys())
+                )
 
-                # Só adiciona ao dict se for diferente ou vazio
-                if payment_ref_atual != referencia_fatura:
-                    dados_atualizacao['payment_reference'] = referencia_fatura
-                    current_app.logger.info(
-                        f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao DFe {dfe_id} "
-                        f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
-                    )
-                else:
-                    current_app.logger.info(
-                        f"✅ payment_reference já está correto: '{referencia_fatura}'"
-                    )
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 2: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.write(
-                    'l10n_br_ciel_it_account.dfe',
-                    [dfe_id],
-                    dados_atualizacao
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=2,
-                etapa_descricao="Atualizar data de entrada e payment_reference",
-                modelo_odoo='l10n_br_ciel_it_account.dfe',
-                acao='write',
-                dfe_id=dfe_id,
-                campos_alterados=list(dados_atualizacao.keys())
-            )
-
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 2: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
-
-            resultado['etapas_concluidas'] = 2
+                resultado['etapas_concluidas'] = 2
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 2 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 3: Atualizar tipo pedido
             # ========================================
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.write(
-                    'l10n_br_ciel_it_account.dfe',
-                    [dfe_id],
-                    {'l10n_br_tipo_pedido': 'servico'}
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=3,
-                etapa_descricao="Atualizar tipo de pedido para 'servico'",
-                modelo_odoo='l10n_br_ciel_it_account.dfe',
-                acao='write',
-                dfe_id=dfe_id
-            )
+            if continuar_de_etapa < 4:  # Só executa se não está retomando de etapa posterior
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.write(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        {'l10n_br_tipo_pedido': 'servico'}
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=3,
+                    etapa_descricao="Atualizar tipo de pedido para 'servico'",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    acao='write',
+                    dfe_id=dfe_id
+                )
 
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 3: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 3: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            resultado['etapas_concluidas'] = 3
+                resultado['etapas_concluidas'] = 3
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 3 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 4: Atualizar linha com produto
             # ========================================
-            line_ids = dfe.get('lines_ids', [])
-            if not line_ids:
-                resultado['erro'] = "DFe não possui linhas"
-                resultado['mensagem'] = "Erro na etapa 4: DFe não possui linhas"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+            if continuar_de_etapa < 5:  # Só executa se não está retomando de etapa posterior
+                line_ids = dfe.get('lines_ids', [])
+                if not line_ids:
+                    resultado['erro'] = "DFe não possui linhas"
+                    resultado['mensagem'] = "Erro na etapa 4: DFe não possui linhas"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            line_id = line_ids[0]
+                line_id = line_ids[0]
 
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.write(
-                    'l10n_br_ciel_it_account.dfe.line',
-                    [line_id],
-                    {
-                        'product_id': self.PRODUTO_SERVICO_FRETE_ID,
-                        'l10n_br_quantidade': 1.0,
-                        'product_uom_id': 1  # UN
-                    }
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=4,
-                etapa_descricao="Atualizar linha com produto SERVICO DE FRETE",
-                modelo_odoo='l10n_br_ciel_it_account.dfe.line',
-                acao='write',
-                dfe_id=dfe_id
-            )
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.write(
+                        'l10n_br_ciel_it_account.dfe.line',
+                        [line_id],
+                        {
+                            'product_id': self.PRODUTO_SERVICO_FRETE_ID,
+                            'l10n_br_quantidade': 1.0,
+                            'product_uom_id': 1  # UN
+                        }
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=4,
+                    etapa_descricao="Atualizar linha com produto SERVICO DE FRETE",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe.line',
+                    acao='write',
+                    dfe_id=dfe_id
+                )
 
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 4: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 4: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            resultado['etapas_concluidas'] = 4
+                resultado['etapas_concluidas'] = 4
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 4 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 5: Atualizar vencimento
             # ========================================
-            dups_ids = dfe.get('dups_ids', [])
-            if not dups_ids:
-                resultado['erro'] = "DFe não possui pagamentos"
-                resultado['mensagem'] = "Erro na etapa 5: DFe não possui pagamentos"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+            if continuar_de_etapa < 6:  # Só executa se não está retomando de etapa posterior
+                dups_ids = dfe.get('dups_ids', [])
+                if not dups_ids:
+                    resultado['erro'] = "DFe não possui pagamentos"
+                    resultado['mensagem'] = "Erro na etapa 5: DFe não possui pagamentos"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            dup_id = dups_ids[0]
+                dup_id = dups_ids[0]
 
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.write(
-                    'l10n_br_ciel_it_account.dfe.pagamento',
-                    [dup_id],
-                    {'cobr_dup_dvenc': data_vencimento_str}
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=5,
-                etapa_descricao=f"Atualizar vencimento para {data_vencimento_str}",
-                modelo_odoo='l10n_br_ciel_it_account.dfe.pagamento',
-                acao='write',
-                dfe_id=dfe_id
-            )
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.write(
+                        'l10n_br_ciel_it_account.dfe.pagamento',
+                        [dup_id],
+                        {'cobr_dup_dvenc': data_vencimento_str}
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=5,
+                    etapa_descricao=f"Atualizar vencimento para {data_vencimento_str}",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe.pagamento',
+                    acao='write',
+                    dfe_id=dfe_id
+                )
 
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 5: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 5: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            resultado['etapas_concluidas'] = 5
+                resultado['etapas_concluidas'] = 5
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 5 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 6: Gerar Purchase Order
             # ========================================
-            contexto = {'validate_analytic': True}
+            if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
+                contexto = {'validate_analytic': True}
 
-            sucesso, po_result, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.execute_kw(
-                    'l10n_br_ciel_it_account.dfe',
-                    'action_gerar_po_dfe',
-                    [[dfe_id]],
-                    {'context': contexto}
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=6,
-                etapa_descricao="Executar action_gerar_po_dfe",
-                modelo_odoo='l10n_br_ciel_it_account.dfe',
-                metodo_odoo='action_gerar_po_dfe',
-                acao='execute_method',
-                contexto_odoo=contexto,
-                dfe_id=dfe_id
-            )
-
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 6: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
-
-            resultado['etapas_concluidas'] = 6
-
-            # Extrair ID do PO
-            purchase_order_id = None
-            if po_result and isinstance(po_result, dict):
-                purchase_order_id = po_result.get('res_id')
-
-            if not purchase_order_id:
-                # Tentar buscar pelo DFe
-                po_search = self.odoo.search_read(
-                    'purchase.order',
-                    [('l10n_br_dfe_id', '=', dfe_id)],
-                    fields=['id'],
-                    limit=1
+                sucesso, po_result, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.execute_kw(
+                        'l10n_br_ciel_it_account.dfe',
+                        'action_gerar_po_dfe',
+                        [[dfe_id]],
+                        {'context': contexto}
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=6,
+                    etapa_descricao="Executar action_gerar_po_dfe",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    metodo_odoo='action_gerar_po_dfe',
+                    acao='execute_method',
+                    contexto_odoo=contexto,
+                    dfe_id=dfe_id
                 )
-                if po_search:
-                    purchase_order_id = po_search[0]['id']
 
-            if not purchase_order_id:
-                resultado['erro'] = "Purchase Order não foi criado"
-                resultado['mensagem'] = "Erro: PO não foi criado após executar action_gerar_po_dfe"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 6: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            resultado['purchase_order_id'] = purchase_order_id
-            current_app.logger.info(f"Purchase Order criado: ID {purchase_order_id}")
+                resultado['etapas_concluidas'] = 6
+
+                # Extrair ID do PO
+                if po_result and isinstance(po_result, dict):
+                    purchase_order_id = po_result.get('res_id')
+
+                if not purchase_order_id:
+                    # Tentar buscar pelo DFe
+                    po_search = self.odoo.search_read(
+                        'purchase.order',
+                        [('dfe_id', '=', dfe_id)],
+                        fields=['id'],
+                        limit=1
+                    )
+                    if po_search:
+                        purchase_order_id = po_search[0]['id']
+
+                if not purchase_order_id:
+                    resultado['erro'] = "Purchase Order não foi criado"
+                    resultado['mensagem'] = "Erro: PO não foi criado após executar action_gerar_po_dfe"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                resultado['purchase_order_id'] = purchase_order_id
+                current_app.logger.info(f"Purchase Order criado: ID {purchase_order_id}")
+            else:
+                # RETOMADA: Usar PO existente
+                current_app.logger.info(f"⏭️ ETAPA 6 PULADA - Usando PO existente: ID {purchase_order_id}")
+                resultado['purchase_order_id'] = purchase_order_id
 
             # ========================================
             # ETAPA 7: Atualizar campos do PO (incluindo partner_ref e picking_type_id)
             # ========================================
-            # Preparar dados para atualização
-            dados_po = {
-                'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
-                'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
-                'company_id': self.COMPANY_NACOM_GOYA_CD_ID,
-                'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
-            }
+            if continuar_de_etapa < 8:  # Só executa se não está retomando de etapa posterior
+                # Preparar dados para atualização
+                dados_po = {
+                    'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
+                    'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
+                    'company_id': self.COMPANY_NACOM_GOYA_CD_ID,
+                    'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
+                }
 
-            # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
-            # O Odoo pode criar o PO com operação da empresa FB, precisamos corrigir para CD
-            operacao_correta_id = None
-            try:
-                po_operacao = self.odoo.read(
-                    'purchase.order',
-                    [purchase_order_id],
-                    ['l10n_br_operacao_id', 'order_line']
-                )
-                if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
-                    operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
-                    operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
-
-                    if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
-                        operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
-                        dados_po['l10n_br_operacao_id'] = operacao_correta_id
-                        current_app.logger.info(
-                            f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
-                            f"→ {operacao_correta_id} (empresa CD)"
-                        )
-
-                        # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO
-                        line_ids = po_operacao[0].get('order_line', [])
-                        if line_ids:
-                            self.odoo.write(
-                                'purchase.order.line',
-                                line_ids,
-                                {'l10n_br_operacao_id': operacao_correta_id}
-                            )
-                            current_app.logger.info(
-                                f"🔄 Corrigindo operação fiscal nas {len(line_ids)} linha(s) do PO"
-                            )
-                    else:
-                        current_app.logger.info(
-                            f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
-                        )
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
-
-            # ✅ ADICIONAR partner_ref com número da fatura (se houver)
-            if frete.fatura_frete_id and frete.fatura_frete:
-                referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
-
-                # Buscar valor atual ANTES de atualizar
+                # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
+                # O Odoo pode criar o PO com operação da empresa FB, precisamos corrigir para CD
+                operacao_correta_id = None
                 try:
-                    po_atual = self.odoo.read(
+                    po_operacao = self.odoo.read(
                         'purchase.order',
                         [purchase_order_id],
-                        ['partner_ref']
+                        ['l10n_br_operacao_id', 'order_line']
                     )
-                    partner_ref_atual = po_atual[0].get('partner_ref', '') if po_atual else ''
+                    if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
+                        operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
+                        operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
+
+                        if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
+                            operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
+                            dados_po['l10n_br_operacao_id'] = operacao_correta_id
+                            current_app.logger.info(
+                                f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
+                                f"→ {operacao_correta_id} (empresa CD)"
+                            )
+
+                            # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO
+                            line_ids = po_operacao[0].get('order_line', [])
+                            if line_ids:
+                                self.odoo.write(
+                                    'purchase.order.line',
+                                    line_ids,
+                                    {'l10n_br_operacao_id': operacao_correta_id}
+                                )
+                                current_app.logger.info(
+                                    f"🔄 Corrigindo operação fiscal nas {len(line_ids)} linha(s) do PO"
+                                )
+                        else:
+                            current_app.logger.info(
+                                f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
+                            )
                 except Exception as e:
-                    current_app.logger.warning(f"⚠️ Erro ao ler partner_ref atual: {e}")
-                    partner_ref_atual = ''
+                    current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
 
-                # Só adiciona ao dict se for diferente ou vazio
-                if partner_ref_atual != referencia_fatura:
-                    dados_po['partner_ref'] = referencia_fatura
-                    current_app.logger.info(
-                        f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao PO {purchase_order_id} "
-                        f"(partner_ref: '{partner_ref_atual}' -> '{referencia_fatura}')"
-                    )
-                else:
-                    current_app.logger.info(
-                        f"✅ partner_ref já está correto: '{referencia_fatura}'"
-                    )
+                # ✅ ADICIONAR partner_ref com número da fatura (se houver)
+                if frete.fatura_frete_id and frete.fatura_frete:
+                    referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
 
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.write(
-                    'purchase.order',
-                    [purchase_order_id],
-                    dados_po
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=7,
-                etapa_descricao="Atualizar campos do PO (operação fiscal, team, payment, company, picking_type)",
-                modelo_odoo='purchase.order',
-                acao='write',
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                campos_alterados=list(dados_po.keys())
-            )
+                    # Buscar valor atual ANTES de atualizar
+                    try:
+                        po_atual = self.odoo.read(
+                            'purchase.order',
+                            [purchase_order_id],
+                            ['partner_ref']
+                        )
+                        partner_ref_atual = po_atual[0].get('partner_ref', '') if po_atual else ''
+                    except Exception as e:
+                        current_app.logger.warning(f"⚠️ Erro ao ler partner_ref atual: {e}")
+                        partner_ref_atual = ''
 
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 7: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                    # Só adiciona ao dict se for diferente ou vazio
+                    if partner_ref_atual != referencia_fatura:
+                        dados_po['partner_ref'] = referencia_fatura
+                        current_app.logger.info(
+                            f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao PO {purchase_order_id} "
+                            f"(partner_ref: '{partner_ref_atual}' -> '{referencia_fatura}')"
+                        )
+                    else:
+                        current_app.logger.info(
+                            f"✅ partner_ref já está correto: '{referencia_fatura}'"
+                        )
 
-            resultado['etapas_concluidas'] = 7
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.write(
+                        'purchase.order',
+                        [purchase_order_id],
+                        dados_po
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=7,
+                    etapa_descricao="Atualizar campos do PO (operação fiscal, team, payment, company, picking_type)",
+                    modelo_odoo='purchase.order',
+                    acao='write',
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    campos_alterados=list(dados_po.keys())
+                )
+
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 7: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                resultado['etapas_concluidas'] = 7
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 7 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 8: Atualizar impostos do PO - ❌ DESABILITADA
@@ -732,57 +972,107 @@ class LancamentoOdooService:
             # ========================================
             # ETAPA 9: Confirmar Purchase Order
             # ========================================
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.execute_kw(
-                    'purchase.order',
-                    'button_confirm',
-                    [[purchase_order_id]],
-                    {'context': {'validate_analytic': True}}
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=9,
-                etapa_descricao="Confirmar Purchase Order",
-                modelo_odoo='purchase.order',
-                metodo_odoo='button_confirm',
-                acao='execute_method',
-                contexto_odoo={'validate_analytic': True},
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id
-            )
+            if continuar_de_etapa < 10:  # Só executa se não está retomando de etapa posterior
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.execute_kw(
+                        'purchase.order',
+                        'button_confirm',
+                        [[purchase_order_id]],
+                        {'context': {'validate_analytic': True}}
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=9,
+                    etapa_descricao="Confirmar Purchase Order",
+                    modelo_odoo='purchase.order',
+                    metodo_odoo='button_confirm',
+                    acao='execute_method',
+                    contexto_odoo={'validate_analytic': True},
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id
+                )
 
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 9: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 9: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            resultado['etapas_concluidas'] = 9
+                resultado['etapas_concluidas'] = 9
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 9 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 10: Verificar se precisa aprovar
             # ========================================
-            po_data = self.odoo.read(
-                'purchase.order',
-                [purchase_order_id],
-                fields=['state', 'is_current_approver']
-            )[0]
+            if continuar_de_etapa < 11:  # Só executa se não está retomando de etapa posterior
+                po_data = self.odoo.read(
+                    'purchase.order',
+                    [purchase_order_id],
+                    fields=['state', 'is_current_approver']
+                )[0]
 
-            if po_data.get('state') == 'to approve' and po_data.get('is_current_approver'):
-                sucesso, _, erro = self._executar_com_auditoria(
+                if po_data.get('state') == 'to approve' and po_data.get('is_current_approver'):
+                    sucesso, _, erro = self._executar_com_auditoria(
+                        funcao=lambda: self.odoo.execute_kw(
+                            'purchase.order',
+                            'button_approve',
+                            [[purchase_order_id]]
+                        ),
+                        frete_id=frete_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=10,
+                        etapa_descricao="Aprovar Purchase Order",
+                        modelo_odoo='purchase.order',
+                        metodo_odoo='button_approve',
+                        acao='execute_method',
+                        dfe_id=dfe_id,
+                        purchase_order_id=purchase_order_id
+                    )
+
+                    if not sucesso:
+                        resultado['erro'] = erro
+                        resultado['mensagem'] = f"Erro na etapa 10: {erro}"
+                        resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                        return resultado
+                else:
+                    self._registrar_auditoria(
+                        frete_id=frete_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=10,
+                        etapa_descricao="Aprovar Purchase Order (não necessário)",
+                        modelo_odoo='purchase.order',
+                        acao='skip',
+                        status='SUCESSO',
+                        mensagem='Aprovação não necessária',
+                        dfe_id=dfe_id,
+                        purchase_order_id=purchase_order_id
+                    )
+
+                resultado['etapas_concluidas'] = 10
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 10 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
+            # ETAPA 11: Criar Invoice
+            # ========================================
+            if continuar_de_etapa < 12:  # Só executa se não está retomando de etapa posterior
+                sucesso, invoice_result, erro = self._executar_com_auditoria(
                     funcao=lambda: self.odoo.execute_kw(
                         'purchase.order',
-                        'button_approve',
+                        'action_create_invoice',
                         [[purchase_order_id]]
                     ),
                     frete_id=frete_id,
                     cte_id=cte_id,
                     chave_cte=cte_chave,
-                    etapa=10,
-                    etapa_descricao="Aprovar Purchase Order",
+                    etapa=11,
+                    etapa_descricao="Criar Invoice",
                     modelo_odoo='purchase.order',
-                    metodo_odoo='button_approve',
+                    metodo_odoo='action_create_invoice',
                     acao='execute_method',
                     dfe_id=dfe_id,
                     purchase_order_id=purchase_order_id
@@ -790,274 +1080,246 @@ class LancamentoOdooService:
 
                 if not sucesso:
                     resultado['erro'] = erro
-                    resultado['mensagem'] = f"Erro na etapa 10: {erro}"
+                    resultado['mensagem'] = f"Erro na etapa 11: {erro}"
                     resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                     return resultado
+
+                resultado['etapas_concluidas'] = 11
+
+                # Extrair ID da Invoice
+                if invoice_result and isinstance(invoice_result, dict):
+                    invoice_id = invoice_result.get('res_id')
+
+                if not invoice_id:
+                    # Tentar buscar pelo PO
+                    po_updated = self.odoo.read(
+                        'purchase.order',
+                        [purchase_order_id],
+                        fields=['invoice_ids']
+                    )[0]
+                    invoice_ids = po_updated.get('invoice_ids', [])
+                    if invoice_ids:
+                        invoice_id = invoice_ids[0]
+
+                if not invoice_id:
+                    resultado['erro'] = "Invoice não foi criada"
+                    resultado['mensagem'] = "Erro: Invoice não foi criada"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                resultado['invoice_id'] = invoice_id
+                current_app.logger.info(f"Invoice criada: ID {invoice_id}")
             else:
-                self._registrar_auditoria(
-                    frete_id=frete_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=10,
-                    etapa_descricao="Aprovar Purchase Order (não necessário)",
-                    modelo_odoo='purchase.order',
-                    acao='skip',
-                    status='SUCESSO',
-                    mensagem='Aprovação não necessária',
-                    dfe_id=dfe_id,
-                    purchase_order_id=purchase_order_id
-                )
-
-            resultado['etapas_concluidas'] = 10
-
-            # ========================================
-            # ETAPA 11: Criar Invoice
-            # ========================================
-            sucesso, invoice_result, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.execute_kw(
-                    'purchase.order',
-                    'action_create_invoice',
-                    [[purchase_order_id]]
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=11,
-                etapa_descricao="Criar Invoice",
-                modelo_odoo='purchase.order',
-                metodo_odoo='action_create_invoice',
-                acao='execute_method',
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id
-            )
-
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 11: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
-
-            resultado['etapas_concluidas'] = 11
-
-            # Extrair ID da Invoice
-            invoice_id = None
-            if invoice_result and isinstance(invoice_result, dict):
-                invoice_id = invoice_result.get('res_id')
-
-            if not invoice_id:
-                # Tentar buscar pelo PO
-                po_updated = self.odoo.read(
-                    'purchase.order',
-                    [purchase_order_id],
-                    fields=['invoice_ids']
-                )[0]
-                invoice_ids = po_updated.get('invoice_ids', [])
-                if invoice_ids:
-                    invoice_id = invoice_ids[0]
-
-            if not invoice_id:
-                resultado['erro'] = "Invoice não foi criada"
-                resultado['mensagem'] = "Erro: Invoice não foi criada"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
-
-            resultado['invoice_id'] = invoice_id
-            current_app.logger.info(f"Invoice criada: ID {invoice_id}")
+                # RETOMADA: Usar Invoice existente
+                current_app.logger.info(f"⏭️ ETAPA 11 PULADA - Usando Invoice existente: ID {invoice_id}")
+                resultado['invoice_id'] = invoice_id
 
             # ========================================
             # ETAPA 12: Atualizar impostos da Invoice
             # ========================================
-            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
-            try:
-                db.session.commit()
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 12: {e}")
+            if continuar_de_etapa < 13:  # Só executa se não está retomando de etapa posterior
+                # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 12: {e}")
 
-            try:
-                self.odoo.execute_kw(
-                    'account.move',
-                    'onchange_l10n_br_calcular_imposto',
-                    [[invoice_id]]
-                )
-            except Exception as e:
-                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
-                current_app.logger.warning(
-                    f"⚠️ ETAPA 12 falhou (não crítico): {e.__class__.__name__}. "
-                    f"Impostos podem precisar ajuste manual no Odoo."
-                )
+                try:
+                    self.odoo.execute_kw(
+                        'account.move',
+                        'onchange_l10n_br_calcular_imposto',
+                        [[invoice_id]]
+                    )
+                except Exception as e:
+                    # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                    current_app.logger.warning(
+                        f"⚠️ ETAPA 12 falhou (não crítico): {e.__class__.__name__}. "
+                        f"Impostos podem precisar ajuste manual no Odoo."
+                    )
 
-            try:
-                self._registrar_auditoria(
-                    frete_id=frete_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=12,
-                    etapa_descricao="Atualizar impostos da Invoice",
-                    modelo_odoo='account.move',
-                    metodo_odoo='onchange_l10n_br_calcular_imposto',
-                    acao='execute_method',
-                    status='SUCESSO',
-                    mensagem='Impostos atualizados',
-                    dfe_id=dfe_id,
-                    purchase_order_id=purchase_order_id,
-                    invoice_id=invoice_id
-                )
-            except Exception as e:
-                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
-                current_app.logger.error(
-                    f"❌ Erro ao registrar auditoria ETAPA 12 (não crítico): {e}"
-                )
-                # Reconectar sessão se perdeu conexão
-                db.session.rollback()
-                db.session.remove()
+                try:
+                    self._registrar_auditoria(
+                        frete_id=frete_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=12,
+                        etapa_descricao="Atualizar impostos da Invoice",
+                        modelo_odoo='account.move',
+                        metodo_odoo='onchange_l10n_br_calcular_imposto',
+                        acao='execute_method',
+                        status='SUCESSO',
+                        mensagem='Impostos atualizados',
+                        dfe_id=dfe_id,
+                        purchase_order_id=purchase_order_id,
+                        invoice_id=invoice_id
+                    )
+                except Exception as e:
+                    # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                    current_app.logger.error(
+                        f"❌ Erro ao registrar auditoria ETAPA 12 (não crítico): {e}"
+                    )
+                    # Reconectar sessão se perdeu conexão
+                    db.session.rollback()
+                    db.session.remove()
 
-            resultado['etapas_concluidas'] = 12
+                resultado['etapas_concluidas'] = 12
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 12 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 13: Configurar campos da Invoice (incluindo payment_reference)
             # ========================================
-            # Preparar dados para atualização
-            dados_invoice = {
-                'l10n_br_compra_indcom': 'out',
-                'l10n_br_situacao_nf': 'autorizado',
-                'invoice_date_due': data_vencimento_str
-            }
+            if continuar_de_etapa < 14:  # Só executa se não está retomando de etapa posterior
+                # Preparar dados para atualização
+                dados_invoice = {
+                    'l10n_br_compra_indcom': 'out',
+                    'l10n_br_situacao_nf': 'autorizado',
+                    'invoice_date_due': data_vencimento_str
+                }
 
-            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-            if frete.fatura_frete_id and frete.fatura_frete:
-                referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+                # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+                if frete.fatura_frete_id and frete.fatura_frete:
+                    referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
 
-                # Buscar valor atual ANTES de atualizar
-                try:
-                    invoice_atual = self.odoo.read(
+                    # Buscar valor atual ANTES de atualizar
+                    try:
+                        invoice_atual = self.odoo.read(
+                            'account.move',
+                            [invoice_id],
+                            ['payment_reference']
+                        )
+                        payment_ref_atual = invoice_atual[0].get('payment_reference', '') if invoice_atual else ''
+                    except Exception as e:
+                        current_app.logger.warning(f"⚠️ Erro ao ler payment_reference atual: {e}")
+                        payment_ref_atual = ''
+
+                    # Só adiciona ao dict se for diferente ou vazio
+                    if payment_ref_atual != referencia_fatura:
+                        dados_invoice['payment_reference'] = referencia_fatura
+                        current_app.logger.info(
+                            f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} à Invoice {invoice_id} "
+                            f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
+                        )
+                    else:
+                        current_app.logger.info(
+                            f"✅ payment_reference já está correto: '{referencia_fatura}'"
+                        )
+
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.write(
                         'account.move',
                         [invoice_id],
-                        ['payment_reference']
-                    )
-                    payment_ref_atual = invoice_atual[0].get('payment_reference', '') if invoice_atual else ''
-                except Exception as e:
-                    current_app.logger.warning(f"⚠️ Erro ao ler payment_reference atual: {e}")
-                    payment_ref_atual = ''
+                        dados_invoice
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=13,
+                    etapa_descricao="Configurar campos da Invoice e payment_reference",
+                    modelo_odoo='account.move',
+                    acao='write',
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id,
+                    campos_alterados=list(dados_invoice.keys())
+                )
 
-                # Só adiciona ao dict se for diferente ou vazio
-                if payment_ref_atual != referencia_fatura:
-                    dados_invoice['payment_reference'] = referencia_fatura
-                    current_app.logger.info(
-                        f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} à Invoice {invoice_id} "
-                        f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
-                    )
-                else:
-                    current_app.logger.info(
-                        f"✅ payment_reference já está correto: '{referencia_fatura}'"
-                    )
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 13: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.write(
-                    'account.move',
-                    [invoice_id],
-                    dados_invoice
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=13,
-                etapa_descricao="Configurar campos da Invoice e payment_reference",
-                modelo_odoo='account.move',
-                acao='write',
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id,
-                campos_alterados=list(dados_invoice.keys())
-            )
-
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 13: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
-
-            resultado['etapas_concluidas'] = 13
+                resultado['etapas_concluidas'] = 13
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 13 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 14: Atualizar impostos novamente
             # ========================================
-            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
-            try:
-                db.session.commit()
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 14: {e}")
+            if continuar_de_etapa < 15:  # Só executa se não está retomando de etapa posterior
+                # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 14: {e}")
 
-            try:
-                self.odoo.execute_kw(
-                    'account.move',
-                    'onchange_l10n_br_calcular_imposto_btn',
-                    [[invoice_id]]
-                )
-            except Exception as e:
-                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
-                current_app.logger.warning(
-                    f"⚠️ ETAPA 14 falhou (não crítico): {e.__class__.__name__}. "
-                    f"Impostos podem precisar ajuste manual no Odoo."
-                )
+                try:
+                    self.odoo.execute_kw(
+                        'account.move',
+                        'onchange_l10n_br_calcular_imposto_btn',
+                        [[invoice_id]]
+                    )
+                except Exception as e:
+                    # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                    current_app.logger.warning(
+                        f"⚠️ ETAPA 14 falhou (não crítico): {e.__class__.__name__}. "
+                        f"Impostos podem precisar ajuste manual no Odoo."
+                    )
 
-            try:
-                self._registrar_auditoria(
-                    frete_id=frete_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=14,
-                    etapa_descricao="Atualizar impostos da Invoice (final)",
-                    modelo_odoo='account.move',
-                    metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
-                    acao='execute_method',
-                    status='SUCESSO',
-                    mensagem='Impostos atualizados',
-                    dfe_id=dfe_id,
-                    purchase_order_id=purchase_order_id,
-                    invoice_id=invoice_id
-                )
-            except Exception as e:
-                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
-                current_app.logger.error(
-                    f"❌ Erro ao registrar auditoria ETAPA 14 (não crítico): {e}"
-                )
-                # Reconectar sessão se perdeu conexão
-                db.session.rollback()
-                db.session.remove()
+                try:
+                    self._registrar_auditoria(
+                        frete_id=frete_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=14,
+                        etapa_descricao="Atualizar impostos da Invoice (final)",
+                        modelo_odoo='account.move',
+                        metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
+                        acao='execute_method',
+                        status='SUCESSO',
+                        mensagem='Impostos atualizados',
+                        dfe_id=dfe_id,
+                        purchase_order_id=purchase_order_id,
+                        invoice_id=invoice_id
+                    )
+                except Exception as e:
+                    # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                    current_app.logger.error(
+                        f"❌ Erro ao registrar auditoria ETAPA 14 (não crítico): {e}"
+                    )
+                    # Reconectar sessão se perdeu conexão
+                    db.session.rollback()
+                    db.session.remove()
 
-            resultado['etapas_concluidas'] = 14
+                resultado['etapas_concluidas'] = 14
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 14 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 15: Confirmar Invoice
             # ========================================
-            sucesso, _, erro = self._executar_com_auditoria(
-                funcao=lambda: self.odoo.execute_kw(
-                    'account.move',
-                    'action_post',
-                    [[invoice_id]],
-                    {'context': {'validate_analytic': True}}
-                ),
-                frete_id=frete_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=15,
-                etapa_descricao="Confirmar Invoice",
-                modelo_odoo='account.move',
-                metodo_odoo='action_post',
-                acao='execute_method',
-                contexto_odoo={'validate_analytic': True},
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id
-            )
+            if continuar_de_etapa < 16:  # Só executa se não está retomando de etapa posterior
+                sucesso, _, erro = self._executar_com_auditoria(
+                    funcao=lambda: self.odoo.execute_kw(
+                        'account.move',
+                        'action_post',
+                        [[invoice_id]],
+                        {'context': {'validate_analytic': True}}
+                    ),
+                    frete_id=frete_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=15,
+                    etapa_descricao="Confirmar Invoice",
+                    modelo_odoo='account.move',
+                    metodo_odoo='action_post',
+                    acao='execute_method',
+                    contexto_odoo={'validate_analytic': True},
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id
+                )
 
-            if not sucesso:
-                resultado['erro'] = erro
-                resultado['mensagem'] = f"Erro na etapa 15: {erro}"
-                resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                return resultado
+                if not sucesso:
+                    resultado['erro'] = erro
+                    resultado['mensagem'] = f"Erro na etapa 15: {erro}"
+                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            resultado['etapas_concluidas'] = 15
+                resultado['etapas_concluidas'] = 15
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 15 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
             # ETAPA 16: Atualizar frete E criar vínculo bidirecional com CTe

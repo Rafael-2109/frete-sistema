@@ -64,47 +64,68 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
         invoice_id: Optional[int] = None
     ) -> LancamentoFreteOdooAuditoria:
         """
-        Registra etapa na auditoria com despesa_extra_id
+        Registra etapa na auditoria com despesa_extra_id e retry automático
 
         Returns:
             Registro de auditoria criado
         """
-        try:
-            auditoria = LancamentoFreteOdooAuditoria(
-                frete_id=None,  # Não é frete
-                despesa_extra_id=despesa_extra_id,
-                cte_id=cte_id,
-                chave_cte=chave_cte,
-                dfe_id=dfe_id,
-                purchase_order_id=purchase_order_id,
-                invoice_id=invoice_id,
-                etapa=etapa,
-                etapa_descricao=etapa_descricao,
-                modelo_odoo=modelo_odoo,
-                metodo_odoo=metodo_odoo,
-                acao=acao,
-                dados_antes=json.dumps(dados_antes, default=str) if dados_antes else None,
-                dados_depois=json.dumps(dados_depois, default=str) if dados_depois else None,
-                campos_alterados=','.join(campos_alterados) if campos_alterados else None,
-                status=status,
-                mensagem=mensagem,
-                contexto_odoo=json.dumps(contexto_odoo, default=str) if contexto_odoo else None,
-                erro_detalhado=erro_detalhado,
-                tempo_execucao_ms=tempo_execucao_ms,
-                executado_por=self.usuario_nome,
-                ip_usuario=self.usuario_ip
-            )
+        max_retries = 3
 
-            db.session.add(auditoria)
-            db.session.flush()  # Para obter o ID
+        for tentativa in range(max_retries):
+            try:
+                # ✅ CORREÇÃO: Remover sessão stale antes de inserir
+                if tentativa > 0:
+                    db.session.remove()
+                    current_app.logger.info(f"🔄 Retry {tentativa}/{max_retries} - Reconectando ao banco...")
 
-            self.auditoria_logs.append(auditoria.to_dict())
+                auditoria = LancamentoFreteOdooAuditoria(
+                    frete_id=None,  # Não é frete
+                    despesa_extra_id=despesa_extra_id,
+                    cte_id=cte_id,
+                    chave_cte=chave_cte,
+                    dfe_id=dfe_id,
+                    purchase_order_id=purchase_order_id,
+                    invoice_id=invoice_id,
+                    etapa=etapa,
+                    etapa_descricao=etapa_descricao,
+                    modelo_odoo=modelo_odoo,
+                    metodo_odoo=metodo_odoo,
+                    acao=acao,
+                    dados_antes=json.dumps(dados_antes, default=str) if dados_antes else None,
+                    dados_depois=json.dumps(dados_depois, default=str) if dados_depois else None,
+                    campos_alterados=','.join(campos_alterados) if campos_alterados else None,
+                    status=status,
+                    mensagem=mensagem,
+                    contexto_odoo=json.dumps(contexto_odoo, default=str) if contexto_odoo else None,
+                    erro_detalhado=erro_detalhado,
+                    tempo_execucao_ms=tempo_execucao_ms,
+                    executado_por=self.usuario_nome,
+                    ip_usuario=self.usuario_ip
+                )
 
-            return auditoria
+                db.session.add(auditoria)
+                db.session.commit()  # ✅ CORREÇÃO: commit em vez de flush para evitar conexão stale
 
-        except Exception as e:
-            current_app.logger.error(f"Erro ao registrar auditoria despesa: {e}")
-            raise
+                self.auditoria_logs.append(auditoria.to_dict())
+
+                return auditoria
+
+            except Exception as e:
+                erro_str = str(e).lower()
+                # Erros de conexão que justificam retry
+                erros_conexao = ['ssl connection', 'connection', 'closed unexpectedly', 'server closed', 'lost connection']
+                eh_erro_conexao = any(erro in erro_str for erro in erros_conexao)
+
+                if eh_erro_conexao and tentativa < max_retries - 1:
+                    current_app.logger.warning(f"⚠️ Erro de conexão na auditoria (tentativa {tentativa + 1}): {e}")
+                    db.session.rollback()
+                    import time as time_module
+                    time_module.sleep(1)  # Aguardar 1s antes de retry
+                    continue
+                else:
+                    current_app.logger.error(f"❌ Erro ao registrar auditoria despesa: {e}")
+                    db.session.rollback()
+                    raise
 
     def _rollback_despesa_odoo(self, despesa_id: int, etapas_concluidas: int) -> bool:
         """
@@ -150,6 +171,135 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             current_app.logger.error(f"Erro ao executar rollback: {rollback_error}")
             db.session.rollback()
             return False
+
+    def _verificar_lancamento_existente_despesa(self, dfe_id: int, cte_chave: str) -> Dict[str, Any]:
+        """
+        Verifica se já existe um lançamento parcial para este DFe de despesa e determina
+        de qual etapa deve continuar.
+
+        Returns:
+            Dict com:
+            - existe_po: bool - Se já existe um PO vinculado
+            - purchase_order_id: int - ID do PO existente (se houver)
+            - po_state: str - Estado do PO (draft, purchase, done, cancel)
+            - existe_invoice: bool - Se já existe Invoice
+            - invoice_id: int - ID da Invoice (se houver)
+            - invoice_state: str - Estado da Invoice (draft, posted, cancel)
+            - continuar_de_etapa: int - Etapa de onde deve continuar (0 se novo)
+            - mensagem: str - Descrição do estado encontrado
+        """
+        resultado = {
+            'existe_po': False,
+            'purchase_order_id': None,
+            'po_state': None,
+            'po_company_id': None,
+            'existe_invoice': False,
+            'invoice_id': None,
+            'invoice_state': None,
+            'continuar_de_etapa': 0,
+            'mensagem': 'Nenhum lançamento anterior encontrado'
+        }
+
+        try:
+            # Buscar PO vinculado ao DFe
+            po_search = self.odoo.search_read(
+                'purchase.order',
+                [('dfe_id', '=', dfe_id)],
+                fields=['id', 'name', 'state', 'company_id', 'invoice_ids', 'team_id', 'picking_type_id'],
+                limit=1
+            )
+
+            if not po_search:
+                current_app.logger.info(f"✅ Nenhum PO existente para DFe {dfe_id} - Iniciando do zero")
+                return resultado
+
+            po = po_search[0]
+            resultado['existe_po'] = True
+            resultado['purchase_order_id'] = po['id']
+            resultado['po_state'] = po['state']
+            resultado['po_company_id'] = po['company_id'][0] if po.get('company_id') else None
+
+            current_app.logger.info(
+                f"🔍 PO existente encontrado: ID {po['id']} ({po['name']}), "
+                f"Estado: {po['state']}, Company: {resultado['po_company_id']}"
+            )
+
+            # Verificar se o PO está em draft e precisa ser configurado/confirmado
+            if po['state'] == 'draft':
+                # Verificar se já foi configurado (tem team_id e company correta)
+                team_ok = po.get('team_id') and po['team_id'][0] == self.TEAM_LANCAMENTO_FRETE_ID
+                company_ok = resultado['po_company_id'] == self.COMPANY_NACOM_GOYA_CD_ID
+                picking_ok = po.get('picking_type_id') and po['picking_type_id'][0] == self.PICKING_TYPE_CD_RECEBIMENTO_ID
+
+                if not team_ok or not company_ok or not picking_ok:
+                    resultado['continuar_de_etapa'] = 7  # Precisa configurar
+                    resultado['mensagem'] = (
+                        f"PO {po['name']} existe mas não foi configurado corretamente. "
+                        f"Continuando da ETAPA 7 (Configurar PO)"
+                    )
+                else:
+                    resultado['continuar_de_etapa'] = 9  # Precisa confirmar
+                    resultado['mensagem'] = (
+                        f"PO {po['name']} está configurado mas em draft. "
+                        f"Continuando da ETAPA 9 (Confirmar PO)"
+                    )
+
+            elif po['state'] == 'purchase':
+                # PO confirmado, verificar se tem Invoice
+                invoice_ids = po.get('invoice_ids', [])
+
+                if not invoice_ids:
+                    resultado['continuar_de_etapa'] = 11  # Precisa criar Invoice
+                    resultado['mensagem'] = (
+                        f"PO {po['name']} está confirmado mas sem Invoice. "
+                        f"Continuando da ETAPA 11 (Criar Invoice)"
+                    )
+                else:
+                    # Buscar estado da Invoice
+                    invoice_data = self.odoo.read(
+                        'account.move',
+                        invoice_ids,
+                        ['id', 'name', 'state']
+                    )
+
+                    if invoice_data:
+                        invoice = invoice_data[0]
+                        resultado['existe_invoice'] = True
+                        resultado['invoice_id'] = invoice['id']
+                        resultado['invoice_state'] = invoice['state']
+
+                        if invoice['state'] == 'draft':
+                            resultado['continuar_de_etapa'] = 13  # Precisa configurar/confirmar Invoice
+                            resultado['mensagem'] = (
+                                f"Invoice {invoice.get('name', invoice['id'])} existe em draft. "
+                                f"Continuando da ETAPA 13 (Configurar Invoice)"
+                            )
+                        elif invoice['state'] == 'posted':
+                            resultado['continuar_de_etapa'] = 16  # Já está tudo pronto
+                            resultado['mensagem'] = (
+                                f"Lançamento já completo! Invoice {invoice.get('name', invoice['id'])} está posted. "
+                                f"Continuando da ETAPA 16 (Finalizar)"
+                            )
+                        else:
+                            resultado['continuar_de_etapa'] = 15  # Tentar confirmar Invoice
+                            resultado['mensagem'] = (
+                                f"Invoice {invoice.get('name', invoice['id'])} em estado {invoice['state']}. "
+                                f"Tentando ETAPA 15 (Confirmar Invoice)"
+                            )
+
+            elif po['state'] in ('done', 'cancel'):
+                resultado['continuar_de_etapa'] = 0  # Não pode continuar, precisa de novo
+                resultado['mensagem'] = (
+                    f"PO {po['name']} está em estado '{po['state']}' e não pode ser retomado. "
+                    f"Será necessário cancelar manualmente e relançar."
+                )
+
+            current_app.logger.info(f"📋 {resultado['mensagem']}")
+            return resultado
+
+        except Exception as e:
+            current_app.logger.error(f"❌ Erro ao verificar lançamento existente: {e}")
+            return resultado
 
     def lancar_despesa_odoo(
         self,
@@ -279,135 +429,127 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             resultado['etapas_concluidas'] = 1
             dfe_id = dfe_data[0]['id']
             resultado['dfe_id'] = dfe_id
-
-            # Verificar status do DFe
             dfe_status = dfe_data[0].get('l10n_br_status')
-            if dfe_status != '04':
-                resultado['erro'] = f"DFe com status '{dfe_status}' - esperado '04' (PO)"
-                resultado['mensagem'] = f"Erro: CTe não está com status PO no Odoo"
-                return resultado
+
+            current_app.logger.info(f"DFe encontrado: ID {dfe_id}, Status: {dfe_status}")
 
             # ========================================
-            # ETAPAS 2-16: Usar lógica do LancamentoOdooService
+            # VERIFICAÇÃO DE RETOMADA: Existe lançamento parcial?
+            # (Deve vir ANTES da validação de status!)
             # ========================================
-            # A partir daqui, delegamos para o método pai adaptando os parâmetros
-            # Porém, como o método pai espera um frete_id, vamos replicar a lógica
-            # adaptada para despesa
+            lancamento_existente = self._verificar_lancamento_existente_despesa(dfe_id, cte_chave)
+            continuar_de_etapa = lancamento_existente['continuar_de_etapa']
+            po_id = lancamento_existente.get('purchase_order_id')
+            invoice_id = lancamento_existente.get('invoice_id')
 
-            # Por simplicidade, vamos chamar as etapas individuais
-            # (Este é um ponto de extensão - poderia ser refatorado para reutilizar mais código)
+            # ========================================
+            # VALIDAÇÃO DE STATUS (considera retomada)
+            # ========================================
+            # Status '04' (PO) = Pronto para gerar PO (lançamento novo)
+            # Status '06' (Concluído) = PO já foi gerado (retomada válida)
+            status_map = {
+                '01': 'Rascunho',
+                '02': 'Sincronizado',
+                '03': 'Ciência/Confirmado',
+                '04': 'PO',
+                '05': 'Rateio',
+                '06': 'Concluído',
+                '07': 'Rejeitado'
+            }
+            status_nome = status_map.get(dfe_status, f'Desconhecido ({dfe_status})')
 
-            # ETAPA 2: Atualizar data de entrada no DFe
-            data_entrada = datetime.now().strftime('%Y-%m-%d')
+            if continuar_de_etapa > 0:
+                # RETOMADA: Aceita status '04' (PO) ou '06' (Concluído)
+                if dfe_status not in ('04', '06'):
+                    resultado['erro'] = (
+                        f'CTe possui status "{status_nome}" ({dfe_status}) - '
+                        f'Para retomada, esperado "PO" (04) ou "Concluído" (06)'
+                    )
+                    resultado['mensagem'] = f'Erro: {resultado["erro"]}'
+                    resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            # Preparar dados para atualização
-            dados_dfe = {'l10n_br_data_entrada': data_entrada}
-
-            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-            if despesa.fatura_frete_id and despesa.fatura_frete:
-                referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
-                dados_dfe['payment_reference'] = referencia_fatura
                 current_app.logger.info(
-                    f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao DFe {dfe_id}"
+                    f"✅ DFe validado para RETOMADA: Status {status_nome} ({dfe_status}), "
+                    f"PO existente: {po_id}"
                 )
             else:
-                dados_dfe['payment_reference'] = f'DESPESA-{despesa_id}'
+                # LANÇAMENTO NOVO: Exige status '04' (PO)
+                if dfe_status != '04':
+                    resultado['erro'] = (
+                        f'CTe possui status "{status_nome}" ({dfe_status}) - '
+                        f'Apenas CTes com status "PO" (04) podem ser lançados'
+                    )
+                    resultado['mensagem'] = f'Erro: {resultado["erro"]}'
+                    resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
+                    return resultado
 
-            inicio = time.time()
-            self.odoo.write(
-                'l10n_br_ciel_it_account.dfe',
-                [dfe_id],
-                dados_dfe
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+                current_app.logger.info(f"✅ DFe validado: Status PO (04), iniciando lançamento novo")
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=2,
-                etapa_descricao="Atualizar data de entrada e payment_reference",
-                modelo_odoo='l10n_br_ciel_it_account.dfe',
-                acao='write',
-                status='SUCESSO',
-                mensagem=f"Data entrada: {data_entrada}, Ref: {dados_dfe['payment_reference']}",
-                campos_alterados=list(dados_dfe.keys()),
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id
-            )
-            resultado['etapas_concluidas'] = 2
+            if continuar_de_etapa > 0:
+                current_app.logger.info(
+                    f"🔄 RETOMADA DE LANÇAMENTO DETECTADA! Continuando da ETAPA {continuar_de_etapa}"
+                )
+                current_app.logger.info(f"📋 {lancamento_existente['mensagem']}")
 
-            # ETAPA 3: Definir tipo pedido = 'servico'
-            inicio = time.time()
-            self.odoo.write(
-                'l10n_br_ciel_it_account.dfe',
-                [dfe_id],
-                {'l10n_br_tipo_pedido': 'servico'}  # Campo correto (não tipo_pedido)
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+                # Registrar auditoria da retomada
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=0,
+                    etapa_descricao="Retomada de lançamento parcial",
+                    modelo_odoo='purchase.order',
+                    acao='retomada',
+                    status='SUCESSO',
+                    mensagem=lancamento_existente['mensagem'],
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                    invoice_id=invoice_id
+                )
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=3,
-                etapa_descricao="Definir l10n_br_tipo_pedido = servico",
-                modelo_odoo='l10n_br_ciel_it_account.dfe',
-                acao='write',
-                status='SUCESSO',
-                mensagem="l10n_br_tipo_pedido definido como 'servico'",
-                campos_alterados=['l10n_br_tipo_pedido'],
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id
-            )
-            resultado['etapas_concluidas'] = 3
+                # Atualizar resultado com IDs existentes
+                if po_id:
+                    resultado['purchase_order_id'] = po_id
+                if invoice_id:
+                    resultado['invoice_id'] = invoice_id
 
-            # ETAPA 4: Atualizar linha do DFe com produto de serviço
-            lines_ids = dfe_data[0].get('lines_ids', [])
-            if not lines_ids:
-                resultado['erro'] = "DFe não possui linhas"
-                resultado['mensagem'] = "Erro na etapa 4: DFe não possui linhas"
-                resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
-                return resultado
+                # Definir etapas como já concluídas baseado na etapa de retomada
+                if continuar_de_etapa >= 7:
+                    resultado['etapas_concluidas'] = 6  # PO já existe
+                if continuar_de_etapa >= 9:
+                    resultado['etapas_concluidas'] = 8  # PO configurado
+                if continuar_de_etapa >= 11:
+                    resultado['etapas_concluidas'] = 10  # PO confirmado
+                if continuar_de_etapa >= 13:
+                    resultado['etapas_concluidas'] = 12  # Invoice existe
+                if continuar_de_etapa >= 16:
+                    resultado['etapas_concluidas'] = 15  # Invoice confirmada
 
-            line_id = lines_ids[0]
-            inicio = time.time()
-            self.odoo.write(
-                'l10n_br_ciel_it_account.dfe.line',
-                [line_id],
-                {
-                    'product_id': self.PRODUTO_SERVICO_FRETE_ID,
-                    'l10n_br_quantidade': 1.0,
-                    'product_uom_id': 1  # UN
-                }
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+            # ========================================
+            # ETAPA 2: Atualizar data de entrada no DFe
+            # ========================================
+            if continuar_de_etapa < 3:  # Só executa se não está retomando de etapa posterior
+                data_entrada = datetime.now().strftime('%Y-%m-%d')
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=4,
-                etapa_descricao="Atualizar linha com produto SERVICO DE FRETE",
-                modelo_odoo='l10n_br_ciel_it_account.dfe.line',
-                acao='write',
-                status='SUCESSO',
-                mensagem=f"Linha {line_id} atualizada com produto {self.PRODUTO_SERVICO_FRETE_ID}",
-                campos_alterados=['product_id', 'l10n_br_quantidade', 'product_uom_id'],
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id
-            )
-            resultado['etapas_concluidas'] = 4
+                # Preparar dados para atualização
+                dados_dfe = {'l10n_br_data_entrada': data_entrada}
 
-            # ETAPA 5: Atualizar vencimento
-            dups_ids = dfe_data[0].get('dups_ids', [])
-            if dups_ids:
-                dup_id = dups_ids[0]
+                # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+                if despesa.fatura_frete_id and despesa.fatura_frete:
+                    referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                    dados_dfe['payment_reference'] = referencia_fatura
+                    current_app.logger.info(
+                        f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao DFe {dfe_id}"
+                    )
+                else:
+                    dados_dfe['payment_reference'] = f'DESPESA-{despesa_id}'
+
                 inicio = time.time()
                 self.odoo.write(
-                    'l10n_br_ciel_it_account.dfe.pagamento',
-                    [dup_id],
-                    {'cobr_dup_dvenc': data_vencimento_str}  # Campo correto (não date_due)
+                    'l10n_br_ciel_it_account.dfe',
+                    [dfe_id],
+                    dados_dfe
                 )
                 tempo_ms = int((time.time() - inicio) * 1000)
 
@@ -415,141 +557,262 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                     despesa_extra_id=despesa_id,
                     cte_id=cte_id,
                     chave_cte=cte_chave,
-                    etapa=5,
-                    etapa_descricao=f"Atualizar vencimento para {data_vencimento_str}",
-                    modelo_odoo='l10n_br_ciel_it_account.dfe.pagamento',
+                    etapa=2,
+                    etapa_descricao="Atualizar data de entrada e payment_reference",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
                     acao='write',
                     status='SUCESSO',
-                    mensagem=f"Vencimento: {data_vencimento_str}",
-                    campos_alterados=['cobr_dup_dvenc'],
+                    mensagem=f"Data entrada: {data_entrada}, Ref: {dados_dfe['payment_reference']}",
+                    campos_alterados=list(dados_dfe.keys()),
                     tempo_execucao_ms=tempo_ms,
                     dfe_id=dfe_id
                 )
-            resultado['etapas_concluidas'] = 5
+                resultado['etapas_concluidas'] = 2
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 2 PULADA - Retomando de etapa {continuar_de_etapa}")
 
+            # ========================================
+            # ETAPA 3: Definir tipo pedido = 'servico'
+            # ========================================
+            if continuar_de_etapa < 4:  # Só executa se não está retomando de etapa posterior
+                inicio = time.time()
+                self.odoo.write(
+                    'l10n_br_ciel_it_account.dfe',
+                    [dfe_id],
+                    {'l10n_br_tipo_pedido': 'servico'}  # Campo correto (não tipo_pedido)
+                )
+                tempo_ms = int((time.time() - inicio) * 1000)
+
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=3,
+                    etapa_descricao="Definir l10n_br_tipo_pedido = servico",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    acao='write',
+                    status='SUCESSO',
+                    mensagem="l10n_br_tipo_pedido definido como 'servico'",
+                    campos_alterados=['l10n_br_tipo_pedido'],
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id
+                )
+                resultado['etapas_concluidas'] = 3
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 3 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
+            # ETAPA 4: Atualizar linha do DFe com produto de serviço
+            # ========================================
+            if continuar_de_etapa < 5:  # Só executa se não está retomando de etapa posterior
+                lines_ids = dfe_data[0].get('lines_ids', [])
+                if not lines_ids:
+                    resultado['erro'] = "DFe não possui linhas"
+                    resultado['mensagem'] = "Erro na etapa 4: DFe não possui linhas"
+                    resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                line_id = lines_ids[0]
+                inicio = time.time()
+                self.odoo.write(
+                    'l10n_br_ciel_it_account.dfe.line',
+                    [line_id],
+                    {
+                        'product_id': self.PRODUTO_SERVICO_FRETE_ID,
+                        'l10n_br_quantidade': 1.0,
+                        'product_uom_id': 1  # UN
+                    }
+                )
+                tempo_ms = int((time.time() - inicio) * 1000)
+
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=4,
+                    etapa_descricao="Atualizar linha com produto SERVICO DE FRETE",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe.line',
+                    acao='write',
+                    status='SUCESSO',
+                    mensagem=f"Linha {line_id} atualizada com produto {self.PRODUTO_SERVICO_FRETE_ID}",
+                    campos_alterados=['product_id', 'l10n_br_quantidade', 'product_uom_id'],
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id
+                )
+                resultado['etapas_concluidas'] = 4
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 4 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
+            # ETAPA 5: Atualizar vencimento
+            # ========================================
+            if continuar_de_etapa < 6:  # Só executa se não está retomando de etapa posterior
+                dups_ids = dfe_data[0].get('dups_ids', [])
+                if dups_ids:
+                    dup_id = dups_ids[0]
+                    inicio = time.time()
+                    self.odoo.write(
+                        'l10n_br_ciel_it_account.dfe.pagamento',
+                        [dup_id],
+                        {'cobr_dup_dvenc': data_vencimento_str}  # Campo correto (não date_due)
+                    )
+                    tempo_ms = int((time.time() - inicio) * 1000)
+
+                    self._registrar_auditoria_despesa(
+                        despesa_extra_id=despesa_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=5,
+                        etapa_descricao=f"Atualizar vencimento para {data_vencimento_str}",
+                        modelo_odoo='l10n_br_ciel_it_account.dfe.pagamento',
+                        acao='write',
+                        status='SUCESSO',
+                        mensagem=f"Vencimento: {data_vencimento_str}",
+                        campos_alterados=['cobr_dup_dvenc'],
+                        tempo_execucao_ms=tempo_ms,
+                        dfe_id=dfe_id
+                    )
+                resultado['etapas_concluidas'] = 5
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 5 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
             # ETAPA 6: Gerar Purchase Order
-            contexto = {'validate_analytic': True}
-            inicio = time.time()
-            self.odoo.execute_kw(
-                'l10n_br_ciel_it_account.dfe',
-                'action_gerar_po_dfe',
-                [[dfe_id]],
-                {'context': contexto}
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+            # ========================================
+            if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
+                contexto = {'validate_analytic': True}
+                inicio = time.time()
+                self.odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe',
+                    'action_gerar_po_dfe',
+                    [[dfe_id]],
+                    {'context': contexto}
+                )
+                tempo_ms = int((time.time() - inicio) * 1000)
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=6,
-                etapa_descricao="Gerar Purchase Order (action_gerar_po_dfe)",
-                modelo_odoo='l10n_br_ciel_it_account.dfe',
-                metodo_odoo='action_gerar_po_dfe',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem="Purchase Order gerado",
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id
-            )
-            resultado['etapas_concluidas'] = 6
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=6,
+                    etapa_descricao="Gerar Purchase Order (action_gerar_po_dfe)",
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    metodo_odoo='action_gerar_po_dfe',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem="Purchase Order gerado",
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id
+                )
+                resultado['etapas_concluidas'] = 6
 
-            # Buscar PO gerado
-            dfe_atualizado = self.odoo.read(
-                'l10n_br_ciel_it_account.dfe',
-                [dfe_id],
-                ['purchase_fiscal_id']
-            )
-
-            if not dfe_atualizado or not dfe_atualizado[0].get('purchase_fiscal_id'):
-                resultado['erro'] = "Purchase Order não foi gerado"
-                resultado['mensagem'] = "Erro na etapa 6: PO não foi criado"
-                resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
-                return resultado
-
-            po_id = dfe_atualizado[0]['purchase_fiscal_id'][0]
-            resultado['purchase_order_id'] = po_id
-
-            # ETAPA 7: Configurar PO (incluindo correção da operação fiscal)
-            dados_po = {
-                'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
-                'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
-                'company_id': self.COMPANY_NACOM_GOYA_CD_ID,  # ✅ CRÍTICO: Define empresa CD (ID 4)
-                'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID
-            }
-
-            # ✅ ADICIONAR partner_ref com número da fatura (se houver)
-            if despesa.fatura_frete_id and despesa.fatura_frete:
-                referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
-                dados_po['partner_ref'] = referencia_fatura
-                current_app.logger.info(
-                    f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao PO {po_id} "
-                    f"(partner_ref: '{referencia_fatura}')"
+                # Buscar PO gerado
+                dfe_atualizado = self.odoo.read(
+                    'l10n_br_ciel_it_account.dfe',
+                    [dfe_id],
+                    ['purchase_fiscal_id']
                 )
 
-            # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
-            try:
-                po_operacao = self.odoo.read(
+                if not dfe_atualizado or not dfe_atualizado[0].get('purchase_fiscal_id'):
+                    resultado['erro'] = "Purchase Order não foi gerado"
+                    resultado['mensagem'] = "Erro na etapa 6: PO não foi criado"
+                    resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                po_id = dfe_atualizado[0]['purchase_fiscal_id'][0]
+                resultado['purchase_order_id'] = po_id
+            else:
+                # RETOMADA: Usar PO existente
+                current_app.logger.info(f"⏭️ ETAPA 6 PULADA - Usando PO existente: ID {po_id}")
+                resultado['purchase_order_id'] = po_id
+
+            # ========================================
+            # ETAPA 7: Configurar PO (incluindo correção da operação fiscal)
+            # ========================================
+            if continuar_de_etapa < 8:  # Só executa se não está retomando de etapa posterior
+                dados_po = {
+                    'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
+                    'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
+                    'company_id': self.COMPANY_NACOM_GOYA_CD_ID,  # ✅ CRÍTICO: Define empresa CD (ID 4)
+                    'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID
+                }
+
+                # ✅ ADICIONAR partner_ref com número da fatura (se houver)
+                if despesa.fatura_frete_id and despesa.fatura_frete:
+                    referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                    dados_po['partner_ref'] = referencia_fatura
+                    current_app.logger.info(
+                        f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao PO {po_id} "
+                        f"(partner_ref: '{referencia_fatura}')"
+                    )
+
+                # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
+                try:
+                    po_operacao = self.odoo.read(
+                        'purchase.order',
+                        [po_id],
+                        ['l10n_br_operacao_id', 'order_line']
+                    )
+                    if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
+                        operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
+                        operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
+
+                        if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
+                            operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
+                            dados_po['l10n_br_operacao_id'] = operacao_correta_id
+                            current_app.logger.info(
+                                f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
+                                f"→ {operacao_correta_id} (empresa CD)"
+                            )
+
+                            # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO
+                            line_ids = po_operacao[0].get('order_line', [])
+                            if line_ids:
+                                self.odoo.write(
+                                    'purchase.order.line',
+                                    line_ids,
+                                    {'l10n_br_operacao_id': operacao_correta_id}
+                                )
+                                current_app.logger.info(
+                                    f"🔄 Corrigindo operação fiscal nas {len(line_ids)} linha(s) do PO"
+                                )
+                        else:
+                            current_app.logger.info(
+                                f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
+                            )
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
+
+                inicio = time.time()
+                self.odoo.write(
                     'purchase.order',
                     [po_id],
-                    ['l10n_br_operacao_id', 'order_line']
+                    dados_po
                 )
-                if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
-                    operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
-                    operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
+                tempo_ms = int((time.time() - inicio) * 1000)
 
-                    if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
-                        operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
-                        dados_po['l10n_br_operacao_id'] = operacao_correta_id
-                        current_app.logger.info(
-                            f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
-                            f"→ {operacao_correta_id} (empresa CD)"
-                        )
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=7,
+                    etapa_descricao="Configurar PO (operação fiscal, team, payment, company, picking_type)",
+                    modelo_odoo='purchase.order',
+                    acao='write',
+                    status='SUCESSO',
+                    mensagem=f"PO {po_id} configurado com company_id={self.COMPANY_NACOM_GOYA_CD_ID}",
+                    campos_alterados=list(dados_po.keys()),
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id
+                )
+                resultado['etapas_concluidas'] = 7
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 7 PULADA - Retomando de etapa {continuar_de_etapa}")
 
-                        # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO
-                        line_ids = po_operacao[0].get('order_line', [])
-                        if line_ids:
-                            self.odoo.write(
-                                'purchase.order.line',
-                                line_ids,
-                                {'l10n_br_operacao_id': operacao_correta_id}
-                            )
-                            current_app.logger.info(
-                                f"🔄 Corrigindo operação fiscal nas {len(line_ids)} linha(s) do PO"
-                            )
-                    else:
-                        current_app.logger.info(
-                            f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
-                        )
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
-
-            inicio = time.time()
-            self.odoo.write(
-                'purchase.order',
-                [po_id],
-                dados_po
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
-
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=7,
-                etapa_descricao="Configurar PO (operação fiscal, team, payment, company, picking_type)",
-                modelo_odoo='purchase.order',
-                acao='write',
-                status='SUCESSO',
-                mensagem=f"PO {po_id} configurado com company_id={self.COMPANY_NACOM_GOYA_CD_ID}",
-                campos_alterados=list(dados_po.keys()),
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id
-            )
-            resultado['etapas_concluidas'] = 7
-
+            # ========================================
             # ETAPA 8: Pulada (impostos calculados automaticamente)
+            # ========================================
             self._registrar_auditoria_despesa(
                 despesa_extra_id=despesa_id,
                 cte_id=cte_id,
@@ -565,40 +828,93 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             )
             resultado['etapas_concluidas'] = 8
 
+            # ========================================
             # ETAPA 9: Confirmar PO
-            inicio = time.time()
-            self.odoo.execute_kw(
-                'purchase.order',
-                'button_confirm',
-                [[po_id]],
-                {'context': {'validate_analytic': True}}
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
-
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=9,
-                etapa_descricao="Confirmar Purchase Order",
-                modelo_odoo='purchase.order',
-                metodo_odoo='button_confirm',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem="PO confirmado",
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id
-            )
-            resultado['etapas_concluidas'] = 9
-
-            # ETAPA 10: Aprovar PO se necessário
-            po_data = self.odoo.read('purchase.order', [po_id], ['state', 'is_current_approver'])
-            if po_data and po_data[0].get('state') == 'to approve' and po_data[0].get('is_current_approver'):
+            # ========================================
+            if continuar_de_etapa < 10:  # Só executa se não está retomando de etapa posterior
                 inicio = time.time()
                 self.odoo.execute_kw(
                     'purchase.order',
-                    'button_approve',
+                    'button_confirm',
+                    [[po_id]],
+                    {'context': {'validate_analytic': True}}
+                )
+                tempo_ms = int((time.time() - inicio) * 1000)
+
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=9,
+                    etapa_descricao="Confirmar Purchase Order",
+                    modelo_odoo='purchase.order',
+                    metodo_odoo='button_confirm',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem="PO confirmado",
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id
+                )
+                resultado['etapas_concluidas'] = 9
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 9 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
+            # ETAPA 10: Aprovar PO se necessário
+            # ========================================
+            if continuar_de_etapa < 11:  # Só executa se não está retomando de etapa posterior
+                po_data = self.odoo.read('purchase.order', [po_id], ['state', 'is_current_approver'])
+                if po_data and po_data[0].get('state') == 'to approve' and po_data[0].get('is_current_approver'):
+                    inicio = time.time()
+                    self.odoo.execute_kw(
+                        'purchase.order',
+                        'button_approve',
+                        [[po_id]]
+                    )
+                    tempo_ms = int((time.time() - inicio) * 1000)
+
+                    self._registrar_auditoria_despesa(
+                        despesa_extra_id=despesa_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=10,
+                        etapa_descricao="Aprovar Purchase Order",
+                        modelo_odoo='purchase.order',
+                        metodo_odoo='button_approve',
+                        acao='execute_method',
+                        status='SUCESSO',
+                        mensagem="PO aprovado",
+                        tempo_execucao_ms=tempo_ms,
+                        dfe_id=dfe_id,
+                        purchase_order_id=po_id
+                    )
+                else:
+                    self._registrar_auditoria_despesa(
+                        despesa_extra_id=despesa_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=10,
+                        etapa_descricao="Aprovar Purchase Order (pulada)",
+                        modelo_odoo='purchase.order',
+                        acao='skip',
+                        status='SUCESSO',
+                        mensagem="Aprovação não necessária",
+                        dfe_id=dfe_id,
+                        purchase_order_id=po_id
+                    )
+                resultado['etapas_concluidas'] = 10
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 10 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
+            # ETAPA 11: Criar Invoice
+            # ========================================
+            if continuar_de_etapa < 12:  # Só executa se não está retomando de etapa posterior
+                inicio = time.time()
+                self.odoo.execute_kw(
+                    'purchase.order',
+                    'action_create_invoice',
                     [[po_id]]
                 )
                 tempo_ms = int((time.time() - inicio) * 1000)
@@ -607,230 +923,216 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                     despesa_extra_id=despesa_id,
                     cte_id=cte_id,
                     chave_cte=cte_chave,
-                    etapa=10,
-                    etapa_descricao="Aprovar Purchase Order",
+                    etapa=11,
+                    etapa_descricao="Criar Invoice",
                     modelo_odoo='purchase.order',
-                    metodo_odoo='button_approve',
+                    metodo_odoo='action_create_invoice',
                     acao='execute_method',
                     status='SUCESSO',
-                    mensagem="PO aprovado",
+                    mensagem="Invoice criada",
                     tempo_execucao_ms=tempo_ms,
                     dfe_id=dfe_id,
                     purchase_order_id=po_id
                 )
+                resultado['etapas_concluidas'] = 11
+
+                # Buscar Invoice criada
+                po_atualizado = self.odoo.read('purchase.order', [po_id], ['invoice_ids'])
+                if not po_atualizado or not po_atualizado[0].get('invoice_ids'):
+                    resultado['erro'] = "Invoice não foi gerada"
+                    resultado['mensagem'] = "Erro na etapa 11: Invoice não foi criada"
+                    resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
+                    return resultado
+
+                invoice_id = po_atualizado[0]['invoice_ids'][0]
+                resultado['invoice_id'] = invoice_id
             else:
-                self._registrar_auditoria_despesa(
-                    despesa_extra_id=despesa_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=10,
-                    etapa_descricao="Aprovar Purchase Order (pulada)",
-                    modelo_odoo='purchase.order',
-                    acao='skip',
-                    status='SUCESSO',
-                    mensagem="Aprovação não necessária",
-                    dfe_id=dfe_id,
-                    purchase_order_id=po_id
-                )
-            resultado['etapas_concluidas'] = 10
+                # RETOMADA: Usar Invoice existente
+                current_app.logger.info(f"⏭️ ETAPA 11 PULADA - Usando Invoice existente: ID {invoice_id}")
+                resultado['invoice_id'] = invoice_id
 
-            # ETAPA 11: Criar Invoice
-            inicio = time.time()
-            self.odoo.execute_kw(
-                'purchase.order',
-                'action_create_invoice',
-                [[po_id]]
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
-
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=11,
-                etapa_descricao="Criar Invoice",
-                modelo_odoo='purchase.order',
-                metodo_odoo='action_create_invoice',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem="Invoice criada",
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id
-            )
-            resultado['etapas_concluidas'] = 11
-
-            # Buscar Invoice criada
-            po_atualizado = self.odoo.read('purchase.order', [po_id], ['invoice_ids'])
-            if not po_atualizado or not po_atualizado[0].get('invoice_ids'):
-                resultado['erro'] = "Invoice não foi gerada"
-                resultado['mensagem'] = "Erro na etapa 11: Invoice não foi criada"
-                resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
-                return resultado
-
-            invoice_id = po_atualizado[0]['invoice_ids'][0]
-            resultado['invoice_id'] = invoice_id
-
+            # ========================================
             # ETAPA 12: Atualizar impostos da Invoice
-            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
-            try:
-                db.session.commit()
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 12: {e}")
+            # ========================================
+            if continuar_de_etapa < 13:  # Só executa se não está retomando de etapa posterior
+                # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 12: {e}")
 
-            try:
-                self.odoo.execute_kw(
-                    'account.move',
-                    'onchange_l10n_br_calcular_imposto',
-                    [[invoice_id]]
-                )
-            except Exception as e:
-                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
-                current_app.logger.warning(
-                    f"⚠️ ETAPA 12 falhou (não crítico): {e.__class__.__name__}. "
-                    f"Impostos podem precisar ajuste manual no Odoo."
-                )
+                try:
+                    self.odoo.execute_kw(
+                        'account.move',
+                        'onchange_l10n_br_calcular_imposto',
+                        [[invoice_id]]
+                    )
+                except Exception as e:
+                    # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                    current_app.logger.warning(
+                        f"⚠️ ETAPA 12 falhou (não crítico): {e.__class__.__name__}. "
+                        f"Impostos podem precisar ajuste manual no Odoo."
+                    )
 
-            try:
-                self._registrar_auditoria_despesa(
-                    despesa_extra_id=despesa_id,
-                    cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=12,
-                    etapa_descricao="Atualizar impostos da Invoice",
-                    modelo_odoo='account.move',
-                    metodo_odoo='onchange_l10n_br_calcular_imposto',
-                    acao='execute_method',
-                    status='SUCESSO',
-                    mensagem="Impostos atualizados",
-                    dfe_id=dfe_id,
-                    purchase_order_id=po_id,
-                    invoice_id=invoice_id
-                )
-            except Exception as e:
-                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
-                current_app.logger.error(f"❌ Erro ao registrar auditoria ETAPA 12 (não crítico): {e}")
-                db.session.rollback()
-                db.session.remove()
+                try:
+                    self._registrar_auditoria_despesa(
+                        despesa_extra_id=despesa_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=12,
+                        etapa_descricao="Atualizar impostos da Invoice",
+                        modelo_odoo='account.move',
+                        metodo_odoo='onchange_l10n_br_calcular_imposto',
+                        acao='execute_method',
+                        status='SUCESSO',
+                        mensagem="Impostos atualizados",
+                        dfe_id=dfe_id,
+                        purchase_order_id=po_id,
+                        invoice_id=invoice_id
+                    )
+                except Exception as e:
+                    # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                    current_app.logger.error(f"❌ Erro ao registrar auditoria ETAPA 12 (não crítico): {e}")
+                    db.session.rollback()
+                    db.session.remove()
 
-            resultado['etapas_concluidas'] = 12
-
-            # ETAPA 13: Configurar Invoice (campos fiscais + vencimento + referência)
-            dados_invoice = {
-                'l10n_br_compra_indcom': 'out',
-                'l10n_br_situacao_nf': 'autorizado',
-                'invoice_date_due': data_vencimento_str
-            }
-
-            # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-            if despesa.fatura_frete_id and despesa.fatura_frete:
-                referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
-                dados_invoice['payment_reference'] = referencia_fatura
-                current_app.logger.info(
-                    f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} à Invoice {invoice_id}"
-                )
+                resultado['etapas_concluidas'] = 12
             else:
-                dados_invoice['payment_reference'] = f'DESPESA-{despesa_id}'
+                current_app.logger.info(f"⏭️ ETAPA 12 PULADA - Retomando de etapa {continuar_de_etapa}")
 
-            inicio = time.time()
-            self.odoo.write(
-                'account.move',
-                [invoice_id],
-                dados_invoice
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+            # ========================================
+            # ETAPA 13: Configurar Invoice (campos fiscais + vencimento + referência)
+            # ========================================
+            if continuar_de_etapa < 14:  # Só executa se não está retomando de etapa posterior
+                dados_invoice = {
+                    'l10n_br_compra_indcom': 'out',
+                    'l10n_br_situacao_nf': 'autorizado',
+                    'invoice_date_due': data_vencimento_str
+                }
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=13,
-                etapa_descricao="Configurar Invoice (campos fiscais, vencimento e payment_reference)",
-                modelo_odoo='account.move',
-                acao='write',
-                status='SUCESSO',
-                mensagem=f"Invoice {invoice_id} configurada com ref: {dados_invoice['payment_reference']}",
-                campos_alterados=list(dados_invoice.keys()),
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id,
-                invoice_id=invoice_id
-            )
-            resultado['etapas_concluidas'] = 13
+                # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+                if despesa.fatura_frete_id and despesa.fatura_frete:
+                    referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                    dados_invoice['payment_reference'] = referencia_fatura
+                    current_app.logger.info(
+                        f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} à Invoice {invoice_id}"
+                    )
+                else:
+                    dados_invoice['payment_reference'] = f'DESPESA-{despesa_id}'
 
-            # ETAPA 14: Atualizar impostos novamente
-            # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
-            try:
-                db.session.commit()
-            except Exception as e:
-                current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 14: {e}")
-
-            try:
-                self.odoo.execute_kw(
+                inicio = time.time()
+                self.odoo.write(
                     'account.move',
-                    'onchange_l10n_br_calcular_imposto_btn',
-                    [[invoice_id]]
+                    [invoice_id],
+                    dados_invoice
                 )
-            except Exception as e:
-                # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
-                current_app.logger.warning(
-                    f"⚠️ ETAPA 14 falhou (não crítico): {e.__class__.__name__}. "
-                    f"Impostos podem precisar ajuste manual no Odoo."
-                )
+                tempo_ms = int((time.time() - inicio) * 1000)
 
-            try:
                 self._registrar_auditoria_despesa(
                     despesa_extra_id=despesa_id,
                     cte_id=cte_id,
                     chave_cte=cte_chave,
-                    etapa=14,
-                    etapa_descricao="Atualizar impostos da Invoice (final)",
+                    etapa=13,
+                    etapa_descricao="Configurar Invoice (campos fiscais, vencimento e payment_reference)",
                     modelo_odoo='account.move',
-                    metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
-                    acao='execute_method',
+                    acao='write',
                     status='SUCESSO',
-                    mensagem="Impostos recalculados",
+                    mensagem=f"Invoice {invoice_id} configurada com ref: {dados_invoice['payment_reference']}",
+                    campos_alterados=list(dados_invoice.keys()),
+                    tempo_execucao_ms=tempo_ms,
                     dfe_id=dfe_id,
                     purchase_order_id=po_id,
                     invoice_id=invoice_id
                 )
-            except Exception as e:
-                # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
-                current_app.logger.error(f"❌ Erro ao registrar auditoria ETAPA 14 (não crítico): {e}")
-                db.session.rollback()
-                db.session.remove()
+                resultado['etapas_concluidas'] = 13
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 13 PULADA - Retomando de etapa {continuar_de_etapa}")
 
-            resultado['etapas_concluidas'] = 14
+            # ========================================
+            # ETAPA 14: Atualizar impostos novamente
+            # ========================================
+            if continuar_de_etapa < 15:  # Só executa se não está retomando de etapa posterior
+                # ✅ COMMIT ANTES de chamada longa ao Odoo para liberar conexão PostgreSQL
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao fazer commit antes da ETAPA 14: {e}")
 
+                try:
+                    self.odoo.execute_kw(
+                        'account.move',
+                        'onchange_l10n_br_calcular_imposto_btn',
+                        [[invoice_id]]
+                    )
+                except Exception as e:
+                    # ⚠️ Etapa OPCIONAL: Ignorar erros (impostos podem ser ajustados manualmente depois)
+                    current_app.logger.warning(
+                        f"⚠️ ETAPA 14 falhou (não crítico): {e.__class__.__name__}. "
+                        f"Impostos podem precisar ajuste manual no Odoo."
+                    )
+
+                try:
+                    self._registrar_auditoria_despesa(
+                        despesa_extra_id=despesa_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=14,
+                        etapa_descricao="Atualizar impostos da Invoice (final)",
+                        modelo_odoo='account.move',
+                        metodo_odoo='onchange_l10n_br_calcular_imposto_btn',
+                        acao='execute_method',
+                        status='SUCESSO',
+                        mensagem="Impostos recalculados",
+                        dfe_id=dfe_id,
+                        purchase_order_id=po_id,
+                        invoice_id=invoice_id
+                    )
+                except Exception as e:
+                    # ✅ BLINDAGEM: Se auditoria falhar, NÃO trava o lançamento
+                    current_app.logger.error(f"❌ Erro ao registrar auditoria ETAPA 14 (não crítico): {e}")
+                    db.session.rollback()
+                    db.session.remove()
+
+                resultado['etapas_concluidas'] = 14
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 14 PULADA - Retomando de etapa {continuar_de_etapa}")
+
+            # ========================================
             # ETAPA 15: Confirmar Invoice
-            inicio = time.time()
-            self.odoo.execute_kw(
-                'account.move',
-                'action_post',
-                [[invoice_id]],
-                {'context': {'validate_analytic': True}}
-            )
-            tempo_ms = int((time.time() - inicio) * 1000)
+            # ========================================
+            if continuar_de_etapa < 16:  # Só executa se não está retomando de etapa posterior
+                inicio = time.time()
+                self.odoo.execute_kw(
+                    'account.move',
+                    'action_post',
+                    [[invoice_id]],
+                    {'context': {'validate_analytic': True}}
+                )
+                tempo_ms = int((time.time() - inicio) * 1000)
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=15,
-                etapa_descricao="Confirmar Invoice (action_post)",
-                modelo_odoo='account.move',
-                metodo_odoo='action_post',
-                acao='execute_method',
-                status='SUCESSO',
-                mensagem="Invoice confirmada",
-                tempo_execucao_ms=tempo_ms,
-                dfe_id=dfe_id,
-                purchase_order_id=po_id,
-                invoice_id=invoice_id
-            )
-            resultado['etapas_concluidas'] = 15
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=15,
+                    etapa_descricao="Confirmar Invoice (action_post)",
+                    modelo_odoo='account.move',
+                    metodo_odoo='action_post',
+                    acao='execute_method',
+                    status='SUCESSO',
+                    mensagem="Invoice confirmada",
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                    invoice_id=invoice_id
+                )
+                resultado['etapas_concluidas'] = 15
+            else:
+                current_app.logger.info(f"⏭️ ETAPA 15 PULADA - Retomando de etapa {continuar_de_etapa}")
 
+            # ========================================
             # ETAPA 16: Atualizar despesa local
+            # ========================================
             despesa.odoo_dfe_id = dfe_id
             despesa.odoo_purchase_order_id = po_id
             despesa.odoo_invoice_id = invoice_id
