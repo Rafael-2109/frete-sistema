@@ -27,11 +27,18 @@
                 <form method="GET">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            {{ form.frete_id.label(class="form-label") }}
+                            {{ form.frete_id(class="form-control", placeholder="Ex: 12345") }}
+                            {% if form.frete_id.description %}
+                            <small class="form-text text-muted">{{ form.frete_id.description }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-2">
                             {{ form.embarque_numero.label(class="form-label") }}
                             {{ form.embarque_numero(class="form-control") }}
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             {{ form.cnpj_cliente.label(class="form-label") }}
                             {{ form.cnpj_cliente(class="form-control") }}
                         </div>

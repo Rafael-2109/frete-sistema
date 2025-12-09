@@ -20,6 +20,7 @@ TRATAMENTO DE ERROS:
 - Erro de conexão: Retorna erro com retry sugerido
 """
 
+import json
 import logging
 import traceback
 from datetime import datetime, date
@@ -44,6 +45,77 @@ STATUS_DFE_MAP = {
     '06': 'Concluído',
     '07': 'Rejeitado'
 }
+
+# ========================================
+# PROGRESSO DE LOTE EM TEMPO REAL
+# ========================================
+
+
+def _get_redis_connection():
+    """Obtém conexão Redis do RQ"""
+    try:
+        from app.portal.workers import get_redis_connection
+        return get_redis_connection()
+    except Exception:
+        return None
+
+
+def _atualizar_progresso_lote(fatura_id: int, progresso: dict):
+    """
+    Atualiza progresso do lote no Redis para acompanhamento em tempo real.
+
+    Estrutura do progresso:
+    {
+        'fatura_id': int,
+        'status': 'processando' | 'concluido' | 'erro',
+        'total_fretes': int,
+        'total_despesas': int,
+        'fretes_processados': int,
+        'despesas_processadas': int,
+        'fretes_sucesso': int,
+        'despesas_sucesso': int,
+        'fretes_erro': int,
+        'despesas_erro': int,
+        'item_atual': str,  # "Frete #123 (1/4)" ou "Despesa #456 (2/3)"
+        'item_atual_etapa': str,  # "Etapa 6/16"
+        'ultimo_update': str,  # ISO timestamp
+        'detalhes': [...]  # Lista de resultados de cada item
+    }
+    """
+    try:
+        redis_conn = _get_redis_connection()
+        if redis_conn:
+            progresso['ultimo_update'] = datetime.now().isoformat()
+            key = f'lote_progresso:{fatura_id}'
+            redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
+            logger.debug(f"📊 [Lote] Progresso atualizado: {progresso.get('item_atual', 'N/A')}")
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao atualizar progresso do lote: {e}")
+
+
+def _obter_progresso_lote(fatura_id: int) -> Optional[dict]:
+    """Obtém progresso do lote do Redis"""
+    try:
+        redis_conn = _get_redis_connection()
+        if redis_conn:
+            key = f'lote_progresso:{fatura_id}'
+            data = redis_conn.get(key)
+            if data:
+                return json.loads(data)
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao obter progresso do lote: {e}")
+    return None
+
+
+def _limpar_progresso_lote(fatura_id: int):
+    """Remove progresso do lote do Redis após conclusão"""
+    try:
+        redis_conn = _get_redis_connection()
+        if redis_conn:
+            key = f'lote_progresso:{fatura_id}'
+            redis_conn.delete(key)
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao limpar progresso do lote: {e}")
 
 
 def _criar_app_context():
@@ -421,7 +493,8 @@ def lancar_lote_job(
         app = _criar_app_context()
 
         with app.app_context():
-            from app.fretes.models import FaturaFrete, Frete, DespesaExtra
+            from app import db
+            from app.fretes.models import FaturaFrete, Frete, DespesaExtra, ConhecimentoTransporte
 
             # ========================================
             # VALIDAÇÃO: Fatura existe?
@@ -449,10 +522,53 @@ def lancar_lote_job(
             logger.info(f"📦 [Job Lote] Encontradas {len(despesas)} despesas na fatura")
 
             # ========================================
+            # INICIALIZAR PROGRESSO EM TEMPO REAL
+            # ========================================
+            progresso = {
+                'fatura_id': fatura_frete_id,
+                'fatura_numero': fatura.numero_fatura,
+                'transportadora': fatura.transportadora.nome_curto if fatura.transportadora else 'N/A',
+                'status': 'processando',
+                'total_fretes': len(fretes),
+                'total_despesas': len(despesas),
+                'fretes_processados': 0,
+                'despesas_processadas': 0,
+                'fretes_sucesso': 0,
+                'despesas_sucesso': 0,
+                'fretes_erro': 0,
+                'despesas_erro': 0,
+                'fretes_skip': 0,
+                'despesas_skip': 0,
+                'item_atual': 'Iniciando...',
+                'item_atual_id': None,
+                'item_atual_etapa': '',
+                'detalhes': [],
+                'inicio': datetime.now().isoformat()
+            }
+            _atualizar_progresso_lote(fatura_frete_id, progresso)
+
+            # ========================================
             # PROCESSAR FRETES
             # ========================================
-            for frete in fretes:
-                logger.info(f"📋 [Job Lote] Processando frete #{frete.id}")
+            for idx, frete in enumerate(fretes):
+                # 🔧 RECONEXÃO: Garantir conexão válida antes de cada frete
+                # Isso evita erros de "SSL connection has been closed unexpectedly"
+                # que ocorrem quando o lançamento anterior demora muito
+                try:
+                    db.session.execute(db.text('SELECT 1'))
+                except Exception as e:
+                    logger.warning(f"⚠️ [Lote] Conexão perdida, reconectando... ({e})")
+                    db.session.rollback()
+                    db.session.remove()
+
+                logger.info(f"📋 [Job Lote] Processando frete #{frete.id} ({idx + 1}/{len(fretes)})")
+
+                # 📊 Atualizar progresso: iniciando frete
+                progresso['item_atual'] = f"Frete #{frete.id} ({idx + 1}/{len(fretes)})"
+                progresso['item_atual_id'] = frete.id
+                progresso['item_atual_tipo'] = 'frete'
+                progresso['item_atual_etapa'] = 'Buscando CTe...'
+                _atualizar_progresso_lote(fatura_frete_id, progresso)
 
                 # ========================================
                 # BUSCAR CTe - PRIORIZA SEMPRE O CTe VINCULADO
@@ -479,7 +595,22 @@ def lancar_lote_job(
                 # FALLBACK: Busca automática por NFs + CNPJ (SOMENTE se não houver CTe vinculado)
                 if not cte:
                     logger.info(f"🔍 [Lote] Frete #{frete.id}: Buscando CTe por NFs em comum + CNPJ...")
-                    ctes_relacionados = frete.buscar_ctes_relacionados()
+
+                    # 🔧 RETRY: Em caso de erro de conexão, tenta reconectar e buscar novamente
+                    ctes_relacionados = None
+                    for tentativa in range(3):
+                        try:
+                            ctes_relacionados = frete.buscar_ctes_relacionados()
+                            break
+                        except Exception as e:
+                            if 'SSL connection' in str(e) or 'connection' in str(e).lower():
+                                logger.warning(f"⚠️ [Lote] Tentativa {tentativa + 1}/3 falhou: {e}")
+                                db.session.rollback()
+                                db.session.remove()
+                                if tentativa == 2:
+                                    raise  # Re-lança na última tentativa
+                            else:
+                                raise  # Outros erros são lançados imediatamente
 
                     if not ctes_relacionados:
                         detalhe = {
@@ -532,6 +663,10 @@ def lancar_lote_job(
                 # Todos os documentos usam o mesmo vencimento da fatura
                 # ========================================
 
+                # 📊 Atualizar progresso: executando lançamento
+                progresso['item_atual_etapa'] = 'Lançando no Odoo (16 etapas)...'
+                _atualizar_progresso_lote(fatura_frete_id, progresso)
+
                 # Executar lançamento com vencimento da fatura
                 result_frete = lancar_frete_job(
                     frete_id=frete.id,
@@ -543,18 +678,51 @@ def lancar_lote_job(
 
                 resultado['detalhes_fretes'].append(result_frete)
 
+                # 📊 Atualizar progresso: frete concluído
+                progresso['fretes_processados'] = idx + 1
                 if result_frete.get('skipped'):
                     resultado['fretes_skip'] += 1
+                    progresso['fretes_skip'] += 1
+                    progresso['item_atual_etapa'] = '⏭️ Já lançado (skip)'
                 elif result_frete.get('success'):
                     resultado['fretes_sucesso'] += 1
+                    progresso['fretes_sucesso'] += 1
+                    progresso['item_atual_etapa'] = f"✅ Concluído ({result_frete.get('etapas_concluidas', 16)}/16)"
                 else:
                     resultado['fretes_erro'] += 1
+                    progresso['fretes_erro'] += 1
+                    progresso['item_atual_etapa'] = f"❌ Erro: {result_frete.get('error', 'Desconhecido')[:50]}"
+
+                # Adicionar ao detalhes do progresso
+                progresso['detalhes'].append({
+                    'tipo': 'frete',
+                    'id': frete.id,
+                    'success': result_frete.get('success', False),
+                    'skipped': result_frete.get('skipped', False),
+                    'message': result_frete.get('message', result_frete.get('error', ''))[:100]
+                })
+                _atualizar_progresso_lote(fatura_frete_id, progresso)
 
             # ========================================
             # PROCESSAR DESPESAS
             # ========================================
-            for despesa in despesas:
-                logger.info(f"📋 [Job Lote] Processando despesa #{despesa.id}")
+            for idx, despesa in enumerate(despesas):
+                # 🔧 RECONEXÃO: Garantir conexão válida antes de cada despesa
+                try:
+                    db.session.execute(db.text('SELECT 1'))
+                except Exception as e:
+                    logger.warning(f"⚠️ [Lote] Conexão perdida antes de despesa, reconectando... ({e})")
+                    db.session.rollback()
+                    db.session.remove()
+
+                logger.info(f"📋 [Job Lote] Processando despesa #{despesa.id} ({idx + 1}/{len(despesas)})")
+
+                # 📊 Atualizar progresso: iniciando despesa
+                progresso['item_atual'] = f"Despesa #{despesa.id} ({idx + 1}/{len(despesas)})"
+                progresso['item_atual_id'] = despesa.id
+                progresso['item_atual_tipo'] = 'despesa'
+                progresso['item_atual_etapa'] = 'Lançando no Odoo (16 etapas)...'
+                _atualizar_progresso_lote(fatura_frete_id, progresso)
 
                 # Executar lançamento com vencimento da FATURA
                 result_despesa = lancar_despesa_job(
@@ -566,12 +734,31 @@ def lancar_lote_job(
 
                 resultado['detalhes_despesas'].append(result_despesa)
 
+                # 📊 Atualizar progresso: despesa concluída
+                progresso['despesas_processadas'] = idx + 1
+
                 if result_despesa.get('skipped'):
                     resultado['despesas_skip'] += 1
+                    progresso['despesas_skip'] += 1
+                    progresso['item_atual_etapa'] = '⏭️ Já lançada (skip)'
                 elif result_despesa.get('success'):
                     resultado['despesas_sucesso'] += 1
+                    progresso['despesas_sucesso'] += 1
+                    progresso['item_atual_etapa'] = f"✅ Concluída ({result_despesa.get('etapas_concluidas', 16)}/16)"
                 else:
                     resultado['despesas_erro'] += 1
+                    progresso['despesas_erro'] += 1
+                    progresso['item_atual_etapa'] = f"❌ Erro: {result_despesa.get('error', 'Desconhecido')[:50]}"
+
+                # Adicionar ao detalhes do progresso
+                progresso['detalhes'].append({
+                    'tipo': 'despesa',
+                    'id': despesa.id,
+                    'success': result_despesa.get('success', False),
+                    'skipped': result_despesa.get('skipped', False),
+                    'message': result_despesa.get('message', result_despesa.get('error', ''))[:100]
+                })
+                _atualizar_progresso_lote(fatura_frete_id, progresso)
 
             # ========================================
             # RESUMO FINAL
@@ -599,6 +786,14 @@ def lancar_lote_job(
                     f"{total_sucesso} lançados, {total_skip} já lançados, {total_erros} com erro"
                 )
                 logger.warning(f"⚠️ [Job Lote] {resultado['message']}")
+
+            # 📊 Finalizar progresso
+            progresso['status'] = 'concluido' if total_erros == 0 else 'erro'
+            progresso['item_atual'] = 'Concluído!'
+            progresso['item_atual_etapa'] = resultado['message']
+            progresso['fim'] = datetime.now().isoformat()
+            progresso['tempo_total_segundos'] = tempo_total
+            _atualizar_progresso_lote(fatura_frete_id, progresso)
 
             return resultado
 

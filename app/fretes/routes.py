@@ -397,7 +397,15 @@ def listar_fretes():
     form.transportadora_id.choices = [('', 'Todas as transportadoras')] + [(t.id, t.razao_social) for t in transportadoras]
     
     query = Frete.query
-    
+
+    # ✅ NOVO: Filtro por ID do frete (busca direta)
+    if form.frete_id.data:
+        try:
+            frete_id = int(form.frete_id.data.strip())
+            query = query.filter(Frete.id == frete_id)
+        except ValueError:
+            pass
+
     # ✅ CORREÇÃO: Filtro por número do embarque usando cast para string
     if form.embarque_numero.data:
         query = query.join(Embarque).filter(cast(Embarque.numero, String).ilike(f'%{form.embarque_numero.data}%'))
@@ -4068,18 +4076,20 @@ def lancar_despesa_odoo(despesa_id):
                 'erro': 'Vincule um CTe Complementar antes de lançar no Odoo'
             }), 400
 
-        if despesa.status == 'LANCADO_ODOO':
+        if despesa.status == 'LANCADO_ODOO' and despesa.odoo_invoice_id:
             return jsonify({
                 'sucesso': False,
                 'mensagem': 'Despesa já foi lançada no Odoo',
                 'erro': f'Invoice ID: {despesa.odoo_invoice_id}'
             }), 400
 
-        if despesa.status != 'VINCULADO_CTE':
+        # Permitir reprocessamento para status VINCULADO_CTE ou ERRO
+        status_permitidos = ['VINCULADO_CTE', 'ERRO']
+        if despesa.status not in status_permitidos:
             return jsonify({
                 'sucesso': False,
                 'mensagem': f'Status "{despesa.status}" não permite lançamento',
-                'erro': 'Status esperado: VINCULADO_CTE'
+                'erro': f'Status esperado: {", ".join(status_permitidos)}'
             }), 400
 
         # Obter data de vencimento do request
@@ -4683,8 +4693,45 @@ def jobs_pendentes():
         }), 500
 
 
+@fretes_bp.route('/lote/<int:fatura_id>/progresso', methods=['GET'])
+@login_required
+def progresso_lote(fatura_id):
+    """
+    Retorna o progresso em tempo real de um lançamento de lote.
+
+    Usado para acompanhar o lançamento de fatura completa (fretes + despesas).
+    Os dados são armazenados no Redis durante o processamento do job.
+    """
+    from app.fretes.workers.lancamento_odoo_jobs import _obter_progresso_lote
+
+    try:
+        progresso = _obter_progresso_lote(fatura_id)
+
+        if progresso:
+            return jsonify({
+                'sucesso': True,
+                'encontrado': True,
+                'progresso': progresso
+            })
+        else:
+            # Não há progresso no Redis - pode ser que o lote não esteja em processamento
+            # ou que já tenha sido concluído há mais de 1 hora (TTL do Redis)
+            return jsonify({
+                'sucesso': True,
+                'encontrado': False,
+                'mensagem': 'Nenhum lançamento em andamento para esta fatura'
+            })
+
+    except Exception as e:
+        logger.error(f"Erro ao obter progresso do lote {fatura_id}: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
 def _extract_job_args(job):
-    """Extrai argumentos do job de forma segura para exibição"""
+    """Extrai argumentos do job de forma segura para exibição, incluindo dados extras"""
     try:
         args = job.args or []
         if not args:
@@ -4694,27 +4741,85 @@ def _extract_job_args(job):
 
         # lancar_frete_job(frete_id, cte_chave, usuario_nome, usuario_ip, data_vencimento)
         if 'lancar_frete_job' in func_name:
-            return {
+            frete_id = args[0] if len(args) > 0 else None
+            cte_chave = args[1] if len(args) > 1 else None
+
+            # Buscar dados adicionais do frete (sem lazy loading)
+            resultado = {
                 'tipo': 'frete',
-                'frete_id': args[0] if len(args) > 0 else None,
+                'frete_id': frete_id,
+                'cte_chave': cte_chave[:20] + '...' if cte_chave and len(cte_chave) > 20 else cte_chave,
                 'usuario': args[2] if len(args) > 2 else None
             }
 
+            # Tentar buscar número do CTe e transportadora
+            if cte_chave:
+                try:
+                    cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
+                    if cte:
+                        resultado['cte_numero'] = cte.numero_cte
+                        resultado['transportadora'] = cte.nome_emitente[:30] if cte.nome_emitente else None
+                except Exception:
+                    pass
+
+            # Tentar buscar dados do frete (fatura)
+            if frete_id:
+                try:
+                    frete = Frete.query.get(frete_id)
+                    if frete:
+                        resultado['fatura_numero'] = frete.fatura_frete.numero_fatura if frete.fatura_frete else None
+                        resultado['valor_cte'] = float(frete.valor_cte) if frete.valor_cte else None
+                except Exception:
+                    pass
+
+            return resultado
+
         # lancar_despesa_job(despesa_id, usuario_nome, usuario_ip, data_vencimento)
         if 'lancar_despesa_job' in func_name:
-            return {
+            despesa_id = args[0] if len(args) > 0 else None
+
+            resultado = {
                 'tipo': 'despesa',
-                'despesa_id': args[0] if len(args) > 0 else None,
+                'despesa_id': despesa_id,
                 'usuario': args[1] if len(args) > 1 else None
             }
 
+            # Tentar buscar dados da despesa
+            if despesa_id:
+                try:
+                    despesa = DespesaExtra.query.get(despesa_id)
+                    if despesa:
+                        resultado['tipo_despesa'] = despesa.tipo_despesa
+                        resultado['valor'] = float(despesa.valor_despesa) if despesa.valor_despesa else None
+                        if despesa.cte:
+                            resultado['cte_numero'] = despesa.cte.numero_cte
+                except Exception:
+                    pass
+
+            return resultado
+
         # lancar_lote_job(fatura_frete_id, usuario_nome, usuario_ip)
         if 'lancar_lote_job' in func_name:
-            return {
+            fatura_id = args[0] if len(args) > 0 else None
+
+            resultado = {
                 'tipo': 'lote',
-                'fatura_id': args[0] if len(args) > 0 else None,
+                'fatura_id': fatura_id,
                 'usuario': args[1] if len(args) > 1 else None
             }
+
+            # Tentar buscar dados da fatura
+            if fatura_id:
+                try:
+                    fatura = FaturaFrete.query.get(fatura_id)
+                    if fatura:
+                        resultado['fatura_numero'] = fatura.numero_fatura
+                        resultado['transportadora'] = fatura.transportadora.nome_curto if fatura.transportadora else None
+                        resultado['total_fretes'] = len(fatura.fretes) if fatura.fretes else 0
+                except Exception:
+                    pass
+
+            return resultado
 
         return {'args': str(args)[:100]}
 

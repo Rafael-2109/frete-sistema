@@ -134,12 +134,13 @@
                         <tr>
                             <th width="40"></th>
                             <th>Tipo</th>
-                            <th>CTe/Chave</th>
-                            <th>Referência</th>
+                            <th>CTe</th>
+                            <th>Frete/Fatura</th>
                             <th>Etapas</th>
                             <th>IDs Odoo</th>
                             <th>Executado</th>
                             <th>Status</th>
+                            <th width="100">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -161,15 +162,38 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <small class="text-muted">{{ lanc.chave_cte[:20] }}...</small>
+                                {# CTe e Transportadora #}
+                                {% if lanc.frete and lanc.frete.cte %}
+                                <strong>{{ lanc.frete.cte.numero_cte }}</strong><br>
+                                <small class="text-muted">{{ lanc.frete.transportadora.nome_curto if lanc.frete.transportadora else 'N/A' }}</small>
+                                {% elif lanc.despesa and lanc.despesa.cte %}
+                                <strong>{{ lanc.despesa.cte.numero_cte }}</strong><br>
+                                <small class="text-muted">{{ lanc.despesa.tipo_despesa }}</small>
+                                {% else %}
+                                <small class="text-muted" title="{{ lanc.chave_cte }}">{{ lanc.chave_cte[:15] }}...</small>
+                                {% endif %}
                             </td>
                             <td>
-                                {% if lanc.frete and lanc.frete.cte %}
-                                <strong>CTe {{ lanc.frete.cte.numero_cte }}</strong><br>
-                                <small>{{ lanc.frete.transportadora.nome_curto if lanc.frete.transportadora else 'N/A' }}</small>
-                                {% elif lanc.despesa and lanc.despesa.cte %}
-                                <strong>CTe {{ lanc.despesa.cte.numero_cte }}</strong><br>
-                                <small>{{ lanc.despesa.tipo_despesa }} - R$ {{ "%.2f"|format(lanc.despesa.valor_despesa) }}</small>
+                                {# Frete, Fatura e NFs #}
+                                {% if lanc.frete %}
+                                <a href="{{ url_for('fretes.visualizar_frete', frete_id=lanc.frete.id) }}" class="text-decoration-none" target="_blank">
+                                    <strong>#{{ lanc.frete.id }}</strong>
+                                </a>
+                                {% if lanc.frete.fatura_frete %}
+                                <br><small><i class="fas fa-file-invoice text-primary"></i> {{ lanc.frete.fatura_frete.numero_fatura }}</small>
+                                {% endif %}
+                                {% if lanc.frete.numeros_nfs %}
+                                <br><small class="text-muted" title="{{ lanc.frete.numeros_nfs }}"><i class="fas fa-receipt"></i> NFs: {{ lanc.frete.numeros_nfs[:20] }}{% if lanc.frete.numeros_nfs|length > 20 %}...{% endif %}</small>
+                                {% endif %}
+                                {% if lanc.frete.valor_cte %}
+                                <br><small class="text-success"><strong>R$ {{ "%.2f"|format(lanc.frete.valor_cte) }}</strong></small>
+                                {% endif %}
+                                {% elif lanc.despesa %}
+                                <a href="{{ url_for('fretes.visualizar_frete', frete_id=lanc.despesa.frete_id) }}" class="text-decoration-none" target="_blank">
+                                    <strong>Desp. #{{ lanc.despesa.id }}</strong>
+                                </a>
+                                <br><small>{{ lanc.despesa.tipo_despesa }}</small>
+                                <br><small class="text-success"><strong>R$ {{ "%.2f"|format(lanc.despesa.valor_despesa) }}</strong></small>
                                 {% else %}
                                 <small class="text-muted">N/A</small>
                                 {% endif %}
@@ -206,10 +230,33 @@
                                 <span class="badge bg-warning"><i class="fas fa-clock"></i> Incompleto</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {# Botão de reprocessar para ERRO ou INCOMPLETO #}
+                                {% if lanc.status in ['ERRO', 'INCOMPLETO'] %}
+                                    {% if lanc.tipo == 'frete' and lanc.frete %}
+                                    <button class="btn btn-sm btn-outline-primary btn-reprocessar"
+                                            data-tipo="frete"
+                                            data-id="{{ lanc.frete.id }}"
+                                            data-chave="{{ lanc.chave_cte }}"
+                                            title="Retomar lançamento do frete #{{ lanc.frete.id }}">
+                                        <i class="fas fa-redo"></i> Retomar
+                                    </button>
+                                    {% elif lanc.tipo == 'despesa' and lanc.despesa %}
+                                    <button class="btn btn-sm btn-outline-info btn-reprocessar"
+                                            data-tipo="despesa"
+                                            data-id="{{ lanc.despesa.id }}"
+                                            title="Retomar lançamento da despesa #{{ lanc.despesa.id }}">
+                                        <i class="fas fa-redo"></i> Retomar
+                                    </button>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         <!-- Linha de detalhes (oculta inicialmente) -->
                         <tr class="detalhes-row d-none" data-parent="{{ lanc.chave_cte }}">
-                            <td colspan="8" class="bg-light p-3">
+                            <td colspan="9" class="bg-light p-3">
                                 <div class="detalhes-content">
                                     <div class="text-center">
                                         <div class="spinner-border spinner-border-sm" role="status">
@@ -391,6 +438,35 @@ function renderJobAccordion(job, tipo, idx) {
     const createdAt = job.created_at ? new Date(job.created_at).toLocaleString('pt-BR') : '-';
     const startedAt = job.started_at ? new Date(job.started_at).toLocaleString('pt-BR') : null;
 
+    // Informações extras
+    const cteNumero = job.args?.cte_numero;
+    const transportadora = job.args?.transportadora;
+    const faturaNumero = job.args?.fatura_numero;
+    const valor = job.args?.valor_cte || job.args?.valor;
+    const tipoDespesa = job.args?.tipo_despesa;
+    const totalFretes = job.args?.total_fretes;
+
+    // Título mais informativo
+    let tituloExtra = '';
+    if (cteNumero) tituloExtra = `CTe ${cteNumero}`;
+    else if (faturaNumero) tituloExtra = `Fat. ${faturaNumero}`;
+    if (transportadora) tituloExtra += tituloExtra ? ` - ${transportadora}` : transportadora;
+    if (tipoDespesa) tituloExtra = tipoDespesa;
+    if (totalFretes) tituloExtra += ` (${totalFretes} fretes)`;
+
+    // Para lotes em processamento, adicionar área de progresso em tempo real
+    let loteProgressoHtml = '';
+    if (tipoLabel === 'lote' && tipo === 'processando' && job.args?.fatura_id) {
+        loteProgressoHtml = `
+            <div class="mt-2 pt-2 border-top" id="loteProgresso${job.args.fatura_id}">
+                <div class="text-center text-muted">
+                    <small><i class="fas fa-spinner fa-spin"></i> Carregando progresso...</small>
+                </div>
+            </div>`;
+        // Iniciar polling do progresso
+        setTimeout(() => carregarProgressoLote(job.args.fatura_id), 500);
+    }
+
     let html = `
     <div class="accordion-item">
         <h2 class="accordion-header">
@@ -398,6 +474,8 @@ function renderJobAccordion(job, tipo, idx) {
                 <span class="badge ${badgeClass} me-2"><i class="fas fa-${badgeIcon}"></i></span>
                 <span class="badge bg-${tipoBadge} me-2"><i class="fas fa-${tipoIcone}"></i> ${tipoLabel.toUpperCase()}</span>
                 <span class="me-2">#${id}</span>
+                ${tituloExtra ? `<span class="badge bg-light text-dark me-2">${tituloExtra}</span>` : ''}
+                ${valor ? `<span class="badge bg-secondary me-2">R$ ${valor.toFixed(2)}</span>` : ''}
                 <small class="text-muted">por ${job.args?.usuario || 'N/A'}</small>
             </button>
         </h2>
@@ -408,12 +486,18 @@ function renderJobAccordion(job, tipo, idx) {
                         <small class="text-muted">Job ID:</small> <code>${job.job_id}</code><br>
                         <small class="text-muted">Criado:</small> ${createdAt}
                         ${startedAt ? `<br><small class="text-muted">Iniciado:</small> ${startedAt}` : ''}
+                        ${faturaNumero ? `<br><small class="text-muted">Fatura:</small> <strong>${faturaNumero}</strong>` : ''}
+                        ${cteNumero ? `<br><small class="text-muted">CTe:</small> <strong>${cteNumero}</strong>` : ''}
+                        ${transportadora ? `<br><small class="text-muted">Transp.:</small> ${transportadora}` : ''}
                     </div>
                     <div class="col-md-6">
                         <small class="text-muted">Status:</small> <span class="badge ${badgeClass}">${job.status_display}</span>
+                        ${valor ? `<br><small class="text-muted">Valor:</small> <strong>R$ ${valor.toFixed(2)}</strong>` : ''}
+                        ${totalFretes ? `<br><small class="text-muted">Total Fretes:</small> ${totalFretes}` : ''}
                         ${job.error ? `<br><small class="text-danger">${job.error}</small>` : ''}
                     </div>
                 </div>
+                ${loteProgressoHtml}
             </div>
         </div>
     </div>`;
@@ -421,10 +505,193 @@ function renderJobAccordion(job, tipo, idx) {
     return html;
 }
 
+// =================== PROGRESSO DE LOTE EM TEMPO REAL ===================
+let loteIntervals = {};
+
+function carregarProgressoLote(faturaId) {
+    fetch(`/fretes/lote/${faturaId}/progresso`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById(`loteProgresso${faturaId}`);
+            if (!container) return;
+
+            if (!data.sucesso || !data.encontrado) {
+                container.innerHTML = '<small class="text-muted">Aguardando início...</small>';
+                // Continuar polling
+                if (!loteIntervals[faturaId]) {
+                    loteIntervals[faturaId] = setInterval(() => carregarProgressoLote(faturaId), 3000);
+                }
+                return;
+            }
+
+            const p = data.progresso;
+            const totalItens = p.total_fretes + p.total_despesas;
+            const processados = p.fretes_processados + p.despesas_processadas;
+            const percentual = totalItens > 0 ? Math.round((processados / totalItens) * 100) : 0;
+
+            let statusClass = 'bg-primary';
+            if (p.status === 'concluido') statusClass = 'bg-success';
+            else if (p.status === 'erro') statusClass = 'bg-danger';
+
+            let html = `
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong>${p.item_atual}</strong>
+                        <span class="badge ${statusClass}">${processados}/${totalItens}</span>
+                    </div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar ${statusClass} progress-bar-striped progress-bar-animated"
+                             style="width: ${percentual}%">${percentual}%</div>
+                    </div>
+                    <small class="text-muted">${p.item_atual_etapa || ''}</small>
+                </div>
+                <div class="row small">
+                    <div class="col-4">
+                        <span class="text-success"><i class="fas fa-check"></i> ${p.fretes_sucesso + p.despesas_sucesso} OK</span>
+                    </div>
+                    <div class="col-4">
+                        <span class="text-warning"><i class="fas fa-forward"></i> ${p.fretes_skip + p.despesas_skip} Skip</span>
+                    </div>
+                    <div class="col-4">
+                        <span class="text-danger"><i class="fas fa-times"></i> ${p.fretes_erro + p.despesas_erro} Erro</span>
+                    </div>
+                </div>
+            `;
+
+            // Mostrar detalhes dos itens processados
+            if (p.detalhes && p.detalhes.length > 0) {
+                html += '<div class="mt-2 pt-2 border-top"><small class="text-muted">Itens processados:</small><div class="mt-1">';
+                p.detalhes.forEach(item => {
+                    let icon = 'check text-success';
+                    if (item.skipped) icon = 'forward text-warning';
+                    else if (!item.success) icon = 'times text-danger';
+                    html += `<span class="badge bg-light text-dark me-1 mb-1"><i class="fas fa-${icon}"></i> ${item.tipo === 'frete' ? 'F' : 'D'}#${item.id}</span>`;
+                });
+                html += '</div></div>';
+            }
+
+            container.innerHTML = html;
+
+            // Se concluído ou erro, parar polling
+            if (p.status === 'concluido' || p.status === 'erro') {
+                if (loteIntervals[faturaId]) {
+                    clearInterval(loteIntervals[faturaId]);
+                    delete loteIntervals[faturaId];
+                }
+            } else {
+                // Continuar polling
+                if (!loteIntervals[faturaId]) {
+                    loteIntervals[faturaId] = setInterval(() => carregarProgressoLote(faturaId), 2000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar progresso do lote:', error);
+        });
+}
+
+// =================== REPROCESSAR LANÇAMENTO ===================
+function reprocessarLancamento(tipo, id, btn) {
+    // Desabilitar botão e mostrar loading
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    // Determinar URL baseado no tipo
+    let url;
+    if (tipo === 'frete') {
+        url = `/fretes/${id}/lancar_odoo`;
+    } else if (tipo === 'despesa') {
+        url = `/fretes/despesas/${id}/lancar_odoo`;
+    } else {
+        alert('Tipo de lançamento desconhecido: ' + tipo);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        return;
+    }
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Sucesso - mostrar mensagem e atualizar botão
+            btn.classList.remove('btn-outline-primary', 'btn-outline-info');
+            btn.classList.add('btn-success');
+            btn.innerHTML = '<i class="fas fa-check"></i> Enfileirado';
+
+            // Mostrar toast ou alerta
+            const toast = document.createElement('div');
+            toast.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                <strong><i class="fas fa-check-circle"></i> Sucesso!</strong><br>
+                ${tipo === 'frete' ? 'Frete' : 'Despesa'} #${id} enfileirado para reprocessamento.<br>
+                <small>Job ID: ${data.job_id}</small>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+
+            // Recarregar jobs pendentes para mostrar o novo
+            setTimeout(() => carregarJobsPendentes(), 1000);
+        } else {
+            // Erro - restaurar botão e mostrar mensagem
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+
+            const toast = document.createElement('div');
+            toast.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                <strong><i class="fas fa-times-circle"></i> Erro!</strong><br>
+                ${data.mensagem || 'Erro desconhecido'}<br>
+                <small>${data.erro || ''}</small>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 8000);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao reprocessar:', error);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+
+        const toast = document.createElement('div');
+        toast.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        toast.innerHTML = `
+            <strong><i class="fas fa-times-circle"></i> Erro de conexão!</strong><br>
+            Não foi possível conectar ao servidor.<br>
+            <small>${error}</small>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 8000);
+    });
+}
+
 // =================== DETALHES DE LANÇAMENTOS ===================
 document.addEventListener('DOMContentLoaded', function() {
     // Carregar jobs pendentes ao iniciar
     carregarJobsPendentes();
+
+    // Handler para botões de reprocessar
+    document.querySelectorAll('.btn-reprocessar').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const tipo = this.dataset.tipo;
+            const id = this.dataset.id;
+
+            if (confirm(`Deseja retomar o lançamento ${tipo === 'frete' ? 'do frete' : 'da despesa'} #${id}?`)) {
+                reprocessarLancamento(tipo, id, this);
+            }
+        });
+    });
 
     // Expandir/recolher detalhes
     document.querySelectorAll('.btn-expand').forEach(function(btn) {

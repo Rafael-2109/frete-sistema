@@ -182,13 +182,14 @@ class ContaCorrenteForm(FlaskForm):
 
 class FiltroFretesForm(FlaskForm):
     """Formulário para filtros na listagem de fretes"""
+    frete_id = StringField('ID do Frete', description='Busca direta pelo ID do frete')
     embarque_numero = StringField('Número do Embarque')
     cnpj_cliente = StringField('CNPJ do Cliente')
     nome_cliente = StringField('Nome do Cliente')
     numero_cte = StringField('Número CTe')
     numero_fatura = StringField('Número da Fatura')
     numero_nf = StringField('Número da NF', description='Busca nos fretes que contêm esta NF')
-    transportadora_id = SelectField('Transportadora', 
+    transportadora_id = SelectField('Transportadora',
                                   choices=[],  # Será populado dinamicamente
                                   coerce=lambda x: x if x else None)
     status = SelectField('Status',
@@ -199,12 +200,13 @@ class FiltroFretesForm(FlaskForm):
                             ('APROVADO', 'Aprovado'),
                             ('REJEITADO', 'Rejeitado'),
                             ('PAGO', 'Pago'),
-                            ('LANCADO', 'Lançado')
+                            ('LANCADO', 'Lançado'),
+                            ('LANCADO_ODOO', 'Lançado Odoo')
                         ])
-    
+
     data_inicio = DateField('Data Início')
     data_fim = DateField('Data Fim')
-    
+
     submit = SubmitField('Filtrar')
 
 class LancamentoCteForm(FlaskForm):
