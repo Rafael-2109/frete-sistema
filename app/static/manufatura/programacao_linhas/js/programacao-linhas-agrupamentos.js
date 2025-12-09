@@ -443,13 +443,10 @@ function renderizarPorProduto(linhas) {
 
 function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = false) {
     const progId = prog.id || 0;
-    const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
-    const iconeObs = temObs ? ` <i class="fas fa-comment text-muted ms-1" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>` : '';
-
     const comHistorico = programacaoState.comHistorico;
-    const isExtraProducao = prog.is_extra_producao || false;  // ✅ NOVO: Flag de produção extra
+    const isExtraProducao = prog.is_extra_producao || false;
 
-    // ✅ NOVO: Classes CSS para produção extra (destaque visual)
+    // Classes CSS para produção extra (destaque visual)
     const extraClass = isExtraProducao ? 'border-warning bg-light' : '';
     const extraBadge = isExtraProducao ? ' <span class="badge bg-warning text-dark ms-2" title="Produção não programada">⚠️ Extra</span>' : '';
 
@@ -459,7 +456,7 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
                 <div class="flex-grow-1">
                     <strong class="clickable-produto" data-cod="${prog.cod_produto}" style="cursor:pointer; color: #0d6efd;">
                         ${prog.cod_produto}
-                    </strong> - ${prog.nome_produto || ''}${iconeObs}${extraBadge}`;
+                    </strong> - ${prog.nome_produto || ''}${extraBadge}`;
 
     if (mostrarLinha) {
         html += ` <span class="badge bg-info ms-2">${prog.linha_producao}</span>`;
@@ -473,7 +470,7 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
                 </div>
                 <div class="d-flex align-items-center gap-2">`;
 
-    // ✅ NOVO: Se com histórico, mostrar tabela Programado/Produzido/Diferença
+    // Se com histórico, mostrar tabela Programado/Produzido/Diferença (somente leitura)
     if (comHistorico) {
         const qtdProgramada = parseFloat(prog.qtd_programada) || 0;
         const qtdProduzida = parseFloat(prog.qtd_produzida) || 0;
@@ -509,8 +506,25 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
                         </div>
                     </div>`;
     } else {
-        // Modo ORIGINAL (sem histórico)
+        // Modo edição (sem histórico) - inputs inline
+        const obsValue = prog.observacao_pcp || '';
+        const opValue = prog.ordem_producao || '';
+
         html += `
+                    <!-- Input Ordem Produção (editável inline) -->
+                    <input type="text" class="form-control form-control-sm input-edit-op"
+                           value="${opValue}"
+                           onblur="salvarEdicaoCampo(${progId}, 'ordem_producao', this.value)"
+                           placeholder="OP"
+                           style="width: 80px;" title="Ordem de Produção">
+
+                    <!-- Input Observação PCP (editável inline) -->
+                    <input type="text" class="form-control form-control-sm input-edit-obs"
+                           value="${obsValue}"
+                           onblur="salvarEdicaoCampo(${progId}, 'observacao_pcp', this.value)"
+                           placeholder="Obs..."
+                           style="width: 120px;" title="Observação PCP">
+
                     <!-- Input de Data (editável) -->
                     <input type="date" class="form-control form-control-sm input-edit-data"
                            value="${prog.data_programacao}"
@@ -548,13 +562,10 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
  */
 function renderizarItemPorProduto(prog) {
     const progId = prog.id || 0;
-    const temObs = prog.observacao_pcp && prog.observacao_pcp.trim();
-    const iconeObs = temObs ? ` <i class="fas fa-comment text-muted ms-1" data-bs-toggle="tooltip" title="${prog.observacao_pcp}" style="cursor:help;"></i>` : '';
-
     const comHistorico = programacaoState.comHistorico;
-    const isExtraProducao = prog.is_extra_producao || false;  // ✅ NOVO
+    const isExtraProducao = prog.is_extra_producao || false;
 
-    // ✅ NOVO: Destaque visual para produção extra
+    // Destaque visual para produção extra
     const extraClass = isExtraProducao ? 'border-warning bg-light' : '';
     const extraBadge = isExtraProducao ? ' <span class="badge bg-warning text-dark ms-2" title="Produção não programada">⚠️ Extra</span>' : '';
 
@@ -562,11 +573,11 @@ function renderizarItemPorProduto(prog) {
         <div class="p-2 mb-1 border rounded programacao-item ${extraClass}" data-prog-id="${progId}">
             <div class="d-flex justify-content-between align-items-center gap-2">
                 <div class="flex-grow-1">
-                    <strong>${formatarData(prog.data_programacao)}</strong> - ${prog.linha_producao}${iconeObs}${extraBadge}
+                    <strong>${formatarData(prog.data_programacao)}</strong> - ${prog.linha_producao}${extraBadge}
                 </div>
                 <div class="d-flex align-items-center gap-2">`;
 
-    // ✅ NOVO: Se com histórico, mostrar Programado/Produzido/Diferença
+    // Se com histórico, mostrar Programado/Produzido/Diferença (somente leitura)
     if (comHistorico) {
         const qtdProgramada = parseFloat(prog.qtd_programada) || 0;
         const qtdProduzida = parseFloat(prog.qtd_produzida) || 0;
@@ -601,8 +612,25 @@ function renderizarItemPorProduto(prog) {
                         </div>
                     </div>`;
     } else {
-        // Modo ORIGINAL
+        // Modo edição (sem histórico) - inputs inline
+        const obsValue = prog.observacao_pcp || '';
+        const opValue = prog.ordem_producao || '';
+
         html += `
+                    <!-- Input Ordem Produção (editável inline) -->
+                    <input type="text" class="form-control form-control-sm input-edit-op"
+                           value="${opValue}"
+                           onblur="salvarEdicaoCampo(${progId}, 'ordem_producao', this.value)"
+                           placeholder="OP"
+                           style="width: 80px;" title="Ordem de Produção">
+
+                    <!-- Input Observação PCP (editável inline) -->
+                    <input type="text" class="form-control form-control-sm input-edit-obs"
+                           value="${obsValue}"
+                           onblur="salvarEdicaoCampo(${progId}, 'observacao_pcp', this.value)"
+                           placeholder="Obs..."
+                           style="width: 120px;" title="Observação PCP">
+
                     <!-- Input de Data (editável) -->
                     <input type="date" class="form-control form-control-sm input-edit-data"
                            value="${prog.data_programacao}"
@@ -635,6 +663,38 @@ function renderizarItemPorProduto(prog) {
 // ============================================================
 // FUNÇÕES DE EDIÇÃO E EXCLUSÃO
 // ============================================================
+
+/**
+ * Salva edição de campo individual (observacao_pcp, ordem_producao)
+ */
+function salvarEdicaoCampo(id, campo, valor) {
+    if (!id || id === 0) {
+        console.warn('[EDITAR CAMPO] ID inválido:', id);
+        return;
+    }
+
+    console.log('[EDITAR CAMPO] ID:', id, '| Campo:', campo, '| Valor:', valor);
+
+    const dados = {};
+    dados[campo] = valor;
+
+    fetch(`/manufatura/recursos/api/programacao/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.sucesso) {
+            showToast('Erro ao atualizar: ' + (data.erro || 'Erro desconhecido'), 'error');
+        }
+        // Sucesso: silencioso para não interromper edição
+    })
+    .catch(error => {
+        console.error('[EDITAR CAMPO] Erro:', error);
+        showToast('Erro ao salvar alteração', 'error');
+    });
+}
 
 function salvarEdicaoProgramacao(id, novaData, novaQtd) {
     console.log('[EDITAR] ID:', id, '| Data:', novaData, '| Qtd:', novaQtd);

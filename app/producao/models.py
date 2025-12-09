@@ -25,7 +25,8 @@ class ProgramacaoProducao(db.Model):
 
     # Prioridade e observações
     observacao_pcp = db.Column(db.Text, nullable=True)
-        
+    ordem_producao = db.Column(db.String(50), nullable=True)  # Número da ordem de produção (OP)
+
     # Auditoria
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
@@ -51,7 +52,8 @@ class ProgramacaoProducao(db.Model):
             'qtd_programada': float(self.qtd_programada) if self.qtd_programada else 0,
             'linha_producao': self.linha_producao,
             'cliente_produto': self.cliente_produto,
-            'observacao_pcp': self.observacao_pcp
+            'observacao_pcp': self.observacao_pcp,
+            'ordem_producao': self.ordem_producao
         }
        
 

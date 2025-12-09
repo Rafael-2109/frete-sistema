@@ -367,7 +367,8 @@ def lancar_despesa_job(
 def lancar_lote_job(
     fatura_frete_id: int,
     usuario_nome: str,
-    usuario_ip: str = None
+    usuario_ip: str = None,
+    data_vencimento_fatura: str = None
 ) -> Dict[str, Any]:
     """
     Job para lançar todos os fretes e despesas de uma fatura no Odoo
@@ -376,6 +377,8 @@ def lancar_lote_job(
         fatura_frete_id: ID da fatura de frete
         usuario_nome: Nome do usuário que solicitou
         usuario_ip: IP do usuário (opcional)
+        data_vencimento_fatura: Data de vencimento da fatura (YYYY-MM-DD)
+            Será usado para TODOS os documentos da fatura (fretes e despesas)
 
     Returns:
         dict: Resultado do processamento em lote
@@ -451,32 +454,77 @@ def lancar_lote_job(
             for frete in fretes:
                 logger.info(f"📋 [Job Lote] Processando frete #{frete.id}")
 
-                # Validar se tem CTe vinculado
+                # ========================================
+                # BUSCAR CTe - MESMA LÓGICA DO LANÇAMENTO INDIVIDUAL
+                # ========================================
+                cte = None
                 cte_chave = None
-                if frete.frete_cte_id and frete.cte:
-                    cte_chave = frete.cte.chave_acesso
-                elif frete.chave_cte:
-                    cte_chave = frete.chave_cte
 
-                if not cte_chave:
+                # PRIORIDADE 1: Vínculo explícito (frete_cte_id)
+                if frete.frete_cte_id:
+                    cte = frete.cte
+                    if cte:
+                        cte_chave = cte.chave_acesso
+                        logger.info(f"✅ [Lote] Frete #{frete.id}: Usando CTe vinculado: {cte.numero_cte} (ID {cte.id})")
+
+                # FALLBACK: Busca automática por NFs + CNPJ (igual ao individual)
+                if not cte:
+                    logger.info(f"🔍 [Lote] Frete #{frete.id}: Buscando CTe por NFs em comum + CNPJ...")
+                    ctes_relacionados = frete.buscar_ctes_relacionados()
+
+                    if not ctes_relacionados:
+                        detalhe = {
+                            'frete_id': frete.id,
+                            'success': False,
+                            'skipped': False,
+                            'error': 'Nenhum CTe relacionado encontrado',
+                            'error_type': 'CTE_NAO_ENCONTRADO'
+                        }
+                        resultado['detalhes_fretes'].append(detalhe)
+                        resultado['fretes_erro'] += 1
+                        continue
+
+                    if len(ctes_relacionados) > 1:
+                        detalhe = {
+                            'frete_id': frete.id,
+                            'success': False,
+                            'skipped': False,
+                            'error': f'Múltiplos CTes encontrados ({len(ctes_relacionados)}). Vincule manualmente antes de lançar.',
+                            'error_type': 'MULTIPLOS_CTES'
+                        }
+                        resultado['detalhes_fretes'].append(detalhe)
+                        resultado['fretes_erro'] += 1
+                        continue
+
+                    cte = ctes_relacionados[0]
+                    cte_chave = cte.chave_acesso
+                    logger.info(f"✅ [Lote] Frete #{frete.id}: CTe encontrado automaticamente: {cte.numero_cte}")
+
+                # Validar chave (igual ao individual)
+                if not cte_chave or len(cte_chave) != 44:
                     detalhe = {
                         'frete_id': frete.id,
                         'success': False,
                         'skipped': False,
-                        'error': 'Frete não possui CTe vinculado',
-                        'error_type': 'CTE_NAO_VINCULADO'
+                        'error': f'Chave do CTe inválida ({len(cte_chave) if cte_chave else 0} caracteres, esperado 44)',
+                        'error_type': 'CTE_CHAVE_INVALIDA'
                     }
                     resultado['detalhes_fretes'].append(detalhe)
                     resultado['fretes_erro'] += 1
                     continue
 
-                # Executar lançamento
+                # ========================================
+                # VENCIMENTO: Usa da FATURA (prioridade)
+                # Todos os documentos usam o mesmo vencimento da fatura
+                # ========================================
+
+                # Executar lançamento com vencimento da fatura
                 result_frete = lancar_frete_job(
                     frete_id=frete.id,
                     cte_chave=cte_chave,
                     usuario_nome=usuario_nome,
                     usuario_ip=usuario_ip,
-                    data_vencimento=frete.vencimento.strftime('%Y-%m-%d') if frete.vencimento else None
+                    data_vencimento=data_vencimento_fatura  # Vencimento da fatura
                 )
 
                 resultado['detalhes_fretes'].append(result_frete)
@@ -494,12 +542,12 @@ def lancar_lote_job(
             for despesa in despesas:
                 logger.info(f"📋 [Job Lote] Processando despesa #{despesa.id}")
 
-                # Executar lançamento
+                # Executar lançamento com vencimento da FATURA
                 result_despesa = lancar_despesa_job(
                     despesa_id=despesa.id,
                     usuario_nome=usuario_nome,
                     usuario_ip=usuario_ip,
-                    data_vencimento=despesa.vencimento_despesa.strftime('%Y-%m-%d') if despesa.vencimento_despesa else None
+                    data_vencimento=data_vencimento_fatura  # Vencimento da fatura
                 )
 
                 resultado['detalhes_despesas'].append(result_despesa)

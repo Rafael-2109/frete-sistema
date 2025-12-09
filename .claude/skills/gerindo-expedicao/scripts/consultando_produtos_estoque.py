@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 """
 Script: consultando_produtos_estoque.py
-Queries cobertas: Q13, Q17, Q18, Q20
+Queries cobertas: Q13, Q17, Q18, Q20 + SITUACAO COMPLETA
 
-Consulta estoque atual, entradas, pendencias e projecoes.
+Consulta estoque atual, entradas, pendencias, projecoes e situacao completa de produtos.
 
 Uso:
+    --produto palmito --completo          # ⭐ SITUACAO COMPLETA (estoque, separacoes, demanda, producao, projecao)
     --produto palmito --entradas          # Q13: Chegou o produto?
     --produto pessego --pendente          # Q17: Falta embarcar muito?
     --produto pessego --sobra             # Q18: Quanto vai sobrar no estoque?
     --ruptura --dias 7                    # Q20: O que vai dar falta essa semana?
+
+A opcao --completo retorna TUDO que o Agent SDK precisa:
+    1. Estoque atual e menor estoque nos proximos 7 dias
+    2. Separacoes por data de expedicao (detalhado com pedidos)
+    3. Demanda total (Carteira bruta/liquida + Separacoes)
+    4. Programacao de producao (proximos 14 dias)
+    5. Projecao dia a dia (estoque projetado)
+    6. Indicadores: sobra, cobertura em dias, % disponivel, previsao de ruptura
 """
 import sys
 import os
@@ -438,6 +447,248 @@ def consultar_produtos_sobra_estoque(args):
     return resultado
 
 
+def consultar_situacao_completa_produto(args):
+    """
+    NOVA QUERY: Situacao completa do produto.
+    Retorna TUDO que o Agent SDK precisa para analise:
+
+    1. Estoque atual
+    2. Separacoes por data de expedicao (detalhado)
+    3. Demanda total (Carteira pendente)
+    4. Programacao de producao (proximos 14 dias)
+    5. Projecao dia a dia (estoque projetado)
+    6. Indicadores calculados (sobra, ruptura, etc)
+
+    Uso:
+        --produto palmito --completo
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from app.producao.models import CadastroPalletizacao, ProgramacaoProducao
+    from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+    from sqlalchemy import func
+    from collections import defaultdict
+
+    resultado = {
+        'sucesso': True,
+        'tipo_analise': 'SITUACAO_COMPLETA_PRODUTO',
+        'termo_busca': args.produto,
+        'produtos': [],
+        'resumo': {}
+    }
+
+    # Resolver produto
+    produto_info, info_busca = resolver_produto_unico(args.produto)
+
+    if not produto_info and not info_busca.get('multiplos'):
+        resultado['sucesso'] = False
+        resultado['erro'] = f"Produto '{args.produto}' nao encontrado"
+        resultado['sugestao'] = formatar_sugestao_produto(info_busca)
+        return resultado
+
+    # Se multiplos candidatos, usar todos
+    if info_busca.get('multiplos') and not produto_info:
+        produtos_buscar = [c['cod_produto'] for c in info_busca.get('candidatos', [])]
+    elif produto_info:
+        produtos_buscar = [produto_info['cod_produto']]
+    else:
+        resultado['sucesso'] = False
+        resultado['erro'] = "Nao foi possivel identificar produtos"
+        return resultado
+
+    resultado['busca'] = {
+        'encontrado': info_busca.get('encontrado', False),
+        'multiplos': info_busca.get('multiplos', False)
+    }
+    if info_busca.get('candidatos'):
+        resultado['busca']['candidatos'] = info_busca['candidatos']
+
+    hoje = date.today()
+    produtos_resultado = []
+
+    for cod_produto in produtos_buscar:
+        # ========== 1. CADASTRO DO PRODUTO ==========
+        cadastro = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+        nome_produto = cadastro.nome_produto if cadastro else cod_produto
+
+        info_produto = {
+            'cod_produto': cod_produto,
+            'nome_produto': nome_produto,
+            'tipo_embalagem': cadastro.tipo_embalagem if cadastro else None,
+            'tipo_materia_prima': cadastro.tipo_materia_prima if cadastro else None,
+            'categoria': cadastro.categoria_produto if cadastro else None,
+            'linha_producao': cadastro.linha_producao if cadastro else None,
+            'palletizacao': float(cadastro.palletizacao or 1) if cadastro else 1,
+            'peso_bruto': float(cadastro.peso_bruto or 0) if cadastro else 0
+        }
+
+        # ========== 2. ESTOQUE ATUAL ==========
+        estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+
+        # ========== 3. SEPARACOES POR DATA DE EXPEDICAO ==========
+        # Buscar todas as separacoes nao faturadas
+        separacoes = Separacao.query.filter(
+            Separacao.cod_produto == cod_produto,
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
+        ).order_by(Separacao.expedicao.asc()).all()
+
+        # Agrupar por data de expedicao
+        separacoes_por_data = defaultdict(lambda: {'qtd': 0, 'valor': 0, 'pedidos': []})
+        total_separado = 0
+
+        for sep in separacoes:
+            data_exp = sep.expedicao.isoformat() if sep.expedicao else 'SEM_DATA'
+            qtd = float(sep.qtd_saldo or 0)
+            valor = float(sep.valor_saldo or 0)
+
+            separacoes_por_data[data_exp]['qtd'] += qtd
+            separacoes_por_data[data_exp]['valor'] += valor
+            if sep.num_pedido not in separacoes_por_data[data_exp]['pedidos']:
+                separacoes_por_data[data_exp]['pedidos'].append(sep.num_pedido)
+            total_separado += qtd
+
+        # Converter para lista ordenada
+        separacoes_lista = []
+        for data_exp, dados in sorted(separacoes_por_data.items()):
+            separacoes_lista.append({
+                'data_expedicao': data_exp,
+                'quantidade': round(dados['qtd'], 2),
+                'valor': round(dados['valor'], 2),
+                'pedidos': dados['pedidos'],
+                'qtd_pedidos': len(dados['pedidos'])
+            })
+
+        # ========== 4. DEMANDA DA CARTEIRA (NAO SEPARADO) ==========
+        # Saldo pendente na carteira que AINDA NAO foi para separacao
+        itens_carteira = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.cod_produto == cod_produto,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).all()
+
+        # Calcular demanda real da carteira (carteira - ja separado por pedido)
+        # IMPORTANTE: CarteiraPrincipal.qtd_saldo_produto_pedido nao diminui ao separar!
+        demanda_carteira_bruta = sum(float(i.qtd_saldo_produto_pedido or 0) for i in itens_carteira)
+
+        # Demanda liquida = carteira - separado (evitar contar 2x)
+        demanda_carteira_liquida = max(0, demanda_carteira_bruta - total_separado)
+
+        # DEMANDA TOTAL = separado (vai sair) + carteira liquida (ainda nao separado)
+        demanda_total = total_separado + demanda_carteira_liquida
+
+        # Pedidos na carteira (agrupado)
+        pedidos_carteira = defaultdict(lambda: {'qtd': 0, 'valor': 0})
+        for item in itens_carteira:
+            pedidos_carteira[item.num_pedido]['qtd'] += float(item.qtd_saldo_produto_pedido or 0)
+            pedidos_carteira[item.num_pedido]['valor'] += float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+            pedidos_carteira[item.num_pedido]['cliente'] = item.raz_social_red
+
+        carteira_lista = [
+            {
+                'num_pedido': num,
+                'cliente': dados.get('cliente'),
+                'quantidade': round(dados['qtd'], 2),
+                'valor': round(dados['valor'], 2)
+            }
+            for num, dados in sorted(pedidos_carteira.items(), key=lambda x: -x[1]['valor'])
+        ]
+
+        # ========== 5. PROGRAMACAO DE PRODUCAO (PROXIMOS 14 DIAS) ==========
+        programacoes = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.cod_produto == cod_produto,
+            ProgramacaoProducao.data_programacao >= hoje,
+            ProgramacaoProducao.data_programacao <= hoje + timedelta(days=14)
+        ).order_by(ProgramacaoProducao.data_programacao.asc()).all()
+
+        programacao_lista = []
+        total_programado = 0
+        for prog in programacoes:
+            qtd = float(prog.qtd_programada or 0)
+            programacao_lista.append({
+                'data': prog.data_programacao.isoformat(),
+                'quantidade': qtd,
+                'linha': prog.linha_producao,
+                'status': prog.status
+            })
+            total_programado += qtd
+
+        # ========== 6. PROJECAO DIA A DIA (14 DIAS) ==========
+        projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, dias=14)
+        projecao_diaria = projecao.get('projecao', [])
+        dia_ruptura = projecao.get('dia_ruptura')
+        menor_estoque_d7 = projecao.get('menor_estoque_d7', estoque_atual)
+
+        # ========== 7. INDICADORES CALCULADOS ==========
+        sobra = estoque_atual - demanda_total
+        status_estoque = 'OK'
+        if sobra < 0:
+            status_estoque = 'RUPTURA_IMINENTE' if dia_ruptura else 'DEFICIT'
+        elif dia_ruptura:
+            status_estoque = 'RISCO_RUPTURA'
+        elif sobra < demanda_total * 0.1:  # Menos de 10% de folga
+            status_estoque = 'ATENCAO'
+
+        produtos_resultado.append({
+            'produto': info_produto,
+            'estoque': {
+                'atual': round(estoque_atual, 2),
+                'menor_d7': round(menor_estoque_d7, 2),
+                'status': status_estoque
+            },
+            'separacoes': {
+                'total_quantidade': round(total_separado, 2),
+                'por_data_expedicao': separacoes_lista,
+                'total_pedidos': len(set(p for sep in separacoes_lista for p in sep['pedidos']))
+            },
+            'carteira': {
+                'demanda_bruta': round(demanda_carteira_bruta, 2),
+                'demanda_liquida': round(demanda_carteira_liquida, 2),
+                'pedidos': carteira_lista[:20],  # Top 20 por valor
+                'total_pedidos': len(carteira_lista)
+            },
+            'demanda_total': round(demanda_total, 2),
+            'programacao_producao': {
+                'total_programado': round(total_programado, 2),
+                'proximas_entradas': programacao_lista
+            },
+            'projecao': {
+                'dia_ruptura': dia_ruptura,
+                'dias_ate_ruptura': (date.fromisoformat(dia_ruptura) - hoje).days if dia_ruptura else None,
+                'diaria': projecao_diaria[:14]  # 14 dias
+            },
+            'indicadores': {
+                'sobra_atual': round(sobra, 2),
+                'cobertura_dias': round(estoque_atual / (demanda_total / 14), 1) if demanda_total > 0 else 999,
+                'percentual_disponivel': round((estoque_atual / demanda_total * 100), 1) if demanda_total > 0 else 100
+            }
+        })
+
+    resultado['produtos'] = produtos_resultado
+
+    # Resumo
+    if produtos_resultado:
+        p = produtos_resultado[0]
+        msg_linhas = [f"SITUACAO COMPLETA - {p['produto']['nome_produto']}:"]
+        msg_linhas.append(f"  Estoque atual: {p['estoque']['atual']:,.0f} un ({p['estoque']['status']})")
+        msg_linhas.append(f"  Em separacao: {p['separacoes']['total_quantidade']:,.0f} un ({p['separacoes']['total_pedidos']} pedidos)")
+        msg_linhas.append(f"  Carteira pendente: {p['carteira']['demanda_liquida']:,.0f} un ({p['carteira']['total_pedidos']} pedidos)")
+        msg_linhas.append(f"  DEMANDA TOTAL: {p['demanda_total']:,.0f} un")
+        msg_linhas.append(f"  Producao programada: {p['programacao_producao']['total_programado']:,.0f} un (14 dias)")
+        msg_linhas.append(f"  SOBRA/DEFICIT: {p['indicadores']['sobra_atual']:+,.0f} un")
+        if p['projecao']['dia_ruptura']:
+            msg_linhas.append(f"  ⚠️ RUPTURA PREVISTA: {p['projecao']['dia_ruptura']} ({p['projecao']['dias_ate_ruptura']} dias)")
+        msg = '\n'.join(msg_linhas)
+    else:
+        msg = f"Produto {args.produto} nao encontrado"
+
+    resultado['resumo'] = {
+        'total_produtos': len(produtos_resultado),
+        'mensagem': msg
+    }
+
+    return resultado
+
+
 def consultar_produtos_previsao_ruptura(args):
     """
     Query 20: O que vai dar falta essa semana?
@@ -556,20 +807,30 @@ def main():
     from app import create_app
 
     parser = argparse.ArgumentParser(
-        description='Consultar estoque, entradas, saidas, pendencias e projecoes (Q13, Q17, Q18, Q20)',
+        description='Consultar estoque, entradas, saidas, pendencias, projecoes e situacao completa de produtos',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
+  python consultando_produtos_estoque.py --produto palmito --completo        # SITUACAO COMPLETA (NOVO!)
   python consultando_produtos_estoque.py --produto palmito --entradas
   python consultando_produtos_estoque.py --produto palmito --saidas
   python consultando_produtos_estoque.py --produto pessego --pendente
   python consultando_produtos_estoque.py --produto pessego --sobra
   python consultando_produtos_estoque.py --ruptura --dias 7
+
+A opcao --completo retorna:
+  - Estoque atual
+  - Separacoes por data de expedicao
+  - Demanda total (carteira + separacoes)
+  - Programacao de producao (14 dias)
+  - Projecao dia a dia
+  - Indicadores (sobra, cobertura, ruptura)
         """
     )
 
     # Argumentos
     parser.add_argument('--produto', help='Nome ou termo do produto')
+    parser.add_argument('--completo', action='store_true', help='Situacao completa do produto (estoque, separacoes, demanda, producao, projecao)')
     parser.add_argument('--entradas', action='store_true', help='Mostrar entradas recentes (qtd > 0)')
     parser.add_argument('--saidas', action='store_true', help='Mostrar saidas recentes (qtd < 0)')
     parser.add_argument('--pendente', action='store_true', help='Mostrar pendente de embarque')
@@ -585,7 +846,9 @@ Exemplos:
     app = create_app()
     with app.app_context():
         # Determinar qual analise executar
-        if args.produto and args.entradas:
+        if args.produto and args.completo:
+            resultado = consultar_situacao_completa_produto(args)
+        elif args.produto and args.entradas:
             resultado = consultar_produtos_entradas(args)
         elif args.produto and args.saidas:
             resultado = consultar_produtos_saidas(args)
@@ -598,7 +861,7 @@ Exemplos:
         else:
             resultado = {
                 'sucesso': False,
-                'erro': 'Informe ao menos um filtro: --produto com (--entradas, --saidas, --pendente ou --sobra), ou --ruptura'
+                'erro': 'Informe ao menos um filtro: --produto com (--completo, --entradas, --saidas, --pendente ou --sobra), ou --ruptura'
             }
 
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))

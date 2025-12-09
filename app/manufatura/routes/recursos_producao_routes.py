@@ -4,7 +4,7 @@ Gerencia capacidades produtivas, linhas de produção e eficiências
 """
 
 from flask import Blueprint, render_template, request, jsonify, send_file
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.manufatura.models import RecursosProducao
 from sqlalchemy import or_
@@ -575,6 +575,7 @@ def api_programacao_linhas_dados():
                     'capacidade_unidade_minuto': capacidade,
                     'qtd_unidade_por_caixa': qtd_un_caixa,
                     'observacao_pcp': prog.observacao_pcp,  # ✅ Adicionar observação
+                    'ordem_producao': prog.ordem_producao,  # ✅ Número da OP
                     'cliente_produto': prog.cliente_produto,  # ✅ Adicionar cliente
                     'is_extra_producao': False  # ✅ Flag: não é produção extra
                 })
@@ -610,6 +611,7 @@ def api_programacao_linhas_dados():
                                     'capacidade_unidade_minuto': capacidade,
                                     'qtd_unidade_por_caixa': qtd_un_caixa,
                                     'observacao_pcp': None,
+                                    'ordem_producao': None,  # ✅ Sem OP pois é extra
                                     'cliente_produto': None,
                                     'is_extra_producao': True  # ✅ Flag: é produção extra (não programada)
                                 })
@@ -839,3 +841,72 @@ def api_separacoes_estoque():
         import logging
         logging.error(f"[SEPARACOES ESTOQUE] Erro: {str(e)}", exc_info=True)
         return jsonify({'erro': str(e)}), 500
+
+
+# ============================================================
+# ROTAS DE EDIÇÃO DE PROGRAMAÇÃO DE PRODUÇÃO
+# ============================================================
+
+@recursos_bp.route('/api/programacao/<int:id>', methods=['PUT'])
+@login_required
+def api_atualizar_programacao(id):
+    """API para atualizar programação de produção"""
+    try:
+        from app.producao.models import ProgramacaoProducao
+        from datetime import datetime
+
+        programacao = ProgramacaoProducao.query.get_or_404(id)
+        data = request.get_json()
+
+        # Atualizar campos se fornecidos
+        if 'data_programacao' in data and data['data_programacao']:
+            programacao.data_programacao = datetime.strptime(data['data_programacao'], '%Y-%m-%d').date()
+
+        if 'qtd_programada' in data and data['qtd_programada'] is not None:
+            programacao.qtd_programada = float(data['qtd_programada'])
+
+        if 'observacao_pcp' in data:
+            programacao.observacao_pcp = data['observacao_pcp'].strip() if data['observacao_pcp'] else None
+
+        if 'ordem_producao' in data:
+            programacao.ordem_producao = data['ordem_producao'].strip() if data['ordem_producao'] else None
+
+        # Auditoria
+        programacao.updated_by = current_user.email if hasattr(current_user, 'email') else 'sistema'
+
+        db.session.commit()
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': 'Programação atualizada com sucesso!'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.error(f"[PROGRAMACAO PUT] Erro: {str(e)}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+@recursos_bp.route('/api/programacao/<int:id>', methods=['DELETE'])
+@login_required
+def api_excluir_programacao(id):
+    """API para excluir programação de produção"""
+    try:
+        from app.producao.models import ProgramacaoProducao
+
+        programacao = ProgramacaoProducao.query.get_or_404(id)
+
+        db.session.delete(programacao)
+        db.session.commit()
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': 'Programação excluída com sucesso!'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.error(f"[PROGRAMACAO DELETE] Erro: {str(e)}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500

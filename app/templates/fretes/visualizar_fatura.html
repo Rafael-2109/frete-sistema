@@ -328,5 +328,377 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- ========================================
+         CARD: LANÇAMENTO NO ODOO
+         Exibe botão para lançar todos os CTes da fatura no Odoo
+    ======================================== -->
+    {% if fatura.status_conferencia == 'CONFERIDO' %}
+    <div class="card mt-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Lançamento no Odoo</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <h6>Status de Lançamento dos Documentos</h6>
+                    <div id="resumo-lancamento">
+                        <p><i class="fas fa-spinner fa-spin"></i> Carregando status...</p>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <button type="button" class="btn btn-success btn-lg" id="btnAbrirModalLancar"
+                            onclick="abrirModalLancarOdoo()" disabled>
+                        <i class="fas fa-cloud-upload-alt"></i> Lançar no Odoo
+                    </button>
+                    <p class="text-muted mt-2 small" id="info-lancamento">Verificando...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Lançamento -->
+    <div class="modal fade" id="modalLancarOdoo" tabindex="-1" aria-labelledby="modalLancarOdooLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalLancarOdooLabel">
+                        <i class="fas fa-cloud-upload-alt"></i> Lançar Fatura no Odoo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Deseja lançar os fretes e despesas desta fatura no Odoo?</h6>
+                        <p class="mb-0">
+                            Fatura: <strong>{{ fatura.numero_fatura }}</strong><br>
+                            Transportadora: <strong>{{ fatura.transportadora.razao_social if fatura.transportadora else 'N/A' }}</strong>
+                        </p>
+                    </div>
+
+                    <!-- Resumo do que será lançado -->
+                    <div id="modal-resumo-lancamento">
+                        <p><i class="fas fa-spinner fa-spin"></i> Carregando detalhes...</p>
+                    </div>
+
+                    <!-- Campo de vencimento (se não houver na fatura) -->
+                    <div id="campo-vencimento" class="alert alert-info d-none">
+                        <h6><i class="fas fa-calendar-alt"></i> Informe o Vencimento</h6>
+                        <p class="mb-2">A fatura não possui vencimento cadastrado. Informe a data de vencimento para o lançamento:</p>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <input type="date" class="form-control" id="inputVencimento" required>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Este vencimento será salvo na fatura e usado para todos os documentos.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Alerta de vencimentos passados -->
+                    <div id="alerta-vencimentos" class="alert alert-warning d-none">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Atenção: Vencimento Passado!</h6>
+                        <p class="mb-0" id="detalhe-vencimentos"></p>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="confirmarVencimentos">
+                            <label class="form-check-label" for="confirmarVencimentos">
+                                Confirmo que desejo lançar mesmo com vencimento passado
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-secondary mt-3">
+                        <small>
+                            <i class="fas fa-clock"></i> O lançamento será processado em background.
+                            Acompanhe o status na <a href="{{ url_for('fretes.auditoria_lancamentos') }}" target="_blank"><strong>Auditoria de Lançamentos Odoo</strong></a>.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" id="btnConfirmarLancar" onclick="confirmarLancamentoOdoo()">
+                        <i class="fas fa-cloud-upload-alt"></i> Confirmar Lançamento
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Fatura não conferida - não pode lançar -->
+    <div class="card mt-4">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Lançamento no Odoo</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning mb-0">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Fatura não conferida.</strong>
+                É necessário conferir a fatura antes de lançar os documentos no Odoo.
+                <br><br>
+                <a href="{{ url_for('fretes.conferir_fatura', fatura_id=fatura.id) }}" class="btn btn-warning">
+                    <i class="fas fa-check-double"></i> Conferir Fatura
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<script>
+// ========================================
+// LANÇAMENTO DE FATURA NO ODOO
+// ========================================
+
+let dadosLancamento = null;
+
+// Carrega status de lançamento ao abrir a página
+document.addEventListener('DOMContentLoaded', function() {
+    {% if fatura.status_conferencia == 'CONFERIDO' %}
+    carregarStatusLancamento();
+    {% endif %}
+});
+
+function carregarStatusLancamento() {
+    fetch('{{ url_for("fretes.verificar_status_lancamento_fatura", fatura_id=fatura.id) }}')
+        .then(response => response.json())
+        .then(data => {
+            dadosLancamento = data;
+            atualizarResumoLancamento(data);
+        })
+        .catch(error => {
+            console.error('Erro ao carregar status:', error);
+            document.getElementById('resumo-lancamento').innerHTML =
+                '<p class="text-danger"><i class="fas fa-exclamation-circle"></i> Erro ao carregar status</p>';
+        });
+}
+
+function atualizarResumoLancamento(data) {
+    let html = '<table class="table table-sm">';
+    html += '<tr><th>Tipo</th><th>Total</th><th>Já Lançados</th><th>Pendentes</th></tr>';
+
+    // Fretes
+    html += `<tr>
+        <td><span class="badge bg-primary">CTes</span></td>
+        <td>${data.total_fretes}</td>
+        <td><span class="text-success">${data.fretes_lancados}</span></td>
+        <td><span class="text-warning">${data.fretes_pendentes}</span></td>
+    </tr>`;
+
+    // Despesas
+    html += `<tr>
+        <td><span class="badge bg-warning text-dark">Despesas</span></td>
+        <td>${data.total_despesas}</td>
+        <td><span class="text-success">${data.despesas_lancadas}</span></td>
+        <td><span class="text-warning">${data.despesas_pendentes}</span></td>
+    </tr>`;
+
+    html += '</table>';
+
+    // Vencimentos passados
+    if (data.vencimentos_passados && data.vencimentos_passados.length > 0) {
+        html += `<p class="text-warning mb-0">
+            <i class="fas fa-exclamation-triangle"></i>
+            ${data.vencimentos_passados.length} documento(s) com vencimento passado
+        </p>`;
+    }
+
+    document.getElementById('resumo-lancamento').innerHTML = html;
+
+    // Habilita/desabilita botão
+    const btnLancar = document.getElementById('btnAbrirModalLancar');
+    const infoLancamento = document.getElementById('info-lancamento');
+
+    const totalPendentes = data.fretes_pendentes + data.despesas_pendentes;
+
+    if (totalPendentes > 0) {
+        btnLancar.disabled = false;
+        infoLancamento.innerHTML = `<span class="text-success">${totalPendentes} documento(s) para lançar</span>`;
+    } else if (data.total_fretes + data.total_despesas === 0) {
+        btnLancar.disabled = true;
+        infoLancamento.innerHTML = '<span class="text-muted">Nenhum documento na fatura</span>';
+    } else {
+        btnLancar.disabled = true;
+        infoLancamento.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Todos já lançados</span>';
+    }
+}
+
+function abrirModalLancarOdoo() {
+    if (!dadosLancamento) {
+        alert('Aguarde carregar os dados...');
+        return;
+    }
+
+    // Atualiza modal com detalhes
+    let html = '<h6>Documentos a serem lançados:</h6>';
+    html += '<ul class="list-group">';
+
+    if (dadosLancamento.fretes_pendentes > 0) {
+        html += `<li class="list-group-item d-flex justify-content-between">
+            <span><i class="fas fa-file-alt text-primary"></i> CTes (Fretes)</span>
+            <span class="badge bg-primary">${dadosLancamento.fretes_pendentes}</span>
+        </li>`;
+    }
+
+    if (dadosLancamento.despesas_pendentes > 0) {
+        html += `<li class="list-group-item d-flex justify-content-between">
+            <span><i class="fas fa-receipt text-warning"></i> Despesas Extras</span>
+            <span class="badge bg-warning text-dark">${dadosLancamento.despesas_pendentes}</span>
+        </li>`;
+    }
+
+    html += '</ul>';
+    document.getElementById('modal-resumo-lancamento').innerHTML = html;
+
+    // Campo de vencimento (se não houver na fatura)
+    const campoVencimento = document.getElementById('campo-vencimento');
+    const inputVencimento = document.getElementById('inputVencimento');
+
+    if (!dadosLancamento.vencimento_fatura) {
+        campoVencimento.classList.remove('d-none');
+        // Define data default como hoje + 30 dias
+        const hoje = new Date();
+        hoje.setDate(hoje.getDate() + 30);
+        inputVencimento.value = hoje.toISOString().split('T')[0];
+        inputVencimento.min = ''; // Permite datas passadas, mas pedirá confirmação
+    } else {
+        campoVencimento.classList.add('d-none');
+    }
+
+    // Alerta de vencimentos passados
+    const alertaVencimentos = document.getElementById('alerta-vencimentos');
+    const detalheVencimentos = document.getElementById('detalhe-vencimentos');
+    const checkboxConfirmar = document.getElementById('confirmarVencimentos');
+    const btnConfirmar = document.getElementById('btnConfirmarLancar');
+
+    if (dadosLancamento.vencimento_passado) {
+        alertaVencimentos.classList.remove('d-none');
+        detalheVencimentos.innerHTML = `O vencimento da fatura (<strong>${formatarData(dadosLancamento.vencimento_fatura)}</strong>) é anterior a hoje.`;
+        checkboxConfirmar.checked = false;
+        btnConfirmar.disabled = true;
+
+        // Habilita botão apenas se checkbox marcado
+        checkboxConfirmar.onchange = function() {
+            btnConfirmar.disabled = !this.checked;
+        };
+    } else {
+        alertaVencimentos.classList.add('d-none');
+        btnConfirmar.disabled = false;
+    }
+
+    // Listener para verificar vencimento digitado
+    inputVencimento.onchange = function() {
+        verificarVencimentoDigitado();
+    };
+
+    // Abre modal
+    const modal = new bootstrap.Modal(document.getElementById('modalLancarOdoo'));
+    modal.show();
+}
+
+function verificarVencimentoDigitado() {
+    const inputVencimento = document.getElementById('inputVencimento');
+    const alertaVencimentos = document.getElementById('alerta-vencimentos');
+    const detalheVencimentos = document.getElementById('detalhe-vencimentos');
+    const checkboxConfirmar = document.getElementById('confirmarVencimentos');
+    const btnConfirmar = document.getElementById('btnConfirmarLancar');
+
+    if (!inputVencimento.value) return;
+
+    const vencimento = new Date(inputVencimento.value + 'T00:00:00');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    if (vencimento < hoje) {
+        alertaVencimentos.classList.remove('d-none');
+        detalheVencimentos.innerHTML = `O vencimento informado (<strong>${formatarData(inputVencimento.value)}</strong>) é anterior a hoje.`;
+        checkboxConfirmar.checked = false;
+        btnConfirmar.disabled = true;
+
+        checkboxConfirmar.onchange = function() {
+            btnConfirmar.disabled = !this.checked;
+        };
+    } else {
+        alertaVencimentos.classList.add('d-none');
+        btnConfirmar.disabled = false;
+    }
+}
+
+function formatarData(dataStr) {
+    if (!dataStr) return 'N/A';
+    const partes = dataStr.split('-');
+    if (partes.length !== 3) return dataStr;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+function confirmarLancamentoOdoo() {
+    const btnConfirmar = document.getElementById('btnConfirmarLancar');
+    const inputVencimento = document.getElementById('inputVencimento');
+    const checkboxConfirmar = document.getElementById('confirmarVencimentos');
+
+    // Verifica se precisa informar vencimento
+    let vencimento = dadosLancamento.vencimento_fatura;
+    if (!vencimento) {
+        if (!inputVencimento.value) {
+            alert('Por favor, informe a data de vencimento.');
+            inputVencimento.focus();
+            return;
+        }
+        vencimento = inputVencimento.value;
+    }
+
+    // Verifica checkbox se há vencimento passado
+    const vencimentoDate = new Date(vencimento + 'T00:00:00');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    if (vencimentoDate < hoje && !checkboxConfirmar.checked) {
+        alert('Por favor, confirme que deseja lançar mesmo com vencimento passado.');
+        return;
+    }
+
+    // Desabilita botão e mostra loading
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enfileirando...';
+
+    // Monta payload
+    const payload = {
+        data_vencimento: vencimento
+    };
+
+    // Envia requisição
+    fetch('{{ url_for("fretes.lancar_lote_fatura", fatura_id=fatura.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Fecha modal
+            bootstrap.Modal.getInstance(document.getElementById('modalLancarOdoo')).hide();
+
+            // Mostra mensagem de sucesso
+            alert(`✅ ${data.mensagem}\n\nJob ID: ${data.job_id}\n\nO processamento está sendo realizado em background.\nAcompanhe o status na tela de Auditoria de Lançamentos Odoo.`);
+
+            // Recarrega página para atualizar status
+            location.reload();
+        } else {
+            alert(`❌ Erro: ${data.mensagem}\n\n${data.erro || ''}`);
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Confirmar Lançamento';
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao comunicar com o servidor. Tente novamente.');
+        btnConfirmar.disabled = false;
+        btnConfirmar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Confirmar Lançamento';
+    });
+}
+</script>
 {% endblock %}

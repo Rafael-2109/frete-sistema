@@ -93,9 +93,9 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py 
 
 ### 3. consultando_produtos_estoque.py
 
-**Proposito:** Consulta estoque atual, movimentacoes, pendencias e projecoes.
+**Proposito:** Consulta estoque atual, movimentacoes, pendencias, projecoes e SITUACAO COMPLETA.
 
-**Queries cobertas:** Q13, Q17, Q18, Q20
+**Queries cobertas:** Q13, Q17, Q18, Q20 + SITUACAO COMPLETA
 
 ```bash
 source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
@@ -105,6 +105,7 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_produtos_estoque.py 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
 | `--produto` | Nome ou termo do produto | `--produto palmito`, `--produto "az verde"` |
+| `--completo` | ⭐ **SITUACAO COMPLETA** (estoque, separacoes, demanda, producao, projecao) | flag |
 | `--entradas` | Mostrar entradas recentes (qtd > 0) | flag |
 | `--saidas` | Mostrar saidas recentes (qtd < 0) | flag |
 | `--pendente` | Quantidade pendente de embarque + lista pedidos | flag |
@@ -114,13 +115,21 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_produtos_estoque.py 
 | `--limit` | Limite de resultados (default: 100) | `--limit 50` |
 | `--limit-entradas` | Limite de movimentacoes por produto (default: 100) | `--limit-entradas 20` |
 
+**Opcao --completo retorna:**
+- Estoque atual e menor estoque nos proximos 7 dias
+- Separacoes por data de expedicao (detalhado com pedidos)
+- Demanda total (Carteira bruta/liquida + Separacoes)
+- Programacao de producao (proximos 14 dias)
+- Projecao dia a dia (estoque projetado)
+- Indicadores: sobra, cobertura em dias, % disponivel, previsao de ruptura
+
 ---
 
 ### 4. calculando_leadtime_entrega.py
 
-**Proposito:** Calcula data de entrega baseada em lead time de transportadoras.
+**Proposito:** Calcula data de entrega OU data de expedicao sugerida (calculo reverso).
 
-**Queries cobertas:** Q7
+**Queries cobertas:** Q7 + CALCULO REVERSO
 
 ```bash
 source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
@@ -130,8 +139,19 @@ python .claude/skills/gerindo-expedicao/scripts/calculando_leadtime_entrega.py [
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
 | `--pedido` | Numero do pedido ou termo de busca | `--pedido VCD123`, `--pedido "atacadao 183"` |
-| `--data-embarque` | Data de embarque (hoje, amanha, dd/mm, YYYY-MM-DD) | `--data-embarque amanha` |
-| `--limit` | Limite de opcoes de transportadora (default: 5) | `--limit 3` |
+| `--cidade` | Cidade de destino (alternativa ao pedido) | `--cidade "Sao Paulo"` |
+| `--uf` | UF de destino (requerido se usar --cidade) | `--uf SP` |
+| `--data-embarque` | Data de embarque (calcula data de entrega) | `--data-embarque amanha` |
+| `--data-entrega` | ⭐ **NOVO** Data de entrega desejada (calcula data de embarque) | `--data-entrega 25/12` |
+| `--limit` | Limite de opcoes de transportadora (default: 10) | `--limit 3` |
+
+**Modos de operacao:**
+
+| Modo | Parametro | Descricao |
+|------|-----------|-----------|
+| Previsao de entrega | `--data-embarque` | Se embarcar dia X, quando chega? |
+| Sugestao de embarque | `--data-entrega` | Para chegar dia Y, quando embarcar? |
+| Auto (usa pedido) | Apenas `--pedido` | Usa data_entrega_pedido para calculo reverso |
 
 ---
 
@@ -182,9 +202,9 @@ python .claude/skills/gerindo-expedicao/scripts/criando_separacao_pedidos.py [pa
 
 ### 6. consultando_programacao_producao.py
 
-**Proposito:** Consulta e simula alteracoes na programacao de producao.
+**Proposito:** Lista programacao de producao e simula alteracoes para resolver ruptura.
 
-**Queries cobertas:** Q15
+**Queries cobertas:** Q15 + LISTAGEM COMPLETA
 
 ```bash
 source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
@@ -193,7 +213,24 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_programacao_producao
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
-| `--produto` | Produto em ruptura | `--produto "VF pouch 150"` |
+| `--listar` | ⭐ **NOVO** Lista TODA a programacao de producao | flag |
+| `--dias` | Horizonte em dias (default: 14) | `--dias 7` |
+| `--por-dia` | Mostrar detalhes agrupados por dia | flag |
+| `--por-linha` | Mostrar detalhes agrupados por linha | flag |
+| `--linha` | Filtrar por linha de producao | `--linha "Linha A"` |
+| `--produto` | Produto em ruptura (para reprogramacao) | `--produto "VF pouch 150"` |
+
+**Modos de operacao:**
+
+| Modo | Parametro | Descricao |
+|------|-----------|-----------|
+| Listagem | `--listar` | Toda a programacao dos proximos N dias |
+| Reprogramacao | `--produto` | Opcoes para resolver ruptura |
+
+**Exemplo de listagem completa:**
+```bash
+python .claude/skills/gerindo-expedicao/scripts/consultando_programacao_producao.py --listar --dias 7 --por-dia
+```
 
 ---
 

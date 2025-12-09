@@ -4396,13 +4396,48 @@ def lancar_lote_fatura(fatura_id):
     Enfileira lançamento em lote de todos os fretes e despesas de uma fatura
 
     Processa todos os itens da fatura de forma assíncrona.
+
+    Body JSON (opcional):
+        - data_vencimento: str (YYYY-MM-DD) - Se informado e fatura não tem vencimento, salva na fatura
     """
     try:
         from app.fretes.workers.lancamento_odoo_jobs import lancar_lote_job
         from app.portal.workers import enqueue_job
+        from datetime import datetime
 
         # Validar fatura
         fatura = FaturaFrete.query.get_or_404(fatura_id)
+
+        # ========================================
+        # VENCIMENTO: Recebe do body e salva na fatura se não tiver
+        # ========================================
+        data = request.get_json() or {}
+        data_vencimento_str = data.get('data_vencimento')
+
+        # Se fatura não tem vencimento e foi informado um, salva
+        if not fatura.vencimento and data_vencimento_str:
+            try:
+                fatura.vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
+                db.session.commit()
+                logger.info(f"📅 Vencimento {data_vencimento_str} salvo na fatura #{fatura_id}")
+            except ValueError as e:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Data de vencimento inválida',
+                    'erro': str(e)
+                }), 400
+
+        # Usa vencimento da fatura (pode ter sido salvo agora ou já existia)
+        data_vencimento = None
+        if fatura.vencimento:
+            data_vencimento = fatura.vencimento.strftime('%Y-%m-%d')
+
+        if not data_vencimento:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Fatura não possui vencimento',
+                'erro': 'Informe a data de vencimento para lançar no Odoo'
+            }), 400
 
         # Contar itens
         qtd_fretes = Frete.query.filter_by(fatura_frete_id=fatura_id).count()
@@ -4416,13 +4451,14 @@ def lancar_lote_fatura(fatura_id):
             }), 400
 
         # Enfileirar job de lote
-        logger.info(f"📋 Enfileirando lançamento em lote - Fatura #{fatura_id} ({qtd_fretes} fretes, {qtd_despesas} despesas)")
+        logger.info(f"📋 Enfileirando lançamento em lote - Fatura #{fatura_id} ({qtd_fretes} fretes, {qtd_despesas} despesas) - Vencimento: {data_vencimento}")
 
         job = enqueue_job(
             lancar_lote_job,
             fatura_id,
             current_user.nome,
             request.remote_addr,
+            data_vencimento,  # Novo parâmetro: vencimento da fatura
             queue_name='odoo_lancamento',
             timeout='30m'  # 30 minutos para lotes
         )
@@ -4447,6 +4483,79 @@ def lancar_lote_fatura(fatura_id):
         return jsonify({
             'sucesso': False,
             'mensagem': 'Erro ao enfileirar lançamento em lote',
+            'erro': str(e)
+        }), 500
+
+
+@fretes_bp.route('/faturas/<int:fatura_id>/status-lancamento', methods=['GET'])
+@login_required
+def verificar_status_lancamento_fatura(fatura_id):
+    """
+    Retorna status de lançamento dos documentos de uma fatura no Odoo
+
+    Usado pelo JavaScript para mostrar resumo e habilitar botão de lançamento.
+
+    Returns:
+        JSON com:
+        - total_fretes: int
+        - fretes_lancados: int
+        - fretes_pendentes: int
+        - total_despesas: int
+        - despesas_lancadas: int
+        - despesas_pendentes: int
+        - vencimento_fatura: str (YYYY-MM-DD) ou null
+        - vencimentos_passados: List[Dict] com docs que têm vencimento < hoje
+    """
+    from datetime import date
+
+    try:
+        fatura = FaturaFrete.query.get_or_404(fatura_id)
+
+        # Buscar fretes
+        fretes = Frete.query.filter_by(fatura_frete_id=fatura_id).all()
+        fretes_lancados = sum(1 for f in fretes if f.status == 'LANCADO_ODOO')
+        fretes_pendentes = len(fretes) - fretes_lancados
+
+        # Buscar despesas
+        despesas = DespesaExtra.query.filter_by(fatura_frete_id=fatura_id).all()
+        despesas_lancadas = sum(1 for d in despesas if d.status == 'LANCADO_ODOO')
+        despesas_pendentes = len(despesas) - despesas_lancadas
+
+        # Verificar vencimento da fatura
+        vencimento_fatura = None
+        vencimento_passado = False
+        hoje = date.today()
+
+        if fatura.vencimento:
+            vencimento_fatura = fatura.vencimento.strftime('%Y-%m-%d')
+            vencimento_passado = fatura.vencimento < hoje
+
+        # Lista de documentos com vencimento passado (para detalhe)
+        vencimentos_passados = []
+        if vencimento_passado and vencimento_fatura:
+            vencimentos_passados.append({
+                'tipo': 'Fatura',
+                'id': fatura.id,
+                'vencimento': vencimento_fatura
+            })
+
+        return jsonify({
+            'sucesso': True,
+            'total_fretes': len(fretes),
+            'fretes_lancados': fretes_lancados,
+            'fretes_pendentes': fretes_pendentes,
+            'total_despesas': len(despesas),
+            'despesas_lancadas': despesas_lancadas,
+            'despesas_pendentes': despesas_pendentes,
+            'vencimento_fatura': vencimento_fatura,
+            'vencimento_passado': vencimento_passado,
+            'vencimentos_passados': vencimentos_passados
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar status de lançamento: {e}")
+        return jsonify({
+            'sucesso': False,
             'erro': str(e)
         }), 500
 
