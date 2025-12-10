@@ -600,9 +600,9 @@ function reprocessarLancamento(tipo, id, btn) {
     // Determinar URL baseado no tipo
     let url;
     if (tipo === 'frete') {
-        url = `/fretes/${id}/lancar_odoo`;
+        url = `/fretes/${id}/lancar-odoo`;  // Hífen, não underscore
     } else if (tipo === 'despesa') {
-        url = `/fretes/despesas/${id}/lancar_odoo`;
+        url = `/fretes/despesas/${id}/lancar_odoo`;  // Despesa usa underscore
     } else {
         alert('Tipo de lançamento desconhecido: ' + tipo);
         btn.disabled = false;

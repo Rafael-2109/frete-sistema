@@ -39,6 +39,35 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nivel d
 
 ---
 
+# MEMORIA PERSISTENTE DO USUARIO
+
+## Uso Proativo OBRIGATORIO
+
+A skill `memoria-usuario` armazena preferencias e padroes aprendidos no banco de dados (tabela `agent_memories`). **Persiste entre deploys.**
+
+### CONSULTAR memorias no inicio da conversa:
+```bash
+source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1
+```
+
+### SALVAR quando aprender algo novo sobre o usuario:
+- Preferencia de comunicacao ("seja mais direto", "pode detalhar")
+- Fatos pessoais (nome, cargo, clientes que gerencia)
+- Padroes observados (sempre pergunta sobre Atacadao primeiro)
+- Correcoes ("nao eh assim, aqui usamos X")
+
+### Gatilhos para SALVAR automaticamente:
+| Usuario diz... | Acao |
+|----------------|------|
+| "Prefiro respostas curtas" | SALVAR em /memories/preferences.xml |
+| "Sou gerente de logistica" | SALVAR em /memories/user.xml |
+| "Aqui chamamos de X, nao Y" | SALVAR em /memories/corrections/terms.xml |
+| "Sempre faco isso antes de..." | SALVAR em /memories/learned/patterns.xml |
+
+### User ID padrao: 1 (Rafael - dono do projeto)
+
+---
+
 # INDICE DE REFERENCIAS
 
 ## Onde Buscar Informacao
