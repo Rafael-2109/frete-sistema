@@ -127,6 +127,9 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                     db.session.rollback()
                     raise
 
+        # Nunca deveria chegar aqui, mas satisfaz o type checker
+        raise RuntimeError("Falha ao registrar auditoria após todas as tentativas")
+
     def _rollback_despesa_odoo(self, despesa_id: int, etapas_concluidas: int) -> bool:
         """
         Faz rollback dos campos Odoo da despesa em caso de erro
@@ -772,17 +775,72 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                                 f"→ {operacao_correta_id} (empresa CD)"
                             )
 
-                            # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO
+                            # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO (COM PROTEÇÃO DE VALORES)
                             line_ids = po_operacao[0].get('order_line', [])
                             if line_ids:
-                                self.odoo.write(
+                                # 1. Ler dados atuais das linhas ANTES de alterar
+                                linhas_data = self.odoo.read(
                                     'purchase.order.line',
                                     line_ids,
-                                    {'l10n_br_operacao_id': operacao_correta_id}
+                                    ['id', 'l10n_br_operacao_id', 'price_unit', 'product_qty', 'price_subtotal']
                                 )
-                                current_app.logger.info(
-                                    f"🔄 Corrigindo operação fiscal nas {len(line_ids)} linha(s) do PO"
-                                )
+
+                                # 2. Filtrar apenas linhas que PRECISAM de correção
+                                linhas_para_corrigir = []
+                                valores_backup = {}
+
+                                for linha in linhas_data:
+                                    op_linha = linha.get('l10n_br_operacao_id')
+                                    op_linha_id = op_linha[0] if op_linha else None
+
+                                    if op_linha_id != operacao_correta_id:
+                                        linhas_para_corrigir.append(linha['id'])
+                                        valores_backup[linha['id']] = {
+                                            'price_unit': linha.get('price_unit', 0),
+                                            'product_qty': linha.get('product_qty', 1)
+                                        }
+                                        current_app.logger.info(
+                                            f"  📝 Linha {linha['id']}: op {op_linha_id} → {operacao_correta_id} "
+                                            f"(valor: R$ {linha.get('price_subtotal', 0):.2f})"
+                                        )
+
+                                if linhas_para_corrigir:
+                                    # 3. Alterar operação fiscal
+                                    self.odoo.write(
+                                        'purchase.order.line',
+                                        linhas_para_corrigir,
+                                        {'l10n_br_operacao_id': operacao_correta_id}
+                                    )
+
+                                    # 4. Verificar se valores foram zerados e RESTAURAR
+                                    linhas_apos = self.odoo.read(
+                                        'purchase.order.line',
+                                        linhas_para_corrigir,
+                                        ['id', 'price_unit', 'price_subtotal']
+                                    )
+
+                                    for linha in linhas_apos:
+                                        backup = valores_backup.get(linha['id'], {})
+                                        valor_original = backup.get('price_unit', 0)
+                                        valor_atual = linha.get('price_unit', 0)
+
+                                        if valor_atual == 0 and valor_original > 0:
+                                            current_app.logger.warning(
+                                                f"  ⚠️ Linha {linha['id']} foi ZERADA! Restaurando R$ {valor_original:.2f}"
+                                            )
+                                            self.odoo.write(
+                                                'purchase.order.line',
+                                                [linha['id']],
+                                                backup
+                                            )
+
+                                    current_app.logger.info(
+                                        f"🔄 Operação fiscal corrigida em {len(linhas_para_corrigir)} linha(s) do PO"
+                                    )
+                                else:
+                                    current_app.logger.info(
+                                        f"✅ Todas as {len(line_ids)} linha(s) já estão com operação fiscal correta"
+                                    )
                         else:
                             current_app.logger.info(
                                 f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"

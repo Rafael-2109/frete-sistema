@@ -23,8 +23,8 @@ TRATAMENTO DE ERROS:
 import json
 import logging
 import traceback
-from datetime import datetime, date
-from typing import Dict, List, Any, Optional
+from datetime import datetime
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ def _atualizar_progresso_lote(fatura_id: int, progresso: dict):
         logger.warning(f"⚠️ Erro ao atualizar progresso do lote: {e}")
 
 
-def _obter_progresso_lote(fatura_id: int) -> Optional[dict]:
+def _obter_progresso_lote(fatura_id: int) -> Optional[dict]: # type: ignore
     """Obtém progresso do lote do Redis"""
     try:
         redis_conn = _get_redis_connection()
@@ -107,7 +107,7 @@ def _obter_progresso_lote(fatura_id: int) -> Optional[dict]:
     return None
 
 
-def _limpar_progresso_lote(fatura_id: int):
+def _limpar_progresso_lote(fatura_id: int): # type: ignore
     """Remove progresso do lote do Redis após conclusão"""
     try:
         redis_conn = _get_redis_connection()
@@ -131,9 +131,9 @@ def _criar_app_context():
 
 def lancar_frete_job(
     frete_id: int,
-    cte_chave: str,
     usuario_nome: str,
     usuario_ip: str = None,
+    cte_chave: str = None,
     data_vencimento: str = None
 ) -> Dict[str, Any]:
     """
@@ -141,9 +141,9 @@ def lancar_frete_job(
 
     Args:
         frete_id: ID do frete no sistema
-        cte_chave: Chave de acesso do CTe (44 dígitos)
         usuario_nome: Nome do usuário que solicitou
         usuario_ip: IP do usuário (opcional)
+        cte_chave: Chave de acesso do CTe (44 dígitos) - OPCIONAL, busca automaticamente se não informado
         data_vencimento: Data de vencimento YYYY-MM-DD (opcional)
 
     Returns:
@@ -209,25 +209,71 @@ def lancar_frete_job(
                 return resultado
 
             # ========================================
-            # VALIDAÇÃO 3: Tem CTe?
+            # BUSCAR CTe - Automático se não informado
+            # Prioridade: 1) Informado 2) Vinculado 3) Automático
             # ========================================
-            if not cte_chave:
-                resultado['error'] = "Chave CTe não informada"
-                resultado['error_type'] = 'CTE_NAO_INFORMADO'
+            cte = None
+
+            if cte_chave:
+                # CTe informado explicitamente
+                cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
+                if cte:
+                    logger.info(f"✅ [Job Frete] CTe informado: {cte.numero_cte}")
+                else:
+                    resultado['error'] = f"CTe informado não encontrado (chave: {cte_chave[:20]}...)"
+                    resultado['error_type'] = 'CTE_NAO_ENCONTRADO'
+                    resultado['message'] = resultado['error']
+                    logger.error(f"❌ [Job Frete] {resultado['error']}")
+                    return resultado
+            else:
+                # BUSCA AUTOMÁTICA
+                logger.info(f"🔍 [Job Frete] Buscando CTe automaticamente...")
+
+                # PRIORIDADE 1: CTe vinculado explicitamente
+                if frete.frete_cte_id:
+                    cte = frete.cte or ConhecimentoTransporte.query.get(frete.frete_cte_id)
+                    if cte:
+                        cte_chave = cte.chave_acesso
+                        logger.info(f"✅ [Job Frete] Usando CTe VINCULADO: {cte.numero_cte}")
+                    else:
+                        resultado['error'] = f"CTe vinculado ID {frete.frete_cte_id} não encontrado"
+                        resultado['error_type'] = 'CTE_VINCULADO_NAO_ENCONTRADO'
+                        resultado['message'] = resultado['error']
+                        logger.error(f"❌ [Job Frete] {resultado['error']}")
+                        return resultado
+
+                # PRIORIDADE 2: Busca automática por NFs + CNPJ
+                if not cte:
+                    ctes_relacionados = frete.buscar_ctes_relacionados()
+
+                    if not ctes_relacionados:
+                        resultado['error'] = "Nenhum CTe relacionado encontrado. Vincule um CTe manualmente."
+                        resultado['error_type'] = 'CTE_NAO_ENCONTRADO'
+                        resultado['message'] = resultado['error']
+                        logger.error(f"❌ [Job Frete] {resultado['error']}")
+                        return resultado
+
+                    if len(ctes_relacionados) > 1:
+                        ctes_info = ', '.join([f"CTe {c.numero_cte}" for c in ctes_relacionados[:5]])
+                        resultado['error'] = f"Múltiplos CTes ({len(ctes_relacionados)}): {ctes_info}. Vincule manualmente."
+                        resultado['error_type'] = 'MULTIPLOS_CTES'
+                        resultado['message'] = resultado['error']
+                        logger.warning(f"⚠️ [Job Frete] {resultado['error']}")
+                        return resultado
+
+                    cte = ctes_relacionados[0]
+                    cte_chave = cte.chave_acesso
+                    logger.info(f"✅ [Job Frete] CTe automático: {cte.numero_cte}")
+
+            # Validar chave (44 dígitos)
+            if not cte_chave or len(cte_chave) != 44:
+                resultado['error'] = f"Chave CTe inválida ({len(cte_chave) if cte_chave else 0} dígitos)"
+                resultado['error_type'] = 'CTE_CHAVE_INVALIDA'
                 resultado['message'] = resultado['error']
                 logger.error(f"❌ [Job Frete] {resultado['error']}")
                 return resultado
 
-            # ========================================
-            # VALIDAÇÃO 4: CTe existe no sistema?
-            # ========================================
-            cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
-            if not cte:
-                resultado['error'] = f"CTe com chave {cte_chave[:20]}... não encontrado no sistema"
-                resultado['error_type'] = 'CTE_NAO_ENCONTRADO'
-                resultado['message'] = resultado['error']
-                logger.error(f"❌ [Job Frete] {resultado['error']}")
-                return resultado
+            resultado['cte_chave'] = cte_chave
 
             # ========================================
             # EXECUTAR LANÇAMENTO
@@ -494,7 +540,7 @@ def lancar_lote_job(
 
         with app.app_context():
             from app import db
-            from app.fretes.models import FaturaFrete, Frete, DespesaExtra, ConhecimentoTransporte
+            from app.fretes.models import FaturaFrete, Frete, DespesaExtra
 
             # ========================================
             # VALIDAÇÃO: Fatura existe?
@@ -527,7 +573,7 @@ def lancar_lote_job(
             progresso = {
                 'fatura_id': fatura_frete_id,
                 'fatura_numero': fatura.numero_fatura,
-                'transportadora': fatura.transportadora.nome_curto if fatura.transportadora else 'N/A',
+                'transportadora': fatura.transportadora.razao_social if fatura.transportadora else 'N/A',
                 'status': 'processando',
                 'total_fretes': len(fretes),
                 'total_despesas': len(despesas),
@@ -551,130 +597,42 @@ def lancar_lote_job(
             # PROCESSAR FRETES
             # ========================================
             for idx, frete in enumerate(fretes):
-                # 🔧 RECONEXÃO: Garantir conexão válida antes de cada frete
-                # Isso evita erros de "SSL connection has been closed unexpectedly"
-                # que ocorrem quando o lançamento anterior demora muito
                 try:
-                    db.session.execute(db.text('SELECT 1'))
+                    # 🔧 RECONEXÃO: Garantir conexão válida antes de cada frete
+                    try:
+                        db.session.execute(db.text('SELECT 1'))
+                    except Exception as e:
+                        logger.warning(f"⚠️ [Lote] Conexão perdida, reconectando... ({e})")
+                        db.session.rollback()
+                        db.session.remove()
+
+                    logger.info(f"📋 [Job Lote] Processando frete #{frete.id} ({idx + 1}/{len(fretes)})")
+
+                    # 📊 Atualizar progresso
+                    progresso['item_atual'] = f"Frete #{frete.id} ({idx + 1}/{len(fretes)})"
+                    progresso['item_atual_id'] = frete.id
+                    progresso['item_atual_tipo'] = 'frete'
+                    progresso['item_atual_etapa'] = 'Lançando no Odoo...'
+                    _atualizar_progresso_lote(fatura_frete_id, progresso)
+
+                    # ✅ SIMPLIFICADO: Job faz TUDO (busca CTe, valida, lança)
+                    result_frete = lancar_frete_job(
+                        frete_id=frete.id,
+                        usuario_nome=usuario_nome,
+                        usuario_ip=usuario_ip,
+                        data_vencimento=data_vencimento_fatura
+                    )
+
                 except Exception as e:
-                    logger.warning(f"⚠️ [Lote] Conexão perdida, reconectando... ({e})")
-                    db.session.rollback()
-                    db.session.remove()
-
-                logger.info(f"📋 [Job Lote] Processando frete #{frete.id} ({idx + 1}/{len(fretes)})")
-
-                # 📊 Atualizar progresso: iniciando frete
-                progresso['item_atual'] = f"Frete #{frete.id} ({idx + 1}/{len(fretes)})"
-                progresso['item_atual_id'] = frete.id
-                progresso['item_atual_tipo'] = 'frete'
-                progresso['item_atual_etapa'] = 'Buscando CTe...'
-                _atualizar_progresso_lote(fatura_frete_id, progresso)
-
-                # ========================================
-                # BUSCAR CTe - PRIORIZA SEMPRE O CTe VINCULADO
-                # ========================================
-                cte = None
-                cte_chave = None
-
-                # PRIORIDADE 1: Vínculo explícito (frete_cte_id) - SEMPRE priorizar
-                if frete.frete_cte_id:
-                    # Tentar pelo relationship primeiro
-                    cte = frete.cte
-
-                    # Se relationship falhar, buscar explicitamente pelo ID
-                    if not cte:
-                        cte = ConhecimentoTransporte.query.get(frete.frete_cte_id)
-
-                    if cte:
-                        cte_chave = cte.chave_acesso
-                        logger.info(f"✅ [Lote] Frete #{frete.id}: Usando CTe VINCULADO: {cte.numero_cte} (ID {cte.id})")
-                    else:
-                        # CTe vinculado não existe mais - erro
-                        logger.warning(f"⚠️ [Lote] Frete #{frete.id}: CTe vinculado ID {frete.frete_cte_id} não encontrado!")
-
-                # FALLBACK: Busca automática por NFs + CNPJ (SOMENTE se não houver CTe vinculado)
-                if not cte:
-                    logger.info(f"🔍 [Lote] Frete #{frete.id}: Buscando CTe por NFs em comum + CNPJ...")
-
-                    # 🔧 RETRY: Em caso de erro de conexão, tenta reconectar e buscar novamente
-                    ctes_relacionados = None
-                    for tentativa in range(3):
-                        try:
-                            ctes_relacionados = frete.buscar_ctes_relacionados()
-                            break
-                        except Exception as e:
-                            if 'SSL connection' in str(e) or 'connection' in str(e).lower():
-                                logger.warning(f"⚠️ [Lote] Tentativa {tentativa + 1}/3 falhou: {e}")
-                                db.session.rollback()
-                                db.session.remove()
-                                if tentativa == 2:
-                                    raise  # Re-lança na última tentativa
-                            else:
-                                raise  # Outros erros são lançados imediatamente
-
-                    if not ctes_relacionados:
-                        detalhe = {
-                            'frete_id': frete.id,
-                            'success': False,
-                            'skipped': False,
-                            'error': 'Nenhum CTe relacionado encontrado. Vincule um CTe manualmente.',
-                            'error_type': 'CTE_NAO_ENCONTRADO'
-                        }
-                        resultado['detalhes_fretes'].append(detalhe)
-                        resultado['fretes_erro'] += 1
-                        continue
-
-                    if len(ctes_relacionados) > 1:
-                        # Listar CTes sugeridos na mensagem de erro
-                        ctes_info = ', '.join([f"CTe {c.numero_cte}" for c in ctes_relacionados[:5]])
-                        if len(ctes_relacionados) > 5:
-                            ctes_info += f" e mais {len(ctes_relacionados) - 5}..."
-
-                        detalhe = {
-                            'frete_id': frete.id,
-                            'success': False,
-                            'skipped': False,
-                            'error': f'Múltiplos CTes sugeridos ({len(ctes_relacionados)}): {ctes_info}. Vincule manualmente o CTe correto antes de lançar.',
-                            'error_type': 'MULTIPLOS_CTES'
-                        }
-                        resultado['detalhes_fretes'].append(detalhe)
-                        resultado['fretes_erro'] += 1
-                        continue
-
-                    cte = ctes_relacionados[0]
-                    cte_chave = cte.chave_acesso
-                    logger.info(f"✅ [Lote] Frete #{frete.id}: CTe encontrado automaticamente: {cte.numero_cte}")
-
-                # Validar chave (igual ao individual)
-                if not cte_chave or len(cte_chave) != 44:
-                    detalhe = {
+                    # ⚠️ ISOLAMENTO: Erro em um frete NÃO impacta os demais
+                    logger.error(f"💥 [Lote] Erro inesperado frete #{frete.id}: {e}")
+                    result_frete = {
                         'frete_id': frete.id,
                         'success': False,
                         'skipped': False,
-                        'error': f'Chave do CTe inválida ({len(cte_chave) if cte_chave else 0} caracteres, esperado 44)',
-                        'error_type': 'CTE_CHAVE_INVALIDA'
+                        'error': str(e),
+                        'error_type': 'ERRO_INESPERADO'
                     }
-                    resultado['detalhes_fretes'].append(detalhe)
-                    resultado['fretes_erro'] += 1
-                    continue
-
-                # ========================================
-                # VENCIMENTO: Usa da FATURA (prioridade)
-                # Todos os documentos usam o mesmo vencimento da fatura
-                # ========================================
-
-                # 📊 Atualizar progresso: executando lançamento
-                progresso['item_atual_etapa'] = 'Lançando no Odoo (16 etapas)...'
-                _atualizar_progresso_lote(fatura_frete_id, progresso)
-
-                # Executar lançamento com vencimento da fatura
-                result_frete = lancar_frete_job(
-                    frete_id=frete.id,
-                    cte_chave=cte_chave,
-                    usuario_nome=usuario_nome,
-                    usuario_ip=usuario_ip,
-                    data_vencimento=data_vencimento_fatura  # Vencimento da fatura
-                )
 
                 resultado['detalhes_fretes'].append(result_frete)
 

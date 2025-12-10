@@ -4,7 +4,7 @@ Permite visualizar produções realizadas e ajustar consumos de componentes
 """
 from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 
 from app import db

@@ -35,7 +35,7 @@ from resolver_entidades import (
     listar_grupos_disponiveis,
     formatar_sugestao_pedido,
     GRUPOS_EMPRESARIAIS
-)
+) # type: ignore
 
 
 def decimal_default(obj):
@@ -109,7 +109,7 @@ def consultar_situacao_pedidos_grupo(args):
     Busca pedidos pendentes de um grupo empresarial.
     """
     from app.carteira.models import CarteiraPrincipal
-    from sqlalchemy import or_, func
+    from sqlalchemy import or_
 
     resultado = {
         'sucesso': True,
@@ -163,14 +163,14 @@ def consultar_situacao_pedidos_grupo(args):
             pedidos_dict[num]['cidade'] = item.nome_cidade
             pedidos_dict[num]['uf'] = item.cod_uf
 
-        pedidos_dict[num]['total_itens'] += 1
+        pedidos_dict[num]['total_itens'] += 1 # type: ignore
         preco = float(item.preco_produto_pedido or 0)
         qtd = float(item.qtd_saldo_produto_pedido or 0)
-        pedidos_dict[num]['valor_total'] += preco * qtd
+        pedidos_dict[num]['valor_total'] += preco * qtd # type: ignore
 
     # Converter para lista
     pedidos_lista = list(pedidos_dict.values())
-    pedidos_lista.sort(key=lambda x: -x['valor_total'])
+    pedidos_lista.sort(key=lambda x: -x['valor_total']) # type: ignore
 
     resultado['pedidos'] = pedidos_lista[:args.limit]
 
@@ -191,7 +191,6 @@ def consultar_situacao_pedidos_atrasados(args):
     Busca pedidos com expedicao < hoje em Separacao (sincronizado_nf=False).
     """
     from app.separacao.models import Separacao
-    from sqlalchemy import func
 
     resultado = {
         'sucesso': True,
@@ -241,12 +240,12 @@ def consultar_situacao_pedidos_atrasados(args):
             if item.expedicao:
                 pedidos_dict[num]['dias_atraso'] = (hoje - item.expedicao).days
 
-        pedidos_dict[num]['total_itens'] += 1
-        pedidos_dict[num]['valor_total'] += float(item.valor_saldo or 0)
+        pedidos_dict[num]['total_itens'] += 1 # type: ignore
+        pedidos_dict[num]['valor_total'] += float(item.valor_saldo or 0) # type: ignore
 
     # Converter para lista e ordenar por dias de atraso
     pedidos_lista = list(pedidos_dict.values())
-    pedidos_lista.sort(key=lambda x: -x['dias_atraso'])
+    pedidos_lista.sort(key=lambda x: -x['dias_atraso']) # type: ignore
 
     resultado['pedidos'] = pedidos_lista[:args.limit]
 
@@ -269,7 +268,6 @@ def verificar_bonificacao(args):
     """
     from app.carteira.models import CarteiraPrincipal
     from app.separacao.models import Separacao
-    from sqlalchemy import func
 
     resultado = {
         'sucesso': True,
@@ -380,7 +378,6 @@ def consultar_status_pedido(args):
     - Saldo pendente = cp.qtd_saldo - SUM(s.qtd_saldo WHERE mesmo produto E sincronizado_nf=False)
     - % separado = valor_separado / valor_total_pedido (NAO somar os dois!)
     """
-    from app.carteira.models import CarteiraPrincipal
     from app.separacao.models import Separacao
     from app.producao.models import CadastroPalletizacao
 
@@ -640,7 +637,6 @@ def consultar_consolidacao(args):
     Busca pedidos proximos para consolidar com base em CEP, cidade e sub_rota.
     """
     from app.carteira.models import CarteiraPrincipal
-    from app.separacao.models import Separacao
 
     resultado = {
         'sucesso': True,
@@ -833,7 +829,6 @@ def consultar_situacao_pedidos_por_produto(args):
     """
     from app.carteira.models import CarteiraPrincipal
     from app.separacao.models import Separacao
-    from app.producao.models import CadastroPalletizacao
 
     resultado = {
         'sucesso': True,
@@ -921,9 +916,9 @@ def consultar_situacao_pedidos_por_produto(args):
                 pedidos_dict[num]['uf'] = item.cod_uf
                 pedidos_dict[num]['expedicao'] = item.expedicao.isoformat() if item.expedicao else None
 
-            pedidos_dict[num]['qtd_produto'] += float(item.qtd_saldo or 0)
-            pedidos_dict[num]['valor_produto'] += float(item.valor_saldo or 0)
-            pedidos_dict[num]['total_itens'] += 1
+            pedidos_dict[num]['qtd_produto'] += float(item.qtd_saldo or 0)  # type: ignore
+            pedidos_dict[num]['valor_produto'] += float(item.valor_saldo or 0) # type: ignore
+            pedidos_dict[num]['total_itens'] += 1 # type: ignore
     else:
         # Buscar em CarteiraPrincipal (saldo pendente > 0)
         query = CarteiraPrincipal.query.filter(
@@ -948,13 +943,13 @@ def consultar_situacao_pedidos_por_produto(args):
 
             qtd = float(item.qtd_saldo_produto_pedido or 0)
             preco = float(item.preco_produto_pedido or 0)
-            pedidos_dict[num]['qtd_produto'] += qtd
-            pedidos_dict[num]['valor_produto'] += qtd * preco
-            pedidos_dict[num]['total_itens'] += 1
+            pedidos_dict[num]['qtd_produto'] += qtd # type: ignore
+            pedidos_dict[num]['valor_produto'] += qtd * preco # type: ignore
+            pedidos_dict[num]['total_itens'] += 1 # type: ignore
 
     # 4. Converter para lista e ordenar por valor
     pedidos_lista = list(pedidos_dict.values())
-    pedidos_lista.sort(key=lambda x: -x['valor_produto'])
+    pedidos_lista.sort(key=lambda x: -x['valor_produto']) # type: ignore
 
     resultado['pedidos'] = pedidos_lista[:args.limit]
 
