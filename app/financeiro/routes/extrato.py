@@ -38,7 +38,7 @@ def extrato_hub():
     # Filtro por journal
     journal_filter = request.args.get('journal')
 
-    # Estatísticas dos lotes
+    # Estatísticas dos lotes (consultas locais - rápidas)
     total_lotes = ExtratoLote.query.count()
     lotes_pendentes = ExtratoLote.query.filter(
         ExtratoLote.status.in_(['IMPORTADO', 'AGUARDANDO_APROVACAO'])
@@ -49,25 +49,44 @@ def extrato_hub():
         ExtratoLote.criado_em.desc()
     ).limit(5).all()
 
-    # Buscar statements disponíveis do Odoo
-    try:
-        service = ExtratoService()
-        statements = service.listar_statements_disponiveis(journal_code=journal_filter)
-        journals = service.listar_journals_disponiveis()
-    except Exception as e:
-        statements = []
-        journals = []
-        flash(f'Erro ao buscar dados do Odoo: {e}', 'warning')
+    # NÃO buscar statements aqui - será feito via AJAX para não travar a página
+    # Os statements serão carregados pelo endpoint /extrato/api/statements
 
     return render_template(
         'financeiro/extrato_hub.html',
         total_lotes=total_lotes,
         lotes_pendentes=lotes_pendentes,
         ultimos_lotes=ultimos_lotes,
-        statements=statements,
-        journals=journals,
         journal_filter=journal_filter
     )
+
+
+@financeiro_bp.route('/extrato/api/statements')
+@login_required
+def extrato_api_statements():
+    """
+    API para buscar statements do Odoo de forma assíncrona.
+    Evita travar a página principal.
+    """
+    journal_filter = request.args.get('journal')
+
+    try:
+        service = ExtratoService()
+        statements = service.listar_statements_disponiveis(journal_code=journal_filter)
+        journals = service.listar_journals_disponiveis()
+
+        return jsonify({
+            'success': True,
+            'statements': statements,
+            'journals': journals
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'statements': [],
+            'journals': []
+        })
 
 
 # =============================================================================

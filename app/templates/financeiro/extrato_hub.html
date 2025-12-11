@@ -89,7 +89,9 @@
         <div class="col-md-3">
             <div class="card bg-info text-white">
                 <div class="card-body text-center">
-                    <div class="stat-badge">{{ statements|selectattr('pendentes_odoo', 'gt', 0)|rejectattr('importado')|list|length }}</div>
+                    <div class="stat-badge" id="statExtratosComPendencias">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
                     <div>Extratos com Pendências</div>
                 </div>
             </div>
@@ -97,7 +99,9 @@
         <div class="col-md-3">
             <div class="card bg-success text-white">
                 <div class="card-body text-center">
-                    <div class="stat-badge">{{ statements|sum(attribute='pendentes_odoo') }}</div>
+                    <div class="stat-badge" id="statRecebimentosOdoo">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
                     <div>Recebimentos no Odoo</div>
                 </div>
             </div>
@@ -115,13 +119,12 @@
                     </h5>
                     <!-- Filtro por Journal -->
                     <div class="d-flex align-items-center">
+                        <button class="btn btn-sm btn-outline-light me-2" onclick="carregarStatements()" title="Recarregar">
+                            <i class="fas fa-sync-alt" id="btnRecarregarIcon"></i>
+                        </button>
                         <select id="filterJournal" class="form-select form-select-sm" style="width: auto;">
                             <option value="">Todos os Journals</option>
-                            {% for j in journals %}
-                            <option value="{{ j.code }}" {{ 'selected' if journal_filter == j.code else '' }}>
-                                {{ j.code }}
-                            </option>
-                            {% endfor %}
+                            <!-- Journals serão carregados via AJAX -->
                         </select>
                     </div>
                 </div>
@@ -142,73 +145,17 @@
                                     <th></th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {% for st in statements %}
-                                {% if st.pendentes_odoo > 0 or st.importado %}
-                                <tr class="statement-row {{ 'importado' if st.importado else '' }}"
-                                    data-statement-id="{{ st.statement_id }}"
-                                    data-importado="{{ 'true' if st.importado else 'false' }}">
-                                    <td>
-                                        {% if not st.importado and st.pendentes_odoo > 0 %}
-                                        <input type="checkbox" class="form-check-input statement-checkbox"
-                                               value="{{ st.statement_id }}"
-                                               data-pendentes="{{ st.pendentes_odoo }}">
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <strong>{{ st.name }}</strong>
-                                        <br><small class="text-muted">ID: {{ st.statement_id }}</small>
-                                    </td>
-                                    <td>
-                                        <code>{{ st.journal_code }}</code>
-                                        <br><small class="text-muted">{{ st.company[:15] }}</small>
-                                    </td>
-                                    <td>{{ st.date }}</td>
-                                    <td class="text-center">
-                                        {% if st.pendentes_odoo > 0 %}
-                                        <span class="badge bg-warning text-dark">{{ st.pendentes_odoo }}</span>
-                                        {% else %}
-                                        <span class="badge bg-success">0</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        {% if st.importado %}
-                                        <span class="badge
-                                            {% if st.lote_status == 'CONCLUIDO' %}bg-success
-                                            {% elif st.lote_status == 'ERRO' %}bg-danger
-                                            {% elif st.lote_status == 'AGUARDANDO_APROVACAO' %}bg-warning text-dark
-                                            {% else %}bg-info{% endif %}">
-                                            {{ st.lote_status }}
-                                        </span>
-                                        {% else %}
-                                        <span class="badge bg-secondary">Não importado</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end">
-                                        {% if st.importado %}
-                                        <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=st.lote_id) }}"
-                                           class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-eye"></i> Ver
-                                        </a>
-                                        {% elif st.pendentes_odoo > 0 %}
-                                        <form action="{{ url_for('financeiro.extrato_importar_statement', statement_id=st.statement_id) }}"
-                                              method="POST" style="display: inline;">
-                                            <button type="submit" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-download"></i> Importar
-                                            </button>
-                                        </form>
-                                        {% endif %}
+                            <tbody id="statementsBody">
+                                <!-- Carregando via AJAX -->
+                                <tr id="loadingRow">
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                        <p class="text-muted mt-2 mb-0">Buscando extratos do Odoo...</p>
+                                        <small class="text-muted">Isso pode levar alguns segundos</small>
                                     </td>
                                 </tr>
-                                {% endif %}
-                                {% else %}
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">
-                                        <i class="fas fa-inbox fa-2x mb-2"></i>
-                                        <p>Nenhum extrato com pendências encontrado</p>
-                                    </td>
-                                </tr>
-                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -337,21 +284,234 @@
 
 {% block scripts %}
 <script>
-// Filtro por journal
-document.getElementById('filterJournal').addEventListener('change', function() {
-    const journal = this.value;
-    const url = new URL(window.location);
-    if (journal) {
-        url.searchParams.set('journal', journal);
-    } else {
-        url.searchParams.delete('journal');
-    }
-    window.location = url;
+// =============================================
+// CARREGAMENTO ASSÍNCRONO DE STATEMENTS
+// =============================================
+
+let statementsData = [];
+let journalsData = [];
+const currentJournalFilter = '{{ journal_filter or "" }}';
+
+// Carregar statements do Odoo via AJAX ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    carregarStatements();
 });
 
-// Seleção de checkboxes
-const selectAllCheckbox = document.getElementById('selectAll');
-const checkboxes = document.querySelectorAll('.statement-checkbox');
+function carregarStatements() {
+    const tbody = document.getElementById('statementsBody');
+    const btnIcon = document.getElementById('btnRecarregarIcon');
+
+    // Mostrar loading
+    tbody.innerHTML = `
+        <tr id="loadingRow">
+            <td colspan="7" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <p class="text-muted mt-2 mb-0">Buscando extratos do Odoo...</p>
+                <small class="text-muted">Isso pode levar alguns segundos</small>
+            </td>
+        </tr>
+    `;
+
+    // Animar botão de recarregar
+    if (btnIcon) btnIcon.classList.add('fa-spin');
+
+    // Montar URL com filtro
+    let url = '{{ url_for("financeiro.extrato_api_statements") }}';
+    if (currentJournalFilter) {
+        url += '?journal=' + encodeURIComponent(currentJournalFilter);
+    }
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (btnIcon) btnIcon.classList.remove('fa-spin');
+
+            if (data.success) {
+                statementsData = data.statements;
+                journalsData = data.journals;
+
+                // Atualizar estatísticas
+                atualizarEstatisticas();
+
+                // Preencher select de journals
+                preencherJournals();
+
+                // Renderizar tabela
+                renderizarStatements();
+
+                // Configurar checkboxes
+                configurarCheckboxes();
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-danger py-4">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                            <p>Erro ao buscar dados do Odoo</p>
+                            <small>${data.error || 'Erro desconhecido'}</small>
+                            <br><br>
+                            <button class="btn btn-sm btn-primary" onclick="carregarStatements()">
+                                <i class="fas fa-redo me-1"></i>Tentar Novamente
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+        })
+        .catch(error => {
+            if (btnIcon) btnIcon.classList.remove('fa-spin');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-danger py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p>Erro de conexão</p>
+                        <small>${error}</small>
+                        <br><br>
+                        <button class="btn btn-sm btn-primary" onclick="carregarStatements()">
+                            <i class="fas fa-redo me-1"></i>Tentar Novamente
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+function atualizarEstatisticas() {
+    // Extratos com pendências (não importados com pendentes > 0)
+    const extratosComPendencias = statementsData.filter(
+        st => st.pendentes_odoo > 0 && !st.importado
+    ).length;
+
+    // Total de recebimentos no Odoo
+    const totalRecebimentos = statementsData.reduce(
+        (sum, st) => sum + (st.pendentes_odoo || 0), 0
+    );
+
+    document.getElementById('statExtratosComPendencias').textContent = extratosComPendencias;
+    document.getElementById('statRecebimentosOdoo').textContent = totalRecebimentos;
+}
+
+function preencherJournals() {
+    const select = document.getElementById('filterJournal');
+    // Manter opção "Todos"
+    select.innerHTML = '<option value="">Todos os Journals</option>';
+
+    journalsData.forEach(j => {
+        const option = document.createElement('option');
+        option.value = j.code;
+        option.textContent = j.code;
+        if (currentJournalFilter === j.code) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+function renderizarStatements() {
+    const tbody = document.getElementById('statementsBody');
+
+    // Filtrar apenas statements com pendências ou já importados
+    const statementsVisiveis = statementsData.filter(
+        st => st.pendentes_odoo > 0 || st.importado
+    );
+
+    if (statementsVisiveis.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                    <p>Nenhum extrato com pendências encontrado</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let html = '';
+    statementsVisiveis.forEach(st => {
+        const importadoClass = st.importado ? 'importado' : '';
+        const checkboxHtml = (!st.importado && st.pendentes_odoo > 0)
+            ? `<input type="checkbox" class="form-check-input statement-checkbox"
+                      value="${st.statement_id}" data-pendentes="${st.pendentes_odoo}">`
+            : '';
+
+        const pendentesHtml = st.pendentes_odoo > 0
+            ? `<span class="badge bg-warning text-dark">${st.pendentes_odoo}</span>`
+            : `<span class="badge bg-success">0</span>`;
+
+        let statusHtml = '';
+        if (st.importado) {
+            let statusClass = 'bg-secondary';
+            if (st.lote_status === 'CONCLUIDO') statusClass = 'bg-success';
+            else if (st.lote_status === 'ERRO') statusClass = 'bg-danger';
+            else if (st.lote_status === 'AGUARDANDO_APROVACAO') statusClass = 'bg-warning text-dark';
+            else if (st.lote_status === 'IMPORTADO' || st.lote_status === 'CONCILIANDO') statusClass = 'bg-info';
+            statusHtml = `<span class="badge ${statusClass}">${st.lote_status}</span>`;
+        } else {
+            statusHtml = `<span class="badge bg-secondary">Não importado</span>`;
+        }
+
+        let acoesHtml = '';
+        if (st.importado) {
+            acoesHtml = `<a href="/financeiro/extrato/lote/${st.lote_id}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-eye"></i> Ver
+            </a>`;
+        } else if (st.pendentes_odoo > 0) {
+            acoesHtml = `<form action="/financeiro/extrato/importar-statement/${st.statement_id}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="fas fa-download"></i> Importar
+                </button>
+            </form>`;
+        }
+
+        const companyName = st.company ? st.company.substring(0, 15) : 'N/A';
+
+        html += `
+            <tr class="statement-row ${importadoClass}"
+                data-statement-id="${st.statement_id}"
+                data-importado="${st.importado ? 'true' : 'false'}">
+                <td>${checkboxHtml}</td>
+                <td>
+                    <strong>${st.name}</strong>
+                    <br><small class="text-muted">ID: ${st.statement_id}</small>
+                </td>
+                <td>
+                    <code>${st.journal_code || ''}</code>
+                    <br><small class="text-muted">${companyName}</small>
+                </td>
+                <td>${st.date || ''}</td>
+                <td class="text-center">${pendentesHtml}</td>
+                <td class="text-center">${statusHtml}</td>
+                <td class="text-end">${acoesHtml}</td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function configurarCheckboxes() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+
+    // Select all
+    selectAllCheckbox?.addEventListener('change', function() {
+        document.querySelectorAll('.statement-checkbox').forEach(cb => {
+            cb.checked = this.checked;
+        });
+        updateBulkActions();
+    });
+
+    // Individual checkboxes
+    document.querySelectorAll('.statement-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBulkActions);
+    });
+}
+
+// =============================================
+// SELEÇÃO E AÇÕES EM LOTE
+// =============================================
+
 const bulkActions = document.getElementById('bulkActions');
 const selectedCountEl = document.getElementById('selectedCount');
 const selectedPendentesEl = document.getElementById('selectedPendentes');
@@ -385,24 +545,24 @@ function updateBulkActions() {
     });
 }
 
-// Select all
-selectAllCheckbox?.addEventListener('change', function() {
-    checkboxes.forEach(cb => {
-        cb.checked = this.checked;
-    });
-    updateBulkActions();
-});
-
-// Individual checkboxes
-checkboxes.forEach(cb => {
-    cb.addEventListener('change', updateBulkActions);
-});
-
 function clearSelection() {
-    checkboxes.forEach(cb => cb.checked = false);
+    document.querySelectorAll('.statement-checkbox').forEach(cb => cb.checked = false);
+    const selectAllCheckbox = document.getElementById('selectAll');
     if (selectAllCheckbox) selectAllCheckbox.checked = false;
     updateBulkActions();
 }
+
+// Filtro por journal
+document.getElementById('filterJournal').addEventListener('change', function() {
+    const journal = this.value;
+    const url = new URL(window.location);
+    if (journal) {
+        url.searchParams.set('journal', journal);
+    } else {
+        url.searchParams.delete('journal');
+    }
+    window.location = url;
+});
 
 function importarSelecionados() {
     const selected = document.querySelectorAll('.statement-checkbox:checked');
